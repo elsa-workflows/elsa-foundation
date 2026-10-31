@@ -1530,7 +1530,7 @@
     {
       "alias": "Elsa.Activities.Switch.Activities.Switch",
       "activityTypeKey": "Elsa.Activities.Switch.Activities.Switch",
-      "version": "1.0.0",
+      "version": "4.1.0",
       "category": "Control Flow",
       "executionType": "Action",
       "inputs": [
@@ -1558,7 +1558,7 @@
       },
       "structure": {
         "kind": "elsa.switch.structure",
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "2.0.0",
         "mode": "generic",
         "supportsScopedVariables": false,
         "slots": [
@@ -1566,7 +1566,9 @@
             "cardinality": "single",
             "childProperty": "activity",
             "collectionProperty": "cases",
+            "conditionProperty": "condition",
             "displayName": "Cases",
+            "itemIdProperty": "caseId",
             "labelProperty": "match",
             "name": "Switch.Case",
             "property": "cases",

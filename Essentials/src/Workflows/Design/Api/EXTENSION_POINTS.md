@@ -340,3 +340,10 @@ replacement contract. No template mutation creates workflow definitions, version
 `WorkflowTemplateCapabilitySource` advertises `workflow-templates`, `workflow-template` and
 `workflow-template-delete` relations only when this port is present. Studio discovers these
 relations instead of constructing routes; code-owned Blank/HTTP recipes remain client starters.
+
+### `IActivityStructureHandler.ProjectInputs` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Contribution keyed by structure kind and schema version; `IActivityStructureService` routes to the owning handler.
+- **Signature:** `ActivityStructureInputProjection ProjectInputs(ActivityNode activity)`, defaulting to an empty projection for existing handlers.
+- **Obligations:** project stable owner-derived reference keys, normal `InputDefinition` declarations and optional `ArgumentState` values. Declare consumed ordinary catalog keys explicitly; a null projected definition uses that catalog declaration. Publishing normalizes state keys, rejects duplicate declarations and compiles through the ordinary typed binding compiler. Expression authoring and draft validation use the same projection. Keep child traversal/replacement lossless for structure-owned arguments and unknown members.
+- **Known implementation:** Switch schema 2.0.0 projects Boolean case predicates, consumes Value and reintroduces it only when legacy matching remains. No Runtime project reads the Design projection.

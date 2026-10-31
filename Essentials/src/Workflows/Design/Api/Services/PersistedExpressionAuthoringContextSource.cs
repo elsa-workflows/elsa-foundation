@@ -52,8 +52,12 @@ public sealed class PersistedExpressionAuthoringContextSource(
             return null;
 
         var draft = await drafts.FindByIdAsync(request.WorkflowDraftId, cancellationToken);
-        if (draft is null || FindNode(draft.State.RootActivity, request.NodeId, cancellationToken) is not { } node ||
-            !node.Inputs.Concat(node.Outputs).Any(argument => string.Equals(argument.ReferenceKey, request.PropertyKey, StringComparison.Ordinal)))
+        if (draft is null || FindNode(draft.State.RootActivity, request.NodeId, cancellationToken) is not { } node)
+            return null;
+        var projection = structures.ProjectInputs(node);
+        if (!node.Inputs.Where(argument => !projection.ConsumedInputKeys.Contains(argument.ReferenceKey, StringComparer.Ordinal))
+                .Concat(node.Outputs).Any(argument => string.Equals(argument.ReferenceKey, request.PropertyKey, StringComparison.Ordinal)) &&
+            !projection.Inputs.Any(input => input.ReferenceKey == request.PropertyKey && input.State is not null))
             return null;
 
         var target = await FindTargetAsync(node, request.PropertyKey, cancellationToken);
@@ -159,6 +163,12 @@ public sealed class PersistedExpressionAuthoringContextSource(
 
     private async ValueTask<(TypeReference Type, bool IsNullable)?> FindTargetAsync(ActivityNode node, string propertyKey, CancellationToken cancellationToken)
     {
+        var projection = structures.ProjectInputs(node);
+        var structureInput = projection.Inputs.FirstOrDefault(input => input.ReferenceKey == propertyKey);
+        if (structureInput?.Definition is { } definition)
+            return (definition.Type, definition.IsNullable);
+        if (structureInput is null && projection.ConsumedInputKeys.Contains(propertyKey, StringComparer.Ordinal))
+            return null;
         if (activityVersions is null)
             return null;
 
