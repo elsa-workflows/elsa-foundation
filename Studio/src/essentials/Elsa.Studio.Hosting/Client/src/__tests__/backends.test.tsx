@@ -97,6 +97,43 @@ describe("immutable backend lifetimes",()=>{
 });
 
 describe("backend profile selection",()=>{
+  it.each(["elsa.studio.backend.selection.v1", "elsa.studio.backend.sign-in.v1"])("settles root initialization when optional storage read %s is unavailable", async deniedKey => {
+    window.history.replaceState({}, "", "/");
+    const original = Storage.prototype.getItem;
+    const storage = vi.spyOn(Storage.prototype, "getItem").mockImplementation(function(this: Storage, key: string) {
+      if (key === deniedKey) throw new DOMException("Storage is blocked", "SecurityError");
+      return original.call(this, key);
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => response(document)));
+    const { connections } = controller();
+    try {
+      await expect(connections.initialize()).resolves.toBeUndefined();
+      expect(connections.getSnapshot().loading).toBe(false);
+      expect(connections.getSnapshot().active?.profile.id).toBe(a.id);
+      expect(connections.getSnapshot().active?.capabilities).toEqual(document);
+    } finally { storage.mockRestore(); connections.getSnapshot().active?.dispose(); }
+  });
+
+  it("keeps the default connection usable when a sign-in marker cannot be consumed", async () => {
+    window.history.replaceState({}, "", "/?backendConnect=b");
+    sessionStorage.setItem("elsa.studio.backend.sign-in.v1", JSON.stringify({ id: b.id, baseUrl: b.baseUrl, time: Date.now() }));
+    const original = Storage.prototype.removeItem;
+    const storage = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function(this: Storage, key: string) {
+      if (key === "elsa.studio.backend.sign-in.v1") throw new DOMException("Storage is blocked", "SecurityError");
+      return original.call(this, key);
+    });
+    const request = vi.fn(async () => response(document)); vi.stubGlobal("fetch", request);
+    const { connections, commit } = controller();
+    try {
+      await expect(connections.initialize()).resolves.toBeUndefined();
+      expect(connections.getSnapshot().loading).toBe(false);
+      expect(connections.getSnapshot().active?.profile.id).toBe(a.id);
+      expect(connections.getSnapshot().error).toContain("Choose the backend again to connect.");
+      expect(commit).not.toHaveBeenCalled();
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally { storage.mockRestore(); connections.getSnapshot().active?.dispose(); }
+  });
+
   it("initializes on HTTP hosts without crypto.randomUUID",async()=>{
     const random=vi.spyOn(crypto,"randomUUID").mockImplementation(()=>{throw new Error("Secure-context API is unavailable");});
     vi.stubGlobal("fetch",vi.fn(async()=>response(document)));

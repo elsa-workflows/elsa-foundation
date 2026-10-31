@@ -14,6 +14,11 @@ const profileBytes = 32 * 1024;
 const selectionKey = "elsa.studio.backend.selection.v1";
 const pendingKey = "elsa.studio.backend.sign-in.v1";
 
+function readSessionValue(key: string): string | null {
+  try { return sessionStorage.getItem(key); }
+  catch { return null; }
+}
+
 /** Opaque cryptographic generation IDs also work on HTTP development hosts. */
 export function backendConnectionNonce() {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,"0")).join("");
@@ -210,7 +215,7 @@ export class BackendConnections {
     this.update({profiles:[...this.configured,...this.personal]});
     const query = new URLSearchParams(window.location.search);
     // A resource URL without a backend reference means the configured default, never another tab's last choice.
-    const id = query.get("backend") ?? (window.location.pathname === "/" ? sessionStorage.getItem(selectionKey) : null) ?? this.defaultId;
+    const id = query.get("backend") ?? (window.location.pathname === "/" ? readSessionValue(selectionKey) : null) ?? this.defaultId;
     const profile = this.snapshot.profiles.find(item => item.id === id);
     if (!profile) { this.update({loading:false,error:"The backend referenced by this link is unavailable. Choose a backend in Settings."}); return; }
     try {
@@ -226,14 +231,14 @@ export class BackendConnections {
       active.discoveryError = connectionError(error);
       this.update({active,loading:false,error:active.discoveryError});
     }
-    const pending = sessionStorage.getItem(pendingKey);
+    const pending = readSessionValue(pendingKey);
     if (pending && query.has("backendConnect")) {
-      sessionStorage.removeItem(pendingKey);
       try {
+        sessionStorage.removeItem(pendingKey);
         const saved = JSON.parse(pending) as {id:string;baseUrl:string;time:number};
         const target = this.snapshot.profiles.find(item => item.id === saved.id && item.baseUrl === saved.baseUrl);
         if (target && query.get("backendConnect") === target.id && Date.now()-saved.time < 10*60_000) await this.connect(target.id,true);
-      } catch (error) { this.update({error:connectionError(error)}); }
+      } catch { this.update({error:"The saved sign-in could not be resumed. Choose the backend again to connect."}); }
     }
   }
   private async prepare(profile:StudioBackendProfile,operation=this.operation): Promise<PreparedBackend> {
