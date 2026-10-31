@@ -30,8 +30,8 @@ export function MappingEditor({
         <button type="button" disabled={disabled} onClick={() => onChange([...mapping, { name: "", origin: "source", field: "" }])}>Add mapping</button>
       </div>
       {mapping.length === 0 ? <p className="etl-editor-empty" role="status">No output fields are mapped yet.</p> : null}
-      <div className="etl-editor-table-wrap" tabIndex={0} role="region" aria-label="Output field mapping table">
-        <table className="etl-editor-table etl-editor-mapping-table">
+      <div className="studio-table-container etl-editor-table-wrap" tabIndex={0} role="region" aria-label="Output field mapping table">
+        <table className="studio-table etl-editor-table etl-editor-mapping-table">
           <thead><tr><th scope="col">Output field</th><th scope="col">From</th><th scope="col">Input field</th><th scope="col"><span className="etl-editor-sr-only">Actions</span></th></tr></thead>
           <tbody>
             {mapping.map((field, index) => {

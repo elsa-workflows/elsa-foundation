@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -149,8 +150,8 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           onCancel={executableRun.cancel}
         />
       ) : null}
-      <div className="wf-toolbar wf-executable-toolbar">
-        <button type="button" onClick={() => void load()}>Refresh</button>
+      <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." actions={<StudioButton onClick={() => void load()}>Refresh</StudioButton>} />
+      <div className="studio-collection-toolbar wf-executable-toolbar">
         <label className="wf-toolbar-field">
           <span>Scope</span>
           <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
@@ -201,8 +202,8 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
         )
       ) : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
-        <div className="wf-executable-table-wrap">
-          <table className="wf-executable-table" aria-label="Workflow executables">
+        <div className="studio-table-container">
+          <table className="studio-table wf-executable-table" aria-label="Workflow executables">
             <colgroup>
               <col className="wf-executable-workflow-column" /><col className="wf-executable-artifact-column" />
               <col className="wf-executable-version-column" /><col className="wf-executable-root-column" />

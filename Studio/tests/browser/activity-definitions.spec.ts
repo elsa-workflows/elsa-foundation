@@ -44,7 +44,7 @@ for (const theme of ["light", "dark"]) {
       const back = header.getByRole("button", { name: "Activity Definitions", exact: true });
       await back.focus();
       await back.press("Enter");
-      await expect(page.getByRole("heading", { name: "Activity Definitions", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Activity definitions", exact: true })).toBeVisible();
     });
   }
 
@@ -112,7 +112,7 @@ test("Activity Definitions restores each collection origin through real browser 
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/?mode=activity-definitions");
-  const search = page.getByRole("textbox", { name: "Search" });
+  const search = page.getByRole("searchbox", { name: "Search" });
   await search.fill("first-origin");
   await expect.poll(() => requests.some(request => request.search === "first-origin" && request.limit === "25")).toBe(true);
   await page.getByText("Advanced filters", { exact: true }).click();
@@ -153,7 +153,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goBack();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("first-origin");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("first-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "first-origin" &&
@@ -163,7 +163,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goForward();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
   await page.goForward();
-  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("second-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
@@ -172,7 +172,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goForward();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
   await page.goForward();
-  await expect(page.getByRole("textbox", { name: "Search" })).toHaveValue("second-origin");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("second-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
 });
 
@@ -740,7 +740,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.goto("/?mode=activity-definitions");
   await expect(page.getByText("No designed activities yet")).toBeVisible();
 
-  await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
   await expect(page.getByText("Implementation type")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Display name" }).fill("Browser graph activity");
   await page.getByRole("combobox", { name: "Category" }).fill("Browser tests");
@@ -834,7 +834,7 @@ test("Activity Definition provider contract proposals require review and apply a
 test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
   await page.getByRole("button", { name: "Create definition" }).click();
   await expectSavedRevision(page, 1);
@@ -2955,7 +2955,7 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
 
 async function createBrowserActivity(page: Page, theme = "light") {
   await page.goto(`/?mode=activity-definitions&theme=${theme}`);
-  await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);
   await page.getByRole("button", { name: "Create definition" }).click();

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import "./styles.css";
+import { StudioPage, StudioPageHeader, StudioButton, StudioTableContainer, StudioCollectionFooter, StudioResultState, SkeletonRows } from "@elsa-workflows/studio-ui";
 
 interface Forecast {
   date: string;
@@ -33,37 +33,40 @@ export function register(api: ElsaStudioModuleApi) {
 export function WeatherPage() {
   const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    moduleApi.host.http
-      .getJson<Forecast[]>("/_elsa/studio/samples/weather-forecast")
-      .then(setForecasts)
-      .catch(e => setError(e instanceof Error ? e.message : String(e)));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setForecasts(await moduleApi.host.http.getJson<Forecast[]>("/_elsa/studio/samples/weather-forecast"));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { void load(); }, [load]);
 
   return (
-    <section>
-      <div className="section-header">
-        <div>
-          <h2>Weather forecast</h2>
-          <p>This module contributes both server behavior and React UI.</p>
-        </div>
-      </div>
-      {error ? <div className="error-state">{error}</div> : null}
-      <div className="weather-table">
-        <div className="weather-row weather-heading">
-          <span>Date</span>
-          <span>Summary</span>
-          <span>Temperature</span>
-        </div>
-        {forecasts.map(forecast => (
-          <div className="weather-row" key={forecast.date}>
-            <span>{forecast.date}</span>
-            <strong>{forecast.summary}</strong>
-            <span>{forecast.temperatureC}C / {forecast.temperatureF}F</span>
-          </div>
-        ))}
-      </div>
-    </section>
+    <StudioPage aria-labelledby="weather-title">
+      <StudioPageHeader title="Weather forecast" titleId="weather-title" headingLevel={2}
+        description="This module contributes both server behavior and React UI."
+        actions={<StudioButton onClick={() => void load()} disabled={loading}>Refresh</StudioButton>} />
+      {loading ? <SkeletonRows label="Loading weather forecast" /> : error ? (
+        <StudioResultState tone="danger" title="Weather forecast could not be loaded" description={error}
+          actions={<StudioButton onClick={() => void load()}>Retry</StudioButton>} />
+      ) : forecasts.length === 0 ? <StudioResultState title="No forecast available" description="Refresh to check for new forecasts." /> : (
+        <StudioTableContainer role="region" aria-label="Weather forecast table" tabIndex={0}>
+          <table className="studio-table" aria-label="Weather forecast">
+            <thead><tr><th scope="col">Date</th><th scope="col">Summary</th><th scope="col">Temperature</th></tr></thead>
+            <tbody>{forecasts.map(forecast => <tr key={forecast.date}>
+              <td>{forecast.date}</td><td>{forecast.summary}</td><td>{forecast.temperatureC}°C / {forecast.temperatureF}°F</td>
+            </tr>)}</tbody>
+          </table>
+        </StudioTableContainer>
+      )}
+      {!loading && !error ? <StudioCollectionFooter>{forecasts.length} forecasts</StudioCollectionFooter> : null}
+    </StudioPage>
   );
 }

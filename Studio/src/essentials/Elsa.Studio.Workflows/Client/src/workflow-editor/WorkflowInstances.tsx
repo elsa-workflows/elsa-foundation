@@ -66,7 +66,7 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { AdvancedSection, CopyableIdentifier, OverflowMenu } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
@@ -380,12 +380,12 @@ export function WorkflowInstances({ context, navigate }: {
 
   return (
     <>
+      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and execution evidence." actions={<StudioButton ref={refreshButton} onClick={() => void load()}>Refresh</StudioButton>} />
       <form className="wf-run-filters" aria-label="Workflow run filters" onSubmit={event => {
         event.preventDefault();
         applyFilters();
       }}>
-        <div className="wf-toolbar">
-          <button ref={refreshButton} type="button" onClick={() => void load()}>Refresh</button>
+        <div className="studio-collection-toolbar">
           <div className="wf-run-primary-controls" aria-label="Primary workflow run filters">
             <button
               type="button"
@@ -496,7 +496,7 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       ) : null}
       {state === "ready" && instances.length > 0 ? (
-        <div className={`wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
+        <div className={`studio-table-container studio-collection-table wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
             <span role="columnheader" className="wf-run-column-header">
               {canDeleteRuns ? <label className="wf-run-select-all"><input
@@ -591,7 +591,7 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       ) : null}
       {state === "ready" ? (
-        <div className="wf-pagination" aria-label="Workflow run pagination">
+        <div className="studio-collection-footer" aria-label="Workflow run pagination">
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {page.count} of {page.totalCount} matching runs
           </span>

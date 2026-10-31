@@ -1,4 +1,3 @@
-.ad-designed-collection.ad-page { padding: 16px 18px; }
 .ad-designed-collection > .ad-page-header { align-items: center; flex-wrap: wrap; gap: 12px; margin: 0 0 12px; padding: 0 0 12px; border-bottom: 1px solid var(--studio-border); }
 .ad-designed-collection .ad-page-header h1 { margin: 2px 0 4px; }
 .ad-designed-collection .ad-page-header p { max-width: 62ch; font-size: var(--studio-body-size); line-height: 1.45; }
@@ -11,7 +10,6 @@
 .ad-designed-collection .ad-filters input,
 .ad-designed-collection .ad-filters select { padding: 0 9px; font-size: var(--studio-body-size); }
 .ad-designed-collection .ad-input-shell { padding-left: 8px; }
-.ad-designed-collection .ad-collection { margin: 14px 0; }
 .ad-designed-collection .ad-empty,
 .ad-designed-collection .ad-failure { margin: 14px 0; border-style: solid; border-radius: var(--studio-radius); }
 .ad-designed-collection .ad-empty { background: var(--studio-surface-muted); }
@@ -20,7 +18,6 @@
 .ad-designed-collection .ad-pager button { min-height: 32px; padding: 0 9px; border-radius: var(--studio-radius-sm); font-size: var(--studio-label-size); }
 
 .ad-designed-collection .ad-header-actions { align-items: center; }
-.ad-designed-collection .ad-collection-filters { grid-template-columns: minmax(15rem, 1fr) auto auto; align-items: end; }
 .ad-designed-collection .ad-search-field { min-width: 0; }
 
 .ad-designed-collection .ad-collection-view { display: inline-flex; align-items: center; gap: .2rem; min-height: 2.45rem; padding: .2rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface-muted); }
@@ -55,17 +52,14 @@
 .ad-create-advanced .ad-key-summary span, .ad-create-advanced label small { color: var(--studio-text-muted); font-weight: 400; }
 
 @media (max-width: 980px) {
-  .ad-designed-collection .ad-collection-filters { grid-template-columns: minmax(0, 1fr) auto; }
   .ad-designed-collection .ad-search-field { grid-column: 1 / -1; }
 }
 
 @media (max-width: 600px) {
-  .ad-designed-collection.ad-page { padding: 12px; }
   .ad-designed-collection > .ad-page-header { align-items: stretch; }
   .ad-designed-collection .ad-header-actions { justify-content: stretch; }
   .ad-designed-collection .ad-header-actions > button,
   .ad-designed-collection .ad-header-actions .ad-collection-disclosure { flex: 1 1 auto; }
-  .ad-designed-collection .ad-collection-filters { grid-template-columns: 1fr; }
   .ad-designed-collection .ad-search-field { grid-column: auto; }
   .ad-designed-collection .ad-collection-view { width: 100%; }
   .ad-designed-collection .ad-collection-view button { flex: 1; }

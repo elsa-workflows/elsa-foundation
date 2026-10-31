@@ -66,28 +66,7 @@
 .settings-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
   max-width: 720px;
-}
-
-.settings-page-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.settings-page-header h2 {
-  margin: 0;
-  color: var(--studio-text);
-  font-family: var(--studio-font-display);
-  font-size: var(--studio-page-title-size);
-  font-weight: var(--studio-title-weight, 600);
-}
-
-.settings-page-header p {
-  margin: 0;
-  color: var(--studio-text-muted);
-  font-size: var(--studio-body-size);
 }
 
 .settings-scope {

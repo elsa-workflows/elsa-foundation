@@ -78,11 +78,13 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // and limiting affordances to the proved explain/layout journeys reduced these to 387.22 / 378.34 kB.
 // Add 3 kB to the previous 384.50 / 376.00 kB limits for this measured ownership cost; entry, stylesheet,
 // individual-chunk and heavy-surface guards are unchanged. The parent tree was not rebuilt separately.
+// Shared page/collection composition (#3511) measures upgrades at 379.50 kB.
+// Allow 1 kB for this public primitive reuse; all eager/heavy-surface guards stay unchanged.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
   definitionsLandingTotal: 387_500,
-  upgradeLandingTotal: 379_000,
+  upgradeLandingTotal: 380_000,
   individualChunk: 500_000
 };
 

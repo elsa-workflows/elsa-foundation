@@ -143,6 +143,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       '@microsoft/signalr':
         specifier: ^8.0.7
         version: 8.0.29
@@ -168,6 +171,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -196,6 +202,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -382,6 +391,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -614,6 +626,9 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
     devDependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../StudioSdk
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -636,6 +651,9 @@ importers:
 
   src/essentials/Elsa.Studio.Hosting/StudioUi:
     dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7

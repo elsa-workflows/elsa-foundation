@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "../ui";
 import React from "react";
 import { StudioButton } from "../ui/forms/Button";
 import { useTheme } from "../components/ThemeProvider";
@@ -51,12 +52,8 @@ export function AppearancePage({
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
-    <section className="settings-page" aria-labelledby="settings-appearance-title">
-      <header className="settings-page-header">
-        <h2 id="settings-appearance-title">Appearance</h2>
-        <p>Choose your workspace, colors and mode independently.</p>
-        <span className="settings-scope">This browser</span>
-      </header>
+    <section className="studio-page settings-page" aria-labelledby="settings-appearance-title">
+      <StudioPageHeader headingLevel={2} title={<>Appearance</>} titleId="settings-appearance-title" description={<>Choose your workspace, colors and mode independently.</>} actions={<><span className="settings-scope">This browser</span></>} />
 
       <AppearanceCard title="Workspace style" description="Arrange your tools without changing your color scheme.">
         <RadioCardGroup

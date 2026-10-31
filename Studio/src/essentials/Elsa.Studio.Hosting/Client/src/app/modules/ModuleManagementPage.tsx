@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
@@ -140,21 +141,15 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   const isReady = activeQuery.isSuccess;
 
   return (
-    <section className="modules-page">
-      <div className="section-header modules-header">
-        <div>
-          <h2>Modules</h2>
-          <p>{activeHost.label}: {summary.loaded} loaded, {summary.available} available, {summary.failed} failed, {summary.packages} package(s)</p>
-        </div>
-        <StudioToolbar>
+    <section className="studio-page modules-page">
+      <StudioPageHeader headingLevel={2} title={<>Modules</>} description={<>{activeHost.label}: {summary.loaded} loaded, {summary.available} available, {summary.failed} failed, {summary.packages} package(s)</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
+            <StudioButton type="button" className="studio-button" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
               <RefreshCcw size={15} />
               {isLoading ? "Refreshing" : "Refresh"}
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 

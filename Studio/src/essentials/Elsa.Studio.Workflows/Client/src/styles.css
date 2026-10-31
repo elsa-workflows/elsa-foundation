@@ -125,13 +125,19 @@
 
   --xy-background-pattern-color: var(--wf-border-strong);
   --xy-attribution-background-color: color-mix(in srgb, var(--wf-panel-tone) 70%, transparent);
+}
+.wf-editor,
+.wf-tokens {
 
   color: var(--wf-text);
 }
 
 /* Page/editor shells own their own flow layout and body fill; an embedded workspace inherits
    those from whatever host shell it is mounted in. */
-.wf-page,
+.wf-page {
+  display: flex;
+  flex-direction: column;
+}
 .wf-editor {
   display: flex;
   min-height: 100%;
@@ -143,11 +149,6 @@
    padded content area (same treatment as .console-stream-page). The editor (.wf-editor)
    stays full-bleed. Overlays are safe: menus/backdrops in list pages are position:fixed,
    and the sticky availability headers live in their own inner scroll container. */
-.wf-page {
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  overflow: hidden;
-}
 
 .wf-page--run-workbench {
   display: grid;
@@ -935,9 +936,6 @@
 
 .wf-grid {
   display: grid;
-  margin: 14px 18px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius-md);
   overflow: hidden;
 }
 
@@ -947,27 +945,11 @@
   grid-template-columns: 32px minmax(0, 1fr) 120px 150px 190px minmax(0, auto);
   align-items: start;
   gap: 12px;
-  border-bottom: 1px solid var(--wf-border);
-  padding: 10px 12px;
   text-align: left;
 }
 
-.wf-grid-head {
-  background: var(--wf-panel-muted);
-  color: var(--wf-muted-text);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
-  letter-spacing: var(--wf-label-tracking, 0);
-}
-
 .wf-grid-row {
-  background: var(--wf-row);
-  background-size: var(--wf-row-bg-size);
-  color: var(--wf-text);
   cursor: pointer;
-  font: inherit;
-  font-size: 13px;
 }
 
 .wf-executable-toolbar {
@@ -995,40 +977,24 @@
 .wf-executable-table {
   width: 100%;
   min-width: 1120px;
-  border-collapse: collapse;
   table-layout: fixed;
-  color: var(--studio-text);
-  font-size: 13px;
 }
 
 .wf-executable-workflow-column { width: 24%; }
 .wf-executable-artifact-column { width: 22%; }
-.wf-executable-version-column { width: 9%; }
+.wf-executable-version-column,
 .wf-executable-root-column { width: 9%; }
 .wf-executable-date-column { width: 14%; }
 .wf-executable-actions-column { width: 22%; }
 
 .wf-executable-table th,
 .wf-executable-table td {
-  padding: 12px;
-  border-bottom: 1px solid var(--studio-border);
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
 }
 
-.wf-executable-table th {
-  background: var(--studio-surface-muted);
-  color: var(--studio-text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-}
-
 .wf-executable-table th:last-child { text-align: right; }
-.wf-executable-table tr:last-child td { border-bottom: 0; }
-.wf-executable-table tbody tr:hover { background: var(--studio-surface-muted); }
 .wf-executable-table .wf-row-actions { justify-content: flex-end; flex-wrap: wrap; }
 .wf-executable-table .wf-cell-line > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1075,10 +1041,6 @@
   gap: 14px;
   align-items: start;
   margin: 14px 18px;
-}
-
-.wf-instance-workbench .wf-grid {
-  margin: 0;
 }
 
 
@@ -2318,10 +2280,7 @@
   color: var(--studio-text);
 }
 
-.wf-instance-incident-summary {
-  grid-column: 1 / -1;
-}
-
+.wf-instance-incident-summary,
 .wf-instance-incident-actions,
 .wf-incident-technical-details,
 .wf-incident-stacktrace {
@@ -2433,10 +2392,7 @@
 }
 
 .wf-run-association-status .wf-instance-note,
-.wf-run-association-status p {
-  margin: 0;
-}
-
+.wf-run-association-status p,
 .wf-run-association-status .wf-run-incident-action {
   margin: 0;
 }
@@ -3026,21 +2982,13 @@
   color: var(--wf-warning-text);
 }
 
-.wf-grid-row:hover {
-  background: var(--wf-accent-soft);
-}
-
 .wf-grid-row:focus-visible {
   outline: 2px solid var(--wf-accent);
   outline-offset: -2px;
 }
 
 .wf-grid-row[aria-selected="true"] {
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-accent) 14%, transparent) 0 0),
-    var(--wf-panel);
   /* The row's --wf-row-bg-size list is laid out for the row recipe, not this panel stack. */
-  background-size: auto;
 }
 
 .wf-row-select {
@@ -7121,7 +7069,6 @@ button.wf-reference-select {
 }
 
 /* Layered depth on list/summary containers (closer to Elsa 3's ring + shadow). */
-.wf-grid,
 .wf-pagination {
   box-shadow: var(--wf-shadow-sm);
 }
@@ -7528,8 +7475,7 @@ html[data-theme-material] .react-flow__edge:focus .react-flow__edge-path {
 
 html[data-theme-material] .react-flow__controls,
 html[data-theme-material] .react-flow__minimap,
-html[data-theme-material] .wf-canvas-tools,
-html[data-theme-material] .wf-grid {
+html[data-theme-material] .wf-canvas-tools {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);
@@ -7538,12 +7484,6 @@ html[data-theme-material] .wf-grid {
 
 /* Grid header is the one banded row atop the container slab; the data rows below stay flat
    (--wf-row) with hairline separators so the list reads as one slab, not corduroy ridges. */
-html[data-theme-material] .wf-grid-head {
-  border-color: var(--studio-material-edge);
-  background: var(--studio-material-panel-bg-soft);
-  background-size: var(--studio-material-panel-bg-size);
-  box-shadow: var(--studio-material-inset-low);
-}
 
 /* Checkboxes inside dense rows sit on grain — give them a solid surface + edge so they
    stay legible instead of drowning in the texture. */

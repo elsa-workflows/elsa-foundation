@@ -7,15 +7,13 @@ import {
   type ElsaStudioModuleApi,
   type StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
-import {
-  registerBuiltInSettingEditors,
+import { registerBuiltInSettingEditors,
   selectSettingEditor,
   SkeletonRows,
   StudioAlert,
   StudioTabs,
   StudioToolbar,
-  StudioToolbarGroup
-} from "@elsa-workflows/studio-ui";
+  StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import "./styles.css";
 
 interface FeatureCatalogResponse {
@@ -758,24 +756,18 @@ export function FeatureManagementPage() {
   }
 
   return (
-    <section className="feature-management-page">
-      <div className="section-header feature-management-header">
-        <div>
-          <h2>Features</h2>
-          <p>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
-        </div>
-        <StudioToolbar>
+    <section className="studio-page feature-management-page">
+      <StudioPageHeader headingLevel={2} title={<>Features</>} description={<>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
+            <StudioButton type="button" className="studio-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
               <RefreshCcw size={15} />
-            </button>
-            <button type="button" className="studio-button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
-            <button type="button" className="studio-button studio-button-primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
+            </StudioButton>
+            <StudioButton type="button" className="studio-button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</StudioButton>
+            <StudioButton type="button" className="studio-button studio-button-primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
               Review changes
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       <StudioTabs
         tabs={hosts.map(host => ({ id: host.id, label: host.label }))}

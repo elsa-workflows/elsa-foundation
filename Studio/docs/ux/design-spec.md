@@ -49,7 +49,7 @@ code.
    and is the default. Settings › Appearance offers System; the ThemeSwitcher still lists the
    four concrete modes (`exists`).
 5. **Quiet typography.** `target, phase 1` Sentence case for labels, tabs and panel titles.
-   Uppercase mono is reserved for page eyebrows and table headers.
+   Table headers use sentence case and the shared label size. Eyebrows are optional context; technical identifiers may use mono.
 
 ## Layout
 
@@ -63,13 +63,39 @@ code.
 | Bottom dock default | `exists` | Collapsed by default when no stored value, including on desktop. Reset restores the default and keeps the cleared chrome keys absent. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
-| Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
+| Page header | `target, #3511` | Shared `StudioPageHeader`: compact title, optional description/context, wrapping actions. One `primary` button (see Principles). |
 | Lists | `target, phase 2` | Keep the page heading/actions, primary search or filters, results, and pager in a stable order. Use an accessible table or grid with a clear empty/error state. Lists may retain domain-specific filter layouts; advanced Runs criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. See [Definition list consistency](#definition-list-consistency-3070). |
 | Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
 | Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, the publication split control and Test Run are all visible. These domain controls do not use `StudioButton`. `WorkflowEditorToolbar` fills the publication action; Test Run uses the surface background with an accent border. |
 | Designer header primary | `exists` | The publication split control is the filled action, defaulting to Review & publish. Save is an icon action and Test Run is outlined. |
+
+## Shared module composition (#3511)
+
+**Status: `target, #3511`** pending exact-head acceptance. The
+[coverage inventory](../../../docs/reports/studio-design-language-audit.md) records
+all discovered module surfaces, including modules absent from the default host.
+The [module UI guide](../module-ui.md) owns public imports and composition examples.
+
+Collections share a flat page, a 20px page title, 13px description/body, 12px
+sentence-case table headers, search before filters, 32px default controls, and a
+48px minimum row height. Longer content may grow a row. Use the shared footer for
+counts and pagination. The host owns the outer gutter; a module does not add a
+second whole-page border or another page inset. Small row actions may use the
+shared small button size.
+
+Reuse `StudioPage`, `StudioPageHeader`, `StudioCollectionToolbar`,
+`StudioTableContainer`, `StudioResultState` and `StudioCollectionFooter` from
+`@elsa-workflows/studio-ui`. Native tables use `studio-table`; existing ARIA tables
+use `studio-collection-table` without replacing their domain interactions.
+The public `styles.css` ships the actual component rules and token defaults.
+Module authors must not copy a snapshot of host component CSS.
+
+Purposeful differences remain: template catalogs and dashboard widgets may use
+cards; authoring canvases, staged review workflows and diagnostic streams retain
+their task layout. Embedded headers can use the compact variant. These exceptions
+still use the shared theme tokens, control recipes, typography and feedback.
 
 ## Live workflow execution (#3392)
 
