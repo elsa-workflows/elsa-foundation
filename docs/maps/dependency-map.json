@@ -3104,6 +3104,11 @@
         },
         {
           "type": "external",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.10"
         },
