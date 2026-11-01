@@ -200,6 +200,16 @@ Because a bookmark (including a `Delay` or other timer) is saved at once, an out
 
 The durable queue is still moved on, after checking that this node still owns the run, so the finished run is not started again and a node that lost the run cannot remove its new owner's work.
 
+**Cancellation during a live native drain.** In the default in-process actor composition, a Cancel waiting for the
+same execution and partition requests a cooperative handoff. Both discrete scheduler steps and replay-safe fused
+steps check that in-memory signal before starting their next step. The active turn finishes its current step, flushes
+its folded segment through the ordinary ownership-fenced checkpoint path, reports `Yielded`, and releases its lease
+and mailbox. Cancel then runs through its normal scheduler handler. An activity already running must finish or
+cooperate with its own cancellation policy before handoff; the signal does not interrupt an external effect. A
+cancelled caller removes its waiting signal. An idle drain adds no database read for this check. Distributed placement
+uses the configured local mailbox on the owning node; forwarding still has to deliver Cancel to that mailbox. Custom
+actor providers must supply their own equivalent cooperative scheduling behavior.
+
 **The activity cap (Durable and Balanced).** Durable's cap is one activity, whatever the host says; Balanced's is `MaxActivitiesPerCommit` (default 50). The cap counts distinct activity executions in a segment, not checkpoints, and a ReplaySafe activity's attempt claim never trips it (the claim is taken just before the work runs, so the next checkpoint takes the fold). A checkpoint that would bring one more activity into a full segment forces a save and starts a fresh segment, so a long replayable loop keeps folding at one save per window instead of saving every checkpoint. The cap limits both replay cost (a crash re-runs at most one window past the last save) and memory. Continuation outbox items saved by a cap flush keep delivering from the buffer in the next segment; their outcome is written back at the next save, so no stale *Pending* row is left for a later sweep to redeliver. Ephemeral has no cap: a long pass that meets none of its commit points (a suspension, fault or cancellation, an incident or alteration, a child dispatch, an activity that is not safe to repeat, or the end of the pass) holds its working set in memory.
 
 > **Good to know: activities can run again after a crash.** A crash mid-segment loses checkpoints that were buffered but not saved. They are replayed from the last save plus the queue: recovery re-drives the segment's first step and re-runs the whole segment. So **activities in a lost segment run again**. This is the same at-least-once guarantee as the queue's; folding just sets the replay window to one segment (one activity under Durable). External-facing outbox intents are still delivered **only after** the save, so an activity's external effect is never sent before its state is saved.

@@ -45,6 +45,7 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
+    internal RuntimeDrainControlContext? DrainControls { private get; init; }
     internal RuntimeExecutionProtocolSelector? ModelProtocols { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
@@ -155,10 +156,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // would re-load and deserialize the state document needlessly on durable providers. (#293)
         var stoppedOnTerminalStatus = await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken);
 
+        var yielded = false;
         while (remaining > 0 && !stoppedOnTerminalStatus)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (DrainControls?.ShouldYield(request.WorkflowExecutionId) == true)
+            {
+                yielded = true;
+                break;
+            }
             var delivery = await AcquireNextAsync(request.WorkflowExecutionId, cancellationToken);
             if (delivery is null)
                 break;
@@ -197,7 +204,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // all-completed drain; flag it as the stop reason.
         var stopReason = stoppedOnTerminalStatus
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
-            : (RuntimeSchedulerDrainStopReason?)null;
+            : yielded ? RuntimeSchedulerDrainStopReason.Yielded : (RuntimeSchedulerDrainStopReason?)null;
 
         // Outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
         if (activity is not null)

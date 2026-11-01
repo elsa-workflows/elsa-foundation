@@ -9,6 +9,8 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable
 {
+    internal RuntimeDrainControlContext? DrainControls { private get; init; }
+
     // In-process diagnostic/routing label only; not persisted across runs (the actor subsystem is in-memory and
     // descriptors are transient), so the nameof value tracks the type name without wire-compatibility risk.
     public const string ProviderName = nameof(InProcessWorkflowExecutionActorProvider);
@@ -112,7 +114,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                     request.Partition,
                     activationId,
                     _commandProcessor,
-                    _maxProcessedIdempotencyKeysPerAgent);
+                    _maxProcessedIdempotencyKeysPerAgent,
+                    DrainControls);
                 return new SelfPassivatingActorHandle(actor, this, _evictionOptions);
             });
 
@@ -249,6 +252,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
 
     private sealed class InProcessWorkflowExecutionActor : IWorkflowExecutionActor
     {
+        private readonly RuntimeDrainControlContext? _drainControls;
+        private readonly RuntimeDrainControl _drainControl = new();
         private readonly SemaphoreSlim _mailbox = new(1, 1);
         private readonly HashSet<string> _processedIdempotencyKeys = new(StringComparer.Ordinal);
         private readonly Queue<string> _processedIdempotencyKeyOrder = new();
@@ -266,7 +271,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             WorkflowExecutionPartition partition,
             long activationId,
             IWorkflowExecutionCommandExecutor commandProcessor,
-            int maxProcessedIdempotencyKeys)
+            int maxProcessedIdempotencyKeys,
+            RuntimeDrainControlContext? drainControls)
         {
             _workflowExecutionId = workflowExecutionId;
             _partition = partition;
@@ -274,6 +280,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             _activatedAt = DateTimeOffset.UtcNow;
             _commandProcessor = commandProcessor;
             _maxProcessedIdempotencyKeys = maxProcessedIdempotencyKeys;
+            _drainControls = drainControls;
         }
 
         public WorkflowExecutionActorDescriptor Descriptor => new(
@@ -306,7 +313,15 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             ArgumentNullException.ThrowIfNull(envelope);
             ArgumentNullException.ThrowIfNull(options);
 
+            cancellationToken.ThrowIfCancellationRequested();
+            // Publish only a valid mailbox-local control wait, before waiting for its active turn. A cancelled
+            // waiter removes its request; the running turn may safely have yielded in the meantime.
+            using var pendingControl = _drainControls is not null &&
+                envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel &&
+                envelope.WorkflowExecutionId == _workflowExecutionId && envelope.Partition == _partition &&
+                Status == WorkflowExecutionActorStatus.Active ? _drainControl.Wait() : null;
             await _mailbox.WaitAsync(cancellationToken);
+            pendingControl?.Dispose();
             try
             {
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
@@ -321,6 +336,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 if (_processedIdempotencyKeys.Contains(envelope.IdempotencyKey))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
 
+                using var controlScope = _drainControls?.Push(_workflowExecutionId, _drainControl);
                 var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
 
                 // Admission shed (RB1, #1235). Deferred is the truthful status either way, but the two refusals differ

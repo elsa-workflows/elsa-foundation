@@ -27,3 +27,18 @@ not capture scoped services (§2.5.1); actual Type/source ownership avoids cross
 roots. Preserve existing tests and add risk-based red/green controls (§2.21/§2.23, ADR0080 D1). Runtime remains
 artifact-only (Elsa §E2.6). Balanced remains default; no draft constitutional decision is promoted. Recheck fencing,
 retention, tenant isolation, crash boundaries and extension behavior for each storage/scheduling change.
+
+## M4 cancellation design (#2831)
+
+A private control counter belongs to one local actor mailbox. Only a valid matching Cancel waiting on that mailbox
+registers it; cancellation or acquisition removes that registration. The configured default provider pushes the counter
+through an injected internal async context for its active turn. Both the discrete scheduler and replay-safe completion
+pump check it before beginning another step. The orchestrator distinguishes `Yielded` from quiescence and flushes
+the current segment through the existing ownership-fenced committer before returning. The Cancel then runs through
+the usual serialized command/handler path. No second writer or database polling is introduced.
+
+The configured concrete local provider is also the provider used by distributed placement. Remote delivery and custom
+actor implementations retain their own transport/scheduling responsibilities; this signal never grants authority. An
+already executing activity is not interrupted. In-memory waiter isolation and real SQLite External/ReplaySafe loop
+cases cover all modes, resumption convergence, and deliberate scheduler/fusion/cleanup/flush mutations. See the
+[continuation receipt](../../docs/reports/native-runtime-performance-program-2026-11-01.md).
