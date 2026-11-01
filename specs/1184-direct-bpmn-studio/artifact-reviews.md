@@ -51,3 +51,9 @@ No uncovered buildable requirement or constitutional contradiction found. Correc
 ## Capability dependency correction — 1 November 2026
 
 During T009 implementation, the existing capability declaration/registration was found in its implementation assembly. Adding that dependency would contradict the contract boundary in framework §§2.1/2.5/2.18. The amended plan/task lifts the existing declarations and thin registration into that domain's Core, with forwarding for old API binaries and focused compatibility/registration checks. The actual publisher needs this boundary to advertise its optional route. This is an implementation decision under standing authorization, not a constitutional exception, new capability framework or full PR review round. A new BPMN publishing project remains unnecessary.
+
+## Backend publication checkpoint — 1 November 2026
+
+T006–008 implemented and checked. Optional publisher/capability wiring is implemented with positive/absent route controls and old binary compatibility; T009 remains pending its remaining runtime-only validation. The real-host source48259 attempt exposed a valid catalog reader shape with an unloaded parent Definition. Source9d3fd45f0 fixes the lookup through the visible parent query and adds the corresponding regression;167 interchange tests and the actual host journey pass. [Source-bound receipt](evidence/publication/README.md) retains that failed attempt and the successful two-restart control.
+
+Author inspection also preserved raw publication identity and post-material timestamps; no model-frame writer or legacy completion fingerprint changed. The read-only storage observer uses the provider reader for model material/receipts, respecting the different storage encoding of typed fields and opaque JSON. No new Studio, runtime-only host, frozen-family or full feature acceptance is inferred from backend controls. Full PR review rounds remain0.

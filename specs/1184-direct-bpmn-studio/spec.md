@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: In progress — specification, plan and tasks reviewed; implementing binding retention before the direct Studio journey.
+**Status**: In progress — binding retention and authored direct publication/host recovery verified; Studio discovery and browser acceptance remain open.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 
