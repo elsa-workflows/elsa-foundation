@@ -102,11 +102,20 @@ public sealed class BpmnAuthoredDirectPublisherTests
     public async Task A_shape_alone_cannot_impersonate_a_visible_compatible_root_activity(string invalid)
     {
         var fixture = new Fixture { MissingActivity = invalid == "missing", Visible = invalid != "invisible" };
-        if (invalid == "wrong-type") fixture.Activity = fixture.Activity with
-            { Definition = new ActivityDefinitionModel("activity", "Another.Activity", "Test", null, null) };
+        if (invalid == "wrong-type") fixture.CatalogDefinition = new ActivityDefinitionModel("activity", "Another.Activity", "Test", null, null);
         if (invalid == "new-contract") fixture.Activity = fixture.Activity with { Version = "2.0.0" };
         await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
         Assert.Equal(0, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task A_version_reader_need_not_hydrate_its_parent_definition_for_publication()
+    {
+        var fixture = new Fixture();
+        fixture.Activity = fixture.Activity with { Definition = null! };
+        await fixture.Publish();
+        Assert.Equal(1, fixture.Publications);
+        Assert.Contains("visible", fixture.Calls);
     }
 
     [Fact]
@@ -159,6 +168,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public ActivityDefinitionVersionModel Activity { get; set; } = new("activity-version", "1.0.0", "activity", "clr", "1", "clr", "1",
             JsonSerializer.SerializeToElement(new { }), "CLR", "source",
             new ActivityDefinitionModel("activity", typeof(Process).FullName!, "BPMN", "BPMN Process", null), [], [], [], default, "hash");
+        public IActivityDefinition CatalogDefinition { get; set; } = new ActivityDefinitionModel("activity", typeof(Process).FullName!, "BPMN", "BPMN Process", null);
         public string? DeniedPermission { get; set; }
         public bool MissingActivity { get; set; }
         public bool Visible { get; set; } = true;
@@ -197,7 +207,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         { Calls.Add("catalog"); return Task.FromResult<IActivityDefinitionVersion?>(!MissingActivity && id == Activity.Id ? Activity : null); }
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null,
             string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default)
-        { Calls.Add("visible"); return Task.FromResult<IEnumerable<IActivityDefinition>>(Visible ? [Activity.Definition] : []); }
+        { Calls.Add("visible"); return Task.FromResult<IEnumerable<IActivityDefinition>>(Visible ? [CatalogDefinition] : []); }
         public ValueTask<PermissionEvaluationResult> AuthorizeAsync(PermissionEvaluationContext context, CancellationToken cancellationToken)
         { Calls.Add("authorize:" + context.Permission); Assert.Same(Version, context.Resource); return ValueTask.FromResult(context.Permission == DeniedPermission ? PermissionEvaluationResult.Denied() : PermissionEvaluationResult.Success); }
         public ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken)

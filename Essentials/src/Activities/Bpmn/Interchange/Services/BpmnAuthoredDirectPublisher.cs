@@ -38,7 +38,7 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
             throw new BpmnModelValidationException("This source-owned definition cannot be directly published through the catalog authoring action.");
         var root = BpmnAuthoredDirectProjection.ReadState(version)?.RootActivity;
         var activity = root is null ? null : await catalog.FindVersion(root.ActivityVersionId, cancellationToken);
-        if (activity is null || activity.Definition.ActivityTypeKey != typeof(Process).FullName ||
+        if (activity is null ||
             !SemVer.TryParse(activity.Version, out var activityVersion) || activityVersion.Major != 1 || activityVersion.Minor != 0 ||
             activityVersion.Patch != 0 || activityVersion.Prerelease is not null ||
             !(await catalog.ListDefinitions(id: activity.DefinitionId, cancellationToken: cancellationToken))
