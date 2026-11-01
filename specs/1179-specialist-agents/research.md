@@ -340,3 +340,69 @@ and worker. The fixture removes that implementation, retains the closure guard, 
 startup-type and single chat-assembly checks plus central-pin validation in assets inspection.
 The prior script exited with a closure failure while its report still said InProgress; the qualifier
 now finalizes all caught qualification exceptions as Failed. Earlier receipts remain untouched.
+
+## R9 — Concrete provider protocol preparation (#3592)
+
+**Status:** Executable research, not production M3 acceptance. The isolated
+[provider fixture](../../tools/agents/research/providers/README.md) runs twenty-four cases through actual
+MAF 1.27.0, Anthropic 12.32.0 and Azure OpenAI 2.1.0 chat-completion clients, with MEAI 10.10.1,
+OpenAI 2.14.0 and System.ClientModel 1.15.0. Normal and locked restores agree on the committed graph.
+It uses explicit fixture credentials and an injected HTTP handler; no sockets, live inference,
+production specialist connection, Elsa journal or durability is exercised.
+
+**Observed retry boundary:** HTTP 429 produces three Anthropic transport requests and four Azure
+requests by default. `MaxRetries = 0` and `ClientRetryPolicy(0)` respectively reduce the API-key
+profiles to one. However, Anthropic's changing-token `IAccessTokenProvider` refreshes on HTTP 401 and
+sends a second request even with `MaxRetries = 0`. This independent path exists in the
+[pinned SDK source](https://github.com/anthropics/anthropic-sdk-csharp/blob/38b988d36f4f0a25f4324387573776fac6adcc4b/src/Anthropic/AnthropicClient.cs).
+Consequently, an outer MAF-run counter or disabled ordinary retry setting cannot establish a hard
+physical-request budget for every authentication profile. T016/T017 must guard each real dispatch
+or refuse unsupported profiles, including caller-added retry/fallback handlers.
+
+**Observed request/result boundary:** For the simple supported-object fixture, both clients serialize the exact dynamic JSON schema,
+model/deployment, temperature and output-token limit, return visible JSON and preserve observable
+11-input/7-output fixture usage. Both also return malformed business text normally despite the schema
+request. Valid JSON accompanied by a truncation signal remains incomplete. Anthropic refusal maps to
+`content_filter` with text; Azure refusal maps to an `ErrorContent` with `Refusal` code while its finish
+reason is `stop`. Production acceptance must inspect content and finish signals before validating the
+complete result against the authored contract. Provider schema forwarding is not enforcement proof.
+
+**Observed schema projection boundary:** Additional bounded-integer cases change the conclusion
+for richer contracts. Both actual SDK bindings move `minimum: 0` / `maximum: 100` into descriptions,
+leaving the original schema intact. They return both 42 and the out-of-range fixture 101 normally.
+The earlier exploratory assumption of verbatim forwarding failed for each vendor; those failures are
+retained as scope-specific observations. [Anthropic documents this transformation](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+[Azure's documented subset](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/structured-outputs#json-schema-support-and-limitations)
+also excludes numeric bounds and adds required-property, closed-object and depth/size constraints.
+M3 must identify and test the actual request projection, preserve the full original schema for Elsa's
+result validation and fingerprint the effective provider/API/SDK profile. A constraint placed in a
+description is not enforced by the provider's grammar. No wider accepted contract, automatic result
+coercion or unbudgeted repair call is authorized; unsupported semantic transformations must fail
+explicitly. These injected responses establish no live-model enforcement or production lowerer.
+
+**Observed content/session boundary:** Anthropic thinking plus visible output becomes
+`TextReasoningContent` plus `TextContent`. MAF's business text excludes thinking, but raw SDK session
+serialization retains it. M2's bounded text-only path is not adequate qualification of this richer
+profile. T017/T020 must define allowed visible/non-business content and a minimal protected
+continuation representation. Do not flatten every content type into business output or persist raw SDK
+sessions by default. The fixture retains only content-type names and booleans, never raw session or
+reasoning values in its report.
+
+**Observed cancellation/uncertainty boundary:** An already cancelled call still enters the injected
+handler for both SDKs. The fixture's entry cancellation check rejects it before recording a request;
+that is a fixture observation, not proof that the SDK avoided the HTTP stack or that a remote provider
+did no work. Cancellation after request observation and controlled response loss each occur after one
+request, with an SDK exception. T017/T019/T021 must retain the dispatch marker, distinguish interruption
+from accepted/terminal failure and preserve unknown outcome without automatic replay. Protocol-server
+tests must count real outbound requests and qualify the actual transport/auth configuration.
+
+**Causal controls:** Enabling default retries, dropping the requested schema, omitting cancellation
+propagation and flattening reasoning each makes the full executable exit 1 at its corresponding guard.
+Normal restores, locked restores and builds remain successful in those controls. Research output
+retains logs, complete package versions, fixture hashes and report hashes separately from product
+acceptance. Primary source provenance and reproduction commands are in the fixture README.
+
+**Remaining gate:** T016/T017 remain open. Real connection authorization/allowed hosts, capability
+drift, native process/journal recovery, production content/session codecs, actual protocol servers,
+streaming/Responses and live model behavior require their own implementation evidence. This spike
+does not advance M3 execution past M2 or qualify a packaged/custom runtime host.
