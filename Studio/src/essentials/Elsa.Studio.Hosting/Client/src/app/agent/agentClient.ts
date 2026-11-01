@@ -457,11 +457,14 @@ function mapSessionPolicy(policy: Record<string, unknown> | undefined): AgentSes
   return { autonomyMode, maxAutonomyMode, allowedAutonomyModes: allowed?.length ? allowed : allowedModesUpTo(maxAutonomyMode), revision };
 }
 
-/** The domain message's frozen `acceptedPolicy` ({ policy, revision }) as the mode and revision that admitted it. */
+/**
+ * The accepted message's public `acceptedPolicy` (the session-policy shape: mode, ceiling, allowed modes and
+ * revision) as the mode and revision that admitted it. Private policy data never reaches the client.
+ */
 function mapAcceptedPolicy(accepted: Record<string, unknown> | undefined): AgentAcceptedPolicy | undefined {
   const revision = readField(accepted, "revision");
   if (typeof revision !== "number") return undefined;
-  const autonomyMode = mapAutonomyMode(readField(readRecord(accepted, "policy"), "autonomyMode"));
+  const autonomyMode = mapAutonomyMode(readField(accepted, "autonomyMode"));
   return autonomyMode ? { autonomyMode, revision } : { revision };
 }
 

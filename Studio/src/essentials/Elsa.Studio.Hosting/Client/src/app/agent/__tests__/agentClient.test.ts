@@ -303,7 +303,7 @@ describe("agent client", () => {
   it("maps a message's accepted policy and surfaces a policy-changed admission as a coded refusal", async () => {
     const context = stubContext();
     context.http.postJson = vi.fn()
-      .mockResolvedValueOnce({ data: { message: { id: "m1", status: "Pending", acceptedPolicy: { policy: { autonomyMode: "fullAuto", maxAutonomyMode: "fullAuto" }, revision: 4 } }, warnings: [] } })
+      .mockResolvedValueOnce({ data: { message: { id: "m1", status: "Pending", acceptedPolicy: { autonomyMode: "full-auto", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 4 } }, warnings: [] } })
       .mockRejectedValueOnce(new StudioHttpError(409, "Conflict", null, { error: { code: POLICY_CHANGED, message: "The session policy changed.", statusCode: 409 } }))
       .mockResolvedValueOnce({ error: { code: POLICY_CHANGED, message: "The session policy changed.", statusCode: 409 } })
       .mockRejectedValueOnce(new StudioHttpError(409, "Other conflict", null, { error: { code: "agent.other" } })) as typeof context.http.postJson;
@@ -314,6 +314,19 @@ describe("agent client", () => {
     await expect(client.sendMessage("agt_01", request())).rejects.toMatchObject({ name: "AgentApiError", code: POLICY_CHANGED });
     // Unrelated refusals keep their historical shape.
     await expect(client.sendMessage("agt_01", request())).rejects.toMatchObject({ name: "StudioHttpError", message: "Other conflict" });
+  });
+
+  it("keeps an accepted policy's revision without inventing a mode, and never reads a nested domain policy", async () => {
+    const context = stubContext();
+    context.http.postJson = vi.fn()
+      .mockResolvedValueOnce({ data: { message: { id: "m1", status: "Pending", acceptedPolicy: { revision: 5 } }, warnings: [] } })
+      .mockResolvedValueOnce({ data: { message: { id: "m2", status: "Pending", acceptedPolicy: { policy: { autonomyMode: "fullAuto" }, revision: 6 } }, warnings: [] } })
+      .mockResolvedValueOnce({ data: { message: { id: "m3", status: "Pending", acceptedPolicy: null }, warnings: [] } }) as typeof context.http.postJson;
+    const client = createAgentClient(context);
+    const request = () => ({ message: "Resize", mode: "build" as const, contextAttachments: [] });
+    expect((await client.sendMessage("agt_01", request())).acceptedPolicy).toEqual({ revision: 5 });
+    expect((await client.sendMessage("agt_01", request())).acceptedPolicy).toEqual({ revision: 6 });
+    expect((await client.sendMessage("agt_01", request())).acceptedPolicy).toBeUndefined();
   });
 
 });
