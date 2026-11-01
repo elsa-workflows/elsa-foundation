@@ -1,6 +1,6 @@
 # Actual Studio ETL service recovery — partial product acceptance
 
-The owned application products at `41f1828cb5797c167701e14f5c366cf152dda75b` contain main `8dcbf2345`. Browser/controller fixes reuse those unchanged builds; their source/hash identities are retained separately. This milestone completes T021's actual authored RunEtl service publication/replay. T025's retained retry UI is implemented. **T026 remains open** for the completed-occurrence navigation gap below.
+The owned application products at `41f1828cb5797c167701e14f5c366cf152dda75b` contain main `8dcbf2345`. Browser/controller fixes reuse those unchanged builds; their source/hash identities are retained separately. This milestone completes T021's actual authored RunEtl service publication/replay. T025's retained retry UI is implemented. The completed-occurrence navigation gap below was fixed afterwards and verified against these stores; see [cleared-state correction](cleared-state/README.md).
 
 ## Actual recovery proved
 
