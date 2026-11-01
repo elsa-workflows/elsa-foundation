@@ -7,10 +7,11 @@ connections. It depends on `Elsa.Secrets`.
 
 Use `services.AddConnections()` to register defaults, then replace these services as needed:
 
-- `IConnectionRepository` for durable persistence. Phase 1 ships `InMemoryConnectionRepository` only:
-  restarting the host drops connection definitions. Owned secrets (`connection:<name>:<field>`) stay
-  in the encrypted secret store, so a published workflow that still names the connection faults until
-  the definition is created again. An EF Core repository is tracked in #2854. A replacement must keep
+- `IConnectionRepository` for persistence. The default `InMemoryConnectionRepository` drops metadata
+  on restart. Opt into [EF persistence](../Persistence/EntityFrameworkCore/README.md) to retain it;
+  choose durable Secrets storage separately for owned credentials (`connection:<name>:<field>`).
+  `GetCapabilitiesAsync` identifies the actual configured metadata profile; unspecified contributions
+  do not claim durability. A replacement must keep
   the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
   the document's and then increments it; otherwise, including after a delete, it throws
   `ConnectionConflictException` and writes nothing. Its expected-version `DeleteAsync` deletes only while
@@ -33,7 +34,7 @@ Use `services.AddConnections()` to register defaults, then replace these service
     protects a commit the next read can see. When a durable store fails with the commit's outcome unknown and the
     commit is not yet visible, the rollback can delete a secret the committed row uses, so the connection fails to
     resolve that credential. Retrying the create or update with the inline value writes the secret again. The
-    in-memory repository commits visibly or not at all; the durable repository is tracked in #2854.
+    in-memory repository commits visibly or not at all; adding durable metadata does not resolve this limit.
   - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look failed: it is
     reported as not written (500), or as a false 409 when the failure reads as a concurrent change (#3153).
   - A secret with no active version (revoked or expired) is rotated without an expected version, and Secrets has

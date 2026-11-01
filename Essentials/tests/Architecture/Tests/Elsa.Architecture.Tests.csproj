@@ -165,6 +165,7 @@
     <ProjectReference Include="..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Persistence\EntityFrameworkCore\Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />

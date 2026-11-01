@@ -238,6 +238,9 @@
     <Project Path="Essentials/src/Connections/Design/Elsa.Connections.Design.csproj" />
     <Project Path="Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj" />
   </Folder>
+  <Folder Name="/Essentials/src/Connections/Persistence/">
+    <Project Path="Essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/Diagnostics/">
     <Project Path="Essentials/src/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
     <Project Path="Essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
@@ -538,6 +541,11 @@
   </Folder>
   <Folder Name="/Essentials/tests/Connections/">
     <Project Path="Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Connections/Persistence/EntityFrameworkCore/">
+    <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+    <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Elsa.Connections.Persistence.EntityFrameworkCore.RestartProbe.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Cli/Fixtures/">
     <Project Path="Essentials/tests/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj" />

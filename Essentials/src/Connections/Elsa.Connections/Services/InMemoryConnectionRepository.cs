@@ -7,7 +7,13 @@ namespace Elsa.Connections.Services;
 
 internal sealed class InMemoryConnectionRepository : IConnectionRepository
 {
-    private readonly ConcurrentDictionary<string, ConnectionDocument> _documents = new(StringComparer.OrdinalIgnoreCase);
+    public ValueTask<ConnectionRepositoryCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(new ConnectionRepositoryCapabilities("in-memory", false));
+    }
+
+    private readonly ConcurrentDictionary<(string TenantId, string Name), ConnectionDocument> _documents = new(new ConnectionKeyComparer());
 
     public ValueTask<ConnectionDocument?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)
     {
@@ -117,7 +123,7 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
                 return new(false);
 
             // Removes the entry only while it is still the one read, so a concurrent save or re-add is never deleted.
-            if (_documents.TryRemove(new KeyValuePair<string, ConnectionDocument>(key, current)))
+            if (_documents.TryRemove(new KeyValuePair<(string TenantId, string Name), ConnectionDocument>(key, current)))
                 return new(true);
         }
 
@@ -130,7 +136,17 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
     }
 
-    private static string Key(string tenantId, string name) => $"{tenantId}\u001f{name.Trim().ToLowerInvariant()}";
+    private static (string TenantId, string Name) Key(string tenantId, string name) => (tenantId, name.Trim().ToLowerInvariant());
+
+    private sealed class ConnectionKeyComparer : IEqualityComparer<(string TenantId, string Name)>
+    {
+        public bool Equals((string TenantId, string Name) left, (string TenantId, string Name) right) =>
+            StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
+            StringComparer.OrdinalIgnoreCase.Equals(left.Name, right.Name);
+
+        public int GetHashCode((string TenantId, string Name) key) =>
+            HashCode.Combine(StringComparer.Ordinal.GetHashCode(key.TenantId), StringComparer.OrdinalIgnoreCase.GetHashCode(key.Name));
+    }
 
     private static ConnectionDocument? Clone(ConnectionDocument? document)
     {
