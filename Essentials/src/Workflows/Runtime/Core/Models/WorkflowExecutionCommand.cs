@@ -37,5 +37,7 @@ public enum WorkflowExecutionCommandKind
     /// <summary>Delivers an operator's intervention decision to the structural parent that requested it (spec 260 R-5).</summary>
     DeliverInterventionDecision = 19,
     /// <summary>Delivers exact-source nonterminal called-workflow control through its caller inbox.</summary>
-    DeliverChildControl = 20
+    DeliverChildControl = 20,
+    /// <summary>Delivers a typed model input through its verified material/state protocol.</summary>
+    ExecuteModel = 21
 }

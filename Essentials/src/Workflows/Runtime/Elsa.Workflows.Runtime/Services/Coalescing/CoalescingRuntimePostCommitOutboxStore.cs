@@ -81,6 +81,11 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
         (_innerLookupStore ?? throw new NotSupportedException("The inner provider cannot verify a durable outbox source."))
             .FindDurableAsync(outboxItemId, cancellationToken);
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId, IReadOnlyCollection<string> excludedIntentKinds,
+        CancellationToken cancellationToken = default) =>
+        (_innerLookupStore ?? throw new NotSupportedException("The inner provider cannot verify prior durable outbox responsibility."))
+            .FindUndeliveredDurableAsync(workflowExecutionId, excludedIntentKinds, cancellationToken);
+
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
         RuntimePostCommitOutboxClaimRequest request,
         CancellationToken cancellationToken = default)

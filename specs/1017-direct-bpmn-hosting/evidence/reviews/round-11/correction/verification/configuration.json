@@ -1,0 +1,24 @@
+{
+  "shellsSha256": "ff150ff86f729000277306bd05cc2f12bca8cf7fb8ff5645a2cf0f76fe1788ad",
+  "EtlRuntime": {
+    "SnapshotRoot": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-current-nested-cancel-tw742u2t/etl-snapshots",
+    "FileBindings": [],
+    "HttpBindings": []
+  },
+  "installedEtlFeatures": [
+    "EtlRuntime",
+    "EtlRuntimeEntityFrameworkCore",
+    "EtlRuntimeApi",
+    "EtlDesign",
+    "EtlDesignEntityFrameworkCore",
+    "EtlDesignApi",
+    "EtlWorkflowsDesign",
+    "EtlWorkflowsRuntime"
+  ],
+  "BpmnHosting": {
+    "AdmitNewExecutions": true
+  },
+  "resumption": {
+    "SweepIntervalSeconds": 0.2
+  }
+}

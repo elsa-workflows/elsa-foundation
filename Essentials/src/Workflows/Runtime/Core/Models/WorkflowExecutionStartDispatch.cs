@@ -296,7 +296,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         if (startAuthority is null)
             return;
 
-        if (startAuthority.Kind is WorkflowExecutableStartAuthorityKind.RetainedDependency or WorkflowExecutableStartAuthorityKind.StimulusDelivery)
+        if (startAuthority.Kind is WorkflowExecutableStartAuthorityKind.RetainedDependency or WorkflowExecutableStartAuthorityKind.StimulusDelivery or
+            WorkflowExecutableStartAuthorityKind.ModelWork)
         {
             if (sourceSelection is not null || provenanceRequirement != WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
                 throw new ArgumentException("Saved authority cannot be combined with live-source selection or requirements.", nameof(startAuthority));
@@ -352,7 +353,8 @@ public enum WorkflowExecutableStartAuthorityKind
 {
     LiveReference = 0,
     RetainedDependency = 1,
-    StimulusDelivery = 2
+    StimulusDelivery = 2,
+    ModelWork = 3
 }
 
 /// <summary>
@@ -369,11 +371,20 @@ public sealed class WorkflowExecutableStartAuthority
         WorkflowExecutableRetainedDependencyAuthority? retainedDependency = null)
         : this(kind, retainedDependency, null) { }
 
-    [JsonConstructor]
     public WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind kind,
         WorkflowExecutableRetainedDependencyAuthority? retainedDependency,
         WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery)
+        : this(kind, retainedDependency, stimulusDelivery, null) { }
+
+    [JsonConstructor]
+    public WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind kind,
+        WorkflowExecutableRetainedDependencyAuthority? retainedDependency,
+        WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery,
+        RuntimeModelNativeWorkOrigin? modelWork)
     {
+        if ((kind == WorkflowExecutableStartAuthorityKind.ModelWork) != (modelWork is not null) ||
+            modelWork is not null && (retainedDependency is not null || stimulusDelivery is not null))
+            throw new ArgumentException("Model-work authority requires only its exact committed model invocation.", nameof(modelWork));
         if (kind == WorkflowExecutableStartAuthorityKind.LiveReference && (retainedDependency is not null || stimulusDelivery is not null))
             throw new ArgumentException("Live-reference authority cannot carry saved provenance.");
         if (kind == WorkflowExecutableStartAuthorityKind.RetainedDependency && (retainedDependency is null || stimulusDelivery is not null))
@@ -386,6 +397,7 @@ public sealed class WorkflowExecutableStartAuthority
         Kind = kind;
         RetainedDependency = retainedDependency;
         StimulusDelivery = stimulusDelivery;
+        ModelWork = modelWork;
     }
 
     public WorkflowExecutableStartAuthorityKind Kind { get; }
@@ -393,6 +405,11 @@ public sealed class WorkflowExecutableStartAuthority
     public WorkflowExecutableRetainedDependencyAuthority? RetainedDependency { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowExecutableStimulusDeliveryAuthority? StimulusDelivery { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelNativeWorkOrigin? ModelWork { get; }
+
+    public static WorkflowExecutableStartAuthority FromModelWork(RuntimeModelNativeWorkOrigin origin) =>
+        new(WorkflowExecutableStartAuthorityKind.ModelWork, null, null, origin);
 
     public static WorkflowExecutableStartAuthority LiveReference { get; } = new(WorkflowExecutableStartAuthorityKind.LiveReference);
 
@@ -706,7 +723,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         if (startAuthority is null)
             return;
 
-        if (startAuthority.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency)
+        if (startAuthority.Kind is WorkflowExecutableStartAuthorityKind.RetainedDependency or WorkflowExecutableStartAuthorityKind.ModelWork)
         {
             if (pinnedSource is not null)
                 throw new ArgumentException("Retained-dependency authority cannot carry historical child source provenance.", nameof(startAuthority));
