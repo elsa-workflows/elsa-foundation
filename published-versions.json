@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "11a07e86686c68bb523334409e66f39deaed068c",
+  "last_publish_commit": "9016c1de59e852828203deacca89b1bfcf786ef4",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -694,8 +694,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Api",
-      "version": "4.0.25-preview",
-      "commit": "3bd200c098ec8bd7d4816f17757cde9389ed854a"
+      "version": "4.0.26-preview",
+      "commit": "9016c1de59e852828203deacca89b1bfcf786ef4"
     },
     {
       "package_id": "Elsa.Workflows.Design.CodeGeneration",
