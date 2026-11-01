@@ -12,5 +12,9 @@ An approved article reaches `ReviewEditorialContent`. Its exact native wait is d
 example performs no publication effect. See [extension points](EXTENSION_POINTS.md).
 
 Enable `SpecialistsEditorial` together with a current-subject identity provider, such as Foundation
-ASP.NET Core Identity. `DecisionLifetime` (default 15 minutes) bounds how long an issued decision may wait
+ASP.NET Core Identity, and a distributed lock provider (FileSystem locking is qualified for a single node only). `DecisionLifetime` (default 15 minutes) bounds how long an issued decision may wait
 for admission.
+
+The feature runs inside a native workflow runtime host (it consumes the bookmark dispatcher, scheduler queue and
+runtime stores) and registers one startup task, `EditorialTypesStartupTask`, which registers the two activity type
+aliases.

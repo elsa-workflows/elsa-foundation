@@ -68,6 +68,30 @@ public sealed class AspNetCoreIdentityCurrentSubjectPermissionTests
         Assert.IsType<UnsupportedCurrentSubjectPermissionAuthorizer>(provider.CreateScope().ServiceProvider.GetRequiredService<ICurrentSubjectPermissionAuthorizer>());
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_host_replacement_wins_over_the_provider_default_in_either_order(bool hostFirst)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        if (hostFirst) services.ReplaceCurrentSubjectPermissionAuthorizer<HostAuthorizer>();
+        services.AddFoundationAspNetCoreIdentity();
+        if (!hostFirst) services.ReplaceCurrentSubjectPermissionAuthorizer<HostAuthorizer>();
+        services.AddFoundationAspNetCoreIdentity();
+        await using var provider = services.BuildServiceProvider();
+
+        Assert.Single(services, x => x.ServiceType == typeof(ICurrentSubjectPermissionAuthorizer));
+        Assert.Equal(CurrentSubjectPermissionStatus.Denied, (await AuthorizeAsync(provider, "ada")).Status);
+        Assert.Equal("host", (await AuthorizeAsync(provider, "ada")).Failure);
+    }
+
+    private sealed class HostAuthorizer : ICurrentSubjectPermissionAuthorizer
+    {
+        public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(CurrentSubjectPermissionResult.Denied("host"));
+    }
+
     private static ServiceProvider Provider()
     {
         var services = new ServiceCollection();

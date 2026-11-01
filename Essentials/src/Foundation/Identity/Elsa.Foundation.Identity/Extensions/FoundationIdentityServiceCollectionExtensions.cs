@@ -80,6 +80,20 @@ public static class FoundationIdentityServiceCollectionExtensions
         Replace<ICurrentSubjectPermissionAuthorizer, TAuthorizer>(services, ServiceLifetime.Scoped);
 
     /// <summary>
+    /// Lets an identity provider take over the fail-closed default. It never overwrites a host's explicit
+    /// <see cref="ReplaceCurrentSubjectPermissionAuthorizer{TAuthorizer}"/> made before or after it, and repeating
+    /// it is idempotent.
+    /// </summary>
+    public static IServiceCollection UseCurrentSubjectPermissionAuthorizerProvider<TAuthorizer>(this IServiceCollection services)
+        where TAuthorizer : class, ICurrentSubjectPermissionAuthorizer
+    {
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(ICurrentSubjectPermissionAuthorizer)).ToArray();
+        if (descriptors.Length == 1 && descriptors[0].ImplementationType != typeof(UnsupportedCurrentSubjectPermissionAuthorizer))
+            return services;
+        return Replace<ICurrentSubjectPermissionAuthorizer, TAuthorizer>(services, ServiceLifetime.Scoped);
+    }
+
+    /// <summary>
     /// Registers the default for a replacement contract while preserving one explicit host
     /// registration. A second registration is a composition error, never a last-write-wins choice.
     /// </summary>

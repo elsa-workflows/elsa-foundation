@@ -116,6 +116,7 @@ internal sealed class EditorialHost : IAsyncDisposable
                 services.AddSingleton<ISpecialistModelClientFactory>(Model);
                 services.AddScoped<ICurrentSubjectPermissionAuthorizer>(_ => Subjects);
                 services.AddSingleton(Crash);
+                services.AddSingleton(new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = TimeSpan.FromMilliseconds(200) });
                 services.AddScoped<IRuntimeCheckpointCommitEnricher, EditorialCrashEnricher>();
                 services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                 {
@@ -502,12 +503,23 @@ internal sealed class EditorialSubjects : ICurrentSubjectPermissionAuthorizer
     private int checks;
     private (string Tenant, string Subject)? revokeAfterNextCheck;
 
+    private int unavailableAfterChecks = -1;
+
+    /// <summary>Lets the next check pass, then fails every check as a store outage until <see cref="Unavailable"/> is cleared.</summary>
+    public void UnavailableAfterNextCheck() => unavailableAfterChecks = checks + 1;
+
     /// <summary>Grants the next check for this subject, then revokes it: models revocation between issue and admission.</summary>
     public void RevokeAfterNextCheck(string subject, string tenant = EditorialHost.Tenant) => revokeAfterNextCheck = (tenant, subject);
 
     public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default)
     {
         if (Unavailable) throw new TimeoutException("The identity store is temporarily unavailable.");
+        if (unavailableAfterChecks >= 0 && checks >= unavailableAfterChecks)
+        {
+            unavailableAfterChecks = -1;
+            Unavailable = true;
+            throw new TimeoutException("The identity store is temporarily unavailable.");
+        }
         Interlocked.Increment(ref checks);
         if (revokeAfterNextCheck == (request.TenantId, request.SubjectId) && grants.ContainsKey((request.TenantId, request.SubjectId)))
         {

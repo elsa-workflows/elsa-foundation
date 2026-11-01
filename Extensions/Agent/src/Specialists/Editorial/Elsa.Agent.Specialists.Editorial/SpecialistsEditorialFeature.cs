@@ -23,7 +23,7 @@ namespace Elsa.Agent.Specialists.Editorial;
 [ManifestFeatureCategory("Runtime")]
 [ShellFeature(name: "SpecialistsEditorial", DisplayName = "Specialists: Editorial Review",
     Description = "Bounded Copywriter/Proofreader revision routing and an exact, permission-gated human content review wait.",
-    DependsOn = new object[] { "ActivitiesRuntime", "Secrets", "FoundationIdentityAbstractions" })]
+    DependsOn = new object[] { "ActivitiesRuntime", "Events", "Secrets", "Serialization", "Tasks", "FoundationIdentityAbstractions" })]
 public class SpecialistsEditorialFeature : IShellFeature
 {
     /// <summary>How long an issued decision may wait for native admission. Defaults to fifteen minutes.</summary>

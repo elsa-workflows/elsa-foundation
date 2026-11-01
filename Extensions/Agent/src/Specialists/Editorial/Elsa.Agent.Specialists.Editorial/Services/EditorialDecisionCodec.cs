@@ -26,11 +26,14 @@ internal sealed record EditorialDecisionClaims(
     DateTimeOffset IssuedAt,
     DateTimeOffset ExpiresAt)
 {
-    /// <summary>True when every wait-identity field equals the pinned review state.</summary>
-    public bool Targets(EditorialReviewState state, string bookmarkId) =>
+    /// <summary>
+    /// True when every wait-identity field equals the pinned review state. The bookmark is compared when the
+    /// caller knows it: the pre-claim guard does, while the activity's resume context exposes only the delivery.
+    /// </summary>
+    public bool Targets(EditorialReviewState state, string? bookmarkId) =>
         TenantId == state.TenantId && Partition == state.Partition && WorkflowExecutionId == state.WorkflowExecutionId &&
         ActivityExecutionId == state.ActivityExecutionId && ExecutableNodeId == state.ExecutableNodeId &&
-        WaitId == state.WaitId && Round == state.Round && ArticleHash == state.ArticleHash && BookmarkId == bookmarkId;
+        WaitId == state.WaitId && Round == state.Round && ArticleHash == state.ArticleHash && (bookmarkId is null || BookmarkId == bookmarkId);
 
     /// <summary>The decision content that one request ID may carry; replays must repeat it exactly.</summary>
     public bool SameContent(EditorialDecisionClaims other) =>
@@ -44,7 +47,7 @@ internal sealed record EditorialDecisionClaims(
 /// is checked after decryption: a protected secret produced for any other purpose is refused. The codec keeps
 /// reading every format it ever wrote; keys follow the Secrets key-ring retention.
 /// </summary>
-public sealed class EditorialDecisionCodec(ISecretValueProtector protector)
+internal sealed class EditorialDecisionCodec(ISecretValueProtector protector)
 {
     internal const string Purpose = "elsa.agent.editorial-decision/1";
     internal const string Codec = "editorial-decision/1";

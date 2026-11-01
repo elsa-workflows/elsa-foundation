@@ -73,6 +73,8 @@
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Design\Elsa.Agent.Specialists.Design.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\JsonSchema\Elsa.Agent.Specialists.JsonSchema.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Elsa.Agent.Specialists\Elsa.Agent.Specialists.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Editorial/Elsa.Agent.Specialists.Editorial/Elsa.Agent.Specialists.Editorial.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Editorial/Api/Elsa.Agent.Specialists.Editorial.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />

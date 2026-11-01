@@ -12,7 +12,8 @@ Two NativeEndpoints endpoints over `IEditorialReviews`, with capability `elsa.ap
 
 The caller's tenant and subject come only from the trusted normalized principal. The decision body has a
 closed schema (`round`, `articleHash`, `decision`, `comment`, `requestId`), so an `actorId`, `requestedBy` or
-other unmapped member is refused with 400. A missing or foreign review is 404. Refusals of a well-formed
-decision are typed receipt statuses (`Conflict`, `AlreadyResolved`, `Forbidden`, `Closed`, `Unavailable`),
-so a retry with the same request ID replays the native receipt. `EditorialReviewPermissionContributor`
+other unmapped member is refused with 400. On GET, a missing or foreign review is 404. The decision route
+answers a well-formed request with a typed receipt status: `Accepted`, `Pending`, `AlreadyResolved`,
+`Conflict`, `Forbidden`, `NotFound`, `Closed`, `Unavailable` or `Refused`. A retry with the same request ID
+replays the native receipt. Receipts never carry review content, because deciding does not imply reading. `EditorialReviewPermissionContributor`
 contributes both permissions.

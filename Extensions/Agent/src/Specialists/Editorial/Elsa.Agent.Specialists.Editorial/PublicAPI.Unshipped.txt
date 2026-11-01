@@ -20,7 +20,7 @@ Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.Article.get -
 Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.Article.set -> void
 Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.ReviewComments.get -> string?
 Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.ReviewComments.set -> void
-Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.ReviewEditorialContent(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Agent.Specialists.Editorial.Services.EditorialDecisionCodec! codec) -> void
+Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.ReviewEditorialContent(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! workflows, Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor! access, Elsa.Secrets.Core.Contracts.ISecretValueProtector! protector) -> void
 Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.Round.get -> int
 Elsa.Agent.Specialists.Editorial.Activities.ReviewEditorialContent.Round.set -> void
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecider
@@ -53,13 +53,11 @@ Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionCommand.WorkflowExec
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionCommand.WorkflowExecutionId.init -> void
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.<Clone>$() -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt!
-Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Deconstruct(out Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus Status, out Elsa.Agent.Specialists.Editorial.Contracts.EditorialReviewView? Review, out string? Reason) -> void
-Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.EditorialDecisionReceipt(Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus Status, Elsa.Agent.Specialists.Editorial.Contracts.EditorialReviewView? Review = null, string? Reason = null) -> void
+Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Deconstruct(out Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus Status, out string? Reason) -> void
+Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.EditorialDecisionReceipt(Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus Status, string? Reason = null) -> void
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Equals(Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt? other) -> bool
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Reason.get -> string?
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Reason.init -> void
-Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Review.get -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialReviewView?
-Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Review.init -> void
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Status.get -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceipt.Status.init -> void
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
@@ -70,6 +68,7 @@ Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus.Confli
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus.Forbidden = 4 -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus.NotFound = 5 -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus.Pending = 1 -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
+Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus.Refused = 8 -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus.Unavailable = 7 -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialDecisionReceiptStatus
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialReviewReference
 Elsa.Agent.Specialists.Editorial.Contracts.EditorialReviewReference.<Clone>$() -> Elsa.Agent.Specialists.Editorial.Contracts.EditorialReviewReference!
@@ -193,15 +192,9 @@ Elsa.Agent.Specialists.Editorial.Models.EditorialRevisionResult.Round.get -> int
 Elsa.Agent.Specialists.Editorial.Models.EditorialRevisionResult.Round.init -> void
 Elsa.Agent.Specialists.Editorial.Models.EditorialRevisionResult.Verdict.get -> string?
 Elsa.Agent.Specialists.Editorial.Models.EditorialRevisionResult.Verdict.init -> void
-Elsa.Agent.Specialists.Editorial.Services.EditorialDecisionCodec
-Elsa.Agent.Specialists.Editorial.Services.EditorialDecisionCodec.EditorialDecisionCodec(Elsa.Secrets.Core.Contracts.ISecretValueProtector! protector) -> void
 Elsa.Agent.Specialists.Editorial.Services.EditorialReviewException
 Elsa.Agent.Specialists.Editorial.Services.EditorialReviewException.Code.get -> string!
 Elsa.Agent.Specialists.Editorial.Services.EditorialReviewException.IsUnavailable.get -> bool
-Elsa.Agent.Specialists.Editorial.Services.EditorialReviewOptions
-Elsa.Agent.Specialists.Editorial.Services.EditorialReviewOptions.DecisionLifetime.get -> System.TimeSpan
-Elsa.Agent.Specialists.Editorial.Services.EditorialReviewOptions.DecisionLifetime.set -> void
-Elsa.Agent.Specialists.Editorial.Services.EditorialReviewOptions.EditorialReviewOptions() -> void
 Elsa.Agent.Specialists.Editorial.SpecialistsEditorialFeature
 Elsa.Agent.Specialists.Editorial.SpecialistsEditorialFeature.DecisionLifetime.get -> System.TimeSpan
 Elsa.Agent.Specialists.Editorial.SpecialistsEditorialFeature.DecisionLifetime.set -> void

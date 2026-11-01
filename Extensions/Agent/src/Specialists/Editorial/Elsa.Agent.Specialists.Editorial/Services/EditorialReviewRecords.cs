@@ -52,12 +52,20 @@ internal static class EditorialReviewRecords
     public static EditorialAdmittedDecision? Admitted(ActivityExecutionState activity, EditorialDecisionCodec codec)
     {
         if (ConsumedDecision(activity) is not { } consumed) return null;
+        var result = ReadResult(activity);
         if (consumed.Payload.InlineValue is { } inline)
         {
-            var claims = ReadDelivery(codec, inline);
-            return new(claims.RequestId, claims.ActorId, claims.Decision, claims.Comment);
+            try
+            {
+                var claims = ReadDelivery(codec, inline);
+                return new(claims.RequestId, claims.ActorId, claims.Decision, claims.Comment);
+            }
+            catch (EditorialReviewException) when (result is not null)
+            {
+                // A completed review keeps its typed result even when the in-flight envelope is no longer readable.
+            }
         }
-        return ReadResult(activity) is { } result && Enum.TryParse<EditorialDecision>(result.Decision, out var decision)
+        return result is not null && Enum.TryParse<EditorialDecision>(result.Decision, out var decision)
             ? new(result.RequestId, result.DecidedBy, decision, result.Comment)
             : throw EditorialReviewException.Invalid("The admitted editorial decision is unreadable.");
     }

@@ -27,10 +27,15 @@ public sealed class EditorialCompositionTests
     {
         await using var host = await EditorialHost.StartAsync("editorial-approve", new([FirstArticle, SecondArticle], [ChangesRequested, Approved]));
         host.Subjects.Grant(Reviewer);
-        var (executable, _, _) = await EditorialExecutable.BuildAsync(DateTimeOffset.UtcNow.AddHours(1));
+        var (executable, copywriterVersion, proofreaderVersion) = await EditorialExecutable.BuildAsync(DateTimeOffset.UtcNow.AddHours(1));
         await host.StartRunAsync(executable);
         await host.PumpAsync();
 
+        // The native graph pins the exact published specialist versions that ran.
+        var pinned = Pinned(executable.RootActivity).Select(x => x.DescriptorPayload).Where(x => x.ValueKind == JsonValueKind.Object && x.TryGetProperty("definitionVersionId", out _))
+            .Select(x => x.GetProperty("definitionVersionId").GetString()).ToArray();
+        Assert.Contains(copywriterVersion, pinned);
+        Assert.Contains(proofreaderVersion, pinned);
         var calls = host.Model.Calls.ToArray();
         Assert.True(calls.Select(x => x.Role).SequenceEqual(["copywriter", "proofreader", "copywriter", "proofreader"]),
             string.Join(",", calls.Select(x => x.Role)) + await host.DiagnoseAsync());
@@ -62,7 +67,11 @@ public sealed class EditorialCompositionTests
         Assert.Equal(EditorialDecisionReceiptStatus.AlreadyResolved, (await host.DecideAsync(command with { RequestId = "request-late-deny" }, Reviewer)).Status);
 
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
-        var completed = Assert.Single(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
+        var finished = await host.ActivitiesAsync();
+        // One logical continuation: each container completes exactly once.
+        Assert.Single(finished, x => x.Execution.ExecutableNodeId == "editorial-flowchart" && x.Status == ActivityExecutionStatus.Completed);
+        Assert.Single(finished, x => x.Execution.ExecutableNodeId == "editorial-sequence" && x.Status == ActivityExecutionStatus.Completed);
+        var completed = Assert.Single(finished, x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
         Assert.Equal("Approved", completed.Completion!.OutcomeKey);
         Assert.Single(completed.TriggerDeliveries!, x => x.Status == ActivityTriggerDeliveryStatus.Consumed);
         Assert.Equal(4, host.Model.Calls.Count);
@@ -155,11 +164,15 @@ public sealed class EditorialCompositionTests
         host.Subjects.RevokeAfterNextCheck(Reviewer);
         var issued = await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-revoked"), Reviewer);
         await host.PumpAsync();
-        Assert.Equal(EditorialDecisionReceiptStatus.Pending, issued.Status);
+        Assert.Equal(EditorialDecisionReceiptStatus.Refused, issued.Status);
         Assert.True(host.Subjects.Checks >= 2);
 
         Assert.Equal(EditorialReviewStatus.Pending, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
-        Assert.Contains(await host.IncidentsAsync(), x => x.Message.Contains("editorial", StringComparison.OrdinalIgnoreCase) || x.Message.Contains("review permission", StringComparison.Ordinal));
+        Assert.Contains(await host.IncidentsAsync(), x => x.Message.Contains("no longer holds the review permission", StringComparison.Ordinal));
+        // The refused request ID stays refused; it never reports Pending again.
+        host.Subjects.Grant(Reviewer);
+        Assert.Equal(EditorialDecisionReceiptStatus.Refused, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-revoked"), Reviewer)).Status);
+        host.Subjects.Revoke(Reviewer);
         Assert.Equal(EditorialDecisionReceiptStatus.Forbidden, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-revoked-again"), Reviewer)).Status);
 
         await host.DecideAsync(Command(host, pending, view, EditorialDecision.Deny, "request-grace"), "reviewer-grace");
@@ -176,16 +189,25 @@ public sealed class EditorialCompositionTests
         host.Subjects.Grant(Reviewer);
         var (pending, view) = await RunToReviewAsync(host);
 
-        Assert.Equal(EditorialDecisionReceiptStatus.Pending, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-expired"), Reviewer)).Status);
-        await Task.Delay(20);
+        Assert.Equal(EditorialDecisionReceiptStatus.Refused, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-expired"), Reviewer)).Status);
         await host.PumpAsync();
         Assert.Equal(EditorialReviewStatus.Pending, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
+        Assert.Contains(await host.IncidentsAsync(), x => x.Message.Contains("expired before it was admitted", StringComparison.Ordinal));
 
         var bookmarkId = Assert.Single(pending.BookmarkIds);
+        var state = EditorialReviewRecords.ReadState(pending);
         await using (var scope = await host.ScopeAsync())
         {
             var protector = scope.ServiceProvider.GetRequiredService<ISecretValueProtector>();
-            foreach (var envelope in new[] { protector.Protect("{\"purpose\":\"elsa.connections.secret/1\"}"), "v2:forged:envelope" })
+            var codec = new EditorialDecisionCodec(protector);
+            var genuine = new EditorialDecisionClaims(EditorialDecisionCodec.Purpose, EditorialDecisionCodec.Codec, state.TenantId, state.Partition,
+                state.WorkflowExecutionId, state.ActivityExecutionId, state.ExecutableNodeId, state.WaitId, bookmarkId, state.Round, state.ArticleHash,
+                Reviewer, EditorialDecision.Approve, null, "request-genuine", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
+            var authentic = codec.Protect(genuine);
+            var flipped = authentic[..^2] + (authentic[^2] == 'A' ? 'B' : 'A') + authentic[^1];
+            var foreignWait = codec.Protect(genuine with { WaitId = "editorial-review:" + new string('f', 40), RequestId = "request-foreign-wait" });
+            var foreignRun = codec.Protect(genuine with { WorkflowExecutionId = "another-run", RequestId = "request-foreign-run" });
+            foreach (var envelope in new[] { protector.Protect("{\"purpose\":\"elsa.connections.secret/1\"}"), "v2:forged:envelope", flipped, foreignWait, foreignRun })
             {
                 var input = JsonSerializer.SerializeToElement(new EditorialDecisionDelivery(EditorialReviewIds.FormatVersion, envelope));
                 await scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(new BookmarkResumeDispatchRequest(host.WorkflowExecutionId,
@@ -271,6 +293,61 @@ public sealed class EditorialCompositionTests
         Assert.Equal(EditorialDecisionReceiptStatus.Accepted, (await host.DecideAsync(command, Reviewer)).Status);
         Assert.Equal(2, host.Model.Calls.Count);
     }
+
+    [Fact]
+    public async Task A_guard_time_identity_outage_keeps_the_decision_owed_until_it_recovers()
+    {
+        await using var host = await EditorialHost.StartAsync("editorial-outage", new([FirstArticle], [Approved]));
+        host.Subjects.Grant(Reviewer);
+        var (pending, view) = await RunToReviewAsync(host);
+
+        host.Subjects.UnavailableAfterNextCheck();
+        var issued = await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-outage"), Reviewer);
+        Assert.Equal(EditorialDecisionReceiptStatus.Pending, issued.Status);
+        Assert.Empty(await host.IncidentsAsync());
+        Assert.Equal(EditorialReviewStatus.Pending, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
+
+        host.Subjects.Unavailable = false;
+        for (var attempt = 0; attempt < 20 && (await host.WorkflowAsync()).Status == WorkflowExecutionStatus.Running; attempt++)
+        {
+            await Task.Delay(250);
+            await host.PumpAsync();
+        }
+
+        Assert.Equal(EditorialReviewStatus.Approved, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
+        Assert.Equal(EditorialDecisionReceiptStatus.Accepted, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-outage"), Reviewer)).Status);
+    }
+
+    [Fact]
+    public async Task A_cancellation_requested_behind_an_owed_decision_settles_in_native_order_exactly_once()
+    {
+        await using var host = await EditorialHost.StartAsync("editorial-cancel-race", new([FirstArticle], [Approved]));
+        host.Subjects.Grant(Reviewer);
+        var (pending, view) = await RunToReviewAsync(host);
+
+        host.Subjects.UnavailableAfterNextCheck();
+        Assert.Equal(EditorialDecisionReceiptStatus.Pending, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-race"), Reviewer)).Status);
+        // The cancel is queued behind the earlier, still-owed decision; native ordering settles both.
+        await host.CancelAsync();
+        Assert.Equal(WorkflowExecutionStatus.Running, (await host.WorkflowAsync()).Status);
+        host.Subjects.Unavailable = false;
+        for (var attempt = 0; attempt < 20 && (await host.WorkflowAsync()).Status == WorkflowExecutionStatus.Running; attempt++)
+        {
+            await Task.Delay(250);
+            await host.PumpAsync();
+        }
+
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, (await host.WorkflowAsync()).Status);
+        var activities = await host.ActivitiesAsync();
+        var review = Assert.Single(activities, x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
+        Assert.True((review.TriggerDeliveries ?? []).Count(x => x.Status == ActivityTriggerDeliveryStatus.Consumed) <= 1);
+        Assert.DoesNotContain(activities, x => x.Execution.ExecutableNodeId == "editorial-sequence" && x.Status == ActivityExecutionStatus.Completed);
+        Assert.Contains((await host.DecideAsync(Command(host, pending, view, EditorialDecision.Deny, "request-after-race"), Reviewer)).Status,
+            new[] { EditorialDecisionReceiptStatus.AlreadyResolved, EditorialDecisionReceiptStatus.Closed });
+    }
+
+    private static IEnumerable<ExecutableNode> Pinned(ExecutableNode node) =>
+        new[] { node }.Concat(node.ChildSlots.SelectMany(slot => slot.Activities).SelectMany(Pinned));
 
     private static async Task<(ActivityExecutionState Pending, EditorialReviewView View)> RunToReviewAsync(EditorialHost host)
     {

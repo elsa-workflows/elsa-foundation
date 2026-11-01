@@ -9,8 +9,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Agent.Specialists.Editorial.Services;
 
-/// <summary>Bounds for issued decision envelopes.</summary>
-public sealed class EditorialReviewOptions
+/// <summary>Bounds for issued decision envelopes, set only through <c>SpecialistsEditorialFeature</c>.</summary>
+internal sealed class EditorialReviewOptions
 {
     /// <summary>How long an issued decision may wait for native admission. Defaults to fifteen minutes.</summary>
     public TimeSpan DecisionLifetime { get; set; } = TimeSpan.FromMinutes(15);
@@ -42,12 +42,12 @@ internal sealed partial class EditorialReviewService(IWorkflowExecutionStateStor
         ArgumentNullException.ThrowIfNull(decider);
         if (!RequestIdPattern().IsMatch(command.RequestId ?? string.Empty) || !Enum.IsDefined(command.Decision) ||
             command.Comment?.Length > EditorialReviewIds.MaximumCommentCharacters || string.IsNullOrWhiteSpace(command.ArticleHash))
-            return new(EditorialDecisionReceiptStatus.Conflict, Reason: "The decision request is malformed.");
+            return new(EditorialDecisionReceiptStatus.Conflict, "The decision request is malformed.");
         try
         {
             await using var handle = await locks.TryAcquireLockAsync(
                 $"elsa.agent.editorial-review:{command.WorkflowExecutionId}:{command.ActivityExecutionId}", TimeSpan.FromSeconds(10), cancellationToken);
-            if (handle is null) return new(EditorialDecisionReceiptStatus.Unavailable, Reason: "Another decision for this review is being submitted.");
+            if (handle is null) return new(EditorialDecisionReceiptStatus.Unavailable, "Another decision for this review is being submitted.");
             return await DecideLockedAsync(command, decider, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
@@ -57,36 +57,36 @@ internal sealed partial class EditorialReviewService(IWorkflowExecutionStateStor
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return new(EditorialDecisionReceiptStatus.Unavailable, Reason: "A review dependency is temporarily unavailable; retry with the same request ID.");
+            return new(EditorialDecisionReceiptStatus.Unavailable, "A review dependency is temporarily unavailable; retry with the same request ID.");
         }
     }
 
     private async ValueTask<EditorialDecisionReceipt> DecideLockedAsync(EditorialDecisionCommand command, EditorialDecider decider, CancellationToken cancellationToken)
     {
         var located = await LocateAsync(command.WorkflowExecutionId, command.ActivityExecutionId, decider, cancellationToken);
-        if (located is not { } found) return new(EditorialDecisionReceiptStatus.NotFound, Reason: "No visible editorial review matches.");
+        if (located is not { } found) return new(EditorialDecisionReceiptStatus.NotFound, "No visible editorial review matches.");
         var (activity, review) = found;
         if (command.Round != review.Round || !string.Equals(command.ArticleHash, review.ArticleHash, StringComparison.Ordinal))
-            return new(EditorialDecisionReceiptStatus.Conflict, View(activity, review), "The article or round changed; this decision targeted another wait.");
+            return new(EditorialDecisionReceiptStatus.Conflict, "The article or round changed; this decision targeted another wait.");
 
         if (Admitted(activity) is { } admitted)
-            return Reconcile(admitted, command, decider, activity, review);
+            return Reconcile(admitted, command, decider);
         if (activity.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or
             ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded)
-            return new(EditorialDecisionReceiptStatus.Closed, View(activity, review), "The review ended without a decision.");
+            return new(EditorialDecisionReceiptStatus.Closed, "The review ended without a decision.");
 
         var bookmark = await FindWaitAsync(activity, review, cancellationToken);
-        if (bookmark is null) return new(EditorialDecisionReceiptStatus.Unavailable, View(activity, review), "The review wait is not committed yet.");
+        if (bookmark is null) return new(EditorialDecisionReceiptStatus.Unavailable, "The review wait is not committed yet.");
         var idempotencyKey = $"{review.WorkflowExecutionId}:bookmark-resume:{bookmark.BookmarkId}:{EditorialReviewIds.StimulusType}:{review.WaitId}:{command.RequestId}";
         var queued = await QueuedAsync(review, idempotencyKey, cancellationToken);
         if (queued is { } earlier)
             return earlier.SameContent(Claims(command, decider, review, bookmark.BookmarkId, earlier.IssuedAt))
-                ? new(EditorialDecisionReceiptStatus.Pending, View(activity, review))
-                : new(EditorialDecisionReceiptStatus.Conflict, View(activity, review), "This request ID already carries a different decision.");
+                ? new(EditorialDecisionReceiptStatus.Pending)
+                : new(EditorialDecisionReceiptStatus.Conflict, "This request ID already carries a different decision.");
 
         var current = await subjects.AuthorizeAsync(new(decider.TenantId, decider.ActorId, EditorialReviewIds.DecidePermission), cancellationToken);
         if (current.Status != CurrentSubjectPermissionStatus.Granted)
-            return new(EditorialDecisionReceiptStatus.Forbidden, Reason: "You do not currently hold the editorial review permission.");
+            return new(EditorialDecisionReceiptStatus.Forbidden, "You do not currently hold the editorial review permission.");
 
         var claims = Claims(command, decider, review, bookmark.BookmarkId, time.GetUtcNow());
         var input = JsonSerializer.SerializeToElement(new EditorialDecisionDelivery(EditorialReviewIds.FormatVersion, codec.Protect(claims)));
@@ -97,25 +97,27 @@ internal sealed partial class EditorialReviewService(IWorkflowExecutionStateStor
             dispatched.Bookmark is { } resolved && resolved.BookmarkId != bookmark.BookmarkId)
             throw EditorialReviewException.Invalid("The dispatcher resolved a different wait.");
 
-        // No dispatch status is itself an acknowledgement: reconcile from the native records it produced.
+        // No dispatch status is itself an acknowledgement: reconcile from the native records it produced. Pending is
+        // reported only while the decision is provably owed; a Duplicate the actor remembers but nothing retains
+        // means native admission already refused this request.
         var after = await activities.FindAsync(review.WorkflowExecutionId, review.ActivityExecutionId, cancellationToken) ?? activity;
-        if (Admitted(after) is { } settled) return Reconcile(settled, command, decider, after, review);
-        return dispatched.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate
-            ? new(EditorialDecisionReceiptStatus.Pending, View(after, review))
-            : dispatched.Status == BookmarkResumeDispatchStatus.NotFound
-                ? new(EditorialDecisionReceiptStatus.Closed, View(after, review), "The review wait is no longer open.")
-                : new(EditorialDecisionReceiptStatus.Unavailable, View(after, review), "The decision could not be queued now; retry with the same request ID.");
+        if (Admitted(after) is { } settled) return Reconcile(settled, command, decider);
+        if (dispatched.Status is not (BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate or BookmarkResumeDispatchStatus.NotFound))
+            return new(EditorialDecisionReceiptStatus.Unavailable, "The decision could not be queued now; retry with the same request ID.");
+        if (await QueuedAsync(review, idempotencyKey, cancellationToken) is not null) return new(EditorialDecisionReceiptStatus.Pending);
+        if (after.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or
+            ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded || dispatched.Status == BookmarkResumeDispatchStatus.NotFound)
+            return new(EditorialDecisionReceiptStatus.Closed, "The review wait is no longer open.");
+        return new(EditorialDecisionReceiptStatus.Refused, "This decision was not admitted; check your permission and submit a new request ID.");
     }
 
-    private EditorialDecisionReceipt Reconcile(EditorialAdmittedDecision admitted, EditorialDecisionCommand command, EditorialDecider decider,
-        ActivityExecutionState activity, EditorialReviewState review)
+    private static EditorialDecisionReceipt Reconcile(EditorialAdmittedDecision admitted, EditorialDecisionCommand command, EditorialDecider decider)
     {
-        var view = View(activity, review);
-        if (admitted.RequestId != command.RequestId) return new(EditorialDecisionReceiptStatus.AlreadyResolved, view, "Another decision was already admitted.");
+        if (admitted.RequestId != command.RequestId) return new(EditorialDecisionReceiptStatus.AlreadyResolved, "Another decision was already admitted.");
         var comment = string.IsNullOrWhiteSpace(command.Comment) ? null : command.Comment;
         return admitted.ActorId == decider.ActorId && admitted.Decision == command.Decision && admitted.Comment == comment
-            ? new(EditorialDecisionReceiptStatus.Accepted, view)
-            : new(EditorialDecisionReceiptStatus.Conflict, view, "This request ID already carries a different decision.");
+            ? new(EditorialDecisionReceiptStatus.Accepted)
+            : new(EditorialDecisionReceiptStatus.Conflict, "This request ID already carries a different decision.");
     }
 
     private async ValueTask<(ActivityExecutionState Activity, EditorialReviewState Review)?> LocateAsync(string workflowExecutionId, string activityExecutionId,

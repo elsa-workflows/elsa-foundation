@@ -71,7 +71,14 @@ public enum EditorialDecisionReceiptStatus
     Closed,
 
     /// <summary>A dependency was temporarily unavailable; retry with the same request ID.</summary>
-    Unavailable
+    Unavailable,
+
+    /// <summary>Native admission refused this request (for example expiry or revoked permission); the wait stays open.</summary>
+    Refused
 }
 
-public sealed record EditorialDecisionReceipt(EditorialDecisionReceiptStatus Status, EditorialReviewView? Review = null, string? Reason = null);
+/// <summary>
+/// The decision outcome only. It never carries review content: deciding does not imply the read permission, and
+/// callers read the exact review through <see cref="IEditorialReviews.GetAsync"/>.
+/// </summary>
+public sealed record EditorialDecisionReceipt(EditorialDecisionReceiptStatus Status, string? Reason = null);

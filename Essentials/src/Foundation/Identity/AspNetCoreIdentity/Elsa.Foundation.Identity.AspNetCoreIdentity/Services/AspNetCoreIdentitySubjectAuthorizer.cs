@@ -9,7 +9,7 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 /// <see cref="IdentityClaimsProjector"/> used at sign-in, then applies the canonical permission decision.
 /// A missing, disabled or locked user is denied; nothing from an earlier sign-in is reused.
 /// </summary>
-internal sealed class AspNetCoreIdentityCurrentSubjectPermissionAuthorizer(
+internal sealed class AspNetCoreIdentitySubjectAuthorizer(
     IUserStore users,
     IRoleStore roles,
     ITenantMembershipStore memberships,

@@ -43,12 +43,18 @@ internal sealed class EditorialResumeGuard(EditorialDecisionCodec codec, ICurren
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (EditorialReviewException exception) when (exception.IsUnavailable) { throw Unavailable(exception); }
         catch (EditorialReviewException) { throw; }
-        catch (Exception exception)
+        catch (RuntimeSchedulerWorkUnavailableException) { throw; }
+        catch (Exception exception) when (IsTransient(exception))
         {
-            // Identity or store reads that fail are not a refusal: the decision stays owed until they recover.
+            // An identity or store read that fails is not a refusal: the decision stays owed until it recovers.
             throw Unavailable(exception);
         }
+        // Anything else is deterministic and poisons the work item, leaving the pending wait for an operator.
     }
+
+    private static bool IsTransient(Exception exception) =>
+        exception is TimeoutException or IOException or System.Data.Common.DbException or HttpRequestException or OperationCanceledException ||
+        exception.InnerException is { } inner && IsTransient(inner);
 
     private static RuntimeSchedulerWorkUnavailableException Unavailable(Exception cause) =>
         new("editorial.review.unavailable", "The editorial decision could not be validated now; resume remains owed.", cause);

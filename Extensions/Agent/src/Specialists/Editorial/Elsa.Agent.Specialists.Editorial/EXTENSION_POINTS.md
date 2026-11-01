@@ -3,7 +3,7 @@
 Owner project: `Elsa.Agent.Specialists.Editorial`
 Domain: `Elsa.Agent`
 
-The finite editorial example from [spec1179 editorial contract](../../../../../specs/1179-specialist-agents/contracts/editorial.md).
+The finite editorial example from [spec1179 editorial contract](../../../../../../specs/1179-specialist-agents/contracts/editorial.md).
 It adds no general task inbox, user-task platform, approval store or generic checkpoint API.
 
 ## Consumed contracts

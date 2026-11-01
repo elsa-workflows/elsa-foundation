@@ -2,6 +2,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Editorial.Models;
 using Elsa.Agent.Specialists.Editorial.Services;
+using Elsa.Secrets.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Agent.Specialists.Editorial.Activities;
@@ -14,7 +15,7 @@ namespace Elsa.Agent.Specialists.Editorial.Activities;
 [Activity(Icon = "UserCheck")]
 [ActivityOutcome("Approved"), ActivityOutcome("Rejected")]
 public sealed class ReviewEditorialContent(IWorkflowExecutionStateStore workflows, IPersistenceAccessContextAccessor access,
-    EditorialDecisionCodec codec) : StatefulActivity<EditorialReviewResult, EditorialReviewState, EditorialDecisionDelivery>
+    ISecretValueProtector protector) : StatefulActivity<EditorialReviewResult, EditorialReviewState, EditorialDecisionDelivery>
 {
     /// <summary>The exact article awaiting a decision.</summary>
     [ActivityInput(Key = nameof(Article), Order = 0)]
@@ -51,15 +52,15 @@ public sealed class ReviewEditorialContent(IWorkflowExecutionStateStore workflow
     protected override ValueTask<ActivityTransition<EditorialReviewResult, EditorialReviewState>> ResumeAsync(
         ActivityResumeContext<EditorialReviewState, EditorialDecisionDelivery> context)
     {
-        // The guard already admitted this exact decision before the wait was claimed; the activity only checks
-        // that the envelope still targets this pinned state, so a substituted payload cannot complete it.
+        // The pre-claim guard validated the exact bookmark, expiry and current permission before the wait was
+        // claimed. The activity re-checks that the authentic envelope targets this pinned wait identity.
         var state = context.State;
         if (context.Trigger.FormatVersion != EditorialReviewIds.FormatVersion || state.FormatVersion != EditorialReviewIds.FormatVersion ||
             context.WorkflowExecutionId != state.WorkflowExecutionId || context.InvocationId != state.ActivityExecutionId ||
             context.ExecutableNodeId != state.ExecutableNodeId)
             throw EditorialReviewException.Invalid("The decision does not belong to this review.");
-        var claims = codec.Read(context.Trigger.Envelope);
-        if (!claims.Targets(state, claims.BookmarkId) || EditorialDecisionCodec.HashArticle(state.Article) != state.ArticleHash)
+        var claims = new EditorialDecisionCodec(protector).Read(context.Trigger.Envelope);
+        if (!claims.Targets(state, bookmarkId: null) || EditorialDecisionCodec.HashArticle(state.Article) != state.ArticleHash)
             throw EditorialReviewException.Invalid("The decision does not target this exact article and wait.");
         var result = new EditorialReviewResult(claims.Decision.ToString(), state.Round, state.ArticleHash, state.Article,
             state.ReviewComments, claims.ActorId, claims.Comment, claims.IssuedAt, claims.RequestId);

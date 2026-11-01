@@ -46,7 +46,7 @@ public sealed class EditorialRevisionGate(TimeProvider time) : Activity<Editoria
     [ActivityInput(Key = nameof(MaxRounds), Order = 5, DefaultValue = "3", DefaultSyntax = "Literal")]
     public int MaxRounds { get; set; } = EditorialReviewIds.MaximumRounds;
 
-    /// <summary>The original shared deadline for every specialist call of this revision.</summary>
+    /// <summary>The original shared deadline for every specialist call of this revision. Required before any call.</summary>
     [ActivityInput(Key = nameof(Deadline), Order = 6)]
     public DateTimeOffset? Deadline { get; set; }
 
@@ -73,10 +73,13 @@ public sealed class EditorialRevisionGate(TimeProvider time) : Activity<Editoria
         _ => Fault("editorial.review.verdict-invalid", "The reviewer verdict is not approved or changes_requested.")
     };
 
-    private ActivityTransition<EditorialRevisionResult> Call(EditorialRevisionResult next, string outcome) =>
-        Deadline is { } deadline && time.GetUtcNow() >= deadline
-            ? Fault("editorial.revision.deadline-exceeded", "The editorial revision's shared deadline passed before the next specialist call.")
-            : ActivityTransition.Complete(next, outcome);
+    private ActivityTransition<EditorialRevisionResult> Call(EditorialRevisionResult next, string outcome) => Deadline switch
+    {
+        null => Fault("editorial.revision.deadline-missing", "An editorial revision needs its original shared deadline before any specialist call."),
+        { } deadline when time.GetUtcNow() >= deadline =>
+            Fault("editorial.revision.deadline-exceeded", "The editorial revision's shared deadline passed before the next specialist call."),
+        _ => ActivityTransition.Complete(next, outcome)
+    };
 
     private static ActivityTransition<EditorialRevisionResult> Fault(string code, string message) =>
         ActivityTransition.Fault<EditorialRevisionResult>(new(code, message));
