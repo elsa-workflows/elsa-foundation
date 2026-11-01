@@ -474,7 +474,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!settingsSurface && ActiveComponent ? routeAvailability?.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability?.reason ?? "This route is unavailable."}<ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/></div> : null}
+        {!settingsSurface && ActiveComponent ? routeAvailability?.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability?.reason ?? "This route is unavailable."}</div> : null}
         {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea

@@ -52,6 +52,7 @@ describe("studio auth mounting", () => {
     const loader = vi.spyOn(moduleLoader, "registerStudioModuleInstances").mockImplementation(async (_manifests, api) => {
       const route = { id: path, path, label: "Module policy", component, requiresBackend: [{ id: "elsa.api.runtime", contractVersion: "1" }], availability: { state, reason: "Blocked by module policy" } };
       api.routes.add(route);
+      api.shell!.add({id:"acme.connection-action",placement:"connection",component:()=> <button type="button">Acme connection action</button>});
       api.navigation.add({ id: "module-policy", path: "/settings/module-policy", label: "Module policy", placement: "settings" });
       return;
     });
@@ -65,6 +66,7 @@ describe("studio auth mounting", () => {
       try {
         await vi.waitFor(() => expect(view.container.textContent).toContain(state === "hidden" ? "No Studio route is registered for" : "Blocked by module policy"));
         expect(component).not.toHaveBeenCalled();
+        expect([...view.container.querySelectorAll("button")].filter(button=>button.textContent==="Acme connection action")).toHaveLength(1);
       } finally {await view.unmount();}
     } finally {loader.mockRestore();window.history.replaceState({}, "", initialPath);}
   });

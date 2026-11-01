@@ -101,4 +101,3 @@ export function studioConnectionError(error: unknown): string {
   if (error instanceof StudioHttpError && error.status === 403) return "You do not have permission to discover this backend's capabilities.";
   return error instanceof Error ? error.message : "The backend could not be reached.";
 }
-
