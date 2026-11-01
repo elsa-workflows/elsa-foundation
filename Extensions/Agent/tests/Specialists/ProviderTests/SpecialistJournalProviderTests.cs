@@ -38,8 +38,14 @@ public sealed class SpecialistJournalProviderTests
                 var denied = await Assert.ThrowsAsync<SpecialistJournalException>(() => scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>()
                     .StageAsync(candidate, false, CancellationToken.None).AsTask());
                 Assert.Equal("specialist.journal.admission-disabled", denied.Code);
-                Assert.Equal(0, await context.Set<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistTurnRecord>().CountAsync());
-                Assert.Equal(0, await context.Set<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistOperationRecord>().CountAsync());
+                await context.Database.OpenConnectionAsync();
+                foreach (var table in new[] { "elsa_specialist_turns", "elsa_specialist_operations" })
+                {
+                    await using var count = context.Database.GetDbConnection().CreateCommand();
+                    count.CommandText = "SELECT COUNT(*) FROM " + table;
+                    Assert.Equal(0L, Convert.ToInt64(await count.ExecuteScalarAsync()));
+                }
+                await context.Database.CloseConnectionAsync();
             }
             var handles = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
             {
