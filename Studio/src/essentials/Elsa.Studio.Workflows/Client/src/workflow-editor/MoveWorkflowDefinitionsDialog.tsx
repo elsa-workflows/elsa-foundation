@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { moveWorkflowDefinitions } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
@@ -124,10 +125,13 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
             </div>
           </fieldset>
         </div>
-        <div className="wf-dialog-actions">
-          <button type="button" onClick={onClose} disabled={moving}>Cancel</button>
-          <button type="submit" disabled={moving}>{moving ? "Moving…" : "Move"}</button>
-        </div>
+        <StudioDialogFooter
+          className="wf-dialog-actions"
+          onCancel={onClose}
+          cancelDisabled={moving}
+          confirmLabel={moving ? "Moving…" : "Move"}
+          confirmDisabled={moving}
+        />
       </form>
     </section>
   </div>;

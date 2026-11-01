@@ -3598,7 +3598,7 @@
   gap: 8px;
 }
 
-.wf-dialog-actions button {
+.wf-dialog-actions button:not(.studio-button) {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -3611,15 +3611,15 @@
   padding: 0 12px;
 }
 
-.wf-dialog-actions button[type="submit"] {
+.wf-dialog-actions button:not(.studio-button)[type="submit"] {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--wf-border));
   background: var(--wf-accent-soft);
   color: var(--wf-accent);
   font-weight: 700;
 }
 
-.wf-dialog-actions button:disabled,
-.wf-dialog-actions button[aria-disabled="true"] {
+.wf-dialog-actions button:not(.studio-button):disabled,
+.wf-dialog-actions button:not(.studio-button)[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.7;
 }
