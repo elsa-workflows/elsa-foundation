@@ -6,6 +6,7 @@ import {
   usePermissions,
   studioBackendCapabilitiesChangedEvent,
   studioNavigationRequestedEvent,
+  notifyStudioNavigationGuardReleased,
   type AuthSession,
   type ElsaStudioModuleApi,
   type StudioSettingDescriptor
@@ -537,6 +538,10 @@ export function FeatureManagementPage() {
     window.addEventListener(studioNavigationRequestedEvent,guard);
     return () => window.removeEventListener(studioNavigationRequestedEvent,guard);
   },[hostStates,activeHost.id]);
+  useEffect(() => {
+    if (!Object.values(hostStates).some(state => state.applying || isDirty(state.catalog,state.draft)))
+      notifyStudioNavigationGuardReleased();
+  },[hostStates]);
 
   useEffect(() => {
     if (selectedFeature && selectedFeature.id !== selectedId) {

@@ -16,6 +16,10 @@ on:
       - 'Studio/**'
       - 'Extensions/*/studio/**'
       - 'Extensions/Weaver/**'
+      - 'Essentials/src/Events/**'
+      - 'Essentials/src/Pipelines/Core/**'
+      - 'Essentials/src/Primitives/Primitives/**'
+      - 'Essentials/src/Tasks/Core/**'
       - 'Essentials/src/Modularity/Core/**'
       - 'Essentials/src/Modularity/Nuplane/**'
       - 'Essentials/build/Analyzers/**'
@@ -33,6 +37,7 @@ on:
       - 'tools/ci/verify_studio_nuget_packages.py'
       - 'tools/studio/**'
       - 'tools/ci/qualify_studio_consumers.py'
+      - 'tools/ci/pack_studio_support.py'
       - 'tools/ci/studio*'
   push:
     branches: [main]
@@ -202,19 +207,10 @@ jobs:
           python3 tools/ci/verify_studio_nuget_packages.py --self-test
           python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget" --version "$STUDIO_PACKAGE_VERSION" --report "$RUNNER_TEMP/studio-archive-verification.json"
 
-      - name: Pack matching governed Preferences dependency without publishing
+      - name: Pack matching mandatory support candidates without publishing
         run: >-
-          dotnet pack Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj -c Release
-          -p:RestoreLockedMode=true "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
-          -o "$RUNNER_TEMP/studio-modularity-nuget"
-
-      - name: Pack matching lightweight Modularity candidates without publishing
-        run: |
-          for module in Core Nuplane; do
-            dotnet pack "Essentials/src/Modularity/$module/Elsa.Modularity.$module.csproj" -c Release -p:RestoreLockedMode=true \
-              "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA" \
-              -o "$RUNNER_TEMP/studio-modularity-nuget"
-          done
+          python3 tools/ci/pack_studio_support.py --output "$RUNNER_TEMP/studio-modularity-nuget"
+          --version "$STUDIO_PACKAGE_VERSION" --source "$GITHUB_SHA"
 
       - name: Publish the matching actual reference Studio
         run: >-

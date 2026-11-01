@@ -39,9 +39,7 @@ public sealed record StudioBackendManagementOptions(string? BackendBaseUrl, stri
     /// </summary>
     public static string? ResolveServerBaseUrl(IConfiguration configuration) =>
         string.IsNullOrWhiteSpace(configuration[BackendServerBaseUrlConfigurationKey])
-            ? (configuration[BackendBaseUrlConfigurationKey] is { Length: > 0 } legacy ? legacy :
-                configuration.GetSection("Studio:Backends:Profiles").GetChildren().FirstOrDefault(profile =>
-                    configuration["Studio:Backends:DefaultId"] is null || profile["Id"] == configuration["Studio:Backends:DefaultId"])?["BaseUrl"])
+            ? configuration[BackendBaseUrlConfigurationKey]
             : configuration[BackendServerBaseUrlConfigurationKey];
 
     public static StudioBackendManagementOptions FromConfiguration(IConfiguration configuration) =>

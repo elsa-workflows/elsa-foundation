@@ -16,7 +16,6 @@
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <ProjectReference Include="../Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
     <ProjectReference Include="../Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
   </ItemGroup>
   <Target Name="VerifyStudioBrowserPayload" BeforeTargets="GenerateNuspec">
     <ItemGroup>

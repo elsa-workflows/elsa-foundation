@@ -1,0 +1,7 @@
+#nullable enable
+Elsa.Studio.Backends.BackendsHostConfigurationExtensions
+Elsa.Studio.Backends.BackendsStudioFeature
+Elsa.Studio.Backends.BackendsStudioFeature.BackendsStudioFeature() -> void
+static Elsa.Studio.Backends.BackendsHostConfigurationExtensions.AddStudioBackendsHostConfiguration(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Studio.Backends.BackendsStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Studio.Backends.BackendsStudioFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

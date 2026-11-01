@@ -31,6 +31,10 @@ COPY Essentials/build/Analyzers/ ./Essentials/build/Analyzers/
 COPY Essentials/src/Modularity/Core/ ./Essentials/src/Modularity/Core/
 COPY Essentials/src/Modularity/Nuplane/ ./Essentials/src/Modularity/Nuplane/
 COPY Essentials/src/Studio/Preferences/Core/ ./Essentials/src/Studio/Preferences/Core/
+COPY Essentials/src/Events/ ./Essentials/src/Events/
+COPY Essentials/src/Pipelines/Core/ ./Essentials/src/Pipelines/Core/
+COPY Essentials/src/Primitives/Primitives/ ./Essentials/src/Primitives/Primitives/
+COPY Essentials/src/Tasks/Core/ ./Essentials/src/Tasks/Core/
 
 # Copy the Studio host and shared modules.
 COPY Studio/src/ ./Studio/src/

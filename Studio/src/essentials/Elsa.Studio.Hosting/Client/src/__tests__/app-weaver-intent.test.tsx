@@ -19,14 +19,14 @@ describe("shell-owned Weaver intent", () => {
   it.each([false, true])("gives synchronous correlations an explicit disposition, including cancellation-listener replacement=%s", async replacement => {
     let api!: ElsaStudioModuleApi;
     const results: StudioAgentPromptResult[] = [];
-    vi.spyOn(loader, "loadStudioModules").mockImplementation(async (_modules, registry) => {
+    vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, registry) => {
       api = registry;
       api.agent.onPromptResult(result => {
         results.push(result);
         if (replacement && result.requestId === "same-tick-first" && result.status === "cancelled") api.agent.dispatchPrompt({ requestId: "replacement", message: "New intent after cancellation", mode: "enqueue" });
       });
       api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read selected resource", kind: "answer", risk: "read-only", surfaces: ["*"] });
-      return [];
+      return;
     });
     const client: clients.AgentClient = {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
@@ -57,14 +57,14 @@ describe("shell-owned Weaver intent", () => {
     } finally { flushSync(() => root.unmount()); container.remove(); }
   });
 
-  it.each(["same dock", "close/reopen", "registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
+  it.each(["same dock", "close/reopen", "registry reconciliation", "immediate registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
     const registries: ElsaStudioModuleApi[] = [];
     let releaseRegistry: (() => void) | undefined;
-    vi.spyOn(loader, "loadStudioModules").mockImplementation(async (_modules, api) => {
+    vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, api) => {
       registries.push(api);
       api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read the selected resource.", kind: "answer", risk: "read-only", surfaces: ["*"] });
-      if (registries.length === 2) await new Promise<void>(resolve => { releaseRegistry = resolve; });
-      return [];
+      if (registries.length === 2 && transition === "registry reconciliation") await new Promise<void>(resolve => { releaseRegistry = resolve; });
+      return;
     });
     const client: clients.AgentClient = {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read.", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], provider: { providerId: "protocol", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} }, policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
@@ -97,11 +97,15 @@ describe("shell-owned Weaver intent", () => {
         flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Close assistant"]')!.click());
         expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull();
         flushSync(() => container.querySelector<HTMLButtonElement>(".agent-launcher")!.click());
-      } else if (transition === "registry reconciliation") {
-        flushSync(() => window.dispatchEvent(new Event("elsa-studio:modules-changed")));
-        await vi.waitFor(() => expect(releaseRegistry).toBeTypeOf("function"));
-        await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull());
-        releaseRegistry!();
+      } else if (transition.includes("registry reconciliation")) {
+        const oldDock=container.querySelector('[aria-label="Weaver assistant"]')!;
+        flushSync(() => window.dispatchEvent(new CustomEvent("elsa:backend-capabilities-changed",{detail:{key:registries[0].backendSession!.key,refreshed:true}})));
+        if(transition === "registry reconciliation") {
+          await vi.waitFor(() => expect(releaseRegistry).toBeTypeOf("function"));
+          await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull());
+          releaseRegistry!();
+        }
+        await vi.waitFor(()=>expect(oldDock.isConnected).toBe(false));
       }
       await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).not.toBeNull());
       await settle();

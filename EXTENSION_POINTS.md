@@ -221,7 +221,7 @@ not automatic constitution violations.
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).
 
 
-## Studio backend connections
+## Studio
 
-- [Hosting backend connection composition and SDK seams](Studio/src/essentials/Elsa.Studio.Hosting/README.md#backend-connections)
+- [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)

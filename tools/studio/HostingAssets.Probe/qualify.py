@@ -21,7 +21,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 REPO = Path(__file__).resolve().parents[3]
-IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard", "Elsa.Studio.Preferences.Core")
+SUPPORT_PROJECTS = {item["id"]: item["project"] for item in json.loads((REPO / "tools/ci/studio-package-identities.json").read_text())["support_projects"] if item.get("hosting_required")}
+IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard") + tuple(SUPPORT_PROJECTS)
 RUNTIME_HOST_ID = "package-consumer-proof"
 
 
@@ -129,7 +130,7 @@ def main(args):
                 source_assets[package_id] = {path.relative_to(source).as_posix(): path.read_bytes() for path in source.rglob("*") if path.is_file()}
                 shutil.copytree(source, producer / relative)
             for package_id in IDS:
-                project = producer / ("Essentials/src/Studio/Preferences/Core" if package_id == "Elsa.Studio.Preferences.Core" else "Studio/src/essentials/" + package_id) / (package_id + ".csproj")
+                project = producer / SUPPORT_PROJECTS.get(package_id, "Studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
                 run("pack-" + package_id, [dotnet, "pack", str(project), "-c", "Release", "-p:Version=" + version,
                                           "-p:SourceRevisionId=" + revision, "-o", str(feed)], producer)
             report.update(producer="owned committed source snapshot with unchanged production project files", producerSourceRevision=revision)
@@ -212,19 +213,32 @@ using Elsa.Studio.Dashboard;
 using Elsa.Studio.Hosting;
 var builder = WebApplication.CreateBuilder(args);
 var studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.IndexFile = "''' + fallback + '''"; })
-    .ConfigureShells(shells => shells.WithAssemblies(typeof(DashboardStudioFeature).Assembly));
+    .ConfigureShells(shells => shells.WithAssemblies(typeof(DashboardStudioFeature).Assembly, typeof(QualificationFeature).Assembly));
 var app = builder.Build();
 ''' + runtime_fault + '''
 app.UseElsaStudio();
 app.MapElsaStudio();
+app.MapGet("/capabilities", () => new {capabilities = new[] { new {id="qualification.api",contractVersion="1",links=Array.Empty<object>()} }});
+app.MapGet("/_content/Consumer/studio/modules/qualification/module.js", () => Results.Content("""
+import React from "react";
+export function register(api) {
+  const required=[{id:"qualification.api",contractVersion:"1"}];
+  if(!api.backendSession || api.backendSession.disposed || !api.backendSession.capabilities?.capabilities.some(item=>item.id==="qualification.api")) throw new Error("The default connection did not discover the real consumer capability");
+  window.__STUDIO_CONNECTION_QUALIFICATION__={key:api.backendSession.key,id:api.backendSession.profile.id,capabilities:api.backendSession.capabilities};
+  api.shell.add({id:"qualification.connection",placement:"notice",requiresBackend:required,component:()=>React.createElement("span",null,"Configured connection ready")});
+}
+""", "application/javascript"));
 app.MapGet("/__qualification", () => new {
     contentRoot = app.Environment.ContentRootPath,
     locations = new[] { typeof(StudioBuilder).Assembly.Location, typeof(StudioApiOptions).Assembly.Location,
         typeof(StudioModuleAttribute).Assembly.Location, typeof(DashboardStudioFeature).Assembly.Location }
 });
 app.Run();
+[Elsa.Studio.Core.Attributes.StudioModule("qualification", "Qualification", HasStyles=false)]
+[CShells.Features.ShellFeature("QualificationStudio")]
+public class QualificationFeature : CShells.Features.IShellFeature { public virtual void ConfigureServices(IServiceCollection services) { } }
 ''')
-            (path / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"StudioApi": {}, "DashboardStudio": {}}, "Configuration": {"WebRouting": {"Path": ""}}}}}}))
+            (path / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"StudioApi": {}, "DashboardStudio": {}, "QualificationStudio": {}}, "Configuration": {"WebRouting": {"Path": ""}}}}}}))
             shutil.copy2(REPO / "global.json", path / "global.json")
             ET.ElementTree(config).write(path / "NuGet.Config", encoding="utf-8", xml_declaration=True)
             if optout or collision:
@@ -241,6 +255,7 @@ app.Run();
             check({entry["type"] for entry in graph["libraries"].values()} == {"package"}, "Consumer reaches source/project libraries")
             check(len(graph["packageFolders"]) == 1 and Path(next(iter(graph["packageFolders"]))).resolve() == cache.resolve(), "Consumer uses another cache")
             check(not any(key.startswith(("Nuplane", "Elsa.Studio.Web/")) for key in graph["libraries"]), "Unexpected Web/Nuplane dependency")
+            check(not any(key.startswith(("Elsa.Studio.Backends/", "Elsa.Studio.Preferences.Core/")) for key in graph["libraries"]), "Base Hosting unexpectedly requires backend management or Preferences")
             for package_id in IDS:
                 library = graph["libraries"].get(package_id + "/" + version)
                 check(library and library["type"] == "package", "Candidate missing from package closure: " + package_id)
@@ -313,7 +328,7 @@ app.Run();
                     check(request(base, "/")[1] == expected_index and request(base, "/overview")[1] == expected_index, "Root/deep-link document mismatch")
                     status, data, _ = request(base, "/studio/sdk/index.js", {"Range": "bytes=0-9"})
                     check(status == 206 and data == expected["/studio/sdk/index.js"][:10], "Published range request failed")
-                    browser_env = dict(os.environ, STUDIO_HOSTING_ASSET_BASE=base, STUDIO_HOSTING_ASSET_OUTPUT=str(root / (name + "-browser.json")),
+                    browser_env = dict(os.environ, STUDIO_HOSTING_REQUIRE_CONNECTION_PROBE="1", STUDIO_HOSTING_ASSET_BASE=base, STUDIO_HOSTING_ASSET_OUTPUT=str(root / (name + "-browser.json")),
                                        STUDIO_HOSTING_RUNTIME_HOST_ID=RUNTIME_HOST_ID)
                     run(name + "-browser", [node, str(Path(__file__).with_name("browser.mjs"))], REPO, browser_env)
                 report["runtime"][name] = {"resources": rows, "hostVersion": modules["hostVersion"], "sdkVersion": modules["sdkVersion"], "publishedOnly": True,

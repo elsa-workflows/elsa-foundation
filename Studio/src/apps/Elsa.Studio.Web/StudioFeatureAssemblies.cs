@@ -1,4 +1,5 @@
 using CShells.DependencyInjection;
+using Elsa.Studio.Hosting;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.Attention;
 using Elsa.Studio.ConsoleStream;
@@ -16,6 +17,8 @@ using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
 using Elsa.Studio.Workflows.Dashboard;
 
+using Elsa.Studio.Backends;
+
 namespace Elsa.Studio.Web;
 
 internal static class StudioFeatureAssemblies
@@ -23,8 +26,9 @@ internal static class StudioFeatureAssemblies
     /// <summary>Chooses the in-box modules shipped by this Studio distribution.</summary>
     public static CShellsBuilder WithStudioFeatureAssemblies(this CShellsBuilder shells)
     {
-        return shells.WithAssemblies(
+        return shells.WithStudioStartupAssemblies(
                 typeof(StudioApiFeature).Assembly,
+                typeof(BackendsStudioFeature).Assembly,
                 typeof(ConsoleStreamStudioFeature).Assembly,
                 typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
                 typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,

@@ -1,5 +1,8 @@
 import type { AuthSession } from "../auth/types";
 export * from "./backends";
+export * from "./backendConnection";
+export * from "./moduleHost";
+import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
 import type { ComponentType } from "react";
 import type { StudioActivityIconComponent } from "./activityIcons";
@@ -1488,6 +1491,7 @@ export interface StudioDialogController {
 }
 
 export const studioSlotIds = {
+  shell: "studio.shell",
   featureAreas: "studio.feature-areas",
   navigation: "studio.navigation",
   routes: "studio.routes",
@@ -1577,6 +1581,7 @@ export interface CreateStudioContributionRegistryOptions<T> {
 }
 
 export const studioSlots = {
+  shell: defineStudioSlot({id:studioSlotIds.shell,kind:"shell",title:"Shell",owner:hostSlotOwner()}),
   featureAreas: defineStudioSlot({ id: studioSlotIds.featureAreas, kind: "feature-area", title: "Feature areas", owner: hostSlotOwner() }),
   navigation: defineStudioSlot({ id: studioSlotIds.navigation, kind: "navigation", title: "Navigation", owner: hostSlotOwner() }),
   routes: defineStudioSlot({ id: studioSlotIds.routes, kind: "route", title: "Routes", owner: hostSlotOwner() }),
@@ -1684,6 +1689,13 @@ export interface StudioRuntimeSettings {
   };
   /** Loaded module ids and capabilities. Home widgets with `requiresFeature` consult this list. */
   enabledFeatures?: readonly string[];
+}
+
+export const studioNavigationGuardReleasedEvent = "elsa:studio-navigation-guard-released";
+
+/** Signal that a draft or write guard may have released a queued host lifecycle reset. */
+export function notifyStudioNavigationGuardReleased() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(studioNavigationGuardReleasedEvent));
 }
 
 export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
@@ -1820,6 +1832,8 @@ export interface StudioActivityDefinitionImplementationEditorContribution extend
 }
 
 export interface ElsaStudioModuleApi {
+  readonly connection?: StudioConnectionController;
+  readonly shell?: StudioContributionRegistry<StudioShellContribution>;
   readonly backendSession?: StudioBackendSession;
   readonly hostSession?: AuthSession;
   readonly host: ElsaStudioHostContext;
@@ -1855,9 +1869,8 @@ export interface ElsaStudioModuleApi {
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;
 }
 
-export interface ElsaStudioModule {
-  register(api: ElsaStudioModuleApi): void | Promise<void>;
-}
+export type ElsaStudioModule = {register(api: ElsaStudioModuleApi): void | Promise<void>}
+  | {initialize(host: StudioModuleHostContext): StudioModuleInstance | Promise<StudioModuleInstance>};
 
 export function defineStudioSlot(definition: StudioSlotDefinition): StudioSlotDefinition {
   return definition;
