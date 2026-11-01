@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles, reloadBackendOnPageRestore } from "../../../../Elsa.Studio.Backends/Client/src/connections";
+import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles } from "../../../../Elsa.Studio.Backends/Client/src/connections";
 import {
   evaluateBackendRequirements, getBackendCapabilities, resolveBackendPath, qualifyStudioBackendPath, validateApiCapabilities,
   createEndpointContext, StudioHttpError, studioNavigationRequestedEvent,
@@ -7,6 +7,7 @@ import {
   type AuthProviderManager, type AuthSession, type StudioBackendProfile, type StudioEndpointContext
 } from "../sdk";
 import { createStudioRegistry } from "../app/registry";
+import { reloadConnectionOnPageRestore as reloadBackendOnPageRestore } from "../app/connection";
 
 const user:AuthSession = {status:"authenticated",subject:"alice",tenantId:"tenant-a",roles:[],permissions:[]};
 const a:StudioBackendProfile = {id:"a",name:"Backend A",baseUrl:"https://backend.example/shell-a/",environment:"Development",source:"configuration"};

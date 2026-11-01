@@ -2,7 +2,7 @@ import {afterEach,describe,expect,it,vi} from "vitest";
 import {initializeStudioModules,registerStudioModuleInstances} from "../app/loader";
 import {ConfiguredBackendConnection} from "../app/connection";
 import {createStudioRegistry} from "../app/registry";
-import {anonymousAuthSession,createEndpointContext,type StudioModuleHostContext,type StudioModuleManifest,type StudioConnectionController} from "../sdk";
+import {StudioBackendConnection,anonymousAuthSession,createEndpointContext,type StudioModuleHostContext,type StudioModuleManifest,type StudioConnectionController} from "../sdk";
 const host:StudioModuleHostContext={host:createEndpointContext("http://localhost:3000"),identity:anonymousAuthSession,authManager:null,configuration:{},signal:new AbortController().signal};
 const manifest=(id:string):StudioModuleManifest=>({id,displayName:id,entry:`/${id}.js`,version:"1",styles:[],requiredHostVersion:"*",requiredSdkVersion:"*",capabilities:["host-initialization"]});
 const options={hostVersion:"1",sdkVersion:"1"};
@@ -46,4 +46,17 @@ describe("document-owned connection providers",()=>{
   await expect(initializeStudioModules([manifest("acme")],host,{...options,importModule:async()=>{throw Error("unavailable");}})).rejects.toThrow("unavailable");
   await expect(initializeStudioModules([{...manifest("acme"),capabilities:[]}],host,{...options,importModule:async()=>({initialize(){throw Error("broken provider");}})})).rejects.toThrow("broken provider");
  });
+ it("retires in-flight writes at document teardown and fences a transport's late response",async()=>{
+  let finish!:(response:Response)=>void;
+  const request=vi.fn(()=>new Promise<Response>(resolve=>finish=resolve));vi.stubGlobal("fetch",request);
+  const active=new StudioBackendConnection({id:"fixed",name:"Fixed",baseUrl:"http://backend.example/shell/",environment:"Development",source:"configuration"},null,anonymousAuthSession);
+  const write=active.context.http.postJson("workflows",{name:"Pending write"});
+  await vi.waitFor(()=>expect(request).toHaveBeenCalledOnce());
+  expect(active.pendingWrites).toBe(1);expect(()=>active.dispose()).toThrow("Wait for backend changes");
+  active.retire();expect(active.disposed).toBe(true);
+  finish(Response.json({id:"late-result"}));
+  await expect(write).rejects.toMatchObject({name:"AbortError"});expect(active.pendingWrites).toBe(0);
+  await expect(active.context.http.getJson("workflows")).rejects.toMatchObject({name:"AbortError"});expect(request).toHaveBeenCalledOnce();
+ });
+
 });

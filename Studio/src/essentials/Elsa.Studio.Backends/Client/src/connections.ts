@@ -280,11 +280,3 @@ export class BackendConnections {
     return `${url.pathname}${url.search}${url.hash}`;
   }
 }
-
-
-/** A cached document must rediscover identity and capabilities before showing retained backend data. */
-export function reloadBackendOnPageRestore(connections:BackendConnections,reload=()=>window.location.reload()) {
-  const restore=(event:PageTransitionEvent)=>{if(event.persisted && connections.getSnapshot().active) reload();};
-  window.addEventListener("pageshow",restore);
-  return ()=>window.removeEventListener("pageshow",restore);
-}

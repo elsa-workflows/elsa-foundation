@@ -22,11 +22,13 @@ try {
     if (!runtime || typeof runtime !== "object" || typeof runtime.hostId !== "string" || (expectedHostId && runtime.hostId !== expectedHostId)) {
       throw new Error("Browser runtime configuration is missing or lost the configured HostId");
     }
+    if(process.env.STUDIO_HOSTING_REQUIRE_CONNECTION_PROBE === "1") {
     await page.getByText("Configured connection ready",{exact:true}).waitFor({state:"visible"});
     const connection=await page.evaluate(()=>window.__STUDIO_CONNECTION_QUALIFICATION__);
     if(!connection || connection.id!=="legacy" || !connection.key || connection.capabilities.capabilities[0]?.id!=="qualification.api")throw new Error("Base Hosting has no real configured connection/capability snapshot");
     if(await page.getByRole("link",{name:"Backends",exact:true}).count())throw new Error("Absent Backends module leaked management navigation");
     runtimeRoutes.push({ path, hostId: runtime.hostId,connection });
+    } else runtimeRoutes.push({path,hostId:runtime.hostId});
   }
   const shared = await page.evaluate(async () => {
     const react = await import("react");
@@ -37,7 +39,7 @@ try {
   });
   if (errors.length || missing.length || !Object.values(shared).every(Boolean)) throw new Error(JSON.stringify({ errors, missing, shared }));
   await page.screenshot({ path: process.env.STUDIO_HOSTING_ASSET_OUTPUT.replace(/\.json$/, ".png"), fullPage: true });
-  const result = { browserVersion: browser.version(), rootAndDeepLink: true, actualHomeModuleRoute: true, defaultConnectionCapabilities: true, optionalBackendsAbsent: true, shared, runtimeRoutes, errors, missing };
+  const result = { browserVersion: browser.version(), rootAndDeepLink: true, actualHomeModuleRoute: true, defaultConnectionCapabilities: process.env.STUDIO_HOSTING_REQUIRE_CONNECTION_PROBE === "1", optionalBackendsAbsent: process.env.STUDIO_HOSTING_REQUIRE_CONNECTION_PROBE === "1", shared, runtimeRoutes, errors, missing };
   await writeFile(process.env.STUDIO_HOSTING_ASSET_OUTPUT, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } finally {

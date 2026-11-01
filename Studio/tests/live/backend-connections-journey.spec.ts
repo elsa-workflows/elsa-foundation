@@ -128,7 +128,9 @@ test.describe("backend connections against composed hosts",()=>{
       await page.getByRole("button",{name:"Sign in",exact:true}).click();
       await expect(page.getByRole("button",{name:/Select backend\. Current: Runtime/})).toBeVisible();
       await page.goto(`/features?target=studio&backend=${secondary}`);
-      await page.getByRole("button",{name:"Disable Backend connections",exact:true}).click();
+      const disable=page.getByRole("switch",{name:"Disable Backend connections",exact:true});
+      await expect(disable).toBeVisible();
+      await disable.click();
       await page.getByRole("button",{name:"Review changes",exact:true}).click();
       const review=page.getByRole("dialog",{name:"Review changes"});
       await expect(review).toContainText("Backend connections");
@@ -140,9 +142,9 @@ test.describe("backend connections against composed hosts",()=>{
       await expect(page.getByRole("link",{name:"Backends",exact:true})).toHaveCount(0);
       await expect(page.getByRole("link",{name:"Workflows",exact:true})).toBeVisible();
       expect(imported).toEqual([]);
-      expect((await page.request.get("/_elsa/studio/backends/profiles")).status()).toBe(404);
+      expect(await page.evaluate(async()=> (await fetch("/_elsa/studio/backends/profiles")).status)).toBe(404);
       const resources:string[]=[];
-      const track=(request:import("@playwright/test").Request)=>{if(/:5664[12]\/default\/.*(workflows|capabilities)/.test(request.url()))resources.push(request.url());};
+      const track=(request:import("@playwright/test").Request)=>{if(/:5664[12]\/default\//.test(request.url()) && !request.url().includes("/default/_elsa/identity/"))resources.push(request.url());};
       page.on("request",track);
       await page.goto(`/workflows/definitions?definition=foreign-resource&backend=${secondary}`);
       await expect(page.getByRole("status").filter({hasText:"not available in this Studio"})).toBeVisible();
@@ -151,13 +153,15 @@ test.describe("backend connections against composed hosts",()=>{
       await page.getByRole("button",{name:"Return Home",exact:true}).click();
       await expect(page.getByRole("heading",{name:"Home",exact:true,level:2})).toBeVisible();
       await page.goto("/features?target=studio");
-      await page.getByRole("button",{name:"Enable Backend connections",exact:true}).click();
+      const enable=page.getByRole("switch",{name:"Enable Backend connections",exact:true});
+      await expect(enable).toBeVisible();
+      await enable.click();
       await page.getByRole("button",{name:"Review changes",exact:true}).click();
       await page.getByRole("dialog",{name:"Review changes"}).getByRole("button",{name:"Apply",exact:true}).click();
       await expect(page.getByRole("button",{name:/Select backend\. Current: Runtime/})).toBeVisible();
       await expect(page.getByRole("heading",{name:"Home",exact:true,level:2})).toBeVisible();
       await page.goto(`/settings/backends?backend=${secondary}`);
-      await expect(page.getByRole("button",{name:"Retained optional profile",exact:true})).toBeVisible();
+      await expect(page.getByRole("button",{name:/^Retained optional profile /})).toBeVisible();
     } finally {
       const current=JSON.parse(readFileSync(studioFile!,"utf8"));
       const features=current.CShells.Shells.Default.Features;

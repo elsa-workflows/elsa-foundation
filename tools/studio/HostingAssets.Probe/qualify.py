@@ -327,7 +327,7 @@ public class QualificationFeature : CShells.Features.IShellFeature { public virt
                     check(request(base, "/")[1] == expected_index and request(base, "/overview")[1] == expected_index, "Root/deep-link document mismatch")
                     status, data, _ = request(base, "/studio/sdk/index.js", {"Range": "bytes=0-9"})
                     check(status == 206 and data == expected["/studio/sdk/index.js"][:10], "Published range request failed")
-                    browser_env = dict(os.environ, STUDIO_HOSTING_ASSET_BASE=base, STUDIO_HOSTING_ASSET_OUTPUT=str(root / (name + "-browser.json")),
+                    browser_env = dict(os.environ, STUDIO_HOSTING_REQUIRE_CONNECTION_PROBE="1", STUDIO_HOSTING_ASSET_BASE=base, STUDIO_HOSTING_ASSET_OUTPUT=str(root / (name + "-browser.json")),
                                        STUDIO_HOSTING_RUNTIME_HOST_ID=RUNTIME_HOST_ID)
                     run(name + "-browser", [node, str(Path(__file__).with_name("browser.mjs"))], REPO, browser_env)
                 report["runtime"][name] = {"resources": rows, "hostVersion": modules["hostVersion"], "sdkVersion": modules["sdkVersion"], "publishedOnly": True,
