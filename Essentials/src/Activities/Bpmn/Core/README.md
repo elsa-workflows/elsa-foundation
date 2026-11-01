@@ -1,4 +1,4 @@
-# BPMN hosting contracts
+# BPMN contracts and neutral graph models
 
 This package is the thin consumer boundary for [direct BPMN hosting](../../../../../specs/1017-direct-bpmn-hosting/spec.md). Shared durable execution ports belong to `Elsa.Workflows.Runtime.Core`; BPMN command and inspection contracts belong here. The package does not depend on an interpreter, provider or API host.
 
@@ -21,3 +21,13 @@ Service policy format 1 counts the initial physical attempt in its budget of 1â€
 A duration must also produce a representable UTC `DateTimeOffset` deadline. New model publication, direct admission and native wait creation refuse overflow. Already accepted work that reaches an unrepresentable deadline commits a visible `Faulted` result (`bpmn.duration-deadline-unrepresentable`) and settles native responsibility through the existing result/cancellation paths.
 
 Definition format, `elsa.bpmn/1` protocol, material schema and private execution-state version are separate boundaries. Earlier definition formats omit later optional fields and retain their wire/hashes. The [hosting contract](../../../../../specs/1017-direct-bpmn-hosting/contracts/hosting.md) records the detailed refusal, outcome and settlement rules. [Source-bound evidence](../../../../../specs/1017-direct-bpmn-hosting/tasks.md) qualifies the implemented journeys; spec1017 and the wider program remain in progress.
+
+
+## Native graph and authoring boundary
+
+The `Models/` DTOs retain the native composite graph's JSON names without an interpreter or Design
+reference. `BpmnActivityIdentities` holds the existing activity/structure/slot/input vocabulary used by
+both authoring and execution. The concrete runtime forwards the moved neutral CLR types.
+`BpmnAuthoredStructure` belongs to [Design](../Design/README.md), because it owns authored `ActivityNode` children.
+Private embedding wire plumbing is shared only with the BPMN runtime/Design siblings through same-domain
+friend grants; it is not a new third-party extension surface.

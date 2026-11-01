@@ -5,7 +5,7 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Models;
-using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using Process = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
@@ -18,7 +18,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
     };
     private static readonly IReadOnlyDictionary<string, string> Profile = new Dictionary<string, string>
     {
-        [BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId] = "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+        [BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId] = Process.ProcessType,
         [BpmnDocumentImporter.DefaultDelayActivityVersionId] = "Elsa.Activities.Scheduling.Activities.Delay",
         [BpmnDocumentImporter.DefaultEventActivityVersionId] = "Elsa.Activities.Primitives.Activities.Event",
         [BpmnDocumentImporter.DefaultPublishEventActivityVersionId] = "Elsa.Activities.Primitives.Activities.PublishEvent",

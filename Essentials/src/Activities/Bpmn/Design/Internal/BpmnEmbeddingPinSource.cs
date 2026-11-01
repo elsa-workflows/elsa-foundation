@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.Bpmn.Activities;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -16,10 +15,10 @@ internal sealed class BpmnEmbeddingPinSource(IWorkflowExecutableStore materials,
     {
         var metadata = new List<ExecutableNodeMetadataClaim>();
         var dependencies = new List<ExecutableDependencyClaim>();
-        foreach (var node in context.RootActivity.DescendantsAndSelf().Where(node => node.ActivityType == RunBpmn.ActivityType))
+        foreach (var node in context.RootActivity.DescendantsAndSelf().Where(node => node.ActivityType == BpmnActivityIdentities.RunType))
         {
-            var binding = node.InputBindings.GetValueOrDefault(nameof(RunBpmn.Model));
-            SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, nameof(RunBpmn.Model));
+            var binding = node.InputBindings.GetValueOrDefault(BpmnActivityIdentities.ModelInput);
+            SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, BpmnActivityIdentities.ModelInput);
             if (binding is not { Source: RuntimeInputBindingSource.Literal, LiteralValue: { ValueKind: JsonValueKind.String } literal } ||
                 string.IsNullOrWhiteSpace(literal.GetString()))
                 throw Refused(node, "requires a literal published BPMN model source reference.");
@@ -32,7 +31,7 @@ internal sealed class BpmnEmbeddingPinSource(IWorkflowExecutableStore materials,
                 material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion)
                 throw Refused(node, "requires a qualified published BPMN human-work or native-service profile.");
             var pin = new BpmnEmbeddingPin(source.SourceReferenceId, material.Identity, material.IncarnationId);
-            metadata.Add(new(node.ExecutableNodeId, BpmnEmbeddingBoundary.PinKey, BpmnEmbeddingJson.Serialize(pin)));
+            metadata.Add(new(node.ExecutableNodeId, BpmnEmbeddingJson.PinKey, BpmnEmbeddingJson.Serialize(pin)));
             dependencies.Add(new(node.ExecutableNodeId, material.Identity.ArtifactId, material.Identity.ArtifactHash));
         }
         return new(metadata, dependencies);

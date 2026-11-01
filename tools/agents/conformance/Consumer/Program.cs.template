@@ -1,3 +1,14 @@
+#if COMBINED
+using Elsa.Activities.Bpmn.Design;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Contracts;
+#endif
+#if BPMN
+using Elsa.Activities.Bpmn;
+using Elsa.Activities.Bpmn.Models;
+using Elsa.Primitives.Models;
+using BpmnProcess = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+#endif
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Agents.AI;
@@ -41,6 +52,10 @@ var requirements = source.GetProperty("RuntimeRequirements").Deserialize<Runtime
 var storage = JsonSerializer.Deserialize<RuntimeStorageDriverRequirement[]>(await File.ReadAllTextAsync(Path.Combine(args[0], "storage.json")))!;
 Check(node.DescriptorPayload.GetProperty("definitionVersionId").GetString() == "copywriter-v1", "exact reviewed specialist version imported");
 Check(node.ChildSlots.Single().Activities.Single().ExecutableNodeId != "model-turn", "real placement remapped the worker node");
+var root = node;
+#if BPMN
+root = BpmnRoot(node, await File.ReadAllTextAsync(Path.Combine(args[0], "bpmn-structure.json")));
+#endif
 var services = new ServiceCollection();
 services.AddLogging();
 services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
@@ -50,8 +65,21 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature)
         typeof(SpecialistsRuntimeFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
         typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
         typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly,
-        typeof(FileSystemLockingFeature).Assembly)
+        typeof(FileSystemLockingFeature).Assembly
+#if BPMN
+        , typeof(ActivitiesBpmnFeature).Assembly
+#endif
+#if COMBINED
+        , typeof(ActivitiesBpmnDesignFeature).Assembly
+#endif
+        )
     .AddShell("specialist-package", shell => shell.WithFeature<PackageHostFeature>()
+        #if BPMN
+        .WithFeature<ActivitiesBpmnFeature>()
+#endif
+#if COMBINED
+        .WithFeature<ActivitiesBpmnDesignFeature>()
+#endif
         .WithFeature<BackgroundActivitiesFeature>(feature => feature.RunWorkers = false)
         .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)))
         .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = locks)));
@@ -68,7 +96,7 @@ Check(AppDomain.CurrentDomain.GetAssemblies().Count(x => x.GetName().Name == "Mi
 var observations = provider.GetRequiredService<ModelObservations>();
 observations.InvalidResult = mode == "invalid-result";
 var identity = new WorkflowExecutableIdentity("packaged-editorial-" + mode, "workflow", "workflow-v1", "1.0.0", node.DescriptorPayload.GetProperty("templateHash").GetString()!);
-var executable = new WorkflowExecutable(identity, node, resume, DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference, requirements, storage);
+var executable = new WorkflowExecutable(identity, root, resume, DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference, requirements, storage);
 await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
 var now = DateTimeOffset.UtcNow;
 var executionId = "package-run-" + mode;
@@ -104,10 +132,42 @@ else
     await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim!);
     Check(observations.Calls == 1, "duplicate native delivery did not repeat the model call");
 }
+#if COMBINED
+Check(provider.GetServices<IActivityStructureHandler>().Count(handler => handler.Kind == BpmnProcess.StructureKind) == 1 &&
+    provider.GetServices<IExecutableCompilationSource>().Count(source => source.GetType().Assembly == typeof(ActivitiesBpmnDesignFeature).Assembly) == 1,
+    "combined normal shell retains one authored structure handler and one publication pin source");
+#else
 Check(!AppDomain.CurrentDomain.GetAssemblies().Any(x => x.GetName().Name is { } name && name.StartsWith("Elsa.", StringComparison.Ordinal) &&
     (name.Contains(".Design", StringComparison.Ordinal) || name.Contains(".Publishing", StringComparison.Ordinal))), "runtime loaded zero Design or Publishing assemblies");
+#endif
 Console.WriteLine(JsonSerializer.Serialize(new { mode, checks, passed = checks.Count, liveModel = false, journalProfile = "process-local-development", workflowStatus = workflow?.Status.ToString(),
     mafAssembly = typeof(ChatClientAgent).Assembly.FullName, chatAbstractionsAssembly = typeof(IChatClient).Assembly.FullName }));
+
+
+#if BPMN
+static ExecutableNode BpmnRoot(ExecutableNode child, string compiledStructure)
+{
+    var type = typeof(BpmnProcess);
+    var alias = TypeAliasConvention.CanonicalAlias(type);
+    var descriptor = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias));
+    var boolean = new ValueTypeDescriptor("Boolean");
+    var input = new Elsa.Activities.Runtime.Core.Models.ActivityInputContract("CanStartWorkflow", "CanStartWorkflow", boolean, false, false, true,
+        JsonSerializer.SerializeToElement(true), ActivityValuePolicy.Default);
+    var contract = new Elsa.Activities.Runtime.Core.Models.ActivityContract(alias, "1.0.0", typeof(ClrActivityDescriptor).FullName!, descriptor, [input],
+        new ActivityResultContract(new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))), true, ActivityValuePolicy.Default, []),
+        ["Done"], new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, alias));
+    var structure = JsonSerializer.Deserialize<BpmnStructure>(compiledStructure, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        ?? throw new InvalidOperationException("Missing separately authored BPMN graph.");
+    if (structure.Elements.Single(element => element.ElementId == "write").ChildNodeId != child.ExecutableNodeId)
+        throw new InvalidOperationException("BPMN authoring did not pin the exact placed specialist.");
+    return new ExecutableNode("bpmn-process", "bpmn-process", alias, "1.0.0", new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1", descriptor),
+        new Dictionary<string, RuntimeInputBinding> { [input.Key] = new(input.Key, boolean, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline)) },
+        new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
+        [new ExecutableChildSlot(BpmnProcess.ActivitiesSlotName, [child])],
+        new ExecutableActivityStructure(BpmnProcess.StructureKind, BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, new JsonSerializerOptions(JsonSerializerDefaults.Web))), contract);
+}
+#endif
 
 
 [ShellFeature("SpecialistPackageHost", DependsOn = new object[] { "SpecialistsInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking" })]

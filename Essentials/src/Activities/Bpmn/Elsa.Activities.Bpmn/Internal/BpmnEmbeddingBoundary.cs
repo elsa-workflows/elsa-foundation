@@ -15,7 +15,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
     IPersistenceAccessContextAccessor access, TimeProvider clock, BpmnModelHostingOptions options,
     CoalescingInner<IBookmarkStateStore>? physicalBookmarks = null, IRuntimeModelExecutionReader? models = null)
 {
-    internal const string PinKey = "bpmn.model.v1";
+    internal const string PinKey = BpmnEmbeddingJson.PinKey;
     internal const string ResumeKey = "bpmn-model-completed";
     internal const string StimulusType = "elsa.bpmn.model-completed.v1";
     internal const string ProviderId = "elsa.bpmn.native-parent.v1";

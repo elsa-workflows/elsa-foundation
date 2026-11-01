@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
+    <ProjectReference Include="../../../Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="../../../Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
+  </ItemGroup>
+</Project>

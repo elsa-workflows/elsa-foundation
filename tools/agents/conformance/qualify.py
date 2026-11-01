@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--source", default="HEAD")
-    parser.add_argument("--profile", choices=["kernel", "durable-recovery"], default="kernel")
+    parser.add_argument("--profile", choices=["kernel", "durable-recovery", "bpmn-boundary"], default="kernel")
     parser.add_argument("--stream-responses", action="store_true", help="Qualify the optional streaming path in the durable profile")
     args = parser.parse_args()
     if args.stream_responses and args.profile != "durable-recovery":
@@ -92,6 +92,8 @@ def main():
             selected.append(project)
 
         roots = PRODUCT_ROOTS + (["Elsa.Agent.Specialists.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
+        if args.profile == "bpmn-boundary":
+            roots += ["Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Design"]
         for name in roots:
             visit(projects[name])
         solution = ET.Element("Solution")
@@ -133,11 +135,13 @@ def main():
             if any(x["type"] != "package" for x in assets["libraries"].values()):
                 raise RuntimeError(name + " consumed a source project reference")
             authoring = sorted(x for x in assets["libraries"] if x.startswith("Elsa.") and (".Design" in x or ".Publishing" in x))
-            if name in ["Model", "Consumer", "DurableConsumer"] and authoring:
+            if name in ["Model", "Consumer", "DurableConsumer", "BpmnConsumer"] and authoring:
                 raise RuntimeError(name + " has an authoring dependency: " + str(authoring))
+            if name == "BpmnAuthor" and any(x.startswith(("Elsa.Activities.Bpmn/", "Bpmn.Model/", "Bpmn.Semantics/")) for x in assets["libraries"]):
+                raise RuntimeError("BPMN authoring consumed its concrete runtime or interpreter")
             shared = {identity.split("/")[0]: identity.split("/")[1] for identity in assets["libraries"]
                       if identity.split("/")[0] in shared_pins}
-            if any(version != shared_pins[identity] for identity, version in shared.items()) or name in ["Consumer", "DurableConsumer"] and set(shared) != set(shared_pins):
+            if any(version != shared_pins[identity] for identity, version in shared.items()) or name in ["Consumer", "DurableConsumer", "BpmnConsumer"] and set(shared) != set(shared_pins):
                 raise RuntimeError(name + " resolved a different shared runtime graph: " + str(shared))
             resolved = {}
             for identity, library in assets["libraries"].items():
@@ -170,13 +174,15 @@ def main():
                        for identity in ["Microsoft.Extensions.AI.Abstractions", "Microsoft.Agents.AI", "CShells"]}
         report["selectedSharedRuntimePins"] = shared_pins
         report["fixtureDependencyPins"] = {"SQLitePCLRaw.bundle_e_sqlite3": sqlite_bundle_version, "CShells": cshells_version, "Microsoft.EntityFrameworkCore.Sqlite": ef_core_version}
-        for name in ["Model", "Author", "Consumer"] + (["DurableConsumer"] if args.profile == "durable-recovery" else []):
+        for name in ["Model", "Author", "Consumer"] + (["BpmnAuthor", "BpmnConsumer", "BpmnCombined"] if args.profile == "bpmn-boundary" else []) + (["DurableConsumer"] if args.profile == "durable-recovery" else []):
             directory = out / name
             directory.mkdir()
             for path in (fixtures / name).iterdir():
                 if path.suffix != ".template":
                     continue
                 (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version).replace("__SQLITE_BUNDLE_VERSION__", sqlite_bundle_version).replace("__CSHELLS_VERSION__", cshells_version).replace("__EF_CORE_VERSION__", ef_core_version))
+            if name in ["BpmnConsumer", "BpmnCombined"]:
+                shutil.copy2(fixtures / "Consumer/Program.cs.template", directory / "Program.cs")
             if name == "Author":
                 test_source = producer / "Extensions/Agent/tests/Specialists/Tests/Publication/SpecialistPublicationTests.cs"
                 shutil.copy2(test_source, directory / test_source.name)
@@ -192,6 +198,11 @@ def main():
             elif name == "Consumer":
                 for mode in ["native", "invalid-result"]:
                     run("Consumer-" + mode, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), mode], directory)
+            elif name == "BpmnAuthor":
+                run("BpmnAuthor-execute", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox")], directory)
+                report["bpmnCompiledStructureSha256"] = sha(out / "runtime-inbox/bpmn-structure.json")
+            elif name in ["BpmnConsumer", "BpmnCombined"]:
+                run(name + "-execute", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), name.lower()], directory)
             elif name == "DurableConsumer":
                 run("DurableConsumer-build", ["dotnet", "build", str(project), "-c", "Release", "--no-restore"], directory)
                 cases = []
@@ -213,7 +224,7 @@ def main():
                     cases.append({"persistenceMode": persistence, "responseMode": dispatch["responseMode"], "processes": receipts, "expectedCrashes": [crash, ack_crash], "databaseSha256": sha(case / "runtime.db"), "modelDispatches": 1})
                 report["durableRecoveryCases"] = cases
             inspect(name, directory)
-        report["status"] = "PassedDurableRecoveryProfile" if args.profile == "durable-recovery" else "PassedBoundedKernelProfile"
+        report["status"] = "PassedDurableRecoveryProfile" if args.profile == "durable-recovery" else ("PassedBpmnBoundaryProfile" if args.profile == "bpmn-boundary" else "PassedBoundedKernelProfile")
         report["durableJournal"] = args.profile == "durable-recovery"
         report["durableRuntime"] = args.profile == "durable-recovery"
         report["independentPackageConsumers"] = True

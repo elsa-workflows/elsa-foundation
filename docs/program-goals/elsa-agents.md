@@ -72,20 +72,20 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    exact-head CI and resulting-main source/package/core/Studio qualification on `0d6db68a3`.
    Its bounded profile establishes no production durability or live-model acceptance. Draft discovery
    #3541 merged through #3543; central MEAI enabler #3544/#3546 merged at `fd304319c`.
-4. M3 [#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) is the active implementation
-   unit for T016–T023. Concrete SDK integration, protected turn/conversation journals, bounded physical
-   requests, optional streaming, native application/cancellation, retention and retained readers are
-   implemented in [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594). The shared draft
-   Test Run application service executes the exact saved candidate through the same production worker.
-   Independent review and local source/shared/package gates passed; remote CI, Code Review merge and
-   resulting-main verification remain. The milestone and Program are still open.
-   Connections prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578) delivered
-   T014–T015 under owner #2854 through PR #3591 and resulting-main receipts on `5be59cebc`.
-   Package proof uses deterministic models and file SQLite in Balanced/Durable. Current binaries recover
-   earlier accepted work; an older runtime reading only workflow schema 1 correctly refuses a database
-   finalized at 2. Compatible-reader recovery preserves that acceptance without another model call.
-   The earlier unchanged-format binary pair has its own bidirectional receipt. Neither proves arbitrary
-   downgrade, backup restore, power loss, live inference or the complete M4–M7 support matrix.
+4. M3 [#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) is complete through
+   [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594), reviewed at `4f3a920836` and
+   merged as `8dcbf2345`. Required reviewed-head CI and Studio passed; fresh resulting-main source
+   (780 Specialists, 3 required provider cases, 607 Architecture), affected browser (22), normal package
+   recovery (49 packages/73 stages) and three host controls passed. Broader hosted main outcomes remain
+   separately monitored; a passing job does not turn REST quarantine #3261 or opt-in screenshot skips
+   into passing tests. Connections prerequisite #3578 delivered T014–T015 through PR #3591.
+   Current and retained package receipts distinguish compatible-reader recovery from an older runtime's
+   correct schema-rollback refusal. Unresolved/abandoned protected-content retention remains a bounded
+   M7 obligation. No live inference, full support matrix or M4–M7 product acceptance is claimed.
+5. M4 [#3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524) is the sole active implementation
+   unit for T024–T029: the approved BPMN package separation, exact native/BPMN editorial composition,
+   finite revision/approval lifecycle and normal runtime-only package consumers. M5–M7 remain open.
+
 
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
@@ -109,7 +109,7 @@ The design is approved to implement; neither the packet nor the illustrative wir
 implemented product acceptance. Public signatures remain proposed until their first implementing slice.
 [M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) merged through
 [PR #3543](https://github.com/elsa-workflows/elsa-foundation/pull/3543). Native specialist kernel #3548
-is complete; #3523 is the sole active implementation unit and #3578 is complete.
+is complete; M3 #3523 and #3578 are complete; #3524 is the sole active implementation unit.
 
 ## Completion
 
