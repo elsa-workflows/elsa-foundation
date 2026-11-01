@@ -39,8 +39,12 @@ internal sealed partial class InMemorySpecialistTurnStore
                 var current = Find(expected.Handle, expected.Identity);
                 if (current is null || current.ContentPurgedAt is not null || !SpecialistRetentionRules.Settled(current.Status) || current.Deadline >= now ||
                     !SpecialistRetentionRules.Matches(current, expected, SpecialistRetentionRules.Snapshot(current))) return ValueTask.FromResult(false);
-                if (current.Conversation is { } admission && (!state.Conversations.TryGetValue((current.Identity.TenantId, current.Identity.PersistencePartition, admission.ConversationId), out var conversation) ||
-                    conversation.ActiveTurnHandle is not null || conversation.OutcomeUnknown)) return ValueTask.FromResult(false);
+                if (current.Conversation is { } admission)
+                {
+                    state.Conversations.TryGetValue((current.Identity.TenantId, current.Identity.PersistencePartition, admission.ConversationId), out var conversation);
+                    if (conversation is null ? !SpecialistRetentionRules.CanLackConversation(expected) : conversation.ActiveTurnHandle is not null || conversation.OutcomeUnknown)
+                        return ValueTask.FromResult(false);
+                }
                 rows[current.Handle] = SpecialistRetentionRules.Purge(current, now);
                 return ValueTask.FromResult(true);
             }

@@ -94,7 +94,7 @@ no authority by themselves. The first equivalent source is retained and changed 
 refuses. Cancelling the current unaccepted delivery invalidates later writes, releases its exact
 conversation owner without advancing history, and retains request reservations/observations. Accepted
 pairs, other deliveries and later conversation owners remain unchanged. Hard input/total-token
-accounting, retention and complete recovery qualification remain separate M3 work.
+accounting and complete recovery/compatibility qualification remain separate M3 work.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.
@@ -140,3 +140,36 @@ collections cannot mutate retained memory state. A new physical claim records it
 nonce and generation; expired dispatch and rejected/unknown terminal decisions cannot issue a fresh
 request. Exact-original request/1 and result/1 readers remain; old records do not acquire new native
 alias authority from missing protocol fields. Unsupported legacy cross-attempt staging conflicts.
+
+
+## Conditional content retention
+
+The creation-policy `StageAsync` overload atomically refuses new operations when disabled, after
+matching retained-operation checks. Implementations retain existing delivery registration/replay and
+settlement. A host setting never changes the persisted fingerprint or implicitly cancels work.
+
+`QueryRetentionAsync` takes an explicit tenant/partition and finite keyset page (default32, maximum128).
+It returns copied content-free candidate metadata and an opaque store snapshot; `NextHandle` advances
+across scanned records even when every row is pinned or already purged. A null legacy tenant remains
+distinct from the partition's named tenant. Both stores require the selected ordinary scope.
+
+`PurgeContentAsync` consumes an unchanged candidate only after native runtime eligibility proof.
+Implementations reject changed turn/delivery/application metadata and active/unknown conversation
+ownership atomically. Memory uses its existing lock; EF uses conversation-version and turn-version
+CAS inside one fresh owned transaction, without altering conversation history. Unknown commit outcome
+remains unconfirmed. No retry creates a new request or erases a retained operation row/gate.
+
+A cancelled fresh conversation that never claimed has no conversation row: only generation zero,
+base revision zero and the original private turn handle as conversation ID admit that absence.
+Missing referenced/admitted conversation state remains pinned.
+
+A successful mutation clears only protected request/result content and records `ContentPurgedAt`.
+Status, operation fingerprint, native associations, cancellation authority, reservations, usage and
+conversation references remain. Normal records omit the marker, preserving their existing serialized
+shape. Prepared/claimed/dispatching/unknown records cannot become purged markers. Runtime content
+readers report `specialist.journal.content-unavailable`; matching Stage cannot replace the marker with
+new ciphertext or inference authority. Native business-output retention is owned separately.
+
+The runtime's default thirty-day policy requires old terminal native ownership and resolved physical
+application sources; active work and unsettled conversation history remain pinned. Key/codec/module
+upgrade and full independent-process durable runtime/outbox qualification remain separate receipts.

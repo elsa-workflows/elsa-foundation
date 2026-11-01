@@ -14,6 +14,8 @@ public sealed record SpecialistRetentionCandidate(string Handle, SpecialistInvoc
 {
     /// <summary>Optional conversation whose unsettled ownership continues to pin retained history.</summary>
     public SpecialistConversationAdmission? Conversation { get; init; }
+    /// <summary>Retained claim generation; zero distinguishes cancellation before any conversation claim.</summary>
+    public int AdmissionGeneration { get; init; }
 }
 
 /// <summary>A bounded metadata page. NextHandle advances over scanned records, including records pinned or already purged.</summary>
@@ -36,10 +38,13 @@ internal static class SpecialistRetentionRules
     }
     internal static string Snapshot(SpecialistTurnDocument document) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(document, Json))).ToLowerInvariant();
     internal static SpecialistRetentionCandidate Candidate(SpecialistTurnDocument document, string snapshot) => new(document.Handle, document.Identity, document.Status,
-        document.Deadline, document.DeliveryProtocol, document.Deliveries?.ToArray(), document.Applications?.ToArray(), snapshot) { Conversation = document.Conversation };
+        document.Deadline, document.DeliveryProtocol, document.Deliveries?.ToArray(), document.Applications?.ToArray(), snapshot) { Conversation = document.Conversation, AdmissionGeneration = document.AdmissionGeneration };
     internal static bool Matches(SpecialistTurnDocument document, SpecialistRetentionCandidate expected, string snapshot) =>
         expected == Candidate(document, snapshot) with { Deliveries = expected.Deliveries, Applications = expected.Applications } &&
         (document.Deliveries ?? []).SequenceEqual(expected.Deliveries ?? []) && (document.Applications ?? []).SequenceEqual(expected.Applications ?? []);
+    internal static bool CanLackConversation(SpecialistRetentionCandidate candidate) => candidate.Status == SpecialistTurnStatus.Cancelled &&
+        candidate.AdmissionGeneration == 0 && candidate.Conversation is { ExpectedRevision: 0 } conversation && conversation.ConversationId == candidate.Handle;
+
     internal static SpecialistTurnDocument Purge(SpecialistTurnDocument document, DateTimeOffset now)
     {
         if (!Settled(document.Status) || document.Deadline >= now || document.ContentPurgedAt is not null)

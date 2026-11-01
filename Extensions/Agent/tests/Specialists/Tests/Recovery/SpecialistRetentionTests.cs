@@ -136,4 +136,22 @@ public sealed partial class SpecialistEfJournalTests
         else Assert.NotNull((await store.StageAsync(Document, default)).ContentPurgedAt);
     }
 
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    public async Task Missing_referenced_conversation_is_not_mistaken_for_an_uncreated_fresh_conversation(bool durable, long revision)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var first = Document with { Conversation = new(revision == 0 ? new string('f', 64) : Document.Handle, revision) };
+        await store.StageAsync(first, default);
+        await store.CancelAsync(new(Identity, null, "cancel", new string('e', 64), Now), default);
+        var candidate = Assert.Single((await store.QueryRetentionAsync(new("tenant", "tenant"), default)).Items);
+        Assert.False(await store.PurgeContentAsync(candidate, Now.AddDays(31), default));
+        Assert.NotNull((await store.ReadAsync(first.Handle, Identity, default))!.ProtectedRequest);
+    }
+
 }

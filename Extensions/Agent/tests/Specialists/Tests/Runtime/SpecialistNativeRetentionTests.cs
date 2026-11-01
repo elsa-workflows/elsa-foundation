@@ -104,4 +104,34 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal(1, factory.Calls);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_fresh_continuity_turn_cancelled_before_claim_can_expire_without_an_uncreated_conversation_row(bool durable)
+    {
+        using var files = new JournalFiles();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var factory = new FixtureFactory("{\"Article\":\"unused\"}");
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        var (before, _) = await NativeTurnAsync(provider, executable);
+        var now = DateTimeOffset.UtcNow;
+        var command = new WorkflowExecutionCommand("retention-cancel", "run", WorkflowExecutionCommandKind.Cancel, now, null, new Dictionary<string, string>());
+        await actor.EnqueueAsync(new("retention-cancel-envelope", "run", command, "retention-cancel", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, (await provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(10, "run", SpecialistSettlementBoundary.CancelKind))).DeliveredCount);
+        var store = provider.GetRequiredService<ISpecialistTurnStore>();
+        var cancelled = (await store.ReadAsync(before.Handle, before.Identity, default))!;
+        Assert.Equal(SpecialistTurnStatus.Cancelled, cancelled.Status);
+        Assert.Equal(0, cancelled.AdmissionGeneration);
+        Assert.Null(await store.ReadConversationAsync(cancelled.Conversation!.ConversationId, cancelled.Identity, default));
+        clock.Advance(TimeSpan.FromDays(31));
+        var result = await provider.GetRequiredService<SpecialistRetentionPruner>().PrunePageAsync(new(cancelled.Identity.TenantId, cancelled.Identity.PersistencePartition), default);
+        Assert.Equal(1, result.Purged);
+        Assert.Null((await store.ReadAsync(before.Handle, before.Identity, default))!.ProtectedRequest);
+        Assert.Equal(0, factory.Calls);
+        Assert.Equal(0, factory.Opens);
+    }
+
 }

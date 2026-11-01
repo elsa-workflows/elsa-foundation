@@ -576,3 +576,5 @@ Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ContentPurgedAt.init -
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ContentPurgedAt.get -> System.DateTimeOffset?
 Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.Conversation.get -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission?
 Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.Conversation.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.AdmissionGeneration.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.AdmissionGeneration.init -> void

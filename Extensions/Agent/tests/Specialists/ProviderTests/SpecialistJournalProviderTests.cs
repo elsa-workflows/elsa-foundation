@@ -375,6 +375,17 @@ public sealed class SpecialistJournalProviderTests
             Assert.Equal(SpecialistCancellationOutcome.OtherDeliveryUnchanged, (await fresh.CancelAsync(CancelRequest(transferred.Identity, "old-child"), CancellationToken.None)).Outcome);
         }
 
+        foreach (var freshConversation in new[] { true, false })
+        {
+            var unclaimed = RaceDocument(freshConversation ? "retention-unclaimed-fresh" : "retention-unclaimed-reference");
+            unclaimed = unclaimed with { Conversation = new(freshConversation ? unclaimed.Handle : Hash("missing-referenced-conversation"), 0) };
+            await recovered.StageAsync(unclaimed, CancellationToken.None);
+            Assert.Equal(SpecialistCancellationOutcome.Cancelled, (await recovered.CancelAsync(CancelRequest(unclaimed.Identity), CancellationToken.None)).Outcome);
+            var proof = Assert.Single((await recovered.QueryRetentionAsync(new("tenant", "tenant", PageSize: 128), CancellationToken.None)).Items, item => item.Handle == unclaimed.Handle);
+            Assert.Equal(freshConversation, await recovered.PurgeContentAsync(proof, now.AddDays(31), CancellationToken.None));
+            Assert.Equal(freshConversation, (await recovered.ReadAsync(unclaimed.Handle, unclaimed.Identity, CancellationToken.None))!.ContentPurgedAt is not null);
+        }
+
         var historyRace = RaceDocument("retention-history-race");
         await recovered.StageAsync(historyRace, CancellationToken.None);
         Assert.NotNull(await recovered.ClaimAsync(historyRace.Handle, historyRace.Identity, "history-child", "history-fence", now, CancellationToken.None));

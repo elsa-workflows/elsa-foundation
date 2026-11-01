@@ -52,8 +52,8 @@ internal sealed class SpecialistRetentionPruner(ISpecialistTurnStore turns, IWor
         if (candidate.Conversation is { } admission)
         {
             var conversation = await turns.ReadConversationAsync(admission.ConversationId, identity, cancellationToken);
-            if (conversation is null) return "conversation-unavailable";
-            if (conversation.ActiveTurnHandle is not null || conversation.OutcomeUnknown) return "conversation-unsettled";
+            if (conversation is null && !SpecialistRetentionRules.CanLackConversation(candidate)) return "conversation-unavailable";
+            if (conversation is not null && (conversation.ActiveTurnHandle is not null || conversation.OutcomeUnknown)) return "conversation-unsettled";
         }
         var workflow = await workflows.FindAsync(identity.WorkflowExecutionId, cancellationToken);
         if (workflow is null) return "owner-unavailable";

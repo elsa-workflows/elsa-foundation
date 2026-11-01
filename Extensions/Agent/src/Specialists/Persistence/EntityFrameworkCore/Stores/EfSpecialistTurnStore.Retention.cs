@@ -37,7 +37,7 @@ internal sealed partial class EfSpecialistTurnStore
                     throw new InvalidDataException("The specialist retention header does not match its selected record.");
                 if (SpecialistRetentionRules.Settled(header.Status) && header.ContentPurgedAt is null)
                     items.Add(new(header.Handle, header.Identity, header.Status, header.Deadline, header.DeliveryProtocol,
-                        header.Deliveries, header.Applications, row.Version.ToString(CultureInfo.InvariantCulture)) { Conversation = header.Conversation });
+                        header.Deliveries, header.Applications, row.Version.ToString(CultureInfo.InvariantCulture)) { Conversation = header.Conversation, AdmissionGeneration = header.AdmissionGeneration });
             }
             return new(items, null);
         }
@@ -63,15 +63,21 @@ internal sealed partial class EfSpecialistTurnStore
             if (before.Conversation is { } admission)
             {
                 var conversationRow = await owned.Set<SpecialistConversationRecord>().AsNoTracking().SingleOrDefaultAsync(value => value.ScopeKey == scope && value.Id == admission.ConversationId, cancellationToken);
-                if (conversationRow is null) return false;
-                var conversation = ReadConversation(conversationRow);
-                if (conversation.ActiveTurnHandle is not null || conversation.OutcomeUnknown) return false;
-                // Compete with claim/accept/fail against the same conversation version. Preserve
-                // history exactly; a concurrent owner must invalidate the purge proof atomically.
-                var locked = await owned.Set<SpecialistConversationRecord>().Where(value => value.ScopeKey == scope && value.Id == conversationRow.Id &&
-                        value.SchemaVersion == SpecialistsEfModule.SchemaVersion && value.Version == conversationRow.Version)
-                    .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.Version, conversationRow.Version + 1), cancellationToken);
-                if (locked != 1) return false;
+                if (conversationRow is null)
+                {
+                    if (!SpecialistRetentionRules.CanLackConversation(expected)) return false;
+                }
+                else
+                {
+                    var conversation = ReadConversation(conversationRow);
+                    if (conversation.ActiveTurnHandle is not null || conversation.OutcomeUnknown) return false;
+                    // Compete with claim/accept/fail against the same conversation version. Preserve
+                    // history exactly; a concurrent owner must invalidate the purge proof atomically.
+                    var locked = await owned.Set<SpecialistConversationRecord>().Where(value => value.ScopeKey == scope && value.Id == conversationRow.Id &&
+                            value.SchemaVersion == SpecialistsEfModule.SchemaVersion && value.Version == conversationRow.Version)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.Version, conversationRow.Version + 1), cancellationToken);
+                    if (locked != 1) return false;
+                }
             }
             var next = SpecialistRetentionRules.Purge(before, now);
             var payload = Serialize(next);
@@ -88,5 +94,5 @@ internal sealed partial class EfSpecialistTurnStore
     }
 
     private sealed record RetentionHeader(string Handle, SpecialistInvocationIdentity Identity, SpecialistTurnStatus Status, DateTimeOffset Deadline,
-        int DeliveryProtocol, IReadOnlyList<SpecialistTurnDelivery>? Deliveries, IReadOnlyList<SpecialistTurnApplication>? Applications, DateTimeOffset? ContentPurgedAt, SpecialistConversationAdmission? Conversation);
+        int DeliveryProtocol, IReadOnlyList<SpecialistTurnDelivery>? Deliveries, IReadOnlyList<SpecialistTurnApplication>? Applications, DateTimeOffset? ContentPurgedAt, SpecialistConversationAdmission? Conversation, int AdmissionGeneration);
 }
