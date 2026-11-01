@@ -38,7 +38,7 @@
 .wf-library-controls input,
 .wf-organization-dialog button:not(.studio-button),
 .wf-organization-dialog select,
-.wf-organization-dialog input,
+.wf-organization-dialog input:not(.studio-search-input),
 .wf-organization-dialog textarea {
   min-height: 32px;
   max-width: 100%;
@@ -154,7 +154,7 @@
 
 html[data-workspace-style="minimal"] .wf-library-controls { gap: 16px; padding-block: 16px; border-bottom-style: var(--studio-section-boundary-style); }
 html[data-workspace-style="minimal"] .wf-library-filter-panel > label:first-child { max-width: 360px; }
-html[data-workspace-style="minimal"] :is(.wf-library-controls, .wf-organization-dialog) :is(button, select, input:not([type="checkbox"]), textarea) { min-height: var(--studio-control-height); border-radius: var(--studio-radius); }
+html[data-workspace-style="minimal"] :is(.wf-library-controls, .wf-organization-dialog) :is(button:not(.studio-button), select, input:not([type="checkbox"]):not(.studio-search-input), textarea) { min-height: var(--studio-control-height); border-radius: var(--studio-radius); }
 html[data-workspace-style="minimal"] .wf-library-controls button[aria-pressed="true"] { background: var(--studio-row-selected); border-color: var(--studio-selection-mark); color: var(--studio-text); }
 html[data-workspace-style="minimal"] :is(.wf-library-filter-clause, .wf-library-preview) { border-top-style: var(--studio-section-boundary-style); }
 html[data-workspace-style="minimal"] .wf-organization-dialog { border-radius: var(--studio-radius-lg); }
@@ -173,7 +173,7 @@ html[data-workspace-style="minimal"] .wf-organization-dialog .wf-dialog-actions 
   .wf-library-controls select,
   .wf-library-controls input,
   .wf-organization-dialog select,
-  .wf-organization-dialog input,
+  .wf-organization-dialog input:not(.studio-search-input),
   .wf-organization-dialog textarea {
     font-size: 16px;
   }

@@ -39,8 +39,13 @@ namespace Elsa.Workflows.Design.Api;
 )]
 public class WorkflowsDesignApiFeature : IWebShellFeature
 {
+    /// <summary>Controls folders, tags, saved views and favorites without removing their stored data.</summary>
+    [ManifestSetting(DisplayName = "Workflow organization", Description = "Enables folders, tags, saved views and favorites. Turning this off preserves saved organization and ordinary workflow browsing, authoring and execution.", Category = "Workflows", DefaultValue = "true")]
+    public bool WorkflowOrganizationEnabled { get; set; } = true;
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton(new WorkflowOrganizationOptions(WorkflowOrganizationEnabled));
         services.AddElsaEndpoints();
         var assembly = GetType().Assembly;
 

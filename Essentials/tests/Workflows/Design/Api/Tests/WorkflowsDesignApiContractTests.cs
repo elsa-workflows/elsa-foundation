@@ -678,7 +678,8 @@ public sealed class WorkflowsDesignApiContractTests
         public AuthorizationProbe AuthorizationProbe { get; } = host.Services.GetRequiredService<AuthorizationProbe>();
         public DefinitionDomainFakes Domain { get; } = host.Services.GetRequiredService<DefinitionDomainFakes>();
 
-        public static async Task<AuthorizationHost> StartAsync(Action<IServiceCollection>? configure = null)
+        public static async Task<AuthorizationHost> StartAsync(Action<IServiceCollection>? configure = null,
+            Action<WorkflowsDesignApiFeature>? configureFeature = null)
         {
             var host = new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -701,7 +702,9 @@ public sealed class WorkflowsDesignApiContractTests
                         services.AddOpenApi();
                         services.AddFoundationIdentityAbstractions(options =>
                             options.NormalizedAuthenticationTypes = new HashSet<string>([AuthenticationHandler.SchemeName], StringComparer.Ordinal));
-                        new WorkflowsDesignApiFeature().ConfigureServices(services);
+                        var feature = new WorkflowsDesignApiFeature();
+                        configureFeature?.Invoke(feature);
+                        feature.ConfigureServices(services);
                         services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
                         // No mediator senders: every Workflows Design route now owns its handling.
                         DefinitionDomainFakes.Register(services);

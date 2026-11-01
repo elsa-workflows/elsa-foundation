@@ -7,6 +7,8 @@ import {
   studioSlots,
   evaluateBackendRequirements,
   type AuthSession,
+  type StudioConnectionController,
+  type StudioShellContribution,
   type StudioBackendAwareContribution,
   type StudioBackendSession,
   type ElsaStudioHostContext,
@@ -27,6 +29,7 @@ import { dialogController } from "./dialogs";
 type RegistryItem<T> = T extends StudioContributionRegistry<infer Item> ? Item : never;
 
 export interface CreateStudioRegistryOptions {
+  connection?: StudioConnectionController;
   backendContext?: StudioEndpointContext;
   backendSession?: StudioBackendSession;
   hostSession?: AuthSession;
@@ -58,6 +61,8 @@ export function createStudioRegistry(
     host: hostContext,
     backend,
     backendSession: options.backendSession,
+    connection: options.connection,
+    shell: createContributionRegistry<StudioShellContribution>({slot:studioSlots.shell,hostPolicy}),
     hostSession: options.hostSession,
     runtime: options.runtime ?? {},
     featureAreas,

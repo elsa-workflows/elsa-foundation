@@ -1,5 +1,37 @@
 import { expect, test } from "@playwright/test";
 
+for (const palette of ["atelier", "classic"]) for (const theme of ["light", "dark"]) for (const width of [320, 1440]) {
+  test(`unavailable organization has explicit keyboard recovery (${palette}, ${theme}, ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=workflow-library&organization=off&palette=${palette}&theme=${theme}&folderId=finance&view=mine&search=payment&state=all&sort=modified&publicationState=published&columns=tags,location&backend=authoring#results`);
+    const recovery = page.getByRole("button", { name: "Clear unavailable organization filters", exact: true });
+    await expect(recovery).toBeVisible();
+    await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { workflowLibraryRequests: { url: string }[] }).workflowLibraryRequests.filter(request => request.url.includes("/pages")))).toEqual([]);
+    await recovery.focus();
+    await expect(recovery).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("link", { name: "Collect overdue payment", exact: true })).toBeVisible();
+    const url = new URL(page.url());
+    expect(url.searchParams.get("search")).toBe("payment");
+    expect(url.searchParams.get("state")).toBe("all");
+    expect(url.searchParams.get("sort")).toBe("modified");
+    expect(url.searchParams.get("publicationState")).toBe("published");
+    expect(url.searchParams.get("columns")).toBe("tags,location");
+    expect(url.searchParams.get("backend")).toBe("authoring");
+    expect(url.hash).toBe("#results");
+    await expect(page.getByRole("columnheader", { name: "Tags", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "Location", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Favorites", exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.reload();
+    await expect(page.getByRole("link", { name: "Collect overdue payment", exact: true })).toBeVisible();
+    await page.goBack();
+    await expect(recovery).toBeVisible();
+    await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toHaveCount(0);
+  });
+}
+
 test("a workflow keeps its identity while tags, saved views and favorites organize it", async ({ page }) => {
   await page.goto("/?mode=workflow-library&theme=light");
   const payment = page.getByRole("row", { name: "Open workflow definition Collect overdue payment" });

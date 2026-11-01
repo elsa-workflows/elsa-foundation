@@ -1,5 +1,6 @@
 import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
@@ -235,10 +236,14 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
             <p className="wf-muted" id="wf-root-create-readiness">No compatible root activity is available. Each disabled choice explains why.</p>
           ) : null}
           {submitError ? <div ref={submitErrorRef} className="wf-alert" role="alert" tabIndex={-1}>{submitError}</div> : null}
-          <div className="wf-dialog-actions">
-            <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
-            <button type="submit" disabled={creating || !draft.name.trim()} aria-disabled={!canCreate} aria-describedby={createReadinessDescriptionId}>{creating ? "Creating..." : submitLabel}</button>
-          </div>
+          <StudioDialogFooter
+            className="wf-dialog-actions"
+            onCancel={onClose}
+            cancelDisabled={creating}
+            confirmLabel={creating ? "Creating..." : submitLabel}
+            confirmDisabled={creating || !draft.name.trim()}
+            confirmProps={{ "aria-disabled": !canCreate, "aria-describedby": createReadinessDescriptionId }}
+          />
         </form>
       </section>
     </div>

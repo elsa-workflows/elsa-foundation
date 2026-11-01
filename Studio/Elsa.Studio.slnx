@@ -15,6 +15,7 @@
     <Project Path="../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <Project Path="src/essentials/Elsa.Studio.Backends/Elsa.Studio.Backends.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />

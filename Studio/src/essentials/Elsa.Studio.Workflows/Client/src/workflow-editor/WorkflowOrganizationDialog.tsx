@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { FolderTree, RefreshCw, Search, Tags } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -60,7 +60,15 @@ export function WorkflowOrganizationDialog({ context, definitionId, name, onClos
         </> : null}
         {error ? <p role="alert">{error}</p> : null}
       </div>
-      <footer className="wf-organization-footer">{!loading ? <StudioButton variant="ghost" size="sm" disabled={busy} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} aria-hidden="true" />Reload organization</StudioButton> : <span />}<div className="wf-organization-actions"><StudioButton disabled={busy} onClick={onClose}>Close</StudioButton><StudioButton variant="primary" type="submit" disabled={busy || !changed || organization?.permissions?.canAssignTags !== true}>{busy ? "Saving…" : "Save tags"}</StudioButton></div></footer>
+      <StudioDialogFooter
+        className="wf-organization-footer"
+        leading={!loading ? <StudioButton disabled={busy} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} aria-hidden="true" />Reload organization</StudioButton> : undefined}
+        cancelLabel="Close"
+        onCancel={onClose}
+        cancelDisabled={busy}
+        confirmLabel={busy ? "Saving…" : "Save tags"}
+        confirmDisabled={busy || !changed || organization?.permissions?.canAssignTags !== true}
+      />
     </form>
   </section></div>;
 }
@@ -116,7 +124,15 @@ export function WorkflowBulkTagsDialog({ context, definitionIds, onClose, onSave
         {outcomes ? <div role="status" aria-label="Bulk tag results"><p>Bulk tag results</p><ul>{outcomes.map(outcome => <li key={outcome.definitionId}><code>{outcome.definitionId}</code>: {outcome.status}{outcome.message ? ` — ${outcome.message}` : ""}</li>)}</ul><button type="button" disabled={busy} onClick={() => { setRefresh(value => value + 1); setOutcomes(null); setPreview(false); keyRef.current = workflowOperationKey(); }}>Reload targets for another edit</button></div> : null}
         {error ? <p role="alert">{error}</p> : null}
       </div>
-      <div className="wf-dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Close</button>{preview && !outcomes ? <button type="button" disabled={busy} onClick={() => setPreview(false)}>Back to changes</button> : null}<button type="submit" disabled={busy || loading || !canEdit || !assignments.length || Boolean(outcomes)}>{busy ? "Applying…" : preview ? "Apply tag changes" : "Preview changes"}</button></div>
+      <StudioDialogFooter
+        className="wf-dialog-actions"
+        extra={preview && !outcomes ? <StudioButton disabled={busy} onClick={() => setPreview(false)}>Back to changes</StudioButton> : null}
+        cancelLabel="Close"
+        onCancel={onClose}
+        cancelDisabled={busy}
+        confirmLabel={busy ? "Applying…" : preview ? "Apply tag changes" : "Preview changes"}
+        confirmDisabled={busy || loading || !canEdit || !assignments.length || Boolean(outcomes)}
+      />
     </form>
   </section></div>;
 }
@@ -167,12 +183,12 @@ function WorkflowTagAssignmentsEditor({ context, assignments, disabled, allowRet
     finally { if (generation === generationRef.current) setLoading(false); }
   };
   return <fieldset className="wf-tag-assignments" disabled={disabled}><legend><Tags size={16} aria-hidden="true" />Tags</legend>
-    <div className="wf-tag-search"><label>Find tag<input type="search" placeholder="Search tags…" aria-label="Find workflow tags" value={search} onChange={event => setSearch(event.target.value)} enterKeyHint="search" onKeyDown={event => {
+    <div className="wf-tag-search"><StudioSearchInput placeholder="Search tags…" aria-label="Find workflow tags" value={search} onChange={event => setSearch(event.target.value)} enterKeyHint="search" onKeyDown={event => {
       if (event.key === "Enter" && !event.nativeEvent.isComposing) {
         event.preventDefault();
         if (!loading) setTerm(search);
       }
-    }} /></label><StudioButton disabled={loading} onClick={() => setTerm(search)}><Search size={16} aria-hidden="true" />Find</StudioButton></div>
+    }} /><StudioButton size="sm" disabled={loading} onClick={() => setTerm(search)}><Search size={16} aria-hidden="true" />Find</StudioButton></div>
     {catalog.map(tag => tag.mode === "marker" ? <label className="wf-library-check" key={tag.id}><input type="checkbox" checked={selected.has(workflowTagAssignmentKey({ tagId: tag.id }))} disabled={!allowRetired && tag.deprecated && !selected.has(workflowTagAssignmentKey({ tagId: tag.id }))} onChange={event => toggle({ tagId: tag.id }, event.target.checked, true)} />{tag.name}{tag.deprecated ? " (retired)" : ""}</label> :
       <fieldset className="wf-library-values" key={tag.id}><legend>{tag.name}{tag.deprecated ? " (retired)" : ""}{tag.cardinality === "single" && !allowRetired ? " · choose one" : ""}</legend>{tag.values.map(value => {
         const assignment = { tagId: tag.id, valueId: value.id };

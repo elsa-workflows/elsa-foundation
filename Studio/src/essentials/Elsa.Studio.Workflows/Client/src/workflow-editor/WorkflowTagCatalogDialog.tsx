@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowTag, getWorkflowTag, updateWorkflowTag, workflowOperationKey, type WorkflowTag, type WorkflowTagInput } from "../api/workflowOrganization";
 import { useDialogFocus } from "./useDialogFocus";
@@ -70,7 +71,14 @@ export function WorkflowTagCatalogDialog({ context, tags, onClose, onSaved }: {
         {error ? <p role="alert">{error}</p> : null}
         {status ? <p role="status">{status}</p> : null}
       </div>
-      <div className="wf-dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Close</button><button type="submit" disabled={busy || !draft.name.trim()}>{busy ? "Saving…" : editingId ? "Save tag" : "Create tag"}</button></div>
+      <StudioDialogFooter
+        className="wf-dialog-actions"
+        cancelLabel="Close"
+        onCancel={onClose}
+        cancelDisabled={busy}
+        confirmLabel={busy ? "Saving…" : editingId ? "Save tag" : "Create tag"}
+        confirmDisabled={busy || !draft.name.trim()}
+      />
     </form>
   </section></div>;
 }

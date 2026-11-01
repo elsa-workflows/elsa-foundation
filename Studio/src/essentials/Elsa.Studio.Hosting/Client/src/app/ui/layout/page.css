@@ -1,4 +1,6 @@
 /* Shared page and collection recipes. No host or module-private selectors. */
+@import "./DialogFooter.css";
+
 .studio-page {
   display: flex;
   flex-direction: column;

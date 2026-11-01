@@ -275,8 +275,8 @@
   padding: 12px 20px;
 }
 
-.wf-publication-footer.wf-dialog-actions .wf-primary-action,
-.wf-publication-footer.wf-dialog-actions button[type="submit"] {
+.wf-publication-footer.wf-dialog-actions button:not(.studio-button).wf-primary-action,
+.wf-publication-footer.wf-dialog-actions button:not(.studio-button)[type="submit"] {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--wf-border));
   background: var(--wf-accent-soft);
   /* Favor the text tone so the tinted action stays readable across independently chosen palettes. */

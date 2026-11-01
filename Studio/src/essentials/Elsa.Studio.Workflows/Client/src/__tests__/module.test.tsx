@@ -365,10 +365,10 @@ describe("workflows module", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute(
-      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval"
+      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Opaque workflow");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Opaque workflow")).not.toBeNull());
     const row = rowByLabel(container, "Open workflow definition Opaque workflow");
     const nameLink = row!.querySelector<HTMLAnchorElement>("a");
     expect(nameLink).not.toBeNull();
@@ -395,10 +395,10 @@ describe("workflows module", () => {
     const opaqueId = "definition/opaque ?&=value";
     vi.stubGlobal("fetch", vi.fn(async () => response({ items: [definition({ id: opaqueId, name: "Opaque workflow" })] })));
     const { container, unmount } = await renderRegisteredRoute(
-      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval"
+      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Opaque workflow");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Opaque workflow")).not.toBeNull());
     const row = rowByLabel(container, "Open workflow definition Opaque workflow");
 
     await click(checkboxByLabel(row!, "Select workflow definition Opaque workflow"));
@@ -808,10 +808,10 @@ describe("workflows module", () => {
       return response({ items: [definition()] });
     }));
     const { container, unmount } = await renderRegisteredRoute(
-      "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=hello"
+      "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=hello", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Hello World");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Hello World")).not.toBeNull());
     await click(rowByLabel(container, "Open workflow definition Hello World"));
 
     const parameters = new URLSearchParams(window.location.search);
@@ -2357,10 +2357,20 @@ describe("workflows module", () => {
 
     await waitForText(container, "Showing newest live reference ref-1");
 
-    // Identity panel: artifact id, hash, node/resume-target counts.
+    // Identity panel: workflow name as title, hash as a secondary address, node/resume-target counts.
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
     expect(container.textContent).toContain("Executable Inspector");
+    await waitForText(container, "Hello World");
+    const inspector = container.querySelector(".wf-instance-inspector");
+    expect(inspector?.querySelector("h3")?.textContent).toBe("Hello World");
+    expect(inspector?.textContent).not.toContain("Executable Artifact");
+    expect(inspector?.textContent).not.toContain("Elsa.Activities.Sequence.Activities.Sequence");
+    const identityTerms = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].map(dt => dt.textContent);
+    expect(identityTerms).toEqual(expect.arrayContaining(["Root activity", "Nodes", "Resume targets", "Created"]));
+    expect(identityTerms).not.toContain("Artifact ID");
+    expect(identityTerms).not.toContain("Artifact Hash");
+    expect(identityTerms).not.toContain("Definition");
 
     // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
     await waitForText(container, "Log greeting");
@@ -2379,13 +2389,115 @@ describe("workflows module", () => {
 
     // Selecting another reference updates the routed selection. Runtime remains the executable source.
     await click(buttonByText(container, "References (2)"));
-    await click(buttonByLabel(container, "Show reference ref-0"));
+    const referenceList = container.querySelector(".wf-reference-list--collection");
+    expect(referenceList?.querySelector(".wf-reference-origin")?.textContent).toBe("Hello World");
+    expect(referenceList?.textContent).toContain("Version");
+    expect(referenceList?.textContent).toContain("2.0.0");
+    expect(referenceList?.textContent).toContain("Published");
+    await click(buttonByLabel(container, "Show Hello World version 1.0.0"));
     await waitForText(container, "Showing requested reference ref-0");
 
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
 
     await unmount();
+  });
+
+  it("shows executable identity in designer-inspector language", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) {
+        return response(executableDetail({
+          rootActivityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+          rootActivity: executableWireNode({
+            executableNodeId: "exec-root",
+            authoredActivityId: "root",
+            activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+            structureKind: null,
+            childSlots: []
+          })
+        }));
+      }
+      if (url.includes("/activities")) {
+        return response({ activities: [
+          activity({
+            activityVersionId: "write-line-v1",
+            activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+            displayName: "Write Line"
+          })
+        ] });
+      }
+      if (url.includes("/definitions/definition-1")) {
+        return response({ definition: definition({ name: "Invoice settlement" }), draft: null, versions: [] });
+      }
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "Invoice settlement");
+    const inspector = container.querySelector(".wf-instance-inspector")!;
+    expect(inspector.querySelector(".wf-executable-identity h3")?.textContent).toBe("Invoice settlement");
+    expect(inspector.textContent).not.toContain("Executable Artifact");
+    expect(inspector.textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(inspector.querySelector(".wf-identity-cell")?.textContent).toContain("Write Line");
+
+    const copyableLabels = [...inspector.querySelectorAll(".studio-copyable-identifier__label")].map(label => label.textContent);
+    expect(copyableLabels).toEqual(["Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"]);
+    const copyableValues = [...inspector.querySelectorAll(".studio-copyable-identifier")].map(row => ({
+      label: row.querySelector(".studio-copyable-identifier__label")?.textContent,
+      value: row.querySelector(".studio-copyable-identifier__value")?.getAttribute("title")
+        ?? row.querySelector(".studio-copyable-identifier__value")?.textContent
+    }));
+    expect(copyableValues).toEqual([
+      { label: "Artifact ID", value: "artifact-1" },
+      { label: "Artifact hash", value: "sha256:abc" },
+      { label: "Definition ID", value: "definition-1" },
+      { label: "Definition version ID", value: "version-2" }
+    ]);
+    expect(inspector.querySelectorAll(".wf-executable-source-ids .studio-copyable-identifier")).toHaveLength(2);
+    expect([...inspector.querySelectorAll(".wf-instance-meta dt")].map(dt => dt.textContent)).not.toContain("Artifact ID");
+
+    await click(buttonByText(container, "References (2)"));
+    const items = [...container.querySelectorAll(".wf-reference-list--collection .wf-reference-item")];
+    expect(items).toHaveLength(2);
+    expect(items[0]?.querySelector(".wf-reference-origin")?.textContent).toBe("Invoice settlement");
+    expect([...items[0]?.querySelectorAll(".wf-reference-collection-label") ?? []].map(label => label.textContent)).toEqual(["Version", "Scope", "Published"]);
+    expect(items[0]?.querySelector("dl")).toBeNull();
+    expect(items[0]?.querySelector(".wf-reference-scope-published")?.textContent).toBe("Published");
+    expect(items[0]?.textContent).toContain("2.0.0");
+    expect(items[0]?.textContent).toContain("Shown");
+    expect(buttonByLabel(container, "Show Invoice settlement version 2.0.0")).toBeTruthy();
+
+    await unmount();
+  });
+
+  it("falls back to Executable when the source definition is missing or unnamed", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    for (const definitionResponse of [
+      { status: 404, body: null },
+      { status: 200, body: { definition: definition({ name: "   " }), draft: null, versions: [] } }
+    ]) {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/executables/artifact-1")) return response(executableDetail());
+        if (url.includes("/activities")) return response({ activities: [] });
+        if (url.includes("/definitions/definition-1")) return response(definitionResponse.body, definitionResponse.status);
+        return response(null, 404);
+      }));
+      const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+      await waitForText(container, "Resume targets");
+      await vi.waitFor(() => expect(container.querySelector(".wf-executable-identity h3")?.textContent).toBe("Executable"));
+      await unmount();
+    }
   });
 
   it("collects workflow inputs before running from the Executable Inspector", async () => {
@@ -3690,7 +3802,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("keeps the flat inventory when folders are advertised without bounded definition browsing", async () => {
+  it("holds scoped browsing when folders are advertised without bounded definition browsing", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/definitions?")) return response({ items: [definition({ name: "Legacy flat workflow" })] });
@@ -3706,13 +3818,12 @@ describe("workflows module", () => {
       capabilities
     );
 
-    await waitForText(container, "Legacy flat workflow");
+    await waitForText(container, "Some organization filters are unavailable");
     expect(container.querySelector("[role='tree']")).toBeNull();
-    expect(container.querySelector("[role='status']")?.textContent).toContain(
-      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
-    );
-    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
-    expect(buttonByText(container, "Search all workflows")).toBeNull();
+    expect(container.textContent).not.toContain("Legacy flat workflow");
+    expect(fetchMock).not.toHaveBeenCalled();
+    await click(buttonByText(container, "Clear unavailable organization filters"));
+    await waitForText(container, "Legacy flat workflow");
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
   });
@@ -3729,12 +3840,14 @@ describe("workflows module", () => {
     );
 
     await waitForText(container, "Couldn't inspect workflow folder support.");
+    await waitForText(container, "Some organization filters are unavailable");
+    await click(buttonByText(container, "Clear unavailable organization filters"));
     await waitForText(container, "Couldn't load workflow definitions");
     expect(container.querySelector(".wf-grid[aria-busy='true']")).toBeNull();
     await unmount();
   });
 
-  it("preserves requested folder context while explaining the capability-unavailable flat fallback", async () => {
+  it("preserves unavailable folder context until explicit recovery", async () => {
     const definitionRequests: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -3754,11 +3867,11 @@ describe("workflows module", () => {
       capabilities
     );
 
-    await waitForText(container, "Flat fallback workflow");
-    expect(container.querySelector("[role='status']")?.textContent).toContain(
-      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
-    );
+    await waitForText(container, "Some organization filters are unavailable");
+    expect(definitionRequests).toEqual([]);
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("opaque-folder");
+    await click(buttonByText(container, "Clear unavailable organization filters"));
+    await waitForText(container, "Flat fallback workflow");
     expect(definitionRequests).toEqual([
       "https://server.example/design/workflows/definition-pages?state=active&searchTerm=approval&pageSize=10"
     ]);
@@ -6011,4 +6124,10 @@ async function waitForUrlParam(name: string, value: string) {
   }
 
   throw new Error(`Timed out waiting for URL parameter: ${name}=${value}`);
+}
+
+function folderBrowseCapabilities() {
+  const capabilities = capabilityDocument();
+  capabilities.capabilities[0].links.push({ rel: "workflow-folders", href: "design/workflows/folders" }, { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+  return capabilities;
 }

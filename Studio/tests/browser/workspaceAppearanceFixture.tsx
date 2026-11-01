@@ -26,7 +26,7 @@ const panels = new URLSearchParams(location.search).has("bottom-panel")
   : [];
 
 function Fixture() {
-  const [view, setView] = useState(new URLSearchParams(location.search).get("view") ?? "editor");
+  const [view, setView] = useState(new URLSearchParams(location.search).get("screen") ?? "editor");
   const path = view === "appearance" ? "/settings/appearance" : view === "availability" ? "/workflows/activity-availability" : "/workflows/definitions";
   return <ThemeProvider>
     <ShellFrame navigation={navigation} panels={panels} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
