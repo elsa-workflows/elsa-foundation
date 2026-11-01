@@ -356,7 +356,8 @@ and `--studio-*` aliases on `.sidebar` from these roles so every sidebar part fo
 navigation the same setting paints the menubar. **Theme default** follows the workspace: in light Linen
 the host derives the roles from the palette's dark navigation roles; in other modes it uses the selected
 mode, and a light-only custom palette uses its own pair. High contrast always retains the explicit
-high-contrast pair and never carries `data-sidebar-color`.
+high-contrast pair and never carries `data-sidebar-color`. The choice is independent of Studio presets:
+applying a preset leaves it as it is, so a preset shows its own navigation only under Theme default.
 
 `--studio-workspace-page-background` and `--studio-workspace-panel-background` are workspace background recipes,
 which may contain subtle gradients. Use them only as `background`, with a solid role fallback; never

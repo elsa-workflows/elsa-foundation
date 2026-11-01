@@ -49,12 +49,14 @@ export function AppearancePage({
     mode,
     resetAppearance,
     supportedModes,
+    navMode,
     navModePreference,
     setNavModePreference,
     sidebarColorPreference,
     setSidebarColorPreference
   } = useTheme();
   const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
+  const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
@@ -153,16 +155,17 @@ export function AppearancePage({
       </AppearanceCard>
 
       <AppearanceCard
-        title="Sidebar color"
+        title={sidebarColorTitle}
         description="Keep the navigation dark or light in every mode, or follow the workspace. High contrast keeps its own navigation."
       >
         <RadioCardGroup
-          ariaLabel="Sidebar color"
+          ariaLabel={sidebarColorTitle}
           value={sidebarColorPreference}
           options={sidebarColorPreferences.map(preference => ({
             value: preference,
             label: sidebarColorPreferenceLabels[preference],
-            defaultValue: preference === defaultAppearancePreferences.sidebarColor
+            defaultValue: preference === defaultAppearancePreferences.sidebarColor,
+            disabled: mode === "high-contrast"
           }))}
           onChange={value => isSidebarColorPreference(value) && setSidebarColorPreference(value)}
         />
