@@ -88,6 +88,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         requestId,
         source: request.source,
         promptMode: request.promptMode,
+        activeSurface: request.activeSurface,
         requestedCapabilities: request.capabilityId ? [request.capabilityId] : [],
         contextAttachments: request.contextAttachments.map(mapContextAttachment)
       }));
@@ -95,6 +96,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       return {
         messageId: getAcceptedMessageId(accepted),
         status: mapMessageStatus(readField(readRecord(accepted, "message"), "status")),
+        contextAttachments: readRecordArray(readRecord(accepted, "message"), "context").map(mapAdmittedContextAttachment),
         warnings: readRecordArray(accepted, "warnings").map(item => ({ code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", target: readString(item, "target") })),
         streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`
       };
@@ -330,6 +332,40 @@ function mapContextAttachment(attachment: AgentMessageRequest["contextAttachment
     summary: redacted ? "[secret redacted]" : attachment.summary ?? (typeof attachment.content === "string" ? attachment.content : attachment.label),
     content: redacted ? undefined : attachment.content,
     references: attachment.references ?? {}
+  };
+}
+
+/** Shared normalization for accepted-message and current-disclosure stream envelopes. */
+export function mapAdmittedContextAttachment(attachment: Record<string, unknown>): AgentMessageRequest["contextAttachments"][number] {
+  const sensitivities = ["public", "internal", "sensitive", "secret-redacted", "secret-redacted"] as const;
+  const sensitivityNames: Record<string, AgentMessageRequest["contextAttachments"][number]["sensitivity"]> = { public: "public", internal: "internal", sensitive: "sensitive", confidential: "sensitive", "secret-redacted": "secret-redacted", secret: "secret-redacted" };
+  const rawSensitivity = readField(attachment, "sensitivity");
+  const sensitivity = typeof rawSensitivity === "number" ? sensitivities[rawSensitivity] ?? "secret-redacted"
+    : sensitivityNames[normalizeEnum(rawSensitivity)] ?? "secret-redacted";
+  const origins = ["clientSnapshot", "resourceData", "authoritativeRead", "installedGuidance"] as const;
+  const rawOrigin = readField(attachment, "origin");
+  const origin = typeof rawOrigin === "number" ? origins[rawOrigin]
+    : origins.find(item => normalizeEnum(item) === normalizeEnum(rawOrigin));
+  const redacted = sensitivity === "secret-redacted";
+  const target = readRecord(attachment, "target");
+  const client = readRecord(attachment, "client");
+  return {
+    id: readString(attachment, "id") ?? "",
+    source: readString(attachment, "source") ?? "",
+    sourceId: redacted ? undefined : readString(attachment, "sourceId"),
+    label: readString(attachment, "label") ?? "Admitted context",
+    contentType: readString(attachment, "contentType") ?? "",
+    sensitivity,
+    scope: readString(attachment, "scope") ?? "",
+    summary: readString(attachment, "summary"),
+    content: redacted ? undefined : readField(attachment, "content"),
+    references: redacted ? {} : readRecord(attachment, "references") as Record<string, string> | undefined,
+    moduleId: readString(attachment, "moduleId"),
+    schemaVersion: readString(attachment, "schemaVersion"),
+    target: redacted || !target ? null : { moduleId: readString(target, "moduleId") ?? "", resourceType: readString(target, "resourceType") ?? "", resourceId: readString(target, "resourceId") ?? null, revision: readString(target, "revision") ?? null, displayName: readString(target, "displayName"), route: readString(target, "route") },
+    origin,
+    client: redacted || !client ? null : { clientId: readString(client, "clientId") ?? "", generationId: readString(client, "generationId") ?? "" },
+    agentScopes: redacted ? [] : readStringArray(attachment, "agentScopes")
   };
 }
 

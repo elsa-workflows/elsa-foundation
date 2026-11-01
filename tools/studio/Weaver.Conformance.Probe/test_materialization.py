@@ -3,11 +3,34 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import xml.etree.ElementTree as ET
 
-from artifacts import ConformanceRun
+from artifacts import ConformanceRun, sha
+from authors import build_authors
 
 
 class MaterializationTests(unittest.TestCase):
+    def test_commit_derived_author_version_has_no_zero_prefixed_numeric_identifier(self):
+        for prefix in ("02848461", "00000000", "12345678", "deadbeef"):
+            with self.subTest(prefix=prefix), tempfile.TemporaryDirectory() as directory:
+                repo, run = self.real_pin_run(directory, ["10.0.12"], ["10.0.8"])
+                run.source = prefix + "a" * 32
+                run.sdk.write_bytes(b"synthetic SDK identity for template-only testing")
+                run.packages = {"Elsa.Test": {"version": run.version}}
+                run.report = {"producer": {"source": run.source, "sdk": {"sha256": sha(run.sdk)}}}
+                run.save = lambda: None
+                # Inspect the actual generated author before any restore/build/network work.
+                with patch("artifacts.REPO", repo), patch("authors._configure", side_effect=RuntimeError("template boundary")):
+                    with self.assertRaisesRegex(RuntimeError, "template boundary"):
+                        build_authors(run)
+                project = run.root / "author-protocol/Acme.Weaver.ProtocolFixtures.csproj"
+                version = next(ET.parse(project).iter("Version")).text
+                self.assertIn(prefix, version)
+                prerelease = version.split("-", 1)[1]
+                for identifier in prerelease.split("."):
+                    self.assertRegex(identifier, r"^[0-9A-Za-z-]+$")
+                    self.assertFalse(identifier.isdigit() and len(identifier) > 1 and identifier.startswith("0"), version)
+
     @staticmethod
     def real_pin_run(directory, backend_di, studio_di):
         root = Path(directory)

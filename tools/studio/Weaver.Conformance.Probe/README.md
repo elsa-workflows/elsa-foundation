@@ -35,3 +35,20 @@ These external packages are qualification fixtures, not shipped product modules.
 Expected negative children stay Failed with separately recognized precise causes. Before-effect controls retain unchanged owner state; concurrent CAS preserves its actual winner, and post-dispatch uncertainty/confirmation retry cannot replay an accepted edit. The general private IAM setup uses normal persisted principals and predeclared grants, followed by normal sign-in. Module-owned CAS rendezvous and provider pre-call gates only coordinate real native operations; they do not replace stores or the engine or add product contracts.
 
 The exporter selects evidence references rather than uploading the run directory. The 76ec safe export contains 11,823 references with original statuses and no private authentication, seed configuration, runtime databases or keys. Report/index hashes are in the curated receipt. Earlier failed runs and diagnostic component versions remain preserved on the owning issue/private outputs; this complete run does not relabel them. [Tasks](../../../specs/1174-weaver-package-witness/tasks.md#causal-corrections-retained-for-review) retain useful causal correction references.
+
+
+## Current-authority context qualification (#3439)
+
+The same immutable package run now additionally requires four native cases in
+`contextDisclosureQualification`, separate from the original38case records. Both actual adapters
+must receive no request/call/continuation after accepted-message read authority is withdrawn and
+after an actual accepted effect's receipt becomes undisclosable. Native Identity revision/grants,
+fresh same-actor authentication, the exact owner403, strict SSE cause, unchanged trace prefixes,
+retained receipt equality and final independent owner readback establish these outcomes. Wrong
+transport/auth/session errors cannot substitute for disclosure denial. Each stage is bounded and
+never retried automatically. The original M1 cases and their recognized Failed controls remain
+mandatory. This evidence is deterministic provider-protocol qualification, not a live-provider claim.
+
+Modules link tools to their exact disclosure source and own `AdmitDisclosureAsync`; see the
+[Agent catalog](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
+Session stores must preserve complete journal provenance before a result can be sent to a provider.

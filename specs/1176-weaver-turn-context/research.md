@@ -1,0 +1,152 @@
+# Research: current turn context
+
+Baseline: reviewed main `ab46bc22a52aa6e456bca6ac0e803c80904de081`.
+
+## Reuse module admission for current disclosure
+
+**Decision**: Reuse installed context sources, native identity/authorization and host policy when qualifying retained context before provider use. Preserve accepted receipts and operation targets. Let the native authority experiments determine whether re-admission, an explicit refusal or a minimal additional owner hook is necessary.
+
+**Rationale**: `AgentApi` admits context at acceptance. `AgentTurnServices.PrepareAsync` later uses `latest.Context` or `paused.Context` directly. Tool preflight already checks current permissions; that does not establish current context/result disclosure. These are source observations, not yet runtime failures.
+
+**Alternatives**: Trusting stored context forever or client permission claims fails current authority. Provider-specific domain filters violate the Program. A universal resource authorization schema duplicates owning modules.
+
+## Bound individual collection without changing global events
+
+**Decision**: Qualify required/optional failure and noncompletion at existing contribution boundaries. Keep the named Sequential fan-in and one aggregator. Use explicit typed outcomes, deadlines/cancellation and isolated contribution buffers where needed; do not swallow global event failures.
+
+**Rationale**: Client collection awaits sources sequentially and checks abort only before each call; its existing `required` descriptor is unused for unexpected failure. Backend aggregation also awaits sources directly. A noncooperating asynchronous contributor needs a bounded outcome, and late mutations must not reach admitted state.
+
+**Alternatives**: An aggregate timeout alone loses which required evidence is missing. Globally changing event failure delivery exceeds scope and the constitution. Merely passing a cancellation token does not bound an uncooperative promise/task.
+
+## Show admitted evidence, preserve opaque payloads
+
+**Decision**: Use backend admission metadata for displayed context; preserve correlation/source and refresh the per-request active surface. Generic chips may show declared provenance, target/revision and limitations, while domain details remain module-owned.
+
+**Rationale**: The UI currently sets locally collected attachments before backend acceptance; client response mapping ignores admitted message context. Generic chips inspect workflow-shaped selection/catalog fields. Session surface is only sent at creation. Component experiments must distinguish actual gaps from standard host remount behavior.
+
+**Alternatives**: New domain-specific label cases deepen coupling. Displaying local content as admitted misrepresents exclusions. Updating an outstanding invocation's target when a route changes would violate its original binding.
+
+## Preserve lifetime and delivery boundaries
+
+**Decision**: Exercise same-tick shell/direct sends and late completion before selecting a queue or explicit rejection. Each request identity needs an observable disposition. Preserve existing generation guards and client receipt acknowledgements.
+
+**Rationale**: The shell has one incoming-prompt state slot and the hook reads render-captured chat state. Standard sign-out and module reconciliation already unmount the shell; retained custom editor lifetimes need separate evidence rather than an assumed defect.
+
+**Alternatives**: A second orchestration engine or speculative durable prompt queue exceeds this leaf. Silently replacing an incoming prompt fails explicit correlation.
+
+## Qualification boundary
+
+**Decision**: Fresh package-only consumers use verified M1 archives and fresh native state for baseline probes; integrated fixes rebuild supported packages and rerun the independent witness. Capture actual Copilot/Anthropic adapter input through the existing deterministic protocol fixture.
+
+**Rationale**: This proves the actual transport/ownership path without credentials or live-provider charges. Completed proof roots remain immutable; native IAM changes require fresh normal authentication because an older token retains its permission claims.
+
+**Alternatives**: In-process-only assertions cannot prove composed behavior. Reusing mutable published directories contaminates accepted evidence. A provider-protocol pass is not a live-provider observation.
+
+## Observed baseline and selected implementation
+
+Fresh native package consumers on ab46bc22a reproduced both ordinary and receipt disclosure after fresh native owner403 through both actual adapters (protocol evidence, no live provider). Final four-case summary SHA256 `7a5d833c3f053d594426bc07b3037915df1c9fc0fe1a9760240a7e0ece8e5e51`; native-cases `55cdc8872d120ff86e5ccc932f64b48b572a1ef170ac543f16ec312d1101fa61`. Exact owner readback confirmed one effect and no replay. Earlier private-driver Failed attempts remain Failed. [Owning issue baseline](https://github.com/elsa-workflows/elsa-foundation/issues/3439#issuecomment-6539864507).
+
+Client baseline51unique cases yielded36passed/15failed, preserving all34 existing passes. Backend cancellation baseline7passed/2failed plus a separately failing inter-source snapshot race. Fixed focused collection26/26 and client90/90 are bounded evidence pending integrated qualification. Per-message backend surface independently failed on empty scope and passed after current-surface propagation.
+
+Selected disclosure shape: optional fail-closed `IAgentContextProvider.AdmitDisclosureAsync` uses the existing named context fan-in and source identity. The host stamps `ContributorId`; current module/descriptor/schema must match that original source. Successful admission authorizes supplied historical evidence/results unchanged, while returning the current permitted context projection. Receipt truth is never rewritten; unsupported/unknown ownership, current denial or failed disclosure blocks provider entry, including Copilot remote-session reuse. Optional collection failures cannot downgrade this security gate. Native tool identity/version/target for retained result authority is server-stamped from real preparation, not inferred from a reused tool name. Current historical resource provenance is retained with assistant messages.
+
+Collection options add a finite positive per-source deadline (default10seconds), with `Required=true` by default on backend source descriptors. Optional faults/deadlines are visible outcomes; required unexpected faults remain domain-wrapped failures. Named Sequential publisher semantics remain unchanged. Returned source data is snapshotted before another source can run.
+
+This decision remains under implementation and independent review. Full affected tests, native package extension proof and main verification are still required before #3439 completion.
+
+
+## Integrated behavior evidence before package qualification
+
+All316Agent cases passed with zero skips after the result boundary, exact-source routing, policy projection and provenance repairs. Thirteen boundary cases had a12failure/1control baseline and passed after repair; two legacy/custom-store cases failed before repair and passed after. Two extension-contract cases also failed before repair: the review digest omitted the disclosure source, and a generic same-resource restriction rejected a module-owned collection-to-new-item receipt. The digest now binds that source; generic identity validation preserves the existing receipt contract and lets the module own resource transitions. Original historical labels/routes are not identity.
+
+The integrated frontend at main a5d4 plus this feature passed710Hosting and2803Workflows cases with exact discovery reconciliation, supported Studio `pnpm typecheck`, frozen install and scoped lint (zero errors; six preexisting App warnings). Earlier raw standalone typecheck failures remain distinct invocations; the supported check is the current evidence.
+
+The package run must retain all38M1 cases and additionally pass four native authority-withdrawal cases through both actual adapters. No native fixed-source result is claimed by these component results. The branch is still under implementation/qualification; independent review and resulting-main gates remain mandatory.
+
+## First integrated package run and independent review
+
+The immutable `dd5d6d1a4` package run failed in the initial Copilot resource journey after 120 stages; it never completed the original 38 or additional 4 cases. The real backend trace showed `AgentSseJsonContext` lacked `AgentContextContribution` metadata, resetting the SSE stream after Started. A focused test reproduced the same serialization failure; registering the payload then passed the full 317-test Agent suite. This is a component repair, not native completion. The failed report/root is retained unchanged, both owned hosts exited 0 and their private runtime caches were empty.
+
+Independent round 1 identified three concrete findings: delegated callbacks reused captured scopes after a successful narrower module projection; ContextAdmitted erased current-request client limitations; and the compatibility note omitted the public workflow provider constructor break. Repairs require causal checks, full affected suites and a fresh immutable native run. Review/qualification remain open; no terminal status is claimed.
+
+The current-tool regression reproduced five failures and four passing controls across nine cases: Copilot and a host batch reused a withdrawn scope; all three provider shapes followed a changed target/revision. Rechecking module admission, the current tool set and the accepted resource binding before dispatch passed all nine, including the three same-target/edit-retained positive controls. These are deterministic actual-adapter/host-loop tests; package runtime qualification remains open.
+
+## Qualified candidate and second review
+
+Candidate `6cdbd5e83` passed the complete supported package run: 135 stages, the original 38 cases (16 positive and 22 recognized negative/Failed controls), and four additional native authority-withdrawal cases through both adapters. Report SHA256 `4242c0ecc91ce3a7e6d440fa4840302054e96e492f95d4f32f1d2ff586b419d4`; all 11,987 exported evidence files were hash-verified. Both owned hosts exited 0 and private runtime caches were empty. This is deterministic provider-protocol evidence, not live-provider evidence; the passed root remains immutable.
+
+Independent round 2 found two additional cases: tools without a unique installed same-module disclosure owner could execute before result refusal, and `[A] -> [A,S]` detail enrichment incorrectly blocked an explicit operation still bound to A. Twenty-two coordinated tests reproduced 11 failures and 11 passing controls. Static descriptor-link validation in the existing named tool aggregator, a concrete pre-dispatch refusal after owner unloading, and a target check permitting additions passed all 22. The earlier A-to-B/revision and scope-withdrawal controls remain intact. New product changes still require fresh native qualification and review.
+
+Two additional ambiguity cases failed under a mutation that accepted duplicate source IDs; the mutation was restored and the full Agent project passed all 341 discovered/executed cases with zero skips. The private source-composed Note fixture was also migrated through its own contribution: source link and module-owned disclosure rules. Its fresh prepared project compiled and a controlled harness passed 32 behavior checks, observing one genuine reviewed file write without replay. The first private harness setup failed to compile due to a missing direct Events reference and is retained separately. The corrected run uses a controlled authorizer and native in-memory lifecycle services; it is not composed HTTP/IAM, browser, live-provider or package-only evidence.
+
+## Acceptance audit after main integration
+
+After main `c4cfa0736` (workflow library folders, tags and views) was integrated as `1eeec9120`, the package witness again passed all 135 stages, original 38 controls and four authority-withdrawal cases. The current-context inventory includes those new library surfaces for the existing workflow/current-module journey scope.
+
+T013's retained-editor audit then reproduced a workflow-owned lifetime gap: a replacement controller in the same React editor reused its generation and applied an old preparation; new controllers after auth events also remained unavailable. The module hook now distinguishes fresh controller/client lifetimes. The focused 24 cases and full 3,540 frontend cases passed; the original production-StrictMode replay-count assertion was a harness limitation, not a product failure, and a real retained Activity control classified that distinction. A separate retained-activation check then reproduced four more stale applications (no auth event, ended, started and both while hidden), while ordinary edit/Undo was a passing control. Activation now creates a fresh origin nonce and cleanup retires it; normal snapshot edits retain it. The 28 focused cases and all 2,822 Workflows cases passed with exact discovery and no skips, supported typecheck and scoped lint. Prior Hosting 722 evidence remains valid for its unchanged source.
+
+The new native workflow authorization path exposed a separate real gap. Supported typed definition/folder handlers denied the owning GET with 403 but returned no decision for Weaver's generic target; native claims fallback then admitted protected snapshots/history/results or a client edit envelope. The first controlled baseline had an AsyncLocal fixture setup fault and its workflow results were unqualified. After correcting that fixture, all native denial preconditions passed: 14 workflow refusal checks failed and the visible dirty-state control passed; five new generic companion checks also failed. No client or persisted mutation is claimed by that authorization baseline.
+
+The repair exposes a workflow-owned Core read/manage port, implemented by its native API, and an optional authorization companion on installed tools. It preserves native tenant/ID existence and folder checks without comparing persisted and unsaved revisions. The corrected targeted run passed all 25 native-authority and five generic companion cases; four older classification fixtures then required their exact declared read identities. With those legitimate fixture preconditions restored, the whole Agent project passed 371 discovered/executed tests and the workflow Design API project passed 233, both with zero skips. Native package requalification of this new product source is still required.
+
+## Final independent-review repair
+
+At `2c2a58dec`, the immutable package report again passed 135 stages, 38 original case records and four added native authority-withdrawal cases. Report SHA256 `5af968acd65d7a7c067397ce2f7a4355840a8c75f164eba03c251aa33d9557a8`; all 12,269 exported files were hash-verified. Correctness and acceptance round 3 were clean; standards found the workflow owner startup validator could inspect copied parent registrations instead of the child context. Runtime authorization still refused ambiguity, but the startup diagnostic was wrong.
+
+The causal registration baseline reproduced four child-context failures and one passing same-collection control. Current-collection validation metadata now owns and rebinds the child registrations without replacing the global `IServiceCollection` metadata or capturing scoped authority/request services. Six registration controls and all 25 native authority regressions passed; the whole Agent project passed 377 cases and the workflow API project passed 233, with zero skips. The final current-head package/CI/review/resulting-main receipts remain on the owning issue and PR; no prior report is relabeled.
+
+At `49a97b6db`, package qualification passed 135 stages, the original 38 case records and four authority-withdrawal cases; all 12,269 exported files were hash-verified. Correctness and acceptance round 4 were clean. Standards identified raw infrastructure failures escaping the new workflow owner authorization port, contrary to framework §2.23.5. A causal test run reproduced seven raw `IOException` failures from the actual permission handler, metadata store and replacement reader across read/manage decisions, with ten passing denial/cancellation/visible-resource/existing-wrapper controls. The owning Core exception now preserves the resource, operation and exact cause without disclosing the cause in its outer message. The focused 42 cases passed after repair. Full Agent 394 and workflow API 233 cases then passed with exact discovery identity/multiplicity and zero skips. Final package, review and main verification remain live delivery gates on the issue and PR.
+
+## Cumulative disclosure provenance: round 7 finding and selected correction
+
+Independent correctness review at `2c4963da6` found that an assistant answer was journaled against the accepted source context even when admission supplied additional authorized resource evidence. With original A and added B, a no-tool answer derived from B could later pass historical admission of A after only B's authority was withdrawn. Root traced the same path. Intermediate host steps, delegated callbacks and review pauses also require every earlier disclosure to remain accountable when a later projection omits it. The causal baseline reproduced eight semantic failures with ten passing unchanged/restored-authority controls across controlled host and delegated orchestration probes.
+
+**Decision**: Preserve whole disclosed context snapshots cumulatively, separately from immutable operation intent and the current executable projection. Recheck retained disclosure evidence before a later provider handoff and preserve it with assistant and paused-turn provenance. Deduplicate only identical complete snapshots: the same attachment ID may have represented different resources or revisions. Historical admission authorizes the retained original snapshot; its returned, unused projection must not replace that snapshot or become purported disclosure evidence.
+
+Inherited history dependencies and results must not change current-turn execution or receipt-continuation semantics. Custom stores must preserve complete provenance or fail explicitly before provider disclosure. This uses generic existing session/paused-state boundaries, with no module interpretation in Weaver or its adapters. Regression evidence must distinguish B-only withdrawal from unchanged authority and cover completed answers, intermediate projections and approval continuation before a new clean review and final qualification.
+
+Root integration also identified textless terminal turns: a provider can retain context without emitting text or a tool result. A second causal run reproduced six withdrawal failures after completion, error or cancellation, with 35 passing controls. The corrected implementation retains metadata-only assistant provenance and omits those rows from provider text and the session chat projection. It verifies assistant and paused-state checksums and refuses another disclosure above 64 distinct snapshots or 8 MiB without evicting dependencies.
+
+The focused repaired-source suite passed all 44 cases; the whole Agent project passed 438 discovered/executed cases with exact identity/multiplicity and zero skips. Summary SHA256 `7e0108fcdc02b058946319f835c9f98140309957509f436d9222aee66e6a2df7`. These are component and API-projection results, not actual-adapter/native or live-provider qualification. Fresh independent review, package/browser/CI and resulting-main evidence remain required on the owning issue and PR.
+
+## Round 8: write before disclosure, retain infrastructure causes
+
+Correctness and acceptance independently found a remaining missing-row case at `cd1418896`: a final assistant insert could fail before storing any row after the SDK had received added context B. Clearing the turn and failing source A then allowed later SDK reuse without B in historical admission. Standards also found unexpected storage/serialization causes being discarded by new provenance guards. Returning a safe transport error does not justify losing the server-side domain cause.
+
+**Decision**: Verify a metadata-only write-ahead checkpoint before provider entry or an expanded callback context. Cache identical checkpoints within the foreground, but always reauthorize. Keep pending context separate from successfully checkpointed history, honor cancellation before disclosure, and preserve original operation/effect bindings. The existing Core exception carries infrastructure causes to the API transport caller, which logs them and emits a fixed SSE error; no new public exception or storage port is needed.
+
+Final causal tests against the unchanged `cd1418896` product reproduced 20 failures with ten passing controls. These cover failed inserts before commit, direct Core causes, actual API/SSE redaction, host/delegated callback failures after an effect, and persistent final-write failure. The first corrected 76-case run passed. Root integration then reproduced 12 cleanup failures: a second store failure could mask the primary cause or skip another cleanup attempt. The localized repair preserves primary and secondary causes and independently attempts cleanup/lease release; all 88 focused cases passed.
+
+The first whole Agent run retained 480 passes and two failures: a fixture counted hidden metadata as visible answer text, and an authority exception before preparation returned could strand a new pending prompt. The corrected fixture selects visible text; a private source/continuation callback establishes cleanup ownership before admission. A fresh whole run passed all 482 discovered/executed cases with exact identity/multiplicity and zero skips. Summary SHA256 `2358b128f33632db76b3074f379368c29b013a4699ea2f34d8b6bbe45c260da8`. Three unchanged-file compiler/analyzer warnings remain distinct from failures.
+
+The interrupted `cd1418896` native/browser runs were superseded during review and establish no package witness. Their raw reports and cleanup remain retained. Fresh repaired-source review, native/browser/CI and resulting-main evidence are still required. These component results do not establish durable restart recovery, an uncooperative-store timeout policy or live-provider success.
+
+## Round 9: current authority after checkpoint acknowledgement
+
+At `b854f9095`, independent acceptance review found that authority could change while a successful checkpoint write awaited completion. The original A+B admission then reached a provider or callback without another authority check. Correctness found a receipt-resume catch still discarding journal failures; standards found that a primary status/catalog failure outside the tracking helper could be replaced by a later cleanup failure.
+
+The final causal suite against the unchanged product executed 79 cases: 51 semantic failures and 28 passing controls. Two host post-effect cases already protected the model at its next history check; separate UI oracles established that their earlier result events also needed withholding. Benign payload-refresh controls passed before and after repair. The immutable earlier baselines retain their narrower assertions and actual counts.
+
+The correction reauthorizes exact retained evidence and current tools after successful asynchronous checkpoint storage, immediately before provider/callback/result delivery. It freezes the already checkpointed payload and compares only the generic binding envelope for dispatch. It does not interpret opaque module data or require its body to remain byte-identical. A private foreground boundary captures synchronous and asynchronous contribution/provider/storage calls and preserves distinct primary causes across enumeration, disposal and cleanup. Receipt-resume infrastructure failures retain their domain cause and accepted pause/receipt.
+
+All 167 focused cases and the complete 561-case Agent project passed with zero skips and exact discovery identity/multiplicity; all 79 final causal identities are included. Summary SHA256 `0e6f4377a742a937c4e04b296bdf6c43c3a3771f87d156fd73ab7bfc2367d11f`. These remain component/Core/API results. Independent review and fresh composed package/browser/CI and resulting-main gates are still required on the owning issue and PR.
+
+## Round 10: current tool scopes and canonical target identity
+
+Review of integrated `91d7113e5` found two remaining P2 issues. Initial provider entry rediscovered tools against the earlier scope projection after checkpoint storage, so a tool whose required scope had just been withdrawn could still be advertised. Later dispatch refused correctly. Separately, comparing whole target objects treated an authorized display-name or route refresh as a resource change even though the canonical module/type/id/revision remained the same.
+
+Twelve causal cases against the unchanged product reproduced eight semantic failures and four passing controls, with successful compilation and zero skips. The scope cases use a tool that actually requires the withdrawn scope; the prior neutral read tool required none. The target cases cover label-only, route-only and combined presentation refreshes through both execution paths, retaining the checkpointed presentation at invocation. Existing real scope, revision and resource drift refusals remain required.
+
+The correction takes a fresh ordinary projection for initial tool eligibility without replacing checkpointed provider evidence, then separately checks historical disclosure authority. Dispatch reuses the existing canonical target comparison and leaves module payloads opaque. This adds no public contract or storage port. The test-only CS9107 warning introduced by this PR is corrected by using the base provider state instead of capturing it twice.
+
+The repaired focused suite passed all 179 cases and the whole Agent project passed all 573 discovered/executed cases, with exact identity/multiplicity and zero skips. All 12 causal identities and their test-source hashes match the earlier baseline. Summary SHA256 `c30fa25b7b593c67047c97c8014f5894de5cf3bdec4f237ad88ca7bbda83c8ed`. Current integrated component evidence before this repair also passed workflow Design API 234, Hosting 756 and Workflows 2,835 cases with exact discovery identity/multiplicity and zero skips; Studio typechecking passed. Those owning/frontend source trees are unchanged by this repair. Independent round 11, current architecture/maps, fresh native/browser/required CI and resulting-main verification remain live gates on the owning issue and PR.
+
+## Native qualification after round 11
+
+Independent round 11 was clean on `37d7dc3e3`. Architecture passed all 592 cases with exact discovery reconciliation and zero skips; graph restore and generated-map checks also passed. Native package run q10 then completed all 135 build/journey stages and the original 38 cases, but the additional authority qualification stopped during Copilot accepted-receipt continuation. The immutable report remains Failed, SHA256 `00a46faafedc8391eba0420c7311f15c0b16aa04c3db57589ad66ae111f103e3`.
+
+The failure identifies an obsolete driver expectation. Write-ahead metadata now retains the earlier Acme context, and continuation reauthorizes that history before admitting the result. The module's native owner denies the withdrawn read grant; its required context diagnostic becomes `agent.context.incomplete`/400 before the later result-specific 403 path. The observed stream contains empty admitted context followed by that typed refusal. Fresh native IAM and owner observations independently establish the same actor/tenant, exact saved grant withdrawal and `acme.home.permission_denied`/403. Product admission order and module semantics remain correct.
+
+The driver must recognize this precise history-first refusal for both current scenarios, with structured empty-context/required-diagnostic checks and no localized-message assertion. Transport, provenance, provider and other wrong-cause failures cannot qualify. Native zero-adapter-disclosure, restored owner equality, exact stored receipt and original single-call/no-replay checks remain mandatory. q10 stopped before the receipt case's final preservation checks, so its source diagnosis does not establish their success. Both hosts exited normally with empty private runtime caches; all 12,152 failed-run safe-export files were hash-verified. Fresh causal driver tests, independent review and complete native/browser/CI and resulting-main evidence remain required.
+
+Against the unchanged driver, the new cause/integrity suite executed 26 methods: 20 failed and six controls passed, with zero setup errors. There were 22 failing assertions because two additional subtests failed. The corrected focused suite passed all 26; fresh discovery and execution of the complete Python probe suite matched all 132 test identities and multiplicities, with zero skips. Test source is unchanged between red and green. The native owner/trace/receipt/readback/call-count portion of the driver remains byte-identical to `37d7dc3e3`; no product or fixture code changed. Summary SHA256 `df4ca297331b29f3d25104532c5f26e0e6c7b5c5157ee29b8b157c7b99e2f743`. This is driver evidence, not completion of the failed native qualification.

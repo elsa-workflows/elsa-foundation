@@ -11,13 +11,41 @@ The module contributes to [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) 
 - `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` declares explanation of the admitted graph and a reviewed position-change journey. It does not advertise runtime investigation, activity creation, save or publish.
 - `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result. `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
 - `IAgentClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.agent.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
+- `IAgentToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed.
 
 The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
-This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. Final-head qualification/CI, independent review, merge and resulting-main verification remain open in [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches, activity creation, expression authoring and troubleshooting remain [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442); a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
+This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. [Final-head qualification/CI, independent review, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches, activity creation, expression authoring and troubleshooting remain [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442); a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
 
 ## Legacy domain seams
 
 `IWorkflowAgentContextProvider` retains the minimized workflow-specific context view. `IWorkflowActivityCatalogProvider` currently returns no invented catalog entries. `IWorkflowRevisionProvider` has no authoritative unsaved-editor revision source; exact layout preparation uses the admitted client snapshot and the owning editor rechecks its live revision before application.
 
 `IWorkflowChangePermissionEvaluator` defaults to denial. The legacy broad `IWorkflowChangeProposalService` returns `agent.workflow.operation_unsupported`; broader graph authoring is not a second proposal engine. The retained domain graph vocabulary and classifier do not advertise unsupported activity-creation journeys. Future workflow work must connect the real catalog and owning resource before enabling them.
+
+
+## Current disclosure ownership (#3439)
+
+`DefaultWorkflowAgentContextProvider` implements `AdmitDisclosureAsync` on the existing source
+`workflows.context`. Initial collection and retained disclosure use the current native actor/tenant
+and the owning read descriptor's `workflows/design:read` permission against the exact target.
+An unsaved working-state revision is not compared with a persisted database revision. Both graph
+and position tools declare `DisclosureSourceId=workflows.context`; result-only admission still
+checks the exact owning workflow target. Historical/receipt authority does not imply a fresh editor
+read. Receipt continuation omits the obsolete snapshot while retaining the truthful accepted result;
+no save, publish or effect replay is introduced. Generic failure/deadline/provenance rules belong to
+[Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
+
+Concrete context/history/results additionally require the owner domain's
+[`IWorkflowDefinitionAuthorizer`](../../../../Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
+The workflow contribution references its Core contract; native API resource and identity implementation
+types remain in Workflow Design's API adapter. Missing or multiple owner implementations refuse access.
+Null-target supplemental caller metadata and public guidance retain their existing generic actor/read
+checks and acquire no concrete tool authority. Tool advertisement cannot infer resource authority
+from guidance alone.
+
+Preview consumers must rebuild for the added optional owner-authorizer constructor parameter on
+`DefaultWorkflowAgentContextProvider` and `WorkflowReadGraphTool`. A metadata-only
+`new WorkflowReadGraphTool().Descriptor` remains source-compatible, while actual tool authorization
+fails closed without a concrete target and one current owner implementation. Workflow Design Core
+adds the two-method public owner contract; Workflow Design API supplies its default HTTP adapter.

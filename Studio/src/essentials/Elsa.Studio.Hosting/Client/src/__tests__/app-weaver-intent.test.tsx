@@ -6,7 +6,7 @@ import { App } from "../app/App";
 import * as loader from "../app/loader";
 import * as clients from "../app/agent/agentClient";
 import * as streams from "../app/agent/agentStream";
-import type { ElsaStudioModuleApi } from "../sdk";
+import type { ElsaStudioModuleApi, StudioAgentPromptResult } from "../sdk";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -16,6 +16,47 @@ afterEach(() => {
 });
 
 describe("shell-owned Weaver intent", () => {
+  it.each([false, true])("gives synchronous correlations an explicit disposition, including cancellation-listener replacement=%s", async replacement => {
+    let api!: ElsaStudioModuleApi;
+    const results: StudioAgentPromptResult[] = [];
+    vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, registry) => {
+      api = registry;
+      api.agent.onPromptResult(result => {
+        results.push(result);
+        if (replacement && result.requestId === "same-tick-first" && result.status === "cancelled") api.agent.dispatchPrompt({ requestId: "replacement", message: "New intent after cancellation", mode: "enqueue" });
+      });
+      api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read selected resource", kind: "answer", risk: "read-only", surfaces: ["*"] });
+      return;
+    });
+    const client: clients.AgentClient = {
+      bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
+      createSession: vi.fn<clients.AgentClient["createSession"]>(async () => ({ sessionId: "same-tick-session", status: "active", contextAttachments: [] })),
+      sendMessage: vi.fn<clients.AgentClient["sendMessage"]>(async () => ({ messageId: "same-tick-message", status: "pending", streamUrl: "/_elsa/agent/sessions/same-tick-session/stream" })),
+      approveProposal: vi.fn(), denyProposal: vi.fn(), executeProposal: vi.fn(), acknowledgeClient: vi.fn(), submitFeedback: vi.fn(), cancelTurn: vi.fn()
+    };
+    vi.spyOn(clients, "createAgentClient").mockReturnValue(client);
+    vi.spyOn(streams, "subscribeAgentSessionStream").mockImplementation((_context, _url, emit) => { emit({ type: "message-completed", messageId: "same-tick-message" }); return { close() {} }; });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/capabilities")) return Response.json({capabilities:[{id:"elsa.api.agent",contractVersion:"1",links:[]}]});
+      if (String(input).includes("/_elsa/studio/modules")) return Response.json({ hostVersion: "1.0.0", sdkVersion: "1.0.0", modules: [], diagnostics: [] });
+      if (String(input).includes("/_elsa/module-management/registry")) return Response.json({ modules: [], diagnostics: [] });
+      return Response.json({ status: "Healthy" });
+    }));
+    const container = document.createElement("div"); document.body.appendChild(container);
+    const root = createRoot(container); flushSync(() => root.render(<App />));
+    try {
+      await vi.waitFor(() => expect(api).toBeDefined()); await settle();
+      flushSync(() => {
+        api.agent.dispatchPrompt({ requestId: "same-tick-first", message: "First intent", mode: "enqueue" });
+        api.agent.dispatchPrompt({ requestId: "same-tick-second", message: "Second intent", mode: "enqueue" });
+      });
+      await settle();
+      expect(results.map(result => result.requestId).sort()).toEqual(replacement ? ["replacement", "same-tick-first", "same-tick-second"] : ["same-tick-first", "same-tick-second"]);
+      const submitted = vi.mocked(client.sendMessage).mock.calls.map(([, body]) => body.requestId);
+      expect(new Set(submitted).size).toBe(submitted.length);
+    } finally { flushSync(() => root.unmount()); container.remove(); }
+  });
+
   it.each(["same dock", "close/reopen", "registry reconciliation", "immediate registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
     const registries: ElsaStudioModuleApi[] = [];
     let releaseRegistry: (() => void) | undefined;

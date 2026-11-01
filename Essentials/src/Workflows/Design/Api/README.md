@@ -98,6 +98,10 @@ resource produces HTTP 403 without returning its organization metadata. Definiti
 preflight that read decision before committing. Replacement details readers can implement
 `AuthorizeReadAsync`; its compatibility default reads the details, while the built-in reader
 checks only organization metadata.
+`IWorkflowDefinitionAuthorizer` in Workflow Design Core exposes the same current per-definition
+read/manage decisions to other participating modules. Its HTTP implementation checks typed native
+resources and tenant-scoped existence; definition GET honors the selected replacement before
+returning details. See the [owner authorization contract](EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
 See the [visibility contract](EXTENSION_POINTS.md#overridable-contracts).
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for persistence ports, structure handlers, and input-option providers. API clients should use the published HTTP contracts rather than implementation services.
