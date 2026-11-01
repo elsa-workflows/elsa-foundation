@@ -1,34 +1,34 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Agent.Specialists.Editorial.Activities;
-using Elsa.Agent.Specialists.Editorial.Models;
+using Elsa.Agent.Specialists.Review.Activities;
+using Elsa.Agent.Specialists.Review.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Agent.Specialists.Editorial.Services;
+namespace Elsa.Agent.Specialists.Review.Services;
 
 /// <summary>Reads the review's own durable native records; it never invents state of its own.</summary>
-internal static class EditorialReviewRecords
+internal static class HumanReviewRecords
 {
-    private static readonly ValueTypeDescriptor PayloadTypeValue = ReviewEditorialContent.Registration("wait").PayloadType;
+    private static readonly ValueTypeDescriptor PayloadTypeValue = HumanReview.Registration("wait").PayloadType;
 
     public static ValueTypeDescriptor PayloadType => PayloadTypeValue;
 
-    public static EditorialReviewState ReadState(ActivityExecutionState activity)
+    public static HumanReviewState ReadState(ActivityExecutionState activity)
     {
-        if (activity.Execution.ActivityType != EditorialReviewIds.ActivityType ||
+        if (activity.Execution.ActivityType != HumanReviewIds.ActivityType ||
             activity.PrivateState?.Value.InlineValue is not { ValueKind: JsonValueKind.Object } value)
-            throw EditorialReviewException.Invalid("The activity is not a pending editorial review.");
-        EditorialReviewState? state;
-        try { state = value.Deserialize<EditorialReviewState>(); }
-        catch (JsonException) { throw EditorialReviewException.Invalid("The editorial review state is unreadable."); }
-        if (state is null || state.FormatVersion != EditorialReviewIds.FormatVersion ||
+            throw HumanReviewException.Invalid("The activity is not a pending human review.");
+        HumanReviewState? state;
+        try { state = value.Deserialize<HumanReviewState>(); }
+        catch (JsonException) { throw HumanReviewException.Invalid("The human review state is unreadable."); }
+        if (state is null || state.FormatVersion != HumanReviewIds.FormatVersion ||
             state.WorkflowExecutionId != activity.Execution.WorkflowExecutionId || state.ActivityExecutionId != activity.InvocationId ||
             state.ExecutableNodeId != activity.Execution.ExecutableNodeId ||
-            EditorialDecisionCodec.HashArticle(state.Article) != state.ArticleHash ||
-            EditorialDecisionCodec.WaitId(state.WorkflowExecutionId, state.ActivityExecutionId, state.Round, state.ArticleHash) != state.WaitId)
-            throw EditorialReviewException.Invalid("The editorial review state does not match its activity.");
+            ReviewDecisionCodec.HashContent(state.Content) != state.ContentHash ||
+            ReviewDecisionCodec.WaitId(state.WorkflowExecutionId, state.ActivityExecutionId, state.ContentHash) != state.WaitId)
+            throw HumanReviewException.Invalid("The human review state does not match its activity.");
         return state;
     }
 
@@ -38,18 +38,18 @@ internal static class EditorialReviewRecords
     /// The pinned review of a live or resolved activity. Native completion drops private state and compacts the
     /// consumed payload, so a resolved review is rebuilt from its terminal typed result.
     /// </summary>
-    public static EditorialReviewState? ReadPinned(ActivityExecutionState activity, string tenantId, string? partition)
+    public static HumanReviewState? ReadPinned(ActivityExecutionState activity, string tenantId, string? partition)
     {
-        if (activity.Execution.ActivityType != EditorialReviewIds.ActivityType) return null;
+        if (activity.Execution.ActivityType != HumanReviewIds.ActivityType) return null;
         if (activity.PrivateState is not null) return ReadState(activity);
         if (ReadResult(activity) is not { } result || partition is null) return null;
-        var waitId = EditorialDecisionCodec.WaitId(activity.Execution.WorkflowExecutionId, activity.InvocationId, result.Round, result.ArticleHash);
-        return new(EditorialReviewIds.FormatVersion, tenantId, partition, activity.Execution.WorkflowExecutionId, activity.InvocationId,
-            activity.Execution.ExecutableNodeId, result.Round, result.ArticleHash, waitId, result.Article, result.ReviewComments);
+        var waitId = ReviewDecisionCodec.WaitId(activity.Execution.WorkflowExecutionId, activity.InvocationId, result.ContentHash);
+        return new(HumanReviewIds.FormatVersion, tenantId, partition, activity.Execution.WorkflowExecutionId, activity.InvocationId,
+            activity.Execution.ExecutableNodeId, result.ContentHash, waitId, result.Content, result.Title, result.Notes);
     }
 
     /// <summary>The admitted decision: the in-flight consumed envelope, else the terminal result it produced.</summary>
-    public static EditorialAdmittedDecision? Admitted(ActivityExecutionState activity, EditorialDecisionCodec codec)
+    public static AdmittedReviewDecision? Admitted(ActivityExecutionState activity, ReviewDecisionCodec codec)
     {
         if (ConsumedDecision(activity) is not { } consumed) return null;
         var result = ReadResult(activity);
@@ -60,47 +60,48 @@ internal static class EditorialReviewRecords
                 var claims = ReadDelivery(codec, inline);
                 return new(claims.RequestId, claims.ActorId, claims.Decision, claims.Comment);
             }
-            catch (EditorialReviewException) when (result is not null)
+            catch (HumanReviewException) when (result is not null)
             {
                 // A completed review keeps its typed result even when the in-flight envelope is no longer readable.
             }
         }
-        return result is not null && Enum.TryParse<EditorialDecision>(result.Decision, out var decision)
+        return result is not null && Enum.TryParse<ReviewDecision>(result.Decision, out var decision)
             ? new(result.RequestId, result.DecidedBy, decision, result.Comment)
-            : throw EditorialReviewException.Invalid("The admitted editorial decision is unreadable.");
+            : throw HumanReviewException.Invalid("The admitted human review decision is unreadable.");
     }
 
-    private static EditorialReviewResult? ReadResult(ActivityExecutionState activity)
+    private static HumanReviewResult? ReadResult(ActivityExecutionState activity)
     {
         if (activity.Status != ActivityExecutionStatus.Completed || activity.Completion?.Result.InlineValue is not { ValueKind: JsonValueKind.Object } value)
             return null;
-        EditorialReviewResult? result;
-        try { result = value.Deserialize<EditorialReviewResult>(Web); }
-        catch (JsonException) { throw EditorialReviewException.Invalid("The editorial review result is unreadable."); }
-        if (result is null || string.IsNullOrWhiteSpace(result.Article) || EditorialDecisionCodec.HashArticle(result.Article) != result.ArticleHash)
-            throw EditorialReviewException.Invalid("The editorial review result does not match its article.");
+        HumanReviewResult? result;
+        try { result = value.Deserialize<HumanReviewResult>(Web); }
+        catch (JsonException) { throw HumanReviewException.Invalid("The human review result is unreadable."); }
+        if (result is null || result.Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null ||
+            ReviewDecisionCodec.HashContent(result.Content) != result.ContentHash)
+            throw HumanReviewException.Invalid("The human review result does not match its content.");
         return result;
     }
 
-    public static EditorialDecisionClaims ReadDelivery(EditorialDecisionCodec codec, JsonElement? input)
+    public static ReviewDecisionClaims ReadDelivery(ReviewDecisionCodec codec, JsonElement? input)
     {
         if (input is not { ValueKind: JsonValueKind.Object } value)
-            throw EditorialReviewException.Invalid("The decision payload is missing.");
-        EditorialDecisionDelivery? delivery;
-        try { delivery = value.Deserialize<EditorialDecisionDelivery>(); }
-        catch (JsonException) { throw EditorialReviewException.Invalid("The decision payload is unreadable."); }
-        if (delivery is null || delivery.FormatVersion != EditorialReviewIds.FormatVersion)
-            throw EditorialReviewException.Invalid("The decision payload format is unsupported.");
+            throw HumanReviewException.Invalid("The decision payload is missing.");
+        ReviewDecisionDelivery? delivery;
+        try { delivery = value.Deserialize<ReviewDecisionDelivery>(); }
+        catch (JsonException) { throw HumanReviewException.Invalid("The decision payload is unreadable."); }
+        if (delivery is null || delivery.FormatVersion != HumanReviewIds.FormatVersion)
+            throw HumanReviewException.Invalid("The decision payload format is unsupported.");
         return codec.Read(delivery.Envelope);
     }
 
     public static bool IsDecisionMetadata(RuntimeTypedTriggerDeliveryMetadata? metadata) =>
-        metadata is not null && metadata.ProviderId == EditorialReviewIds.ProviderId && SameType(metadata.PayloadType, PayloadTypeValue);
+        metadata is not null && metadata.ProviderId == HumanReviewIds.ProviderId && SameType(metadata.PayloadType, PayloadTypeValue);
 
-    /// <summary>The consumed editorial decision, if native admission already claimed one.</summary>
+    /// <summary>The consumed human review decision, if native admission already claimed one.</summary>
     public static ActivityTriggerDelivery? ConsumedDecision(ActivityExecutionState activity) =>
         activity.TriggerDeliveries?.SingleOrDefault(delivery => delivery.Status == ActivityTriggerDeliveryStatus.Consumed &&
-            delivery.ProviderId == EditorialReviewIds.ProviderId && SameType(delivery.PayloadType, PayloadTypeValue));
+            delivery.ProviderId == HumanReviewIds.ProviderId && SameType(delivery.PayloadType, PayloadTypeValue));
 
     /// <summary>
     /// True only when this exact payload is the durable claim of the sole open attempt: the attempt claim
@@ -128,4 +129,4 @@ internal static class EditorialReviewRecords
 }
 
 /// <summary>The decision native admission consumed for one review.</summary>
-internal sealed record EditorialAdmittedDecision(string RequestId, string ActorId, EditorialDecision Decision, string? Comment);
+internal sealed record AdmittedReviewDecision(string RequestId, string ActorId, ReviewDecision Decision, string? Comment);

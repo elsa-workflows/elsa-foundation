@@ -1,7 +1,16 @@
 # Editorial composition and human review
 
-**Status**: Proposed finite M4 product example, FR-007–FR-008/US2, Program A4/A5/A14.
+**Status**: Proposed M4 sample and generic human review, FR-007–FR-008/US2, Program A4/A5/A14.
 This example precedes M6 reusable [team patterns](teams.md) and protected tool approval.
+
+**Owner clarification (2 Nov 2026):** specialists are user-defined agents. Authors define them through Studio or
+configuration, in the spirit of Azure AI Foundry agents. Copywriter and Proofreader are only an example of what a
+user might define. The product therefore ships no editorial-specific activity, permission, endpoint or page. It
+ships a generic native `HumanReview` wait for any content, typically an agent's output, plus its permission-gated
+decision path. The revision loop below is a sample, built from user-authored specialists and ordinary control flow;
+any routing helper it uses is sample code. The sections below keep their editorial wording as the sample's
+acceptance scenario. Read "article" as the reviewed content, and "round/article hash" as the content hash of the
+exact pinned wait.
 
 ## Bounded revision in both process models
 
@@ -21,10 +30,10 @@ their exact native incident/disposition rather than becoming a favorable verdict
 
 ## Exact human content decision
 
-An approved model verdict reaches the finite `ReviewEditorialContent` native stateful activity, also
+An approved model verdict reaches the generic `HumanReview` native stateful activity, also
 usable as a BPMN bound child. It suspends through existing native bookmark/checkpoint machinery with
 the exact tenant/owner, execution/activity occurrence, round, article hash and wait identity persisted.
-This feature supplies one content-review page and permission-gated decision endpoint; no general task
+This feature supplies one generic review page and permission-gated decision endpoint; no general task
 inbox, user-task platform or second approval database is implied.
 
 The page resolves an exact wait under existing execution/content permissions. It displays the pinned

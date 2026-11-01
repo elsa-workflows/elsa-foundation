@@ -1,33 +1,32 @@
-using Elsa.Agent.Specialists.Editorial.Models;
+using Elsa.Agent.Specialists.Review.Models;
 
-namespace Elsa.Agent.Specialists.Editorial.Contracts;
+namespace Elsa.Agent.Specialists.Review.Contracts;
 
 /// <summary>
-/// Reads and decides one exact editorial review wait. Callers supply the server-derived tenant and actor;
+/// Reads and decides one exact human review wait. Callers supply the server-derived tenant and actor;
 /// nothing in a command confers authority. This is content approval only and grants no tool or effect permission.
 /// </summary>
-public interface IEditorialReviews
+public interface IHumanReviews
 {
-    ValueTask<EditorialReviewView?> GetAsync(EditorialReviewReference reference, EditorialDecider caller, CancellationToken cancellationToken = default);
+    ValueTask<HumanReviewView?> GetAsync(HumanReviewReference reference, ReviewDecider caller, CancellationToken cancellationToken = default);
 
-    ValueTask<EditorialDecisionReceipt> DecideAsync(EditorialDecisionCommand command, EditorialDecider decider, CancellationToken cancellationToken = default);
+    ValueTask<ReviewDecisionReceipt> DecideAsync(ReviewDecisionCommand command, ReviewDecider decider, CancellationToken cancellationToken = default);
 }
 
-public sealed record EditorialReviewReference(string WorkflowExecutionId, string ActivityExecutionId);
+public sealed record HumanReviewReference(string WorkflowExecutionId, string ActivityExecutionId);
 
 /// <summary>The authenticated caller, derived by the host from its normalized principal.</summary>
-public sealed record EditorialDecider(string TenantId, string ActorId);
+public sealed record ReviewDecider(string TenantId, string ActorId);
 
-public sealed record EditorialDecisionCommand(
+public sealed record ReviewDecisionCommand(
     string WorkflowExecutionId,
     string ActivityExecutionId,
-    int Round,
-    string ArticleHash,
-    EditorialDecision Decision,
+    string ContentHash,
+    ReviewDecision Decision,
     string? Comment,
     string RequestId);
 
-public enum EditorialReviewStatus
+public enum HumanReviewStatus
 {
     Pending,
     Approved,
@@ -35,19 +34,19 @@ public enum EditorialReviewStatus
     Closed
 }
 
-public sealed record EditorialReviewView(
+public sealed record HumanReviewView(
     string WorkflowExecutionId,
     string ActivityExecutionId,
-    int Round,
-    string ArticleHash,
-    string Article,
-    string? ReviewComments,
-    EditorialReviewStatus Status,
+    string? Title,
+    System.Text.Json.JsonElement Content,
+    string? Notes,
+    string ContentHash,
+    HumanReviewStatus Status,
     string? DecidedBy,
     string? DecisionComment,
     string? RequestId);
 
-public enum EditorialDecisionReceiptStatus
+public enum ReviewDecisionReceiptStatus
 {
     /// <summary>This request's decision was admitted; repeating it replays this receipt.</summary>
     Accepted,
@@ -58,7 +57,7 @@ public enum EditorialDecisionReceiptStatus
     /// <summary>Another decision was already admitted for this wait.</summary>
     AlreadyResolved,
 
-    /// <summary>The article/round changed, or this request ID already carries different content.</summary>
+    /// <summary>The content changed, or this request ID already carries different content.</summary>
     Conflict,
 
     /// <summary>The caller does not currently hold the decide permission.</summary>
@@ -83,6 +82,6 @@ public enum EditorialDecisionReceiptStatus
 
 /// <summary>
 /// The decision outcome only. It never carries review content: deciding does not imply the read permission, and
-/// callers read the exact review through <see cref="IEditorialReviews.GetAsync"/>.
+/// callers read the exact review through <see cref="IHumanReviews.GetAsync"/>.
 /// </summary>
-public sealed record EditorialDecisionReceipt(EditorialDecisionReceiptStatus Status, string? Reason = null);
+public sealed record ReviewDecisionReceipt(ReviewDecisionReceiptStatus Status, string? Reason = null);

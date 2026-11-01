@@ -1,7 +1,8 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Agent.Specialists.Editorial.Activities;
-using Elsa.Agent.Specialists.Editorial.Models;
+using Elsa.Agent.Specialists.Review.Activities;
+using Elsa.Agent.Specialists.Tests.Composition.Sample;
+using Elsa.Agent.Specialists.Review.Models;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -90,7 +91,7 @@ public sealed class EditorialRevisionGateTests
         var fault = Assert.IsAssignableFrom<IActivityFaultTransition>(await RunAsync(new(new FakeTimeProvider(Now)) { MaxRounds = maxRounds }));
 
         Assert.Equal("editorial.revision.bounds-invalid", fault.Fault.Code);
-        Assert.Equal(EditorialReviewIds.MaximumRounds, new EditorialRevisionGate(TimeProvider.System).MaxRounds);
+        Assert.Equal(EditorialRevisionGate.MaximumRounds, new EditorialRevisionGate(TimeProvider.System).MaxRounds);
     }
 
     private static ValueTask<ActivityTransition> RunAsync(EditorialRevisionGate gate) =>

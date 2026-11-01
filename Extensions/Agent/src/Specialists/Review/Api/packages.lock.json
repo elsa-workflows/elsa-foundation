@@ -52,7 +52,7 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
-      "elsa.agent.specialists.editorial": {
+      "elsa.agent.specialists.review": {
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",

@@ -5,9 +5,9 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Elsa.Agent.Specialists.Editorial.Api;
-using Elsa.Agent.Specialists.Editorial.Contracts;
-using Elsa.Agent.Specialists.Editorial.Models;
+using Elsa.Agent.Specialists.Review.Api;
+using Elsa.Agent.Specialists.Review.Contracts;
+using Elsa.Agent.Specialists.Review.Models;
 using Elsa.Api.Capabilities;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
@@ -24,10 +24,10 @@ using Xunit;
 namespace Elsa.Agent.Specialists.Tests.Composition;
 
 /// <summary>The HTTP boundary: permission gates, a server-derived actor, and no caller-authored authority.</summary>
-public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
+public sealed class HumanReviewApiHttpTests : IAsyncLifetime
 {
     internal const string Scheme = "EditorialTest";
-    private const string Route = "/agent/editorial-reviews/run-1/review-1";
+    private const string Route = "/agent/reviews/run-1/review-1";
     private readonly RecordingReviews reviews = new();
     private IHost host = null!;
 
@@ -44,15 +44,15 @@ public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
                 services.AddAuthorization();
                 services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>([Scheme], StringComparer.Ordinal));
                 new ApiCapabilitiesFeature().ConfigureServices(services);
-                new SpecialistsEditorialApiFeature().ConfigureServices(services);
-                services.AddSingleton<IEditorialReviews>(reviews);
+                new SpecialistsReviewApiFeature().ConfigureServices(services);
+                services.AddSingleton<IHumanReviews>(reviews);
             });
             web.Configure(app =>
             {
                 app.UseRouting();
                 app.UseAuthentication();
                 app.UseAuthorization();
-                app.UseEndpoints(EditorialReviewApi.MapEditorialReviewApi);
+                app.UseEndpoints(HumanReviewApi.MapHumanReviewApi);
             });
         }).Build();
         await host.StartAsync();
@@ -68,22 +68,22 @@ public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
     public async Task A_decision_carries_the_authenticated_subject_and_tenant_not_anything_the_caller_names()
     {
         var response = await SendAsync(HttpMethod.Post, Route + "/decision",
-            """{"round":2,"articleHash":"hash","decision":"Approve","comment":"Ship it.","requestId":"request-0001"}""", EditorialReviewIds.DecidePermission);
+            """{"contentHash":"hash","decision":"Approve","comment":"Ship it.","requestId":"request-0001"}""", HumanReviewIds.DecidePermission);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Accepted", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
         var (command, decider) = Assert.Single(reviews.Decisions);
-        Assert.Equal(new EditorialDecider("tenant-a", "subject-ada"), decider);
-        Assert.Equal(new EditorialDecisionCommand("run-1", "review-1", 2, "hash", EditorialDecision.Approve, "Ship it.", "request-0001"), command);
+        Assert.Equal(new ReviewDecider("tenant-a", "subject-ada"), decider);
+        Assert.Equal(new ReviewDecisionCommand("run-1", "review-1", "hash", ReviewDecision.Approve, "Ship it.", "request-0001"), command);
     }
 
     [Theory]
-    [InlineData("""{"round":2,"articleHash":"hash","decision":"Approve","requestId":"request-0002","actorId":"someone-else"}""")]
-    [InlineData("""{"round":2,"articleHash":"hash","decision":"Approve","requestId":"request-0003","requestedBy":"admin"}""")]
-    [InlineData("""{"round":2,"articleHash":"hash","decision":"Publish","requestId":"request-0004"}""")]
+    [InlineData("""{"contentHash":"hash","decision":"Approve","requestId":"request-0002","actorId":"someone-else"}""")]
+    [InlineData("""{"contentHash":"hash","decision":"Approve","requestId":"request-0003","requestedBy":"admin"}""")]
+    [InlineData("""{"contentHash":"hash","decision":"Publish","requestId":"request-0004"}""")]
     public async Task Caller_authored_actors_and_unknown_decisions_are_refused_before_the_service(string body)
     {
-        var response = await SendAsync(HttpMethod.Post, Route + "/decision", body, EditorialReviewIds.DecidePermission);
+        var response = await SendAsync(HttpMethod.Post, Route + "/decision", body, HumanReviewIds.DecidePermission);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(reviews.Decisions);
@@ -93,8 +93,8 @@ public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
     public async Task Missing_permissions_are_refused_and_reading_never_implies_deciding()
     {
         var decide = await SendAsync(HttpMethod.Post, Route + "/decision",
-            """{"round":1,"articleHash":"hash","decision":"Deny","requestId":"request-0005"}""", EditorialReviewIds.ReadPermission);
-        var read = await SendAsync(HttpMethod.Get, Route, null, EditorialReviewIds.DecidePermission);
+            """{"contentHash":"hash","decision":"Deny","requestId":"request-0005"}""", HumanReviewIds.ReadPermission);
+        var read = await SendAsync(HttpMethod.Get, Route, null, HumanReviewIds.DecidePermission);
         var anonymous = await SendAsync(HttpMethod.Get, Route, null, null);
 
         Assert.Equal(HttpStatusCode.Forbidden, decide.StatusCode);
@@ -106,13 +106,14 @@ public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
     [Fact]
     public async Task Reading_resolves_the_exact_wait_and_hides_missing_or_foreign_reviews()
     {
-        var found = await SendAsync(HttpMethod.Get, Route, null, EditorialReviewIds.ReadPermission);
-        var missing = await SendAsync(HttpMethod.Get, "/agent/editorial-reviews/run-1/missing", null, EditorialReviewIds.ReadPermission);
+        var found = await SendAsync(HttpMethod.Get, Route, null, HumanReviewIds.ReadPermission);
+        var missing = await SendAsync(HttpMethod.Get, "/agent/reviews/run-1/missing", null, HumanReviewIds.ReadPermission);
 
         Assert.Equal(HttpStatusCode.OK, found.StatusCode);
         var view = await found.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Pending", view.GetProperty("status").GetString());
-        Assert.Equal("Moss gardens.", view.GetProperty("article").GetString());
+        Assert.Equal("Moss gardens.", view.GetProperty("content").GetString());
+        Assert.Equal("Draft", view.GetProperty("title").GetString());
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
@@ -124,19 +125,19 @@ public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
         return await host.GetTestClient().SendAsync(request);
     }
 
-    private sealed class RecordingReviews : IEditorialReviews
+    private sealed class RecordingReviews : IHumanReviews
     {
-        public ConcurrentQueue<(EditorialDecisionCommand Command, EditorialDecider Decider)> Decisions { get; } = new();
+        public ConcurrentQueue<(ReviewDecisionCommand Command, ReviewDecider Decider)> Decisions { get; } = new();
 
-        public ValueTask<EditorialReviewView?> GetAsync(EditorialReviewReference reference, EditorialDecider caller, CancellationToken cancellationToken = default) =>
+        public ValueTask<HumanReviewView?> GetAsync(HumanReviewReference reference, ReviewDecider caller, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(reference.ActivityExecutionId == "review-1" && caller.TenantId == "tenant-a"
-                ? new EditorialReviewView(reference.WorkflowExecutionId, reference.ActivityExecutionId, 1, "hash", "Moss gardens.", null, EditorialReviewStatus.Pending, null, null, null)
+                ? new HumanReviewView(reference.WorkflowExecutionId, reference.ActivityExecutionId, "Draft", JsonSerializer.SerializeToElement("Moss gardens."), null, "hash", HumanReviewStatus.Pending, null, null, null)
                 : null);
 
-        public ValueTask<EditorialDecisionReceipt> DecideAsync(EditorialDecisionCommand command, EditorialDecider decider, CancellationToken cancellationToken = default)
+        public ValueTask<ReviewDecisionReceipt> DecideAsync(ReviewDecisionCommand command, ReviewDecider decider, CancellationToken cancellationToken = default)
         {
             Decisions.Enqueue((command, decider));
-            return ValueTask.FromResult(new EditorialDecisionReceipt(EditorialDecisionReceiptStatus.Accepted));
+            return ValueTask.FromResult(new ReviewDecisionReceipt(ReviewDecisionReceiptStatus.Accepted));
         }
     }
 
@@ -154,7 +155,7 @@ public sealed class EditorialReviewApiHttpTests : IAsyncLifetime
                 new(IdentityClaimTypes.Normalized, "v1")
             };
             claims.AddRange(permissions.ToString().Split(',').Select(permission => new Claim(IdentityClaimTypes.Permission, permission)));
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, EditorialReviewApiHttpTests.Scheme)), EditorialReviewApiHttpTests.Scheme)));
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, HumanReviewApiHttpTests.Scheme)), HumanReviewApiHttpTests.Scheme)));
         }
     }
 }

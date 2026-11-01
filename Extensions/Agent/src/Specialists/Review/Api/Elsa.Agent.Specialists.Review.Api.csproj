@@ -6,7 +6,7 @@
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="NativeEndpoints" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
-    <ProjectReference Include="../Elsa.Agent.Specialists.Editorial/Elsa.Agent.Specialists.Editorial.csproj" />
+    <ProjectReference Include="../Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
     <ProjectReference Include="../../../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="../../../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="../../../../../../Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />

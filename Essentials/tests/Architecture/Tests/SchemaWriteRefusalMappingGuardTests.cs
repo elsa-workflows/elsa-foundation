@@ -49,7 +49,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature),
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
-        typeof(Elsa.Agent.Specialists.Editorial.Api.SpecialistsEditorialApiFeature),
+        typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature),
         typeof(ModularityApiFeature),

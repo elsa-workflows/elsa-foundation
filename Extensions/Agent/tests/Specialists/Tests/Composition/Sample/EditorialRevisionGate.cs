@@ -1,10 +1,11 @@
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Agent.Specialists.Editorial.Models;
 
-namespace Elsa.Agent.Specialists.Editorial.Activities;
+namespace Elsa.Agent.Specialists.Tests.Composition.Sample;
 
 /// <summary>
+/// Sample only: the editorial example's deterministic routing point, an ordinary user-authored activity. Product
+/// code supplies no editorial gate; agents and their processes are user-defined.
 /// The deterministic routing point of the bounded editorial revision. Ordinary control flow owns the loop:
 /// the gate reads the previous stage from workflow variables and selects an outcome; no model prose, hidden
 /// session or specialist runtime chooses the branch. One gate precedes every specialist call, so the shared
@@ -16,6 +17,7 @@ namespace Elsa.Agent.Specialists.Editorial.Activities;
 [ActivityOutcome("Write"), ActivityOutcome("Review"), ActivityOutcome("Approved"), ActivityOutcome("Exhausted")]
 public sealed class EditorialRevisionGate(TimeProvider time) : Activity<EditorialRevisionResult>
 {
+    public const int MaximumRounds = 3;
     public const string AwaitingArticle = "article";
     public const string AwaitingReview = "review";
     public const string AwaitingNothing = "none";
@@ -44,7 +46,7 @@ public sealed class EditorialRevisionGate(TimeProvider time) : Activity<Editoria
 
     /// <summary>Total rounds including the first. At most three.</summary>
     [ActivityInput(Key = nameof(MaxRounds), Order = 5, DefaultValue = "3", DefaultSyntax = "Literal")]
-    public int MaxRounds { get; set; } = EditorialReviewIds.MaximumRounds;
+    public int MaxRounds { get; set; } = MaximumRounds;
 
     /// <summary>The original shared deadline for every specialist call of this revision. Required before any call.</summary>
     [ActivityInput(Key = nameof(Deadline), Order = 6)]
@@ -52,7 +54,7 @@ public sealed class EditorialRevisionGate(TimeProvider time) : Activity<Editoria
 
     protected override ValueTask<ActivityTransition<EditorialRevisionResult>> ExecuteAsync(ActivityExecutionContext context)
     {
-        if (MaxRounds is < 1 or > EditorialReviewIds.MaximumRounds)
+        if (MaxRounds is < 1 or > MaximumRounds)
             return Result(Fault("editorial.revision.bounds-invalid", "An editorial revision runs between one and three rounds."));
         return Result((Awaiting ?? string.Empty) switch
         {
@@ -87,3 +89,12 @@ public sealed class EditorialRevisionGate(TimeProvider time) : Activity<Editoria
     private static ValueTask<ActivityTransition<EditorialRevisionResult>> Result(ActivityTransition<EditorialRevisionResult> transition) =>
         ValueTask.FromResult(transition);
 }
+
+/// <summary>The gate's routing decision; each member is a result projection captured into a workflow variable.</summary>
+public sealed record EditorialRevisionResult(
+    [property: Output(Key = "Round", Path = "round")] int Round,
+    [property: Output(Key = "Awaiting", Path = "awaiting")] string Awaiting,
+    [property: Output(Key = "PreviousArticle", Path = "previousArticle", IsRequired = false)] string? PreviousArticle,
+    [property: Output(Key = "Feedback", Path = "feedback", IsRequired = false)] string? Feedback,
+    [property: Output(Key = "Article", Path = "article", IsRequired = false)] string? Article,
+    [property: Output(Key = "Verdict", Path = "verdict", IsRequired = false)] string? Verdict);

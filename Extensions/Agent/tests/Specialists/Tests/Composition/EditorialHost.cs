@@ -14,10 +14,11 @@ using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Testing;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
-using Elsa.Agent.Specialists.Editorial;
-using Elsa.Agent.Specialists.Editorial.Activities;
-using Elsa.Agent.Specialists.Editorial.Contracts;
-using Elsa.Agent.Specialists.Editorial.Models;
+using Elsa.Agent.Specialists.Review;
+using Elsa.Agent.Specialists.Review.Activities;
+using Elsa.Agent.Specialists.Tests.Composition.Sample;
+using Elsa.Agent.Specialists.Review.Contracts;
+using Elsa.Agent.Specialists.Review.Models;
 using Elsa.Agent.Specialists.Tests.Publication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Locking.FileSystem;
@@ -106,7 +107,7 @@ internal sealed class EditorialHost : IAsyncDisposable
             .WithFeature(services => new BackgroundActivitiesFeature { RunWorkers = false, LeaseDurationSeconds = 60 }.ConfigureServices(services))
             .WithFeature(services => new SecretsFeature { EncryptionKey = encryptionKey }.ConfigureServices(services))
             .WithFeature(services => new SpecialistsRuntimeFeature().ConfigureServices(services))
-            .WithFeature(services => new SpecialistsEditorialFeature { DecisionLifetime = DecisionLifetime }.ConfigureServices(services))
+            .WithFeature(services => new SpecialistsReviewFeature { DecisionLifetime = DecisionLifetime }.ConfigureServices(services))
             .WithFeature(services => new FileSystemLockingFeature { LocksFolderPath = Path.Combine(directory, "locks") }.ConfigureServices(services))
             .ConfigureServices(services =>
             {
@@ -156,7 +157,8 @@ internal sealed class EditorialHost : IAsyncDisposable
         types.RegisterType(typeof(string), "String");
         types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
         await new Elsa.Agent.Specialists.SpecialistTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
-        await new Elsa.Agent.Specialists.Editorial.EditorialTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
+        await new Elsa.Agent.Specialists.Review.HumanReviewTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
+        types.RegisterType(typeof(EditorialRevisionGate), typeof(EditorialRevisionGate).FullName!);
     }
 
     public async ValueTask<PersistenceOperationScope> ScopeAsync() =>
@@ -272,16 +274,16 @@ internal sealed class EditorialHost : IAsyncDisposable
     public async Task<ActivityExecutionState> PendingReviewAsync() =>
         Assert.Single(await ActivitiesAsync(), activity => activity.Execution.ExecutableNodeId == ReviewNodeId && activity.Completion is null);
 
-    public async Task<EditorialDecisionReceipt> DecideAsync(EditorialDecisionCommand command, string actor, string tenant = Tenant)
+    public async Task<ReviewDecisionReceipt> DecideAsync(ReviewDecisionCommand command, string actor, string tenant = Tenant)
     {
         await using var scope = await ScopeAsync();
-        return await scope.ServiceProvider.GetRequiredService<IEditorialReviews>().DecideAsync(command, new(tenant, actor));
+        return await scope.ServiceProvider.GetRequiredService<IHumanReviews>().DecideAsync(command, new(tenant, actor));
     }
 
-    public async Task<EditorialReviewView?> ReadReviewAsync(string activityExecutionId, string tenant = Tenant)
+    public async Task<HumanReviewView?> ReadReviewAsync(string activityExecutionId, string tenant = Tenant)
     {
         await using var scope = await ScopeAsync();
-        return await scope.ServiceProvider.GetRequiredService<IEditorialReviews>().GetAsync(new(WorkflowExecutionId, activityExecutionId), new(tenant, "reader"));
+        return await scope.ServiceProvider.GetRequiredService<IHumanReviews>().GetAsync(new(WorkflowExecutionId, activityExecutionId), new(tenant, "reader"));
     }
 
     public async ValueTask DisposeAsync()
@@ -333,12 +335,13 @@ internal static class EditorialExecutable
             });
         var gate = Gate(EditorialHost.GateNodeId, deadline, maxRounds);
         var check = Gate(EditorialHost.CheckNodeId, deadline, maxRounds);
-        var reviewContract = ClrActivityContractTestBuilder.BuildContract(typeof(ReviewEditorialContent));
-        var review = Clr<ReviewEditorialContent>(EditorialHost.ReviewNodeId, reviewContract, new Dictionary<string, RuntimeInputBinding>
+        var reviewContract = ClrActivityContractTestBuilder.BuildContract(typeof(HumanReview));
+        var review = Clr<HumanReview>(EditorialHost.ReviewNodeId, reviewContract, new Dictionary<string, RuntimeInputBinding>
         {
-            ["Article"] = Read("Article", reviewContract.Inputs["Article"].Type, "article"),
-            ["Round"] = Read("Round", reviewContract.Inputs["Round"].Type, "round"),
-            ["ReviewComments"] = Read("ReviewComments", reviewContract.Inputs["ReviewComments"].Type, "review-comments")
+            // The generic review takes any JSON content; the sample hands it the latest committed article.
+            ["Content"] = Read("Content", reviewContract.Inputs["Content"].Type, "article"),
+            ["Title"] = Literal("Title", reviewContract.Inputs["Title"].Type, "Editorial article"),
+            ["Notes"] = Read("Notes", reviewContract.Inputs["Notes"].Type, "review-comments")
         });
         // Placement owns the exact specialist node identities; the example routes by those identities.
         var writer = copywriter.Placement.Root;
@@ -364,8 +367,8 @@ internal static class EditorialExecutable
             structure: new ExecutableActivityStructure(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new SequenceExecutableStructure([flowchart.ExecutableNodeId]))),
             activityContract: sequenceContract);
-        var target = new WorkflowExecutableResumeTarget(WorkflowExecutableResumeTarget.ComposeScopedId(EditorialHost.ReviewNodeId, EditorialReviewIds.ResumeTargetKey),
-            EditorialHost.ReviewNodeId, "ResumeAsync", new Dictionary<string, string>(StringComparer.Ordinal), EditorialReviewIds.ResumeTargetKey);
+        var target = new WorkflowExecutableResumeTarget(WorkflowExecutableResumeTarget.ComposeScopedId(EditorialHost.ReviewNodeId, HumanReviewIds.ResumeTargetKey),
+            EditorialHost.ReviewNodeId, "ResumeAsync", new Dictionary<string, string>(StringComparer.Ordinal), HumanReviewIds.ResumeTargetKey);
         var resumeTargets = copywriter.Placement.ResumeTargets.Concat(proofreader.Placement.ResumeTargets)
             .Append(new KeyValuePair<string, WorkflowExecutableResumeTarget>(target.ResumeTargetId, target))
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
@@ -529,7 +532,7 @@ internal sealed class EditorialSubjects : ICurrentSubjectPermissionAuthorizer
             grants.TryRemove((request.TenantId, request.SubjectId), out _);
             return ValueTask.FromResult(CurrentSubjectPermissionResult.Granted);
         }
-        return ValueTask.FromResult(request.Permission == EditorialReviewIds.DecidePermission && grants.ContainsKey((request.TenantId, request.SubjectId))
+        return ValueTask.FromResult(request.Permission == HumanReviewIds.DecidePermission && grants.ContainsKey((request.TenantId, request.SubjectId))
             ? CurrentSubjectPermissionResult.Granted
             : CurrentSubjectPermissionResult.Denied("not granted"));
     }

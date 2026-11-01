@@ -1,45 +1,45 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Agent.Specialists.Editorial.Contracts;
-using Elsa.Agent.Specialists.Editorial.Models;
+using Elsa.Agent.Specialists.Review.Contracts;
+using Elsa.Agent.Specialists.Review.Models;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using NativeEndpoints;
 
-namespace Elsa.Agent.Specialists.Editorial.Api;
+namespace Elsa.Agent.Specialists.Review.Api;
 
-/// <summary>Maps the one editorial review read and decision endpoint pair. It is not a task inbox.</summary>
-public static class EditorialReviewApi
+/// <summary>Maps the one human review read and decision endpoint pair. It is not a task inbox.</summary>
+public static class HumanReviewApi
 {
-    internal const string OwnerId = "Elsa.Agent.Specialists.Editorial.Api";
-    internal const string Route = "agent/editorial-reviews/{workflowExecutionId}/{activityExecutionId}";
+    internal const string OwnerId = "Elsa.Agent.Specialists.Review.Api";
+    internal const string Route = "agent/reviews/{workflowExecutionId}/{activityExecutionId}";
 
-    public static void MapEditorialReviewApi(IEndpointRouteBuilder endpoints)
+    public static void MapHumanReviewApi(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        endpoints.MapEndpointGroup(OwnerId, EditorialReviewApiJsonContext.WireContext, jsonContentType: "application/json")
-            .MapEndpointsFrom(typeof(EditorialReviewApi).Assembly);
+        endpoints.MapEndpointGroup(OwnerId, HumanReviewApiJsonContext.WireContext, jsonContentType: "application/json")
+            .MapEndpointsFrom(typeof(HumanReviewApi).Assembly);
     }
 }
 
 /// <summary>Read and decide permissions. Content approval grants no tool or effect permission.</summary>
-internal sealed class EditorialReviewPermissionContributor : IPermissionContributor
+internal sealed class HumanReviewPermissionContributor : IPermissionContributor
 {
-    public string OwnerId => EditorialReviewApi.OwnerId;
+    public string OwnerId => HumanReviewApi.OwnerId;
 
     public IEnumerable<Permission> Contribute() =>
     [
-        new(EditorialReviewIds.ReadPermission, "Read editorial reviews", "Agents", "Read an exact pending or resolved editorial review."),
-        new(EditorialReviewIds.DecidePermission, "Decide editorial reviews", "Agents", "Approve or deny an exact article awaiting editorial review.")
+        new(HumanReviewIds.ReadPermission, "Read agent reviews", "Agents", "Read exact content awaiting, or resolved by, a human review."),
+        new(HumanReviewIds.DecidePermission, "Decide agent reviews", "Agents", "Approve or deny exact content awaiting a human review.")
     ];
 }
 
 /// <summary>Derives the caller from the trusted normalized principal; nothing in a request names the actor.</summary>
-internal sealed class EditorialRequestCaller(IHttpContextAccessor http, NormalizedPrincipalValidator principals)
+internal sealed class ReviewRequestCaller(IHttpContextAccessor http, NormalizedPrincipalValidator principals)
 {
-    public EditorialDecider Get()
+    public ReviewDecider Get()
     {
         if (http.HttpContext is not { } context || !principals.TryGetNormalizedPrincipal(context.User, out var principal))
             throw new UnauthorizedAccessException("The caller is not a trusted Elsa principal.");
@@ -51,36 +51,35 @@ internal sealed class EditorialRequestCaller(IHttpContextAccessor http, Normaliz
     }
 }
 
-public sealed record EditorialReviewRequest([property: JsonIgnore] string WorkflowExecutionId, [property: JsonIgnore] string ActivityExecutionId);
+public sealed record HumanReviewRequest([property: JsonIgnore] string WorkflowExecutionId, [property: JsonIgnore] string ActivityExecutionId);
 
-/// <summary>The decision body. The exact round and article hash pin the wait the person saw.</summary>
-public sealed record EditorialDecisionRequest(
+/// <summary>The decision body. The exact content hash pins the wait the person saw.</summary>
+public sealed record ReviewDecisionRequest(
     [property: JsonIgnore] string WorkflowExecutionId,
     [property: JsonIgnore] string ActivityExecutionId,
-    int Round,
-    string ArticleHash,
-    EditorialDecision Decision,
+    string ContentHash,
+    ReviewDecision Decision,
     string? Comment,
     string RequestId);
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, UseStringEnumConverter = true)]
-[JsonSerializable(typeof(EditorialReviewRequest))]
-[JsonSerializable(typeof(EditorialDecisionRequest))]
-[JsonSerializable(typeof(EditorialReviewView))]
-[JsonSerializable(typeof(EditorialDecisionReceipt))]
-internal partial class EditorialReviewApiJsonContext : JsonSerializerContext
+[JsonSerializable(typeof(HumanReviewRequest))]
+[JsonSerializable(typeof(ReviewDecisionRequest))]
+[JsonSerializable(typeof(HumanReviewView))]
+[JsonSerializable(typeof(ReviewDecisionReceipt))]
+internal partial class HumanReviewApiJsonContext : JsonSerializerContext
 {
-    internal static EditorialReviewApiJsonContext WireContext => Wire.Context;
+    internal static HumanReviewApiJsonContext WireContext => Wire.Context;
 
     private static class Wire
     {
-        internal static readonly EditorialReviewApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
+        internal static readonly HumanReviewApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
     }
 }
 
 /// <summary>Maps the API's known refusals to plain problems; anything else is an opaque server failure.</summary>
-internal sealed class EditorialReviewFaultRenderer : IEndpointFaultRenderer
+internal sealed class HumanReviewFaultRenderer : IEndpointFaultRenderer
 {
     public async ValueTask<bool> TryWriteAsync(HttpContext context, Exception exception)
     {
@@ -92,9 +91,9 @@ internal sealed class EditorialReviewFaultRenderer : IEndpointFaultRenderer
         }
         var (status, title) = exception switch
         {
-            Elsa.Primitives.Exceptions.EntityNotFoundException => (StatusCodes.Status404NotFound, "No visible editorial review matches."),
+            Elsa.Primitives.Exceptions.EntityNotFoundException => (StatusCodes.Status404NotFound, "No visible review matches."),
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "The caller has no single tenant and subject."),
-            _ => (StatusCodes.Status500InternalServerError, "The editorial review operation failed.")
+            _ => (StatusCodes.Status500InternalServerError, "The review operation failed.")
         };
         await Results.Problem(statusCode: status, title: title).ExecuteAsync(context);
         return true;
