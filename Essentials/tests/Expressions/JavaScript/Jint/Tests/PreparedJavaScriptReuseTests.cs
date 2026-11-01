@@ -26,7 +26,9 @@ public sealed class PreparedJavaScriptReuseTests(ITestOutputHelper output)
         {
             var before = GC.GetAllocatedBytesForCurrentThread();
             for (var i = 0; i < 16; i++)
-                Assert.Equal(i + 255, EvaluateCompleted(scope, reuse ? source : new string(source.AsSpan()), i, script)!.Value.GetInt32());
+                Assert.Equal(i + 255, EvaluateCompleted(scope,
+                    reuse ? (script ? new string(source.AsSpan()) : source) : source + $"\n/* fresh:{Guid.NewGuid()} */",
+                    i, script)!.Value.GetInt32());
             return GC.GetAllocatedBytesForCurrentThread() - before;
         }
 

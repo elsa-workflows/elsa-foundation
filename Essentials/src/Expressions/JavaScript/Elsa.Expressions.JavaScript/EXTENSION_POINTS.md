@@ -11,7 +11,9 @@ delegate-backed host functions, or service-location seams. Extending the binding
 a separately reviewed capability profile; a global registration cannot join `binding-pure-v1`.
 
 Jint reuses immutable prepared syntax under weak source-string ownership, with separate preparation for value
-bindings and script activities. Arguments, variables, limits, cancellation and engine state remain per evaluation;
+bindings and script activities. A bounded, hash-only weak index also reuses script preparation across freshly
+hydrated equal source strings; dead source/preparation is not kept alive by that index. Arguments, variables,
+limits, cancellation and engine state remain per evaluation;
 discarding executable source also releases its preparation. No engine or evaluated result is cached.
 
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.

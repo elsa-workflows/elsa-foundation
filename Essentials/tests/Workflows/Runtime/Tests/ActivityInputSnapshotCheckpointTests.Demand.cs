@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
@@ -73,6 +74,42 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
 
         Assert.True(values.Reads > 0);
         Assert.Equal(0, activities.Reads);
+    }
+
+    [Fact]
+    public async Task Variable_inputs_read_current_closed_scope_values_without_listing_history()
+    {
+        var binding = new RuntimeInputBinding("message", StringType, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableRead, variable: new RuntimeVariableReference("choice", "boundary-node"));
+        var executable = NewExecutable(("message", binding));
+        var workflow = await SaveWorkflowStateAsync(executable.Identity);
+        await _workflowStateStore.SaveAsync(workflow with
+        {
+            RootVariableFrame = new VariableFrameFactory().CreateRoot("wfexec-1", "workflow",
+                new Dictionary<string, ValueEnvelope> { ["choice"] = DurableLiteral("choice", "caller").Literal! })
+        });
+        var boundary = NewScheduledState() with
+        {
+            Execution = new ActivityExecution("boundary", "wfexec-1", "boundary-node", "authored-boundary", "test/activity", "1.0.0"),
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ActivityExecutionScope] = RuntimeMetadataKeys.ActivityExecutionScopeClosed }
+        };
+        await _activityStateStore.SaveAsync(boundary);
+        var consumer = NewScheduledState() with { ParentActivityExecutionId = "boundary" };
+        var activities = new CountingActivities(_activityStateStore);
+        var materializer = new RuntimeActivityInputSnapshotMaterializer(activities, _durableValueStateStore, _workflowStateStore);
+        var rowId = ActivityExecutionScopeKeys.Variable("boundary", "choice");
+        foreach (var text in new[] { "scope-first", "scope-second" })
+        {
+            await _durableValueStateStore.SaveAsync(new DurableValueState(rowId, "wfexec-1", rowId,
+                new RuntimeValueTypeDescriptor("object", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+                DurableValueLifecycle.Instance, DurableValueStorage.Inline, JsonSerializer.SerializeToElement(text), null,
+                "boundary", Now, ActivityExecutionScopeValues.Metadata("boundary", ActivityExecutionScopeValues.VariableRole,
+                    "choice", WellKnownRuntimeDurableValueStorageDrivers.Json, variableName: "Choice")));
+            var snapshot = await materializer.MaterializeAsync(executable, executable.RootActivity, consumer, _serviceProvider, Now, default);
+            Assert.Equal(text, snapshot.Values["message"].InlineValue!.Value.GetString());
+        }
+        Assert.Equal(2, activities.AncestorReads);
+        Assert.Equal(0, activities.HistoryReads);
     }
 
     [Fact]
