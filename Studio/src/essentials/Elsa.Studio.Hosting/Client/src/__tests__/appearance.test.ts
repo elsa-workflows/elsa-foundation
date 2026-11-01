@@ -25,19 +25,29 @@ function memoryStorage(initial: Record<string, string> = {}) {
 const media = (matches: Record<string, boolean>) => (query: string) => ({ matches: matches[query] ?? false });
 
 describe("appearance model", () => {
-  it("defaults to the configured theme, system mode and theme navigation", () => {
+  it("defaults to the configured theme, system mode, theme navigation and a dark sidebar", () => {
     expect(readAppearancePreferences(memoryStorage())).toEqual(defaultAppearancePreferences);
-    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: "linen", colorSchemeId: null, mode: "system", navigation: "theme" });
+    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: "linen", colorSchemeId: null, mode: "system", navigation: "theme", sidebarColor: "dark" });
   });
 
   it("reads the existing storage keys so earlier choices survive", () => {
     const storage = memoryStorage({ "elsa-studio-theme": "drift", "elsa-studio-theme-mode": "dim", "elsa-studio-nav-mode": "top" });
-    expect(readAppearancePreferences(storage)).toEqual({ themeId: "drift", workspaceStyle: null, colorSchemeId: null, mode: "dim", navigation: "top" });
+    expect(readAppearancePreferences(storage)).toEqual({ themeId: "drift", workspaceStyle: null, colorSchemeId: null, mode: "dim", navigation: "top", sidebarColor: "dark" });
+  });
+
+  it("persists the sidebar color and falls back to dark for an unknown value", () => {
+    const storage = memoryStorage();
+    writeAppearancePreferences({ sidebarColor: "light" }, storage);
+    expect(storage.data.get(appearanceStorageKeys.sidebarColor)).toBe("light");
+    expect(readAppearancePreferences(storage).sidebarColor).toBe("light");
+    writeAppearancePreferences({ sidebarColor: "theme" }, storage);
+    expect(readAppearancePreferences(storage).sidebarColor).toBe("theme");
+    expect(readAppearancePreferences(memoryStorage({ "elsa-studio-sidebar-color": "purple" })).sidebarColor).toBe("dark");
   });
 
   it("ignores unknown stored values", () => {
     const storage = memoryStorage({ "elsa-studio-theme-mode": "sepia", "elsa-studio-nav-mode": "bottom" });
-    expect(readAppearancePreferences(storage)).toMatchObject({ mode: "system", navigation: "theme" });
+    expect(readAppearancePreferences(storage)).toMatchObject({ mode: "system", navigation: "theme", sidebarColor: "dark" });
   });
 
   it("writes only the given preferences and clears a null theme", () => {
@@ -50,13 +60,14 @@ describe("appearance model", () => {
   });
 
   it("reset removes every listed appearance and chrome key and returns the defaults", () => {
-    expect(appearanceResetStorageKeys).toHaveLength(10);
+    expect(appearanceResetStorageKeys).toHaveLength(11);
     expect([...appearanceResetStorageKeys]).toEqual([
       appearanceStorageKeys.themeId,
       appearanceStorageKeys.workspaceStyle,
       appearanceStorageKeys.colorSchemeId,
       appearanceStorageKeys.mode,
       appearanceStorageKeys.navigation,
+      appearanceStorageKeys.sidebarColor,
       appearanceChromeStorageKeys.sidebarCollapsed,
       appearanceChromeStorageKeys.bottomPanelCollapsed,
       appearanceChromeStorageKeys.bottomPanelHeight,
@@ -67,6 +78,7 @@ describe("appearance model", () => {
       "elsa-studio-theme": "drift",
       "elsa-studio-theme-mode": "dark",
       "elsa-studio-nav-mode": "left",
+      "elsa-studio-sidebar-color": "light",
       "elsa-studio-sidebar-collapsed": "true",
       "elsa-studio-bottom-panel-collapsed": "false",
       "elsa-studio-bottom-panel-height": "320",

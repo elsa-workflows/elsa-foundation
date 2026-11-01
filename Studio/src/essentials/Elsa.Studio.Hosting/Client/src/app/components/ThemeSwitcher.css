@@ -278,7 +278,8 @@
 /* Appearance: the four modes as a compact segmented radio group. Modes the current theme does
    not define stay visible but disabled, so the set of options never shifts under the pointer. */
 .theme-mode-group,
-.theme-nav-group {
+.theme-nav-group,
+.theme-sidebar-color-group {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
@@ -325,13 +326,15 @@
   opacity: 0.45;
 }
 
-/* Navigation placement reuses the segmented control, with three options. */
-.theme-nav-group {
+/* Navigation placement and sidebar color reuse the segmented control, with three options. */
+.theme-nav-group,
+.theme-sidebar-color-group {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .theme-mode-group + .theme-dropdown-header,
-.theme-nav-group + .theme-dropdown-header {
+.theme-nav-group + .theme-dropdown-header,
+.theme-sidebar-color-group + .theme-dropdown-header {
   border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
 

@@ -5,6 +5,7 @@ import { useTheme } from "./ThemeProvider";
 import { allThemeModes, getSupportedThemeModes, getThemeModeDefinition, isThemeMode, themeModeLabels, type ThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences, type NavModePreference } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
+import { isSidebarColorPreference, sidebarColorPreferenceLabels, sidebarColorPreferences, type SidebarColorPreference } from "../themes/sidebarColor";
 import "./ThemeSwitcher.css";
 
 const modeIcons: Record<ThemeMode, LucideIcon> = {
@@ -80,11 +81,19 @@ const navModeIcons: Record<NavModePreference, LucideIcon> = {
   top: PanelTop
 };
 
+const sidebarColorIcons: Record<SidebarColorPreference, LucideIcon> = {
+  theme: SwatchBook,
+  light: Sun,
+  dark: Moon
+};
+
 export function ThemeSwitcher() {
   const {
     currentTheme, currentColorScheme, workspaceStyle, setWorkspaceStyle, setColorScheme, mode, setMode, availableThemes, supportedModes,
-    navModePreference, themeNavMode, setNavModePreference
+    navMode, navModePreference, themeNavMode, setNavModePreference, sidebarColorPreference, setSidebarColorPreference
   } = useTheme();
+  // The setting paints whichever surface holds the navigation: the sidebar, or the top bar.
+  const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
 
   return (
     <div className="theme-switcher-container">
@@ -184,6 +193,37 @@ export function ThemeSwitcher() {
                   >
                     <Icon size={16} aria-hidden="true" />
                     <span>{navModePreferenceLabels[preference]}</span>
+                  </DropdownMenu.RadioItem>
+                );
+              })}
+            </DropdownMenu.RadioGroup>
+
+            <DropdownMenu.Label className="theme-dropdown-header">
+              <span className="theme-dropdown-title">{sidebarColorTitle}</span>
+            </DropdownMenu.Label>
+            <DropdownMenu.RadioGroup
+              className="theme-sidebar-color-group"
+              aria-label={sidebarColorTitle}
+              value={sidebarColorPreference}
+              onValueChange={value => isSidebarColorPreference(value) && setSidebarColorPreference(value)}
+            >
+              {sidebarColorPreferences.map(preference => {
+                const Icon = sidebarColorIcons[preference];
+                const highContrast = mode === "high-contrast";
+                return (
+                  <DropdownMenu.RadioItem
+                    key={preference}
+                    value={preference}
+                    className="theme-mode-item"
+                    // High contrast keeps its own accessible navigation, so a pinned tone does not apply there.
+                    disabled={highContrast}
+                    title={highContrast
+                      ? "High contrast keeps its own navigation colors"
+                      : preference === "theme" ? "Follow the workspace appearance" : `${sidebarColorPreferenceLabels[preference]} navigation in every appearance`}
+                    onSelect={event => event.preventDefault()}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    <span>{sidebarColorPreferenceLabels[preference]}</span>
                   </DropdownMenu.RadioItem>
                 );
               })}

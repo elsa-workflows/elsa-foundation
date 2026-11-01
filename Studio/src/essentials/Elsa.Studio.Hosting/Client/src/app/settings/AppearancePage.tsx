@@ -11,6 +11,7 @@ import {
 import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
+import { isSidebarColorPreference, sidebarColorPreferenceLabels, sidebarColorPreferences } from "../themes/sidebarColor";
 import { studioPresets, type StudioPresetId } from "../themes/studioPresets";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
@@ -49,7 +50,9 @@ export function AppearancePage({
     resetAppearance,
     supportedModes,
     navModePreference,
-    setNavModePreference
+    setNavModePreference,
+    sidebarColorPreference,
+    setSidebarColorPreference
   } = useTheme();
   const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
@@ -146,6 +149,22 @@ export function AppearancePage({
             defaultValue: preference === defaultAppearancePreferences.navigation
           }))}
           onChange={value => isNavModePreference(value) && setNavModePreference(value)}
+        />
+      </AppearanceCard>
+
+      <AppearanceCard
+        title="Sidebar color"
+        description="Keep the navigation dark or light in every mode, or follow the workspace. High contrast keeps its own navigation."
+      >
+        <RadioCardGroup
+          ariaLabel="Sidebar color"
+          value={sidebarColorPreference}
+          options={sidebarColorPreferences.map(preference => ({
+            value: preference,
+            label: sidebarColorPreferenceLabels[preference],
+            defaultValue: preference === defaultAppearancePreferences.sidebarColor
+          }))}
+          onChange={value => isSidebarColorPreference(value) && setSidebarColorPreference(value)}
         />
       </AppearanceCard>
 

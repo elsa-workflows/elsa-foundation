@@ -28,6 +28,12 @@ import {
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 import { applyWorkspaceStyle, getWorkspaceStyle, isWorkspaceStyle, type WorkspaceStyle } from "../themes/workspaceStyles";
 import { studioPresets, type StudioPresetId } from "../themes/studioPresets";
+import {
+  resolveNavigationColors,
+  resolveSidebarColor,
+  sidebarColorAttribute,
+  type SidebarColorPreference
+} from "../themes/sidebarColor";
 
 interface ThemeContextType {
   currentTheme: Theme;
@@ -57,6 +63,9 @@ interface ThemeContextType {
   /** The mode the current theme asks for, i.e. what `theme` resolves to. */
   themeNavMode: NavMode;
   setNavModePreference: (preference: NavModePreference) => void;
+  /** The navigation surface's tone: `theme` follows the workspace, `light`/`dark` pin it. */
+  sidebarColorPreference: SidebarColorPreference;
+  setSidebarColorPreference: (preference: SidebarColorPreference) => void;
   previewTheme: (theme: StudioThemeDefinition) => void;
   availableThemes: Theme[];
   store: ThemeStoreResponse;
@@ -95,6 +104,7 @@ export function ThemeProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-resolve `system` when the OS preference changes
   const preferredMode = React.useMemo(() => resolveModePreference(modePreference), [modePreference, systemModeVersion]);
   const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
+  const [sidebarColorPreference, setSidebarColorPreferenceState] = useState<SidebarColorPreference>("dark");
   const [mounted, setMounted] = useState(false);
   const supportedModes = getSupportedThemeModes(currentColorScheme);
   const activeMode = resolveThemeMode(currentColorScheme, preferredMode);
@@ -110,6 +120,7 @@ export function ThemeProvider({
 
     setModePreferenceState(saved.mode);
     setNavModePreferenceState(saved.navigation);
+    setSidebarColorPreferenceState(saved.sidebarColor);
     setCurrentTheme(nextTheme);
     setWorkspaceStyleState(saved.workspaceStyle);
     // A definitive store response can remove a palette. Clear that override so the base
@@ -177,16 +188,16 @@ export function ThemeProvider({
       }
     });
 
-    // Navigation is a separate surface. In light Linen use the palette's dark navigation
-    // pair; custom light-only palettes retain their own coherent pair.
-    const navigationColors = activeStyle === "linen" && activeMode === "light"
-      ? getThemeModeDefinition(currentColorScheme, "dark") ?? colors
-      : colors;
+    // Navigation is a separate surface: the user may pin it light or dark, else it follows the workspace.
+    const navigationColors = resolveNavigationColors(currentColorScheme, activeMode, activeStyle, sidebarColorPreference);
     for (const [role, value] of Object.entries({
-      bg: navigationColors.sidebar, text: navigationColors.sidebarForeground,
-      active: navigationColors.sidebarActive, "active-text": navigationColors.sidebarActiveForeground,
-      muted: navigationColors.sidebarForeground
+      bg: navigationColors.bg, text: navigationColors.text,
+      active: navigationColors.active, "active-text": navigationColors.activeText,
+      muted: navigationColors.text
     })) root.style.setProperty(`--studio-nav-${role}`, value);
+    const sidebarColor = resolveSidebarColor(sidebarColorPreference, activeMode);
+    if (sidebarColor) root.setAttribute(sidebarColorAttribute, sidebarColor);
+    else root.removeAttribute(sidebarColorAttribute);
 
     // `data-theme-mode` stays the light/dark colour scheme — the contract module CSS keys on — and
     // `data-theme-appearance` carries the exact mode (light, dark, dim, high-contrast).
@@ -204,7 +215,7 @@ export function ThemeProvider({
       root.removeAttribute("data-theme-material");
     }
 
-  }, [currentTheme, currentColorScheme, styledTheme, activeStyle, activeMode, navMode, mounted]);
+  }, [currentTheme, currentColorScheme, styledTheme, activeStyle, activeMode, navMode, sidebarColorPreference, mounted]);
 
   const handleSetTheme = (themeId: string) => {
     const nextTheme = findSelectableTheme(store, themeId);
@@ -250,10 +261,16 @@ export function ThemeProvider({
     writeAppearancePreferences({ navigation: preference });
   };
 
+  const handleSetSidebarColorPreference = (preference: SidebarColorPreference) => {
+    setSidebarColorPreferenceState(preference);
+    writeAppearancePreferences({ sidebarColor: preference });
+  };
+
   const handleResetAppearance = () => {
     const defaults = resetAppearancePreferences();
     setModePreferenceState(defaults.mode);
     setNavModePreferenceState(defaults.navigation);
+    setSidebarColorPreferenceState(defaults.sidebarColor);
     setPreview(undefined);
     setWorkspaceStyleState(defaults.workspaceStyle);
     setColorSchemeId(defaults.colorSchemeId);
@@ -291,6 +308,8 @@ export function ThemeProvider({
         navModePreference,
         themeNavMode,
         setNavModePreference: handleSetNavModePreference,
+        sidebarColorPreference,
+        setSidebarColorPreference: handleSetSidebarColorPreference,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
         store,

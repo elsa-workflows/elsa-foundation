@@ -284,7 +284,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => root.unmount());
     container.remove();
     document.body.removeAttribute("style");
-    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "style"]) {
+    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "data-sidebar-color", "style"]) {
       document.documentElement.removeAttribute(attribute);
     }
     api = undefined;
@@ -547,6 +547,27 @@ describe("ThemeProvider and ThemeSwitcher", () => {
 
     expect(navMode()).toBe("top");
     expect(navItems()[2].getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("offers the sidebar color with Dark checked by default and names the top bar in top navigation", async () => {
+    await render();
+    await openThemeMenu();
+    const sidebarItems = () => radioItems("theme-sidebar-color-group");
+    const groupLabel = () => document.querySelector(".theme-sidebar-color-group")?.getAttribute("aria-label");
+
+    expect(sidebarItems().map(item => item.textContent)).toEqual(["Theme default", "Light", "Dark"]);
+    expect(sidebarItems()[2].getAttribute("aria-checked")).toBe("true");
+    expect(groupLabel()).toBe("Sidebar color");
+
+    await act(() => sidebarItems()[1].click());
+    expect(document.documentElement.getAttribute("data-sidebar-color")).toBe("light");
+    expect(localStorage.getItem("elsa-studio-sidebar-color")).toBe("light");
+
+    await act(() => navItems()[2].click());
+    expect(groupLabel()).toBe("Navigation bar color");
+
+    await act(() => api!.setModePreference("high-contrast"));
+    expect(sidebarItems().every(item => item.hasAttribute("data-disabled"))).toBe(true);
   });
 
   it("follows a live OS colour-scheme change while System mode is selected", async () => {

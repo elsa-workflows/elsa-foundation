@@ -38,8 +38,56 @@ afterEach(async () => {
   await update(() => root.unmount());
   container.remove();
   for (const name of Array.from(html().attributes).map(attribute => attribute.name)) {
-    if (name.startsWith("data-theme") || name === "data-nav-mode" || name === "data-workspace-style" || name === "data-color-scheme" || name === "style") html().removeAttribute(name);
+    if (name.startsWith("data-theme") || name === "data-nav-mode" || name === "data-sidebar-color" || name === "data-workspace-style" || name === "data-color-scheme" || name === "style") html().removeAttribute(name);
   }
+});
+
+describe("sidebar color", () => {
+  it("defaults to a dark sidebar in a Light workspace", async () => {
+    await render();
+    await update(() => appearance.setColorScheme("signal"));
+    await update(() => appearance.setModePreference("light"));
+    expect(appearance.sidebarColorPreference).toBe("dark");
+    expect(html().getAttribute("data-sidebar-color")).toBe("dark");
+    expect(html().getAttribute("data-theme-appearance")).toBe("light");
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(getThemeModeDefinition(getTheme("signal")!, "dark")!.sidebar);
+    expect(localStorage.getItem("elsa-studio-sidebar-color")).toBeNull();
+  });
+
+  it("persists a light sidebar across a remount and applies it in a Dark workspace", async () => {
+    await render();
+    await update(() => appearance.setColorScheme("signal"));
+    await update(() => appearance.setModePreference("dark"));
+    await update(() => appearance.setSidebarColorPreference("light"));
+    expect(localStorage.getItem("elsa-studio-sidebar-color")).toBe("light");
+    await update(() => root.render(<div />));
+    await render();
+    expect(appearance.sidebarColorPreference).toBe("light");
+    expect(html().getAttribute("data-sidebar-color")).toBe("light");
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(getThemeModeDefinition(getTheme("signal")!, "light")!.sidebar);
+  });
+
+  it("follows the workspace for Theme default and leaves High contrast its own navigation", async () => {
+    await render();
+    await update(() => appearance.setColorScheme("signal"));
+    await update(() => appearance.setWorkspaceStyle("minimal"));
+    await update(() => appearance.setModePreference("light"));
+    await update(() => appearance.setSidebarColorPreference("theme"));
+    expect(html().hasAttribute("data-sidebar-color")).toBe(false);
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(getThemeModeDefinition(getTheme("signal")!, "light")!.sidebar);
+    await update(() => appearance.setSidebarColorPreference("dark"));
+    await update(() => appearance.setModePreference("high-contrast"));
+    expect(html().hasAttribute("data-sidebar-color")).toBe(false);
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(getThemeModeDefinition(getTheme("signal")!, "high-contrast")!.sidebar);
+  });
+
+  it("returns to the dark default on reset", async () => {
+    await render();
+    await update(() => appearance.setSidebarColorPreference("light"));
+    await update(() => appearance.resetAppearance());
+    expect(appearance.sidebarColorPreference).toBe("dark");
+    expect(localStorage.getItem("elsa-studio-sidebar-color")).toBeNull();
+  });
 });
 
 describe("independent workspace appearance", () => {
@@ -69,6 +117,8 @@ describe("independent workspace appearance", () => {
   it.each(["builtin:porcelain", "builtin:atelier", "builtin:graphite"] as const)("applies %s as an explicit complete preset and restores it after remount", async id => {
     await render();
     await update(() => appearance.setNavModePreference("top"));
+    // Theme default: the preset's palette owns the navigation surface.
+    await update(() => appearance.setSidebarColorPreference("theme"));
     await update(() => appearance.applyPreset(id));
     const mode = id === "builtin:graphite" ? "dark" : "light";
     expect(html().getAttribute("data-theme")).toBe(id);
