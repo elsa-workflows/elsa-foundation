@@ -16,6 +16,7 @@ public sealed class ModelObservations
     public string? UserJson { get; internal set; }
     public JsonElement? Schema { get; internal set; }
     public bool InvalidResult { get; set; }
+    public string? DispatchCounterDirectory { get; set; }
 }
 
 public static class ModelRegistration
@@ -51,6 +52,12 @@ internal sealed class FixtureModel(ModelObservations observations) : ISpecialist
             cancellationToken.ThrowIfCancellationRequested();
             if (request.DispatchAuthority is { } authority)
                 await authority.BeforeSendAsync(new("fixture", request.Descriptor.Model.ModelId, "fixture-incarnation", 1, "fixture/1", "external-deterministic-one-response/1"), cancellationToken);
+            if (observations.DispatchCounterDirectory is { } counter)
+            {
+                Directory.CreateDirectory(counter);
+                await File.WriteAllTextAsync(Path.Combine(counter, "dispatch-" + Guid.NewGuid().ToString("N") + ".json"),
+                    JsonSerializer.Serialize(new { request.Invocation.WorkflowExecutionId, request.Invocation.OperationKey }), cancellationToken);
+            }
             observations.Calls++;
             observations.Instructions = options?.Instructions;
             observations.ModelId = options?.ModelId;

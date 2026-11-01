@@ -1,0 +1,207 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Acme.Specialist.ModelFixture;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
+using Elsa.Activities.Runtime;
+using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
+using Elsa.Agent.Specialists;
+using Elsa.Agent.Specialists.Core.Contracts;
+using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
+using Elsa.Events;
+using Elsa.Locking.FileSystem;
+using Elsa.Secrets.Features;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
+using Elsa.Tasks;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Resumption;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+var role = args[1];
+var directory = Path.GetFullPath(args[2]);
+var persistence = Enum.Parse<PersistenceMode>(args[3]);
+Directory.CreateDirectory(directory);
+var checks = new List<string>();
+void Check(bool condition, string name) { if (!condition) throw new InvalidOperationException(name); checks.Add(name); }
+var counter = Path.Combine(directory, "dispatches");
+int Calls() => Directory.Exists(counter) ? Directory.GetFiles(counter, "dispatch-*.json").Length : 0;
+var connection = "Data Source=" + Path.Combine(directory, "runtime.db") + ";Pooling=False;Default Timeout=30";
+var locks = Path.Combine(directory, "locks");
+Directory.CreateDirectory(locks);
+var services = new ServiceCollection();
+services.AddLogging();
+services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+services.AddCShells(builder => builder.WithAssemblies(typeof(DurablePackageHostFeature).Assembly,
+        typeof(SpecialistsRuntimeFeature).Assembly, typeof(SpecialistsEntityFrameworkCoreFeature).Assembly,
+        typeof(RuntimeEntityFrameworkCoreFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
+        typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
+        typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly, typeof(FileSystemLockingFeature).Assembly)
+    .AddShell("specialist-durable-package", shell => shell
+        .WithFeature<DurablePackageHostFeature>(feature => { feature.Role = role; feature.Directory = directory; feature.Persistence = persistence; })
+        .WithFeature<SpecialistsRuntimeFeature>(feature => feature.AllowNewOperations = role == "start")
+        .WithFeature<BackgroundActivitiesFeature>(feature => { feature.RunWorkers = false; feature.LeaseDurationSeconds = 5; feature.RenewalIntervalSeconds = 1; })
+        .WithFeature<WorkflowsRuntimeResumptionFeature>(feature => feature.SweepIntervalSeconds = 3600)
+        .WithFeature<SpecialistsEntityFrameworkCoreFeature>(feature => { feature.Provider = "Sqlite"; feature.ConnectionString = connection; })
+        .WithFeature<RuntimeEntityFrameworkCoreFeature>(feature =>
+        {
+            feature.Provider = "Sqlite"; feature.ConnectionString = connection;
+            feature.RecoveryContinuationSigningKey = "synthetic-specialist-durable-recovery-signing-key-v1";
+            feature.HierarchyCursorSigningKey = "synthetic-specialist-durable-hierarchy-signing-key-v1";
+        })
+        .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("synthetic-specialist-durable-content-key-v1"))))
+        .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = locks)));
+await using var host = services.BuildServiceProvider();
+var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("specialist-durable-package");
+await using var scope = activated.BeginScope();
+var provider = scope.ServiceProvider;
+Check(provider.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope().Value == "default", "ordinary selected persistence scope");
+var turns = provider.GetRequiredService<ISpecialistTurnStore>();
+Check((await turns.GetCapabilitiesAsync()).IsDurable, "file-backed specialist journal reports durable storage");
+if (role == "worker") provider.GetRequiredService<ModelObservations>().DispatchCounterDirectory = counter;
+else Check(!provider.GetServices<ISpecialistModelClientFactory>().Any(), "coordinator/recovery/verifier has no model contribution");
+const string executionId = "durable-package-run";
+var handoffPath = Path.Combine(directory, "handoff.json");
+if (role == "start")
+{
+    using var placement = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(args[0], "placement.json")));
+    var source = placement.RootElement;
+    var node = source.GetProperty("Root").Deserialize<ExecutableNode>()!;
+    var resume = source.GetProperty("ResumeTargets").Deserialize<Dictionary<string, WorkflowExecutableResumeTarget>>()!;
+    var requirements = source.GetProperty("RuntimeRequirements").Deserialize<RuntimeRequirement[]>()!;
+    var storage = JsonSerializer.Deserialize<RuntimeStorageDriverRequirement[]>(await File.ReadAllTextAsync(Path.Combine(args[0], "storage.json")))!;
+    var identity = new WorkflowExecutableIdentity("durable-editorial", "workflow", "workflow-v1", "1.0.0", node.DescriptorPayload.GetProperty("templateHash").GetString()!);
+    var executable = new WorkflowExecutable(identity, node, resume, DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference, requirements, storage);
+    await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+    var now = DateTimeOffset.UtcNow;
+    var actor = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(executionId, WorkflowExecutionActorActivationReason.Start, now,
+        "durable-package-start", WorkflowExecutionActorCapabilities.InProcessMailbox));
+    var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = identity.ArtifactId };
+    var payload = new WorkflowExecutionStartCommandPayload(identity, identity.ArtifactId, variables: null, inputs: null, stimulusInput: null, triggerNodeId: null,
+        runKind: WorkflowRunKind.Unknown, pinnedSource: null, parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: null);
+    var command = new WorkflowExecutionCommand("start", executionId, WorkflowExecutionCommandKind.Start, now, JsonSerializer.SerializeToElement(payload), metadata);
+    await actor.EnqueueAsync(new("start-envelope", executionId, command, "start", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now, 1, metadata));
+    var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId))!;
+    var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId);
+    var parent = states.Single(state => state.Execution.ExecutableNodeId == node.ExecutableNodeId);
+    var handle = parent.PrivateState!.Value.InlineValue!.Value.GetString()!;
+    var invocation = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, executionId, parent.InvocationId, parent.OperationKey,
+        identity.ArtifactId, identity.ArtifactHash, node.DescriptorPayload.GetProperty("definitionVersionId").GetString()!, node.DescriptorPayload.GetProperty("templateHash").GetString()!);
+    var turn = await turns.ReadAsync(handle, invocation, default);
+    Check(workflow.Status == WorkflowExecutionStatus.Running && turn?.Status == SpecialistTurnStatus.Prepared, "native checkpoint retained staged turn and owed background child");
+    Check(Calls() == 0, "start process performed no model request");
+    await File.WriteAllTextAsync(handoffPath, JsonSerializer.Serialize(new DurableHandoff(handle, invocation, node.ExecutableNodeId)));
+}
+else
+{
+    var handoff = JsonSerializer.Deserialize<DurableHandoff>(await File.ReadAllTextAsync(handoffPath))!;
+    var before = (await turns.ReadAsync(handoff.Handle, handoff.Identity, default))!;
+    var workStore = provider.GetRequiredService<IBackgroundActivityWorkStore>();
+    if (role is "worker" or "recover")
+    {
+        if (role == "recover")
+        {
+            Check(File.Exists(Path.Combine(directory, "crash.json")), "worker process left the exact accepted-before-receipt crash marker");
+            Check(before.Status == SpecialistTurnStatus.Accepted && before.ProtectedResult is not null, "accepted journal survived worker process loss");
+            using var lost = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
+            var expiry = lost.RootElement.GetProperty("VisibleUntil").GetDateTimeOffset();
+            var delay = expiry - DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(100);
+            if (delay > TimeSpan.Zero) await Task.Delay(delay);
+        }
+        var claim = await workStore.ClaimNextAsync(role, DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+        Check(claim is not null, "new process claimed actual persisted native background work");
+        if (role == "worker") await File.WriteAllTextAsync(Path.Combine(directory, "worker-claim.json"), JsonSerializer.Serialize(claim));
+        else
+        {
+            using var old = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
+            Check(claim!.WorkId == old.RootElement.GetProperty("WorkId").GetString() && claim.ClaimFence > old.RootElement.GetProperty("ClaimFence").GetInt64(), "recovery reclaimed same work with a newer native fence");
+        }
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim!);
+        Check(role != "worker", "worker crash hook must terminate before a native receipt is recorded");
+        Check(Calls() == 1, "accepted recovery performed no additional model request");
+        var now = DateTimeOffset.UtcNow;
+        var actor = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(executionId, WorkflowExecutionActorActivationReason.Recovery, now,
+            "durable-package-recover", WorkflowExecutionActorCapabilities.InProcessMailbox));
+        var drain = new WorkflowExecutionCommand("recover-drain", executionId, WorkflowExecutionCommandKind.RunSchedulerWork, now, null, new Dictionary<string, string>());
+        await actor.EnqueueAsync(new("recover-drain-envelope", executionId, drain, "recover-drain", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
+        var delivery = await provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(32, executionId, "elsa.specialist.applied/1"));
+        Check(delivery.DeliveredCount == 1, "native completion application settled through its actual durable outbox");
+    }
+    if (role is "recover" or "verify")
+    {
+        var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
+        var parent = await provider.GetRequiredService<IActivityExecutionStateStore>().FindAsync(executionId, handoff.Identity.ActivityExecutionId);
+        Check(workflow?.Status == WorkflowExecutionStatus.Completed && parent?.Status == ActivityExecutionStatus.Completed, "native workflow and facade completion survived process boundaries");
+        Check(parent!.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString() == "draft about moss gardens", "exact validated typed business result retained");
+        var accepted = (await turns.ReadAsync(handoff.Handle, handoff.Identity, default))!;
+        Check(accepted.Status == SpecialistTurnStatus.Accepted && accepted.Applications?.Count == 1, "one accepted journal turn and one process application");
+        var application = accepted.Applications!.Single();
+        var physical = await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(application.SourceId);
+        Check(physical?.Status == RuntimePostCommitOutboxStatus.Delivered && RuntimeCheckpointCommitFingerprint.ComputeIntent(physical.Intent) == application.SourceFingerprint, "physical application source is delivered and matches retained fingerprint");
+        Check(Calls() == 1, "independent verifier observed exactly one model dispatch across all processes");
+    }
+}
+Check(!AppDomain.CurrentDomain.GetAssemblies().Any(assembly => assembly.GetName().Name is { } name && name.StartsWith("Elsa.", StringComparison.Ordinal) &&
+    (name.Contains(".Design", StringComparison.Ordinal) || name.Contains(".Publishing", StringComparison.Ordinal))), "runtime loaded zero authoring assemblies");
+await File.WriteAllTextAsync(Path.Combine(directory, role + "-receipt.json"), JsonSerializer.Serialize(new { role, persistence = persistence.ToString(), processId = Environment.ProcessId, checks, liveModel = false, durableJournal = true }));
+Console.WriteLine(JsonSerializer.Serialize(new { role, passed = checks.Count, processId = Environment.ProcessId, liveModel = false, durableJournal = true }));
+
+public sealed record DurableHandoff(string Handle, SpecialistInvocationIdentity Identity, string ParentNodeId);
+
+[ShellFeature("SpecialistDurablePackageHost", DependsOn = new object[] { "SpecialistsEntityFrameworkCore", "WorkflowsRuntimeEntityFrameworkCore", "Events", "Tasks", "FileSystemDistributedLocking" })]
+public sealed class DurablePackageHostFeature : IShellFeature
+{
+    public string Role { get; set; } = "start";
+    public string Directory { get; set; } = "";
+    public PersistenceMode Persistence { get; set; }
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddWorkflowRuntime();
+        services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = Persistence });
+        services.AddPersistenceModes();
+        if (Role == "worker")
+        {
+            services.AddFixtureModel();
+            var directory = Directory;
+            services.Replace(ServiceDescriptor.Scoped<IActivityActivator>(provider => new CrashAfterAcceptanceActivator(ActivatorUtilities.CreateInstance<ActivityActivator>(provider), provider, directory)));
+        }
+    }
+}
+
+public sealed class CrashAfterAcceptanceActivator(IActivityActivator inner, IServiceProvider services, string directory) : IActivityActivator
+{
+    public async ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+    {
+        var lease = await inner.ActivateAsync(request, cancellationToken);
+        if (request.Contract.Activation.Capability != SpecialistRuntimeIds.TurnCapability) return lease;
+        if (lease.Activity is IDisposable or IAsyncDisposable) throw new InvalidOperationException("The crash fixture requires the fixed non-disposable model leaf.");
+        return new(lease.Activity, new CrashScope(lease, services, directory));
+    }
+    private sealed class CrashScope(ActivityActivationLease inner, IServiceProvider services, string directory) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            var handoff = JsonSerializer.Deserialize<DurableHandoff>(await File.ReadAllTextAsync(Path.Combine(directory, "handoff.json")))!;
+            var turn = await services.GetRequiredService<ISpecialistTurnStore>().ReadAsync(handoff.Handle, handoff.Identity, default);
+            using var claim = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
+            var work = await services.GetRequiredService<IBackgroundActivityWorkStore>().FindAsync(handoff.Identity.WorkflowExecutionId, claim.RootElement.GetProperty("WorkId").GetString()!);
+            if (turn?.Status != SpecialistTurnStatus.Accepted || turn.ProtectedResult is null || work?.Status != BackgroundActivityWorkStatus.Claimed)
+                throw new InvalidOperationException("The crash boundary requires accepted specialist content and an unreceipted native claim.");
+            await inner.DisposeAsync();
+            await File.WriteAllTextAsync(Path.Combine(directory, "crash.json"), JsonSerializer.Serialize(new { phase = "journal-accepted-before-native-receipt", processId = Environment.ProcessId, claimExpires = claim.RootElement.GetProperty("VisibleUntil").GetDateTimeOffset() }));
+            Environment.Exit(197);
+        }
+    }
+}
