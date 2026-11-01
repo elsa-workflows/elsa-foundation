@@ -91,8 +91,17 @@ One restart with a large backlog, or one broken run, must not overwhelm or starv
 | Limit | How it works |
 |---|---|
 | **Per sweep** | At most 100 runs are re-driven per sweep (`MaxExecutionsPerSweep`). The recovery scanner keeps half the slots (at least one, at most its batch size) and the backlog the rest, so neither starves the other. Either side may use slots the other leaves. With a cap of one they take turns (#2188). |
+| **Concurrent dispatches** | `MaxConcurrentDispatches` defaults to 1 on resumption, durable-timer and recurring-trigger options/features. Raising it allows independent runs to drain together, up to the configured degree. Each concurrent dispatch uses its own ordinary persistence operation scope bound to the discovered partition. Timers for the same run retain provider order; recurring occurrences retain order within a schedule. Custom hosts without a scope factory and legacy timer stores remain sequential. |
 | **Across sweeps** | See below. |
 | **Per run** | A run whose re-drive fails gets its own growing back-off and is skipped until it passes. Separately, the whole sweep backs off after consecutive failures, up to 5 minutes by default. One broken run cannot block healthy ones. |
+
+Actual timer/recurring routes, recovery re-drives and outbox deliveries contribute to the runtime admission load
+signal while running. Empty scans, waiting claims and completed work carry no load. A pump dispatch uses an existing
+ambient charge when present, so nested delivery does not count the same admission twice. Durable pump work is not
+shed by the live-arrival limiter; its batch and concurrency limits bound it. Tune these limits against database
+connections, write capacity and foreground latency across all nodes. A higher setting is not a guarantee of higher
+throughput. Outbox delivery, discovery and recovery cursor settlement remain ordered; concurrent re-drive outcomes
+are settled in discovery order.
 
 **Across sweeps, in detail:**
 
@@ -122,7 +131,7 @@ their visibility rules. This is local segment provenance, not a clock override f
 
 ## Claims that outlive their lease
 
-The outbox processor and the durable timer pump each claim a batch of rows under one visibility timeout (1 minute by default), then work through the batch one row at a time. Claims near the end of a long batch can lapse, and another node re-claims them.
+The outbox processor and timer pumps claim bounded batches under one visibility timeout (1 minute by default). Outbox delivery remains sequential; configured timer pumps can dispatch independent executions concurrently. Claims waiting behind long dispatches can lapse and be re-claimed by another node.
 
 Both follow one shared rule: **renew a claim just before acting on it, and never act on a claim that cannot be renewed.** The renewal is a compare-and-set on the claim's owner and fence, so a row that was re-claimed is skipped rather than delivered twice.
 
@@ -137,7 +146,8 @@ Both follow one shared rule: **renew a claim just before acting on it, and never
   | PublishStimulus start | Keyed run id (see [Stimulus START idempotency](serialization.md#stimulus-start-idempotency-is-at-least-once)) |
 
   The runtime extension-point notes (the per-kind table under the outbox store contract) record each mechanism and its limit. One limit: a scheduler-work repeat that arrives after its whole chain has drained can re-run a checkpoint whose replay conflicts. Redelivery after a crash already had the same exposure.
-- **Durable timers.** Each timer's claim is renewed just before it fires and kept renewed while the fire runs. A failed renewal cancels the fire.
+- **Durable timers.** Each timer's claim is renewed just before it fires and kept renewed while the fire runs. Configured pumps renew in a separate bound operation scope, so renewal cannot race the dispatch on one database context. A failed renewal cancels the fire.
+- **Recurring triggers.** Configured pumps also renew occurrence claims before and during routing in separate operation scopes. Custom direct construction retains renewal before routing only, since routing can share its supplied store's context. The occurrence's existing keyed start still governs repeated delivery.
 - **One lost claim never ends a sweep.** A row whose claim was lost before, during or at the fenced completion of its side effect is logged and skipped. The sweep moves to the next row, then to backlog discovery and re-drive. Whoever holds the row records its outcome.
 - **Test-scope clean-up runs separately.** It runs first on every resumption tick, in its own scope. A failure there (a clean-up race, an unreadable scope row) is logged and retried next tick; it does not stop outbox delivery or re-drive.
 

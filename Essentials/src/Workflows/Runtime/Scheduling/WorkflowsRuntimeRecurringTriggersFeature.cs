@@ -49,6 +49,9 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max schedules per tick", Description = "Hard cap on due schedules claimed and fired per sweep.", Category = "Runtime", DefaultValue = "100")]
     public int MaxSchedulesPerTick { get; set; } = 100;
 
+    [ManifestSetting(DisplayName = "Max concurrent dispatches", Description = "Maximum simultaneous pump dispatches across independent executions, using separate persistence scopes. Tune against provider capacity.", Category = "Runtime", DefaultValue = "1")]
+    public int MaxConcurrentDispatches { get; set; } = 1;
+
     [ManifestSetting(DisplayName = "Occurrence claim visibility (seconds)", Description = "Lease on a claimed recurring occurrence. A peer fires the occurrence again once the lease of a claimant that died before settling it lapses.", Category = "Runtime", DefaultValue = "60")]
     public double ClaimVisibilitySeconds { get; set; } = 60;
 
@@ -60,6 +63,7 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
             options.MaxSchedulesPerTick = MaxSchedulesPerTick;
+            options.MaxConcurrentDispatches = MaxConcurrentDispatches;
             options.ClaimVisibilityTimeout = TimeSpan.FromSeconds(ClaimVisibilitySeconds);
         });
 

@@ -320,3 +320,43 @@ compact generator, and its memory state count did not independently establish di
 Raw logs, TRX, source snapshots, rejected cache patches, hashes and experiment scripts are retained at `/private/tmp/elsa-runtime-efficiency-program` on the qualification machine. Frozen original binaries and original failed results remain under `/private/tmp/elsa-native-perf-20261031`. Heap files, if captured, are private diagnostic artifacts and are not committed.
 
 Remaining acceptance is tracked on #2531 and spec 1183: reconcile older objectives, resolve the original anomaly and identifier concerns, deliver applicable persistence/scheduling/diagnostics work, run representative sustained and failure/recovery cohorts including independent hosts, then review and qualify the exact integration head and containing main. This report is not a substitute for those gates.
+
+## Bounded pump dispatch (#1307)
+
+`MaxConcurrentDispatches` is now configurable on durable timers, recurring starts and recovery re-drives, with a
+conservative default of one. Independent executions/schedules can drain concurrently using separate ordinary
+persistence scopes. Timers for one execution retain provider order. Each timer/recurrence renewal uses a separate
+scope too; claims reclaimed while waiting cannot authorize an old dispatch. Direct hosts without a scope factory
+and legacy timer providers retain sequential behavior. Known timer deadlines already wake adaptively (#3481), so
+this change addresses the remaining inline-drain ceiling rather than attributing that earlier wakeup improvement
+to this program.
+
+Recovery discovery, outbox processing and cursor settlement remain ordered. Candidate purge/re-drive uses separate
+scoped service instances, while indexed results preserve discovery order and existing fairness/accounting. Actual
+timer/recurring dispatches, recovery re-drives and individual outbox deliveries contribute load charges without
+shedding durable work. Nested work reuses its caller's charge. Empty scans and waiting claims carry no charge.
+The outbox still processes items sequentially to preserve its continuation/dependency ordering.
+
+The focused controls cover bounded overlap, same-execution order, tenant binding, fresh scope disposal, active
+lease-renewal isolation, waiting-claim takeover, terminal purge, result order, faults, cancellation and admission
+load cleanup. Eight outbox cases cover claimed and legacy delivery, ambient-charge reuse and empty scans. A real
+SQLite contract holds two dispatcher queries open on separate EF contexts while renewal completes through another
+context, for timers and recurring starts, and independently proves recovery re-drive context isolation.
+Seven source mutations independently remove execution grouping, fresh renewal scopes, timer charges, recurring
+parallelism, recovery parallelism, recovery result order and outbox charges. Each fails its corresponding behavioral
+control; restored implementation qualification follows. Raw logs retain initial compilation/setup mistakes, the
+missing reason in the first fake duplicate response, a scope-disposal assertion taken before its outer scope closed,
+and an invalid first EF recurrence seed identity; those are test-fixture corrections, not engine regressions.
+
+This establishes concurrency and ownership behavior. Degree-one versus higher-degree throughput, native-provider
+concurrency and independent-host capacity remain part of integrated qualification; no numerical throughput gain is
+claimed from these barrier-controlled tests.
+
+Restored local whole-suite qualification after the pump change: **7,026 passed, zero failed, zero skipped** across
+Runtime (3,188), Activities Runtime (732), EF Runtime (1,854), HTTP (116), DispatchWorkflow (380), Distributed Runtime
+(114), BPMN (513), Scheduling (107) and Resumption (22). Discovery-to-execution accounting has no missing or unmatched
+cases, including runtime-expanded theories. After extracting the EF context contract for native-provider reuse,
+all three SQLite cases pass again; the native-provider project builds and discovers 245 cases, including nine new
+pump cases. Native execution is pending. Raw custody: `m4-pumps-*` under the program's temporary evidence root.
+The shared-contract extraction initially needed an explicit Resumption test reference and extension namespace;
+those compilation attempts ran no tests and are retained separately from passing qualification.

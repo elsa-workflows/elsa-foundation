@@ -73,3 +73,21 @@ failed experiments remain in the qualification custody directory.
 The nine guard cases, eight independent guard mutations, reference budget control and physical process fixture
 qualify this change. The parent process matrix uses an explicit cap of one for Balanced to reach a physical parent
 outcome; Ephemeral does not produce those cap-triggered checkpoints. Independent-host acceptance is separate.
+
+
+## M4 bounded pumps (#1307)
+
+Expose `MaxConcurrentDispatches` (default 1) on timer, recurring-trigger and recovery settings. The production
+scope runner resolves its operation factory from its bound sweep scope. Timer claims are grouped by execution and
+recurrence claims by schedule; each group retains provider order, and a bounded parallel traversal dispatches separate
+groups using fresh operation scopes bound to that persistence partition. Renewal uses another fresh scope. A claim
+waiting behind a slow drain can lapse; its mandatory first renewal refuses an obsolete owner before any side effect.
+Custom direct construction without a scope factory and legacy non-claiming timer providers retain sequential behavior.
+
+Recovery discovery/outbox processing and cursor/fairness settlement retain the original ordered sweep. Candidate
+purge/re-drive work uses independent scoped service instances, and indexed outcomes preserve discovery order.
+Cancellation never commits a partially completed discovery walk. Terminal purge and held-run semantics are unchanged.
+Actual dispatches and individual outbox deliveries open load charges when their caller has none. This makes pump
+load visible to live-arrival admission while avoiding double charging nested work or shedding durable dispatches.
+Empty scans/waiting claims carry no charge. Qualify scopes, actual EF context concurrency and claim fencing before
+measuring degrees against the final provider/host matrix; the default degree is not increased from this implementation.

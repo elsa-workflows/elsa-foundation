@@ -4577,6 +4577,8 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.BacklogBatchSiz
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.ExcludedWorkflowExecutionIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.HeartbeatTimeout.get -> System.TimeSpan
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.LeaseTimeout.get -> System.TimeSpan
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.MaxConcurrentDispatches.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.MaxConcurrentDispatches.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.MaxExecutionsPerSweep.get -> int?
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.OutboxBatchSize.get -> int
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.RecoveryScanBatchSize.get -> int

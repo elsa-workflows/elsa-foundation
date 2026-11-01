@@ -35,7 +35,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// </para>
 /// <para>
 /// <b>Claims (#2195).</b> A claim-capable store hands the pump a batch of claims under one visibility timeout, and the pump
-/// fires them one at a time, so the claims at the end of a long batch can lapse and be re-claimed by a peer. Each timer is
+/// fires them with bounded concurrency, so claims waiting behind long drains can lapse and be re-claimed by a peer. Each timer is
 /// therefore fired under a <see cref="FencedClaimLease{TClaim}"/>: its claim is renewed immediately before the fire and
 /// kept renewed while the fire runs. A timer whose claim was lost, before, during or at its completion or release, is
 /// logged and skipped; it never ends the sweep for the timers behind it.
@@ -103,6 +103,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
 
         _options = options;
         _timeProvider = timeProvider;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(_options.Value.MaxConcurrentDispatches);
         if (_options.Value.ClaimVisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(options), "Durable timer claim visibility timeout must be greater than zero.");
     }
@@ -138,7 +139,9 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
                     operationScope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>(),
                     options,
                     now,
-                    operationCancellationToken);
+                    operationCancellationToken,
+                    operationScope.ServiceProvider.GetService<IPersistenceOperationScopeFactory>(),
+                    operationScope.ServiceProvider.GetService<IRuntimeAdmissionLoadSignal>());
                 var next = await NextDeadlineAsync(operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
                     operationCancellationToken);
                 if (next is not null && (nextDeadline is null || next < nextDeadline))
@@ -170,7 +173,9 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
         IBookmarkResumeDispatcher dispatcher,
         DurableTimerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IPersistenceOperationScopeFactory? scopeFactory = null,
+        IRuntimeAdmissionLoadSignal? loadSignal = null)
     {
         if (timerStore.SupportsClaimTransitions)
         {
@@ -181,25 +186,48 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
                     options.ClaimVisibilityTimeout,
                     options.MaxTimersPerTick),
                 cancellationToken);
-            var lease = new FencedClaimLease<RuntimeDurableTimerClaim>(
-                RenewalOf(timerStore),
-                options.ClaimVisibilityTimeout,
-                _timeProvider);
-            var claimedDispatches = 0;
-            foreach (var claim in claims)
+            // Renewal has its own context: a long inline drain must never race its renewal on a shared DbContext.
+            async ValueTask<RuntimeDurableTimerClaim?> RenewAsync(RuntimeDurableTimerClaim claim, DateTimeOffset at,
+                TimeSpan visibility, CancellationToken ct)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (await FireClaimedAsync(
-                        persistenceScope,
-                        timerStore,
-                        dispatcher,
-                        lease,
-                        claim,
-                        options,
-                        now,
-                        cancellationToken))
+                RuntimeDurableTimerClaimTransitionResult result;
+                if (scopeFactory is null)
+                    result = await timerStore.RenewClaimAsync(claim, at, visibility, ct);
+                else
                 {
-                    claimedDispatches++;
+                    await using var scope = await scopeFactory.CreateAsync(persistenceScope, ct);
+                    result = await scope.ServiceProvider.GetRequiredService<IDurableTimerStore>().RenewClaimAsync(claim, at, visibility, ct);
+                }
+                return result is { Status: RuntimeDurableTimerClaimTransitionStatus.Succeeded, Claim: { } renewed } ? renewed : null;
+            }
+            var lease = new FencedClaimLease<RuntimeDurableTimerClaim>(RenewAsync, options.ClaimVisibilityTimeout, _timeProvider);
+            var claimedDispatches = 0;
+            if (scopeFactory is not null && options.MaxConcurrentDispatches > 1)
+            {
+                // Preserve provider order for one execution, while independent mailboxes can drain together.
+                await Parallel.ForEachAsync(claims.GroupBy(x => x.Timer.WorkflowExecutionId, StringComparer.Ordinal),
+                    new ParallelOptions { MaxDegreeOfParallelism = options.MaxConcurrentDispatches, CancellationToken = cancellationToken },
+                    async (group, ct) =>
+                    {
+                        foreach (var claim in group)
+                        {
+                            await using var scope = await scopeFactory.CreateAsync(persistenceScope, ct);
+                            if (await FireClaimedAsync(persistenceScope,
+                                    scope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
+                                    scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>(),
+                                    lease, claim, options, now, ct, loadSignal))
+                                Interlocked.Increment(ref claimedDispatches);
+                        }
+                    });
+            }
+            else
+            {
+                foreach (var claim in claims)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (await FireClaimedAsync(persistenceScope, timerStore, dispatcher, lease, claim, options, now,
+                            cancellationToken, loadSignal))
+                        claimedDispatches++;
                 }
             }
 
@@ -224,7 +252,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             if (IsBackingOff(persistenceScope, timer, now))
                 continue;
 
-            if (await FireAsync(persistenceScope, timerStore, dispatcher, timer, options, now, cancellationToken))
+            if (await FireAsync(persistenceScope, timerStore, dispatcher, timer, options, now, cancellationToken, loadSignal))
                 dispatched++;
         }
 
@@ -240,13 +268,16 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
         RuntimeDurableTimerClaim claim,
         DurableTimerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IRuntimeAdmissionLoadSignal? loadSignal = null)
     {
         var run = await lease.RunRenewingAsync(
             claim,
-            dispatchCancellationToken => dispatcher.DispatchAsync(
-                CreateRequest(claim.Timer),
-                cancellationToken: dispatchCancellationToken),
+            async dispatchCancellationToken =>
+            {
+                using var charge = loadSignal is { HasAmbientCharge: false } ? loadSignal.OpenCharge() : null;
+                return await dispatcher.DispatchAsync(CreateRequest(claim.Timer), cancellationToken: dispatchCancellationToken);
+            },
             cancellationToken);
 
         switch (run.Status)
@@ -304,11 +335,13 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
         DurableTimer timer,
         DurableTimerPumpOptions options,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IRuntimeAdmissionLoadSignal? loadSignal = null)
     {
         BookmarkResumeDispatchResult result;
         try
         {
+            using var charge = loadSignal is { HasAmbientCharge: false } ? loadSignal.OpenCharge() : null;
             result = await dispatcher.DispatchAsync(CreateRequest(timer), cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
@@ -412,15 +445,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
             payloadType: timer.PayloadType,
             providerId: timer.ProviderId);
 
-    private static FencedClaimRenewal<RuntimeDurableTimerClaim> RenewalOf(IDurableTimerStore timerStore) =>
-        async (claim, now, visibilityTimeout, cancellationToken) =>
-            await timerStore.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken) is
-                { Status: RuntimeDurableTimerClaimTransitionStatus.Succeeded, Claim: { } renewed }
-                ? renewed
-                : null;
 
-    // Warning, not Error: another claimant holds the timer and fires it, so nothing is lost. It is still worth seeing,
-    // because it means a sweep outran the claim visibility timeout.
     private void LogClaimLost(
         RuntimeDurableTimerClaim claim,
         string transition,

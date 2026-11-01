@@ -16,10 +16,10 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// orders of magnitude more.</para>
 ///
 /// <para>The ambient charge is an <see cref="AsyncLocal{T}"/>, the same idiom the live-drain delivery and burst
-/// scopes use. A dispatch performed on a flow that was never admitted — the recovery sweep, the placement and timer
-/// pumps — charges nothing, so the reading stays a reading of <em>live</em> dispatch. Those paths carry their own
-/// bounds (<c>RuntimeResumptionOptions.MaxExecutionsPerSweep</c> and its siblings); admission does not double-bound
-/// them.</para>
+/// scopes use. Timer, recurring-trigger and recovery re-drive pumps open charges while actually dispatching, so
+/// admission observes their load without shedding durable work. Outbox delivery opens a charge for each actual
+/// delivery when its caller has none. Their own batch and concurrency bounds still apply.
+/// Empty scans and waiting claims carry no charge. Other uncharged background paths remain outside this signal.</para>
 /// </summary>
 public sealed class DispatchRuntimeAdmissionLoadSignal : IRuntimeAdmissionLoadSignal
 {
