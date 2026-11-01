@@ -40,9 +40,19 @@
 ## Phase 6: Documentation and delivery
 
 - [x] T015 Document the existing feature's setting, defaults, data retention, capability refresh and unsupported-link behavior in `Essentials/src/Workflows/Design/Api/README.md` and `docs/program-goals/workflow-library-organization.md`; link canonical contracts rather than duplicating organization concepts.
-- [ ] T016 Run whole affected API and Workflows/Features suites, browser coverage, typecheck/lint, production builds/budget, targeted hosts, maps/architecture and actual live proof from `quickstart.md`; retain all statuses and counts without weakening tests.
-- [ ] T017 Open a draft PR for #3595; perform independent correctness/standards/acceptance review on the actual diff, verify/fix concrete findings, then qualify the exact reviewed head through hosted required/Studio/consumer/package gates; record evidence on the PR.
-- [ ] T018 Use the normal authorized merge path, qualify actual resulting main, set the spec's terminal status in the implementation PR, remove completed checklist residue, post final receipts on #3595/PR/#2559 and release the exact claim.
+- [x] T016 Run whole affected API and Workflows/Features suites, browser coverage, typecheck/lint, production builds/budget, targeted hosts, maps/architecture and actual live proof from `quickstart.md`; retain all statuses and counts without weakening tests.
+- [x] T017 Open a draft PR for #3595; perform independent correctness/standards/acceptance review on the actual diff, verify/fix concrete findings and record each author-review round on the PR.
+- [x] T018 Prepare the implementation PR's terminal spec status, remove the completed requirements checklist and link the canonical delivery tracking below.
+
+## Delivery tracking
+
+Hosted exact-head qualification, the normal authorized merge, actual resulting-main verification,
+final receipts on #3595/PR/#2559 and release of the exact claim remain required by the specification.
+Their current status and immutable run/commit receipts live on
+[PR #3599](https://github.com/elsa-workflows/elsa-foundation/pull/3599) and
+[issue #3595](https://github.com/elsa-workflows/elsa-foundation/issues/3595), following
+[the repository merge gates](../../docs/contributing/merging.md). These external delivery checkpoints
+are not recorded as completed by this implementation checklist.
 
 ## Dependencies and parallel opportunities
 

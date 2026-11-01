@@ -587,7 +587,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   const showTagColumn = librarySupport?.tags === true && (browseLocation.columns?.includes("tags") ?? false);
   const showLocationColumn = folderCapability === "available" && (browseLocation.columns?.includes("location") ?? false);
-  const hasLibrarySupport = librarySupport && Object.values(librarySupport).some(Boolean);
+  const hasLibrarySupport = librarySupport && (librarySupport.queryOptions || librarySupport.tags || librarySupport.folders || librarySupport.views);
 
   return (
     <>

@@ -68,7 +68,7 @@ describe("workflow library query boundaries", () => {
     expect(new URLSearchParams(window.location.search).has("view")).toBe(false);
   });
 
-  it.each(["folderId=old-folder", "unfiled=true", "includeDescendants=true", "favoritesOnly=true", "view=private-view",
+  it.each(["folderId=old-folder", "unfiled=true", "includeDescendants=true", "favoritesOnly=true", "view=private-view", "view=list",
     `tagFilters=${encodeURIComponent(JSON.stringify([{ tagId: "old-tag", operator: "exists" }]))}`])(
     "holds unavailable scope %s until explicit recovery, retaining ordinary filters and saved columns", async scope => {
       const requests: URL[] = [];

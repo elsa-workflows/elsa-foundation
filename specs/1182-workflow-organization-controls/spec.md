@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: Approved — implementation authorized by the end-to-end delivery request; bounded follow-up #3595 under #2559.
+**Status**: Implemented — [PR #3599](https://github.com/elsa-workflows/elsa-foundation/pull/3599), bounded follow-up #3595 under #2559.
 
 **Input**: Make workflow organization independently available or unavailable for a backend, retaining the delivered appearance choices and saved organization data.
 
