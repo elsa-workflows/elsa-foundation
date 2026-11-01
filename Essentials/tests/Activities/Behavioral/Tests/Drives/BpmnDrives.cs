@@ -161,6 +161,7 @@ internal static class BpmnHarness
     public static WorkflowExecutionHarness New(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services))
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .Build(activityExecutionIds);

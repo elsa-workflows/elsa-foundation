@@ -148,6 +148,7 @@
       "elsa.activities.bpmn.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },

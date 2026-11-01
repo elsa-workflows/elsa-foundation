@@ -6,8 +6,8 @@
 **Status**: Implementation in progress. Checked boxes record completed implementation and local
 qualification; they do not assert product acceptance. M2 is complete through
 [PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with exact-head CI and
-resulting-main qualification on `0d6db68a3`. M3 implementation is active under
-[#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523). The product spec remains nonterminal.
+resulting-main qualification on `0d6db68a3`. M3 is complete; M4 implementation is active under
+[#3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524). The product spec remains nonterminal.
 
 **Cadence**: ADR 0080 D1 risk-based behavior tests; no invented TDD rule or coverage quota. Tests
 accompany their owning implementation slice and complete before its review/merge. Use meaningful
@@ -56,7 +56,7 @@ qualification on resulting main `5be59cebc`. They do not establish M3 specialist
 acceptance. M3 source and local qualification are implemented in PR #3594, including the shared draft
 Test Run application service, concrete SDK/socket profiles, optional streaming, protected continuity,
 retention and packaged recovery. T016–T023 implementation is complete; independent review converged.
-Required remote CI, Code Review merge and resulting-main verification remain before M3 closes.
+Required reviewed-head CI, Code Review merge and fresh resulting-main source/package/affected-browser verification completed through PR #3594 on `8dcbf2345`; broader hosted main jobs remain separately monitored.
 The complete host/provider/store and live/Studio product acceptance remains M4–M7.
 
 - [x] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.

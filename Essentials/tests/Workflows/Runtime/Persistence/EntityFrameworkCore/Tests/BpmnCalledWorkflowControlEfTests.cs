@@ -175,6 +175,7 @@ public sealed partial class BpmnCalledWorkflowControlEfTests : IDisposable
         var host = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Events.EventsFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services))
             .WithFeature(services => new DispatchWorkflowRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
             .ConfigureServices(services =>

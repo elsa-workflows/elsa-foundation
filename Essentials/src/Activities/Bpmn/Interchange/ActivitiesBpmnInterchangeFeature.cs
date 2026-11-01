@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Features;
+using Elsa.Activities.Bpmn.Design;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Activities.Bpmn.Interchange.Authorization;
@@ -24,10 +25,11 @@ namespace Elsa.Activities.Bpmn.Interchange;
     DisplayName = "Activities BPMN Interchange",
     Description = "BPMN 2.0 XML + BPMNDI import/export for the BPMN process composite."
 )]
-public class ActivitiesBpmnInterchangeFeature : IWebShellFeature
+public class ActivitiesBpmnInterchangeFeature : ActivitiesBpmnDesignFeature, IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public override void ConfigureServices(IServiceCollection services)
     {
+        base.ConfigureServices(services);
         services.AddElsaEndpoints();
         services.TryAddScoped<IBpmnWorkBinder, BpmnWorkBinder>();
         services.TryAddScoped<IBpmnDocumentImporter, BpmnDocumentImporter>();

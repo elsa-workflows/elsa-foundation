@@ -320,8 +320,6 @@
           "Elsa.Activities.Bpmn.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
@@ -329,7 +327,17 @@
       "elsa.activities.bpmn.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.bpmn.design": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Bpmn.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.compensation": {

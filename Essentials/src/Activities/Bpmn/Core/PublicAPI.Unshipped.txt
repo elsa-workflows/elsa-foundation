@@ -217,3 +217,123 @@ Elsa.Activities.Bpmn.Core.BpmnModelInspection.Source.get -> Elsa.Activities.Bpmn
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.State.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState!
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Work.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionWork!>!
 Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.InspectAsync(string! executionId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelInspection!>
+Elsa.Activities.Bpmn.Core.BpmnActivityIdentities
+Elsa.Activities.Bpmn.Models.BpmnElement
+Elsa.Activities.Bpmn.Models.BpmnElement.AttachedToRef.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.BpmnElement(string! elementId, string! elementType, string? name = null, string? childNodeId = null, string? laneId = null, string? defaultFlowId = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnEventDefinition!>? eventDefinitions = null, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? properties = null, string? attachedToRef = null, bool cancelActivity = true, Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? loopCharacteristics = null, bool isForCompensation = false, string? compensationHandlerElementId = null, bool isTransaction = false, bool triggeredByEvent = false, string? listenerNodeId = null) -> void
+Elsa.Activities.Bpmn.Models.BpmnElement.CancelActivity.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnElement.ChildNodeId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.CompensationHandlerElementId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.DefaultFlowId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.ElementId.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnElement.ElementType.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnElement.EventDefinitions.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnEventDefinition!>!
+Elsa.Activities.Bpmn.Models.BpmnElement.IsForCompensation.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnElement.IsTransaction.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnElement.LaneId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.ListenerNodeId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.LoopCharacteristics.get -> Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics?
+Elsa.Activities.Bpmn.Models.BpmnElement.Name.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnElement.Properties.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Bpmn.Models.BpmnElement.TriggeredByEvent.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnElementTypes
+Elsa.Activities.Bpmn.Models.BpmnEventDefinition
+Elsa.Activities.Bpmn.Models.BpmnEventDefinition.BpmnEventDefinition(string! type, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? properties = null) -> void
+Elsa.Activities.Bpmn.Models.BpmnEventDefinition.Properties.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Activities.Bpmn.Models.BpmnEventDefinition.Type.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnEventDefinitionProperties
+Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes
+Elsa.Activities.Bpmn.Models.BpmnLane
+Elsa.Activities.Bpmn.Models.BpmnLane.BpmnLane(string! laneId, string? poolId = null, string? name = null) -> void
+Elsa.Activities.Bpmn.Models.BpmnLane.LaneId.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnLane.Name.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnLane.PoolId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.<Clone>$() -> Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics!
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.BpmnLoopCharacteristics(bool isSequential = false, int? cardinality = null, string? collectionVariable = null, string? itemVariable = null) -> void
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.Cardinality.get -> int?
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.CollectionVariable.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.Equals(Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? other) -> bool
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.IsCollectionMode.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.IsSequential.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.ItemVariable.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.BpmnMessageFlow(string! flowId, string? name = null, string? sourceElementId = null, string? sourcePoolId = null, string? targetElementId = null, string? targetPoolId = null, string? messageName = null) -> void
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.FlowId.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.MessageName.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.Name.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.SourceElementId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.SourcePoolId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.TargetElementId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnMessageFlow.TargetPoolId.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnPool
+Elsa.Activities.Bpmn.Models.BpmnPool.BpmnPool(string! poolId, string? name = null, string? processRef = null, bool isExecutable = true) -> void
+Elsa.Activities.Bpmn.Models.BpmnPool.IsExecutable.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnPool.Name.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnPool.PoolId.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnPool.ProcessRef.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnRetainedAuthoring
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.BpmnSequenceFlow(string! flowId, string! sourceRef, string! targetRef, string? name = null, string? conditionOutcome = null, bool isDefault = false) -> void
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.ConditionOutcome.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.FlowId.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.IsDefault.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.Name.get -> string?
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.SourceRef.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnSequenceFlow.TargetRef.get -> string!
+Elsa.Activities.Bpmn.Models.BpmnStructure
+Elsa.Activities.Bpmn.Models.BpmnStructure.BpmnStructure(System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnElement!>? elements = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnSequenceFlow!>? sequenceFlows = null, System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition!>? variables = null, bool isTransaction = false) -> void
+Elsa.Activities.Bpmn.Models.BpmnStructure.Elements.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnElement!>!
+Elsa.Activities.Bpmn.Models.BpmnStructure.IsTransaction.get -> bool
+Elsa.Activities.Bpmn.Models.BpmnStructure.SequenceFlows.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Bpmn.Models.BpmnSequenceFlow!>!
+Elsa.Activities.Bpmn.Models.BpmnStructure.Variables.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition!>!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.ActivitiesSlotName = "Bpmn.Activities" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.CanStartWorkflowInput = "CanStartWorkflow" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.DecisionOutcomeInput = "Outcome" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.DecisionType = "Elsa.Activities.Bpmn.Activities.BpmnDecision" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.ModelInput = "Model" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.ProcessAlias = "Elsa.BpmnProcess" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.ProcessType = "Elsa.Activities.Bpmn.Activities.BpmnProcess" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.RunType = "Elsa.Activities.Bpmn.Activities.RunBpmn" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.StructureKind = "elsa.bpmn.structure" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnActivityIdentities.StructureSchemaVersion = "1.0.0" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.BoundaryEvent = "boundaryEvent" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.BusinessRuleTask = "businessRuleTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.CallActivity = "callActivity" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.EndEvent = "endEvent" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.EventBasedGateway = "eventBasedGateway" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.ExclusiveGateway = "exclusiveGateway" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.InclusiveGateway = "inclusiveGateway" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.IntermediateCatchEvent = "intermediateCatchEvent" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.IntermediateThrowEvent = "intermediateThrowEvent" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.ManualTask = "manualTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.ParallelGateway = "parallelGateway" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.ReceiveTask = "receiveTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.ScriptTask = "scriptTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.SendTask = "sendTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.ServiceTask = "serviceTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.StartEvent = "startEvent" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.SubProcess = "subProcess" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.Task = "task" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnElementTypes.UserTask = "userTask" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionProperties.ActivityRef = "activityRef" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionProperties.Code = "code" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionProperties.Cron = "cron" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionProperties.Interval = "interval" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionProperties.Name = "name" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Cancel = "cancel" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Compensation = "compensation" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Error = "error" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Escalation = "escalation" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Message = "message" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Signal = "signal" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Terminate = "terminate" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnEventDefinitionTypes.Timer = "timer" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.DefaultItemVariable = "item" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.LoopIndexVariable = "loopIndex" -> string!
+const Elsa.Activities.Bpmn.Models.BpmnRetainedAuthoring.ConditionExpressionPrefix = "elsa.bpmn.retained-condition:" -> string!
+override Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.ToString() -> string!
+static Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.operator !=(Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? left, Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? right) -> bool
+static Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.operator ==(Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? left, Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? right) -> bool

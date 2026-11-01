@@ -7,7 +7,7 @@ using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using Process = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
@@ -46,7 +46,7 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
             !SemVer.TryParse(activity.Version, out var activityVersion) || activityVersion.Major != 1 || activityVersion.Minor != 0 ||
             activityVersion.Patch != 0 || activityVersion.Prerelease is not null ||
             !(await catalog.ListDefinitions(id: activity.DefinitionId, cancellationToken: cancellationToken))
-                .Any(candidate => candidate.Id == activity.DefinitionId && candidate.ActivityTypeKey == typeof(Process).FullName))
+                .Any(candidate => candidate.Id == activity.DefinitionId && candidate.ActivityTypeKey == Process.ProcessType))
             throw new BpmnModelValidationException("The immutable version root does not name a visible compatible BpmnProcess activity.");
         var layout = await layouts.FindByVersionIdAsync(version.Id, cancellationToken);
         if (layout is not null && (layout.WorkflowDefinitionVersionId != version.Id || layout.TenantId != caller.TenantId))

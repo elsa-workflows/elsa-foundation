@@ -3,7 +3,6 @@ using CShells.Lifecycle;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Contracts;
-using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -38,7 +37,6 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         services.TryAddScoped<BpmnEmbeddingBoundary>();
         services.TryAddScoped<BpmnEmbeddingDelivery>();
         services.TryAddScoped<IBpmnModelActivityRuntime, BpmnModelActivityRuntime>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnEmbeddingPinSource>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BpmnEmbeddingCheckpointEnricher>());
         foreach (var kind in new[] { BpmnEmbeddingBoundary.StartKind, BpmnEmbeddingBoundary.CancelKind, BpmnEmbeddingBoundary.ResultKind })
             services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnEmbeddingDelivery),

@@ -6,7 +6,7 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Models;
 using LibInterchange = global::Bpmn.Interchange;
 using LibModel = global::Bpmn.Model;
-using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
