@@ -286,7 +286,7 @@ def main():
             if not command.exists(): time.sleep(.2); continue
             value = json.loads(command.read_text()); command.unlink()
             action = value["action"]
-            label = value.get("label", "restarted") if direct_human and action in ("restart", "checkpoint") else "finished" if direct_human else "restarted"
+            label = value.get("label", "restarted") if direct_human and action in ("restart", "checkpoint", "restore-etl-dependency") else "finished" if direct_human else "restarted"
             if direct_human and (not isinstance(label, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,50}", label) or label in stages):
                 raise ValueError("A direct-human checkpoint needs a new safe label; evidence is never overwritten.")
             if action == "restart":
