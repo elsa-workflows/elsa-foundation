@@ -947,8 +947,8 @@ async function consumedIntentRemount() {
     "Native feature apply did not report a new configuration and shell generation.");
   expect(appliedValue.catalog.features.find(feature => feature.id === target.id)?.enabled).toBe(false);
   await expect.poll(() => moduleEvents.length).toBe(1);
-  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
-  await expect(page).toHaveURL(studioRoute("/"));
+  await page.waitForURL(studioRoute("/"), { waitUntil: "domcontentloaded" });
+  expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
   await expect(dock()).toHaveCount(0);
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("link", { name: "Features", exact: true }).click();
