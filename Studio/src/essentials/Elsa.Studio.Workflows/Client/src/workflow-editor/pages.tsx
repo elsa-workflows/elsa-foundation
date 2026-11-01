@@ -1,6 +1,6 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import type { StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
@@ -17,6 +17,7 @@ const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances"
 
 export function WorkflowManagementPage({
   context,
+  backendSession,
   ai,
   weaver,
   propertyEditors,
@@ -30,6 +31,7 @@ export function WorkflowManagementPage({
   operations
 }: {
   context: StudioEndpointContext;
+  backendSession?: StudioBackendSession;
   ai: StudioAgentRegistry;
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
@@ -79,7 +81,7 @@ export function WorkflowManagementPage({
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (

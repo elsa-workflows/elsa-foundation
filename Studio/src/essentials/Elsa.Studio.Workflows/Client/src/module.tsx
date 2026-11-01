@@ -130,7 +130,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => deferred("workflow definitions", <WorkflowManagementPage operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: () => deferred("workflow definitions", <WorkflowManagementPage backendSession={api.backendSession} operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],

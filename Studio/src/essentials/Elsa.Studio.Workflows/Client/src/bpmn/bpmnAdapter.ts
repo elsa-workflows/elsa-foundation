@@ -216,6 +216,8 @@ export function createBpmnShapeNode(shape: BpmnShapeDescriptor, position: XYPosi
   const element: BpmnElement = {
     elementId: createBpmnElementId(shape.elementType),
     elementType: shape.elementType,
+    ...(shape.name ? { name: shape.name } : {}),
+    ...(shape.properties ? { properties: { ...shape.properties } } : {}),
     ...(shape.eventDefinitions ? { eventDefinitions: shape.eventDefinitions } : {})
   };
 

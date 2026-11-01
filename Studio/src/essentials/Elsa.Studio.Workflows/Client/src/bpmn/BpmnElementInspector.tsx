@@ -1,5 +1,6 @@
 import React from "react";
 import { bpmnElementTypeLabel, isDecisionGatewayType, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
+import { directBindingProperty, directHumanMode, directHumanPatch } from "./bpmnDirectBinding";
 
 interface BpmnElementInspectorProps {
   element: BpmnElement;
@@ -9,6 +10,7 @@ interface BpmnElementInspectorProps {
   onSetDefaultFlow(sourceElementId: string, flowId: string | null): void;
   targetLabelFor(flow: BpmnSequenceFlow): string;
   readOnly?: boolean;
+  directHumanAvailable?: boolean;
   isDecision?: boolean;
   onAddDecision?(): void;
   conversionBlockedReason?: string;
@@ -40,9 +42,12 @@ export function BpmnElementInspector(props: BpmnElementInspectorProps) {
 // Shared with the activity inspector so bound gateways retain both expression and routing editors.
 export function BpmnElementConfiguration({
   element, outboundFlows, onChangeElement, onChangeFlow, onSetDefaultFlow, targetLabelFor,
-  readOnly = false, isDecision = false, onAddDecision, conversionBlockedReason
+  readOnly = false, directHumanAvailable = false, isDecision = false, onAddDecision, conversionBlockedReason
 }: BpmnElementInspectorProps) {
   const gateway = isDecisionGatewayType(element.elementType);
+  const humanMode = directHumanMode(element);
+  const directControl = ["task", "userTask"].includes(element.elementType)
+    && (directHumanAvailable || element.properties?.[directBindingProperty] !== undefined);
   return (
     <section aria-label="BPMN routing">
       <label className="wf-form-field">
@@ -50,6 +55,27 @@ export function BpmnElementConfiguration({
         <input type="text" value={element.name ?? ""} placeholder={bpmnElementTypeLabel(element)}
           disabled={readOnly} onChange={event => onChangeElement(element.elementId, { name: event.target.value || null })} />
       </label>
+      {directControl ? <>
+        <label className="wf-form-field">
+          <span>Task execution</span>
+          <select aria-label="Task execution" value={humanMode}
+            disabled={readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported"}
+            onChange={event => {
+              if (readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported") return;
+              const mode = event.target.value;
+              if (mode === "human" || mode === "unbound") onChangeElement(element.elementId, directHumanPatch(element, mode));
+            }}>
+            <option value="unbound">Task (unbound)</option>
+            <option value="human">Human wait — direct BPMN</option>
+            {humanMode === "native" ? <option value="native">Native activity</option> : null}
+            {humanMode === "unsupported" ? <option value="unsupported">Unsupported binding</option> : null}
+          </select>
+        </label>
+        <p className="wf-muted" role="note">{humanMode === "unsupported"
+          ? "This binding is kept unchanged. Its settings need a compatible backend or correction before publication."
+          : humanMode === "native" ? "This task has a native activity binding. Unbind it before choosing a human wait."
+            : "A human wait pauses the published BPMN process until an authorized person completes it from BPMN runs."}</p>
+      </> : null}
       {gateway || isDecision ? <>
         <label className="wf-form-field">
           <span>Gateway type</span>
