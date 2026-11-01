@@ -1,5 +1,7 @@
 # Direct BPMN qualification
 
+Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
+
 A bounded, one-off Runtime Efficiency #2531 profile of the available direct BPMN model in an operator-owned Workbench.
 The operator selects its real built-in single-node hosting profile and a fresh SQLite runtime database, starts only
 that owned process on a verified free loopback port, and retains source/binary/configuration records. This driver

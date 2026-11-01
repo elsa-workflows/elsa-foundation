@@ -1,5 +1,7 @@
 # Retained-boundary process witness
 
+Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
+
 This bounded qualification fixture exercises real SQLite persistence, native Event suspension, pinned DispatchWorkflow,
 recovery sweeps and actual bookmark resume. It is evidence for #2828 under Runtime Efficiency #2531. It is not a capacity
 benchmark or a timing CI gate. The production engine and persistence provider are project references; no runtime behavior

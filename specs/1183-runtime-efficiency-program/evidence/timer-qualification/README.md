@@ -1,5 +1,7 @@
 # Actual timer-resume qualification
 
+Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
+
 A bounded Runtime Efficiency #2531 / #1307 profile: one warmed actual durable-timer sweep resumes independent native
 workflows through the ordinary provider scopes, bookmark dispatcher and mailbox. Every workflow is
 `Sequence(Delay, ten ReplaySafe no-op leaves)`. The real typed Delay contract/target is linked from the existing

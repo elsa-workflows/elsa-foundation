@@ -488,3 +488,81 @@ configuration on this fixture; eight provide no clear gain and consume more memo
 default change. The [evidence receipt](evidence/runtime-efficiency-program-2026-11-01/README.md#finite-file-etl-cohort)
 contains all selected raw files and exclusions. Timing libraries remain pinned to `63e4c1fc4`; final main integration
 is qualified separately.
+
+### Named diagnostics attribution and disposition for #2613
+
+A separate, non-timing marked-request profile observes the **same exact foreground SQL multiset** with persisted
+diagnostics on/off: **82 commands**, comprising 78 Runtime PostgreSQL commands, two IAM SQLite commands and two
+execution-placement SQLite commands, plus **four PostgreSQL transaction commits** in both. All four cold/warm/marked
+instances complete in each run. Full EF event receipts have no errors, drops or SQL truncation.
+
+The named additional observed component is `OpenTelemetrySqliteDbContext`: **105 commands and four transaction
+commits** during the request/tail phase, including 45 span inserts, trace/resource/summary/membership/ledger work and
+associated reads/retention. Those commands carry no foreground trace. Structured logs issue **no observed writes**;
+the on case has a separate maintenance SELECT before the request. Both five-second before/after phases are retained.
+These are asynchronous bounded-window observations, not a claim of exactly 105 commands for each execution. EF
+commands/transaction events are counted; network packet round trips are not measured.
+
+This reproduces a current OpenTelemetry persistence/I/O cost, not the older suspected synchronous structured-log
+cause. Current single-caller Balanced on/off rates are 4.250/4.767, rather than the historical near-halving. Source
+audit confirms the existing durable drain already groups captures, uses a fresh context/serializable transaction,
+and preserves fingerprinted replay ledgers and trace summaries. A capture call waits for durable acknowledgement;
+this profile does not prove that backpressure or all application-level waiting disappears under other loads.
+
+**Disposition:** no further engine/structured-logging code change for #2613 in this delivery. Preserve diagnostics
+fidelity, replay, acknowledgement and defaults. The measured operational action is to allocate diagnostics its own
+appropriately durable storage capacity, with actual provider/volume qualification; the temporary local volume used
+here is not a durability recommendation. A future provider-specific bulk-write experiment could reduce SQLite's
+per-row span/trace/member inserts and retention passes while preserving the ledger, summary concurrency and
+ambiguous-acknowledgement behavior. It needs its own causal command-count/replay controls; the present data does not
+justify changing those contracts or claiming an unmeasured gain. The named finding was recorded on #2613 before this
+decision. Raw evidence and original failures are in the [attribution receipt](evidence/runtime-efficiency-program-2026-11-01/README.md#named-diagnostics-attribution-and-build-failures).
+
+### Paired native Memory profile
+
+Twenty-four valid short samples compare the original assessment source `ab46bc22a` with integrated production
+libraries `63e4c1fc4` on one dedicated two-vCPU/8-GiB D2s_v6 worker, with identical .NET 10.0.8/Linux x64 tooling.
+Each shape has two fresh processes per variant, alternating order, ten-second warmup and ten-second target window.
+Entry is the public in-process native start API with production IDs and replay-safe no-op leaves; all completion,
+activity/body, distinct-ID, queue, incident and physical outbox assertions pass. This is Memory persistence.
+
+| Persistence / leaf activities / callers | Baseline workflows / s | Candidate workflows / s |
+|---|---:|---:|
+| Balanced / 1 / 1 | 695.0–695.8 | 797.6–802.7 |
+| Balanced / 10 / 1 | 84.9–85.0 | 159.3–159.9 |
+| Balanced / 100 / 1 | 9.8–10.2 | 17.3–17.4 |
+| Balanced / 10 / 4 | 95.3–109.9 | 176.1–181.9 |
+| Durable / 10 / 1 | 66.0–71.5 | 91.9–92.1 |
+| Ephemeral, no completion record / 10 / 1 | 247.7–249.4 | 247.6–251.8 |
+
+These are descriptive ranges from two short samples, not confidence intervals, a long-lived-service soak or an SLO.
+The integrated candidate also contains intervening main changes; specific optimization attribution comes from the
+separate causal controls and command counts. The no-record shape shows no material gain in these samples. Allocations
+are not uniformly lower: ten-leaf Balanced is approximately 3.62 MB/run baseline versus 3.67 MB/run candidate; the
+hundred-leaf case falls from 37.26–37.30 to 33.18–33.22 MB/run. Longer UUID IDs and other integrated changes remain part
+of that measured cost. Process peaks retain different numbers of completed records because throughput differs, so
+higher candidate peaks are not equal-population heap comparisons or evidence of a cache leak.
+
+The first Durable sample failed only its added **post-measurement validator**: an old stimulus-source API requires a
+scope witness absent from ordinary native outbox items. Its original failed series remains retained. Correcting the
+validator to enumerate known checkpoint sources through the concrete physical store changes no baseline production
+DLL or timed execution code. All four replacement Durable samples pass. Earlier baseline compilation/API adaptation
+failures also remain in the raw build ledger. See the [paired receipt](evidence/runtime-efficiency-program-2026-11-01/README.md#paired-native-memory-and-direct-bpmn).
+
+### Direct two-element BPMN profile
+
+Four fresh single-node Workbench samples on a separate two-vCPU/8-GiB D2s_v6 worker qualify the existing direct BPMN
+model, Start Event → End Event, through authenticated loopback HTTP with SQLite on its OS volume. Each has a
+15-second warmup and 15-second target measured window. One caller produces **4.99–5.02 starts/s**, p95 **311–331 ms**;
+four callers produce **4.74–4.93 starts/s**, p95 **3.04–3.28 s**. More callers show no improvement on this fixture.
+
+All **570 total starts**, including cold/warmup traffic, reach TerminalSettled/Completed with empty work. Exact start
+replay preserves the execution's final view, physical model rows match, and native workflow/activity/bookmark/queue
+rows remain zero. The owned host uses roughly 4.6–5.5 CPU seconds in each actual measured interval and peaks at
+468–481 MB. Allocation fields belong to the HTTP client, not the engine. No business task, native wrapper or exporter
+is composed. This profile's model, entry point and storage differ from the Memory native and ETL profiles, so it is
+not a cross-model speed ranking or clustered BPMN qualification. Provider/transition attribution is the next useful
+performance investigation; these rates alone do not establish the cause of the plateau.
+
+Original unreadable-config and reused-port-probe failures are retained. The four-sample comparison uses a fresh
+complete recovery series with separate verified ports; it does not select the surviving fastest partial sample.

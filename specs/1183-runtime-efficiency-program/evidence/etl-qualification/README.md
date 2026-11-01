@@ -1,5 +1,7 @@
 # Finite ETL qualification
 
+Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
+
 A bounded, one-off Runtime Efficiency #2531 fixture for the existing finite file ETL runtime and SQLite provider.
 It uses public compilation/admission services, the real worker, immutable input snapshots, scoped file bindings,
 lookup, partition/batch limits, immutable effect-addressed output with separately checked content hashes and durable acceptance. It creates a fresh absolute output

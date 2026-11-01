@@ -1,5 +1,7 @@
 # Non-timing diagnostics attribution
 
+Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
+
 A one-off Runtime Efficiency #2531 observer for an owned Workbench process. Compile `Hook.csproj`, then pass its
 absolute DLL path in that child's `DOTNET_STARTUP_HOOKS`. Set `ELSA_SQL_CAPTURE_OUTPUT` to a fresh absolute JSONL
 path and `ELSA_SQL_CAPTURE_CONTROL` to an absolute phase-control file. Use a protected task-owned directory and

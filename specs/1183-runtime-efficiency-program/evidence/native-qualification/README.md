@@ -1,5 +1,7 @@
 # Native qualification driver
 
+Prepare the frozen project/lock templates as described in the [manual fixture entrypoint](../README.md) before building.
+
 One-off, bounded owner-requested qualification for Runtime Efficiency #2531. This updates the frozen native
 [assessment driver](../../../../docs/reports/evidence/native-runtime-performance-2026-10-31/harness/Program.cs.txt) with the production identifier registration and stronger accounting. It is not a benchmark
 service or a timing CI gate. Build against the repository revision being qualified; retain source/binary hashes,

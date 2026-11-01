@@ -45,3 +45,33 @@ worker's OS volume. Host migration, dataset generation and compilation are exclu
 wakeup, durable acceptance and 100-ms status polling are included. Each standalone run intentionally owes one native
 callback because no native adapter is composed. No clustered ETL, complete parent-workflow drain or cross-model
 comparison is claimed. Actual ranges remain visible rather than selecting the fastest sample.
+
+## Paired native Memory and direct BPMN
+
+`memory-paired-r1.tar.xz` retains the original 20 passing samples and excluded Durable validator failure (64 files,
+SHA-256 `d342170e431c7dcb75d609fe891df23fc9365b6ee2f5aca5e35ac58d82c4df89`, 73,144 bytes).
+`memory-durable-r2.tar.xz` adds four passing Durable samples after correcting only the baseline driver's physical
+outbox validation (13 files, SHA-256 `0f1906d81a859ee6954b8cc6cc9bfb2d61d4a93e7d7b2201dfd826d662fb7434`, 11,140 bytes).
+All baseline production DLL bytes are unchanged by either validator adaptation. `memory-paired-summary.json` and its
+analysis script account for all 24 valid samples, retaining the failed series separately. The baseline is
+`ab46bc22a52aa6e456bca6ac0e803c80904de081`; candidate production libraries are `63e4c1fc4`. Both use the same x64 SDK/runtime.
+
+`bpmn-series-r3.tar.xz` retains four successful actual direct-model samples, all cold/warm/measured execution
+identities, final terminal/empty-work/replay/physical-row assertions, owned host settings and logs (33 files,
+SHA-256 `693b072121df4bf36f1d342c8087a756d675a033a738656a9f6cd53c2cdfd611`, 10,696 bytes). SQLite database binaries
+are excluded. The earlier r2 series has one passing exploratory window and then a busy-port probe failure;
+`bpmn-series-failed-r2.tar.xz` retains it (13 files, SHA-256
+`e7e3e8e9c11744e304f2af33d6309e2f0139bd255e339b4e4e87837629eacba0`, 7,796 bytes). The first r1 host failed before
+workload on unreadable root-created configuration; r2 corrects that ownership boundary and r3 uses separate verified
+ports for each owned host, avoiding the reused-address probe failure. The r3 comparison uses four fresh complete
+samples, not the fastest surviving partial series. BPMN client allocations are not engine allocations.
+
+## Named diagnostics attribution and build failures
+
+`attribution-and-builds-r1.tar.xz` contains 110 selected raw files: complete EF event records, bounded capture receipts,
+marked request identities, selected host settings/logs, original failed primers/port probe, repaired provider-host
+build and baseline validator compatibility source/byte receipts. SHA-256:
+`24483e2529307ca5b9a94d579b1553c249191dba0932df699e0eb411fa5ff6df` (47,664 bytes).
+All hashes and absence of protected task credentials are verified locally. `diagnostics-attribution-summary.json`
+compares the exact foreground SQL multisets and groups the asynchronous observation. No parameters are captured;
+untraced background commands cannot be claimed as an exact per-request cost or measured socket round trips.
