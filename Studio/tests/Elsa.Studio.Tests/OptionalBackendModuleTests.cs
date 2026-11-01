@@ -138,6 +138,31 @@ public sealed class OptionalBackendModuleTests
         Assert.Contains("Only one",error.ToString());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Implicitly_enabled_Backends_selects_the_same_immutable_host_authority_as_explicit_enablement(bool rawDisabled)
+    {
+        await using var app = await Start(true, false, customRuntime: true, configure: builder =>
+        {
+            builder.Configuration["Studio:BackendBaseUrl"] = null;
+            builder.Configuration["CShells:Shells:Default:Features:ImplicitBackends"] = "true";
+            if (rawDisabled) builder.Configuration["CShells:Shells:Default:Features:BackendsStudio"] = "false";
+        });
+        using var client = app.GetTestClient();
+        Assert.Contains("Configured selection", await client.GetStringAsync("/studio-runtime.js"));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/_elsa/studio/backends/profiles")).StatusCode);
+        var authority = app.Services.GetRequiredService<IStudioBackendAuthorityAccessor>().Value;
+        Assert.Equal("https://selected.example/tenant/", authority.BrowserBaseUrl);
+        Assert.Equal(authority.BrowserBaseUrl, authority.ServerBaseUrl);
+    }
+
+    [ShellFeature("ImplicitBackends", DependsOn = new object[] { typeof(BackendsStudioFeature) })]
+    public class ImplicitBackendsFeature : IShellFeature
+    {
+        public virtual void ConfigureServices(IServiceCollection services) { }
+    }
+
     private sealed class AuthoritySource : IStudioBackendAuthoritySource
     {
         public StudioBackendAuthority Authority {get;}=new("https://custom.example/","https://private.example/");

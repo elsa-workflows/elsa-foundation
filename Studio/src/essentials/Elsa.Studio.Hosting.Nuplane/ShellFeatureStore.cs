@@ -77,22 +77,8 @@ internal sealed class ShellFeatureStore(
     {
         var values = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         var catalog = await featureCatalog.GetSnapshotAsync(cancellationToken);
-        var descriptors = catalog.FeatureDescriptors.ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
-        // The editor must round-trip effective dependency enablement, rather than explicitly disable
-        // infrastructure that CShells already activated for its enabled parents.
-        var enabled = new HashSet<string>(settings.EnabledFeatures, StringComparer.OrdinalIgnoreCase);
-        var resolver = new FeatureDependencyResolver();
-        foreach (var root in settings.EnabledFeatures.Where(descriptors.ContainsKey))
-        {
-            try { enabled.UnionWith(resolver.GetOrderedFeatures([root], descriptors)); }
-            catch (Exception error) when (error is InvalidOperationException or FeatureNotFoundException)
-            {
-                // Keep a broken configured root visible so an operator can disable it. Other valid
-                // roots still expand; Apply's activation preparation remains authoritative.
-                logger.LogWarning(error, "Studio shell {ShellName} has an invalid dependency graph for {FeatureId}.", ShellName, root);
-            }
-        }
-        foreach (var id in enabled.Distinct(StringComparer.OrdinalIgnoreCase))
+        var selection = StudioFeatureSelection.Resolve(settings, catalog.FeatureDescriptors, logger);
+        foreach (var id in selection.Enabled)
         {
             var raw = node?.FirstOrDefault(pair => string.Equals(pair.Key, id, StringComparison.OrdinalIgnoreCase)).Value;
             values[id] = raw is JsonObject value
