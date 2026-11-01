@@ -14,15 +14,28 @@ public sealed partial class EfWorkflowExecutableStore
 {
     bool IWorkflowExecutableStore.SupportsModelMaterial => true;
 
+    /// <inheritdoc />
+    /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">The material store failed; its original infrastructure cause and context are retained.</exception>
     async ValueTask<RuntimeExecutionMaterial?> IWorkflowExecutableStore.FindMaterialAsync(string artifactId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
-        return pair is null ? null : ReadMaterial(pair.Value.Artifact, scope, artifactId, CreateId(scope, artifactId));
+        try
+        {
+            var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
+            return pair is null ? null : ReadMaterial(pair.Value.Artifact, scope, artifactId, CreateId(scope, artifactId));
+        }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            cancellationToken.ThrowIfCancellationRequested();
+            throw NormalizeProviderFailure("reading model/native material", artifactId, exception, scope);
+        }
     }
 
+    /// <inheritdoc />
+    /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">The material store failed; its original infrastructure cause and context are retained.</exception>
     async ValueTask IWorkflowExecutableStore.SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(material);
@@ -65,8 +78,11 @@ public sealed partial class EfWorkflowExecutableStore
             EnsureEquivalent(winner.Value.Artifact);
         }
         catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        { throw NormalizeProviderFailure("saving model material", artifactId, exception); }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) || exception is IOException or OperationCanceledException)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw NormalizeProviderFailure("saving model material", artifactId, exception, scope);
+        }
         finally { context.ChangeTracker.Clear(); }
 
         void EnsureEquivalent(WorkflowExecutableEntity row)
@@ -77,6 +93,8 @@ public sealed partial class EfWorkflowExecutableStore
         }
     }
 
+    /// <inheritdoc />
+    /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">The material store failed; its original infrastructure cause and context are retained.</exception>
     async ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> IWorkflowExecutableStore.ListMaterialPageAsync(
         RuntimeStorePageRequest request, CancellationToken cancellationToken)
     {
@@ -84,14 +102,23 @@ public sealed partial class EfWorkflowExecutableStore
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var cursor = Decode(request.ContinuationToken, scope);
-        var rows = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(context, "listing model/native material", scope,
-            () => context.WorkflowExecutables.AsNoTracking()
-                .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && (cursor == null || x.ArtifactIdOrderKey.CompareTo(cursor) > 0))
-                .OrderBy(x => x.ArtifactIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken));
-        var more = rows.Length > request.Limit;
-        if (more) rows = rows[..request.Limit];
-        var items = rows.Select(row => ReadMaterial(row, scope, Decode(row.ArtifactId), CreateId(scope, Decode(row.ArtifactId)))).ToArray();
-        return new(request, items, more ? Encode(rows[^1].ArtifactIdOrderKey, scope) : null);
+        try
+        {
+            var rows = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(context, "listing model/native material", scope,
+                () => context.WorkflowExecutables.AsNoTracking()
+                    .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && (cursor == null || x.ArtifactIdOrderKey.CompareTo(cursor) > 0))
+                    .OrderBy(x => x.ArtifactIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken));
+            var more = rows.Length > request.Limit;
+            if (more) rows = rows[..request.Limit];
+            var items = rows.Select(row => ReadMaterial(row, scope, Decode(row.ArtifactId), CreateId(scope, Decode(row.ArtifactId)))).ToArray();
+            return new(request, items, more ? Encode(rows[^1].ArtifactIdOrderKey, scope) : null);
+        }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            cancellationToken.ThrowIfCancellationRequested();
+            throw NormalizeProviderFailure("listing model/native material", scope, exception, scope);
+        }
     }
 
     internal static RuntimeExecutionMaterial ReadMaterial(WorkflowExecutableEntity row, string scope, string expected, string id)

@@ -1197,8 +1197,11 @@ public sealed partial class EfWorkflowExecutableStore(
     private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(
         string operation,
         string identity,
-        Exception inner) =>
-        new(operation, identity, $"The EF runtime artifact store failed while {operation} workflow executable '{identity}'.", inner);
+        Exception inner,
+        string? scope = null) =>
+        new(operation, identity, scope is null
+            ? $"The EF runtime artifact store failed while {operation} workflow executable '{identity}'."
+            : $"The EF runtime artifact store failed while {operation} for identity '{identity}' in persistence scope '{scope}'.", inner);
 
     private static string Encode(string x, string scope) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{Hash(scope)}:{x}"));

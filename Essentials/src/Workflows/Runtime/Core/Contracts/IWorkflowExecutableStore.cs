@@ -15,16 +15,22 @@ public interface IWorkflowExecutableStore
     bool SupportsModelMaterial => false;
 
     /// <summary>Reads exact native/model material and its physical incarnation without inventing a native root.</summary>
+    /// <remarks>Providers retain infrastructure failures as contextual domain persistence exceptions with their original cause.
+    /// Caller-requested cancellation propagates with the caller's token.</remarks>
     ValueTask<RuntimeExecutionMaterial?> FindMaterialAsync(string artifactId, CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<RuntimeExecutionMaterial?>(cancellationToken) :
             ValueTask.FromException<RuntimeExecutionMaterial?>(new NotSupportedException($"{GetType().Name} does not support runtime model material."));
 
     /// <summary>Saves immutable versioned model material through this artifact provider's coordination boundary.</summary>
+    /// <remarks>Providers retain infrastructure failures as contextual domain persistence exceptions with their original cause.
+    /// Caller-requested cancellation propagates with the caller's token.</remarks>
     ValueTask SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled(cancellationToken) :
             ValueTask.FromException(new NotSupportedException($"{GetType().Name} does not support runtime model material."));
 
     /// <summary>Pages both material kinds so retention cannot silently overlook a model artifact.</summary>
+    /// <remarks>Providers retain infrastructure failures as contextual domain persistence exceptions with their original cause.
+    /// Caller-requested cancellation propagates with the caller's token.</remarks>
     ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<RuntimeStorePage<RuntimeExecutionMaterial>>(cancellationToken) :
             ValueTask.FromException<RuntimeStorePage<RuntimeExecutionMaterial>>(new NotSupportedException($"{GetType().Name} does not support runtime model material paging."));

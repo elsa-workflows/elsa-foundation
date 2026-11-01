@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Data.Sqlite;
@@ -22,6 +23,139 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfRuntimeModelCheckpointTests
 {
+    [Theory]
+    [InlineData("find", false)]
+    [InlineData("find", true)]
+    [InlineData("save", false)]
+    [InlineData("save", true)]
+    [InlineData("page", false)]
+    [InlineData("page", true)]
+    public async Task Material_io_and_unrequested_cancellation_retain_context(string operation, bool providerCancellation)
+    {
+        var cause = providerCancellation ? (Exception)new OperationCanceledException("Unrequested material-store cancellation.")
+            : new IOException("Authoritative material store failed.");
+        var interceptor = new FailModelReadConnection(cause);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+            .UseSqlite("Data Source=:memory:").AddInterceptors(interceptor).Options);
+        IWorkflowExecutableStore materials = new EfWorkflowExecutableStore(context, new Access("tenant-a"));
+        async Task Execute(CancellationToken token = default)
+        {
+            if (operation == "find") await materials.FindMaterialAsync(Pin.ArtifactId, token);
+            else if (operation == "save") await materials.SaveModelAsync(MaterialFor(Pin), token);
+            else await materials.ListMaterialPageAsync(new(), token);
+        }
+
+        var error = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => Execute());
+        Assert.Same(cause, error.InnerException);
+        Assert.Equal(operation == "page" ? "tenant-a" : Pin.ArtifactId, error.Identity);
+        Assert.Contains("material", error.Operation);
+        Assert.Contains("tenant-a", error.Message);
+        if (operation != "page") Assert.Contains(Pin.ArtifactId, error.Message);
+        Assert.Equal(1, interceptor.Attempts);
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var requested = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Execute(cancellation.Token));
+        Assert.Equal(cancellation.Token, requested.CancellationToken);
+        Assert.Equal(1, interceptor.Attempts);
+    }
+
+    [Theory]
+    [InlineData("find")]
+    [InlineData("save")]
+    [InlineData("page")]
+    public async Task Material_provider_failures_remain_contextual(string operation)
+    {
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+            .UseSqlite("Data Source=:memory:").Options);
+        IWorkflowExecutableStore materials = new EfWorkflowExecutableStore(context, new Access("tenant-a"));
+        async Task Execute()
+        {
+            if (operation == "find") await materials.FindMaterialAsync(Pin.ArtifactId);
+            else if (operation == "save") await materials.SaveModelAsync(MaterialFor(Pin));
+            else await materials.ListMaterialPageAsync(new());
+        }
+
+        var error = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(Execute);
+        Assert.IsType<SqliteException>(error.InnerException);
+        Assert.Equal(operation == "page" ? "tenant-a" : Pin.ArtifactId, error.Identity);
+    }
+
+    [Theory]
+    [InlineData("find", false)]
+    [InlineData("find", true)]
+    [InlineData("save", false)]
+    [InlineData("save", true)]
+    [InlineData("page", false)]
+    [InlineData("page", true)]
+    public async Task Material_inflight_cancellation_keeps_the_requested_token(string operation, bool providerCancellation)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var cause = providerCancellation ? (Exception)new OperationCanceledException("Provider cancelled after caller cancellation.")
+            : new IOException("Storage failed after caller cancellation.");
+        var interceptor = new FailModelReadConnection(cause, cancellation.Cancel);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+            .UseSqlite("Data Source=:memory:").AddInterceptors(interceptor).Options);
+        IWorkflowExecutableStore materials = new EfWorkflowExecutableStore(context, new Access("tenant-a"));
+        async Task Execute()
+        {
+            if (operation == "find") await materials.FindMaterialAsync(Pin.ArtifactId, cancellation.Token);
+            else if (operation == "save") await materials.SaveModelAsync(MaterialFor(Pin), cancellation.Token);
+            else await materials.ListMaterialPageAsync(new(), cancellation.Token);
+        }
+
+        var requested = await Assert.ThrowsAnyAsync<OperationCanceledException>(Execute);
+        Assert.Equal(cancellation.Token, requested.CancellationToken);
+        Assert.Equal(1, interceptor.Attempts);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Material_save_failure_discards_staging_and_allows_the_same_material_to_retry(bool providerCancellation)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var cause = providerCancellation ? (Exception)new OperationCanceledException("Unrequested material write cancellation.")
+            : new IOException("Material write failed after staging.");
+        var interceptor = new FailMaterialSave(cause);
+        await using var context = database.Open(interceptor);
+        IWorkflowExecutableStore materials = new EfWorkflowExecutableStore(context, new Access("tenant-a"));
+        var seed = MaterialFor(Pin with { ArtifactId = "retry-model", ArtifactHash = "pending" });
+        var material = MaterialFor(seed.Identity with { ArtifactHash = seed.ComputeContentHash() });
+
+        var error = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => materials.SaveModelAsync(material).AsTask());
+        Assert.Same(cause, error.InnerException);
+        Assert.Equal(material.Identity.ArtifactId, error.Identity);
+        Assert.Contains("tenant-a", error.Message);
+        Assert.Empty(context.ChangeTracker.Entries());
+        Assert.Null(context.Database.CurrentTransaction);
+        await using (var observed = database.Open())
+        {
+            IWorkflowExecutableStore retained = new EfWorkflowExecutableStore(observed, new Access("tenant-a"));
+            Assert.Null(await retained.FindMaterialAsync(material.Identity.ArtifactId));
+            Assert.Equal(materialIncarnation, (await retained.FindMaterialAsync(Pin.ArtifactId))!.IncarnationId);
+        }
+
+        interceptor.Enabled = false;
+        await materials.SaveModelAsync(material);
+        Assert.Equal(material.Identity, (await materials.FindMaterialAsync(material.Identity.ArtifactId))!.Identity);
+    }
+
+    private static RuntimeModelMaterial MaterialFor(WorkflowExecutableIdentity identity)
+    {
+        using var definition = JsonDocument.Parse("{\"start\":\"human\"}");
+        return new(1, identity, Protocol, "test/1", definition.RootElement, new(1, []), [], [], []);
+    }
+
+    private sealed class FailMaterialSave(Exception cause) : SaveChangesInterceptor
+    {
+        public bool Enabled { get; set; } = true;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
+            Enabled ? ValueTask.FromException<InterceptionResult<int>>(cause) : ValueTask.FromResult(result);
+    }
+
     [Theory]
     [InlineData("state")]
     [InlineData("input")]
@@ -85,7 +219,7 @@ public sealed class EfRuntimeModelCheckpointTests
         Assert.Equal(1, interceptor.Attempts);
     }
 
-    private sealed class FailModelReadConnection(Exception cause) : DbConnectionInterceptor
+    private sealed class FailModelReadConnection(Exception cause, Action? beforeFailure = null) : DbConnectionInterceptor
     {
         public int Attempts { get; private set; }
 
@@ -93,6 +227,7 @@ public sealed class EfRuntimeModelCheckpointTests
             ConnectionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
         {
             Attempts++;
+            beforeFailure?.Invoke();
             return ValueTask.FromException<InterceptionResult>(cause);
         }
     }
