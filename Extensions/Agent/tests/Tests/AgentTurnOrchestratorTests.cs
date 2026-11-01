@@ -3,6 +3,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
+using Elsa.Agent.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.Json;
@@ -330,6 +331,299 @@ public sealed class AgentTurnOrchestratorTests
         Assert.Equal(2, events.Count(x => x.Kind == AgentStreamEventKind.StepStarted));
         Assert.Contains(events, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains("step limit"));
         Assert.Equal(AgentStreamEventKind.Completed, events[^1].Kind);
+    }
+
+    // ---- #3440 T017: lookup-to-registration, terminal-to-unregister and verified-pause handoffs ----
+    // Real default orchestrator/owner; only the participating registry and pause store are forwarding replacements.
+
+    [Fact]
+    public async Task A_policy_committed_between_session_lookup_and_foreground_acquisition_governs_the_turn_instead_of_the_lookup()
+    {
+        var tool = new ApplyChangeTool();
+        using var fixture = new HandoffFixture(tool);
+        var session = await fixture.CreateAsync();
+        var held = fixture.States.HoldNextFind();
+
+        // The stream has already read the session (AutoReadOnly) and holds before acquiring its foreground claim.
+        var stream = Task.Run(() => Collect(fixture.Streaming.StreamAsync(session.Id)));
+        await held.Entered.Task.WaitAsync(HandoffTimeout);
+        var changed = await fixture.ChangeAsync(session, AgentAutonomyMode.FullAuto, 1);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, changed.Outcome);
+        Assert.Equal(2, changed.State!.Revision);
+        var prompt = await fixture.Sessions.AddMessageAsync(session.Id, new(AgentRole.User, "mutate the resource", AgentMessageStatus.Pending, null, [], [])
+        { ExpectedPolicyRevision = 2 });
+        held.Release.SetResult();
+        var events = await stream.WaitAsync(HandoffTimeout);
+
+        // The acquired claim's FullAuto snapshot replaced the stale lookup, which would have required review.
+        Assert.Equal(AgentStreamEventKind.Completed, events[^1].Kind);
+        Assert.DoesNotContain(events, x => x.Kind == AgentStreamEventKind.ProposalCreated);
+        Assert.Equal(1, tool.Invocations);
+        var proposal = Assert.Single(fixture.ProposalStore.Proposals.Values);
+        Assert.False(proposal.RequiresApproval);
+        Assert.Equal(2, proposal.PolicyRevision);
+        Assert.Equal(AgentActionProposalStatus.Executed, proposal.Status);
+        Assert.Equal(2, prompt.AcceptedPolicy!.Revision);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await fixture.ProbeAsync(session));
+    }
+
+    [Fact]
+    public async Task A_completed_turn_stays_busy_after_its_terminal_event_and_status_until_actual_unregister()
+    {
+        using var fixture = new HandoffFixture();
+        var session = await fixture.CreateAsync();
+        await PostAsync(fixture.Sessions, session.Id, "hello");
+        var unregister = fixture.Turns.HoldNextUnregister(afterInner: false);
+        await using var turn = fixture.Streaming.StreamAsync(session.Id).GetAsyncEnumerator();
+
+        while (await turn.MoveNextAsync() && turn.Current.Kind != AgentStreamEventKind.Completed) { }
+        Assert.Equal(AgentStreamEventKind.Completed, turn.Current.Kind);
+        // The terminal event is displayed; the turn has not released anything yet.
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+
+        var cleanup = Task.Run(async () => await turn.MoveNextAsync());
+        await unregister.Entered.Task.WaitAsync(HandoffTimeout);
+        // The source is terminal and its prompt claim released, but the foreground claim spans actual Unregister.
+        Assert.Equal(AgentMessageStatus.Completed, Assert.Single(await fixture.Sessions.ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).Status);
+        Assert.True(fixture.Turns.IsActive(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, (await fixture.ChangeAsync(session, AgentAutonomyMode.FullAuto, 1)).Outcome);
+        unregister.Release.SetResult();
+        Assert.False(await cleanup.WaitAsync(HandoffTimeout));
+
+        Assert.False(fixture.Turns.IsActive(session.Id));
+        Assert.Equal(2, (await fixture.ChangeAsync(session, AgentAutonomyMode.FullAuto, 1)).State!.Revision);
+    }
+
+    [Fact]
+    public async Task A_verified_pause_is_claimed_before_foreground_release_and_its_continuation_releases_only_its_own_claims()
+    {
+        var tool = new ApplyChangeTool();
+        using var fixture = new HandoffFixture(tool);
+        var session = await fixture.CreateAsync();
+        await PostAsync(fixture.Sessions, session.Id, "mutate the resource");
+        var pausedUnregister = fixture.Turns.HoldNextUnregister(afterInner: true);
+
+        var paused = Task.Run(() => Collect(fixture.Streaming.StreamAsync(session.Id)));
+        await pausedUnregister.Entered.Task.WaitAsync(HandoffTimeout);
+        // The lease is gone and foreground is still claimed; the pause claim already covers the turn.
+        Assert.False(fixture.Turns.IsActive(session.Id));
+        var pause = fixture.Owner.FindPause(session.Id);
+        Assert.NotNull(pause);
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+        pausedUnregister.Release.SetResult();
+        var first = await paused.WaitAsync(HandoffTimeout);
+        var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
+        Assert.Same(pause, fixture.Owner.FindPause(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+
+        Assert.True((await fixture.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        Assert.True((await fixture.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value!.Executed);
+        Assert.Same(pause, fixture.Owner.FindPause(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+
+        var continuationUnregister = fixture.Turns.HoldNextUnregister(afterInner: false);
+        var continuation = Task.Run(() => Collect(fixture.Streaming.StreamAsync(session.Id)));
+        await continuationUnregister.Entered.Task.WaitAsync(HandoffTimeout);
+        // The continuation removed and released exactly the pause it observed, while its own foreground claim remains.
+        Assert.Null(fixture.States.Find(session.Id));
+        Assert.Null(fixture.Owner.FindPause(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+        continuationUnregister.Release.SetResult();
+        Assert.Equal(AgentStreamEventKind.Completed, (await continuation.WaitAsync(HandoffTimeout))[^1].Kind);
+
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await fixture.ProbeAsync(session));
+        Assert.Equal(1, tool.Invocations);
+    }
+
+    [Fact]
+    public async Task An_old_turn_cleanup_releases_only_its_own_foreground_claim_and_never_a_successor()
+    {
+        var provider = new HeldDeterministicProvider();
+        using var fixture = new HandoffFixture(provider: provider);
+        var session = await fixture.CreateAsync();
+        await PostAsync(fixture.Sessions, session.Id, "first");
+        var oldUnregister = fixture.Turns.HoldNextUnregister(afterInner: true);
+
+        var old = Task.Run(() => Collect(fixture.Streaming.StreamAsync(session.Id)));
+        await oldUnregister.Entered.Task.WaitAsync(HandoffTimeout);
+        // The old lease is free but its foreground claim is not yet released. A successor turn runs to its own
+        // terminal state and holds in Unregister, so only the two foreground claims remain.
+        await PostAsync(fixture.Sessions, session.Id, "second");
+        var successorUnregister = fixture.Turns.HoldNextUnregister(afterInner: false);
+        using var successorScope = fixture.Root.CreateScope();
+        var successor = Task.Run(() => Collect(successorScope.ServiceProvider.GetRequiredService<IAgentStreamingService>().StreamAsync(session.Id)));
+        await successorUnregister.Entered.Task.WaitAsync(HandoffTimeout);
+        Assert.All(await fixture.Sessions.ListMessagesAsync(session.Id), x => Assert.Equal(AgentMessageStatus.Completed, x.Status));
+        oldUnregister.Release.SetResult();
+        Assert.Equal(AgentStreamEventKind.Completed, (await old.WaitAsync(HandoffTimeout))[^1].Kind);
+
+        // The old turn's cleanup released exactly its own token; the successor's claim still owns the policy.
+        Assert.True(fixture.Turns.IsActive(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
+        successorUnregister.Release.SetResult();
+        Assert.Equal(AgentStreamEventKind.Completed, (await successor.WaitAsync(HandoffTimeout))[^1].Kind);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await fixture.ProbeAsync(session));
+        Assert.Equal(2, provider.Turns);
+    }
+
+    private static readonly TimeSpan HandoffTimeout = TimeSpan.FromSeconds(30);
+
+    private static TaskCompletionSource HandoffBarrier() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private sealed class HandoffFixture : IDisposable
+    {
+        private readonly IServiceScope _scope;
+
+        public HandoffFixture(IAgentTool? tool = null, IAgentProvider? provider = null)
+        {
+            Root = AgentTestServices.Create(services =>
+            {
+                services.AddSingleton(provider ?? new DeterministicAgentProvider());
+                if (tool is not null) services.AddSingleton(tool);
+                services.Replace(ServiceDescriptor.Singleton<IAgentTurnRegistry>(Turns));
+                services.Replace(ServiceDescriptor.Singleton<IAgentTurnStateStore>(States));
+            });
+            _scope = Root.CreateScope();
+        }
+
+        public ServiceProvider Root { get; }
+        public BarrierTurnRegistry Turns { get; } = new(new AgentTurnRegistry());
+        public BarrierTurnStateStore States { get; } = new(new InMemoryAgentTurnStateStore());
+        public IAgentSessionService Sessions => _scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        public IAgentStreamingService Streaming => _scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        public IAgentProposalService Proposals => _scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
+        public InMemoryAgentProposalStore ProposalStore => _scope.ServiceProvider.GetRequiredService<InMemoryAgentProposalStore>();
+        internal IAgentSessionPolicyOwner Owner => (IAgentSessionPolicyOwner)Sessions;
+        private IAgentSessionPolicyService Policy => _scope.ServiceProvider.GetRequiredService<IAgentSessionPolicyService>();
+
+        public Task<AgentSession> CreateAsync() => CreateSessionAsync(Sessions, DeterministicAgentProvider.Id);
+
+        public Task<AgentSessionPolicyResult> ChangeAsync(AgentSession session, AgentAutonomyMode mode, long expectedRevision)
+            => Policy.ChangeAutonomyAsync(new(session.Id, session.ActorId, session.TenantId, mode, expectedRevision));
+
+        /// <summary>Requests the current mode at the current revision: Busy while owned, otherwise an unchanged acknowledgement.</summary>
+        public async Task<AgentSessionPolicyOutcome> ProbeAsync(AgentSession session)
+        {
+            var current = await Policy.GetAsync(session.Id, session.ActorId, session.TenantId);
+            Assert.Equal(AgentSessionPolicyOutcome.Succeeded, current.Outcome);
+            var probe = await ChangeAsync(session, current.State!.Policy.AutonomyMode, current.State.Revision);
+            Assert.Equal(current.State.Revision, probe.State!.Revision);
+            return probe.Outcome;
+        }
+
+        public void Dispose()
+        {
+            _scope.Dispose();
+            Root.Dispose();
+        }
+    }
+
+    /// <summary>A forwarding (participating) registry replacement whose next Unregister can be held before or after the real one.</summary>
+    internal sealed class BarrierTurnRegistry(AgentTurnRegistry inner) : IAgentTurnRegistry
+    {
+        private (TaskCompletionSource Entered, TaskCompletionSource Release, bool AfterInner)? _next;
+
+        public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNextUnregister(bool afterInner)
+        {
+            var hold = (HandoffBarrier(), HandoffBarrier(), afterInner);
+            lock (inner) _next = hold;
+            return (hold.Item1, hold.Item2);
+        }
+
+        public CancellationToken Register(string sessionId, string turnId) => inner.Register(sessionId, turnId);
+        public bool Cancel(string sessionId, string turnId) => inner.Cancel(sessionId, turnId);
+        public bool IsActive(string sessionId) => inner.IsActive(sessionId);
+
+        public void Unregister(string sessionId, string turnId)
+        {
+            (TaskCompletionSource Entered, TaskCompletionSource Release, bool AfterInner)? hold;
+            lock (inner)
+            {
+                hold = _next;
+                _next = null;
+            }
+            if (hold is { AfterInner: true }) inner.Unregister(sessionId, turnId);
+            if (hold is { } held)
+            {
+                held.Entered.TrySetResult();
+                Assert.True(held.Release.Task.Wait(HandoffTimeout));
+            }
+            if (hold is not { AfterInner: true }) inner.Unregister(sessionId, turnId);
+        }
+    }
+
+    /// <summary>A forwarding (participating) pause store replacement whose next Find can be held.</summary>
+    internal sealed class BarrierTurnStateStore(InMemoryAgentTurnStateStore inner) : IAgentTurnStateStore
+    {
+        private (TaskCompletionSource Entered, TaskCompletionSource Release)? _next;
+
+        public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNextFind()
+        {
+            var hold = (HandoffBarrier(), HandoffBarrier());
+            lock (inner) _next = hold;
+            return hold;
+        }
+
+        public void Save(AgentPausedTurn state) => inner.Save(state);
+        public void Remove(string sessionId) => inner.Remove(sessionId);
+
+        public AgentPausedTurn? Find(string sessionId)
+        {
+            (TaskCompletionSource Entered, TaskCompletionSource Release)? hold;
+            lock (inner)
+            {
+                hold = _next;
+                _next = null;
+            }
+            if (hold is { } held)
+            {
+                held.Entered.TrySetResult();
+                Assert.True(held.Release.Task.Wait(HandoffTimeout));
+            }
+            return inner.Find(sessionId);
+        }
+    }
+
+    /// <summary>The deterministic host-step provider; its next turn can be held inside the provider.</summary>
+    private sealed class HeldDeterministicProvider : IAgentProvider
+    {
+        private readonly DeterministicAgentProvider _inner = new();
+        private (TaskCompletionSource Entered, TaskCompletionSource Release)? _next;
+        private int _turns;
+
+        public string ProviderId => _inner.ProviderId;
+        public int Turns => Volatile.Read(ref _turns);
+
+        public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNext()
+        {
+            var hold = (HandoffBarrier(), HandoffBarrier());
+            lock (_inner) _next = hold;
+            return hold;
+        }
+
+        public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default) => _inner.CreateSessionAsync(session, cancellationToken);
+
+        public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _turns);
+            (TaskCompletionSource Entered, TaskCompletionSource Release)? hold;
+            lock (_inner)
+            {
+                hold = _next;
+                _next = null;
+            }
+            if (hold is { } held)
+            {
+                held.Entered.TrySetResult();
+                await held.Release.Task.WaitAsync(cancellationToken);
+            }
+            await foreach (var item in _inner.ContinueTurnAsync(context, cancellationToken))
+                yield return item;
+        }
+
+        public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default) => _inner.ApproveToolAsync(request, cancellationToken);
+        public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) => _inner.GetDiagnosticsAsync(cancellationToken);
     }
 
     private static ServiceProvider Build(IAgentProvider provider, IEnumerable<IAgentTool> tools, int? maxSteps = null)

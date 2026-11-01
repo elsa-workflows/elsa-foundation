@@ -285,6 +285,40 @@ public sealed class AgentSessionAdmissionTests
         }
     }
 
+    // ---- Terminal display to actual unregister through HTTP (T017) ----
+
+    [Fact]
+    public async Task A_completed_SSE_event_or_terminal_status_alone_admits_no_update_or_prompt_before_actual_unregister()
+    {
+        var turns = new AgentTurnOrchestratorTests.BarrierTurnRegistry(new AgentTurnRegistry());
+        using var fixture = new Fixture(services => services.Replace(ServiceDescriptor.Singleton<IAgentTurnRegistry>(turns)));
+        var session = await fixture.CreateAsync();
+        Assert.Equal(200, (await fixture.PostAsync(session.Id, Delivery("hello", "r-1"))).Status);
+        var transport = new CompletedEventTransport();
+        var unregister = turns.HoldNextUnregister(afterInner: false);
+
+        var stream = Task.Run(() => fixture.StreamHttpAsync(session.Id, transport));
+        await transport.CompletedWritten.Task.WaitAsync(Timeout);
+        // The browser holds the completed event; the turn has not resumed past its terminal event.
+        AssertFailure(await fixture.ChangeAsync(session.Id, "full-auto", 1), 409, "agent.session.busy");
+        AssertFailure(await fixture.PostAsync(session.Id, Delivery("next", "r-2")), 409, "agent.session.busy");
+        transport.Release.SetResult();
+        await unregister.Entered.Task.WaitAsync(Timeout);
+        // Session detail now displays the terminal status, yet the foreground claim spans actual Unregister.
+        var detail = await fixture.DetailAsync(session.Id);
+        Assert.Equal("completed", Assert.Single(detail.GetProperty("messages").EnumerateArray(), x => x.GetProperty("role").GetString() == "user").GetProperty("status").GetString());
+        AssertFailure(await fixture.ChangeAsync(session.Id, "full-auto", 1), 409, "agent.session.busy");
+        AssertFailure(await fixture.PostAsync(session.Id, Delivery("next", "r-2")), 409, "agent.session.busy");
+        unregister.Release.SetResult();
+        await stream.WaitAsync(Timeout);
+
+        Assert.Equal(200, (await fixture.ChangeAsync(session.Id, "full-auto", 1)).Status);
+        var (next, nextBody) = await fixture.PostAsync(session.Id, Delivery("next", "r-2"));
+        Assert.Equal(200, next);
+        Assert.Equal(2, nextBody.RootElement.GetProperty("data").GetProperty("message").GetProperty("acceptedPolicy").GetProperty("revision").GetInt64());
+        Assert.Equal(1, fixture.Provider.Turns);
+    }
+
     // ---- Direct message-owner controls ----
 
     [Fact]
@@ -440,6 +474,28 @@ public sealed class AgentSessionAdmissionTests
 
         public Task<(int Status, JsonDocument Body)> PostAsync(string sessionId, object body, CancellationToken aborted = default, bool failingResponse = false)
             => SendAsync("PostMessage", body, sessionId, aborted, failingResponse);
+
+        public async Task<JsonElement> DetailAsync(string sessionId)
+        {
+            var (status, body) = await SendAsync("GetSession", new { }, sessionId);
+            Assert.Equal(200, status);
+            return body.RootElement.GetProperty("data");
+        }
+
+        /// <summary>Runs the stream endpoint delegate with the supplied SSE transport.</summary>
+        public async Task StreamHttpAsync(string sessionId, Stream transport)
+        {
+            var endpoint = Assert.Single(_endpoints, x => x.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName == "ElsaAgentApiEndpointsStreamSession");
+            using var request = Root.CreateScope();
+            var context = new DefaultHttpContext
+            {
+                RequestServices = request.ServiceProvider,
+                User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Actor), new Claim("elsa.identity.tenant_id", Tenant)], "test"))
+            };
+            context.Request.RouteValues["sessionId"] = sessionId;
+            context.Response.Body = transport;
+            await endpoint.RequestDelegate!(context);
+        }
 
         /// <summary>Runs the session's next foreground turn in its own request scope, as the stream endpoint does.</summary>
         public async Task<List<AgentStreamEvent>> StreamAsync(string sessionId)
@@ -608,6 +664,39 @@ public sealed class AgentSessionAdmissionTests
             if (!FailNext) return inner.AddContextAsync(sessionId, attachments, cancellationToken);
             FailNext = false;
             throw new InvalidOperationException("The session context cache failed after the message was accepted.");
+        }
+    }
+
+    /// <summary>An SSE transport that holds the write carrying the completed event until released.</summary>
+    private sealed class CompletedEventTransport : Stream
+    {
+        private readonly StringBuilder _written = new();
+        public TaskCompletionSource CompletedWritten { get; } = Barrier();
+        public TaskCompletionSource Release { get; } = Barrier();
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => 0;
+        public override long Position { get => 0; set { } }
+        public override void Flush() { }
+        public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => WriteAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            bool completed;
+            lock (_written)
+            {
+                _written.Append(Encoding.UTF8.GetString(buffer.Span));
+                completed = !CompletedWritten.Task.IsCompleted && _written.ToString().Contains("\"kind\":\"completed\"", StringComparison.Ordinal);
+            }
+            if (!completed) return;
+            CompletedWritten.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
         }
     }
 
