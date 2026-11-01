@@ -21,7 +21,16 @@ if (parameters.get("palette") === "classic") {
 const readonly = parameters.get("permissions") === "read";
 const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly, canShareViews: !readonly };
 const date = "2026-10-31T12:00:00Z";
-const folder: WorkflowFolder = { id: "finance", parentId: null, name: "Finance", normalizedName: "FINANCE", createdAt: date, lastModifiedAt: date, revision: "1" };
+const folderLayout = parameters.get("folder-layout") === "1";
+const folderName = folderLayout ? "Customer operations and international support" : "Finance";
+const folder: WorkflowFolder = { id: "finance", parentId: null, name: folderName, normalizedName: folderName.toUpperCase(), createdAt: date, lastModifiedAt: date, revision: "1" };
+const layoutFolders: WorkflowFolder[] = folderLayout ? [
+  ...Array.from({ length: parameters.get("tall-folders") === "1" ? 8 : 0 }, (_, index) => ({ ...folder, id: `layout-${index}`, name: `Operations ${index + 1}`, normalizedName: `OPERATIONS ${index + 1}` })),
+  ...Array.from({ length: parameters.get("deep-folders") === "1" ? 15 : 1 }, (_, index) => {
+    const name = index === 0 ? "European customer onboarding and retention" : `International support and retention level ${index + 2}`;
+    return { ...folder, id: index === 0 ? "layout-child" : `layout-depth-${index + 1}`, parentId: index === 0 ? folder.id : index === 1 ? "layout-child" : `layout-depth-${index}`, name, normalizedName: name.toUpperCase() };
+  })
+] : [];
 const tags: WorkflowTag[] = [
   { id: "critical", name: "Critical", mode: "marker", cardinality: "single", deprecated: false, revision: "1", values: [] },
   { id: "team", name: "Owning team", mode: "controlled", cardinality: "single", deprecated: false, revision: "1", values: [{ id: "value-billing", name: "Billing" }, { id: "value-support", name: "Support" }] }
@@ -56,7 +65,7 @@ const capabilities = { capabilities: [{ id: "elsa.api.workflow-design", contract
   { rel: "workflow-views", href: "fixture/library/views" },
   { rel: "workflow-view", href: "fixture/library/views/{viewId}", templated: true },
   { rel: "workflow-favorites", href: "fixture/library/favorites/{definitionId}", templated: true }
-] }] };
+].filter(link => parameters.get("folders") !== "unavailable" || !link.rel.includes("folder")) }] };
 
 Object.assign(window, { workflowLibraryRequests: requests, workflowLibraryDefinitions: definitions });
 
@@ -85,7 +94,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
       if (!tag) throw new Error("Tag unavailable");
       return structuredClone(tag);
     }
-    if (target.pathname === "/fixture/library/folders") return { items: target.searchParams.has("parentId") ? [] : [folder], nextContinuationToken: null };
+    if (target.pathname === "/fixture/library/folders") return { items: target.searchParams.has("parentId") ? layoutFolders.filter(item => item.parentId === target.searchParams.get("parentId")) : [folder, ...layoutFolders.filter(item => item.parentId === null)], nextContinuationToken: null };
     if (target.pathname === "/fixture/library/folders/finance") return { folder, ancestors: [] };
     if (target.pathname.startsWith("/fixture/library/organization/")) {
       const organization = organizations.get(target.pathname.split("/").at(-1)!);
