@@ -17,6 +17,8 @@ using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
 using Elsa.Events;
 using Elsa.Cluster.Readability;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
 using Elsa.Locking.FileSystem;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
@@ -72,6 +74,8 @@ var provider = scope.ServiceProvider;
 Check(provider.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope().Value == "default", "ordinary selected persistence scope");
 var turns = provider.GetRequiredService<ISpecialistTurnStore>();
 Check((await turns.GetCapabilitiesAsync()).IsDurable, "file-backed specialist journal reports durable storage");
+await provider.GetRequiredService<ISchemaDormancyCheck>().EnsureAvailableAsync([new SchemaVersionRequirement("RuntimePostCommitOutbox", "2.0.0")], "SpecialistDurablePackageProbe");
+Check(true, "normal host observes finalized physical-source schema before work");
 if (role == "worker") provider.GetRequiredService<ModelObservations>().DispatchCounterDirectory = counter;
 else Check(!provider.GetServices<ISpecialistModelClientFactory>().Any(), "coordinator/recovery/verifier has no model contribution");
 const string executionId = "durable-package-run";
@@ -123,7 +127,18 @@ else
             var delay = expiry - DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(100);
             if (delay > TimeSpan.Zero) await Task.Delay(delay);
         }
-        var claim = await workStore.ClaimNextAsync(role, DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+        BackgroundActivityWorkClaim? claim = null;
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            claim = await workStore.ClaimNextAsync(role, DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+            if (claim is not null || role != "recover") break;
+            using var old = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
+            var current = await workStore.FindAsync(executionId, old.RootElement.GetProperty("WorkId").GetString()!);
+            if (current?.Status != BackgroundActivityWorkStatus.Claimed || current.VisibleUntil is not { } visible) break;
+            var remaining = visible - DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(100);
+            if (remaining > TimeSpan.FromSeconds(10)) throw new InvalidOperationException("The native claim exceeds this fixture's finite visibility bound.");
+            await Task.Delay(remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(100));
+        }
         Check(claim is not null, "new process claimed actual persisted native background work");
         if (role == "worker") await File.WriteAllTextAsync(Path.Combine(directory, "worker-claim.json"), JsonSerializer.Serialize(claim));
         else

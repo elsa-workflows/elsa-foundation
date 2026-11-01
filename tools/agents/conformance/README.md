@@ -38,3 +38,38 @@ profile is not the final Program acceptance: the journal remains explicitly proc
 providers, durable recovery, native/BPMN authoring journeys, Studio and the complete matrix remain
 subsequent qualification work. The executable is seeded from the real placed specialist; this does
 not claim M4's ordinary workflow/BPMN publication journey.
+
+
+## File-backed native recovery profile
+
+Run the separate profile with the bundled Python runtime:
+
+```bash
+python3 tools/agents/conformance/qualify.py \
+  --profile durable-recovery --source HEAD --version 4.0.0-specialist3523.durable \
+  --output /private/tmp/elsa-specialist-durable-proof
+```
+
+This also runs the kernel consumers, then builds an independent Runtime consumer using actual
+Specialist EF and complete Runtime EF packages. Normal CShell activation applies/validates module
+migrations. The host composes `AddEfSchemaReadability` once on its root container and checks observed
+`RuntimePostCommitOutbox` schema2 readiness before work. Without normal host readability the EF gate
+retains schema1 and refuses required-source data; this is a refusal, not permission to force a version.
+
+Each Balanced/Durable case uses a fresh file-backed SQLite database and four distinct processes:
+
+1. Start the native facade and commit its protected turn/background-child responsibility, without a model contribution.
+2. Claim the actual durable work, run the independent deterministic MAF model once, then exit197 after journal acceptance and before native receipt recording.
+3. Reclaim the same work after real native visibility expiry with a newer fence. New admission is disabled and no model provider is registered. Accepted replay records the receipt; bounded normal resumption sweeps drive remaining scheduler/outbox responsibility.
+4. Reopen independently and verify typed facade/workflow completion, one accepted turn/application, its physically Delivered matching source and one dispatch counter file across the processes.
+
+The causal crash uses the public activation lease boundary and preserves the actual pinned leaf type.
+It reads the accepted journal and still-Claimed work before exiting. Persistence stores, native fences
+and settlement sources are never replaced or fabricated. Synthetic durable keys and an independent
+GUID file per model dispatch cross the process boundary; no credentials or business payloads enter
+counter files. The expected nonzero worker exits are labelled `ExpectedCrash` in the receipt.
+
+`PassedDurableRecoveryProfile` requires every named check and package/archive/DLL closure check to pass.
+The profile proves this SQLite process-loss boundary in both persistence modes. It does not establish
+power-loss durability, older module binary migration/rollback, the full provider/host matrix, streaming,
+BPMN/Studio authoring or live-model acceptance. Failed run receipts remain failed and separate.
