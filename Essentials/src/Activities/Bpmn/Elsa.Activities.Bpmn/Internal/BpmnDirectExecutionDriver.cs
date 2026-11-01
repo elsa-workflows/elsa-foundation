@@ -26,6 +26,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         "bpmn.state-unavailable", "The selected host has no model state reader.");
     private BpmnNativeWorkBoundary NativeWork => nativeWork ?? throw new NotSupportedException("The native BPMN work binding is not installed.");
     private BpmnEmbeddingBoundary Embedding => embedding ?? throw new NotSupportedException("The native RunBpmn binding is not installed.");
+    internal bool AdmitNewExecutions => options.AdmitNewExecutions;
 
     public ValueTask ValidateMaterialAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default)
     {
@@ -504,6 +505,15 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         }
     }
 
+    internal async ValueTask<BpmnInspectionSettlement?> InspectParentSettlementAsync(RuntimeModelExecutionState state, Document document,
+        CancellationToken cancellationToken)
+    {
+        if (document.NativeParent is null || state.TerminalResult is null) return null;
+        var parent = BpmnEmbeddingBoundary.Read(new RunBpmnState(1, document.NativeParent.Invocation));
+        return new("NativeParent", parent.NativeExecutionId, parent.NativeInvocationId, parent.NativeAttemptId,
+            await Embedding.ParentProofAsync(parent, cancellationToken), false);
+    }
+
     private static Document ReadCore(RuntimeModelExecutionState state)
     {
         var result = state.Payload.Deserialize<Document>(Web) ?? throw new BpmnModelValidationException("BPMN model state is missing.");
@@ -671,7 +681,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         return completion;
     }
 
-    private static BpmnModelDefinition Definition(RuntimeModelMaterial material) => material.Definition.Deserialize<BpmnModelDefinition>(Strict)
+    internal static BpmnModelDefinition Definition(RuntimeModelMaterial material) => material.Definition.Deserialize<BpmnModelDefinition>(Strict)
         ?? throw new BpmnModelValidationException("BPMN model definition is missing.");
 
     private static BpmnNativeWorkResult NativeResult(JsonElement payload) => payload.Deserialize<BpmnNativeWorkResult>(Strict)

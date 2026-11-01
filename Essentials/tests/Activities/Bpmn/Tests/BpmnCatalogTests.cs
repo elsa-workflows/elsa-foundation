@@ -28,14 +28,17 @@ public sealed class BpmnCatalogTests
         var builder = WebApplication.CreateBuilder();
         var feature = new ActivitiesBpmnHostingApiFeature();
         feature.ConfigureServices(builder.Services); feature.ConfigureServices(builder.Services);
-        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(builder.Services.Where(d => d.ServiceType == typeof(BpmnCatalog))).Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(builder.Services, d => d.ServiceType == typeof(BpmnCatalog)).Lifetime);
         await using var app = builder.Build(); feature.MapEndpoints(app, null);
         var routes = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText).ToArray();
         Assert.Contains(routes, route => route!.TrimStart('/') == "bpmn/publications");
         Assert.Contains(routes, route => route!.TrimStart('/') == "bpmn/executions");
-        var capability = Assert.Single(app.Services.GetServices<ApiCapabilityDeclaration>().Where(c => c.CapabilityId == "elsa.api.bpmn-catalog"));
+        var capability = Assert.Single(app.Services.GetServices<ApiCapabilityDeclaration>(), c => c.CapabilityId == "elsa.api.bpmn-catalog");
         Assert.Equal(["bpmn-executions", "bpmn-publications"], capability.Links.Select(link => link.Rel));
+        var inspection = Assert.Single(app.Services.GetServices<ApiCapabilityDeclaration>(), c => c.CapabilityId == "elsa.api.bpmn-inspection");
+        Assert.Equal("bpmn-inspection", Assert.Single(inspection.Links).Rel);
+        Assert.Contains(routes, route => route!.TrimStart('/') == "bpmn/executions/{id}/inspection");
     }
 
     [Theory]

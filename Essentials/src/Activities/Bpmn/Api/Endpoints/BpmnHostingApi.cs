@@ -67,6 +67,16 @@ internal sealed class BpmnApiCaller(IHttpContextAccessor contexts, NormalizedPri
         if (!validator.TryGetNormalizedPrincipal(contexts.HttpContext!.User, out var principal)) throw new BpmnModelResourceMissingException();
         return (await authorization.AuthorizeAsync(new(principal, BpmnHostingApi.Read, caller.TenantId, resource), cancellationToken)).Succeeded;
     }
+    public async ValueTask<BpmnInspectionView> InspectAsync(string executionId, CancellationToken cancellationToken)
+    {
+        var identity = await ForExecutionAsync(executionId, BpmnHostingApi.Read, cancellationToken);
+        var inspection = await runtime.InspectAsync(executionId, identity, cancellationToken);
+        // A revision may advance between the first resource check and projection. Authorize
+        // the exact returned snapshot before disclosing its graph, terminal result or work.
+        if (inspection.State.ExecutionId != executionId || inspection.State.TenantId != identity.TenantId ||
+            !await CanReadAsync(inspection.State, cancellationToken)) throw new BpmnModelResourceMissingException();
+        return BpmnInspectionView.From(inspection);
+    }
     public async ValueTask<BpmnModelCaller> ForExecutionAsync(string executionId, string permission, CancellationToken cancellationToken)
     {
         var caller = Current();
@@ -126,6 +136,7 @@ internal sealed class BpmnHostingFaultRenderer(IEndpointProblemWriter writer) : 
 }
 
 internal sealed record PublishBpmnModelRequest(string RequestId, BpmnModelDefinition Definition);
+internal sealed record BpmnAdmissionView(bool AdmitNewExecutions);
 internal sealed record StartBpmnModelRequest(string SourceReferenceId, string RequestId, Dictionary<string, JsonElement>? Inputs = null);
 internal sealed record GetBpmnExecutionRequest(string Id);
 internal sealed record ListBpmnWorkRequest(string Id, int Limit = RuntimeStorePageRequest.DefaultLimit, string? ContinuationToken = null);
@@ -136,6 +147,36 @@ internal sealed record ListBpmnIncidentsRequest(string Id, int Limit = RuntimeSt
 internal sealed record RetryBpmnServiceRequest(string Id, string RequestId, string IncidentId, string InvocationId, string FailedAttemptId);
 internal sealed record BpmnExecutionView(string ExecutionId, long Revision, string Status, RuntimeExecutionProtocol Protocol,
     WorkflowExecutableIdentity Executable, string MaterialIncarnationId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, JsonElement? Result);
+
+[Get("bpmn/admission")]
+[RequirePermission(BpmnHostingApi.Read)]
+internal sealed class GetAdmissionEndpoint(IBpmnModelRuntime runtime, BpmnApiCaller caller) : ApiEndpointWithoutRequest<BpmnAdmissionView>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "GetBpmnAdmission";
+    public override Task<BpmnAdmissionView> HandleAsync(CancellationToken cancellationToken)
+    { _ = caller.Current(); return Task.FromResult(new BpmnAdmissionView(runtime.AdmitNewExecutions)); }
+}
+internal sealed record BpmnInspectionView(BpmnExecutionView Execution, WorkflowExecutionAuthoritySnapshot Authority,
+    string Profile, JsonElement Process, BpmnInspectionSource? Source, IReadOnlyList<BpmnInspectionWork> Work,
+    IReadOnlyList<BpmnInspectionAttempt> Attempts, IReadOnlyList<BpmnServiceIncident> Incidents, IReadOnlyList<BpmnInspectionSettlement> Settlements)
+{
+    public static BpmnInspectionView From(BpmnModelInspection inspection)
+    {
+        var state = inspection.State;
+        return new(new(state.ExecutionId, state.Revision, state.Lifecycle.ToString(), state.Protocol, state.Executable,
+            state.MaterialIncarnationId, state.CreatedAt, state.UpdatedAt, state.TerminalResult), state.Authority,
+            inspection.Profile, inspection.Process, inspection.Source, inspection.Work, inspection.Attempts, inspection.Incidents, inspection.Settlements);
+    }
+}
+
+[Get("bpmn/executions/{id}/inspection")]
+[RequirePermission(BpmnHostingApi.Read)]
+internal sealed class InspectExecutionEndpoint(BpmnApiCaller caller) : ApiEndpoint<GetBpmnExecutionRequest, BpmnInspectionView>
+{
+    public override void Configure(ApiEndpointOptions options) => options.Operation = "InspectBpmnExecution";
+    public override Task<BpmnInspectionView> HandleAsync(GetBpmnExecutionRequest request, CancellationToken cancellationToken) =>
+        caller.InspectAsync(BpmnHostingApi.Route(HttpContext, "id"), cancellationToken).AsTask();
+}
 
 [Post("bpmn/artifacts")]
 [RequirePermission(BpmnHostingApi.Publish)]
@@ -272,6 +313,8 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
 [JsonSerializable(typeof(BpmnPublishedModel))]
 [JsonSerializable(typeof(BpmnModelCommandOutcome))]
 [JsonSerializable(typeof(BpmnExecutionView))]
+[JsonSerializable(typeof(BpmnInspectionView))]
+[JsonSerializable(typeof(BpmnAdmissionView))]
 [JsonSerializable(typeof(RuntimeStorePage<BpmnHumanWork>))]
 [JsonSerializable(typeof(RuntimeStorePage<BpmnServiceIncident>))]
 [JsonSerializable(typeof(BpmnCatalogRequest))]

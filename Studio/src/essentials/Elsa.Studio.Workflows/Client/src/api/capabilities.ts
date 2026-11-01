@@ -9,7 +9,11 @@ export const capabilityIds = {
   expressionTooling: "expressions.tooling.v1",
   publishing: "elsa.api.publishing",
   runtime: "elsa.api.runtime",
-  workflowHttpEndpoints: "elsa.http.workflow-endpoints"
+  workflowHttpEndpoints: "elsa.http.workflow-endpoints",
+  bpmnCatalog: "elsa.api.bpmn-catalog",
+  bpmnInspection: "elsa.api.bpmn-inspection",
+  bpmnRuntime: "elsa.api.bpmn-runtime",
+  bpmnPublishing: "elsa.api.bpmn-publishing"
 } as const;
 
 export type ApiCapabilityId = typeof capabilityIds[keyof typeof capabilityIds];
@@ -21,7 +25,11 @@ const supportedContractVersions: Record<ApiCapabilityId, string> = {
   [capabilityIds.expressionTooling]: "1",
   [capabilityIds.publishing]: "1",
   [capabilityIds.runtime]: "1",
-  [capabilityIds.workflowHttpEndpoints]: "1"
+  [capabilityIds.workflowHttpEndpoints]: "1",
+  [capabilityIds.bpmnCatalog]: "1",
+  [capabilityIds.bpmnInspection]: "1",
+  [capabilityIds.bpmnRuntime]: "1",
+  [capabilityIds.bpmnPublishing]: "1"
 };
 
 export interface ApiCapabilityLink {

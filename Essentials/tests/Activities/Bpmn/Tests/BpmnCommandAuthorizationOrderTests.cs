@@ -17,6 +17,57 @@ public sealed class BpmnCommandAuthorizationOrderTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
+    [Fact]
+    public async Task A_denied_inspection_does_not_load_material_or_a_projection()
+    {
+        var runtime = new Runtime(Saved, () => null) { Inspection = () => throw new InvalidOperationException("The denied inspection ran.") };
+        var caller = Caller(runtime, _ => PermissionEvaluationResult.Denied());
+        await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => caller.InspectAsync(Saved().ExecutionId, default).AsTask());
+        Assert.Equal(0, runtime.InspectionReads);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Inspection_reauthorizes_the_exact_returned_revision_before_disclosure(bool allowNewRevision)
+    {
+        var original = Saved();
+        var current = new RuntimeModelExecutionState(original.FormatVersion, original.Scope, original.ExecutionId, original.TenantId,
+            original.Protocol, original.Executable, original.MaterialIncarnationId, original.Revision + 1, original.Lifecycle,
+            original.Authority, original.CreatedAt, original.UpdatedAt, original.Payload, original.TerminalResult);
+        var checks = new List<RuntimeModelExecutionState>();
+        var runtime = new Runtime(() => original, () => null) { Inspection = () => Inspection(current) };
+        var caller = Caller(runtime, context =>
+        {
+            var resource = Assert.IsType<RuntimeModelExecutionState>(context.Resource); checks.Add(resource);
+            return resource.Revision == original.Revision || allowNewRevision ? PermissionEvaluationResult.Success : PermissionEvaluationResult.Denied();
+        });
+        if (allowNewRevision) Assert.Equal(current.Revision, (await caller.InspectAsync(original.ExecutionId, default)).Execution.Revision);
+        else await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => caller.InspectAsync(original.ExecutionId, default).AsTask());
+        Assert.Equal([original, current], checks); Assert.Equal(1, runtime.InspectionReads);
+    }
+
+    [Fact]
+    public void Inspection_HTTP_projection_excludes_private_state_and_authored_input_values()
+    {
+        var state = Saved();
+        var source = new WorkflowExecutableSourceReference("source", state.Executable.ArtifactId, "BpmnModel", "version", "1.0.0",
+            state.Executable.DefinitionId, state.Executable.DefinitionVersionId, state.Executable.ArtifactVersion,
+            state.CreatedAt, state.CreatedAt, WorkflowExecutableReferenceScope.Published,
+            AuthoredInputs: [new("node", "connector", "json", JsonSerializer.SerializeToElement("private-connector-input"), true)]);
+        var inspection = Inspection(state, new(source));
+        var json = JsonSerializer.SerializeToElement(BpmnInspectionView.From(inspection), BpmnHostingJsonContext.Default.BpmnInspectionView);
+        Assert.False(json.TryGetProperty("state", out _));
+        Assert.False(json.GetProperty("execution").TryGetProperty("payload", out _));
+        Assert.False(json.GetProperty("source").TryGetProperty("authoredInputs", out _));
+        Assert.DoesNotContain("private-connector-input", json.GetRawText());
+        Assert.Equal(state.Revision, json.GetProperty("execution").GetProperty("revision").GetInt64());
+        Assert.True(json.TryGetProperty("process", out _));
+    }
+
+    private static BpmnModelInspection Inspection(RuntimeModelExecutionState state, BpmnInspectionSource? source = null) =>
+        new(state, BpmnModelProtocol.Profile, JsonSerializer.SerializeToElement(new { processId = "process" }), source, [], [], [], []);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -105,6 +156,10 @@ public sealed class BpmnCommandAuthorizationOrderTests
     private sealed class Runtime(Func<RuntimeModelExecutionState?> state, Func<BpmnModelCommandOutcome?> command) : IBpmnModelRuntime
     {
         public int CommandLookups { get; private set; }
+        public int InspectionReads { get; private set; }
+        public Func<BpmnModelInspection>? Inspection { get; init; }
+        public ValueTask<BpmnModelInspection> InspectAsync(string executionId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
+        { InspectionReads++; return ValueTask.FromResult(Inspection!()); }
         public ValueTask<RuntimeModelExecutionState?> FindExecutionAsync(string executionId, BpmnModelCaller caller, CancellationToken cancellationToken = default) => ValueTask.FromResult(state());
         public ValueTask<BpmnModelCommandOutcome?> FindCommandAsync(string executionId, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
         { CommandLookups++; return ValueTask.FromResult(command()); }

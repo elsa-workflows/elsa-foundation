@@ -24,6 +24,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private IRuntimeModelExecutionReader States => states ?? throw new RuntimeSchedulerWorkUnavailableException(
         "bpmn.state-unavailable", "The selected host has no model state reader.");
+    public bool AdmitNewExecutions => driver.AdmitNewExecutions;
 
     public async ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
@@ -149,6 +150,72 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             ? state : null;
     }
 
+    public async ValueTask<BpmnModelInspection> InspectAsync(string executionId, BpmnModelCaller caller,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = Scope(caller);
+        var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        if (state.Scope != scope) throw new BpmnModelResourceMissingException();
+        var material = await materials.FindMaterialAsync(state.Executable.ArtifactId, cancellationToken);
+        if (material?.Model is not { } model || material.IncarnationId != state.MaterialIncarnationId || model.Protocol != state.Protocol ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.Executable))
+            throw new BpmnModelValidationException("The exact material for this BPMN execution is unavailable.");
+        try
+        {
+            var definition = BpmnDirectExecutionDriver.Definition(model);
+            var document = BpmnDirectExecutionDriver.Read(state);
+            BpmnInspectionSource? source = null;
+            if (document.SourceReferenceId is { } referenceId && await sources.FindAsync(referenceId, cancellationToken) is { } reference &&
+                reference.TenantId == caller.TenantId && reference.SourceKind == SourceKind && reference.ArtifactId == state.Executable.ArtifactId &&
+                reference.DefinitionId == state.Executable.DefinitionId && reference.DefinitionVersionId == state.Executable.DefinitionVersionId &&
+                reference.ArtifactVersion == state.Executable.ArtifactVersion)
+                source = new(reference); // Accepted work retains its frozen provenance even after source retirement.
+            var work = document.Work.Select(item => new BpmnInspectionWork(item.Timer is not null ? "Timer" : item.NativeWork is not null ? "Native" : "Human",
+                item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId,
+                item.NativeWork?.WorkerExecutionId, item.Timer?.DueAt)).ToArray();
+            var attempts = InspectAttempts(state, model, document);
+            var incidents = (document.Failures ?? []).OrderBy(item => item.IncidentId, StringComparer.Ordinal).Select(item => Incident(document, item)).ToArray();
+            var settlements = (document.Cancellations ?? []).Select(item => new BpmnInspectionSettlement("NativeCancellation",
+                item.Origin.WorkerExecutionId, item.Origin.InvocationId, item.Origin.AttemptId, item.Settled, item.NotAdmitted)).ToList();
+            if (await driver.InspectParentSettlementAsync(state, document, cancellationToken) is { } parent) settlements.Add(parent);
+            return new(state, model.Profile, definition.Process, source, work, attempts, incidents, settlements);
+        }
+        catch (JsonException exception)
+        {
+            throw new BpmnModelValidationException($"BPMN execution '{executionId}' has invalid inspection material '{state.Executable.ArtifactId}'.", exception);
+        }
+    }
+
+    internal static IReadOnlyList<BpmnInspectionAttempt> InspectAttempts(RuntimeModelExecutionState state, RuntimeModelMaterial model,
+        BpmnDirectExecutionDriver.Document document)
+    {
+        var allOrigins = document.Work.Where(item => item.NativeWork is not null).Select(item => item.NativeWork!)
+            .Concat((document.NativeResults ?? []).Select(item => item.Origin))
+            .Concat((document.Cancellations ?? []).Select(item => item.Origin))
+            .ToArray();
+        if (allOrigins.Any(origin => !origin.MatchesModel(state) ||
+            origin.WorkerExecutionId != BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, state.ExecutionId, origin.InvocationId,
+                origin.AttemptId, origin.WorkerExecutable).WorkflowExecutionId ||
+            !model.Dependencies.Any(dependency => dependency.BindingId == origin.BindingId &&
+                WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dependency.Executable, origin.WorkerExecutable))))
+            throw new BpmnModelValidationException("The retained native attempt differs from this model and its pinned dependency.");
+        var groups = allOrigins.GroupBy(origin => (origin.InvocationId, origin.AttemptId)).ToArray();
+        if (groups.Any(group => group.Any(origin => !group.First().IsEquivalentTo(origin))))
+            throw new BpmnModelValidationException("Conflicting native origins name the same model attempt.");
+        var origins = groups.Select(group => group.First()).OrderBy(origin => origin.InvocationId, StringComparer.Ordinal).ThenBy(origin => origin.AttemptId, StringComparer.Ordinal);
+        return origins.Select(origin =>
+        {
+            var result = document.NativeResults?.SingleOrDefault(item => item.Origin.IsEquivalentTo(origin));
+            var cancellation = document.Cancellations?.SingleOrDefault(item => item.Origin.IsEquivalentTo(origin));
+            var current = document.Work.SingleOrDefault(item => item.InvocationId == origin.InvocationId && item.AttemptId == origin.AttemptId);
+            var failure = document.Failures?.SingleOrDefault(item => item.InvocationId == origin.InvocationId && item.FailedAttemptId == origin.AttemptId);
+            var status = cancellation is { NotAdmitted: true } ? "NotAdmitted" : result?.Status.ToString() ??
+                (cancellation is { Settled: false } ? "CancellationPending" : "Requested");
+            return new BpmnInspectionAttempt(origin.BindingId, origin.InvocationId, origin.AttemptId, origin.WorkerExecutionId,
+                origin.WorkerExecutable, status, current?.AttemptNumber ?? failure?.AttemptNumber, result?.Completion?.OutcomeKey, result?.FaultCode);
+        }).ToArray();
+    }
+
     public async ValueTask<RuntimeStorePage<BpmnHumanWork>> ListWorkAsync(string executionId, RuntimeStorePageRequest request,
         BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
@@ -196,12 +263,14 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         if (more) items = items[..request.Limit];
         var next = more ? continuations.Encode(IncidentPagePurpose,
             JsonSerializer.SerializeToUtf8Bytes(new WorkCursor(scopeKey, executionId, state.Revision, items[^1].IncidentId), Web)) : null;
-        return new(request, items.Select(item =>
-        {
-            var result = document.NativeResults!.Single(result => result.Origin.ResultInputId == item.ResultInputId);
-            return new BpmnServiceIncident(item.IncidentId, item.ElementId, item.BindingId, item.InvocationId, item.FailedAttemptId,
-                result.Origin.WorkerExecutionId, result.FaultCode ?? "bpmn.native-worker-faulted", item.FailedAt, item.AttemptNumber, item.MaxAttempts, item.Status, item.RetryAttemptId);
-        }).ToArray(), next);
+        return new(request, items.Select(item => Incident(document, item)).ToArray(), next);
+    }
+
+    private static BpmnServiceIncident Incident(BpmnDirectExecutionDriver.Document document, BpmnDirectExecutionDriver.ServiceFailure item)
+    {
+        var result = document.NativeResults!.Single(result => result.Origin.ResultInputId == item.ResultInputId);
+        return new(item.IncidentId, item.ElementId, item.BindingId, item.InvocationId, item.FailedAttemptId,
+            result.Origin.WorkerExecutionId, result.FaultCode ?? "bpmn.native-worker-faulted", item.FailedAt, item.AttemptNumber, item.MaxAttempts, item.Status, item.RetryAttemptId);
     }
 
     public async ValueTask<BpmnModelCommandOutcome> RetryServiceAsync(string executionId, string requestId, string incidentId,

@@ -31,7 +31,8 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
-        bool legacyCombinedStore = false, bool runtimeFlowchart = false, bool authoredDirectPublication = false)
+        bool legacyCombinedStore = false, bool runtimeFlowchart = false, bool authoredDirectPublication = false,
+        bool admitNewBpmnExecutions = true)
     {
         if (legacySnapshotDirectory is not null && runtimeSnapshotPath is not null)
             throw new ArgumentException("Select one actual legacy snapshot source.");
@@ -56,7 +57,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                 features["WorkflowsRuntimeResumption"] = new JsonObject { ["SweepIntervalSeconds"] = interval };
             if (directBpmn)
             {
-                features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = true };
+                features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = admitNewBpmnExecutions };
                 features["ActivitiesBpmnHostingApi"] = new JsonObject();
                 // Qualify the built-in single-node profile first. Clustered model placement remains a separate gate.
                 foreach (var name in new[] { "WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence" })
@@ -70,8 +71,10 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             }
             if (runtimeOnly)
             {
+                features["ApiCapabilities"] = new JsonObject();
                 var allowed = new HashSet<string>(StringComparer.Ordinal)
                 {
+                    "ApiCapabilities",
                     "ActivitiesBpmnHosting", "ActivitiesBpmnHostingApi", "ActivitiesRuntime", "Events", "Expressions", "FileSystemDistributedLocking", "Primitives", "Serialization", "Tasks",
                     "WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeResumption",
                     "FoundationIdentityAbstractions", "FoundationIdentityApi", "FoundationIdentityAspNetCoreIdentity",

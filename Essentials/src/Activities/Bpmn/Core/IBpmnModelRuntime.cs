@@ -8,6 +8,8 @@ namespace Elsa.Activities.Bpmn.Core;
 /// with material/execution context and the original JSON exception as its inner cause. Transport parsing is separate.</remarks>
 public interface IBpmnModelRuntime
 {
+    /// <summary>Current new-execution admission; accepted-work inspection and commands remain independent.</summary>
+    bool AdmitNewExecutions => false;
     ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
     /// <summary>Publishes with trusted immutable authored provenance; raw publication keeps its existing identity and payload.</summary>
     ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source,
@@ -16,6 +18,9 @@ public interface IBpmnModelRuntime
     ValueTask<BpmnModelCommandOutcome> StartAsync(string sourceReferenceId, string requestId,
         IReadOnlyDictionary<string, JsonElement>? inputs, BpmnModelCaller caller, CancellationToken cancellationToken = default);
     ValueTask<RuntimeModelExecutionState?> FindExecutionAsync(string executionId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
+    /// <summary>Reads persisted graph/provenance/current work and retained native outcomes; transports reauthorize the exact returned State before disclosure.</summary>
+    ValueTask<BpmnModelInspection> InspectAsync(string executionId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnModelInspection>(new NotSupportedException("This BPMN host does not support persisted inspection."));
     ValueTask<RuntimeStorePage<BpmnHumanWork>> ListWorkAsync(string executionId, RuntimeStorePageRequest request,
         BpmnModelCaller caller, CancellationToken cancellationToken = default);
     ValueTask<BpmnModelCommandOutcome> CompleteHumanAsync(string executionId, string requestId, string invocationId,
