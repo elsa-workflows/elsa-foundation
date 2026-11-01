@@ -1,4 +1,5 @@
 using CShells.DependencyInjection;
+using Elsa.Studio.Hosting;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.Attention;
 using Elsa.Studio.ConsoleStream;
@@ -25,7 +26,7 @@ internal static class StudioFeatureAssemblies
     /// <summary>Chooses the in-box modules shipped by this Studio distribution.</summary>
     public static CShellsBuilder WithStudioFeatureAssemblies(this CShellsBuilder shells)
     {
-        return shells.WithAssemblies(
+        return shells.WithStudioStartupAssemblies(
                 typeof(StudioApiFeature).Assembly,
                 typeof(BackendsStudioFeature).Assembly,
                 typeof(ConsoleStreamStudioFeature).Assembly,

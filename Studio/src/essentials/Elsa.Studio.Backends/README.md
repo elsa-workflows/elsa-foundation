@@ -2,6 +2,8 @@
 
 `BackendsStudio` owns backend profiles, management UI, connection selection and the profile API. Reference the package and enable the feature in the Studio shell; omit/disable it to retain a single configured backend with normal authentication and capability discovery.
 
+Custom hosts using profiles-only startup declare the Backends feature assembly (and any static parent features) through `ConfigureShells(shells => shells.WithStudioStartupAssemblies(typeof(BackendsStudioFeature).Assembly))`. Runtime-only package discovery cannot redefine initial host authority.
+
 The reference Web host explicitly installs `AddStudioBackendsHostConfiguration` for profiles-only startup compatibility. This optional adapter supplies a replacement initial authority source. Hosting composes the selected shell blueprint, then copies its result into a fresh host-owned snapshot before requests/shell activation; personal selection and later reload cannot retarget Studio identity or server bridge credentials. Explicit browser/server URL settings retain precedence. Custom authority sources are exclusive and duplicate registrations fail.
 
 Public module settings are contributed through the Studio runtime configuration collection event under the `backends` namespace. Configuration is allowlisted and contains no credentials. Profile endpoints belong to the enabled Studio feature and are scoped by the original Studio user, tenant and HostId. They disappear with the feature; client-only module suppression is a separate policy.

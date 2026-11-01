@@ -67,7 +67,7 @@ public static class StudioHostingExtensions
         builder.Services.AddCShellsAspNetCore(shells =>
         {
             shellBuilder = shells;
-            shells.WithAssemblies(typeof(StudioApiFeature).Assembly)
+            shells.WithStudioStartupAssemblies(typeof(StudioApiFeature).Assembly, typeof(Elsa.Events.EventsFeature).Assembly)
                 .WithConfigurationProvider(builder.Configuration)
                 .WithWebRouting(routing => routing.EnablePathRouting = true)
                 .ConfigureResolverPipeline(pipeline => pipeline

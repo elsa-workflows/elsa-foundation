@@ -8,7 +8,7 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 
 - Signature: `StudioBackendAuthority Resolve(StudioBackendAuthorityContext context)`.
 - Default: with no replacement, `StudioBackendAuthorityAccessor` in Hosting uses configured browser/server addresses. The optional Backends host adapter supplies `BackendsAuthoritySource`.
-- Register: `services.AddSingleton<IStudioBackendAuthoritySource, MyAuthoritySource>()` in the root host before Build. At most one replacement is accepted; multiple registrations fail startup.
+- Register: `services.AddSingleton<IStudioBackendAuthoritySource, MyAuthoritySource>()` in the root host before Build. Declare host feature assemblies with `CShellsBuilder.WithStudioStartupAssemblies(params Assembly[])` (Hosting); it also registers them for ordinary discovery, while leaving the runtime catalog cold. At most one replacement is accepted; multiple registrations fail startup.
 - Override when initial endpoint authority comes from another configuration provider. Hosting copies the result into its own immutable snapshot, exposed by `IStudioBackendAuthorityAccessor.Value`; browser authentication, introspection and the management bridge depend on that snapshot. Runtime selection cannot retarget it.
 
 ### Frontend connection provider (SDK — Elsa.Studio.Hosting)

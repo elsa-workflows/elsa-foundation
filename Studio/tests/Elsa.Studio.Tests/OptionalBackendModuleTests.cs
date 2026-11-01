@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Text.Json;
 using CShells.Lifecycle;
 using Elsa.Events.Core.Contracts;
@@ -44,9 +46,9 @@ public sealed class OptionalBackendModuleTests
         if (installed)
         {
             builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
-            studio.ConfigureShells(shells => shells.WithAssemblies(typeof(BackendsStudioFeature).Assembly));
+            studio.ConfigureShells(shells => shells.WithStudioStartupAssemblies(typeof(BackendsStudioFeature).Assembly));
         }
-        if(customRuntime) {builder.Configuration["CShells:Shells:Default:Features:AcmeRuntime"]="true";studio.ConfigureShells(shells=>shells.WithAssemblies(typeof(AcmeRuntimeFeature).Assembly));}
+        if(customRuntime) {builder.Configuration["CShells:Shells:Default:Features:AcmeRuntime"]="true";studio.ConfigureShells(shells=>shells.WithStudioStartupAssemblies(typeof(AcmeRuntimeFeature).Assembly));}
         configure?.Invoke(builder);
         var app = builder.Build();
         app.UseElsaStudio();
@@ -161,6 +163,14 @@ public sealed class OptionalBackendModuleTests
     public class ImplicitBackendsFeature : IShellFeature
     {
         public virtual void ConfigureServices(IServiceCollection services) { }
+    }
+
+    [Fact]
+    public void Startup_declarations_refuse_collectible_runtime_package_assemblies()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("RuntimeFeature"), AssemblyBuilderAccess.RunAndCollect);
+        var builder = new CShellsBuilder(new ServiceCollection());
+        Assert.Throws<ArgumentException>(() => builder.WithStudioStartupAssemblies(assembly));
     }
 
     private sealed class AuthoritySource : IStudioBackendAuthoritySource
