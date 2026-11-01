@@ -9,6 +9,8 @@ namespace Elsa.Agent.Specialists.Tests.Recovery;
 internal sealed class LeaseTrace
 {
     internal bool RejectRenewal { get; init; }
+    internal bool BlockRenewal { get; init; }
+    internal TaskCompletionSource RenewalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal bool LoseRenewalResponse { get; init; }
     internal TaskCompletionSource<SpecialistTurnDocument?> Renewed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal TaskCompletionSource<SpecialistTurnDocument> ClaimedRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -44,6 +46,8 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
     public async ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
         trace.Renewals.Enqueue((id, contextId));
+        trace.RenewalStarted.TrySetResult();
+        if (trace.BlockRenewal) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         var result = trace.RejectRenewal ? null : await inner.RenewAsync(handle, identity, lease, now, cancellationToken);
         trace.Renewed.TrySetResult(result);
         if (trace.LoseRenewalResponse) throw new IOException("The committed renewal response was lost.");

@@ -26,7 +26,8 @@ application are distinct boundaries.
 
 The worker renews the initial 30-second journal lease in fresh ordinary partition-bound persistence
 scopes, independently of the model callback's store/DbContext. A denied or unconfirmed renewal cancels
-the waiting model operation and prevents acceptance; a dispatched turn records OutcomeUnknown.
+the waiting model operation and prevents acceptance. Renewal I/O is itself bounded by the last
+confirmed lease expiry, separately from the operation deadline. A dispatched turn records OutcomeUnknown.
 Redelivery of the exact same native child waits for the existing live lease, bounded by native
 cancellation and the original operation deadline. It may recover an expired pre-dispatch claim with
 a new generation. Expired dispatched work is never reissued. This does not supply rebinding to a new

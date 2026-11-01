@@ -73,22 +73,30 @@ public sealed class SpecialistNativeTests
         Assert.Equal(dispatched ? 0 : 1, factory.Opens);
         Assert.Equal(dispatched ? 0 : 1, factory.Calls);
         Assert.Single(restored.ModelRequests!);
-        if (dispatched) Assert.True((await store.ReadConversationAsync(handle, identity, default))!.OutcomeUnknown);
+        if (dispatched)
+        {
+            Assert.True((await store.ReadConversationAsync(handle, identity, default))!.OutcomeUnknown);
+            var child = (await provider.GetRequiredService<IActivityExecutionStateStore>().FindAsync("run", item.Request.ActivityExecutionId))!;
+            Assert.Equal("specialist.turn.outcome-unknown", child.Fault?.Code);
+            Assert.Equal("outcome-unknown", child.Fault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey));
+        }
     }
 
     [Theory]
     [InlineData(false, "success")]
     [InlineData(false, "lost")]
     [InlineData(false, "uncertain")]
+    [InlineData(false, "blocked")]
     [InlineData(true, "success")]
     [InlineData(true, "lost")]
     [InlineData(true, "uncertain")]
+    [InlineData(true, "blocked")]
     public async Task Native_worker_renews_in_a_fresh_scope_and_stops_on_uncertain_renewal(bool durable, string mode)
     {
         using var files = new JournalFiles();
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         var loseLease = mode != "success";
-        var trace = new LeaseTrace { RejectRenewal = mode == "lost", LoseRenewalResponse = mode == "uncertain" };
+        var trace = new LeaseTrace { RejectRenewal = mode == "lost", LoseRenewalResponse = mode == "uncertain", BlockRenewal = mode == "blocked" };
         var factory = new FixtureFactory("{\"Article\":\"accepted\"}") { ResponseGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
         await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock, trace);
         var executable = await ExecutableAsync(provider, allowContinuity: true);
@@ -100,9 +108,17 @@ public sealed class SpecialistNativeTests
         var running = provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
         await factory.RequestSent.Task.WaitAsync(TimeSpan.FromSeconds(10));
         clock.Advance(TimeSpan.FromSeconds(10));
-        var renewal = await trace.Renewed.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        if (mode == "lost") Assert.Null(renewal);
-        else Assert.NotNull(renewal);
+        if (mode == "blocked")
+        {
+            await trace.RenewalStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            clock.Advance(TimeSpan.FromSeconds(20)); // Last confirmed lease expires, before absolute deadline.
+        }
+        else
+        {
+            var renewal = await trace.Renewed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (mode == "lost") Assert.Null(renewal);
+            else Assert.NotNull(renewal);
+        }
         if (!loseLease)
         {
             factory.ResponseGate.TrySetResult();

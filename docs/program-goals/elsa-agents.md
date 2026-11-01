@@ -78,7 +78,11 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578) implements T014–T015 under
    existing owner #2854 is complete through PR #3591 and source/package/core/Studio qualification
    on resulting main `5be59cebc`. M3 draft PR #3594 integrates that main and adds concrete model
-   access before its remaining durable journal/continuity/settlement work.
+   access, protected turn/conversation journals, physical request reservations, explicit native
+   continuation and finite generation-fenced leases. These are draft increments with separate source,
+   provider and bounded package receipts on the owning issue; whole-M3 delivery still requires stable
+   operation/new-delivery binding, native cancellation/applied settlement, retention/compatibility,
+   streaming and complete support qualification.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).

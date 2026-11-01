@@ -49,9 +49,15 @@ internal sealed class SpecialistTurnLeaseLifetime : IAsyncDisposable
                     }
                     var delay = TimeSpan.FromTicks(Math.Clamp((expiry - now).Ticks / 3, TimeSpan.TicksPerMillisecond, TimeSpan.FromSeconds(10).Ticks));
                     await Task.Delay(delay, time, stop.Token);
-                    await using var scope = await scopes.CreateAsync(new PersistenceScope(document.Identity.PersistencePartition), stop.Token);
+                    // Confirmation must arrive before the last confirmed expiry, including scope/DB I/O.
+                    var confirmationWindow = expiry - time.GetUtcNow();
+                    if (confirmationWindow <= TimeSpan.Zero) throw new InvalidOperationException("The specialist claim lease expired before renewal confirmation.");
+                    using var expires = new CancellationTokenSource(confirmationWindow, time);
+                    using var confirmation = CancellationTokenSource.CreateLinkedTokenSource(stop.Token, expires.Token);
+                    await using var scope = await scopes.CreateAsync(new PersistenceScope(document.Identity.PersistencePartition), confirmation.Token);
                     var store = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
-                    var renewed = await store.RenewAsync(document.Handle, document.Identity, SpecialistTurnLeaseRules.Token(document), time.GetUtcNow(), stop.Token);
+                    var renewed = await store.RenewAsync(document.Handle, document.Identity, SpecialistTurnLeaseRules.Token(document), time.GetUtcNow(), confirmation.Token);
+                    confirmation.Token.ThrowIfCancellationRequested();
                     if (renewed is null || renewed.Handle != document.Handle || renewed.Identity != document.Identity || renewed.Fence != document.Fence || renewed.AdmissionGeneration != document.AdmissionGeneration ||
                         renewed.Deadline != document.Deadline || renewed.LeaseExpiresAt is null || renewed.LeaseExpiresAt > document.Deadline || renewed.LeaseExpiresAt <= time.GetUtcNow())
                         throw new InvalidOperationException("The specialist journal could not confirm its live renewal.");
