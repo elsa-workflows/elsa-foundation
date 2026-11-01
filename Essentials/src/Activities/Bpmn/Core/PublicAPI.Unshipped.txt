@@ -1,0 +1,159 @@
+#nullable enable
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings, System.Collections.Generic.IReadOnlyList<string!>? timerBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.TimerBindings.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.CancelAsync(string! executionId, string! requestId, string? reason, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.FormatVersion.get -> int
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.HumanBindings.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.Process.get -> System.Text.Json.JsonElement
+Elsa.Activities.Bpmn.Core.BpmnModelProtocol
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.Key = "elsa.bpmn" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.Profile = "foundation-direct-v1" -> string!
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.Version = 1 -> int
+Elsa.Activities.Bpmn.Core.BpmnHumanWork
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnHumanWork!
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.AttemptId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.AttemptId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.BindingId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.BpmnHumanWork(string! ElementId, string! BindingId, string! TokenId, string? IterationId, string! InvocationId, string! AttemptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.Deconstruct(out string! ElementId, out string! BindingId, out string! TokenId, out string? IterationId, out string! InvocationId, out string! AttemptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.ElementId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.ElementId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.Equals(Elsa.Activities.Bpmn.Core.BpmnHumanWork? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.InvocationId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.InvocationId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.IterationId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.IterationId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.TokenId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.TokenId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCaller
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnModelCaller!
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ActorId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.ActorId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.BpmnModelCaller(string! ActorId, string? TenantId) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.Deconstruct(out string! ActorId, out string? TenantId) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.Equals(Elsa.Activities.Bpmn.Core.BpmnModelCaller? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.TenantId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnModelCaller.TenantId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.BpmnModelCommandOutcome(string! ExecutionId, string! InputId, bool Replay, bool Pending, System.Text.Json.JsonElement? Result) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Deconstruct(out string! ExecutionId, out string! InputId, out bool Replay, out bool Pending, out System.Text.Json.JsonElement? Result) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Equals(Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.ExecutionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.ExecutionId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.InputId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.InputId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Pending.get -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Pending.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Replay.get -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Replay.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Result.get -> System.Text.Json.JsonElement?
+Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Result.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelResourceMissingException
+Elsa.Activities.Bpmn.Core.BpmnModelResourceMissingException.BpmnModelResourceMissingException() -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnPublishedModel!
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.BpmnPublishedModel(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, string! IncarnationId, string! SourceReferenceId, string! Profile) -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Executable, out string! IncarnationId, out string! SourceReferenceId, out string! Profile) -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Equals(Elsa.Activities.Bpmn.Core.BpmnPublishedModel? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Executable.init -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.IncarnationId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.IncarnationId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Profile.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Profile.init -> void
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.SourceReferenceId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnPublishedModel.SourceReferenceId.init -> void
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.CompleteHumanAsync(string! executionId, string! requestId, string! invocationId, string! attemptId, string![]? outcomes, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.FindCommandAsync(string! executionId, string! requestId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome?>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.FindExecutionAsync(string! executionId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState?>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.ListWorkAsync(string! executionId, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! request, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Activities.Bpmn.Core.BpmnHumanWork!>!>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.PublishAsync(Elsa.Activities.Bpmn.Core.BpmnModelDefinition! definition, string! requestId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnPublishedModel!>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.StartAsync(string! sourceReferenceId, string! requestId, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>? inputs, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+override Elsa.Activities.Bpmn.Core.BpmnHumanWork.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnHumanWork.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnHumanWork.ToString() -> string!
+override Elsa.Activities.Bpmn.Core.BpmnModelCaller.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnModelCaller.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnModelCaller.ToString() -> string!
+override Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.ToString() -> string!
+override Elsa.Activities.Bpmn.Core.BpmnPublishedModel.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnPublishedModel.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnPublishedModel.ToString() -> string!
+static Elsa.Activities.Bpmn.Core.BpmnHumanWork.operator !=(Elsa.Activities.Bpmn.Core.BpmnHumanWork? left, Elsa.Activities.Bpmn.Core.BpmnHumanWork? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnHumanWork.operator ==(Elsa.Activities.Bpmn.Core.BpmnHumanWork? left, Elsa.Activities.Bpmn.Core.BpmnHumanWork? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnModelCaller.operator !=(Elsa.Activities.Bpmn.Core.BpmnModelCaller? left, Elsa.Activities.Bpmn.Core.BpmnModelCaller? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnModelCaller.operator ==(Elsa.Activities.Bpmn.Core.BpmnModelCaller? left, Elsa.Activities.Bpmn.Core.BpmnModelCaller? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.operator !=(Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome? left, Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome.operator ==(Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome? left, Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnPublishedModel.operator !=(Elsa.Activities.Bpmn.Core.BpmnPublishedModel? left, Elsa.Activities.Bpmn.Core.BpmnPublishedModel? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnPublishedModel.operator ==(Elsa.Activities.Bpmn.Core.BpmnPublishedModel? left, Elsa.Activities.Bpmn.Core.BpmnPublishedModel? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnModelValidationException
+Elsa.Activities.Bpmn.Core.BpmnModelValidationException.BpmnModelValidationException(string! message, System.Exception? innerException = null) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.ServiceBindings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>?
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BpmnNativeServiceBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! businessErrorCode) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BusinessErrorCode.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.NativeWorkProfile = "foundation-native-work-v1" -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BpmnNativeServiceBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! businessErrorCode, Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy? faultPolicy) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.FaultPolicy.get -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy?
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition.FinalFault = 0 -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition.HoldForRetry = 1 -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.BpmnServiceFaultPolicy(int formatVersion, Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition disposition, int maxAttempts) -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.FormatVersion.get -> int
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.Disposition.get -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.MaxAttempts.get -> int
+const Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.MaximumAttempts = 32 -> int
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.ListIncidentsAsync(string! executionId, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! request, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Activities.Bpmn.Core.BpmnServiceIncident!>!>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.RetryServiceAsync(string! executionId, string! requestId, string! incidentId, string! invocationId, string! failedAttemptId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnServiceIncident!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.BpmnServiceIncident(string! IncidentId, string! ElementId, string! BindingId, string! InvocationId, string! FailedAttemptId, string! WorkerExecutionId, string! FaultCode, System.DateTimeOffset FailedAt, int AttemptNumber, int MaxAttempts, string! Status, string? RetryAttemptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Deconstruct(out string! IncidentId, out string! ElementId, out string! BindingId, out string! InvocationId, out string! FailedAttemptId, out string! WorkerExecutionId, out string! FaultCode, out System.DateTimeOffset FailedAt, out int AttemptNumber, out int MaxAttempts, out string! Status, out string? RetryAttemptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Equals(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.IncidentId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.IncidentId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.ElementId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.ElementId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.BindingId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.InvocationId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.InvocationId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAttemptId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAttemptId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.WorkerExecutionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.WorkerExecutionId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FaultCode.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FaultCode.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAt.get -> System.DateTimeOffset
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAt.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.AttemptNumber.get -> int
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.AttemptNumber.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.MaxAttempts.get -> int
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.MaxAttempts.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Status.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Status.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.RetryAttemptId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.RetryAttemptId.init -> void
+override Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnServiceIncident.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnServiceIncident.ToString() -> string!
+static Elsa.Activities.Bpmn.Core.BpmnServiceIncident.operator !=(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? left, Elsa.Activities.Bpmn.Core.BpmnServiceIncident? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnServiceIncident.operator ==(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? left, Elsa.Activities.Bpmn.Core.BpmnServiceIncident? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings, System.Collections.Generic.IReadOnlyList<string!>? timerBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding!>? nativeEventBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.NativeEventBindings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding!>?
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BpmnNativeEventBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!

@@ -1,0 +1,34 @@
+{
+  "round": 15,
+  "head": "d8969d8e5272b00cb403477ead0cd9521a67f651",
+  "base": "b8fe4f464945cf1a9060bc7d1b83f50d8701425c",
+  "verdict": "not clean",
+  "correctness": "no actionable findings",
+  "acceptance": "no actionable findings",
+  "standards": [
+    {
+      "id": "S1",
+      "priority": "P2",
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs",
+      "primaryLine": 22,
+      "operations": [
+        "FindMaterialAsync",
+        "SaveModelAsync",
+        "ListMaterialPageAsync"
+      ],
+      "scenario": "All three new model-material operations leak raw IOException and unrequested OperationCanceledException across their public feature boundary.",
+      "rawFailures": 6,
+      "providerControls": 3,
+      "requestedCancellationControls": 3,
+      "independentlyConfirmedByParent": true,
+      "adopted": true
+    }
+  ],
+  "findingsDropped": [],
+  "completedRounds": 15,
+  "reviewLimit": 16,
+  "nextFullRound": 16,
+  "correction": "not yet made at this checkpoint",
+  "remoteDraftHeadUnchanged": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+  "historyRouteDecision": "pending"
+}

@@ -16,6 +16,8 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz"
+          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <!-- The feature-activation tests start a real CShells web host. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>

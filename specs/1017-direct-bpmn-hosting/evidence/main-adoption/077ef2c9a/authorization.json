@@ -1,0 +1,11 @@
+{
+  "ownerReply": "Approved both",
+  "goalReactivatedByUser": true,
+  "forceTarget": "c53167925de74d026be739ce4248ed4047c0e578",
+  "requiredRemoteLease": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+  "forceActionsAuthorized": 1,
+  "forceActionsUsed": 0,
+  "subsequentStep": "Ordinary forward publication of qualified descendant",
+  "prCheckpoint": "https://github.com/elsa-workflows/elsa-foundation/pull/3410#issuecomment-6554403026",
+  "state": "Reconciling current main before approved publication; no branch mutation yet"
+}

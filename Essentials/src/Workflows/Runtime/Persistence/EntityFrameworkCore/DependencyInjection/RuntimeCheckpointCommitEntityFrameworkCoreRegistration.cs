@@ -17,6 +17,7 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
         {
             // Admissions, results and cancellation tombstones must share the native checkpoint transaction.
             services.AddRuntimeBackgroundActivityWorkEntityFrameworkCore();
+            services.TryAddScoped<IRuntimeModelExecutionReader, EfRuntimeModelExecutionReader>();
             RequireEfParticipants(services);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime checkpoint EF persistence");
 
