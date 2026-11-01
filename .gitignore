@@ -104,6 +104,8 @@ artifacts/
 # Historical BPMN proof is restored from the pinned release assets when needed.
 # Concise receipts already tracked here remain versioned; add new receipts explicitly.
 /specs/1017-direct-bpmn-hosting/evidence/**
+# Spec 1184 restores the pinned members named in its evidence/fixtures.json here.
+/specs/1184-direct-bpmn-studio/evidence/fixtures/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
