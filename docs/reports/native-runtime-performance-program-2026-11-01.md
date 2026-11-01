@@ -182,6 +182,25 @@ The user guide and resumption mechanics describe the retained session and state 
 deletion fall back to immediate checkpoints. That fallback has behavioral controls; its throughput is unmeasured.
 Independent-host takeover, final provider integration, full review and containing-main gates remain open.
 
+### Statement and wire attribution
+
+The opt-in command-cost tool now includes the 103-activity reference. Its first run exposed a missing tool-only
+activity-count mapping; the workflow itself completed before the report rejected the unknown reference. After that
+mapping and its documentation were corrected, both whole-project measurement cases passed (SQLite and PostgreSQL,
+zero failures/skips, discovery 2/2). Both providers ran all four configurations and all seven reference/series shapes.
+The tool validates named caller attribution, one transaction per checkpoint marker and wire/savepoint/rollback accounting.
+
+For Balanced: ten WriteLines cost 90 SQLite commands; PostgreSQL batches them into 66 EF commands containing 90
+statements and uses 74 wire round trips. The HTTP reference is 97 SQLite commands versus 78 PostgreSQL EF commands,
+97 statements and 94 round trips. The long suspension reference is 625 SQLite commands versus 387 PostgreSQL EF
+commands, 625 statements and 448 round trips. Equivalent SQL counts do not imply equivalent provider command counts
+or network latency. The current Durable ten-WriteLine floor is 329 SQLite commands / 269 PostgreSQL commands /
+368 PostgreSQL round trips, and still exceeds #2584's original SQLite objective of under 300.
+
+Raw command TSVs, run JSON and attribution/linear-fit report are in
+`/private/tmp/elsa-runtime-efficiency-program/m4-command-cost-qualified/`; rerun using the
+[tool instructions](../../Essentials/tests/Activities/Http/CommandCost/Tests/README.md). Nothing in this cohort is timed.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.

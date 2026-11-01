@@ -25,8 +25,9 @@ PostgreSQL test fails if any such database is left on the server.
 
 ## What it measures
 
-Each provider measures the three reference workflows, and a Sequence of 5, 10, 20 and 40 WriteLine activities, under
-four configurations. Every one keeps the default `MaxActivitiesPerCommit` of 50, which no measured run reaches.
+Each provider measures the four reference workflows, including suspension before 100 WriteLines and actual resume,
+and a Sequence of 5, 10, 20 and 40 WriteLine activities, under four configurations. Every run keeps the default
+`MaxActivitiesPerCommit` of 50; the long suspension reference crosses it.
 
 | Mode | Configuration |
 |---|---|
