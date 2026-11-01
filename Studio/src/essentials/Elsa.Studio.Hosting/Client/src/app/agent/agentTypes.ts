@@ -81,6 +81,38 @@ export interface AgentCreateSessionResponse {
   status: AgentSessionStatus;
   title?: string;
   contextAttachments: StudioAgentContextAttachment[];
+  /**
+   * Experimental (#3440, not frozen): the server-acknowledged session policy. Absent only when the backend
+   * composition cannot read it back; such a session cannot change its autonomy.
+   */
+  policy?: AgentSessionPolicy;
+}
+
+/** Experimental (#3440, not frozen): a session's acknowledged effective autonomy, its ceiling and the owner's revision. */
+export interface AgentSessionPolicy {
+  autonomyMode: AgentAutonomyMode;
+  maxAutonomyMode: AgentAutonomyMode;
+  allowedAutonomyModes: AgentAutonomyMode[];
+  revision: number;
+}
+
+/** Experimental (#3440, not frozen): a conditional autonomy-only change against the last acknowledged revision. */
+export interface AgentAutonomyUpdateRequest {
+  autonomyMode: AgentAutonomyMode;
+  expectedRevision: number;
+}
+
+/** The policy that admitted a message; a later selector value never relabels it. */
+export interface AgentAcceptedPolicy {
+  autonomyMode?: AgentAutonomyMode;
+  revision: number;
+}
+
+export interface AgentSessionDetailResponse {
+  sessionId: string;
+  status: AgentSessionStatus;
+  policy?: AgentSessionPolicy;
+  messages: { id: string; role: string; status: string; acceptedPolicyRevision?: number }[];
 }
 
 export interface AgentMessageRequest {
@@ -101,6 +133,8 @@ export interface AgentMessageResponse {
   /** Sanitized evidence admitted for this message; absent responses fail closed in presentation. */
   contextAttachments?: StudioAgentContextAttachment[];
   warnings?: { code: string; message: string; target?: string }[];
+  /** The policy the owning store stamped on the accepted message, when it owns policy revisions. */
+  acceptedPolicy?: AgentAcceptedPolicy;
 }
 
 export interface AgentMessageViewModel {
@@ -108,6 +142,8 @@ export interface AgentMessageViewModel {
   role: AgentMessageRole;
   content: string;
   status: AgentMessageStatus;
+  /** The acknowledged policy that admitted the turn this message belongs to, when known. */
+  acceptedPolicy?: AgentAcceptedPolicy;
 }
 
 export interface AgentActionProposal {
