@@ -33,7 +33,7 @@ def main():
         ("omitted-application", "        await inner.DispatchAsync(source, cancellationToken);",
          '        if (source.Intent.Kind != "elsa.specialist.applied/1") await inner.DispatchAsync(source, cancellationToken);', "recover"),
     ]
-    report = {"baselineSource": receipt["source"], "baselineVersion": receipt["version"],
+    report = {"baselineSource": receipt["source"], "baselineVersion": receipt["version"], "streamResponses": receipt.get("streamResponses", False),
               "baselineReceiptSha256": hashlib.sha256((baseline / "report.json").read_bytes()).hexdigest(),
               "status": "InProgress", "controls": []}
 
@@ -75,7 +75,7 @@ def main():
                 log = directory / (role + ".log")
                 with log.open("w") as stream:
                     result = subprocess.run(["dotnet", "run", "--project", str(project), "-c", "Release", "--no-build", "--no-restore", "--",
-                        str(baseline / "runtime-inbox"), role, str(data), "Durable"], cwd=directory, env=environment, stdout=stream, stderr=subprocess.STDOUT)
+                        str(baseline / "runtime-inbox"), role, str(data), "Durable", *(["stream"] if receipt.get("streamResponses", False) else [])], cwd=directory, env=environment, stdout=stream, stderr=subprocess.STDOUT)
                 if role == failure_role:
                     if result.returncode in [0, 197, 198]:
                         raise RuntimeError(name + ": expected normal refusal, observed " + str(result.returncode))
@@ -95,6 +95,9 @@ def main():
             else:
                 if dispatches != 1 or len(turns) != 1 or turns[0]["status"] != "Accepted" or turns[0].get("applications"):
                     raise RuntimeError(name + ": lost acceptance, repeated model or unexpectedly applied")
+                dispatch = json.loads(next((data / "dispatches").glob("dispatch-*.json")).read_text())
+                if dispatch.get("responseMode", "atomic") != ("stream" if receipt.get("streamResponses", False) else "atomic"):
+                    raise RuntimeError(name + ": control used the wrong baseline response mode")
                 if name == "retired-content-key":
                     work = json.loads(database.execute("SELECT ContentJson FROM elsa_runtime_background_activity_work").fetchone()[0])
                     code = decoded(work["result"]["fault"]["code"])
