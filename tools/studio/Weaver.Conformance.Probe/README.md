@@ -70,3 +70,23 @@ complete thirteen-case matrix and package witness remain T015/T025.
 python3 tools/studio/Weaver.Conformance.Probe/qualify_autonomy.py \
   --output /absolute/new-owned-autonomy-proof --version 4.0.0-weaver3440.local1
 ```
+
+### Per-adapter lifecycle matrix (#3440 T015)
+
+`--scope matrix` runs all thirteen cases from the
+[mandatory native qualification inventory](../../../specs/1186-weaver-effects/contracts/session-policy.md#mandatory-native-qualification-inventory)
+once on each actual adapter, through the same fresh package-composed hosts. The four mode cases run
+unchanged. `lifecycle_journeys.py` drives the other nine by reusing the original driver operations:
+deny, stale revision, write-denied authority, pre-call-gate cancellation and duplicate execute/delivery
+with the module's size operation, the policy route while review, approval and receipt continuation are
+retained, and the resource, workflow and lost-confirmation browser journeys with FullAuto selected
+before the conversation exists. Each record names its adapter and observed outcome, owner readback and
+native session/turn/proposal/invocation/call correlation; `require_lifecycle_matrix` refuses
+omissions, duplicates, wrong-cause outcomes and missing or changed evidence. Every case runs once, a
+failed case keeps its precise cause, and success needs all twenty-six passed. It never sets
+`qualified` or `independentPackageWitness`: T025 owns the complete package witness.
+
+```sh
+python3 tools/studio/Weaver.Conformance.Probe/qualify_autonomy.py --scope matrix \
+  --output /absolute/new-owned-autonomy-matrix --version 4.0.0-weaver3440.local2
+```

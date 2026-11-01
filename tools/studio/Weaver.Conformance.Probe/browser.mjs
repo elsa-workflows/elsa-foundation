@@ -12,6 +12,11 @@ const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
+// T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
+const LIFECYCLE_JOURNEYS = { "visibility-review-control": ["resource", "full-auto"], "workflow-review-control": ["workflow", "full-auto"],
+  "interrupted-after-effect": ["lost-confirmation", null] };
+const lifecycle = config.lifecycleCase ?? null;
+if (lifecycle !== null && LIFECYCLE_JOURNEYS[lifecycle]?.[0] !== config.journey) throw new Error("A lifecycle case must name its exact declared journey.");
 function need(condition, message) { if (!condition) throw new Error(message); }
 function ownedOrigin(value) {
   const url = new URL(value);
@@ -56,6 +61,7 @@ const autonomyCapture = config.journey === "autonomy-size" ? await captureAutono
 page.setDefaultTimeout(30000);
 const requests = [], owningWrites = [], pageErrors = [], consoleMessages = [], failedRequests = [];
 const resourceInteractions = [], moduleOwnerReads = [], pendingOwnerReads = [];
+const publishAttempts = [];
 await context.exposeBinding("qualificationObserveResourceInteraction", (_source, value) => resourceInteractions.push(value));
 await context.addInitScript(observeResourceInteractions, { route: witness.route });
 let owningDraftPath;
@@ -75,6 +81,9 @@ page.on("request", request => {
   if (url.origin === backend && owningDraftPath === url.pathname && ["PUT", "POST", "PATCH", "DELETE"].includes(request.method())) {
     owningWrites.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
   }
+  // Publish is an explicit boundary: a lifecycle journey records any attempt to cross it.
+  if (lifecycle && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
+    publishAttempts.push({ url: diagnosticUrl(request.url()), method: request.method() });
   if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
@@ -792,6 +801,48 @@ async function autonomySize() {
     ownerObserved: true, noImplicitExecute: outcome !== "automatic" || !requests.some(item => item.url.endsWith("/execute")) };
   await screenshot("autonomy-native-outcome");
 }
+async function lifecycleBegin() {
+  // Select the declared draft mode before the first native request, exactly as the mode cases do.
+  if (!lifecycle) return null;
+  const mode = LIFECYCLE_JOURNEYS[lifecycle][1];
+  if (!await dock().isVisible()) {
+    await page.getByRole("button", { name: /^Weaver/ }).click();
+    await expect(dock()).toBeVisible();
+  }
+  if (mode) {
+    need(requests.length === 0, "The lifecycle mode must be selected before the first native request.");
+    const selector = dock().locator(".weaver-auto-apply");
+    const button = selector.getByRole("button", { name: "Auto-apply mode", exact: true });
+    await expect(button).toBeEnabled();
+    await button.click();
+    await dock().getByRole("menu", { name: "Auto-apply mode", exact: true })
+      .getByRole("menuitemradio", { name: new RegExp("^" + AUTONOMY_LABELS[mode] + "(?:\\s|$)") }).click();
+    await expect(button).toHaveText(AUTONOMY_LABELS[mode]);
+    await expect(selector).toHaveAttribute("data-autonomy-state", "requested");
+  }
+  const response = responseFor("/sessions");
+  response.catch(() => undefined); // A failed first request reports its own error first.
+  // Wrapped: an async function returning the promise itself would wait for the request it precedes.
+  return { response };
+}
+async function lifecycleCreated(created) {
+  if (!created) return;
+  const creation = await accepted(created.response, "autonomy-create-session");
+  const mode = LIFECYCLE_JOURNEYS[lifecycle][1];
+  const policy = creation.value.data?.policy, sessionId = creation.value.data?.sessionId;
+  need(typeof sessionId === "string" && sessionId && autonomyPolicy(policy)
+    && (!mode || creation.response.request().postDataJSON().autonomyMode === mode && policy.autonomyMode === mode),
+  "The lifecycle conversation did not acknowledge its selected mode with a readable policy.");
+  result.lifecycle = { caseKey: lifecycle, sessionId, createdPolicy: policy, requestedMode: mode };
+}
+async function lifecycleFinish() {
+  // The originating turn has already settled; read the owning conversation once, never retrying work.
+  if (!lifecycle) return;
+  need(result.lifecycle?.sessionId, "The lifecycle conversation was never acknowledged.");
+  const session = await owner("lifecycle-session-after", "/_elsa/agent/sessions/" + encodeURIComponent(result.lifecycle.sessionId));
+  need(session.value.data?.sessionId === result.lifecycle.sessionId, "The lifecycle conversation changed.");
+  result.lifecycle.sessionAfter = session.receipt;
+}
 async function resource() {
   await page.goto(studio + witness.route);
   await expect(page.getByTestId("acme-home-revision")).toBeVisible();
@@ -804,10 +855,12 @@ async function resource() {
   await screenshot("home-before");
   await page.goto(studio + witness.route);
   await expect(page.getByTestId("acme-home-revision")).toHaveText(before.value.revision);
+  const created = await lifecycleBegin();
   command(witness.readTool, {});
   const readMessage = responseFor("/messages");
   await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
   const read = await accepted(readMessage, "read-message");
+  await lifecycleCreated(created);
   const readResult = dock().getByRole("region", { name: "Module results", exact: true }).getByTestId("acme-home-result");
   await expect(readResult).toContainText(`The owning resource reports ${before.value.visible ? "visible" : "hidden"}.`);
   await expect(readResult.getByTestId("acme-home-result-revision")).toHaveText(before.value.revision);
@@ -884,6 +937,7 @@ async function resource() {
   expect((await owner("owner-after-home-reload", witness.ownerEndpoint)).value).toEqual(after.value);
   if (config.journey === "resource") result.observations.homeReload = true;
   await screenshot("home-reloaded");
+  await lifecycleFinish();
   // actualAdapter is attached by the Python coordinator only after matching the protocol trace.
   result.readMessage = { url: read.response.url(), status: read.response.status() };
 }
@@ -910,9 +964,11 @@ async function workflow() {
   await nativeValidation("validation-before");
   const position = await activity.getAttribute("style");
   await page.getByRole("button", { name: /^Weaver/ }).click();
+  const created = await lifecycleBegin();
   const args = { activityId, x: 480, y: 320 };
   need(!position?.includes("translate(480px, 320px)"), "Workflow baseline must differ from the requested position.");
   const { proposal, sent } = await sendTool("workflow_set_designer_position", args, "workflow");
+  await lifecycleCreated(created);
   expect(sent.response.request().postDataJSON().contextAttachments).toEqual(expect.arrayContaining([expect.objectContaining({ contentType: "workflow.definition",
     target: expect.objectContaining({ resourceId: definitionId }), client: expect.objectContaining({ generationId: expect.any(String) }) })]));
   await approve(proposal, "workflow");
@@ -1015,6 +1071,8 @@ async function workflow() {
     expect(confirmed.response.request().postDataJSON()).toEqual(intercepted.original);
     expect(confirmed.value).toEqual(intercepted.value);
     await expect(proposal).toHaveAttribute("data-status", "executed");
+    // The late receipt resumes its originating turn; let that continuation settle before Undo.
+    if (lifecycle) await expect(dock()).toHaveAttribute("aria-busy", "false");
     expect(await workingDraft("working-after-confirmation-retry")).toEqual(workingApplied);
     await proposal.getByRole("button", { name: "Undo whole change", exact: true }).click();
     await expect(activity).toHaveAttribute("style", position);
@@ -1031,6 +1089,7 @@ async function workflow() {
     result.expectedFailureObserved = true;
     result.actual = { stage: "client-confirmation-delivery", diagnostic: "net::ERR_FAILED" };
     need(failedRequests.some(item => item.url === diagnosticUrl(intercepted.url) && item.errorText === result.actual.diagnostic), "The real accepted ACK response was not observed as lost browser delivery.");
+    await lifecycleFinish();
     result.status = "failed";
     return;
   }
@@ -1080,6 +1139,7 @@ async function workflow() {
   result.observations.validated = true;
   result.observations.explicitSaveReadback = true;
   await screenshot("workflow-saved-reloaded");
+  await lifecycleFinish();
 }
 async function rendererUnavailable() {
   const { definitionId, activityId, definitionPath, draftPath, htmlCanary } = config.workflow ?? {};
@@ -1345,10 +1405,11 @@ try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
-  else if (config.journey === "autonomy-size") {
+  else if (config.journey === "autonomy-size" || lifecycle) {
+    const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
     try {
-      await Promise.race([autonomySize(), new Promise((_resolve, reject) => {
+      await Promise.race([bounded(), new Promise((_resolve, reject) => {
         deadline = setTimeout(() => {
           // Stop pending UI actions in this owned context; never let an expired
           // journey submit a late intent while failure evidence is captured.
@@ -1378,6 +1439,7 @@ try {
   result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
   result.evidence.push(retain("agent-requests", requests));
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
+  if (lifecycle) result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);

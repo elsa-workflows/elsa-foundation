@@ -40,6 +40,7 @@ EXPECTED_CASES = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key
 MODE_CASE_IDS = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key in MODE_CASES)
 EVIDENCE_CATEGORY = "deterministic-provider-protocol"
 MODE_QUALIFICATION = "autonomyModeQualification"
+MATRIX_QUALIFICATION = "autonomyLifecycleQualification"
 MODE_LABELS = {"manual": "Manual review", "full-auto": "Autopilot"}
 # Accepted messages carry the domain policy, serialized with the API's camelCase enum names.
 ACCEPTED_MODES = {"manual": "manual", "autoReadOnly": "auto-read-only", "fullAuto": "full-auto"}
@@ -680,6 +681,81 @@ def qualify_autonomy_modes(runtime):
         raise
     finally:
         check(run.report.get("independentPackageWitness") is False, "Mode qualification cannot promote package qualification")
+        private_json(section_path, section)
+        run.save()
+    return section
+
+
+def require_lifecycle_matrix(section, owned_root):
+    """T015: every one of the thirteen cases passed exactly once on each actual adapter.
+
+    Omissions, duplicates, foreign or wrong-adapter rows, wrong-cause outcomes and missing or
+    changed owner/correlation evidence fail. This never qualifies the package witness (T025).
+    """
+    from lifecycle_journeys import EXPECTED_OUTCOMES, require_lifecycle_record
+    check(set(LIFECYCLE_CASES) - set(MODE_CASES) == set(EXPECTED_OUTCOMES), "The lifecycle manifest and its expected outcomes disagree")
+    check(isinstance(section, dict) and section.get("evidenceCategory") == EVIDENCE_CATEGORY and section.get("liveProvider") is False
+          and section.get("qualified") is False and section.get("independentPackageWitness") is False,
+          "The lifecycle matrix is deterministic provider-protocol evidence and never a package witness")
+    records = section.get("cases")
+    check(isinstance(records, list) and all(isinstance(row, dict) for row in records), "The lifecycle matrix has no case records")
+    identities = [row.get("id") for row in records]
+    check(len(identities) == len(set(identities)), "A duplicated lifecycle case cannot qualify")
+    check(set(identities) == EXPECTED_CASES, "Every one of the thirteen cases per actual adapter is mandatory exactly once")
+    check(all(row.get("provider") in PROVIDERS and row.get("caseKey") in LIFECYCLE_CASES
+              and row["id"] == row["provider"] + "-" + row["caseKey"] for row in records), "A case must name its exact actual adapter")
+    failed = sorted(row["id"] for row in records if row.get("status") != "passed")
+    check(not failed, "Every case must pass on each actual adapter: " + ", ".join(failed))
+    modes = [row for row in records if row["caseKey"] in MODE_CASES]
+    require_mode_qualification(modes)
+    for row in modes:
+        check(row.get("sessionId") and row.get("correlation", {}).get("kind") == "completed-native-result", "A mode case lost its native correlation")
+        for reference in (row.get("ownerBefore"), row.get("ownerAfter"), *row["evidence"]): _owned_ref(owned_root, reference)
+    for row in records:
+        if row["caseKey"] not in MODE_CASES: require_lifecycle_record(owned_root, row)
+    return records
+
+
+def qualify_autonomy_matrix(runtime):
+    """T015: the full per-adapter thirteen-case matrix; never promotes an independent package witness.
+
+    Each case runs once. A failed case keeps its precise cause and the remaining cases still run,
+    so one native attempt shows every outcome. Success requires all twenty-six passed.
+    """
+    from lifecycle_journeys import LifecycleCaseFailure, execute_lifecycle_case
+    run = runtime.run
+    check(MATRIX_QUALIFICATION not in run.report and MODE_QUALIFICATION not in run.report
+          and run.report.get("independentPackageWitness") is False, "Use a fresh lifecycle matrix, never replace a qualified or partial observation")
+    section_path = run.root / "autonomy-lifecycle-qualification.json"
+    check(not section_path.exists(), "Never overwrite a retained lifecycle matrix")
+    section = {"status": "running", "scope": "per-adapter-lifecycle-matrix", "source": run.source,
+               "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "qualified": False, "independentPackageWitness": False,
+               "expectedCaseIds": sorted(EXPECTED_CASES), "cases": []}
+    run.report[MATRIX_QUALIFICATION] = section
+    run.save()
+    try:
+        for provider in PROVIDERS:
+            runtime.select_provider(provider)
+            for key in LIFECYCLE_CASES:
+                try:
+                    record = execute_mode_case(runtime, provider, key) if key in MODE_CASES else execute_lifecycle_case(runtime, provider, key)
+                except RuntimeError as error:
+                    precise = isinstance(error, (ModeCaseFailure, LifecycleCaseFailure))
+                    record = {"id": provider + "-" + key, "provider": provider, "adapter": provider, "caseKey": key, "status": "failed",
+                              "cause": error.cause if precise else "verification", "message": str(error)[:1000],
+                              "observation": getattr(error, "observation", None),
+                              "modeMismatch": isinstance(error, ModeCaseFailure) and error.cause == "autonomy.mode_mismatch",
+                              "nativeEvidenceVerified": False, "qualified": False, "source": run.source}
+                section["cases"].append(record)
+                run.save()
+                run.assert_immutable_inputs()
+        require_lifecycle_matrix(section, run.root)
+        section["status"] = "passed"
+    except BaseException as error:
+        section.update(status="failed", failure={"type": type(error).__name__, "message": str(error)[:1000]})
+        raise
+    finally:
+        check(run.report.get("independentPackageWitness") is False, "The lifecycle matrix cannot promote package qualification")
         private_json(section_path, section)
         run.save()
     return section

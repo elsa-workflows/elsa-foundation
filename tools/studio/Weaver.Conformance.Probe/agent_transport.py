@@ -147,6 +147,9 @@ class AgentTransport:
     def create_session(self, body): return self.request("POST", PREFIX + "/sessions", body)
     def session(self, session_id): return self.request("GET", PREFIX + "/sessions/" + _segment(session_id))
     def message(self, session_id, body): return self.request("POST", PREFIX + "/sessions/" + _segment(session_id) + "/messages", body)
+    def update_autonomy(self, session_id, body):
+        # Experimental #3440 conditional policy route; one request per call, never retried here.
+        return self.request("PUT", PREFIX + "/sessions/" + _segment(session_id) + "/autonomy", body)
     def approve(self, proposal_id, *, revision=None, comment=None):
         return self.request("POST", PREFIX + "/proposals/" + _segment(proposal_id) + "/approve", {"revision": revision, "comment": comment})
     def deny(self, proposal_id, *, comment=None):
