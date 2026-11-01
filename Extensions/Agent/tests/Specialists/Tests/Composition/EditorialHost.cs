@@ -59,21 +59,25 @@ internal sealed class EditorialHost : IAsyncDisposable
     private WorkflowExecutionHarness? harness;
     private int generation;
 
-    private EditorialHost(string workflowExecutionId, EditorialModel model)
+    private EditorialHost(string workflowExecutionId, EditorialModel model, TimeSpan decisionLifetime)
     {
+        DecisionLifetime = decisionLifetime;
         WorkflowExecutionId = workflowExecutionId;
         Model = model;
         Directory.CreateDirectory(Path.Combine(directory, "locks"));
     }
 
     public string WorkflowExecutionId { get; }
+    public TimeSpan DecisionLifetime { get; }
     public EditorialModel Model { get; }
     public EditorialSubjects Subjects { get; } = new();
     public WorkflowExecutionHarness Harness => harness ?? throw new InvalidOperationException("The editorial host is stopped.");
 
-    public static async Task<EditorialHost> StartAsync(string workflowExecutionId, EditorialModel model)
+    public EditorialCrashSwitch Crash { get; } = new();
+
+    public static async Task<EditorialHost> StartAsync(string workflowExecutionId, EditorialModel model, TimeSpan? decisionLifetime = null)
     {
-        var host = new EditorialHost(workflowExecutionId, model);
+        var host = new EditorialHost(workflowExecutionId, model, decisionLifetime ?? TimeSpan.FromMinutes(15));
         await host.BuildAsync();
         return host;
     }
@@ -102,7 +106,7 @@ internal sealed class EditorialHost : IAsyncDisposable
             .WithFeature(services => new BackgroundActivitiesFeature { RunWorkers = false, LeaseDurationSeconds = 60 }.ConfigureServices(services))
             .WithFeature(services => new SecretsFeature { EncryptionKey = encryptionKey }.ConfigureServices(services))
             .WithFeature(services => new SpecialistsRuntimeFeature().ConfigureServices(services))
-            .WithFeature(services => new SpecialistsEditorialFeature().ConfigureServices(services))
+            .WithFeature(services => new SpecialistsEditorialFeature { DecisionLifetime = DecisionLifetime }.ConfigureServices(services))
             .WithFeature(services => new FileSystemLockingFeature { LocksFolderPath = Path.Combine(directory, "locks") }.ConfigureServices(services))
             .ConfigureServices(services =>
             {
@@ -111,6 +115,8 @@ internal sealed class EditorialHost : IAsyncDisposable
                 Elsa.Cluster.Readability.EfSchemaReadabilityServiceCollectionExtensions.AddEfSchemaDormancy(services);
                 services.AddSingleton<ISpecialistModelClientFactory>(Model);
                 services.AddScoped<ICurrentSubjectPermissionAuthorizer>(_ => Subjects);
+                services.AddSingleton(Crash);
+                services.AddScoped<IRuntimeCheckpointCommitEnricher, EditorialCrashEnricher>();
                 services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite",
@@ -240,6 +246,14 @@ internal sealed class EditorialHost : IAsyncDisposable
             if (!progressed) return;
         }
         throw new InvalidOperationException("The editorial run did not settle.");
+    }
+
+    public Task CancelAsync() => Harness.CancelAsync(WorkflowExecutionId, new WorkflowExecutionPartition(Tenant));
+
+    public async Task<IReadOnlyCollection<IncidentState>> IncidentsAsync()
+    {
+        await using var scope = await ScopeAsync();
+        return await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(WorkflowExecutionId);
     }
 
     public async Task<IReadOnlyCollection<ActivityExecutionState>> ActivitiesAsync()
@@ -484,10 +498,23 @@ internal sealed class EditorialSubjects : ICurrentSubjectPermissionAuthorizer
     public void Grant(string subject, string tenant = EditorialHost.Tenant) => grants[(tenant, subject)] = true;
     public void Revoke(string subject, string tenant = EditorialHost.Tenant) => grants.TryRemove((tenant, subject), out _);
     public bool Unavailable { get; set; }
+    public int Checks => checks;
+    private int checks;
+    private (string Tenant, string Subject)? revokeAfterNextCheck;
+
+    /// <summary>Grants the next check for this subject, then revokes it: models revocation between issue and admission.</summary>
+    public void RevokeAfterNextCheck(string subject, string tenant = EditorialHost.Tenant) => revokeAfterNextCheck = (tenant, subject);
 
     public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default)
     {
         if (Unavailable) throw new TimeoutException("The identity store is temporarily unavailable.");
+        Interlocked.Increment(ref checks);
+        if (revokeAfterNextCheck == (request.TenantId, request.SubjectId) && grants.ContainsKey((request.TenantId, request.SubjectId)))
+        {
+            revokeAfterNextCheck = null;
+            grants.TryRemove((request.TenantId, request.SubjectId), out _);
+            return ValueTask.FromResult(CurrentSubjectPermissionResult.Granted);
+        }
         return ValueTask.FromResult(request.Permission == EditorialReviewIds.DecidePermission && grants.ContainsKey((request.TenantId, request.SubjectId))
             ? CurrentSubjectPermissionResult.Granted
             : CurrentSubjectPermissionResult.Denied("not granted"));
@@ -505,4 +532,30 @@ internal sealed class SingleNodeFleet : Elsa.Persistence.Schema.SchemaFinalizati
         ValueTask.FromResult(new Elsa.Persistence.Schema.SchemaFinalization.EfSchemaFleetAnswer(true, []));
     public TimeSpan SettleMargin => TimeSpan.Zero;
     public Microsoft.Extensions.Primitives.IChangeToken GetChangeToken() => new Microsoft.Extensions.Primitives.CancellationChangeToken(CancellationToken.None);
+}
+
+/// <summary>Armed once, it loses the process before the review's completion checkpoint commits.</summary>
+internal sealed class EditorialCrashSwitch
+{
+    private int armed;
+    public void Arm() => Interlocked.Exchange(ref armed, 1);
+    public bool Fired { get; private set; }
+    public bool TryFire()
+    {
+        if (Interlocked.Exchange(ref armed, 0) != 1) return false;
+        Fired = true;
+        return true;
+    }
+}
+
+internal sealed class EditorialCrashEnricher(EditorialCrashSwitch crash) : IRuntimeCheckpointCommitEnricher
+{
+    public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+    {
+        // A stale fence is how the drainer sees a lost owner: nothing is saved, acknowledged or poisoned.
+        if (commit.StateChanges.ActivityExecutions.Any(change => change.State.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId &&
+                change.State.Status == ActivityExecutionStatus.Completed) && crash.TryFire())
+            throw new Elsa.Workflows.Runtime.Core.Exceptions.RuntimeStaleFencingTokenException(commit.WorkflowExecutionId, 1, 2);
+        return ValueTask.FromResult(commit);
+    }
 }
