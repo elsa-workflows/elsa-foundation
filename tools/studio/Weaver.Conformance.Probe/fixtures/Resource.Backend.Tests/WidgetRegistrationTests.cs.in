@@ -45,7 +45,7 @@ public sealed class WidgetRegistrationTests
         using var one = provider.CreateScope();
         using var two = provider.CreateScope();
         var tools = one.ServiceProvider.GetServices<IAgentTool>().ToArray();
-        Assert.Equal(new[] { WidgetContract.ReadTool, WidgetContract.WriteTool }, tools.Select(item => item.Descriptor.Name).Order().ToArray());
+        Assert.Equal(new[] { WidgetContract.ReadTool, WidgetContract.SizeTool, WidgetContract.WriteTool }, tools.Select(item => item.Descriptor.Name).Order().ToArray());
         Assert.All(tools, tool => Assert.Equal(WidgetContract.Module, tool.Descriptor.ModuleId));
         Assert.Same(one.ServiceProvider.GetRequiredService<WidgetResource>(), one.ServiceProvider.GetRequiredService<WidgetResource>());
         Assert.NotSame(one.ServiceProvider.GetRequiredService<WidgetResource>(), two.ServiceProvider.GetRequiredService<WidgetResource>());
@@ -56,7 +56,7 @@ public sealed class WidgetRegistrationTests
         Assert.Equal(new[] { WidgetContract.ResourceType }, contexts[0].Descriptor.ResourceTypes);
         Assert.Contains(WidgetContract.GuidanceType, contexts[0].Descriptor.ContextKinds);
         var capabilities = await one.ServiceProvider.GetRequiredService<IAgentCapabilityProvider>().GetCapabilitiesAsync();
-        Assert.Equal(new[] { "acme.home.read", "acme.home.visibility" }, capabilities.Select(item => item.Id).Order().ToArray());
+        Assert.Equal(new[] { "acme.home.read", "acme.home.size", "acme.home.visibility" }, capabilities.Select(item => item.Id).Order().ToArray());
         var write = Assert.Single(tools, item => item.Descriptor.Name == WidgetContract.WriteTool);
         Assert.Contains(WidgetContract.ReadPermission, write.Descriptor.RequiredPermissions);
         Assert.Contains(WidgetContract.WritePermission, write.Descriptor.RequiredPermissions);
