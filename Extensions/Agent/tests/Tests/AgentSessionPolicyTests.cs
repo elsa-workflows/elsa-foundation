@@ -681,7 +681,7 @@ public sealed class AgentSessionPolicyTests
         }
     }
 
-    private sealed class ForwardingSessions(IAgentSessionService inner) : IAgentSessionService
+    internal sealed class ForwardingSessions(IAgentSessionService inner) : IAgentSessionService
     {
         public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => inner.CreateAsync(request, cancellationToken);
         public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindAsync(sessionId, cancellationToken);
@@ -694,18 +694,18 @@ public sealed class AgentSessionPolicyTests
         public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default) => inner.ListContextAsync(sessionId, cancellationToken);
     }
 
-    private sealed class ForwardingStreaming(IAgentStreamingService inner) : IAgentStreamingService
+    internal sealed class ForwardingStreaming(IAgentStreamingService inner) : IAgentStreamingService
     {
         public IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, CancellationToken cancellationToken = default) => inner.StreamAsync(sessionId, cancellationToken);
     }
 
-    private sealed class ForwardingInvoker(IAgentToolInvoker inner) : IAgentToolInvoker
+    internal sealed class ForwardingInvoker(IAgentToolInvoker inner) : IAgentToolInvoker
     {
         public Task<AgentToolDispatch> DispatchAsync(AgentToolInvocation invocation, AgentPolicy policy, CancellationToken cancellationToken = default)
             => inner.DispatchAsync(invocation, policy, cancellationToken);
     }
 
-    private sealed class ForwardingProposals(IAgentProposalService inner) : IAgentProposalService
+    internal sealed class ForwardingProposals(IAgentProposalService inner) : IAgentProposalService
     {
         public Task<AgentActionProposal> AddAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default) => inner.AddAsync(proposal, cancellationToken);
         public Task<AgentActionProposal?> FindAsync(string proposalId, CancellationToken cancellationToken = default) => inner.FindAsync(proposalId, cancellationToken);
