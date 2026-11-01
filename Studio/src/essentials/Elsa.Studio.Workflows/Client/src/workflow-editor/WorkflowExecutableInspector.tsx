@@ -1,6 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
+import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
@@ -56,6 +56,9 @@ import {
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
+import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -325,6 +328,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
     () => buildExecutableInspectorCanvas(graph, activityCatalog, detail.chosenReference?.layout ?? [], frames, onNavigateToScope, selectedNodeId),
     [activityCatalog, detail, frames, graph, onNavigateToScope, selectedNodeId]
   );
+  const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(canvas.nodes);
   const scopeKey = frames.length === 0 ? "root" : frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
 
   return (
@@ -345,11 +349,13 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
         {canvas.nodes.length === 0 ? <div className="wf-empty">This executable has no renderable activities.</div> : (
           <ReactFlow
             key={scopeKey}
-            nodes={canvas.nodes}
+            nodes={flowNodes}
             edges={canvas.edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
+            fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+            onNodesChange={onNodesChange}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
@@ -357,7 +363,8 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             onPaneClick={() => onSelectNode(null)}
           >
             <Background />
-            <MiniMap pannable zoomable />
+            <FitReadOnlyFlowView nodeCount={flowNodes.length} />
+            <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
             <Controls />
           </ReactFlow>
         )}
