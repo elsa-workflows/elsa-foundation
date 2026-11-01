@@ -117,6 +117,65 @@ public sealed class ActivityStateViewAndOperatorAccessTests
     }
 
     [Fact]
+    public async Task A_module_can_project_a_retained_reference_after_private_state_is_cleared()
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, privateState: false, clearedProjector: true);
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync(StatePath));
+        Assert.True(document.RootElement.GetProperty("available").GetBoolean());
+        Assert.Equal("test.retained-reference", document.RootElement.GetProperty("viewKind").GetString());
+        Assert.Equal("node-scope", document.RootElement.GetProperty("view").GetProperty("node").GetString());
+    }
+
+    [Fact]
+    public async Task An_opted_in_projector_can_report_that_no_retained_reference_remains()
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, privateState: false, clearedProjector: true, clearedUnavailable: true);
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync(StatePath));
+        Assert.False(document.RootElement.GetProperty("available").GetBoolean());
+        Assert.Equal("StateCleared", document.RootElement.GetProperty("unavailableReason").GetString());
+    }
+
+    [Theory]
+    [InlineData("tenant")]
+    [InlineData("structure")]
+    [InlineData("runtime")]
+    public async Task Cleared_state_projection_does_not_run_before_authorization(string change)
+    {
+        var permissions = change == "structure" ? [WorkflowRuntimePermissions.WorkflowRuntimeRead]
+            : change == "runtime" ? [InspectionContext.StructurePermission] : Reader;
+        await using var host = await StateViewHost.StartAsync(permissions, privateState: false, clearedProjector: true,
+            tenant: change == "tenant" ? "other" : "tenant-a");
+        using var response = await host.Client.GetAsync(StatePath);
+        Assert.Equal(change == "runtime" ? HttpStatusCode.Forbidden : HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<ClearedProjector>()).Calls);
+    }
+
+    [Fact]
+    public async Task An_existing_private_state_projector_keeps_precedence()
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, clearedProjector: true);
+        using var document = JsonDocument.Parse(await host.Client.GetStringAsync(StatePath));
+        Assert.Equal(TestProjector.Kind, document.RootElement.GetProperty("viewKind").GetString());
+        Assert.Equal(0, Assert.Single(host.Services.GetServices<IActivityStateViewProjector>().OfType<ClearedProjector>()).Calls);
+    }
+
+    [Fact]
+    public void Duplicate_cleared_activity_selectors_are_rejected_even_with_different_state_aliases()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivityStateViewProjectorRegistry([
+            new ClearedProjector(alias: "one"), new ClearedProjector(alias: "two")]));
+        Assert.Contains("Test.Scope", error.Message);
+    }
+
+    [Fact]
+    public async Task Existing_projectors_default_to_refusing_cleared_state()
+    {
+        IActivityStateViewProjector projector = new TestProjector();
+        Assert.Null(projector.ActivityTypeWithoutState);
+        Assert.Null(await projector.ProjectWithoutStateAsync(null!));
+    }
+
+    [Fact]
     public async Task A_private_state_without_a_projector_says_so()
     {
         await using var host = await StateViewHost.StartAsync(Reader, stateAlias: "Contoso.Unprojected.State");
@@ -241,7 +300,9 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             string stateAlias = TestProjector.Alias,
             bool registerProjector = true,
             bool duplicateProjector = false,
-            bool denyManageResource = false)
+            bool denyManageResource = false,
+            bool clearedProjector = false,
+            bool clearedUnavailable = false)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -255,6 +316,8 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             feature.PostConfigureServices(builder.Services);
             if (registerProjector)
                 builder.Services.AddSingleton<IActivityStateViewProjector, TestProjector>();
+            if (clearedProjector)
+                builder.Services.AddSingleton<IActivityStateViewProjector>(new ClearedProjector(unavailable: clearedUnavailable));
             if (duplicateProjector)
                 builder.Services.AddSingleton<IActivityStateViewProjector, TestProjector>();
             if (denyManageResource)
@@ -347,6 +410,22 @@ public sealed class ActivityStateViewAndOperatorAccessTests
                 incidents = context.Incidents.Count,
                 values = context.CanInspectSensitiveValues
             }));
+    }
+
+    private sealed class ClearedProjector(string alias = "Test.Retained.State", bool unavailable = false) : IActivityStateViewProjector
+    {
+        public string StateTypeAlias => alias;
+        public int Calls { get; private set; }
+        public string? ActivityTypeWithoutState => "Test.Scope";
+        public string ViewKind => "test.retained-reference";
+        public int ViewVersion => 1;
+        public ValueTask<JsonElement> ProjectAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("This test exercises only the explicit absent-state projection.");
+        public ValueTask<JsonElement?> ProjectWithoutStateAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult<JsonElement?>(unavailable ? null : JsonSerializer.SerializeToElement(new { node = context.ExecutableNode.ExecutableNodeId }));
+        }
     }
 
     private sealed class DenyManageForRuns : IPermissionResourceHandler

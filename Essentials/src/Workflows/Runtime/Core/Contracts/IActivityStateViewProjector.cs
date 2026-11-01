@@ -19,6 +19,9 @@ public interface IActivityStateViewProjector
     /// <summary>The private-state type alias this projector reads, such as <c>Elsa.CompensationScope.State</c>.</summary>
     string StateTypeAlias { get; }
 
+    /// <summary>An exact activity type whose retained structural references this projector can read without private state; null keeps the default StateCleared behavior.</summary>
+    string? ActivityTypeWithoutState => null;
+
     /// <summary>The kind of view it produces, such as <c>compensation.journal</c>.</summary>
     string ViewKind { get; }
 
@@ -27,6 +30,10 @@ public interface IActivityStateViewProjector
 
     /// <summary>Projects the view for one activity execution whose private state has <see cref="StateTypeAlias"/>.</summary>
     ValueTask<JsonElement> ProjectAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default);
+
+    /// <summary>Projects retained structural references after private state cleanup, or returns null when no supported reference remains. Called only for <see cref="ActivityTypeWithoutState"/> after the same inspection authorization.</summary>
+    ValueTask<JsonElement?> ProjectWithoutStateAsync(ActivityStateViewContext context, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<JsonElement?>(null);
 }
 
 /// <summary>

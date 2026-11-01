@@ -83,3 +83,13 @@ tools/bpmn/                     # owned-host collectors and receipts
 ## Complexity Tracking
 
 No exception requested. The sole new shared UI seam is a contextual run-related-link contribution needed for demonstrated BPMN→native→ETL navigation. It carries identities and authorized links, not execution semantics.
+
+## T026 completed-occurrence read correction
+
+The actual41f1828cb recovery capture proves that successful RunEtl completion clears its private state while retaining the consumed trigger receipt and ETL invocation/result address. The existing state-view service stops at StateCleared, so a successful native occurrence loses its ETL navigation. The captured old stores and observed failure are archived in evidence/etl/actual-recovery.md before this correction.
+
+Extend the existing state-view projection port with an optional activity-type selector and a nullable read projection for absent private state. Both default to refusing the fallback; existing projectors retain their old behavior. Registry startup rejects duplicate selectors. Resource/tenant/structure authorization remains before projector invocation; the executable node is still pinned to the inspected run. Missing or unsupported retained data yields the existing StateCleared result.
+
+The ETL projector opts in only for RunEtl. Its fallback reads the existing ETL store using the same scope and deterministic invocation identity, then verifies the exact retained native result address, worker pin, consumed typed registration and terminal outcome. It projects only run/address identities. It neither recreates private state nor changes a persisted writer, receipt fingerprint, scheduler or UI link contract. Optional missing ETL storage refuses the fallback while preserving the existing live-state projection.
+
+Local design audit: this uses the read port already serving the demonstrated journey. Keeping completed private payloads or adding an alternate client identity recipe would contradict the accepted cleanup/domain boundaries. Shared-port changes immediately require affected API authorization/registration tests and old compiled-projector/default-interface binary compatibility, followed by actual upgraded-host inspection of the archived completed writer. Full final review remains0/6; this technical correction is within T026 and introduces no owner policy decision.
