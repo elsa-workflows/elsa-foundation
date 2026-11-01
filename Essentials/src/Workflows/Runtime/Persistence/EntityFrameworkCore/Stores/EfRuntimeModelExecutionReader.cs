@@ -28,7 +28,8 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
             var row = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             return row is null ? null : Read(row, scope, executionId);
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+                                          exception is IOException or OperationCanceledException)
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw Unavailable("reading execution", scope, executionId, null, exception);
@@ -46,7 +47,8 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
             var row = await context.Set<RuntimeModelInputEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             return row is null ? null : Read(row, scope, executionId, inputId);
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+                                          exception is IOException or OperationCanceledException)
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw Unavailable("reading input", scope, executionId, inputId, exception);
@@ -84,7 +86,8 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
                 : null;
             return new(request, states, next);
         }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+                                          exception is IOException or OperationCanceledException)
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw Unavailable("listing executions", scope, null, null, exception);

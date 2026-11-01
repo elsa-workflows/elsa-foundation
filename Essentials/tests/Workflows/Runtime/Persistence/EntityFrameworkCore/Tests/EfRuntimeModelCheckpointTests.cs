@@ -48,6 +48,55 @@ public sealed class EfRuntimeModelCheckpointTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Read(cancellation.Token));
     }
 
+    [Theory]
+    [InlineData("state", false)]
+    [InlineData("state", true)]
+    [InlineData("input", false)]
+    [InlineData("input", true)]
+    [InlineData("page", false)]
+    [InlineData("page", true)]
+    public async Task Model_read_io_and_unrequested_cancellation_retain_context(string operation, bool providerCancellation)
+    {
+        var cause = providerCancellation ? (Exception)new OperationCanceledException("Unrequested storage cancellation.")
+            : new IOException("Authoritative storage read failed.");
+        var interceptor = new FailModelReadConnection(cause);
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
+            .UseSqlite("Data Source=:memory:").AddInterceptors(interceptor).Options);
+        var reader = Reader(context);
+        async Task Read(CancellationToken token = default)
+        {
+            if (operation == "state") await reader.FindAsync("requested-execution", token);
+            else if (operation == "input") await reader.FindInputAsync("requested-execution", "requested-input", token);
+            else await reader.ListPageAsync(new(), token);
+        }
+
+        var error = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => Read());
+        Assert.Equal("runtime.model-state-unavailable", error.Code);
+        Assert.Same(cause, error.InnerException);
+        Assert.Contains("tenant-a", error.Message);
+        if (operation != "page") Assert.Contains("requested-execution", error.Message);
+        if (operation == "input") Assert.Contains("requested-input", error.Message);
+        Assert.Equal(1, interceptor.Attempts);
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var requested = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Read(cancellation.Token));
+        Assert.Equal(cancellation.Token, requested.CancellationToken);
+        Assert.Equal(1, interceptor.Attempts);
+    }
+
+    private sealed class FailModelReadConnection(Exception cause) : DbConnectionInterceptor
+    {
+        public int Attempts { get; private set; }
+
+        public override ValueTask<InterceptionResult> ConnectionOpeningAsync(DbConnection connection,
+            ConnectionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            Attempts++;
+            return ValueTask.FromException<InterceptionResult>(cause);
+        }
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
     private static readonly RuntimeExecutionProtocol Protocol = new("test.model", 1);
     private static readonly WorkflowExecutableIdentity Pin = CreatePin();
