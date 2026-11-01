@@ -306,6 +306,16 @@ def main():
                 raise ValueError("A direct-human checkpoint needs a new safe label; evidence is never overwritten.")
             if action == "restart":
                 stop(backend)
+                if direct_human and value.get("seedAdministrator") is not None:
+                    # A second development administrator gives the journey a distinct authenticated subject;
+                    # earlier accounts and their subjects are kept by the seeder.
+                    name = value["seedAdministrator"]
+                    if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,30}", name):
+                        raise ValueError("A seeded administrator needs a safe user name.")
+                    current = json.loads((backend_root / "shells.json").read_text())
+                    seed = current["CShells"]["Shells"]["default"]["Features"]["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"]
+                    seed["SeedAdminUserName"] = name; seed["SeedAdminEmail"] = name + "@elsa.local"
+                    write_json(backend_root / "shells.json", current)
                 backend = start(args.workbench_assembly, backend_root, backend_url, "workbench")
                 ready(backend, backend_url + "/health/ready")
                 stages[label] = observation(label)
