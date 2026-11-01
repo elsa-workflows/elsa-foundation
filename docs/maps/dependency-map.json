@@ -22712,6 +22712,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Design.Core",
+          "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Core",
           "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
@@ -22887,6 +22892,11 @@
           "type": "internal",
           "id": "Elsa.Events",
           "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Api",
+          "path": "Essentials/src/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj"
         },
         {
           "type": "internal",
