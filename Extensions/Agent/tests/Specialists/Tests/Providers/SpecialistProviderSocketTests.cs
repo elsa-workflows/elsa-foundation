@@ -35,6 +35,7 @@ public sealed class SpecialistProviderSocketTests
     [InlineData("anthropic", "truncated", "specialist.result.truncated")]
     [InlineData("azure-openai", "truncated", "specialist.result.truncated")]
     [InlineData("anthropic", "thinking", null)]
+    [InlineData("anthropic", "pause", "specialist.result.content")]
     public async Task Production_acceptance_checks_provider_finish_and_visible_result(string vendor, string mode, string? refusal)
     {
         using var certificate = Certificate();
@@ -44,7 +45,8 @@ public sealed class SpecialistProviderSocketTests
         connection.Hosts = Elsa.Connections.Core.Models.AllowedHostsPolicy.Fixed("127.0.0.1");
         var resolver = new Resolver(connection);
         SpecialistConnectionModelProvider provider = vendor == "anthropic"
-            ? new TlsAnthropic(resolver, new Access(), certificate) : new TlsAzure(resolver, new Access(), certificate);
+            ? new AnthropicSpecialistModelProvider(resolver, new Access()) : new AzureOpenAISpecialistModelProvider(resolver, new Access());
+        provider.ConfigureTransport = handler => Trust(handler, certificate);
         var descriptor = Request(Model(vendor), await provider.GetCapabilitiesAsync(Model(vendor))).Descriptor;
         var contract = new ActivityContract("specialist", "1.0.0", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],
             new(new("System.Text.Json.JsonElement"), true, ActivityValuePolicy.Default, []), ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.FacadeCapability));
@@ -68,7 +70,7 @@ public sealed class SpecialistProviderSocketTests
 
     public static IEnumerable<object[]> Cases() =>
         from vendor in new[] { "anthropic", "azure-openai" }
-        from mode in new[] { "success", "retry", "redirect", "loss", "cancel-before", "cancel-after", "refusal", "truncated", "revoke-after-open", "revise-after-open" }
+        from mode in new[] { "success", "retry", "redirect", "loss", "cancel-before", "cancel-after", "refusal", "truncated", "revoke-after-open", "revise-after-open", "recreate-after-open", "credential-revoke", "credential-rotate" }
         select new object[] { vendor, mode };
 
     [Theory]
@@ -104,12 +106,16 @@ public sealed class SpecialistProviderSocketTests
         connection.Hosts = Elsa.Connections.Core.Models.AllowedHostsPolicy.Fixed("127.0.0.1");
         var resolver = new Resolver(connection);
         SpecialistConnectionModelProvider provider = vendor == "anthropic"
-            ? new TlsAnthropic(resolver, new Access(), certificate) : new TlsAzure(resolver, new Access(), certificate);
+            ? new AnthropicSpecialistModelProvider(resolver, new Access()) : new AzureOpenAISpecialistModelProvider(resolver, new Access());
+        provider.ConfigureTransport = handler => Trust(handler, certificate);
         var metadata = await provider.GetCapabilitiesAsync(Model(vendor), cancellation.Token);
         await using var lease = await provider.OpenAsync(Request(Model(vendor), metadata), cancellation.Token);
         if (mode == "cancel-before") cancellation.Cancel();
         if (mode == "revoke-after-open") connection.Status = "Revoked";
         if (mode == "revise-after-open") connection.Version++;
+        if (mode == "recreate-after-open") connection.IncarnationId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        if (mode == "credential-revoke") connection.CredentialUnavailable = true;
+        if (mode == "credential-rotate") connection.Credential = "fixture-new-credential";
         var observer = new ObservingClient(lease.Client);
         var agent = new ChatClientAgent(observer, instructions: "Write a fixture headline.");
         var options = lease.Options.Clone();
@@ -120,7 +126,7 @@ public sealed class SpecialistProviderSocketTests
         var error = await Record.ExceptionAsync(async () => result = await agent.RunAsync("Fixture brief.", options: new ChatClientAgentRunOptions(options), cancellationToken: cancellation.Token));
         if (mode is "cancel-before" or "cancel-after") Assert.IsAssignableFrom<OperationCanceledException>(error);
         else Assert.False(cancellation.IsCancellationRequested);
-        if (mode is "cancel-before" or "revoke-after-open" or "revise-after-open")
+        if (mode is "cancel-before" or "revoke-after-open" or "revise-after-open" or "recreate-after-open" or "credential-revoke" or "credential-rotate")
         {
             Assert.NotNull(error);
             Assert.Empty(origin.Requests);
@@ -151,7 +157,6 @@ public sealed class SpecialistProviderSocketTests
             else Assert.NotNull(error);
         }
         Assert.Empty(target.Requests);
-        Assert.Equal(1, connection.CredentialReads);
     }
 
     private sealed class ObservingClient(IChatClient inner) : DelegatingChatClient(inner)
@@ -171,7 +176,7 @@ public sealed class SpecialistProviderSocketTests
         if (mode == "thinking") content.Add(new { type = "thinking", thinking = "fixture-private-reasoning", signature = "fixture-signature" });
         content.Add(new { type = "text", text = "{\"headline\":\"Fixture\"}" });
         object body = vendor == "anthropic"
-            ? new { id = "msg-fixture", type = "message", role = "assistant", model = "fixture-model", content, stop_reason = mode == "refusal" ? "refusal" : mode == "truncated" ? "max_tokens" : "end_turn", stop_sequence = (string?)null, usage = new { input_tokens = 11, output_tokens = 7 } }
+            ? new { id = "msg-fixture", type = "message", role = "assistant", model = "fixture-model", content, stop_reason = mode == "refusal" ? "refusal" : mode == "truncated" ? "max_tokens" : mode == "pause" ? "pause_turn" : "end_turn", stop_sequence = (string?)null, usage = new { input_tokens = 11, output_tokens = 7 } }
             : new { id = "chatcmpl-fixture", @object = "chat.completion", created = 1700000000, model = "fixture-model", choices = new[] { new { index = 0, message = new { role = "assistant", content = mode == "refusal" ? null : "{\"headline\":\"Fixture\"}", refusal = mode == "refusal" ? "Fixture refusal" : null }, finish_reason = mode == "truncated" ? "length" : "stop" } }, usage = new { prompt_tokens = 11, completion_tokens = 7, total_tokens = 18 } };
         await context.Response.WriteAsync(JsonSerializer.Serialize(body));
     }
@@ -193,16 +198,6 @@ public sealed class SpecialistProviderSocketTests
         handler.SslOptions.RemoteCertificateValidationCallback = (_, actual, _, errors) => actual is not null &&
             (errors & SslPolicyErrors.RemoteCertificateNameMismatch) == 0 && actual.GetCertHashString(HashAlgorithmName.SHA256) == certificate.GetCertHashString(HashAlgorithmName.SHA256);
         return handler;
-    }
-    private sealed class TlsAnthropic(IConnectionResolver resolver, IPersistenceAccessContextAccessor access, X509Certificate2 certificate)
-        : AnthropicSpecialistModelProvider(resolver, access)
-    {
-        protected override HttpMessageHandler CreatePrimaryHandler() => Trust(base.CreatePrimaryHandler(), certificate);
-    }
-    private sealed class TlsAzure(IConnectionResolver resolver, IPersistenceAccessContextAccessor access, X509Certificate2 certificate)
-        : AzureOpenAISpecialistModelProvider(resolver, access)
-    {
-        protected override HttpMessageHandler CreatePrimaryHandler() => Trust(base.CreatePrimaryHandler(), certificate);
     }
     private sealed record Observed(string Protocol, string Path, JsonElement Body, string? ApiKey, string? Authorization);
     private sealed class Server(WebApplication app) : IAsyncDisposable

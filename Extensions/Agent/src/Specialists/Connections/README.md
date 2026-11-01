@@ -51,9 +51,19 @@ runtime, rather than to this operational connection helper.
 
 ## Contributor extension
 
-`SpecialistConnectionModelProvider` is the shared base for a separately packaged SDK contributor.
+`SpecialistConnectionModelProvider` is the scoped shared base for a separately packaged SDK contributor.
 Implement its exact provider/connection/protocol identities and `CreateClient`, disable SDK retries,
 and use the supplied owned HTTP client and explicit sensitive API key. Change the protocol identity
 when effective SDK/API/schema support changes. A custom primary handler must preserve the documented
 controls and carry actual physical-request tests. Contributors extending beyond this finite profile
 can instead implement the existing Core ports directly.
+
+`SpecialistModelConnectionTypeProvider` supplies the corresponding immutable connection-type
+definition. Register it as a singleton in the existing Connections type registry, separately from the
+scoped model owner. Holding a scoped model owner in that registry creates a resolver/registry cycle.
+
+Lease authorization binds the connection's opaque creation identity as well as its revision. Deleting
+and recreating a name invalidates old leases even when version numbers repeat. Unknown legacy creation
+identities are refused by this profile. Each transport send resolves the current backing credential
+again, refusing revoked/expired/deleted or changed material independently of the metadata revision.
+Revocation after the transport authority check cannot retract a request already in flight.

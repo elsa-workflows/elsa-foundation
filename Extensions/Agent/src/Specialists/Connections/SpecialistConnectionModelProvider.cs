@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,7 +17,7 @@ namespace Elsa.Agent.Specialists.Connections;
 /// </summary>
 public abstract class SpecialistConnectionModelProvider(
     IConnectionResolver resolver,
-    IPersistenceAccessContextAccessor access) : ISpecialistModelClientFactory, ISpecialistModelCapabilitiesSource, IConnectionTypeProvider
+    IPersistenceAccessContextAccessor access) : ISpecialistModelClientFactory, ISpecialistModelCapabilitiesSource
 {
     /// <inheritdoc />
     public abstract string ProviderKey { get; }
@@ -29,46 +28,21 @@ public abstract class SpecialistConnectionModelProvider(
     /// <summary>Creates an owned SDK client with retries disabled and no ambient credential fallback.</summary>
     protected abstract IChatClient CreateClient(Uri endpoint, string modelId, SensitiveValue apiKey, HttpClient http);
 
+    // Internal fixture seam: add trust for an owned HTTPS test server without changing product
+    // retry/redirect/auth behavior or deriving from a concrete SDK implementation.
+    internal Action<SocketsHttpHandler>? ConfigureTransport { get; set; }
+
     /// <summary>Creates the primary transport. Custom implementations require their own physical-request qualification.</summary>
-    protected virtual HttpMessageHandler CreatePrimaryHandler() => new SocketsHttpHandler
+    protected virtual HttpMessageHandler CreatePrimaryHandler()
     {
-        AllowAutoRedirect = false, UseCookies = false, UseProxy = false,
-        Credentials = null, PreAuthenticate = false,
-        PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-    };
-
-    /// <inheritdoc />
-    public ConnectionTypeDescriptor Descriptor => new(ConnectionTypeName, ProviderKey + " specialist model", [HttpAuthSchemes.ApiKey],
-    [
-        new("endpoint", "HTTPS endpoint", "url", true),
-        new("allowedHosts", "Allowed hosts", "text", true),
-        new("modelId", "Model or deployment", "text", true),
-        new("maximumOutputTokens", "Maximum output tokens", "number", true),
-        new("temperatureSupported", "Temperature setting supported", "checkbox", true),
-        new("structuredResults", "Structured JSON results supported", "checkbox", true)
-    ], AllowedHostsPolicy.UserDeclared);
-
-    /// <inheritdoc />
-    public AllowedHostsPolicy ResolveHosts(IReadOnlyDictionary<string, string> settings) => new(AllowedHostsPolicy.UserDeclaredKind,
-        settings.TryGetValue("allowedHosts", out var hosts)
-            ? hosts.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) : []);
-
-    /// <inheritdoc />
-    public async Task<ConnectionTestResult> TestAsync(IResolvedConnection connection, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
+        var handler = new SocketsHttpHandler
         {
-            var scope = access.Current.RequireScope();
-            if (!StringComparer.Ordinal.Equals(scope.Value, connection.TenantId)) throw Unavailable();
-            Read(connection, null);
-            CheckCredential(await connection.GetSensitiveAsync(HttpConnectionSecretFields.ApiKey, cancellationToken));
-            return new() { Succeeded = true, Message = "Connection configuration and credential reference are valid. Inference has not been tested." };
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
-        {
-            return new() { Succeeded = false, Message = "The model connection configuration or credential is unavailable." };
-        }
+            AllowAutoRedirect = false, UseCookies = false, UseProxy = false,
+            Credentials = null, PreAuthenticate = false,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+        };
+        ConfigureTransport?.Invoke(handler);
+        return handler;
     }
 
     /// <inheritdoc />
@@ -101,7 +75,7 @@ public abstract class SpecialistConnectionModelProvider(
         CheckCredential(key);
         var version = connection.Version;
         var http = new HttpClient(new ModelRequestGuard(profile.Endpoint, connection.Hosts,
-            ct => ValidateDispatchAsync(model, request.Invocation, version, profile.Capabilities.Fingerprint, ct), CreatePrimaryHandler()), disposeHandler: true)
+            ct => ValidateDispatchAsync(model, request.Invocation, profile.IncarnationId, version, profile.Capabilities.Fingerprint, key, ct), CreatePrimaryHandler()), disposeHandler: true)
         {
             Timeout = Timeout.InfiniteTimeSpan,
             DefaultRequestVersion = HttpVersion.Version11,
@@ -118,11 +92,14 @@ public abstract class SpecialistConnectionModelProvider(
         catch { http.Dispose(); throw; }
     }
 
-    private async ValueTask ValidateDispatchAsync(SpecialistModelReference model, SpecialistInvocationIdentity invocation, int version, string fingerprint, CancellationToken cancellationToken)
+    private async ValueTask ValidateDispatchAsync(SpecialistModelReference model, SpecialistInvocationIdentity invocation, string incarnationId, int version, string fingerprint, SensitiveValue credential, CancellationToken cancellationToken)
     {
         await using var current = await ResolveAsync(model, invocation, cancellationToken);
         var profile = Read(current, model);
-        if (current.Version != version || profile.Capabilities.Fingerprint != fingerprint) throw Unavailable();
+        if (profile.IncarnationId != incarnationId || current.Version != version || profile.Capabilities.Fingerprint != fingerprint) throw Unavailable();
+        var currentCredential = await current.GetSensitiveAsync(HttpConnectionSecretFields.ApiKey, cancellationToken);
+        CheckCredential(currentCredential);
+        if (currentCredential != credential) throw Unavailable();
     }
 
     private async ValueTask<IResolvedConnection> ResolveAsync(SpecialistModelReference model, SpecialistInvocationIdentity? invocation, CancellationToken cancellationToken)
@@ -146,26 +123,17 @@ public abstract class SpecialistConnectionModelProvider(
 
     private Profile Read(IResolvedConnection connection, SpecialistModelReference? model)
     {
-        if (connection.TypeName != ConnectionTypeName || connection.Owner != ConnectionOwners.Tenant || connection.Status != ConnectionStatuses.Ready ||
-            connection.AuthScheme != HttpAuthSchemes.ApiKey || connection.Version < 1 ||
-            !connection.Settings.TryGetValue("endpoint", out var value) || !Uri.TryCreate(value, UriKind.Absolute, out var endpoint) ||
-            endpoint.Scheme != Uri.UriSchemeHttps || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0 ||
-            endpoint.AbsolutePath != "/" || connection.Hosts.Kind == AllowedHostsPolicy.AnyKind || !connection.Hosts.Allows(endpoint) ||
-            !connection.Settings.TryGetValue("modelId", out var modelId) || string.IsNullOrWhiteSpace(modelId) || modelId.Length > 256 ||
-            modelId.Any(x => !char.IsAsciiLetterOrDigit(x) && x is not ('-' or '_' or '.')) ||
-            model is not null && model.ModelId != modelId ||
-            !connection.Settings.TryGetValue("maximumOutputTokens", out var maximum) || !int.TryParse(maximum, NumberStyles.None, CultureInfo.InvariantCulture, out var tokens) || tokens is < 1 or > 1_000_000 ||
-            !connection.Settings.TryGetValue("structuredResults", out var structured) || !bool.TryParse(structured, out var supports) ||
-            !connection.Settings.TryGetValue("temperatureSupported", out var temperature) || !bool.TryParse(temperature, out var supportsTemperature))
-            throw Unavailable();
-        // Array serialization avoids delimiter collisions. Revision itself is operational: credential
-        // rotation/display-name edits do not invalidate immutable publication with unchanged support.
+        var configuration = SpecialistConnectionProfile.Read(connection, ConnectionTypeName, model);
+        // Serialize framed values rather than concatenate delimiters. The operational incarnation
+        // and revision bind each lease separately, so re-created support metadata can be republished.
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new object[]
         {
-            ProviderKey, ProtocolProfile, SpecialistProviderSchema.Profile, endpoint.AbsoluteUri, modelId, tokens, supports, supportsTemperature,
+            ProviderKey, ProtocolProfile, SpecialistProviderSchema.Profile, configuration.Endpoint.AbsoluteUri,
+            configuration.ModelId, configuration.MaximumOutputTokens, configuration.StructuredResults, configuration.TemperatureSupported,
             connection.Hosts.Kind, connection.Hosts.Hosts.Order(StringComparer.Ordinal).ToArray()
         }))));
-        return new(endpoint, new(fingerprint, supportsTemperature ? SettingsSchema : EmptySettingsSchema, supports, tokens), supportsTemperature);
+        return new(configuration.Endpoint, new(fingerprint, configuration.TemperatureSupported ? SettingsSchema : EmptySettingsSchema,
+            configuration.StructuredResults, configuration.MaximumOutputTokens), configuration.TemperatureSupported, configuration.IncarnationId);
     }
 
     private static float? ReadSettings(JsonElement settings)
@@ -193,7 +161,7 @@ public abstract class SpecialistConnectionModelProvider(
     });
     private static readonly JsonElement EmptySettingsSchema = JsonSerializer.SerializeToElement(new { type = "object", additionalProperties = false, properties = new { } });
     private static InvalidOperationException Unavailable() => new("The model connection does not satisfy the authorized specialist profile.");
-    private sealed record Profile(Uri Endpoint, SpecialistModelCapabilities Capabilities, bool TemperatureSupported);
+    private sealed record Profile(Uri Endpoint, SpecialistModelCapabilities Capabilities, bool TemperatureSupported, string IncarnationId);
     private sealed class OwnedHttpClient(HttpClient client) : IAsyncDisposable
     {
         public ValueTask DisposeAsync() { client.Dispose(); return ValueTask.CompletedTask; }

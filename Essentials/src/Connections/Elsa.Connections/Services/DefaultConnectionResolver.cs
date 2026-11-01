@@ -75,6 +75,7 @@ internal sealed class ResolvedConnection(
     public string Owner => document.Definition.Owner;
     public string Status => document.State.Status;
     public int Version { get; } = document.State.Version;
+    public string? IncarnationId { get; } = string.IsNullOrWhiteSpace(document.Definition.IncarnationId) ? null : document.Definition.IncarnationId;
     public IReadOnlyDictionary<string, string> Settings { get; } = new Dictionary<string, string>(document.Definition.Settings, StringComparer.OrdinalIgnoreCase);
     public AllowedHostsPolicy Hosts => hosts;
 

@@ -38,7 +38,7 @@ public sealed class SpecialistConnectionProviderTests
 
     public static IEnumerable<object[]> Refusals() =>
         from vendor in new[] { "anthropic", "azure-openai" }
-        from mode in new[] { "unknown-version", "revoked", "unknown-status", "foreign-owner", "wrong-type", "foreign-tenant", "wrong-auth", "http", "userinfo", "query", "path", "denied-host", "any-host", "unknown-model", "unsupported-json", "tokens", "wrong-partition", "wrong-tenant", "global", "privileged", "schema", "settings", "changed-profile" }
+        from mode in new[] { "unknown-version", "unknown-incarnation", "revoked", "unknown-status", "foreign-owner", "wrong-type", "foreign-tenant", "wrong-auth", "http", "userinfo", "query", "path", "denied-host", "any-host", "unknown-model", "unsupported-json", "tokens", "wrong-partition", "wrong-tenant", "global", "privileged", "schema", "settings", "changed-profile" }
         select new object[] { vendor, mode };
 
     [Theory]
@@ -52,6 +52,7 @@ public sealed class SpecialistConnectionProviderTests
         switch (mode)
         {
             case "unknown-version": connection.Version = 0; break;
+            case "unknown-incarnation": connection.IncarnationId = null; break;
             case "revoked": connection.Status = ConnectionStatuses.Revoked; break;
             case "unknown-status": connection.Status = "FutureStatus"; break;
             case "foreign-owner": connection.Owner = "user"; break;
@@ -135,6 +136,7 @@ public sealed class SpecialistConnectionProviderTests
         public string Owner { get; set; } = ConnectionOwners.Tenant;
         public string Status { get; set; } = ConnectionStatuses.Ready;
         public int Version { get; set; } = 7;
+        public string? IncarnationId { get; set; } = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         public Dictionary<string, string> Values { get; } = new(StringComparer.Ordinal)
         {
             ["endpoint"] = "https://provider.fixture.invalid", ["allowedHosts"] = "provider.fixture.invalid",
@@ -143,10 +145,14 @@ public sealed class SpecialistConnectionProviderTests
         public IReadOnlyDictionary<string, string> Settings => Values;
         public AllowedHostsPolicy Hosts { get; set; } = AllowedHostsPolicy.Fixed("provider.fixture.invalid");
         public int CredentialReads { get; private set; }
+        public bool CredentialUnavailable { get; set; }
+        public string Credential { get; set; } = "fixture-not-a-real-credential";
         public ValueTask<SensitiveValue> GetSensitiveAsync(string fieldName, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested(); Assert.Equal(HttpConnectionSecretFields.ApiKey, fieldName);
-            CredentialReads++; return ValueTask.FromResult(new SensitiveValue("fixture-not-a-real-credential"));
+            CredentialReads++;
+            if (CredentialUnavailable) throw new InvalidOperationException("The fixture credential was revoked.");
+            return ValueTask.FromResult(new SensitiveValue(Credential));
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

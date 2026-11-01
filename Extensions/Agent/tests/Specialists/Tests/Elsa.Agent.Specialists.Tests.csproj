@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../../Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
     <ProjectReference Include="../../../src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
     <ProjectReference Include="../../../src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

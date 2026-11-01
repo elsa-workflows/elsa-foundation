@@ -25,19 +25,36 @@ public class AnthropicSpecialistsFeature : IShellFeature
         services.AddScoped<AnthropicSpecialistModelProvider>();
         services.AddScoped<ISpecialistModelClientFactory>(sp => sp.GetRequiredService<AnthropicSpecialistModelProvider>());
         services.AddScoped<ISpecialistModelCapabilitiesSource>(sp => sp.GetRequiredService<AnthropicSpecialistModelProvider>());
-        services.AddScoped<IConnectionTypeProvider>(sp => sp.GetRequiredService<AnthropicSpecialistModelProvider>());
+        services.AddSingleton<IConnectionTypeProvider>(new SpecialistModelConnectionTypeProvider("anthropic", "specialist-anthropic"));
     }
 }
 
-internal class AnthropicSpecialistModelProvider(IConnectionResolver resolver, IPersistenceAccessContextAccessor access)
+internal sealed class AnthropicSpecialistModelProvider(IConnectionResolver resolver, IPersistenceAccessContextAccessor access)
     : SpecialistConnectionModelProvider(resolver, access)
 {
     public override string ProviderKey => "anthropic";
     protected override string ConnectionTypeName => "specialist-anthropic";
     protected override string ProtocolProfile => "anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0";
     protected override IChatClient CreateClient(Uri endpoint, string modelId, SensitiveValue apiKey, HttpClient http) =>
-        new AnthropicClient(new global::Anthropic.Core.ClientOptions
+        new TerminalClient(new AnthropicClient(new global::Anthropic.Core.ClientOptions
         {
             ApiKey = apiKey.Reveal(), AuthToken = null, BaseUrl = endpoint.AbsoluteUri.TrimEnd('/'), HttpClient = http, MaxRetries = 0
-        }).AsIChatClient(modelId);
+        }).AsIChatClient(modelId));
+
+    private sealed class TerminalClient(IChatClient inner) : DelegatingChatClient(inner)
+    {
+        public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var response = await base.GetResponseAsync(messages, options, cancellationToken);
+            // The pinned SDK maps pause_turn and unknown reasons to Stop. Preserve the incomplete
+            // meaning before the runtime discards provider objects and admits a business result.
+            if (response.RawRepresentation is not global::Anthropic.Models.Messages.Message raw ||
+                raw.StopReason?.Raw() is not ("end_turn" or "stop_sequence" or "max_tokens" or "refusal" or "tool_use"))
+                response.FinishReason = new ChatFinishReason("anthropic.incomplete");
+            return response;
+        }
+
+        public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The specialist runtime has not enabled the Anthropic streaming profile.");
+    }
 }

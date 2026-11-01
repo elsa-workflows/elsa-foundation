@@ -10,6 +10,8 @@ client creation. Register scoped implementations through DI, keyed by their exac
 operation requires exactly one matching owner of its own port; duplicates and missing owners are refusals.
 A provider can implement both ports, while authoring-only and runtime-only hosts register only what they consume.
 This registry is independent of Weaver's selected assistant provider.
+Known intra-domain contributions are `AnthropicSpecialistModelProvider` and
+`AzureOpenAISpecialistModelProvider`, registered scoped by their respective optional specialist features.
 
 `GetCapabilitiesAsync` reads authorized current model metadata without inference. The capabilities
 fingerprint identifies the effective settings/schema/token support. The supplied settings schema must

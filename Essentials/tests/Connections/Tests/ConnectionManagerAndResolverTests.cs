@@ -55,6 +55,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
         Assert.True(before > 0);
         Assert.Equal(before, original.Version);
+        Assert.False(string.IsNullOrWhiteSpace(original.IncarnationId));
 
         await _manager.UpdateAsync(Tenant, "versioned", new UpdateConnectionRequest { DisplayName = "Updated" });
         var after = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
@@ -62,6 +63,20 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         Assert.True(after > before);
         Assert.Equal(after, current.Version);
         Assert.Equal(before, original.Version);
+        Assert.Equal(original.IncarnationId, current.IncarnationId);
+    }
+
+    [Fact]
+    public async Task Delete_and_recreate_of_the_same_name_has_a_distinct_creation_identity_even_when_versions_repeat()
+    {
+        await CreateConnectionAsync("recreated");
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        await _manager.DeleteAsync(Tenant, "recreated");
+        await CreateConnectionAsync("recreated");
+        await using var replacement = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        Assert.Equal(original.Version, replacement.Version);
+        Assert.False(string.IsNullOrWhiteSpace(replacement.IncarnationId));
+        Assert.NotEqual(original.IncarnationId, replacement.IncarnationId);
     }
 
     [Fact]
