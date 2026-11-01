@@ -516,6 +516,53 @@ select option:disabled {
   min-height: 0;
 }
 
+/*
+ * A pinned sidebar color (ThemeProvider sets `data-sidebar-color` to light or dark) paints the
+ * navigation surface from `--studio-nav-*` whatever the workspace mode is. Re-declaring the
+ * palette and semantic aliases here lets every sidebar part, from search and nav items to the
+ * backend switcher and user footer, resolve against that surface instead of the workspace.
+ */
+html[data-sidebar-color] .sidebar {
+  --sidebar: var(--studio-nav-bg);
+  --sidebar-foreground: var(--studio-nav-text);
+  --sidebar-active: var(--studio-nav-active);
+  --sidebar-active-foreground: var(--studio-nav-active-text);
+  --background: var(--studio-nav-bg);
+  --foreground: var(--studio-nav-text);
+  --card: color-mix(in srgb, var(--studio-nav-text) 6%, var(--studio-nav-bg));
+  --card-foreground: var(--studio-nav-text);
+  --muted-foreground: var(--studio-nav-muted);
+  --border: color-mix(in srgb, var(--studio-nav-text) 14%, var(--studio-nav-bg));
+  --input: var(--border);
+  --studio-bg: var(--studio-nav-bg);
+  --studio-surface: var(--studio-nav-bg);
+  --studio-surface-muted: color-mix(in srgb, var(--studio-nav-text) 7%, var(--studio-nav-bg));
+  --studio-surface-raised: var(--studio-surface-muted);
+  --studio-text: var(--studio-nav-text);
+  --studio-text-muted: var(--studio-nav-muted);
+  --studio-border: var(--border);
+  --studio-edge-subtle: var(--border);
+  --studio-edge-control: var(--border);
+  --studio-accent-soft: var(--studio-nav-active);
+  --studio-focus: var(--studio-nav-text);
+  background: var(--studio-nav-bg);
+  color: var(--studio-nav-text);
+}
+
+html[data-sidebar-color="dark"] .sidebar { color-scheme: dark; }
+html[data-sidebar-color="light"] .sidebar { color-scheme: light; }
+
+/* Low specificity so a workspace style's own active treatment still applies on the pinned surface. */
+html[data-sidebar-color] :where(.sidebar .nav-section) a.active {
+  background: var(--studio-nav-active);
+  color: var(--studio-nav-active-text);
+}
+
+/* Material panels are textured for the workspace mode; a pinned tone keeps the plain surface. */
+html[data-theme-material][data-sidebar-color] .sidebar {
+  background: var(--studio-nav-bg);
+}
+
 .brand {
   display: flex;
   align-items: center;

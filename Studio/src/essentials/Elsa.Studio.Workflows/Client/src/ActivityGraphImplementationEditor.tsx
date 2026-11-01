@@ -42,6 +42,7 @@ import type { WorkflowEdge, WorkflowEditorPanelTab } from "./workflow-editor/edi
 import { GraphAuthoringWorkbench } from "./graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "./graph-authoring/AddStepButton";
 import { useGraphAuthoringCanvas } from "./graph-authoring/useGraphAuthoringCanvas";
+import { persistedNodeWidth } from "./graph-authoring/nodeWidth";
 import {
   useGraphCanvasInteractions,
   type GraphCanvasCommitOptions,
@@ -967,6 +968,7 @@ export function ActivityGraphImplementationEditor({
             onDrop: interactions.onCanvasDrop
           }}
           edgeActions={interactions.edgeActions}
+          nodeResize={slot.mode === "flowchart" && !readOnly ? interactions.resizeNode : null}
           collectionAction={readOnly ? null : addCollectionSlotItem}
           slotNavigation={(ownerNodeId, ownerLabel, childSlot) =>
             enterChildSlot(ownerNodeId, childSlot, slotCrumbLabel(ownerLabel, childSlot))}
@@ -1255,7 +1257,7 @@ function mergeCanvasLayout(
       nodeId: node.id,
       x: node.position.x,
       y: node.position.y,
-      width: previous?.width,
+      width: persistedNodeWidth(node, previous?.width),
       height: previous?.height,
       additionalProperties: previous?.additionalProperties
     });

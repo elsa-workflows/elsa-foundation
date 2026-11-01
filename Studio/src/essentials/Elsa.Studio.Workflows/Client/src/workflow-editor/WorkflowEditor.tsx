@@ -452,6 +452,7 @@ export function WorkflowEditor({
     onConnectEnd,
     onReconnect,
     commitLayout,
+    resizeNode,
     canAutoLayout,
     autoLayout,
     onCanvasDragOver,
@@ -1698,6 +1699,7 @@ export function WorkflowEditor({
           ) : <GraphAuthoringCanvas
             canvasRef={canvasRef}
             nodeActions={nodeActions}
+            nodeResize={isFlowchartDesigner && !editorDoc.pinned ? resizeNode : null}
             collectionAction={canAddActivitiesToCanvas ? addCollectionSlotItem : null}
             canvasProps={{
               tabIndex: -1,

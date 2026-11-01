@@ -15,8 +15,8 @@ describe("computeAutoLayout", () => {
   it("assigns flowchart columns by longest path", () => {
     const positions = computeAutoLayout(nodes("a", "b", "c"), [edge("a", "b"), edge("b", "c")], "flowchart");
     expect(positions.get("a")?.x).toBe(0);
-    expect(positions.get("b")?.x).toBe(320);
-    expect(positions.get("c")?.x).toBe(640);
+    expect(positions.get("b")?.x).toBe(440);
+    expect(positions.get("c")?.x).toBe(880);
   });
 
   it("stacks branches in the same column on separate rows", () => {
@@ -25,8 +25,8 @@ describe("computeAutoLayout", () => {
       [edge("root", "left"), edge("root", "right")],
       "flowchart"
     );
-    expect(positions.get("left")?.x).toBe(320);
-    expect(positions.get("right")?.x).toBe(320);
+    expect(positions.get("left")?.x).toBe(440);
+    expect(positions.get("right")?.x).toBe(440);
     expect(positions.get("left")?.y).not.toBe(positions.get("right")?.y);
   });
 
@@ -37,7 +37,32 @@ describe("computeAutoLayout", () => {
       "flowchart"
     );
     // merge follows the a -> b -> c chain, so it must sit in column 3.
-    expect(positions.get("merge")?.x).toBe(960);
+    expect(positions.get("merge")?.x).toBe(1320);
+  });
+
+  it("starts each column after the widest node in the previous column", () => {
+    const positions = computeAutoLayout(
+      [{ id: "wide", width: 500 }, { id: "next" }, { id: "last" }],
+      [edge("wide", "next"), edge("next", "last")],
+      "flowchart"
+    );
+    // 500px node + 194px gap, then a default 246px node + 194px gap.
+    expect(positions.get("next")?.x).toBe(694);
+    expect(positions.get("last")?.x).toBe(1134);
+  });
+
+  it("uses the widest node of a stacked column", () => {
+    const positions = computeAutoLayout(
+      [{ id: "root" }, { id: "left", width: 400 }, { id: "right" }, { id: "merge" }],
+      [edge("root", "left"), edge("root", "right"), edge("left", "merge"), edge("right", "merge")],
+      "flowchart"
+    );
+    expect(positions.get("merge")?.x).toBe(440 + 400 + 194);
+  });
+
+  it("spaces columns by the clamped width of an out-of-range node", () => {
+    const positions = computeAutoLayout([{ id: "huge", width: 5000 }, { id: "next" }], [edge("huge", "next")], "flowchart");
+    expect(positions.get("next")?.x).toBe(640 + 194);
   });
 
   it("does not loop forever on a cycle", () => {
@@ -59,7 +84,7 @@ describe("computeAutoLayout", () => {
       "flowchart"
     );
     // a -> b spans columns 0 and 1; the disconnected node goes to column 2.
-    expect(positions.get("lonely")?.x).toBe(640);
+    expect(positions.get("lonely")?.x).toBe(880);
   });
 
   it("returns an empty map for no nodes", () => {

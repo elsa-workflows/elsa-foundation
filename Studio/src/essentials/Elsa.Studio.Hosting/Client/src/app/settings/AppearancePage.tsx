@@ -12,6 +12,7 @@ import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
+import { isSidebarColorPreference, sidebarColorPreferenceLabels, sidebarColorPreferences } from "../themes/sidebarColor";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
 function keyTarget(key: string, index: number, count: number): number | undefined {
@@ -48,10 +49,14 @@ export function AppearancePage({
     mode,
     resetAppearance,
     supportedModes,
+    navMode,
     navModePreference,
-    setNavModePreference
+    setNavModePreference,
+    sidebarColorPreference,
+    setSidebarColorPreference
   } = useTheme();
   const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
+  const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
@@ -146,6 +151,23 @@ export function AppearancePage({
             defaultValue: preference === defaultAppearancePreferences.navigation
           }))}
           onChange={value => isNavModePreference(value) && setNavModePreference(value)}
+        />
+      </AppearanceCard>
+
+      <AppearanceCard
+        title={sidebarColorTitle}
+        description="Keep the navigation dark or light in every mode, or follow the workspace. High contrast keeps its own navigation."
+      >
+        <RadioCardGroup
+          ariaLabel={sidebarColorTitle}
+          value={sidebarColorPreference}
+          options={sidebarColorPreferences.map(preference => ({
+            value: preference,
+            label: sidebarColorPreferenceLabels[preference],
+            defaultValue: preference === defaultAppearancePreferences.sidebarColor,
+            disabled: mode === "high-contrast"
+          }))}
+          onChange={value => isSidebarColorPreference(value) && setSidebarColorPreference(value)}
         />
       </AppearanceCard>
 

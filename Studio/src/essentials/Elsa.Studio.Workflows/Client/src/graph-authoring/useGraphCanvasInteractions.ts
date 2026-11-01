@@ -158,6 +158,8 @@ export interface GraphCanvasInteractionsResult {
   onConnectEnd: OnConnectEnd;
   onReconnect: OnReconnect<WorkflowEdge>;
   commitLayout: OnNodeDrag<Node<WorkflowNodeData>>;
+  /** Commits a node's resized width as one canvas transaction (one undo step); a no-op when unchanged. */
+  resizeNode(nodeId: string, width: number, startWidth: number): void;
   canAutoLayout: boolean;
   autoLayout(): void;
   onCanvasDragOver(event: React.DragEvent): void;
@@ -697,6 +699,15 @@ export function useGraphCanvasInteractions({
     commitCanvas(nextNodes, edges);
   };
 
+  const resizeNode = (nodeId: string, width: number, startWidth: number) => {
+    // The resizer reports an end for a plain click too; committing that would dirty the draft and add
+    // an empty undo step.
+    if (Math.round(width) === Math.round(startWidth)) return;
+    const nextNodes = nodes.map(current => current.id === nodeId ? { ...current, width: Math.round(width) } : current);
+    setNodes(nextNodes);
+    commitCanvas(nextNodes, edges);
+  };
+
   const canAutoLayout = !isUnsupported && mode !== "sequence" && nodes.length > 0;
   const autoLayout = useCallback(() => {
     if (isUnsupported || mode === "sequence" || nodes.length === 0) return;
@@ -896,6 +907,7 @@ export function useGraphCanvasInteractions({
     onConnectEnd,
     onReconnect,
     commitLayout,
+    resizeNode,
     canAutoLayout,
     autoLayout,
     onCanvasDragOver,
