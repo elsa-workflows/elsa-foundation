@@ -209,6 +209,7 @@ public sealed partial class SpecialistNativeTests
 
         async Task ExpectBoundaryAsync(Func<Task> action)
         {
+            _ = await enricher.EnrichAsync(enriched);
             var failure = await Assert.ThrowsAsync<SpecialistTurnException>(action);
             Assert.Equal("specialist.settlement.failed", failure.Code);
             Assert.Equal(commit.CommitId, failure.Data["contextId"]);

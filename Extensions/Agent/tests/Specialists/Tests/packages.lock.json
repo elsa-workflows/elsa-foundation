@@ -424,6 +424,14 @@
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
         }
       },
+      "elsa.activities.dispatchworkflow.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.primitives": {
         "type": "Project",
         "dependencies": {

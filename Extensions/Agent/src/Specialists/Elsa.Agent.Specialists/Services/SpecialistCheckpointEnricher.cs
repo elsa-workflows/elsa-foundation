@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -9,17 +9,25 @@ namespace Elsa.Agent.Specialists.Services;
 // Records responsibility in the native checkpoint. No specialist-store writes occur here.
 internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary boundary, IActivityExecutionStateStore activities, IWorkflowExecutableReader executables) : IRuntimeCheckpointCommitEnricher
 {
-    // Commit-local validation evidence only; never a cross-commit or durable-state cache.
-    private readonly ConditionalWeakTable<RuntimeCheckpoint, ExpectedIntents> _expected = new();
-    private sealed record ExpectedIntents(RuntimeStateChange<WorkflowExecutionState>? Workflow,
-        RuntimeStateChange<ActivityExecutionState>[] Activities, IReadOnlyList<RuntimePostCommitIntent> Intents);
+    // Only in-flight enrichment evidence, keyed by the stable commit identity. Later contributors
+    // may replace the checkpoint object or add unrelated state. Final validation consumes the entry.
+    private readonly ConcurrentDictionary<string, ExpectedIntents> _expected = new(StringComparer.Ordinal);
+    private sealed record ExpectedPlan(IReadOnlyList<RuntimePostCommitIntent> Intents, IReadOnlySet<string>? FacadeNodes,
+        IReadOnlyDictionary<string, ActivityExecutionState>? ScannedFacades = null);
+    private sealed record NativeChange(string Id, RuntimeStateChangeOperation Operation, ActivityExecutionState State);
+    private sealed record ExpectedIntents(string WorkflowId, RuntimeStateChange<WorkflowExecutionState>? Workflow,
+        bool WholeCancelled, NativeChange[] Activities, ExpectedPlan Plan);
 
     /// <exception cref="SpecialistTurnException">A contribution failure retaining its cause and checkpoint/workflow identity.</exception>
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
         try { return await EnrichCoreAsync(commit, cancellationToken); }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (Exception exception) { throw SpecialistSettlementBoundary.Failure(commit.CommitId, commit.WorkflowExecutionId, exception); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { _expected.TryRemove(commit.CommitId, out _); throw; }
+        catch (Exception exception)
+        {
+            _expected.TryRemove(commit.CommitId, out _);
+            throw SpecialistSettlementBoundary.Failure(commit.CommitId, commit.WorkflowExecutionId, exception);
+        }
     }
 
     private async ValueTask<RuntimeCheckpointCommit> EnrichCoreAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
@@ -39,49 +47,73 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
     public async ValueTask ValidateFinalAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
         try { await ValidateFinalCoreAsync(commit, cancellationToken); }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { _expected.TryRemove(commit.CommitId, out _); throw; }
         catch (Exception exception) { throw SpecialistSettlementBoundary.Failure(commit.CommitId, commit.WorkflowExecutionId, exception); }
     }
 
     private ValueTask ValidateFinalCoreAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_expected.TryGetValue(commit.Checkpoint, out var evidence)) throw SpecialistSettlementBoundary.Invalid();
+        if (!_expected.TryRemove(commit.CommitId, out var evidence)) throw SpecialistSettlementBoundary.Invalid();
         EnsureUnchanged(commit, evidence);
-        var expected = evidence.Intents;
+        var expected = evidence.Plan.Intents;
         var actual = commit.PostCommitIntents.Where(item => item.Kind is SpecialistSettlementBoundary.AppliedKind or SpecialistSettlementBoundary.CancelKind).ToArray();
         if (actual.Length != expected.Count || expected.Any(intent => actual.Count(item => item.IsEquivalentTo(intent)) != 1))
             throw SpecialistSettlementBoundary.Invalid();
         return ValueTask.CompletedTask;
     }
 
+    private static bool WholeCancelled(RuntimeCheckpointCommit commit) =>
+        commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Upsert, State.Status: WorkflowExecutionStatus.Cancelled };
+
     private static void EnsureUnchanged(RuntimeCheckpointCommit commit, ExpectedIntents evidence)
     {
-        if (commit.StateChanges.WorkflowExecution != evidence.Workflow ||
-            !RelevantActivities(commit).SequenceEqual(evidence.Activities)) throw SpecialistSettlementBoundary.Invalid();
+        if (commit.WorkflowExecutionId != evidence.WorkflowId) throw SpecialistSettlementBoundary.Invalid();
+        // An artifact with no specialist facade cannot acquire a specialist responsibility from
+        // later control/root projections. Its ordinary state belongs to those other contributors.
+        if (evidence.Plan.FacadeNodes is { Count: 0 }) return;
+        if (WholeCancelled(commit) != evidence.WholeCancelled ||
+            evidence.Plan.FacadeNodes is not null && commit.StateChanges.WorkflowExecution != evidence.Workflow)
+            throw SpecialistSettlementBoundary.Invalid();
+        var final = RelevantActivities(commit, evidence.Plan.FacadeNodes).ToDictionary(change => change.Id, StringComparer.Ordinal);
+        foreach (var before in evidence.Activities)
+            if (!final.Remove(before.Id, out var after) || before != after) throw SpecialistSettlementBoundary.Invalid();
+        // The later control producer can add a previously scanned root to the change set. It
+        // may decorate its control fields, but cannot change the native cancellation identity.
+        foreach (var added in final.Values)
+            if (!evidence.WholeCancelled || added.Operation != RuntimeStateChangeOperation.Upsert ||
+                evidence.Plan.ScannedFacades?.TryGetValue(added.Id, out var scanned) != true ||
+                added.State != WithoutControl(scanned)) throw SpecialistSettlementBoundary.Invalid();
     }
 
-    private static IEnumerable<RuntimeStateChange<ActivityExecutionState>> RelevantActivities(RuntimeCheckpointCommit commit) =>
-        commit.StateChanges.ActivityExecutions.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
-            (change.State.Status == ActivityExecutionStatus.Cancelled ||
-             commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted && change.State.Status == ActivityExecutionStatus.Completed && change.State.ContractIdentity is not null));
+    private static ActivityExecutionState WithoutControl(ActivityExecutionState state) =>
+        state with { ProducedControl = null, ProducedControlSourceCommitId = null };
+
+    private static IEnumerable<NativeChange> RelevantActivities(RuntimeCheckpointCommit commit, IReadOnlySet<string>? facades) =>
+        commit.StateChanges.ActivityExecutions.Where(change =>
+            (facades is null || facades.Contains(change.State.Execution.ExecutableNodeId)) &&
+            (WholeCancelled(commit) || change.Operation == RuntimeStateChangeOperation.Upsert &&
+                (change.State.Status == ActivityExecutionStatus.Cancelled ||
+                 commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted && change.State.Status == ActivityExecutionStatus.Completed && change.State.ContractIdentity is not null)))
+            // These fields belong to the later control-producer phase, not specialist settlement.
+            .Select(change => new NativeChange(change.StateId, change.Operation, WithoutControl(change.State)));
 
     private async ValueTask<IReadOnlyList<RuntimePostCommitIntent>> ExpectedOnceAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_expected.TryGetValue(commit.Checkpoint, out var prior))
+        if (_expected.TryGetValue(commit.CommitId, out var prior))
         {
             EnsureUnchanged(commit, prior);
-            return prior.Intents;
+            return prior.Plan.Intents;
         }
-        var intents = await ExpectedAsync(commit, cancellationToken);
-        var evidence = _expected.GetValue(commit.Checkpoint, _ => new(commit.StateChanges.WorkflowExecution,
-            RelevantActivities(commit).ToArray(), intents));
+        var plan = await ExpectedAsync(commit, cancellationToken);
+        var evidence = _expected.GetOrAdd(commit.CommitId, new ExpectedIntents(commit.WorkflowExecutionId, commit.StateChanges.WorkflowExecution,
+            WholeCancelled(commit), RelevantActivities(commit, plan.FacadeNodes).ToArray(), plan));
         EnsureUnchanged(commit, evidence);
-        return evidence.Intents;
+        return evidence.Plan.Intents;
     }
 
-    private async ValueTask<IReadOnlyList<RuntimePostCommitIntent>> ExpectedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask<ExpectedPlan> ExpectedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         var changed = commit.StateChanges.ActivityExecutions.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert)
             .ToDictionary(change => change.StateId, change => change.State, StringComparer.Ordinal);
@@ -89,7 +121,7 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
             changed.Values.Where(state => state.Status == ActivityExecutionStatus.Completed && state.ContractIdentity is not null).ToArray() : [];
         var cancelled = changed.Values.Where(state => state.Status == ActivityExecutionStatus.Cancelled).ToList();
         var wholeCancelled = commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Upsert, State.Status: WorkflowExecutionStatus.Cancelled };
-        if (completed.Length == 0 && cancelled.Count == 0 && !wholeCancelled) return [];
+        if (completed.Length == 0 && cancelled.Count == 0 && !wholeCancelled) return new([], null);
 
         // Native checkpoint metadata (or its workflow change) already carries the exact pin.
         // Reuse the drain's executable reader before touching workflow/activity stores. Ordinary
@@ -110,24 +142,29 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
             loaded = await boundary.WorkflowAsync(commit.WorkflowExecutionId, cancellationToken);
             executable = loaded.Value.Executable;
         }
-        if (!executable.NodesById.Values.Any(node => node.ActivityContract?.Activation.Capability == SpecialistRuntimeIds.FacadeCapability)) return [];
+        var facadeNodes = executable.NodesById.Values.Where(node => node.ActivityContract?.Activation.Capability == SpecialistRuntimeIds.FacadeCapability)
+            .Select(node => node.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
+        if (facadeNodes.Count == 0) return new([], facadeNodes);
         if (!wholeCancelled && !completed.Concat(cancelled).Any(parent =>
                 executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var node) &&
-                node.ActivityContract?.Activation.Capability == SpecialistRuntimeIds.FacadeCapability)) return [];
+                node.ActivityContract?.Activation.Capability == SpecialistRuntimeIds.FacadeCapability)) return new([], facadeNodes);
 
+        var scannedFacades = new Dictionary<string, ActivityExecutionState>(StringComparer.Ordinal);
         if (wholeCancelled)
         {
             string? continuation = null;
             do
             {
                 var page = await activities.ListPageAsync(new(commit.WorkflowExecutionId, continuationToken: continuation), cancellationToken);
+                foreach (var state in page.Items.Where(state => !changed.ContainsKey(state.InvocationId) && facadeNodes.Contains(state.Execution.ExecutableNodeId)))
+                    if (!scannedFacades.TryAdd(state.InvocationId, state)) throw SpecialistSettlementBoundary.Invalid();
                 cancelled.AddRange(page.Items.Where(state => !changed.ContainsKey(state.InvocationId) &&
                     state.Status is not (ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Superseded)));
                 if (page.NextContinuationToken is not null && page.NextContinuationToken == continuation) throw SpecialistSettlementBoundary.Invalid();
                 continuation = page.NextContinuationToken;
             } while (continuation is not null);
         }
-        if (completed.Length == 0 && cancelled.Count == 0) return [];
+        if (completed.Length == 0 && cancelled.Count == 0) return new([], facadeNodes, scannedFacades);
         var proof = loaded ?? await boundary.WorkflowAsync(commit.WorkflowExecutionId, cancellationToken);
         var workflow = proof.Workflow;
         if (proof.Executable.Identity != executable.Identity) throw SpecialistSettlementBoundary.Invalid();
@@ -151,6 +188,6 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
             if (node.ActivityContract?.Activation.Capability != SpecialistRuntimeIds.FacadeCapability) continue;
             intents.Add(SpecialistSettlementBoundary.Intent(await boundary.CancelledAsync(workflow, parent, node, cancellationToken)));
         }
-        return intents;
+        return new(intents, facadeNodes, scannedFacades);
     }
 }

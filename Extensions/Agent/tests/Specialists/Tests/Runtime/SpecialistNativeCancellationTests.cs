@@ -269,6 +269,7 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal("specialist.settlement.failed", removed.Code);
         Assert.Equal(commit.CommitId, removed.Data["contextId"]);
         Assert.NotNull(removed.InnerException);
+        _ = await enricher.EnrichAsync(enriched);
         await Assert.ThrowsAsync<SpecialistTurnException>(() => enricher.ValidateFinalAsync(enriched with { PostCommitIntents = [intent, intent] }).AsTask());
         var forged = new RuntimePostCommitIntent(intent.IntentId, intent.WorkflowExecutionId, intent.Kind, intent.RecordedAt, intent.ActivityExecutionId, intent.IdempotencyKey, Json("{\"version\":999}"));
         await Assert.ThrowsAsync<SpecialistTurnException>(() => enricher.EnrichAsync(commit with { PostCommitIntents = [forged] }).AsTask());

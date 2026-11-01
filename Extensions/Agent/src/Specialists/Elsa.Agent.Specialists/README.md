@@ -63,8 +63,10 @@ Checkpoint enrichment checks the exact pinned executable through the existing bu
 before consulting native workflow/activity stores. Workflows without specialist facade nodes return
 without those state reads or a cancellation activity scan. A warm drain adds no artifact-store read;
 without a warm burst, the capability check requires one artifact read. Final validation compares
-commit-local expected intents without repeating store reads and refuses later changes to relevant
-activity/workflow state or removed, conflicting and duplicate specialist intents.
+commit-local expected intents by stable commit identity without repeating store reads, then releases
+that evidence. Later control enrichment may replace the checkpoint or add a scanned root's control
+projection; it cannot change the specialist's native identity or remove, conflict with or duplicate its
+intents. Whole-workflow cancellation also fences later nonterminal facade changes.
 
 Checkpoint and settlement failures preserve their original cause in the specialist-domain exception,
 with `contextId` and `workflowExecutionId` identifying the checkpoint or exact source. Native source
