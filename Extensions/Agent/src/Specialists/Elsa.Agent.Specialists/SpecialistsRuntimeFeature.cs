@@ -28,11 +28,15 @@ namespace Elsa.Agent.Specialists;
     DependsOn = new object[] { "BackgroundActivities", "Secrets", "Serialization" })]
 public class SpecialistsRuntimeFeature : IShellFeature
 {
+    /// <summary>Allows new logical operations. Disabling keeps matching admitted work, readers and settlement available.</summary>
+    public bool AllowNewOperations { get; set; } = true;
+
     /// <inheritdoc />
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(new SpecialistAdmissionPolicy(AllowNewOperations));
         services.TryAddScoped<SpecialistSchemaValidator>();
         services.TryAddScoped<SpecialistNativeBinding>();
         services.TryAddScoped<SpecialistTurnJournal>();

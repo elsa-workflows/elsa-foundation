@@ -26,7 +26,9 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
     private Dictionary<string, SpecialistTurnDocument> rows => state.Rows;
     private Dictionary<string, string> keys => state.Keys;
 
-    public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
+    public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken) => StageAsync(candidate, true, cancellationToken);
+
+    public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, bool allowNewOperation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(candidate);
@@ -49,6 +51,8 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
                 state.Operations[candidate.Key] = operation;
                 return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(associated));
             }
+            if (!allowNewOperation)
+                throw new SpecialistJournalException("specialist.journal.admission-disabled", null, "New specialist operations are disabled for this host.", new InvalidOperationException("The creation policy permits only retained operations."));
             if (rows.Count >= 10_000) throw new SpecialistJournalException("specialist.journal.capacity", null, "The process-local specialist journal is full.", new InvalidOperationException("The development journal capacity was reached."));
             rows.Add(candidate.Handle, SpecialistTurnDocumentRules.Copy(candidate));
             keys.Add(candidate.Key, candidate.Handle);

@@ -57,6 +57,7 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
     private readonly Guid id = Guid.NewGuid();
     public ValueTask<SpecialistJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default) => inner.GetCapabilitiesAsync(cancellationToken);
     public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken) => inner.StageAsync(candidate, cancellationToken);
+    public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, bool allowNewOperation, CancellationToken cancellationToken) => inner.StageAsync(candidate, allowNewOperation, cancellationToken);
     public async ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
     {
         var document = await inner.ReadAsync(handle, identity, cancellationToken);

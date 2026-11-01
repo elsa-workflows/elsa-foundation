@@ -4,6 +4,18 @@ Executes published specialists through the existing native activity/background-w
 Microsoft Agent Framework. See [runtime extension points](EXTENSION_POINTS.md) for configured
 providers, protected continuity, journal ownership and the current qualification boundaries.
 
+## Admission during maintenance
+
+Set `SpecialistsRuntimeFeature.AllowNewOperations = false` when activating a host to refuse new
+logical operations with `specialist.turn.admission-disabled`. Both journal adapters decide this
+inside the operation's creation transaction or lock. A refusal creates no turn or operation gate
+and opens no model client. The default is `true`.
+
+Matching retained operations can still register a native delivery and replay an accepted result.
+Already admitted work, readers and application/cancellation settlement remain available; disabling
+creation neither cancels work nor resets unknown outcomes, deadlines or conversation history.
+The policy belongs to host configuration and does not alter a persisted request's fingerprint.
+
 ## Cross-domain contributions
 
 `SpecialistsRuntimeFeature` registers these contributions per shell. Implementations stay internal;

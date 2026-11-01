@@ -16,6 +16,9 @@ public interface ISpecialistTurnStore
     /// <summary>Inserts or replays the identical native operation; conflicting requests change nothing.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken);
+    /// <summary>Atomically refuses new operation creation when disabled, while retaining matching existing-operation replay and delivery registration.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record, disabled-creation or scope failure, retaining its cause.</exception>
+    ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, bool allowNewOperation, CancellationToken cancellationToken);
     /// <summary>Reads only the exact handle and native identity in the caller's selected scope.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken);

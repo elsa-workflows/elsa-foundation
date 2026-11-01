@@ -5,3 +5,5 @@ Elsa.Agent.Specialists.SpecialistsRuntimeFeature
 Elsa.Agent.Specialists.SpecialistsRuntimeFeature.SpecialistsRuntimeFeature() -> void
 virtual Elsa.Agent.Specialists.SpecialistsInMemoryJournalFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 virtual Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.AllowNewOperations.get -> bool
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.AllowNewOperations.set -> void

@@ -69,7 +69,9 @@ internal sealed partial class EfSpecialistTurnStore(DbContext context, IPersiste
         catch (Exception exception) { throw Failure(exception); }
     }
 
-    public async ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
+    public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken) => StageAsync(candidate, true, cancellationToken);
+
+    public async ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, bool allowNewOperation, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         try
@@ -100,6 +102,8 @@ internal sealed partial class EfSpecialistTurnStore(DbContext context, IPersiste
                         await transaction.CommitAsync(cancellationToken);
                         return Clone(next);
                     }
+                    if (!allowNewOperation)
+                        throw new SpecialistJournalException("specialist.journal.admission-disabled", null, "New specialist operations are disabled for this host.", new InvalidOperationException("The creation policy permits only retained operations."));
                     owned.Set<SpecialistTurnRecord>().Add(Row(scope, candidate));
                     await owned.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);

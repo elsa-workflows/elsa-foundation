@@ -35,6 +35,11 @@ public sealed class SpecialistJournalProviderTests
                 var context = scope.ServiceProvider.GetRequiredService<SpecialistsDbContext>();
                 await context.Database.MigrateAsync();
                 Assert.Single(await context.Database.GetAppliedMigrationsAsync());
+                var denied = await Assert.ThrowsAsync<SpecialistJournalException>(() => scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>()
+                    .StageAsync(candidate, false, CancellationToken.None).AsTask());
+                Assert.Equal("specialist.journal.admission-disabled", denied.Code);
+                Assert.Equal(0, await context.Set<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistTurnRecord>().CountAsync());
+                Assert.Equal(0, await context.Set<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistOperationRecord>().CountAsync());
             }
             var handles = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
             {
@@ -84,7 +89,7 @@ public sealed class SpecialistJournalProviderTests
         Assert.Equal("reported-model", accepted.ResponseObservation!.ObservedModelId);
         Assert.Equal(7, accepted.ResponseObservation.OutputTokens);
         Assert.Equal(candidate.Deadline, accepted.Deadline);
-        var replay = await recovered.StageAsync(candidate with { Handle = new string('c', 64), Deadline = now.AddHours(1) }, CancellationToken.None);
+        var replay = await recovered.StageAsync(candidate with { Handle = new string('c', 64), Deadline = now.AddHours(1) }, false, CancellationToken.None);
         Assert.Equal(accepted.ProtectedResult, replay.ProtectedResult);
         Assert.Equal(accepted.ModelRequests, replay.ModelRequests);
         await Assert.ThrowsAsync<SpecialistJournalException>(async () => await recovered.StageAsync(candidate with { RequestHash = new string('d', 64) }, CancellationToken.None));
@@ -141,7 +146,7 @@ public sealed class SpecialistJournalProviderTests
             var store = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
             var deliveryIdentity = identity with { ActivityExecutionId = "replay-parent-" + index };
             Assert.Null(await store.ReadAsync(candidate.Handle, deliveryIdentity, CancellationToken.None));
-            var associated = await store.StageAsync(candidate with { Identity = deliveryIdentity, Deliveries = [new(deliveryIdentity)], Deadline = now.AddDays(1) }, CancellationToken.None);
+            var associated = await store.StageAsync(candidate with { Identity = deliveryIdentity, Deliveries = [new(deliveryIdentity)], Deadline = now.AddDays(1) }, false, CancellationToken.None);
             Assert.Equal(candidate.Handle, associated.Handle);
             return await store.ReplayAcceptedAsync(candidate.Handle, deliveryIdentity, "replay-child-" + index, CancellationToken.None);
         }));

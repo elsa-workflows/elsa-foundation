@@ -427,7 +427,7 @@ public sealed class SpecialistJournalTests
     }
 
     private static InMemorySpecialistTurnStore Memory() => new(new Access("tenant"), new());
-    private static ServiceProvider Services()
+    internal static ServiceProvider Services()
     {
         var services = new ServiceCollection();
         new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
@@ -439,7 +439,7 @@ public sealed class SpecialistJournalTests
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new(scope));
     }
-    private static SpecialistTurnRequest Request()
+    internal static SpecialistTurnRequest Request()
     {
         var descriptor = new SpecialistRuntimeDescriptor("very-private-instructions", new("fixture", "connection", "model"), Json("{}"), Json("{}"), Json("{}"), "fixture/1", SpecialistRuntimeIds.SchemaProfile, new(), false);
         var contract = new ActivityContract("specialist", "1.0.0", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],

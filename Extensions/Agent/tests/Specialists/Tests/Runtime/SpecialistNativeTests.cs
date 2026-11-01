@@ -1041,7 +1041,7 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
     }
 
-    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null, PersistenceMode persistenceMode = PersistenceMode.Durable)
+    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null, PersistenceMode persistenceMode = PersistenceMode.Durable, bool allowNewOperations = true)
     {
         var services = new ServiceCollection();
         if (clock is not null) services.AddSingleton(clock);
@@ -1056,7 +1056,7 @@ public sealed partial class SpecialistNativeTests
         new SerializationFeature().ConfigureServices(services);
         new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
         new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
-        new SpecialistsRuntimeFeature().ConfigureServices(services);
+        new SpecialistsRuntimeFeature { AllowNewOperations = allowNewOperations }.ConfigureServices(services);
         new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
         if (journalConnection is not null)
             Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration.AddSpecialistsEntityFrameworkCore(services,

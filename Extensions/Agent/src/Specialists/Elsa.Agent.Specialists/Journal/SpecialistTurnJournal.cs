@@ -10,7 +10,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Agent.Specialists.Journal;
 
-internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretValueProtector protector, IPersistenceAccessContextAccessor access)
+internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretValueProtector protector, IPersistenceAccessContextAccessor access, SpecialistAdmissionPolicy? admissionPolicy = null)
 {
     private const string RequestPurpose = "elsa.specialist.turn/request/1";
     private const string ResultPurpose = "elsa.specialist.turn/result/1";
@@ -31,7 +31,9 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
             now.AddMilliseconds(limits.TimeoutMilliseconds)) { MaximumModelCalls = limits.MaximumModelCalls,
                 Conversation = request.Descriptor.AllowContinuity ? request.Continuation ?? new(handle, 0) : null,
                 DeliveryProtocol = 1, Deliveries = [new(request.Identity)] };
-        try { return (await store.StageAsync(candidate, cancellationToken)).Handle; }
+        try { return (await store.StageAsync(candidate, admissionPolicy?.AllowNewOperations ?? true, cancellationToken)).Handle; }
+        catch (SpecialistJournalException exception) when (exception.Code == "specialist.journal.admission-disabled")
+        { throw Failure("specialist.turn.admission-disabled", "New specialist operations are disabled for this host.", exception); }
         catch (SpecialistJournalException exception) when (exception.Code == "specialist.journal.cancelled")
         { throw Failure("specialist.turn.cancelled", "This native parent has a retained cancellation and cannot admit another model turn.", exception); }
         catch (SpecialistJournalException exception) when (exception.Code == "specialist.journal.conflict")
