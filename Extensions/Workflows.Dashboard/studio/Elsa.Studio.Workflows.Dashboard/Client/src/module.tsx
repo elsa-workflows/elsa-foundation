@@ -14,14 +14,14 @@ const testsDescriptor: StudioSettingDescriptor = {
 };
 export function register(api: ElsaStudioModuleApi) {
   registerHomeWidget<WorkflowPortfolioSnapshot>(api, {
-    id: "workflows.portfolio", moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow portfolio",
+    id: "workflows.portfolio", requiresBackend:[{id:"elsa.api.workflow-dashboard",contractVersion:"1",relations:["workflow-portfolio"]}], moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow portfolio",
     description: "Current workflow definition readiness.", order: 10, defaultVisible: true, defaultSize: "medium",
     permissions: ["workflows/dashboard:read"], requiresFeature: "workflows",
     supportedSizes: ["small", "medium"], minimumRefreshIntervalMs: 300_000, cacheLifetimeMs: 300_000,
     load: ({ signal }) => loadPortfolio(api, signal), component: WorkflowPortfolioWidget
   });
   registerHomeWidget<WorkflowRunHealthSnapshot, RunHealthSettings>(api, {
-    id: "workflows.run-health", moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow run health",
+    id: "workflows.run-health", requiresBackend:[{id:"elsa.api.workflow-dashboard",contractVersion:"1",relations:["workflow-run-health"]}], moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow run health",
     description: "Run outcomes, start activity and workflow failures.", order: 20, defaultVisible: true, defaultSize: "full",
     permissions: ["workflows/dashboard:read"], requiresFeature: "workflows",
     supportedSizes: ["medium", "wide", "full"], minimumRefreshIntervalMs: 60_000, cacheLifetimeMs: 60_000,

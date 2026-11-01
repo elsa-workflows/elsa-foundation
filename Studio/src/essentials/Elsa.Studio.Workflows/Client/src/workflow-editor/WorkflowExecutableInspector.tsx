@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
@@ -211,14 +212,14 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   };
 
   const goBack = () => {
-    window.history.pushState({}, "", "/workflows/executables");
+    window.history.pushState({}, "", qualifyStudioBackendPath("/workflows/executables"));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   const openSourceDefinition = () => {
     const definitionId = chosenReference?.definitionId;
     if (!definitionId) return;
-    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 

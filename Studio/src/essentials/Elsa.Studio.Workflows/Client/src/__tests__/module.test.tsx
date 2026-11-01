@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
-import { authSessionEndedEvent, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, requestStudioNavigation, type StudioBackendSession, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
 import type { WorkflowActivationSlot } from "../api/runtime";
@@ -21,6 +21,62 @@ import { capabilityDocument, definition, renderRegisteredRoute, response, runJav
 // Per-test teardown lives in the shared afterEach in routeRenderingHelpers.tsx.
 
 describe("workflows module", () => {
+  for (const authoring of [false, true]) it(`adapts the executable empty-state authoring action when workflow design is ${authoring ? "available" : "absent"}`, async () => {
+    const capabilities = capabilityDocument();
+    if (!authoring) capabilities.capabilities = capabilities.capabilities.filter(item => item.id !== "elsa.api.workflow-design");
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables?backend=selected", api => {
+      Object.defineProperty(api, "backendSession", { value: {
+        key: "selected-lifetime", profile: { id: "selected", name: "Selected", baseUrl: api.backend.baseUrl, environment: "Test", source: "configuration" },
+        context: api.backend, identity: { status: "anonymous", roles: [], permissions: [] }, capabilities,
+        pendingWrites: 0, disposed: false, refreshCapabilities: async () => capabilities
+      } satisfies StudioBackendSession });
+    }, false, capabilities);
+    await waitForText(container, "No workflow executables");
+    const action = buttonByText(container, "Open workflow definitions");
+    if (authoring) {
+      expect(action).toBeTruthy();
+      await click(action);
+      expect(window.location.pathname).toBe("/workflows/definitions");
+      expect(window.location.search).toBe("?backend=selected");
+    } else {
+      expect(action).toBeNull();
+      expect(container.textContent).not.toContain("Publish a workflow definition");
+      expect(container.textContent).toContain("This backend has no executables in the selected scope.");
+    }
+    await unmount();
+  });
+
+  it("retries failed workflow metadata through the toolbar Save before releasing navigation", async () => {
+    let metadataWrites = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/definitions/definition-1") && init?.method === "PATCH") {
+        metadataWrites++;
+        return metadataWrites === 1 ? response({ message: "Offline" }, 500)
+          : response({ definition: definition({ name: "Renamed workflow" }), draft: workflowDraft(), versions: [] });
+      }
+      if (url.includes("/drafts/draft-1") && init?.method === "PUT") return response(workflowDraft());
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ items: [] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+    await waitForEditor(container);
+    await click(buttonByText(container, "Properties"));
+    const name = inputByLabel(container, "Workflow name")!;
+    await fill(name, "Renamed workflow");
+    flushSync(() => name.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    await waitForText(container, "Couldn't save name/description.");
+    expect(metadataWrites).toBe(1);
+    expect(requestStudioNavigation("/workflows/definitions", "/settings/backends")).toBe(false);
+    await click(buttonByText(container, "Save"));
+    await vi.waitFor(() => expect(metadataWrites).toBe(2));
+    await vi.waitFor(() => expect(requestStudioNavigation("/workflows/definitions", "/settings/backends")).toBe(true));
+    expect(inputByLabel(container, "Workflow name")?.value).toBe("Renamed workflow");
+    await unmount();
+  });
+
   it("renders a draft without validationErrors as valid", () => {
     const draft = workflowDraft();
     delete (draft as { validationErrors?: unknown }).validationErrors;

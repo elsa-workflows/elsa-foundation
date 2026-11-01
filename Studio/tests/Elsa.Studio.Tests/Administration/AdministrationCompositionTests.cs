@@ -44,7 +44,9 @@ public sealed class AdministrationCompositionTests
         var preview = await maintenance.PruneAsync(new());
         Assert.False(preview.InventoryComplete);
         Assert.Equal("Unknown", preview.ProtectionKnowledge);
-        Assert.Contains(preview.Diagnostics, diagnostic => diagnostic.Code == "EnrollmentRequired");
+        // Linux image filesystems may refuse native inspection before enrollment is inspected.
+        Assert.Contains(preview.Diagnostics, diagnostic => diagnostic.Code == "EnrollmentRequired"
+            || OperatingSystem.IsLinux() && diagnostic.Code == "UnsupportedFilesystem");
     }
 
     [Fact]

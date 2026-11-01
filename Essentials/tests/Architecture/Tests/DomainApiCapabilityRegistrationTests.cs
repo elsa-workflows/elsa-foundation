@@ -1,9 +1,14 @@
 using System.Runtime.CompilerServices;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Capabilities.Contracts;
+using Elsa.Api.Capabilities;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Core.Contracts;
@@ -22,6 +27,7 @@ using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -30,6 +36,12 @@ public sealed class DomainApiCapabilityRegistrationTests
 {
     public static TheoryData<Type, ApiCapabilityDeclaration> DomainFeatures => new()
     {
+        { typeof(Elsa.Workflows.Dashboard.WorkflowsDashboardFeature), new("elsa.api.workflow-dashboard",1,[new("workflow-portfolio","_elsa/workflows/dashboard/definitions"),new("workflow-run-health","_elsa/workflows/dashboard/runs")],"WorkflowsDashboard") },
+        { typeof(Elsa.Connections.Api.Features.ConnectionsApiFeature), new("elsa.api.connections",1,[new("connections","connections"),new("connection-picker","connections/picker")],"ConnectionsApi") },
+        { typeof(Elsa.Secrets.Api.Features.SecretsApiFeature), new("elsa.api.secrets",1,[new("secrets","secrets"),new("secret-picker","secrets/picker")],"SecretsApi") },
+        { typeof(Elsa.Attention.Api.AttentionApiFeature), new("elsa.api.attention",1,[new("attention-items","_elsa/attention/items")],"AttentionApi") },
+        { typeof(Elsa.Agent.Api.FoundationAgentApiFeature), new("elsa.api.agent",1,[new("agent-bootstrap","_elsa/agent/bootstrap"),new("agent-sessions","_elsa/agent/sessions")],"FoundationAgentApi") },
+        { typeof(Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature), new("elsa.api.open-telemetry",1,[new("telemetry-resources","diagnostics/opentelemetry/resources/search")],"DiagnosticsOpenTelemetry") },
         { typeof(WorkflowsDesignApiFeature), WorkflowDesignApiCapabilities.StaticDeclaration },
         { typeof(ActivitiesDesignApiFeature), ActivityDesignApiCapabilities.StaticDeclaration },
         // The expressions declaration is internal to its API, so its wire values are stated here.
@@ -52,7 +64,8 @@ public sealed class DomainApiCapabilityRegistrationTests
         ApiCapabilityDeclaration expected)
     {
         var featureAttribute = Assert.Single(featureType.GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false).Cast<ShellFeatureAttribute>());
-        Assert.Contains("ApiCapabilities", featureAttribute.DependsOn.Select(dependency => dependency?.ToString()));
+        Assert.Contains("ApiCapabilities", featureAttribute.DependsOn.Select(dependency =>
+            dependency is Type dependencyType ? ShellBuilder.ResolveFeatureName(dependencyType) : dependency?.ToString()));
 
         var services = new ServiceCollection();
         ((IShellFeature)Activator.CreateInstance(featureType)!).ConfigureServices(services);
@@ -67,6 +80,45 @@ public sealed class DomainApiCapabilityRegistrationTests
             Assert.False(link.Href.StartsWith('/'));
             Assert.False(Uri.TryCreate(link.Href, UriKind.Absolute, out _));
         });
+    }
+
+    [Theory]
+    [InlineData(typeof(Elsa.Attention.Api.AttentionApiFeature))]
+    [InlineData(typeof(Elsa.Secrets.Api.Features.SecretsApiFeature))]
+    [InlineData(typeof(Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature))]
+    [InlineData(typeof(Elsa.Diagnostics.StructuredLogs.StructuredLogsFeature))]
+    public async Task A_standalone_contributor_discovers_and_activates_its_capability_dependency(Type featureType)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(builder => builder
+            .WithAssemblies(featureType.Assembly)
+            .AddShell("capability-leaf", shell => shell.WithFeature(featureType)));
+        await using var root = services.BuildServiceProvider();
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("capability-leaf");
+        await using var scope = shell.BeginScope();
+        var features = scope.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
+        var capabilities = Assert.Single(features, feature => feature.Id == "ApiCapabilities");
+        Assert.Equal(typeof(ApiCapabilitiesFeature), capabilities.StartupType);
+        var enabled = scope.ServiceProvider.GetRequiredService<ShellSettings>().EnabledFeatures.ToArray();
+        Assert.Contains("ApiCapabilities", enabled);
+        Assert.True(Array.IndexOf(enabled, "ApiCapabilities") < Array.IndexOf(enabled, ShellBuilder.ResolveFeatureName(featureType)));
+    }
+
+    [Fact]
+    public async Task Structured_log_capabilities_use_the_host_configured_routes()
+    {
+        var services = new ServiceCollection();
+        new Elsa.Diagnostics.StructuredLogs.StructuredLogsFeature().ConfigureServices(services);
+        services.Configure<Elsa.Diagnostics.StructuredLogs.Core.Options.StructuredLogsOptions>(options =>
+        {options.RecentPath="/custom/logs";options.SourcesPath="/custom/sources";options.StreamPath="/custom/stream";});
+        using var provider = services.BuildServiceProvider();
+        var source = Assert.Single(provider.GetServices<IApiCapabilitySource>());
+        var declaration = Assert.Single(await source.GetCapabilitiesAsync());
+        Assert.Equal("elsa.api.structured-logs",declaration.CapabilityId);
+        Assert.Equal(["custom/logs","custom/sources","custom/stream"],declaration.Links.Select(link => link.Href).Order(StringComparer.Ordinal));
     }
 
     [Fact]

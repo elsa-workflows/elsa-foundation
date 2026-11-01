@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
+import * as moduleLoader from "../app/loader";
 import { createStudioAuthManager, createStudioEndpointContext, StudioAuthBoundary } from "../app/auth/studioAuth";
 import { useAuthSession, type AuthProviderManager, type AuthSession, type StudioModulesResponse } from "../sdk";
 
@@ -13,6 +14,59 @@ afterEach(() => {
 });
 
 describe("studio auth mounting", () => {
+  it.each([false, true])("waits for initial backend discovery before exposing an editable profile (failure: %s)", async failure => {
+    const initialPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, "", "/settings/backends/new?backend=legacy");
+    const fetchMock = stubShellFetch(), original = fetchMock.getMockImplementation()!;
+    let release!: (response: Response) => void;
+    const pending = new Promise<Response>(resolve => { release = resolve; });
+    fetchMock.mockImplementation(async input => String(input).endsWith("/capabilities") ? pending : original(input));
+    const view = await renderApp();
+    try {
+      await vi.waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/capabilities"))).toBe(true));
+      expect(view.container.querySelector(".backend-form")).toBeNull();
+      expect(view.container.querySelector('[aria-label="Loading backend connections"]')).not.toBeNull();
+      release(new Response(JSON.stringify(failure ? { message: "Unavailable" } : { capabilities: [] }), { status: failure ? 503 : 200, headers: { "content-type": "application/json" } }));
+      await vi.waitFor(() => expect(view.container.querySelector(".backend-form")).not.toBeNull());
+      const name = view.container.querySelector<HTMLInputElement>(".backend-form input")!;
+      flushSync(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Retained profile draft");
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await flushPromises(); await flushPromises();
+      expect(view.container.querySelector<HTMLInputElement>(".backend-form input")?.value).toBe("Retained profile draft");
+    } finally {
+      release(new Response(JSON.stringify({ capabilities: [] }), { status: 200 }));
+      await flushPromises(); await view.unmount(); window.history.replaceState({}, "", initialPath);
+    }
+  });
+
+  it.each([
+    ["unavailable", "/module-policy"], ["unavailable", "/settings/module-policy"],
+    ["hidden", "/module-policy"], ["hidden", "/settings/module-policy"]
+  ] as const)("honors composed %s policy on %s with a satisfied backend", async (state, path) => {
+    const initialPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const component = vi.fn(() => <div>Disallowed route content</div>);
+    const loader = vi.spyOn(moduleLoader, "loadStudioModules").mockImplementation(async (_manifests, api) => {
+      const route = { id: path, path, label: "Module policy", component, requiresBackend: [{ id: "elsa.api.runtime", contractVersion: "1" }], availability: { state, reason: "Blocked by module policy" } };
+      api.routes.add(route);
+      api.navigation.add({ id: "module-policy", path: "/settings/module-policy", label: "Module policy", placement: "settings" });
+      return [];
+    });
+    try {
+      localStorage.clear();sessionStorage.clear();window.history.replaceState({}, "", path);
+      const fetchMock = stubShellFetch(), original = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation(async input => String(input).endsWith("/capabilities")
+        ? new Response(JSON.stringify({ capabilities: [{ id: "elsa.api.runtime", contractVersion: "1", links: [] }] }), { status: 200, headers: { "content-type": "application/json" } })
+        : original(input));
+      const view = await renderApp();
+      try {
+        await vi.waitFor(() => expect(view.container.textContent).toContain(state === "hidden" ? "No Studio route is registered for" : "Blocked by module policy"));
+        expect(component).not.toHaveBeenCalled();
+      } finally {await view.unmount();}
+    } finally {loader.mockRestore();window.history.replaceState({}, "", initialPath);}
+  });
+
   it("boots anonymously and attaches no bearer token when no provider is configured", async () => {
     // No runtime auth config -> anonymous contract: the shell must boot with no login gate.
     const fetchMock = stubShellFetch();

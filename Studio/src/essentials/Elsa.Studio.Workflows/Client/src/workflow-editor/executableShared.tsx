@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { Check, Copy } from "lucide-react";
 import type { WorkflowExecutableReference } from "../workflowTypes";
@@ -8,7 +9,7 @@ import { copyTextToClipboard, formatReferenceScope, getExecutableReferenceStatus
 export function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
   const openRun = () => {
     if (!run?.workflowExecutionId) return;
-    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 

@@ -10,6 +10,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.Workflows;
+using Elsa.Api.Capabilities;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Microsoft.Extensions.Configuration;
@@ -50,7 +51,8 @@ public sealed class AgentCompositionTests
     public async Task A_leaf_discovers_and_activates_its_default_feature_through_the_type_dependency(Type leaf)
     {
         // Only the leaf and Events assemblies are supplied. The default Agent assembly must be
-        // discovered through the leaf's Type dependency, and neither dependency is explicitly enabled.
+        // discovered through the leaf's Type dependency, as must the API capability feature for
+        // the API leaf. Dependencies are not explicitly enabled.
         await using var root = BuildRoot([leaf]);
         var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         await using var scope = shell.BeginScope();
@@ -65,6 +67,15 @@ public sealed class AgentCompositionTests
         Assert.Contains("Events", enabled);
         Assert.True(Array.IndexOf(enabled, "Events") < Array.IndexOf(enabled, DefaultFeatureId));
         Assert.True(Array.IndexOf(enabled, DefaultFeatureId) < Array.IndexOf(enabled, ShellBuilder.ResolveFeatureName(leaf)));
+
+        if (leaf == typeof(FoundationAgentApiFeature))
+        {
+            var capabilities = Assert.Single(services.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>(),
+                feature => feature.Id == "ApiCapabilities");
+            Assert.Equal(typeof(ApiCapabilitiesFeature), capabilities.StartupType);
+            Assert.Contains("ApiCapabilities", enabled);
+            Assert.True(Array.IndexOf(enabled, "ApiCapabilities") < Array.IndexOf(enabled, ShellBuilder.ResolveFeatureName(leaf)));
+        }
 
         AssertSingleDefaults(services);
         Assert.NotNull(services.GetRequiredService<IInlineEventPublisher>());

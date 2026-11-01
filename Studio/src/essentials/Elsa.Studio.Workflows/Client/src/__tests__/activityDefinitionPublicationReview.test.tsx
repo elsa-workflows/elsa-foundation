@@ -205,15 +205,15 @@ function capabilities() {
     {
       id: "elsa.api.activity-design",
       contractVersion: "1",
-      links: [{ rel: "activity-definition", href: "/design/activities/definitions/{definitionId}", templated: true }]
+      links: [{ rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true }]
     },
     {
       id: "elsa.api.publishing",
       contractVersion: "1",
       links: [
-        { rel: "activity-publication-preflight", href: "/design/activities/drafts/{draftId}/publication-preflight", templated: true },
-        { rel: "activity-publication", href: "/design/activities/drafts/{draftId}/publication", templated: true },
-        { rel: "activity-publication-receipt", href: "/design/activities/publication-operations/{idempotencyKey}", templated: true }
+        { rel: "activity-publication-preflight", href: "design/activities/drafts/{draftId}/publication-preflight", templated: true },
+        { rel: "activity-publication", href: "design/activities/drafts/{draftId}/publication", templated: true },
+        { rel: "activity-publication-receipt", href: "design/activities/publication-operations/{idempotencyKey}", templated: true }
       ]
     }
   ] };
