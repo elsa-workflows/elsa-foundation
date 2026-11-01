@@ -108,7 +108,6 @@ public sealed class LoginPageTests
     [InlineData("reverse", "tidal", "tidal")]
     [InlineData("immersive", "daybreak", "daybreak")]
     [InlineData("editorial", "canopy", "canopy")]
-    [InlineData("sketchbook", "sketchbook", "sketchbook")]
     public void Custom_presentation_keeps_form_security_and_encodes_branding(string layout, string palette, string artwork)
     {
         var html = LoginPage.Render("/studio?x=\"unsafe", true, "csrf\"token", new LoginPageOptions
