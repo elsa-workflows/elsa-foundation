@@ -16,6 +16,38 @@ export interface WorkflowDefinitionBrowseLocation {
   publicationState?: string;
 }
 
+interface BrowseSupport {
+  folders: boolean;
+  tags: boolean;
+  favorites: boolean;
+  views: boolean;
+  paging: boolean;
+}
+
+/** A constrained link stays constrained until its owner explicitly removes unavailable predicates. */
+export function unavailableWorkflowBrowseConstraints(location: WorkflowDefinitionBrowseLocation, support: BrowseSupport) {
+  return {
+    folders: !support.folders && (location.folderSelection !== "all" || location.includeDescendants === true),
+    tags: Boolean(location.invalidTagFilters || ((!support.tags || !support.paging) && location.tagFilters?.length)),
+    favorites: (!support.favorites || !support.paging) && location.favoritesOnly === true,
+    view: !support.views && Boolean(location.viewId),
+    sort: !support.paging && Boolean(location.sort && location.sort !== "name"),
+    publication: !support.paging && Boolean(location.publicationState)
+  };
+}
+
+export function clearUnavailableWorkflowBrowseConstraints(location: WorkflowDefinitionBrowseLocation, support: BrowseSupport): WorkflowDefinitionBrowseLocation {
+  const unavailable = unavailableWorkflowBrowseConstraints(location, support);
+  if (!Object.values(unavailable).some(Boolean)) return location;
+  return { ...location, viewId: undefined,
+    ...(unavailable.folders ? { folderSelection: "all", includeDescendants: false } : {}),
+    ...(unavailable.tags ? { tagFilters: [], invalidTagFilters: undefined } : {}),
+    ...(unavailable.favorites ? { favoritesOnly: false } : {}),
+    ...(unavailable.sort ? { sort: "name" } : {}),
+    ...(unavailable.publication ? { publicationState: undefined } : {})
+  };
+}
+
 export function workflowLibraryFilterKey(location: WorkflowDefinitionBrowseLocation) {
   return JSON.stringify({ tags: location.tagFilters ?? [], invalid: location.invalidTagFilters ?? null,
     descendants: location.includeDescendants === true, favorites: location.favoritesOnly === true, sort: location.sort ?? "name", publication: location.publicationState ?? null });

@@ -65,7 +65,8 @@ const capabilities = { capabilities: [{ id: "elsa.api.workflow-design", contract
   { rel: "workflow-views", href: "fixture/library/views" },
   { rel: "workflow-view", href: "fixture/library/views/{viewId}", templated: true },
   { rel: "workflow-favorites", href: "fixture/library/favorites/{definitionId}", templated: true }
-].filter(link => parameters.get("folders") !== "unavailable" || !link.rel.includes("folder")) }] };
+].filter(link => (parameters.get("folders") !== "unavailable" || !link.rel.includes("folder"))
+  && (parameters.get("organization") !== "off" || ["workflow-definitions", "workflow-definitions-page"].includes(link.rel))) }] };
 
 Object.assign(window, { workflowLibraryRequests: requests, workflowLibraryDefinitions: definitions });
 

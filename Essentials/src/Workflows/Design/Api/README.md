@@ -45,6 +45,37 @@ The authoring-schema endpoints make the design API a complete headless authoring
 
 ## Extension points
 
+### Optional workflow organization
+
+`WorkflowsDesignApi.WorkflowOrganizationEnabled` is a Boolean setting that defaults to `true`.
+An administrator can change **Workflow organization** in Studio's **Features → Server →
+Workflows Design API → Edit settings**, save the draft, review the single-setting change and Apply.
+The review targets the selected backend. Hosts whose configuration is owned by another source
+must change that source instead. The same setting can be supplied in a shell blueprint:
+
+```json
+"WorkflowsDesignApi": { "WorkflowOrganizationEnabled": false }
+```
+
+Turning it off withdraws folder, placement, tag, organization, saved-view and favorite relations.
+Their endpoints return HTTP 501; active organization predicates on the paged list return HTTP 400.
+The legacy list also refuses organization query keys while disabled, rather than ignoring them.
+Creation with a folder destination is refused before writing. Ordinary paged browsing, search,
+sort, publication filters, authoring, publishing and runtime execution remain available.
+
+The library store and its visibility policy stay registered. Definition/folder resource checks,
+tenant isolation, visibility-bound counts and continuation tokens retain their normal behavior.
+Organization metadata and mutation permission hints are omitted/false while disabled. This is an
+availability control, not an alternative authorization policy.
+
+No folder, tag assignment, saved view, favorite or column preference is deleted or migrated.
+Re-enabling restores them, including after a restart. Each shell generation uses a fixed setting
+snapshot. After a successful reviewed Server Apply, Studio refreshes capabilities for that backend
+and retires the old route/dialog generation. A stale organization-filtered link holds browsing
+until the user explicitly clears unavailable predicates; recovery retains supported ordinary
+filters, backend selection and saved column choices. Clients should discover each operation's
+relation independently. Paged browsing does not depend on organization being enabled.
+
 Workflow library pages enforce visibility before counting and paging. A host that registers any
 `IPermissionResourceHandler` must also register an `IWorkflowLibraryVisibilityPolicy` whose
 server-derived revision and bounded allow/deny definition identities describe the complete workflow

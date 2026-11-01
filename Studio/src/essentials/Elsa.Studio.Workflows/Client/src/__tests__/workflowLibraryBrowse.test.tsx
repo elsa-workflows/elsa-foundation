@@ -7,12 +7,70 @@ import {
 import { parseWorkflowDefinitionBrowseLocation, updateWorkflowDefinitionBrowseUrl, workflowLibraryFilterKey } from "../workflow-editor/workflowDefinitionBrowseLocation";
 
 function libraryCapabilities() {
-  const capabilities = pagedDefinitionCapabilities();
-  capabilities.capabilities[0].links.push({ rel: "workflow-organization", href: "design/workflows/organization/{definitionId}" }, { rel: "workflow-favorites", href: "design/workflows/favorites/{definitionId}" });
+  const capabilities = pagedDefinitionCapabilities({ folders: true });
+  capabilities.capabilities[0].links.push({ rel: "workflow-tags", href: "design/workflows/tags" }, { rel: "workflow-organization", href: "design/workflows/organization/{definitionId}" }, { rel: "workflow-favorites", href: "design/workflows/favorites/{definitionId}" });
   return capabilities;
 }
 
 describe("workflow library query boundaries", () => {
+  it("recovers a missing tag operation without losing supported folder, favorite and column choices", async () => {
+    const capabilities = pagedDefinitionCapabilities({ folders: true });
+    capabilities.capabilities[0].links.push({ rel: "workflow-favorites", href: "design/workflows/favorites/{definitionId}", templated: true });
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("definition-pages")) {
+        requests.push(url);
+        return response({ items: [definition({ name: "Invoice in finance", favorite: true, folderId: "finance", folderBreadcrumb: [{ id: "finance", name: "Finance" }], tags: [{ tagId: "critical" }] })] });
+      }
+      if (url.pathname.endsWith("folders/finance")) return response({ folder: { id: "finance", name: "Finance", parentId: null }, ancestors: [] });
+      return response({ items: [] });
+    });
+    const tags = encodeURIComponent(JSON.stringify([{ tagId: "critical", operator: "exists" }]));
+    const { container } = await renderWorkflowRoute(`/workflows/definitions?folderId=finance&favoritesOnly=true&tagFilters=${tags}&columns=tags,location&view=mine`, fetchMock, capabilities);
+    await waitForText(container, "Some organization filters are unavailable");
+    expect(requests).toHaveLength(0);
+    await click(button(container, "Clear unavailable organization filters"));
+    await waitForText(container, "Invoice in finance");
+    expect(requests.at(-1)?.searchParams.get("folderId")).toBe("finance");
+    expect(requests.at(-1)?.searchParams.get("favoritesOnly")).toBe("true");
+    expect(requests.at(-1)?.searchParams.has("tagFilters")).toBe(false);
+    const headings = [...container.querySelectorAll('[role="columnheader"]')].map(item => item.textContent);
+    expect(headings).toContain("Location");
+    expect(headings).not.toContain("Tags");
+    expect(new URLSearchParams(window.location.search).get("columns")).toBe("tags,location");
+    expect(new URLSearchParams(window.location.search).has("view")).toBe(false);
+  });
+
+  it.each(["folderId=old-folder", "unfiled=true", "includeDescendants=true", "favoritesOnly=true", "view=private-view",
+    `tagFilters=${encodeURIComponent(JSON.stringify([{ tagId: "old-tag", operator: "exists" }]))}`])(
+    "holds unavailable scope %s until explicit recovery, retaining ordinary filters and saved columns", async scope => {
+      const requests: URL[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("definition-pages")) {
+          requests.push(url);
+          return response({ items: [definition({ name: "Recovered ordinary result" })], totalCount: 1 });
+        }
+        return response({ items: [] });
+      });
+      const { container } = await renderWorkflowRoute(`/workflows/definitions?${scope}&search=invoice&state=all&sort=modified&publicationState=published&columns=tags,location&custom=keep`, fetchMock, pagedDefinitionCapabilities());
+      await waitForText(container, "Some organization filters are unavailable");
+      expect(requests).toHaveLength(0);
+      expect(container.querySelector('[role="table"]')).toBeNull();
+      await click(button(container, "Clear unavailable organization filters"));
+      await waitForText(container, "Recovered ordinary result");
+      const query = requests.at(-1)!.searchParams;
+      expect(query.get("searchTerm")).toBe("invoice");
+      expect(query.get("state")).toBe("all");
+      expect(query.get("sort")).toBe("modified");
+      expect(query.get("publicationState")).toBe("published");
+      expect(window.location.search).toContain("custom=keep");
+      expect(new URLSearchParams(window.location.search).get("columns")).toBe("tags,location");
+      expect(container.querySelector('[role="columnheader"]:last-child')?.textContent).toBe("Actions");
+      expect([...container.querySelectorAll('[role="columnheader"]')].map(item => item.textContent)).not.toContain("Tags");
+    });
+
   it("round-trips the complete library query with opaque classification identities", () => {
     const location = { folderSelection: { id: "folder/opaque" }, listState: "all" as const, search: "invoice",
       tagFilters: [{ tagId: "team/ü", operator: "any" as const, valueIds: ["finance#1"] }], includeDescendants: true,
@@ -91,10 +149,10 @@ describe("workflow library query boundaries", () => {
       return response({ items: [definition({ name: "Unfiltered workflow" })], nextContinuationToken: null });
     });
     const { container } = await renderWorkflowRoute("/workflows/definitions?favoritesOnly=true", fetchMock, pagedDefinitionCapabilities());
-    await waitForText(container, "Clear organization filters");
+    await waitForText(container, "Clear unavailable organization filters");
     expect(requests.some(url => url.pathname.endsWith("definition-pages"))).toBe(false);
     expect(row(container, "Unfiltered workflow")).toBeNull();
-    await click(container.querySelector("button") && Array.from(container.querySelectorAll("button")).find(item => item.textContent === "Clear organization filters")!);
+    await click(container.querySelector("button") && Array.from(container.querySelectorAll("button")).find(item => item.textContent === "Clear unavailable organization filters")!);
     await waitForText(container, "Unfiltered workflow");
     expect(new URL(window.location.href).searchParams.has("favoritesOnly")).toBe(false);
   });

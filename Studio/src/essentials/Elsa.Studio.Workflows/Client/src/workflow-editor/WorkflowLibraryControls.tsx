@@ -93,7 +93,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     change({ invalidTagFilters: undefined, tagFilters: (location.tagFilters ?? []).map((filter, position) => position === index ? { ...filter, ...patch } : filter) });
   };
   const selectedView = views.find(view => view.id === location.viewId);
-  const unknownView = Boolean(location.viewId && !selectedView);
+  const unknownView = Boolean(support.views && location.viewId && !selectedView);
   const savedLocation = selectedView ? workflowBrowseLocationFromQuery(selectedView.query, selectedView.id, selectedView.columns) : undefined;
   const modifiedView = savedLocation && (workflowLibraryFilterKey(savedLocation) !== workflowLibraryFilterKey(location)
     || workflowFolderSelectionKey(savedLocation.folderSelection) !== workflowFolderSelectionKey(location.folderSelection)
@@ -102,14 +102,14 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const activeCount = (location.tagFilters?.length ?? 0) + (location.publicationState ? 1 : 0);
   const viewsSaved = () => { setViewDialogOpen(false); setRefresh(value => value + 1); };
 
-  return <section className="wf-library-controls" aria-label="Workflow library organization">
+  return <section className="wf-library-controls" aria-label={support.tags || support.views || support.folders || support.favorites ? "Workflow library organization" : "Workflow library filters"}>
     <div className="wf-library-control-row">
       {support.favorites ? <button type="button" aria-pressed={location.favoritesOnly === true} onClick={() => change({ favoritesOnly: !location.favoritesOnly })}>Favorites</button> : null}
-      {typeof location.folderSelection === "object" ? <label className="wf-library-check"><input type="checkbox" checked={location.includeDescendants ?? false} onChange={event => change({ includeDescendants: event.target.checked })} /> Include subfolders</label> : null}
-      <label>Sort <select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
+      {support.folders && typeof location.folderSelection === "object" ? <label className="wf-library-check"><input type="checkbox" checked={location.includeDescendants ?? false} onChange={event => change({ includeDescendants: event.target.checked })} /> Include subfolders</label> : null}
+      {support.paging ? <label>Sort <select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
         <option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="modified">Recently modified</option>
-      </select></label>
-      {support.tags ? <button type="button" aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}>Filters{activeCount ? ` (${activeCount})` : ""}</button> : null}
+      </select></label> : null}
+      {support.tags || support.paging ? <button type="button" aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}>Filters{activeCount ? ` (${activeCount})` : ""}</button> : null}
       {support.views ? <>
         <label>View <select aria-label="Saved workflow view" value={location.viewId ?? ""} onChange={event => {
           const view = views.find(item => item.id === event.target.value);
@@ -124,14 +124,14 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
     {modifiedView ? <p className="wf-library-help">The current filters differ from the saved view. Save to update it or choose the view again to restore its filters.</p> : null}
-    {location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <button type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</button></p> : null}
+    {support.folders && location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <button type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</button></p> : null}
     {error ? <p role="alert">{error} <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</button></p> : null}
-    {location.invalidTagFilters ? <p role="alert">The tag filters in this link are invalid. <button type="button" onClick={() => change({ invalidTagFilters: undefined, tagFilters: [] })}>Clear invalid tag filters</button></p> : null}
-    {filtersOpen && support.tags ? <div className="wf-library-filter-panel" id={filtersId}>
-      <label>Publication <select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
+
+    {filtersOpen && (support.tags || support.paging) ? <div className="wf-library-filter-panel" id={filtersId}>
+      {support.paging ? <label>Publication <select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
         <option value="">Any publication state</option><option value="published">Published</option>{location.publicationState && location.publicationState !== "published" ? <option value={location.publicationState}>Unsupported state: {location.publicationState}</option> : null}
-      </select></label>
-      <div className="wf-library-control-row"><label>Find tag <input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></label><button type="button" disabled={catalogLoading} onClick={() => setCatalogTerm(catalogSearch)}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</div>
+      </select></label> : null}
+      {support.tags ? <><div className="wf-library-control-row"><label>Find tag <input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></label><button type="button" disabled={catalogLoading} onClick={() => setCatalogTerm(catalogSearch)}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</div>
       {(location.tagFilters ?? []).map((filter, index) => {
         const tag = tags.find(item => item.id === filter.tagId);
         return <div className="wf-library-filter-clause" key={`${index}-${filter.tagId}`}>
@@ -155,7 +155,8 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
         {activeCount ? <button type="button" onClick={() => change({ tagFilters: [], publicationState: undefined })}>Clear filters</button> : null}
       </div>
       <p className="wf-library-help">All tag conditions must match. Selected alternatives within a condition match any value, unless “Every selected value” is chosen.</p>
-      <fieldset className="wf-library-values"><legend>Optional columns</legend>{["tags", "location"].map(column => <label key={column}><input type="checkbox" checked={location.columns?.includes(column) ?? false} onChange={event => change({ columns: event.target.checked ? [...(location.columns ?? []), column] : location.columns?.filter(item => item !== column) })} />{column === "tags" ? "Tags" : "Location"}</label>)}</fieldset>
+      </> : null}
+      {support.tags || support.folders ? <fieldset className="wf-library-values"><legend>Optional columns</legend>{[...(support.tags ? ["tags"] : []), ...(support.folders ? ["location"] : [])].map(column => <label key={column}><input type="checkbox" checked={location.columns?.includes(column) ?? false} onChange={event => change({ columns: event.target.checked ? [...(location.columns ?? []), column] : location.columns?.filter(item => item !== column) })} />{column === "tags" ? "Tags" : "Location"}</label>)}</fieldset> : null}
     </div> : null}
     {catalogOpen ? <Suspense fallback={<p role="status">Loading tag manager…</p>}><WorkflowTagCatalogDialog context={context} tags={tags} onClose={() => setCatalogOpen(false)} onSaved={() => setRefresh(value => value + 1)} /></Suspense> : null}
     {viewDialogOpen ? <WorkflowViewDialog context={context} location={location} existing={selectedView} canShare={permissions.canShareViews === true} onClose={() => setViewDialogOpen(false)} onSaved={viewsSaved} onDeleted={() => { change({ viewId: undefined }); viewsSaved(); }} /> : null}
