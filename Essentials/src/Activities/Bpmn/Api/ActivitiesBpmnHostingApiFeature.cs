@@ -2,6 +2,8 @@ using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Bpmn.Api.Endpoints;
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
@@ -24,6 +26,10 @@ public class ActivitiesBpmnHostingApiFeature : IWebShellFeature
         services.AddElsaEndpoints();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<BpmnApiCaller>();
+        services.TryAddScoped<BpmnCatalog>();
+        ApiCapabilityRegistration.Add(services, new ApiCapabilityDeclaration("elsa.api.bpmn-catalog", 1,
+            [new("bpmn-publications", "bpmn/publications"), new("bpmn-executions", "bpmn/executions")],
+            "ActivitiesBpmnHostingApi"));
         services.AddPermissionContributor<BpmnHostingPermissionContributor>();
         services.TryAddKeyedScoped<IEndpointFaultRenderer, BpmnHostingFaultRenderer>(BpmnHostingApi.Owner);
     }

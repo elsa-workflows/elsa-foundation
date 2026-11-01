@@ -18,6 +18,7 @@ public sealed class DirectBpmnStudioPublicationTests
         await host.PostAsync("/interchange/bpmn/versions/unknown/publish-direct", new { requestId = "missing" }, HttpStatusCode.NotFound);
         var capabilities = await host.GetAsync("/capabilities");
         Assert.Contains("elsa.api.bpmn-publishing", capabilities.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains("elsa.api.bpmn-catalog", capabilities.ToJsonString(), StringComparison.Ordinal);
         var catalog = await host.GetAsync("/design/activities/definitions?search=Elsa.Activities.Bpmn.Activities.BpmnProcess");
         var activity = Assert.Single(catalog["items"]!.AsArray(), item =>
             item!["definition"]!["activityTypeKey"]!.GetValue<string>() == "Elsa.Activities.Bpmn.Activities.BpmnProcess");
@@ -55,6 +56,8 @@ public sealed class DirectBpmnStudioPublicationTests
         var request = new { requestId = "publish-direct", versionId = "body-cannot-choose-source", actorId = "body-cannot-choose-author", tenantId = "body-cannot-choose-tenant" };
         var published = await host.PostAsync(publicationPath, request);
         Assert.True(JsonNode.DeepEquals(published, await host.PostAsync(publicationPath, request)));
+        var publications = await host.GetAsync("/bpmn/publications?limit=500&artifactId=" + Uri.EscapeDataString(published["executable"]!["artifactId"]!.GetValue<string>()));
+        Assert.Equal(published["sourceReferenceId"]!.GetValue<string>(), Assert.Single(publications["items"]!.AsArray())!["sourceReferenceId"]!.GetValue<string>());
         var exported = await host.PostAsync("/interchange/bpmn/export", new { processNode = promoted["state"]!["rootActivity"], processId = "round-trip" });
         var imported = await host.PostAsync("/interchange/bpmn/import", new { xml = exported["xml"]!.GetValue<string>(), processId = "round-trip" });
         Assert.Equal(metadata, imported["processNode"]!["structure"]!["payload"]!["elements"]![1]!["properties"]!["elsa.direct.binding"]!.GetValue<string>());
@@ -70,6 +73,10 @@ public sealed class DirectBpmnStudioPublicationTests
         await host.RestartAsync();
         Assert.NotEqual(firstProcess, host.ProcessId);
         await host.LoginAsync();
+        var executions = await host.GetAsync("/bpmn/executions?artifactId=" + Uri.EscapeDataString(published["executable"]!["artifactId"]!.GetValue<string>()));
+        var discovered = Assert.Single(executions["items"]!.AsArray())!;
+        Assert.Equal(started["executionId"]!.GetValue<string>(), discovered["executionId"]!.GetValue<string>());
+        Assert.Equal(waiting["revision"]!.GetValue<long>(), discovered["revision"]!.GetValue<long>());
         Assert.True(JsonNode.DeepEquals(waiting, await host.GetAsync(path)));
         Assert.True(JsonNode.DeepEquals(published, await host.PostAsync(publicationPath, request)));
         var completionPath = path + "/work/" + work["invocationId"]!.GetValue<string>() + "/complete";
@@ -101,7 +108,7 @@ public sealed class DirectBpmnStudioPublicationTests
                 sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"),
                 profile = "saved/promoted authored version → optional direct publisher → actual Workbench restart and completion replay",
                 studioBrowserProved = false, firstProcess, binaries = host.DescribeBinaries(Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"), includeBpmnAuthoring: true),
-                submitted, reopened, promoted, published, started, waiting, work, completed, terminal,
+                submitted, reopened, promoted, published, publications, started, waiting, work, executions, completed, terminal,
                 snapshots = new[] { waitRuntime, waitDesign, completeRuntime, completeDesign },
                 nativeWorkflowRows = 0, nativeActivityRows = 0, nativeBookmarkRows = 0
             }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));

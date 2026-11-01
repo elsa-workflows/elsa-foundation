@@ -61,6 +61,12 @@ internal sealed class BpmnApiCaller(IHttpContextAccessor contexts, NormalizedPri
             throw new BpmnModelResourceMissingException();
         return new(subjects[0], tenants.SingleOrDefault()?.Value);
     }
+    public async ValueTask<bool> CanReadAsync(object resource, CancellationToken cancellationToken)
+    {
+        var caller = Current();
+        if (!validator.TryGetNormalizedPrincipal(contexts.HttpContext!.User, out var principal)) throw new BpmnModelResourceMissingException();
+        return (await authorization.AuthorizeAsync(new(principal, BpmnHostingApi.Read, caller.TenantId, resource), cancellationToken)).Succeeded;
+    }
     public async ValueTask<BpmnModelCaller> ForExecutionAsync(string executionId, string permission, CancellationToken cancellationToken)
     {
         var caller = Current();
@@ -268,4 +274,7 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
 [JsonSerializable(typeof(BpmnExecutionView))]
 [JsonSerializable(typeof(RuntimeStorePage<BpmnHumanWork>))]
 [JsonSerializable(typeof(RuntimeStorePage<BpmnServiceIncident>))]
+[JsonSerializable(typeof(BpmnCatalogRequest))]
+[JsonSerializable(typeof(BpmnCatalogPage<BpmnPublicationView>))]
+[JsonSerializable(typeof(BpmnCatalogPage<BpmnExecutionView>))]
 internal partial class BpmnHostingJsonContext : JsonSerializerContext;
