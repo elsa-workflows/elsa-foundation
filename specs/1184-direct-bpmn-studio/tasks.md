@@ -13,9 +13,9 @@
 
 These prerequisites serve human and service journeys. No new general storage/framework setup is needed.
 
-- [ ] T003 Reproduce lost owned binding metadata and add meaningful negative controls in Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnDirectBindingInterchangeTests.cs.
-- [ ] T004 Preserve bounded owned direct-binding JSON through XML in Essentials/src/Activities/Bpmn/Interchange/Services/BpmnDirectBindingMetadata.cs, BpmnDocumentExporter.cs and BpmnDocumentImporter.cs; keep unrelated extensions diagnosed and old documents unchanged.
-- [ ] T005 Run the affected interchange suite and record actual failing/passing controls in specs/1184-direct-bpmn-studio/evidence/interchange/README.md.
+- [x] T003 Reproduce lost owned binding metadata and add meaningful negative controls in Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnDirectBindingInterchangeTests.cs.
+- [x] T004 Preserve bounded owned direct-binding JSON through XML in Essentials/src/Activities/Bpmn/Interchange/Services/BpmnDirectBindingMetadata.cs, BpmnDocumentExporter.cs and BpmnDocumentImporter.cs; keep unrelated extensions diagnosed and old documents unchanged.
+- [x] T005 Run the affected interchange suite and record actual failing/passing controls in specs/1184-direct-bpmn-studio/evidence/interchange/README.md.
 
 ## Phase 3: US1 — Direct human journey (P1, MVP)
 

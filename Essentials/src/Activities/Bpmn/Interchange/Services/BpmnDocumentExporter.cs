@@ -83,6 +83,13 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                     ]);
             }
 
+            if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var directBinding))
+                extensions = extensions with
+                {
+                    ForeignAttributes = extensions.ForeignAttributes
+                        .Append(BpmnDirectBindingMetadata.ToAttribute(directBinding, element.ElementId)).ToArray()
+                };
+
             elements.Add(new LibModel.BpmnElement(
                 element.ElementId,
                 element.ElementType,
@@ -91,7 +98,8 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                 element.LaneId,
                 element.DefaultFlowId,
                 element.EventDefinitions.Select(definition => new LibModel.BpmnEventDefinition(definition.Type, definition.Properties)).ToArray(),
-                element.Properties.Where(property => !property.Key.StartsWith(BpmnRetainedAuthoring.ConditionExpressionPrefix, StringComparison.Ordinal))
+                element.Properties.Where(property => property.Key != BpmnDirectBindingMetadata.PropertyKey &&
+                        !property.Key.StartsWith(BpmnRetainedAuthoring.ConditionExpressionPrefix, StringComparison.Ordinal))
                     .ToDictionary(property => property.Key, property => property.Value, StringComparer.Ordinal),
                 element.AttachedToRef,
                 element.CancelActivity,

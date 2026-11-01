@@ -20,6 +20,12 @@ The library supplies its selected XML/semantic profile: coded errors, named even
 
 Default markers are derived from the source element's DefaultFlowId. Import/edit/export preserves Foundation's authored markers; it does not replace them with a library bindingRef envelope. Error classification is separate from ordinary host faults/incidents. Compensation handlers retain their associated ordinary bound task identities; called escalation is carried through real child-control sources rather than an authored marker alone.
 
+## Direct binding metadata retention
+
+The optional authored element property `elsa.direct.binding` round-trips as `elsa:directBinding` in the existing Elsa vendor namespace. Interchange retains the exact JSON object, including future schema versions, with a limit of16KiB UTF-8 and a maximum depth of32. Malformed values and conflicting attributes under both vendor namespace aliases are refused with element context. Other unrepresented extension content still reports degradation; documents without the property emit no new binding attribute.
+
+This is metadata retention, not executable-profile validation or a direct publication path. A publisher must validate the versioned binding's full schema, supported inventory and immutable dependencies before accepting execution. Native `childNodeId` and listener bindings keep their existing meaning. The remaining direct Studio journey is tracked in [spec1184](../../../../../specs/1184-direct-bpmn-studio/spec.md).
+
 ## Verification
 
 The [post-deletion host and Studio qualification](../../../../../specs/1006-bpmn-library-adoption/evidence/post-deletion-host-qualification.md) records normal UI import, default-flow editing, publication, a real published run, reload and downloaded XML. Actual ordinary compensation, called error/escalation, concurrent calls, legacy recovery and broadcast witnesses are linked from the [task ledger](../../../../../specs/1006-bpmn-library-adoption/tasks.md). Each receipt names its source and scope. Final resulting-build/main qualification remains a separate delivery gate.

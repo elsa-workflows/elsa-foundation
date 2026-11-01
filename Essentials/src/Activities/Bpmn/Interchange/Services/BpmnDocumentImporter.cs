@@ -81,6 +81,8 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
     private BpmnImportResult Read(string xml, BpmnImportOptions? options)
     {
         var document = BpmnVendorNamespace.TryParse(xml);
+        if (document is not null)
+            BpmnDirectBindingMetadata.ValidateSourceAttributes(document);
         IReadOnlyDictionary<string, string> boundaryDrops = document is null
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : BpmnUnboundHostPolicy.ScanBoundariesOnUnboundHosts(document);
@@ -187,7 +189,8 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 ReportUnrepresented(source.Extensions with
                 {
                     ForeignAttributes = source.Extensions.ForeignAttributes.Where(attribute =>
-                        source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute)).ToArray()
+                        !BpmnDirectBindingMetadata.IsAttribute(attribute) &&
+                        (source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute))).ToArray()
                 }, source.ElementId);
                 if (source.Script is not null)
                     Degraded(source.ElementId, "The script body and script format are not represented by the frozen Foundation authoring contract; bind an activity explicitly.");
@@ -315,6 +318,13 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
         private static IReadOnlyDictionary<string, string> RetainedProperties(LibModel.BpmnElement source, LibModel.BpmnProcessDefinition process)
         {
             var properties = new Dictionary<string, string>(source.Properties, StringComparer.Ordinal);
+            foreach (var attribute in source.Extensions.ForeignAttributes.Where(BpmnDirectBindingMetadata.IsAttribute))
+            {
+                var value = BpmnDirectBindingMetadata.Validate(attribute.Value, source.ElementId);
+                if (properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var existing) && existing != value)
+                    throw new BpmnInterchangeException($"Element '{source.ElementId}' has conflicting direct binding metadata.");
+                properties[BpmnDirectBindingMetadata.PropertyKey] = value;
+            }
             foreach (var flow in process.SequenceFlows.Where(flow => flow.SourceRef == source.ElementId && flow.ConditionExpression is not null))
             {
                 var expression = flow.ConditionExpression!;
