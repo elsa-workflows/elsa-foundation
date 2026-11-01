@@ -1365,7 +1365,13 @@
   padding: 10px 12px;
 }
 
-.wf-instance-canvas-shell > header span {
+.wf-instance-canvas-shell > header > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.wf-instance-canvas-shell > header > div > span:first-child,
+.wf-instance-canvas-shell > header .wf-canvas-kicker {
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 700;
@@ -5236,8 +5242,22 @@ button.wf-reference-select {
 }
 
 .wf-executable-selection {
+  min-width: 0;
+  max-width: 42%;
+  flex: 0 1 auto;
+  overflow: hidden;
   color: var(--wf-muted-text);
   font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.wf-executable-artifact-id {
+  margin-top: 6px;
+  max-width: 28rem;
 }
 
 .wf-executable-drift {

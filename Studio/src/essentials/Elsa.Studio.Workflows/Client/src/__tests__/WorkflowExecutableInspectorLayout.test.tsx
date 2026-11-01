@@ -4,14 +4,31 @@ import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowExecutableInspectorPage, WorkflowExecutablesPage } from "../workflow-editor/pages";
+import type { ExecutableInspectorIdentity } from "../workflow-editor/executableInspectorIdentity";
 
 vi.mock("../workflow-editor/WorkflowExecutableInspector", () => ({
-  WorkflowExecutableInspectorWorkbench: () => (
+  WorkflowExecutableInspectorWorkbench: ({
+    onIdentityChange
+  }: {
+    onIdentityChange?(identity: ExecutableInspectorIdentity): void;
+  }) => (
     <>
       <div className="wf-toolbar">toolbar</div>
       <div className="studio-result-state" data-tone="danger" role="alert">The executable could not be run</div>
       <div className="wf-status-line">Started artifact-1</div>
-      <div className="wf-instance-detail-workbench">inspector workbench</div>
+      <div className="wf-instance-detail-workbench">
+        inspector workbench
+        <button
+          type="button"
+          onClick={() => onIdentityChange?.({
+            definitionName: "Invoice settlement",
+            artifactId: "artifact-1",
+            version: "1.0.0"
+          })}
+        >
+          resolve identity
+        </button>
+      </div>
     </>
   )
 }));
@@ -76,6 +93,29 @@ describe("Executable Inspector page layout", () => {
     expect(children.at(-1)).toBe(workbench);
     expect(children.indexOf(status as Element)).toBeLessThan(children.indexOf(workbench as Element));
     expect(children.indexOf(runError as Element)).toBeLessThan(children.indexOf(workbench as Element));
+  });
+
+  it("uses Executable plus the artifact ID until the source definition name arrives", async () => {
+    window.history.replaceState({}, "", "/workflows/executables/artifact-95bc4f13586a");
+    flushSync(() => root.render(
+      <WorkflowExecutableInspectorPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAgentRegistry}
+        runInputEditors={[]}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.textContent).toContain("inspector workbench"));
+    expect(container.querySelector("h2")?.textContent).toBe("Executable artifact-95bc4f13586a");
+    expect(container.querySelector(".studio-page-eyebrow")).toBeNull();
+
+    flushSync(() => {
+      const resolve = [...container.querySelectorAll("button")].find(button => button.textContent === "resolve identity");
+      resolve?.click();
+    });
+
+    expect(container.querySelector("h2")?.textContent).toBe("Invoice settlement · 1.0.0");
+    expect(container.querySelector(".studio-page-eyebrow")?.textContent).toBe("Inspector");
   });
 
   it("does not put the executables list on the workbench grid", async () => {
