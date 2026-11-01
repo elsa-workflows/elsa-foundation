@@ -107,7 +107,7 @@ try{
  await shot(page,'ui-claim-authored');mark('Authored, saved and reopened a claim-required human wait');
  await page.getByRole('button',{name:'Publish BPMN',exact:true}).click();
  await expect(page.getByRole('button',{name:'BPMN processes',exact:true})).toBeVisible({timeout:30000});
- const publication=events.find(event=>event.path.endsWith('/publish-direct')&&event.status<300);
+ await Promise.all([...pendingReads]);const publication=events.find(event=>event.path.endsWith('/publish-direct')&&event.status<300);
  if(publication?.response?.profile!=='foundation-direct-claims-v1')throw new Error('Studio did not publish the claim-required profile.');
  await page.getByRole('button',{name:'BPMN processes',exact:true}).click();
  await page.getByRole('button',{name:'Start process',exact:true}).click();
@@ -159,7 +159,7 @@ try{
  await expect(page.getByRole('button',{name:'Complete work',exact:true})).toHaveCount(0);
  const timedInspection=(await api('GET','/bpmn/executions/'+encodeURIComponent(timedId)+'/inspection')).body;
  probes.timerInspection={status:timedInspection.execution.status,result:timedInspection.execution.result,work:timedInspection.work};
- const claimEvent=events.findLast(event=>event.path.endsWith('/claim'));
+ await Promise.all([...pendingReads]);const claimEvent=events.findLast(event=>event.path.endsWith('/claim'));
  probes.lateClaimedCompletion=await api('POST',claimEvent.path.replace(/\/claim$/,'/complete-claimed'),{requestId:'late-after-timer',attemptId:claimEvent.request.attemptId,claimId:timedClaim.claimId});
  // The timer path ends the process, so the late claimed completion meets the terminal execution first.
  if(probes.lateClaimedCompletion.status!==409||probes.lateClaimedCompletion.body.result.code!=='execution-terminal')throw new Error('Interrupted claimed work was not refused.');
@@ -169,7 +169,7 @@ try{
  probes.cancelStart=await api('POST','/bpmn/executions',{requestId:'cancel-start',sourceReferenceId:publication.response.sourceReferenceId});
  const cancelId=probes.cancelStart.body.executionId;
  await openRun(page,runUrl,cancelId);await claimInUi(page);const cancelClaim=(await claimOf(cancelId)).claim;
- const cancelClaimEvent=events.findLast(event=>event.path.endsWith('/claim'));
+ await Promise.all([...pendingReads]);const cancelClaimEvent=events.findLast(event=>event.path.endsWith('/claim'));
  probes.cancel=await api('POST','/bpmn/executions/'+encodeURIComponent(cancelId)+'/cancel',{requestId:'operator-cancel',reason:'Withdrawn order'});
  await refreshUntil(page,'Cancelled');await expect(page.getByRole('button',{name:'Complete work',exact:true})).toHaveCount(0);
  probes.claimedCompletionAfterCancel=await api('POST',cancelClaimEvent.path.replace(/\/claim$/,'/complete-claimed'),{requestId:'late-after-cancel',attemptId:cancelClaimEvent.request.attemptId,claimId:cancelClaim.claimId});
