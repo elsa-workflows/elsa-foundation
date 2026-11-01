@@ -242,9 +242,13 @@ steps check that in-memory signal before starting their next step. The active tu
 its folded segment through the ordinary ownership-fenced checkpoint path, reports `Yielded`, and releases its lease
 and mailbox. Cancel then runs through its normal scheduler handler. An activity already running must finish or
 cooperate with its own cancellation policy before handoff; the signal does not interrupt an external effect. A
-cancelled caller removes its waiting signal. An idle drain adds no database read for this check. Distributed placement
-uses the configured local mailbox on the owning node; forwarding still has to deliver Cancel to that mailbox. Custom
-actor providers must supply their own equivalent cooperative scheduling behavior.
+cancelled caller removes its waiting signal. If the drain had already yielded and that Cancel then does not run (its
+caller cancels before it acquires the mailbox, or its turn answers `Duplicate`, `Rejected` or `Deferred`), the remaining
+scheduler work stays durably queued and continues when the sweep's backlog discovery re-drives it, not immediately. An
+idle drain adds no database read for this check. Distributed placement uses the configured local mailbox on the owning
+node; forwarding still has to deliver Cancel to that mailbox. The yield signal is internal to the default in-process
+provider: a custom actor provider that wraps the registered `InProcessWorkflowExecutionActorProvider` keeps the handoff,
+and an independent provider does not get it.
 
 **Acknowledging an inline parent decision.** The completion pump's current item remains in the working queue while
 its handler runs. Once that exact fenced, non-retaining decision has physically committed, queue advance acknowledges

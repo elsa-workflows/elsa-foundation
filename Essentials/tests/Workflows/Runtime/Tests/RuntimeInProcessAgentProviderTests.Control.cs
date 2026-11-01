@@ -13,7 +13,7 @@ public sealed partial class RuntimeInProcessAgentProviderTests
     [InlineData(false, true)]
     public async Task Only_a_live_valid_cancel_waiter_requests_its_own_mailbox_handoff(bool cancelWaiter, bool wrongPartition)
     {
-        var controls = new RuntimeDrainControlContext();
+        var controls = new DrainControlContext();
         var processor = new ObservingControlProcessor(controls);
         using var provider = new InProcessWorkflowExecutionActorProvider(processor) { DrainControls = controls };
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
@@ -43,7 +43,7 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         Assert.False(controls.ShouldYield("wfexec-1"));
     }
 
-    private sealed class ObservingControlProcessor(RuntimeDrainControlContext controls) : IWorkflowExecutionCommandExecutor
+    private sealed class ObservingControlProcessor(DrainControlContext controls) : IWorkflowExecutionCommandExecutor
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Inspect { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

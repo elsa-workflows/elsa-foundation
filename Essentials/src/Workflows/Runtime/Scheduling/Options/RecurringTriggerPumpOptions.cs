@@ -23,7 +23,8 @@ public sealed class RecurringTriggerPumpOptions
     public int MaxConcurrentDispatches { get; set; } = 1;
 
     /// <summary>
-    /// Lease on a claimed occurrence, renewed immediately before it is routed. When a claimant dies before settling the
+    /// Lease on a claimed occurrence, renewed immediately before it is routed and, when the pump has a persistence scope
+    /// factory, every third of this timeout while it routes (each renewal in its own scope). When a claimant dies before settling the
     /// occurrence, a peer fires it again once this lease lapses, so it bounds how late a crashed fire is completed.
     /// </summary>
     public TimeSpan ClaimVisibilityTimeout { get; set; } = TimeSpan.FromMinutes(1);

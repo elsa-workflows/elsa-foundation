@@ -1,28 +1,28 @@
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
 /// <summary>Cooperative handoff from a live actor turn to a waiting control command. Never grants write authority.</summary>
-internal sealed class RuntimeDrainControlContext
+internal sealed class DrainControlContext
 {
     private readonly AsyncLocal<Frame?> current = new();
 
     public bool ShouldYield(string executionId) => current.Value is { } frame &&
         StringComparer.Ordinal.Equals(frame.ExecutionId, executionId) && frame.Control.IsPending;
 
-    public IDisposable Push(string executionId, RuntimeDrainControl? control)
+    public IDisposable Push(string executionId, DrainControl? control)
     {
         var prior = current.Value;
         current.Value = control is null ? null : new(executionId, control);
         return new Restore(this, prior);
     }
 
-    private sealed record Frame(string ExecutionId, RuntimeDrainControl Control);
-    private sealed class Restore(RuntimeDrainControlContext owner, Frame? prior) : IDisposable
+    private sealed record Frame(string ExecutionId, DrainControl Control);
+    private sealed class Restore(DrainControlContext owner, Frame? prior) : IDisposable
     {
         public void Dispose() => owner.current.Value = prior;
     }
 }
 
-internal sealed class RuntimeDrainControl
+internal sealed class DrainControl
 {
     private int waiting;
     public bool IsPending => Volatile.Read(ref waiting) > 0;
@@ -33,9 +33,9 @@ internal sealed class RuntimeDrainControl
         return new Registration(this);
     }
 
-    private sealed class Registration(RuntimeDrainControl owner) : IDisposable
+    private sealed class Registration(DrainControl owner) : IDisposable
     {
-        private RuntimeDrainControl? current = owner;
+        private DrainControl? current = owner;
         public void Dispose()
         {
             if (Interlocked.Exchange(ref current, null) is { } registered)

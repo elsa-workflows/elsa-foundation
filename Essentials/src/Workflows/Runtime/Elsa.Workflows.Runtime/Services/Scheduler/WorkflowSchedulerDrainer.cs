@@ -45,7 +45,7 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
-    internal RuntimeDrainControlContext? DrainControls { private get; init; }
+    internal DrainControlContext? DrainControls { private get; init; }
     internal RuntimeExecutionProtocolSelector? ModelProtocols { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;

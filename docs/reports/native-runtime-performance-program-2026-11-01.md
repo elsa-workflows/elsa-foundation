@@ -21,7 +21,7 @@ Three variants tested #2583: private provider-scope rows, sharing private rows u
 | HTTP reference | 204 | 204 | 204 |
 | Fork/join with resume | 253 | 252 | 251 |
 
-Balanced/Ephemeral were 90, 104, 180 respectively; only fork/join changed, to 179 and then 178. All ten budget tests passed in each variant. The extra durable-state ownership and invalidation machinery did not justify saving two commands in one fixture. No budget was lowered and no throughput gain is attributed to #2583. The issue's acceptance remains open.
+Balanced/Ephemeral were 90, 104, 180 respectively; only fork/join changed, to 179 and then 178. All ten budget tests passed in each variant. The extra durable-state ownership and invalidation machinery did not justify saving two commands in one fixture. No budget was lowered and no throughput gain is attributed to #2583. The owner later retired #2583 as not planned on this measured negative result (see Owner dispositions).
 
 ## Cooperative cancellation of a progressing native drain
 
@@ -195,7 +195,8 @@ statements and uses 74 wire round trips. The HTTP reference is 97 SQLite command
 97 statements and 94 round trips. The long suspension reference is 625 SQLite commands versus 387 PostgreSQL EF
 commands, 625 statements and 448 round trips. Equivalent SQL counts do not imply equivalent provider command counts
 or network latency. The current Durable ten-WriteLine floor is 329 SQLite commands / 269 PostgreSQL commands /
-368 PostgreSQL round trips, and still exceeds #2584's original SQLite objective of under 300.
+368 PostgreSQL round trips, and at this intermediate head still exceeds #2584's original SQLite objective of under 300.
+The later parent-decision acknowledgement (#2584, below) lowers Durable ten WriteLines to 269.
 
 Raw command TSVs, run JSON and attribution/linear-fit report are in
 `/private/tmp/elsa-runtime-efficiency-program/m4-command-cost-qualified/`; rerun using the
@@ -248,8 +249,13 @@ Independent-host/provider integration and final reviewed-head/main qualification
 by the owner's explicit 1 November decision. The older controlled terminal-status experiment did not reduce simple
 or HTTP command counts, and the owner chose to avoid that low-value plumbing. The required exact issue-reference
 search on freshly fetched main `e5896da5f5b93d9c302d67ca99d529f0d7e064b9` returned no landed implementation. This is an
-owner disposition, not a completed implementation or an optimization gain. #2583's rejected owned-state cache remains
-a separate pending owner decision.
+owner disposition, not a completed implementation or an optimization gain.
+
+On 1 November the owner also decided ([#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6563805234)):
+
+- [#2583 is retired as not planned](https://github.com/elsa-workflows/elsa-foundation/issues/2583#issuecomment-6563804568). The best owned-state cache saved two fork/join commands and none on WriteLine or HTTP; all prototype code was removed.
+- M1 closes on the two independently causal fixes (UUIDv7 runtime IDs and rollback-safe immediate continuation). The original intermittent incident's historical cause stays **unconfirmed**.
+- The [#2564 carry-overs stay open there](https://github.com/elsa-workflows/elsa-foundation/issues/2564#issuecomment-6563805017) and are not delivered here: never-persisted baseline reads, released-liveness retention, and the under-40 SQLite ten-WriteLine target, which is **missed** (Balanced is 90).
 
 ## Original incomplete-start investigation
 
@@ -319,7 +325,7 @@ compact generator, and its memory state count did not independently establish di
 
 Raw logs, TRX, source snapshots, rejected cache patches, hashes and experiment scripts are retained at `/private/tmp/elsa-runtime-efficiency-program` on the qualification machine. Frozen original binaries and original failed results remain under `/private/tmp/elsa-native-perf-20261031`. Heap files, if captured, are private diagnostic artifacts and are not committed.
 
-Remaining acceptance is tracked on #2531 and spec 1183: reconcile older objectives, resolve the original anomaly and identifier concerns, deliver applicable persistence/scheduling/diagnostics work, run representative sustained and failure/recovery cohorts including independent hosts, then review and qualify the exact integration head and containing main. This report is not a substitute for those gates.
+Remaining acceptance is tracked on #2531 and spec 1183: reconcile older objectives (owner dispositions above), deliver applicable persistence/scheduling/diagnostics work, run representative sustained and failure/recovery cohorts including independent hosts, then review and qualify the exact integration head and containing main. This report is not a substitute for those gates.
 
 ## Bounded pump dispatch (#1307)
 
@@ -357,7 +363,7 @@ Runtime (3,188), Activities Runtime (732), EF Runtime (1,854), HTTP (116), Dispa
 (114), BPMN (513), Scheduling (107) and Resumption (22). Discovery-to-execution accounting has no missing or unmatched
 cases, including runtime-expanded theories. After extracting the EF context contract for native-provider reuse,
 all three SQLite cases pass again; the native-provider project builds and discovers 245 cases, including nine new
-pump cases. Native execution is pending. Raw custody: `m4-pumps-*` under the program's temporary evidence root.
+pump cases. Native execution at that point was pending; the later native-provider qualification below passed 245/245. Raw custody: `m4-pumps-*` under the program's temporary evidence root.
 The shared-contract extraction initially needed an explicit Resumption test reference and extension namespace;
 those compilation attempts ran no tests and are retained separately from passing qualification.
 
@@ -448,7 +454,7 @@ Balanced/on/OS versus **32.8 ms** for Balanced/on/separate (50.5 ms for persiste
 144.3 versus 19.7, respectively. These are arithmetic means of interval reports, not operation-weighted latencies.
 PostgreSQL observations include WAL-write/sync waits; sampled counts are not durations. This supports an I/O
 explanation but does not attribute every write to a named diagnostics component. Marked-request SQL attribution
-and the final fix/no-fix decision for #2613 remain open. Diagnostics fidelity/defaults have not been reduced.
+and the fix/no-fix decision for #2613 were then still open; both are recorded in the attribution section below. Diagnostics fidelity/defaults have not been reduced.
 
 The original first two passing configurations and four recovery configurations are linked by an explicit
 attestation. The first separate-device startup failed because its parent directory denied the unprivileged host
@@ -589,8 +595,8 @@ gap above 1.04 seconds inside the cohort and no ungranted lock observed.
 | Ten WriteLines, Durable | 8.7 /s | 15.0 /s (1.71×) | 20.1 /s (2.30×) | 1,829 ms |
 
 Per-node rates fall as nodes are added while each worker uses about 0.6–1.2 of its two cores, so the workers are not
-CPU-bound. On the database host, WAL sync time accumulates 750–975 ms per wall-clock second in every wave, OS-disk
-`%util` is 73–93% and mean write await rises with node count (Durable: 5.8 → 10.8 → 30.6 ms), while host CPU stays at
+CPU-bound. On the database host, WAL sync time accumulates 744–975 ms per wall-clock second in every wave, OS-disk
+`%util` is 72.6–93% and mean write await rises with node count (Durable: 5.8 → 10.8 → 30.6 ms), while host CPU stays at
 or below 61%. That pattern is consistent with commit-flush latency on the shared database volume limiting scale-out,
 especially for Durable; it is not a proven bottleneck attribution. `xact_commit` includes read-only autocommit
 statements and is not the EF command budget.

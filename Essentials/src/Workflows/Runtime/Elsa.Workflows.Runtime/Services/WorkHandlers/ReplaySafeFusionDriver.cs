@@ -42,7 +42,7 @@ public sealed class ReplaySafeFusionDriver
     private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
     private readonly RuntimeSchedulerDispatchDiagnostics? _diagnostics;
     private readonly IReadOnlyCollection<IReplaySafeSuccessorRoutingProbe> _successorRoutingProbes;
-    private readonly RuntimeDrainControlContext? _drainControls;
+    private readonly DrainControlContext? _drainControls;
     private bool _pumping;
 
     public ReplaySafeFusionDriver(
@@ -63,7 +63,7 @@ public sealed class ReplaySafeFusionDriver
         _startHandler = startHandler;
         _schedulerWorkQueue = schedulerWorkQueue;
         _serviceProvider = serviceProvider;
-        _drainControls = serviceProvider.GetService<RuntimeDrainControlContext>();
+        _drainControls = serviceProvider.GetService<DrainControlContext>();
         _coalescingSessionAccessor = coalescingSessionAccessor;
         _diagnostics = diagnostics;
         _successorRoutingProbes = successorRoutingProbes?.ToArray() ?? [];

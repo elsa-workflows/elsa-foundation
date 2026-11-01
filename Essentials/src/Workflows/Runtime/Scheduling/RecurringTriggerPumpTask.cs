@@ -35,7 +35,9 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// claiming, before or after routing, leaves the claim to lapse, and a peer then fires the occurrence again. A route that
 /// throws, or that finds no binding owned by the schedule (index drift mid-republish), releases the claim with a
 /// geometric backoff capped at <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>, so the occurrence is retried
-/// rather than skipped. Each claim is renewed immediately before its route (<see cref="FencedClaimLease{TClaim}"/>), and a
+/// rather than skipped. Each claim is renewed immediately before its route (<see cref="FencedClaimLease{TClaim}"/>), and also
+/// while it routes when a persistence scope factory is available (each renewal in its own scope; schedules may then route
+/// concurrently up to <see cref="RecurringTriggerPumpOptions.MaxConcurrentDispatches"/>), and a
 /// claim lost before the route, or found stale when settling or releasing, is logged and skipped without ending the sweep.
 /// </para>
 /// <para>

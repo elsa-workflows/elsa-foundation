@@ -341,7 +341,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
-        services.TryAddSingleton<RuntimeDrainControlContext>();
+        services.TryAddSingleton<DrainControlContext>();
 
         // Live dispatch admission control (RB1, #1235). All three are singletons: the load reading, the limit, and the
         // counters are host-wide facts, and a per-scope controller would see one command at a time and never bound
@@ -437,7 +437,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
                 serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
             { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
-                DrainControls = serviceProvider.GetRequiredService<RuntimeDrainControlContext>() });
+                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>() });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();

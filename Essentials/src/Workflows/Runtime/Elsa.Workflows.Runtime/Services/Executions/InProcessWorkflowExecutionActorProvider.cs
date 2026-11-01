@@ -10,12 +10,12 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable
 {
-    internal RuntimeDrainControlContext? DrainControls { private get; init; }
+    internal DrainControlContext? DrainControls { private get; init; }
 
     // Core and distributed composition must use the same wiring, regardless of registration order.
     internal static InProcessWorkflowExecutionActorProvider Create(IServiceProvider services) =>
         new(services.GetRequiredService<IWorkflowExecutionCommandExecutor>(), services.GetRequiredService<RuntimeActorEvictionOptions>())
-        { DrainControls = services.GetService<RuntimeDrainControlContext>() };
+        { DrainControls = services.GetService<DrainControlContext>() };
 
     // In-process diagnostic/routing label only; not persisted across runs (the actor subsystem is in-memory and
     // descriptors are transient), so the nameof value tracks the type name without wire-compatibility risk.
@@ -258,8 +258,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
 
     private sealed class InProcessWorkflowExecutionActor : IWorkflowExecutionActor
     {
-        private readonly RuntimeDrainControlContext? _drainControls;
-        private readonly RuntimeDrainControl _drainControl = new();
+        private readonly DrainControlContext? _drainControls;
+        private readonly DrainControl _drainControl = new();
         private readonly SemaphoreSlim _mailbox = new(1, 1);
         private readonly HashSet<string> _processedIdempotencyKeys = new(StringComparer.Ordinal);
         private readonly Queue<string> _processedIdempotencyKeyOrder = new();
@@ -278,7 +278,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             long activationId,
             IWorkflowExecutionCommandExecutor commandProcessor,
             int maxProcessedIdempotencyKeys,
-            RuntimeDrainControlContext? drainControls)
+            DrainControlContext? drainControls)
         {
             _workflowExecutionId = workflowExecutionId;
             _partition = partition;
