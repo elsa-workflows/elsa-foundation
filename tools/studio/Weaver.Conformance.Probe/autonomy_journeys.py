@@ -22,7 +22,7 @@ from agent_transport import _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import retained, correlate_browser_protocol, _normalized_result
 from disclosure_journeys import require_stored_result
-from journey_runtime import browser_inputs, same
+from journey_runtime import browser_inputs, private_policy_keys, same
 from runtime import RUNTIME_ENVIRONMENT, private_json
 
 
@@ -44,8 +44,7 @@ EVIDENCE_CATEGORY = "deterministic-provider-protocol"
 MODE_QUALIFICATION = "autonomyModeQualification"
 MATRIX_QUALIFICATION = "autonomyLifecycleQualification"
 MODE_LABELS = {"manual": "Manual review", "full-auto": "Autopilot"}
-# Accepted messages carry the domain policy, serialized with the API's camelCase enum names.
-ACCEPTED_MODES = {"manual": "manual", "autoReadOnly": "auto-read-only", "fullAuto": "full-auto"}
+# Session create/detail, the autonomy PUT and accepted messages all carry exactly this public policy shape.
 POLICY_FIELDS = {"autonomyMode", "maxAutonomyMode", "allowedAutonomyModes", "revision"}
 
 
@@ -236,6 +235,7 @@ def _frames(output, session, backend_origin):
                   "An open or failed native GET cannot prove the mode outcome")
         frames.extend(complete)
     check(frames and len({row.get("id") for row in frames}) == len(frames), "Native frames need distinct actual event identities")
+    require_public_policy_only(frames, "A native stream frame disclosed private policy")
     return frames, retained(path)
 
 
@@ -523,11 +523,14 @@ def _request_kind(row, session, backend_origin):
     return kind
 
 
+def require_public_policy_only(value, message):
+    """Retained native client data may carry the public policy shape only, never a private policy member."""
+    leaked = private_policy_keys(value)
+    check(not leaked, "autonomy.policy_disclosed: " + message + " (" + ", ".join(sorted(leaked)) + ")")
+
+
 def _accepted_policy(message, mode_message):
-    accepted = message.get("acceptedPolicy") if isinstance(message, dict) else None
-    check(isinstance(accepted, dict) and type(accepted.get("revision")) is int and isinstance(accepted.get("policy"), dict)
-          and ACCEPTED_MODES.get(accepted["policy"].get("autonomyMode")) is not None, mode_message)
-    return accepted
+    return _policy(message.get("acceptedPolicy") if isinstance(message, dict) else None, mode_message)
 
 
 def require_policy_acknowledgement(output, a, requests, backend_origin, owned_root):
@@ -594,6 +597,8 @@ def require_policy_acknowledgement(output, a, requests, backend_origin, owned_ro
     before = _owner(owned_root, a["sessionBefore"]).get("data", {})
     selected = _owner(owned_root, a["sessionAfterSelection"]).get("data", {})
     final = _owner(owned_root, a["sessionAfter"]).get("data", {})
+    for detail in (before, selected, final):
+        require_public_policy_only(detail, "Session detail disclosed private policy")
     check(before.get("sessionId") == selected.get("sessionId") == final.get("sessionId") == session
           and same(before.get("policy"), created) and same(selected.get("policy"), effective) and same(final.get("policy"), effective),
           "Session detail does not read back the acknowledged policy")
@@ -605,18 +610,12 @@ def require_policy_acknowledgement(output, a, requests, backend_origin, owned_ro
                             and row["acceptedPolicyRevision"] == (created if position < index else effective)["revision"]
                             for position, row in enumerate(messages)),
           "Session history is not attributed to the policy revisions that accepted it")
-    accepted = []
     for label, policy in (("read", created), ("size", effective)):
-        message = strict_json((output / ("autonomy-" + label + "-message.json")).read_text()).get("response", {}).get("data", {}).get("message", {})
-        value = _accepted_policy(message, "The accepted " + label + " prompt carries no accepted policy")
-        derived = value["policy"].get("requiresApprovalForMutations", policy["autonomyMode"] != "full-auto")
-        check(value["revision"] == policy["revision"] and ACCEPTED_MODES[value["policy"]["autonomyMode"]] == policy["autonomyMode"]
-              and ACCEPTED_MODES.get(value["policy"].get("maxAutonomyMode")) == policy["maxAutonomyMode"]
-              and derived is (policy["autonomyMode"] != "full-auto"),
-              "The " + label + " prompt was not accepted under its acknowledged policy revision")
-        # Only the mode (and the approval requirement derived from it) may differ between the two prompts.
-        accepted.append({key: item for key, item in value["policy"].items() if key not in ("autonomyMode", "requiresApprovalForMutations")})
-    check(same(accepted[0], accepted[1]), "The mode change altered unrelated accepted policy")
+        response = strict_json((output / ("autonomy-" + label + "-message.json")).read_text()).get("response", {})
+        require_public_policy_only(response, "The accepted " + label + " prompt disclosed private policy")
+        value = _accepted_policy(response.get("data", {}).get("message", {}), "The accepted " + label + " prompt carries no accepted policy")
+        # The public shape is exactly the acknowledged policy: mode, unchanged ceiling/allowed modes and revision.
+        check(same(value, policy), "The " + label + " prompt was not accepted under its acknowledged policy revision")
     selector = strict_json((output / "autonomy-mode-selector.json").read_text())
     check(selector == {"state": "acknowledged", "pendingMode": None, "ariaBusy": "false", "label": MODE_LABELS[effective["autonomyMode"]],
                        "statusCount": 0, "mode": effective["autonomyMode"]},

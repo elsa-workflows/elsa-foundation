@@ -54,7 +54,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     @staticmethod
     def domain_policy(mode):
-        """The accepted message's domain AgentPolicy, serialized with the API's camelCase enums."""
+        """The whole domain AgentPolicy (camelCase enums) that must never reach the client."""
         names = {"manual": "manual", "full-auto": "fullAuto"}
         return {"id": "default", "enabled": True, "contextVisibility": True, "maxContextSensitivity": "sensitive",
                 "allowedContextKinds": ["*"], "autonomyMode": names[mode], "maxAutonomyMode": "fullAuto",
@@ -141,7 +141,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     "source": {"moduleId": w["moduleId"], "actionId": w["readTool"] if label == "read" else w["sizeTool"]}}
             message = {"sessionId": "session-1", "id": identity, "requestId": body["requestId"], "role": "user", "status": "pending",
                 "context": [{"moduleId": w["moduleId"], "contentType": w["contextType"], "contributorId": "acme.home.widget-context", "target": target("rev-1")}],
-                "acceptedPolicy": {"policy": self.domain_policy(mode), "revision": policy["revision"]}}
+                "acceptedPolicy": copy.deepcopy(policy)}
             write("autonomy-" + label + "-message", {"status": 200, "request": body, "response": {"data": {"message": message}, "error": None}})
             details[label] = {"id": identity, "role": "user", "content": "", "status": "completed", "acceptedPolicyRevision": policy["revision"]}
             requests.append({"url": base + "/_elsa/agent/sessions/session-1/messages", "method": "POST", "body": body})
@@ -718,9 +718,15 @@ class AutonomyEvidenceTests(unittest.TestCase):
             "size-accepted-old": "size prompt was not accepted under its acknowledged policy revision",
             "size-accepted-mode": "size prompt was not accepted under its acknowledged policy revision",
             "size-accepted-missing": "accepted size prompt carries no accepted policy",
-            "size-derived-approval": "size prompt was not accepted under its acknowledged policy revision",
+            "size-accepted-ceiling": "size prompt was not accepted under its acknowledged policy revision",
+            "size-accepted-allowed": "size prompt was not accepted under its acknowledged policy revision",
+            "size-accepted-nested": "accepted size prompt carries no accepted policy",
+            "size-accepted-domain": "autonomy.policy_disclosed: The accepted size prompt disclosed private policy",
+            "size-private-approval": "autonomy.policy_disclosed: The accepted size prompt disclosed private policy",
+            "read-denied-capabilities": "autonomy.policy_disclosed: The accepted read prompt disclosed private policy",
+            "detail-retention-label": "autonomy.policy_disclosed: Session detail disclosed private policy",
+            "stream-private-policy": "autonomy.policy_disclosed: A native stream frame disclosed private policy",
             "read-relabeled": "read prompt was not accepted under its acknowledged policy revision",
-            "unrelated-policy": "altered unrelated accepted policy",
             "history-size": "Session history is not attributed",
             "history-read-relabeled": "Session history is not attributed",
             "history-missing": "Session history is not attributed",
@@ -745,11 +751,18 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 elif mutation == "final-old-revision": a["sessionAfter"] = detail("session-after", lambda value: value["policy"].update(revision=0))
                 elif mutation == "read-not-terminal": a["sessionBefore"] = detail("session-before", lambda value: value["messages"][0].update(status="pending"))
                 elif mutation == "size-accepted-old": accepted("size", lambda value: value["acceptedPolicy"].update(revision=0))
-                elif mutation == "size-accepted-mode": accepted("size", lambda value: value["acceptedPolicy"]["policy"].update(autonomyMode="manual"))
+                elif mutation == "size-accepted-mode": accepted("size", lambda value: value["acceptedPolicy"].update(autonomyMode="manual"))
                 elif mutation == "size-accepted-missing": accepted("size", lambda value: value.pop("acceptedPolicy"))
-                elif mutation == "size-derived-approval": accepted("size", lambda value: value["acceptedPolicy"]["policy"].update(requiresApprovalForMutations=True))
+                elif mutation == "size-accepted-ceiling": accepted("size", lambda value: value["acceptedPolicy"].update(maxAutonomyMode="manual"))
+                elif mutation == "size-accepted-allowed": accepted("size", lambda value: value["acceptedPolicy"].update(allowedAutonomyModes=["manual"]))
+                elif mutation == "size-accepted-nested": accepted("size", lambda value: value["acceptedPolicy"].update(policy={"autonomyMode": "fullAuto"}))
+                elif mutation == "size-accepted-domain": accepted("size", lambda value: value.update(acceptedPolicy={"policy": self.domain_policy("full-auto"), "revision": 1}))
+                elif mutation == "size-private-approval": accepted("size", lambda value: value["acceptedPolicy"].update(requiresApprovalForMutations=False))
+                elif mutation == "read-denied-capabilities": accepted("read", lambda value: value.update(deniedCapabilityIds=["acme.secret"]))
+                elif mutation == "detail-retention-label": a["sessionAfter"] = detail("session-after", lambda value: value["policy"].update(retentionLabel="Private"))
+                elif mutation == "stream-private-policy": self.edit(output, "agent-streams", lambda value: value[0].update(rawBody=
+                    'data: {"id": "event-private", "kind": "messageDelta", "payload": {"allowedContextKinds": ["*"]}}\n\n' + value[0]["rawBody"]))
                 elif mutation == "read-relabeled": accepted("read", lambda value: value["acceptedPolicy"].update(revision=1))
-                elif mutation == "unrelated-policy": accepted("size", lambda value: value["acceptedPolicy"]["policy"].update(retentionLabel="changed"))
                 elif mutation == "history-size": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][1].update(acceptedPolicyRevision=0))
                 elif mutation == "history-read-relabeled": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][0].update(acceptedPolicyRevision=1))
                 elif mutation == "history-missing": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][2].pop("acceptedPolicyRevision"))

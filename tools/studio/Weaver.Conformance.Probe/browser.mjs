@@ -550,8 +550,6 @@ function canonicalLayout(value) {
 // T012 (#3440): an established conversation's mode is in effect only after the owning backend
 // acknowledges exactly one conditional PUT. A selector label alone is never policy evidence.
 const AUTONOMY_LABELS = { manual: "Manual review", "full-auto": "Autopilot" };
-// The accepted message carries the domain policy, whose enum uses the API's camelCase names.
-const ACCEPTED_AUTONOMY_MODES = { manual: "manual", autoReadOnly: "auto-read-only", fullAuto: "full-auto" };
 class AutonomyFailure extends Error {
   constructor(cause, message) { super(message); this.name = "AutonomyFailure"; this.autonomyCause = cause; }
 }
@@ -724,7 +722,8 @@ async function autonomySize() {
   expect(sentBody.contextAttachments).toEqual(expect.arrayContaining([expect.objectContaining({ moduleId: witness.moduleId,
     contentType: witness.contextType, target: expect.objectContaining({ resourceId: witness.widgetId, revision: before.value.revision }) })]));
   const acceptedPolicy = sent.value.data?.message?.acceptedPolicy;
-  autonomyNeed(acceptedPolicy?.revision === effectivePolicy.revision && ACCEPTED_AUTONOMY_MODES[acceptedPolicy?.policy?.autonomyMode] === effectivePolicy.autonomyMode,
+  // The accepted message carries exactly the acknowledged public session policy, never the private domain policy.
+  autonomyNeed(canonical(acceptedPolicy) === canonical(effectivePolicy),
     "autonomy.attribution_mismatch", "The size prompt was not accepted under the acknowledged policy revision.");
   // A visible module preview/result distinguishes real review from real application; idle alone can race dispatch.
   await expect(dock().getByTestId("acme-home-size-result").last()).toBeVisible();

@@ -86,7 +86,7 @@ class Native:
             command={"commandId": COMMAND, "toolName": WITNESS["sizeTool"], "arguments": {"size": "small"}},
             message=http("POST", "/_elsa/agent/sessions/" + SESSION + "/messages", 200,
                          {"data": {"message": {"id": "message-1", "sessionId": SESSION, "role": "user", "requestId": "request-1",
-                                                "acceptedPolicy": {"revision": 1, "policy": {"autonomyMode": "manual"}}}}},
+                                                "acceptedPolicy": copy.deepcopy(CREATED)}}},
                          {"requestId": "request-1", "requestedCapabilities": [WITNESS["sizeCapability"]]}),
             ownerBefore=owner("rev-1", "medium"))
         proposal = {"id": PROPOSAL, "sessionId": SESSION, "status": "awaitingApproval", "requiresApproval": True, "baseRevision": "rev-1",
@@ -277,6 +277,21 @@ class LifecycleVerifierTests(unittest.TestCase):
         self.assertEqual("lifecycle.busy_not_released", self.cause("busy-policy-lifecycle", {"acknowledge": rewrite_http(lambda v: v["data"].update(revision=3))}))
         self.assertEqual("lifecycle.policy_relabelled", self.cause("busy-policy-lifecycle", {"session": rewrite_http(lambda v: v["data"]["messages"][0].update(acceptedPolicyRevision=2))}))
 
+    def test_retained_native_evidence_never_discloses_private_policy(self):
+        domain = {"policy": {"autonomyMode": "manual", "deniedCapabilityIds": ["acme.secret"], "retentionLabel": "Private"}, "revision": 1}
+        cases = [
+            {"message": rewrite_http(lambda v: v["data"]["message"].update(acceptedPolicy=domain))},
+            {"message": rewrite_http(lambda v: v["data"]["message"]["acceptedPolicy"].update(contextVisibility=True))},
+            {"initialStream": lambda r: r["frames"][0]["value"]["payload"].update(retentionLabel="Private")},
+            {"continuation": lambda r: r["frames"][1]["value"].update(payload={"allowedContextKinds": ["*"]})},
+            {"session": rewrite_http(lambda v: v["data"]["policy"].update(deniedCapabilityIds=["acme.secret"]))},
+        ]
+        for mutate in cases:
+            with self.subTest(part=next(iter(mutate))):
+                self.assertEqual("lifecycle.policy_disclosed", self.cause("denied-result-continuation", mutate))
+        self.assertEqual("lifecycle.message", self.cause("denied-result-continuation",
+                         {"message": rewrite_http(lambda v: v["data"]["message"]["acceptedPolicy"].update(autonomyMode="full-auto"))}))
+
     def test_changed_retained_evidence_is_refused(self):
         root = Path(self.temporary.name) / "changed"; root.mkdir()
         observation = Native(root, "denied-result-continuation", "copilot").observation()
@@ -310,8 +325,7 @@ class BrowserLifecycleTests(unittest.TestCase):
         body = "".join("data: " + json.dumps(dict(value, id="event-" + str(index))) + "\n\n" for index, value in enumerate(frames))
         files["agent-streams"] = [AutonomyEvidenceTests.stream(body)]
         files["autonomy-create-session"] = {"status": 200, "request": {"autonomyMode": mode or "manual"}, "response": {"data": {"sessionId": SESSION, "policy": policy}}}
-        accepted = {"status": 200, "response": {"data": {"message": {"sessionId": SESSION, "acceptedPolicy": {"revision": 1,
-                    "policy": {"autonomyMode": "fullAuto" if mode else "manual"}}}}}}
+        accepted = {"status": 200, "response": {"data": {"message": {"sessionId": SESSION, "acceptedPolicy": copy.deepcopy(policy)}}}}
         base = BACKEND + "/_elsa/agent"
         create = {"url": base + "/sessions", "method": "POST", "body": {}}
         message = {"url": base + "/sessions/" + SESSION + "/messages", "method": "POST", "body": {}}
@@ -388,7 +402,9 @@ class BrowserLifecycleTests(unittest.TestCase):
         self.assertEqual("lifecycle.session_policy", self.cause("visibility-review-control",
                          lambda f, o: f["autonomy-create-session"]["request"].update(autonomyMode="manual")))
         self.assertEqual("lifecycle.message", self.cause("visibility-review-control",
-                         lambda f, o: f["resource-message"]["response"]["data"]["message"]["acceptedPolicy"]["policy"].update(autonomyMode="manual")))
+                         lambda f, o: f["resource-message"]["response"]["data"]["message"]["acceptedPolicy"].update(autonomyMode="manual")))
+        self.assertEqual("lifecycle.message", self.cause("workflow-review-control",
+                         lambda f, o: f["workflow-message"]["response"]["data"]["message"]["acceptedPolicy"].update(maxAutonomyMode="manual")))
         self.assertEqual("lifecycle.review_bypassed", self.cause("visibility-review-control",
                          lambda f, o: f["owner-at-review"]["value"].update(visible=False)))
         self.assertEqual("lifecycle.native_requests", self.cause("visibility-review-control",
@@ -397,6 +413,16 @@ class BrowserLifecycleTests(unittest.TestCase):
                          lambda f, o: f["agent-requests"].append(f["agent-requests"][-1])))
         self.assertEqual("lifecycle.policy_relabelled", self.cause("workflow-review-control",
                          lambda f, o: f["lifecycle-session-after"]["value"]["data"]["policy"].update(revision=2)))
+
+    def test_retained_browser_evidence_never_discloses_private_policy(self):
+        domain = {"policy": {"autonomyMode": "fullAuto", "deniedCapabilityIds": ["acme.secret"], "retentionLabel": "Private"}, "revision": 1}
+        self.assertEqual("lifecycle.policy_disclosed", self.cause("visibility-review-control",
+                         lambda f, o: f["resource-message"]["response"]["data"]["message"].update(acceptedPolicy=domain)))
+        self.assertEqual("lifecycle.policy_disclosed", self.cause("workflow-review-control",
+                         lambda f, o: f["workflow-message"]["response"]["data"]["message"].update(allowedContextKinds=["*"])))
+        private = 'data: {"id": "event-private", "kind": "messageDelta", "payload": {"maxContextSensitivity": "sensitive"}}\n\n'
+        with self.assertRaisesRegex(RuntimeError, "autonomy.policy_disclosed: A native stream frame disclosed private policy"):
+            self.verify("interrupted-after-effect", change=lambda f, o: f["agent-streams"][0].update(rawBody=private + f["agent-streams"][0]["rawBody"]))
 
     def test_workflow_boundaries_and_publish_are_mandatory(self):
         for change in (lambda f, o: f.update({"publish-attempts": [{"method": "POST"}]}),

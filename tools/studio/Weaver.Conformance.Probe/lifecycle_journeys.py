@@ -23,7 +23,7 @@ import uuid
 from agent_transport import AgentTransportError, _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import _current_function_results, _normalized_result, _same_json, correlate_browser_protocol, retained
-from journey_runtime import BASE_GRANTS, atomic_json, browser_inputs, same
+from journey_runtime import BASE_GRANTS, atomic_json, browser_inputs, private_policy_keys, same
 from owner_resources import seed_workflow
 from runtime import RUNTIME_ENVIRONMENT, private_json
 
@@ -52,7 +52,6 @@ CORRELATION_KEYS.update({"cancel-before-effect": ("sessionId", "turnId", "comman
                          "interrupted-after-effect": ("sessionId", "proposalId", "invocationId", "toolCallId"),
                          "visibility-review-control": ("sessionId", "proposalId", "invocationId", "toolCallId"),
                          "workflow-review-control": ("sessionId", "proposalId", "invocationId", "toolCallId")})
-ACCEPTED_FULL_AUTO = "fullAuto"
 WORKFLOW_TOOL = "workflow_set_designer_position"
 SETTLE_POLLS = 20
 
@@ -67,6 +66,12 @@ class LifecycleCaseFailure(RuntimeError):
 def need(condition, cause, message):
     if not condition:
         raise LifecycleCaseFailure(cause + ": " + message, cause)
+
+
+def _public_policy_only(value, message):
+    """Retained native client data carries the public session-policy shape only (data-model.md)."""
+    leaked = private_policy_keys(value)
+    need(not leaked, "lifecycle.policy_disclosed", message + " (" + ", ".join(sorted(leaked)) + ")")
 
 
 # --- retained evidence readers -------------------------------------------------------------
@@ -103,6 +108,7 @@ def _sse(root, reference, session):
     check(values and all(isinstance(value, dict) and isinstance(value.get("kind"), str) and isinstance(value.get("id"), str)
                          for value in values) and len({value["id"] for value in values}) == len(values),
           "Native frames need distinct actual event identities")
+    _public_policy_only(values, "A native stream frame disclosed private policy")
     return values
 
 
@@ -146,11 +152,12 @@ def _verify_open(root, o, witness):
     need(_json_file(root, o["refs"]["command"]) == {"commandId": command_id, "toolName": witness["sizeTool"], "arguments": {"size": target}},
          "lifecycle.command", "The actual protocol command changed")
     accepted, record = _exchange(root, o["refs"]["message"], "POST", _session_path(session) + "/messages", 200)
+    _public_policy_only(accepted, "The accepted size prompt disclosed private policy")
     message = (accepted.get("data") or {}).get("message") or {}
     request = record.get("requestBody") or {}
     need(message.get("sessionId") == session and str(message.get("role", "")).lower() == "user" and message.get("id") == o["messageId"]
          and message.get("requestId") == request.get("requestId") and request.get("requestedCapabilities") == [witness["sizeCapability"]]
-         and (message.get("acceptedPolicy") or {}).get("revision") == policy["revision"],
+         and same(message.get("acceptedPolicy"), policy),
          "lifecycle.message", "The size prompt was not accepted into this conversation under its acknowledged policy")
     before = _size_owner(root, o["refs"]["ownerBefore"], witness)
     need(before["size"] != target, "lifecycle.command", "A no-op size cannot establish a lifecycle outcome")
@@ -266,6 +273,7 @@ def _stored_once(messages, result):
 
 def _session(root, reference, session):
     value, _ = _exchange(root, reference, "GET", _session_path(session), 200)
+    _public_policy_only(value, "Session detail disclosed private policy")
     data = value.get("data") or {}
     check(data.get("sessionId") == session and isinstance(data.get("messages"), list), "Session detail names another conversation")
     return data
@@ -698,10 +706,11 @@ def _reviewed(frames, tool, count):
 
 
 def _accepted_under(output, name, session, policy):
-    message = ((_browser_json(output, name).get("response") or {}).get("data") or {}).get("message") or {}
-    accepted = message.get("acceptedPolicy") or {}
-    need(message.get("sessionId") == session and accepted.get("revision") == policy["revision"]
-         and (policy["autonomyMode"] != "full-auto" or (accepted.get("policy") or {}).get("autonomyMode") == ACCEPTED_FULL_AUTO),
+    response = _browser_json(output, name).get("response") or {}
+    _public_policy_only(response, "The accepted prompt disclosed private policy")
+    message = (response.get("data") or {}).get("message") or {}
+    # The accepted message carries exactly the acknowledged public policy: mode, ceiling, allowed modes and revision.
+    need(message.get("sessionId") == session and same(message.get("acceptedPolicy"), policy),
          "lifecycle.message", "The reviewed prompt was not accepted under the acknowledged mode")
 
 
