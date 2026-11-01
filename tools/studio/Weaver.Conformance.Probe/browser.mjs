@@ -138,7 +138,7 @@ async function captureNativeStreams(target) {
   // Observe the existing browser request only. A clone/second fetch would change
   // stream consumption, and response.body() loses bytes when Studio aborts it.
   const cdp = await context.newCDPSession(target);
-  const streams = new Map(), pending = [];
+  const streams = new Map(), requests = new Map(), pending = [];
   const limit = 8 * 1024 * 1024, sizeError = "Native SSE capture exceeded its bounded evidence size.";
   const hash = async value => Buffer.from(await globalThis.crypto.subtle.digest("SHA-256", value)).toString("hex");
   function sseText(value, allowTrailingIncomplete = false) {
@@ -220,16 +220,37 @@ async function captureNativeStreams(target) {
       stream.captureError = null;
     }).catch(error => { stream.responseBodyError = error.message; stream.captureError = error.message; }));
   }
+  function safeStreamUrl(value) {
+    const url = new URL(value);
+    return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)
+      && !url.username && !url.password && !url.search && !url.hash ? url.href : null;
+  }
+  cdp.on("Network.requestWillBeSent", event => {
+    const url = new URL(event.request.url);
+    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    requests.set(event.requestId, { rawUrl: event.request.url,
+      count: (requests.get(event.requestId)?.count ?? 0) + 1,
+      observation: { source: "Network.requestWillBeSent", requestId: event.requestId,
+        method: event.request.method, url: safeStreamUrl(event.request.url), resourceType: event.type ?? null,
+        initiatorType: event.initiator?.type ?? null } });
+  });
   cdp.on("Network.responseReceived", event => {
     const url = new URL(event.response.url);
     if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     const contentType = Object.entries(event.response.headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] ?? "";
     const isSse = event.response.status === 200 && contentType.split(";", 1)[0].trim() === "text/event-stream";
+    const request = requests.get(event.requestId);
+    const responseUrl = safeStreamUrl(event.response.url);
     const stream = { requestId: event.requestId, url: diagnosticUrl(url.href), status: event.response.status, contentType,
+      requestObservation: request?.observation ?? null, requestObservationCount: request?.count ?? 0,
+      responseObservation: { source: "Network.responseReceived", requestId: event.requestId, url: responseUrl, resourceType: event.type ?? null },
+      responseObservationCount: (streams.get(event.requestId)?.responseObservationCount ?? 0) + 1,
+      requestIdentityMatchesResponse: !!request && request.rawUrl === event.response.url && responseUrl !== null && request.observation.url === responseUrl,
       reportedCharset: event.response.charset ?? null, reportedMimeType: event.response.mimeType ?? null,
       bodyProfile: "native-agent-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
       termination: "open", captureError: null, captureMethod: isSse ? "streamResourceContent" : "not-sse",
       streamResourceContentError: null, responseBodyError: null, captureValidationError: null, responseBodyAttempted: false,
+      receivedDataBytes: 0, dataEventCount: 0, dataLengthMetadataError: null,
       prefix: Buffer.alloc(0), chunks: [], streamedBytes: 0, completeBody: null, sizeExceeded: false };
     streams.set(event.requestId, stream);
     if (!isSse) return;
@@ -253,7 +274,14 @@ async function captureNativeStreams(target) {
   });
   cdp.on("Network.dataReceived", event => {
     const stream = streams.get(event.requestId);
-    if (!stream || stream.captureMethod === "not-sse" || !event.data || stream.captureError || stream.completeBody) return;
+    if (!stream) return;
+    // Observe decoded body lengths even where no SSE body capture was enabled.
+    // An OPTIONS204 may be ignored only when this independent observer saw no body.
+    stream.dataEventCount++;
+    if (!Number.isSafeInteger(event.dataLength) || event.dataLength < 0)
+      stream.dataLengthMetadataError = "Network.dataReceived did not supply an exact nonnegative body length.";
+    else stream.receivedDataBytes += event.dataLength;
+    if (stream.captureMethod === "not-sse" || !event.data || stream.captureError || stream.completeBody) return;
     try {
       const received = bytes(event.data, true, true);
       stream.streamedBytes += received.length;

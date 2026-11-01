@@ -2,6 +2,7 @@
 import copy
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -9,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from autonomy_journeys import (MODE_CASES, EXPECTED_CASES, DIAGNOSTIC_CASES, EVIDENCE_CATEGORY,
     require_complete_autonomy, require_diagnostic_manifest, verify_mode_observation,
-    require_size_owner_journey, diagnose_autonomy)
+    require_size_owner_journey, diagnose_autonomy, _frames)
 from case_records import retained
 
 
@@ -22,6 +23,33 @@ class AutonomyEvidenceTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    @staticmethod
+    def stream(body, identity="native-get-1", *, method="GET", resource_type="Fetch"):
+        url = "http://127.0.0.1:52001/_elsa/agent/sessions/session-1/stream"
+        size = len(body.encode())
+        return {"requestId": identity, "url": url, "status": 200 if method == "GET" else 204,
+                "requestObservation": {"source": "Network.requestWillBeSent", "requestId": identity, "method": method,
+                    "url": url, "resourceType": resource_type, "initiatorType": "preflight" if method == "OPTIONS" else "script"},
+                "responseObservation": {"source": "Network.responseReceived", "requestId": identity, "url": url, "resourceType": resource_type},
+                "requestObservationCount": 1, "responseObservationCount": 1, "requestIdentityMatchesResponse": True,
+                "contentType": "text/event-stream" if method == "GET" else "", "termination": "loadingFinished", "captureError": None,
+                "captureValidationError": None, "streamResourceContentError": None, "responseBodyError": None,
+                "captureMethod": "streamResourceContent" if method == "GET" else "not-sse", "responseBodyAttempted": False,
+                "bufferedBytes": size, "completeBodyBytes": 0, "streamedBytes": 0, "observedBodyBytes": size,
+                "receivedDataBytes": size, "dataEventCount": 1 if size else 0, "dataLengthMetadataError": None,
+                "textTruncation": "none", "trailingIncompleteUtf8Bytes": 0, "rawBody": body}
+
+    def with_preflights(self, fixture):
+        path = fixture[0] / "agent-streams.json"
+        original = json.loads(path.read_text())[0]["rawBody"]
+        split = original.index('data: {"id": "event-size-started"')
+        rows = [self.stream("", "native-preflight-1", method="OPTIONS", resource_type="Preflight"),
+                self.stream(original[:split], "native-get-1"),
+                self.stream("", "native-preflight-2", method="OPTIONS", resource_type="Preflight"),
+                self.stream(original[split:], "native-get-2")]
+        path.write_text(json.dumps(rows))
+        return fixture
 
     def fixture(self, provider="copilot", key="automatic-size-control"):
         self.sequence += 1
@@ -73,9 +101,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
             # The observed review resume carries response text/completion, not another mutation result event.
             frames += [{"id": "event-resume-message", "kind": "messageDelta", "content": "Synthetic receipt continuation."},
                        {"id": "event-resume-completed", "kind": "completed"}]
-        sse = [{"url": "http://127.0.0.1:52001/_elsa/agent/sessions/session-1/stream", "status": 200,
-            "contentType": "text/event-stream", "termination": "loadingFinished", "captureError": None,
-            "rawBody": "".join("data: " + json.dumps(value) + "\n\n" for value in frames)}]
+        sse = [self.stream("".join("data: " + json.dumps(value) + "\n\n" for value in frames))]
         write("agent-streams", sse)
         write("autonomy-native-bootstrap", {"status": 200, "value": {"data": {"capabilities": [
             {"id": "acme.home.read", "moduleId": w["moduleId"]}, {"id": w["sizeCapability"], "moduleId": w["moduleId"]}]}}})
@@ -158,6 +184,96 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     self.assertEqual(record["correlation"]["completeProviderJourney"], key != "manual-to-automatic")
         require_diagnostic_manifest(records)
         self.assertEqual(4, sum(row["status"] == "failed" for row in records))
+
+    def test_exact_observed_options_preflights_preserve_each_native_mode_outcome(self):
+        for provider in ("copilot", "anthropic"):
+            for key in MODE_CASES:
+                with self.subTest(provider=provider, key=key):
+                    record = self.verify(self.with_preflights(self.fixture(provider, key)), provider)
+                    self.assertEqual("failed" if "-to-" in key else "passed", record["status"])
+
+    def test_only_finished_empty_same_identity_options_preflight_can_be_ignored(self):
+        for mutation in ("get", "missing-method", "wrong-request-type", "wrong-response-type", "missing-request", "missing-response",
+                         "request-id", "response-id", "request-url", "response-url", "foreign", "wrong-session", "unmatched", "repeated-request",
+                         "repeated-response", "boolean-count", "wrong-source", "nonempty", "unobserved-body", "missing-data-count", "failed-data-metadata",
+                         "capture-error", "validation-error", "network-error", "canceled", "open", "failed", "http401", "http200"):
+            with self.subTest(mutation=mutation):
+                fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+                rows = json.loads(path.read_text()); row = rows[0]
+                if mutation == "get": row["requestObservation"].update(method="GET", resourceType="Fetch"); row["responseObservation"]["resourceType"] = "Fetch"
+                elif mutation == "missing-method": row["requestObservation"].pop("method")
+                elif mutation == "wrong-request-type": row["requestObservation"]["resourceType"] = "Fetch"
+                elif mutation == "wrong-response-type": row["responseObservation"]["resourceType"] = "Fetch"
+                elif mutation == "missing-request": row.pop("requestObservation")
+                elif mutation == "missing-response": row.pop("responseObservation")
+                elif mutation == "request-id": row["requestObservation"]["requestId"] = "another"
+                elif mutation == "response-id": row["responseObservation"]["requestId"] = "another"
+                elif mutation == "request-url": row["requestObservation"]["url"] += "?unknown=1"
+                elif mutation == "response-url": row["responseObservation"]["url"] += "?unknown=1"
+                elif mutation == "foreign":
+                    for value in (row, row["requestObservation"], row["responseObservation"]): value["url"] = value["url"].replace(":52001", ":52002")
+                elif mutation == "wrong-session":
+                    for value in (row, row["requestObservation"], row["responseObservation"]): value["url"] = value["url"].replace("session-1", "another")
+                elif mutation == "unmatched": row["requestIdentityMatchesResponse"] = False
+                elif mutation == "repeated-request": row["requestObservationCount"] = 2
+                elif mutation == "repeated-response": row["responseObservationCount"] = 2
+                elif mutation == "boolean-count": row["requestObservationCount"] = True
+                elif mutation == "wrong-source": row["requestObservation"]["source"] = "inferred-from-status"
+                elif mutation == "nonempty": row["rawBody"] = "body"
+                elif mutation == "unobserved-body": row["receivedDataBytes"] = 1; row["dataEventCount"] = 1
+                elif mutation == "missing-data-count": row.pop("receivedDataBytes")
+                elif mutation == "failed-data-metadata": row["dataLengthMetadataError"] = "missing length"
+                elif mutation == "capture-error": row["captureError"] = "missing capture"
+                elif mutation == "validation-error": row["captureValidationError"] = "corrupt"
+                elif mutation == "network-error": row["errorText"] = "net::ERR_FAILED"
+                elif mutation == "canceled": row["canceled"] = True
+                elif mutation == "open": row["termination"] = "open"
+                elif mutation == "failed": row["termination"] = "loadingFailed"
+                elif mutation == "http401": row["status"] = 401
+                else: row["status"] = 200
+                path.write_text(json.dumps(rows))
+                with self.assertRaises(RuntimeError): self.verify(fixture)
+
+    def test_failed_get_or_unknown_metadata_is_not_filtered_as_a_preflight(self):
+        for mutation in ("401", "204", "500", "method", "resource-type", "request-id", "identity", "capture", "validation", "missing-byte-count", "malformed-content-type", "network", "nonterminal-abort", "open"):
+            with self.subTest(mutation=mutation):
+                fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+                rows = json.loads(path.read_text()); row = rows[1]
+                if mutation.isdigit(): row["status"] = int(mutation)
+                elif mutation == "method": row["requestObservation"].pop("method")
+                elif mutation == "resource-type": row["requestObservation"]["resourceType"] = row["responseObservation"]["resourceType"] = "Other"
+                elif mutation == "request-id": row["requestId"] = "another"
+                elif mutation == "identity": row["requestIdentityMatchesResponse"] = False
+                elif mutation == "capture": row["captureError"] = "unavailable"
+                elif mutation == "validation": row["captureValidationError"] = "corrupt"
+                elif mutation == "missing-byte-count": row.pop("receivedDataBytes")
+                elif mutation == "malformed-content-type": row["contentType"] = []
+                elif mutation == "network": row.update(termination="loadingFailed", errorText="net::ERR_CONNECTION_RESET", canceled=False)
+                elif mutation == "nonterminal-abort": row.update(termination="loadingFailed", errorText="net::ERR_ABORTED", canceled=True)
+                else: row["termination"] = "open"
+                path.write_text(json.dumps(rows))
+                with self.assertRaises(RuntimeError): self.verify(fixture)
+
+    def test_complete_native_approval_pause_abort_is_preserved_without_hiding_failed_get(self):
+        for provider in ("copilot", "anthropic"):
+            fixture = self.fixture(provider, "reviewed-size-control"); path = fixture[0] / "agent-streams.json"
+            body = json.loads(path.read_text())[0]["rawBody"]
+            split = body.index('data: {"id": "event-resume-message"')
+            pause = self.stream(body[:split], "native-pause")
+            pause.update(termination="loadingFailed", errorText="net::ERR_ABORTED", canceled=True)
+            rows = [pause, self.stream(body[split:], "native-resume")]
+            path.write_text(json.dumps(rows)); self.verify(fixture, provider)
+            for mutation in ("wrong-error", "not-canceled", "incomplete-terminal", "missing-proposal"):
+                with self.subTest(provider=provider, mutation=mutation):
+                    changed = copy.deepcopy(rows)
+                    if mutation == "wrong-error": changed[0]["errorText"] = "net::ERR_FAILED"
+                    elif mutation == "not-canceled": changed[0]["canceled"] = False
+                    elif mutation == "incomplete-terminal": changed[0]["rawBody"] = changed[0]["rawBody"].rstrip()
+                    else:
+                        blocks = changed[0]["rawBody"].split("\n\n")
+                        changed[0]["rawBody"] = "\n\n".join(block for block in blocks if '"kind": "proposalCreated"' not in block)
+                    path.write_text(json.dumps(changed))
+                    with self.assertRaises(RuntimeError): self.verify(fixture, provider)
 
     def test_reviewed_execute_journal_and_continuation_do_not_require_duplicate_mutation_sse(self):
         for provider in ("copilot", "anthropic"):
@@ -410,6 +526,68 @@ class AutonomyEvidenceTests(unittest.TestCase):
             else:
                 path = self.root / "foreign-owner.json"; path.write_bytes(Path(reference["path"]).read_bytes()); fixture[1]["ownerBefore"] = retained(path)
             with self.assertRaises(RuntimeError): self.verify(fixture)
+
+
+class NativeRequestMetadataCaptureTests(unittest.TestCase):
+    def test_actual_capture_retains_request_response_identity_and_counts_non_sse_body(self):
+        source = Path(__file__).with_name("browser.mjs").read_text()
+        helper = source[source.index("async function captureNativeStreams("):source.index("function command(")]
+        script = '''import assert from "node:assert/strict";
+const backend="http://127.0.0.1:52001";let context;
+const diagnosticUrl=value=>{const url=new URL(value);return url.origin+url.pathname;};
+''' + helper + r'''
+const observations=[];
+for(const scenario of ['valid','missing-request','method-conflict','url-conflict','nonempty-preflight','missing-data-length','wrong-response-id','resource-missing','query']) {
+ const handlers=new Map(),raw='data: {"id":"native-unit","kind":"completed"}\n\n';
+ const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async(kind,args)=>{
+  if(kind==='Network.enable')return {};
+  assert.equal(kind,'Network.streamResourceContent');assert.equal(args.requestId,'native-get');
+  return {bufferedData:Buffer.from(raw).toString('base64')};
+ }};
+ context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+ const url=backend+'/_elsa/agent/sessions/session-1/stream';
+ const query=scenario==='query'?'?access_token=private-query-value':'';
+ if(scenario!=='missing-request')handlers.get('Network.requestWillBeSent')({requestId:'native-preflight',
+  type:scenario==='resource-missing'?undefined:'Preflight',initiator:{type:'preflight'},
+  request:{url:(scenario==='url-conflict'?url.replace('session-1','another'):url)+query,
+    method:scenario==='method-conflict'?'GET':'OPTIONS',headers:{Authorization:'private-metadata-header'}}});
+ const id=scenario==='wrong-response-id'?'unknown-request':'native-preflight';
+ handlers.get('Network.responseReceived')({requestId:id,type:'Preflight',response:{url:url+query,status:204,charset:'',mimeType:'',
+  headers:{Authorization:'private-metadata-header'}}});
+ if(scenario==='nonempty-preflight')handlers.get('Network.dataReceived')({requestId:id,dataLength:1});
+ if(scenario==='missing-data-length')handlers.get('Network.dataReceived')({requestId:id});
+ handlers.get('Network.loadingFinished')({requestId:id});
+ handlers.get('Network.requestWillBeSent')({requestId:'native-get',type:'Fetch',initiator:{type:'script'},request:{url,method:'GET',headers:{Authorization:'private-metadata-header'}}});
+ handlers.get('Network.responseReceived')({requestId:'native-get',type:'Fetch',response:{url,status:200,charset:'utf-8',mimeType:'text/event-stream',headers:{'Content-Type':'text/event-stream',Authorization:'private-metadata-header'}}});
+ handlers.get('Network.loadingFinished')({requestId:'native-get'});
+ const rows=await capture();assert.equal(rows.length,2);
+ assert.equal(rows[1].requestObservation.method,'GET');assert.equal(rows[1].requestObservation.resourceType,'Fetch');
+ assert.equal(rows[1].responseObservation.resourceType,'Fetch');assert.equal(rows[1].requestIdentityMatchesResponse,true);
+ assert.equal(rows[1].rawBody,raw);
+ if(scenario==='valid') { assert.equal(rows[0].requestObservation.method,'OPTIONS');assert.equal(rows[0].requestIdentityMatchesResponse,true); }
+ if(scenario==='method-conflict')assert.equal(rows[0].requestObservation.method,'GET');
+ if(scenario==='nonempty-preflight')assert.equal(rows[0].receivedDataBytes,1);
+ if(scenario==='missing-data-length')assert.ok(rows[0].dataLengthMetadataError);
+ if(scenario==='missing-request')assert.equal(rows[0].requestObservation,null);
+ if(scenario==='url-conflict'||scenario==='query')assert.equal(rows[0].requestIdentityMatchesResponse,false);
+ assert.ok(!JSON.stringify(rows).includes('private-metadata-header'));assert.ok(!JSON.stringify(rows).includes('private-query-value'));
+ observations.push({scenario,rows});
+}
+console.log(JSON.stringify(observations));
+'''
+        completed = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        values = json.loads(completed.stdout)
+        self.assertEqual(9, len(values))
+        with tempfile.TemporaryDirectory() as directory:
+            for value in values:
+                with self.subTest(scenario=value["scenario"]):
+                    path = Path(directory) / "agent-streams.json"; path.write_text(json.dumps(value["rows"]))
+                    if value["scenario"] == "valid":
+                        frames, _ = _frames(Path(directory), "session-1", "http://127.0.0.1:52001")
+                        self.assertEqual(["native-unit"], [row["id"] for row in frames])
+                    else:
+                        with self.assertRaises(RuntimeError): _frames(Path(directory), "session-1", "http://127.0.0.1:52001")
 
 
 class AutonomyManifestTests(unittest.TestCase):

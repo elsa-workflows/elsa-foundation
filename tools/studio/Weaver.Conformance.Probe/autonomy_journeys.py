@@ -90,24 +90,67 @@ def _owner(root, reference):
     return value["value"]
 
 
-def _frames(output, session):
+def _frames(output, session, backend_origin):
     path = Path(output) / "agent-streams.json"
     streams = strict_json(path.read_text())
     check(isinstance(streams, list) and streams, "Native SSE is mandatory")
     frames = []
+    request_ids = set()
+    expected_url = backend_origin + "/_elsa/agent/sessions/" + quote(session, safe="") + "/stream"
     for stream in streams:
-        check(urlparse(stream["url"]).path == "/_elsa/agent/sessions/" + session + "/stream"
-              and stream.get("status") == 200 and stream.get("contentType", "").split(";", 1)[0].strip() == "text/event-stream"
-              and not stream.get("captureError") and isinstance(stream.get("rawBody"), str),
+        check(isinstance(stream, dict), "A native stream observation must be a structured CDP record")
+        request, response = stream.get("requestObservation"), stream.get("responseObservation")
+        check(isinstance(request, dict) and isinstance(response, dict) and isinstance(stream.get("requestId"), str) and stream["requestId"]
+              and stream["requestId"] not in request_ids and request.get("source") == "Network.requestWillBeSent"
+              and response.get("source") == "Network.responseReceived" and type(stream.get("requestObservationCount")) is int
+              and stream["requestObservationCount"] == 1 and type(stream.get("responseObservationCount")) is int
+              and stream["responseObservationCount"] == 1 and stream.get("requestIdentityMatchesResponse") is True
+              and request.get("requestId") == response.get("requestId") == stream["requestId"]
+              and request.get("url") == response.get("url") == stream.get("url") == expected_url,
+              "Native stream/preflight needs its actual matching CDP request/response identity and exact owned URL")
+        request_ids.add(stream["requestId"])
+        if request.get("method") == "OPTIONS":
+            check(request.get("resourceType") == response.get("resourceType") == "Preflight"
+                  and stream.get("status") == 204 and stream.get("termination") == "loadingFinished"
+                  and isinstance(stream.get("contentType"), str) and stream["contentType"].split(";", 1)[0].strip() != "text/event-stream"
+                  and stream.get("rawBody") == "" and stream.get("captureMethod") == "not-sse"
+                  and all(type(stream.get(key)) is int and stream[key] == 0 for key in
+                          ("receivedDataBytes", "observedBodyBytes", "bufferedBytes", "completeBodyBytes", "streamedBytes"))
+                  and type(stream.get("dataEventCount")) is int and stream["dataEventCount"] >= 0
+                  and stream.get("responseBodyAttempted") is False and not stream.get("errorText") and not stream.get("canceled")
+                  and all(not stream.get(key) for key in ("captureError", "captureValidationError", "responseBodyError", "streamResourceContentError", "dataLengthMetadataError")),
+                  "Only an observed empty successful same-session OPTIONS preflight may be ignored")
+            continue
+        check(request.get("method") == "GET" and request.get("resourceType") == response.get("resourceType") == "Fetch"
+              and stream.get("status") == 200 and isinstance(stream.get("contentType"), str)
+              and stream["contentType"].split(";", 1)[0].strip() == "text/event-stream"
+              and all(not stream.get(key) for key in ("captureError", "captureValidationError", "responseBodyError", "dataLengthMetadataError"))
+              and all(type(stream.get(key)) is int and stream[key] >= 0 for key in ("receivedDataBytes", "dataEventCount"))
+              and isinstance(stream.get("rawBody"), str),
               "A wrong-session, failed or unretained native stream cannot prove a mode outcome")
         # Native UI closes its original stream at a review pause. Only complete frames count.
+        complete = []
         for raw in re.split(r"\r?\n\r?\n", stream["rawBody"])[:-1]:
             data = "\n".join(line[5:].removeprefix(" ") for line in raw.splitlines() if line.startswith("data:"))
             if data:
                 value = strict_json(data)
                 check(isinstance(value, dict) and value.get("kind") != "error" and not value.get("error"),
                       "A native error cannot stand in for the session-mode mismatch")
-                frames.append(value)
+                complete.append(value)
+        if stream.get("termination") == "loadingFailed":
+            last = complete[-1] if complete else {}
+            check(stream.get("errorText") == "net::ERR_ABORTED" and stream.get("canceled") is True
+                  and stream["rawBody"].endswith(("\n\n", "\r\n\r\n")) and stream.get("textTruncation") == "none"
+                  and type(stream.get("trailingIncompleteUtf8Bytes")) is int and stream["trailingIncompleteUtf8Bytes"] == 0
+                  and last.get("kind") == "toolApprovalRequested"
+                  and isinstance(last.get("proposalId"), str) and last["proposalId"]
+                  and any(row.get("kind") == "proposalCreated" and isinstance(row.get("payload"), dict)
+                          and row["payload"].get("id") == last["proposalId"] for row in complete[:-1]),
+                  "A failed GET is not a complete native approval-pause cancellation prefix")
+        else:
+            check(stream.get("termination") == "loadingFinished" and not stream.get("errorText") and not stream.get("canceled"),
+                  "An open or failed native GET cannot prove the mode outcome")
+        frames.extend(complete)
     check(frames and len({row.get("id") for row in frames}) == len(frames), "Native frames need distinct actual event identities")
     return frames, retained(path)
 
@@ -427,7 +470,7 @@ def verify_mode_observation(output, observation, witness, provider, transport, *
     before, after = require_size_owner_journey(output, observation, witness)
     requests, session = _messages(output, a, witness, before)
     commands = _commands(output, a, witness)
-    frames, sse = _frames(output, a["sameSessionId"])
+    frames, sse = _frames(output, a["sameSessionId"], transport.http.base)
     trace = transport.protocol_trace(offset)
     check(trace["incompleteTailBytes"] == 0, "An incomplete actual factory trace cannot prove the outcome")
     _actual_calls(trace, commands, provider, a["sameSessionId"])
