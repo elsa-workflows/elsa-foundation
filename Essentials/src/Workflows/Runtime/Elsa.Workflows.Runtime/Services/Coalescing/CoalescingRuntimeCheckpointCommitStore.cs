@@ -28,7 +28,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 {
     private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
     private readonly IRuntimeExecutionOwnershipService? ownershipService;
-    private readonly HashSet<string> requiredSourceKinds;
 
     public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
         IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService = null)
@@ -44,7 +43,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
         _inner = inner.Value;
         this.sessionAccessor = sessionAccessor;
         this.ownershipService = ownershipService;
-        requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+        // Preserve contribution validation; no already-persisted outbox item is restaged by a later fold.
+        _ = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
     }
 
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
@@ -295,14 +295,11 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     // it is, keeping its attempt count and retry time so the sweep that delivers it counts the attempt already made. One
     // an earlier flush already persisted is left out: its durable Pending row is that backstop, and the overlay's changed
     // copy would be a conflicting second save of the same item. Both are what the quiescence flush does with such an item.
-    private IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
+    private static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
         RuntimeCoalescingSession session,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remaining) =>
         remaining
-            .Where(change => !session.IsOutboxDurablyPersisted(change.StateId) ||
-                             change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable &&
-                             change.State.StimulusDeliverySourceScope is null &&
-                             !requiredSourceKinds.Contains(change.State.Intent.Kind))
+            .Where(change => !session.IsOutboxDurablyPersisted(change.StateId))
             .Select(change => change.State.Status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? change with { State = AsPending(change.State) }
                 : change)

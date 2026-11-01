@@ -845,6 +845,7 @@ public sealed class RuntimeCoalescingSession
         }
 
         _outboxItems[completion.Claim.OutboxItemId] = resolution.OutboxItem;
+        _immediateSchedulerOutboxIds.Remove(completion.Claim.OutboxItemId);
         if (resolution.WorkflowDispatch is { } workflowDispatch)
             _workflowDispatchUpserts[workflowDispatch.DispatchId] = workflowDispatch;
         if (resolution.FollowUpOutboxItem is { } followUpOutboxItem)
@@ -1022,10 +1023,11 @@ public sealed class RuntimeCoalescingSession
     public RuntimeCheckpointStateChangeSet FoldBufferedStateChangesWith(RuntimeCheckpointStateChangeSet trailing)
     {
         ArgumentNullException.ThrowIfNull(trailing);
-        return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]));
+        return WithWorkflowDispatchOverlay(RuntimeCheckpointFold.Fold([.. _bufferedChangeSets, trailing]), trailing.WorkflowDispatches);
     }
 
-    private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded)
+    private RuntimeCheckpointStateChangeSet WithWorkflowDispatchOverlay(RuntimeCheckpointStateChangeSet folded,
+        IReadOnlyCollection<RuntimeStateChange<WorkflowDispatchRecord>>? trailing = null)
     {
         if (_workflowDispatchUpserts.Count == 0)
             return folded;
@@ -1039,6 +1041,11 @@ public sealed class RuntimeCoalescingSession
                 record,
                 new Dictionary<string, string>());
         }
+
+        // A trailing checkpoint is later than both the buffered checkpoints and their delivery overlay.
+        if (trailing is not null)
+            foreach (var change in trailing)
+                merged[change.StateId] = change;
 
         return folded.WithWorkflowDispatches(merged.Values.ToArray());
     }
@@ -1059,6 +1066,9 @@ public sealed class RuntimeCoalescingSession
     {
         _bufferedChangeSets.Clear();
         _segmentActivityIds.Clear();
+        // These records have committed. Later delivery may advance them through another scope, so a new
+        // segment must not reapply the preceding segment's snapshot over the authoritative durable lifecycle.
+        _workflowDispatchUpserts.Clear();
     }
 
     /// <summary>

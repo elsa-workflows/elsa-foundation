@@ -111,6 +111,30 @@ assertions to their workflow and persistence scope produced the fresh 236/236 pa
 retained separately. The task-owned database containers bound only to loopback and were removed, with their
 volumes, after every attempt. The existing Azure runner returns to its initial deallocated state after collection.
 
+The core evidence archive was collected locally and its SHA256 verified as
+`08a2b4720007004f6f85154c0dec89bc6103fee18968b836cc24c5870425b117`. Discovery and execution both account for
+236 tests. The first local extraction attempt used a newer Python tar API than the available interpreter; the same
+verified archive was then extracted with checked regular-file names, with no provider rerun or result change.
+
+## Retained boundaries: prerequisite state corrections for #2828
+
+Before enabling any new retained boundary, three controls reproduced stale-state defects. A new segment could
+reapply a previously committed dispatch over a later durable lifecycle; an old overlay dispatch could override a
+newer trailing checkpoint change; and a later cap fold could restage an already-delivered external outbox item as
+Pending. The stores correctly rejected the first and third stale writes rather than silently accepting them, but
+that still failed the later checkpoint. The trailing-change control returned Pending instead of Started.
+
+Committed dispatch snapshots now leave the segment's pending write set, explicit trailing dispatch changes win
+over the earlier overlay, and folds do not restage outbox items already persisted by an earlier segment. The
+canonical claim-completion path also releases its settled immediate-continuation provenance. No new boundary
+retains folding yet in this prerequisite slice.
+
+All three baseline cases fail and the corrected cases pass. Individually restoring each stale path fails its
+corresponding case and passes the other two; restoration passes all three. Whole suites pass: runtime 3,137,
+EF persistence 1,851 and HTTP integration 113, zero failed/skipped, with complete discovery accounting. The next
+step is to retain qualified suspension/child-dispatch boundaries, then prove their crash and takeover behavior;
+these prerequisite controls do not establish that remaining acceptance.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.
