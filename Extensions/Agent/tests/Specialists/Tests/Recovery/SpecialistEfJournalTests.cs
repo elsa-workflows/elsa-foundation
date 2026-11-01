@@ -23,7 +23,7 @@ using Xunit;
 
 namespace Elsa.Agent.Specialists.Tests.Recovery;
 
-public sealed class SpecialistEfJournalTests
+public sealed partial class SpecialistEfJournalTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 1, 5, 0, 0, TimeSpan.Zero);
     private static SpecialistInvocationIdentity Identity => new("tenant", "tenant", "workflow", "activity", "operation", "artifact", "hash", "version", "template");

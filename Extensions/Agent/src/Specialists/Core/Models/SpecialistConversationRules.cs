@@ -19,7 +19,7 @@ internal static class SpecialistConversationRules
             if (current.Owner != owner || current.Revision != admission.ExpectedRevision || current.OutcomeUnknown || current.ActiveTurnHandle is not null) return null;
             return current with { ActiveTurnHandle = before.Handle, ActiveFence = next.Fence, ActiveAdmissionGeneration = next.AdmissionGeneration };
         }
-        if (current is null || current.Owner != owner || current.Revision != admission.ExpectedRevision || current.OutcomeUnknown ||
+        if (current is null || current.Owner != owner || current.Revision != admission.ExpectedRevision || current.OutcomeUnknown && next.Status != SpecialistTurnStatus.Cancelled ||
             current.ActiveTurnHandle != before.Handle || current.ActiveFence != before.Fence || current.ActiveAdmissionGeneration != before.AdmissionGeneration) return null;
         if (before.Status == SpecialistTurnStatus.Claimed && next.Status == SpecialistTurnStatus.Claimed && next.AdmissionGeneration == before.AdmissionGeneration + 1)
             return current with { ActiveFence = next.Fence, ActiveAdmissionGeneration = next.AdmissionGeneration };
@@ -27,6 +27,7 @@ internal static class SpecialistConversationRules
         {
             SpecialistTurnStatus.Accepted => current with { Revision = checked(current.Revision + 1), ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0,
                 AcceptedTurn = new(before.Handle, SpecialistTurnDeliveryRules.DispatchIdentity(before), before.ChildInvocationId!) },
+            SpecialistTurnStatus.Cancelled => current with { ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0, OutcomeUnknown = false },
             SpecialistTurnStatus.Failed => current with { ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0 },
             SpecialistTurnStatus.OutcomeUnknown => current with { OutcomeUnknown = true },
             _ => current

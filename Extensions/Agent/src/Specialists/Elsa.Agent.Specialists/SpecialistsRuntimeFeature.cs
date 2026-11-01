@@ -44,6 +44,8 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, SpecialistCheckpointEnricher>());
         services.AddRuntimePostCommitIntentHandler<SpecialistSettlementHandler>(SpecialistSettlementBoundary.AppliedKind,
             RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)), requiresDurableSource: true);
+        services.AddRuntimePostCommitIntentHandler<SpecialistSettlementHandler>(SpecialistSettlementBoundary.CancelKind,
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)), requiresDurableSource: true);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, SpecialistTypesStartupTask>());

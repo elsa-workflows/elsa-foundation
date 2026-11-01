@@ -64,7 +64,7 @@ internal static class SpecialistTurnDeliveryRules
         }
         var children = deliveries.Where(x => x.ChildInvocationId is not null).Select(x => x.ChildInvocationId).ToArray();
         if (children.Distinct(StringComparer.Ordinal).Count() != children.Length) throw new InvalidDataException("A native child cannot belong to multiple deliveries.");
-        if (document.Status == SpecialistTurnStatus.Prepared)
+        if (document.Status == SpecialistTurnStatus.Prepared || document.Status == SpecialistTurnStatus.Cancelled && document.AdmissionGeneration == 0)
         {
             if (document.ActiveDeliveryActivityId is not null || children.Length != 0) throw new InvalidDataException("A staged operation has no dispatched delivery.");
         }

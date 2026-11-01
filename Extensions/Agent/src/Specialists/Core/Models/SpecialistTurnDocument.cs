@@ -8,7 +8,7 @@ namespace Elsa.Agent.Specialists.Core.Models;
 
 /// <summary>Journal lifecycle. Provider dispatch uncertainty is never an implicit permission to retry.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<SpecialistTurnStatus>))]
-public enum SpecialistTurnStatus { Prepared, Claimed, Dispatching, Accepted, Failed, OutcomeUnknown }
+public enum SpecialistTurnStatus { Prepared, Claimed, Dispatching, Accepted, Failed, OutcomeUnknown, Cancelled }
 
 /// <summary>
 /// Protected native turn material and the conditional journal header. Business/session payloads remain

@@ -38,6 +38,11 @@ internal sealed class SpecialistSettlementHandler(SpecialistSettlementBoundary b
     private async ValueTask HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
         await VerifySourceAsync(source, cancellationToken);
+        if (source.Intent.Kind == SpecialistSettlementBoundary.CancelKind)
+        {
+            await CancelCoreAsync(source, cancellationToken);
+            return;
+        }
         SpecialistAppliedPayload payload;
         try
         {
@@ -59,6 +64,18 @@ internal sealed class SpecialistSettlementHandler(SpecialistSettlementBoundary b
             throw new RuntimePostCommitDeliveryException(PostCommitFailureKind.Permanent, "specialist.settlement.conflict", "The native specialist delivery cannot accept this application source.", SpecialistSettlementBoundary.Invalid());
     }
 
+    private async ValueTask CancelCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        var payload = source.Intent.Payload?.Deserialize<SpecialistCancelledPayload>(SpecialistSettlementBoundary.Json) ?? throw SpecialistSettlementBoundary.Invalid();
+        if (payload.Version != 1 || !SpecialistSettlementBoundary.Intent(payload).IsEquivalentTo(source.Intent)) throw SpecialistSettlementBoundary.Invalid();
+        var (workflow, executable) = await boundary.WorkflowAsync(payload.Identity.WorkflowExecutionId, cancellationToken);
+        var parent = await activities.FindAsync(workflow.WorkflowExecutionId, payload.Identity.ActivityExecutionId, cancellationToken) ?? throw SpecialistSettlementBoundary.Invalid();
+        if (!executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var node) ||
+            await boundary.CancelledAsync(workflow, parent, node, cancellationToken) != payload) throw SpecialistSettlementBoundary.Invalid();
+        await VerifySourceAsync(source, cancellationToken);
+        _ = await turns.CancelAsync(new(payload.Identity, payload.ChildInvocationId, source.SourceOutboxItemId, source.IntentFingerprint, payload.CancelledAt), cancellationToken);
+    }
+
     private async ValueTask VerifySourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
         try { await VerifySourceCoreAsync(source, cancellationToken); }
@@ -75,7 +92,7 @@ internal sealed class SpecialistSettlementHandler(SpecialistSettlementBoundary b
     private async ValueTask VerifySourceCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (source.Intent.Kind != SpecialistSettlementBoundary.AppliedKind || access.Current.AccessPolicy != PersistenceAccessPolicy.Ordinary || source.Scope != access.Current.RequireScope())
+        if (source.Intent.Kind is not (SpecialistSettlementBoundary.AppliedKind or SpecialistSettlementBoundary.CancelKind) || access.Current.AccessPolicy != PersistenceAccessPolicy.Ordinary || source.Scope != access.Current.RequireScope())
             throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, SpecialistSettlementBoundary.Invalid(), false);
         var current = await sources.FindDurableAsync(source.SourceOutboxItemId, cancellationToken) ?? throw SpecialistSettlementBoundary.Invalid();
         if (current.OutboxItemId != source.SourceOutboxItemId || RuntimeCheckpointCommitFingerprint.ComputeIntent(current.Intent) != source.IntentFingerprint)

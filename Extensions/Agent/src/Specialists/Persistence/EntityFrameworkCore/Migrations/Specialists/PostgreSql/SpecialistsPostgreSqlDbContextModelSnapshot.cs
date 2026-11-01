@@ -51,6 +51,39 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                     b.ToTable("elsa_specialist_conversations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistOperationRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ScopeKey", "OperationKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_specialist_operations", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistTurnRecord", b =>
                 {
                     b.Property<string>("ScopeKey")

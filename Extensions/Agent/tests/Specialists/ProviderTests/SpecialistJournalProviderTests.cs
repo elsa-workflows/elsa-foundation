@@ -224,7 +224,9 @@ public sealed class SpecialistJournalProviderTests
                 await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().StageAsync(
                     race with { Identity = innerAlias, Deliveries = [new(innerAlias)] }, cancellationToken);
             };
-            overlap.Arm();
+            // Stage now serializes on the operation gate. Force the competing registration
+            // before that gate CAS, while the outer reader still holds only a version snapshot.
+            overlap.Arm("elsa_specialist_operations");
             var registered = await store.StageAsync(race with { Identity = outerAlias, Deliveries = [new(outerAlias)] }, CancellationToken.None);
             Assert.Equal(3, overlap.Count);
             Assert.Contains(registered.Deliveries!, delivery => delivery.Identity == innerAlias);
@@ -232,6 +234,129 @@ public sealed class SpecialistJournalProviderTests
             Assert.Equal("accepted-after-renewal-race", registered.ProtectedResult);
         }
         Assert.Equal(SpecialistTurnStatus.Accepted, (await recovered.ReadAsync(race.Handle, race.Identity, CancellationToken.None))!.Status);
+
+        // New operation-gate boundaries: force each competing commit before the outer CAS.
+        // These callbacks run before lock acquisition, never while awaiting the same held gate.
+        var pre = RaceDocument("cancel-before-stage");
+        var preCancel = CancelRequest(pre.Identity);
+        var insert = new BeforeOperationInsert(async cancellationToken =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            var receipt = await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().CancelAsync(preCancel, cancellationToken);
+            Assert.Equal(SpecialistCancellationOutcome.CancelledBeforeAdmission, receipt.Outcome);
+        });
+        await using (var host = RaceHost(insert))
+        await using (var scope = host.CreateAsyncScope())
+        {
+            var refusal = await Assert.ThrowsAsync<SpecialistJournalException>(() => scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().StageAsync(pre, CancellationToken.None).AsTask());
+            Assert.Equal("specialist.journal.cancelled", refusal.Code);
+            Assert.Equal(1, insert.Count);
+            Assert.Null(await recovered.ReadAsync(pre.Handle, pre.Identity, CancellationToken.None));
+        }
+
+        var preClaim = RaceDocument("cancel-before-claim");
+        await recovered.StageAsync(preClaim, CancellationToken.None);
+        var claimOverlap = new RenewalBeforeUpdate(async cancellationToken =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            var receipt = await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().CancelAsync(CancelRequest(preClaim.Identity), cancellationToken);
+            Assert.Equal(SpecialistCancellationOutcome.Cancelled, receipt.Outcome);
+        });
+        claimOverlap.Arm("elsa_specialist_operations");
+        await using (var host = RaceHost(claimOverlap))
+        await using (var scope = host.CreateAsyncScope())
+        {
+            Assert.Null(await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().ClaimAsync(preClaim.Handle, preClaim.Identity, "pre-claim-child", "pre-claim-fence", now, CancellationToken.None));
+            Assert.Equal(1, claimOverlap.Count);
+            Assert.Equal(SpecialistTurnStatus.Cancelled, (await recovered.ReadAsync(preClaim.Handle, preClaim.Identity, CancellationToken.None))!.Status);
+        }
+
+        foreach (var acceptsFirst in new[] { false, true })
+        {
+            var contested = RaceDocument(acceptsFirst ? "accept-before-cancel" : "cancel-before-accept");
+            await recovered.StageAsync(contested, CancellationToken.None);
+            Assert.NotNull(await recovered.ClaimAsync(contested.Handle, contested.Identity, "contested-child", "contested-fence", now, CancellationToken.None));
+            var token = new SpecialistTurnLeaseToken("contested-fence", 1);
+            Assert.True(await recovered.DispatchAsync(contested.Handle, contested.Identity, token, now, CancellationToken.None));
+            var cancel = CancelRequest(contested.Identity, "contested-child");
+            var winner = new RenewalBeforeUpdate(async cancellationToken =>
+            {
+                await using var scope = restarted.CreateAsyncScope();
+                var store = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+                if (acceptsFirst) Assert.True(await store.AcceptAsync(contested.Handle, contested.Identity, token, "accepted-winner", now, cancellationToken));
+                else Assert.Equal(SpecialistCancellationOutcome.Cancelled, (await store.CancelAsync(cancel, cancellationToken)).Outcome);
+            });
+            winner.Arm();
+            await using var host = RaceHost(winner);
+            await using var scope = host.CreateAsyncScope();
+            var outer = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+            if (acceptsFirst) Assert.Equal(SpecialistCancellationOutcome.AlreadyAccepted, (await outer.CancelAsync(cancel, CancellationToken.None)).Outcome);
+            else Assert.False(await outer.AcceptAsync(contested.Handle, contested.Identity, token, "losing-result", now, CancellationToken.None));
+            Assert.Equal(1, winner.Count);
+            var retained = (await recovered.ReadAsync(contested.Handle, contested.Identity, CancellationToken.None))!;
+            Assert.Equal(acceptsFirst ? SpecialistTurnStatus.Accepted : SpecialistTurnStatus.Cancelled, retained.Status);
+            Assert.Equal(acceptsFirst ? "accepted-winner" : null, retained.ProtectedResult);
+            var retainedConversation = (await recovered.ReadConversationAsync(contested.Conversation!.ConversationId, contested.Identity, CancellationToken.None))!;
+            Assert.Equal(acceptsFirst ? 1 : 0, retainedConversation.Revision);
+            Assert.Null(retainedConversation.ActiveTurnHandle);
+        }
+
+        var transferred = RaceDocument("old-cancel-after-new-claim");
+        await recovered.StageAsync(transferred, CancellationToken.None);
+        Assert.NotNull(await recovered.ClaimAsync(transferred.Handle, transferred.Identity, "old-child", "old-fence", now, CancellationToken.None));
+        var successorIdentity = transferred.Identity with { ActivityExecutionId = "new-delivery-parent" };
+        await recovered.StageAsync(transferred with { Identity = successorIdentity, Deliveries = [new(successorIdentity)] }, CancellationToken.None);
+        var transfer = new RenewalBeforeUpdate(async cancellationToken =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            var claim = await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().ClaimAsync(transferred.Handle, successorIdentity, "new-delivery-child", "new-delivery-fence", now.AddSeconds(30), cancellationToken);
+            Assert.Equal(2, claim!.AdmissionGeneration);
+        });
+        transfer.Arm("elsa_specialist_operations");
+        await using (var host = RaceHost(transfer))
+        await using (var scope = host.CreateAsyncScope())
+        {
+            var receipt = await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().CancelAsync(CancelRequest(transferred.Identity, "old-child"), CancellationToken.None);
+            Assert.Equal(SpecialistCancellationOutcome.OtherDeliveryUnchanged, receipt.Outcome);
+            Assert.Null(receipt.AdmissionGeneration);
+            Assert.Equal(1, transfer.Count);
+        }
+        Assert.True(await recovered.DispatchAsync(transferred.Handle, successorIdentity, new("new-delivery-fence", 2), now.AddSeconds(31), CancellationToken.None));
+        Assert.True(await recovered.AcceptAsync(transferred.Handle, successorIdentity, new("new-delivery-fence", 2), "new-delivery-result", now.AddSeconds(31), CancellationToken.None));
+        await using (var host = Host())
+        await using (var scope = host.CreateAsyncScope())
+        {
+            var fresh = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+            Assert.Equal(SpecialistCancellationOutcome.CancelledBeforeAdmission, (await fresh.CancelAsync(preCancel, CancellationToken.None)).Outcome);
+            Assert.Equal("new-delivery-result", (await fresh.ReadAsync(transferred.Handle, successorIdentity, CancellationToken.None))!.ProtectedResult);
+            Assert.Equal(SpecialistCancellationOutcome.OtherDeliveryUnchanged, (await fresh.CancelAsync(CancelRequest(transferred.Identity, "old-child"), CancellationToken.None)).Outcome);
+        }
+
+        SpecialistTurnDocument RaceDocument(string name)
+        {
+            var owner = identity with { ActivityExecutionId = name, OperationKey = name };
+            return candidate with { Handle = Hash(name), Key = SpecialistTurnDocument.CalculateOperationKey(owner), Identity = owner,
+                Deliveries = [new(owner)], Conversation = new(Hash("conversation-" + name), 0) };
+        }
+        SpecialistTurnCancellation CancelRequest(SpecialistInvocationIdentity owner, string? child = null) =>
+            new(owner, child, "cancel-source:" + owner.OperationKey, Hash("cancel-" + owner.OperationKey), now.AddSeconds(1));
+        static string Hash(string value) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+        ServiceProvider RaceHost(DbCommandInterceptor interceptor)
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<IPersistenceAccessContextAccessor>(new Access());
+            services.AddDbContext<RaceContext>(options =>
+            {
+                _ = providerName switch
+                {
+                    "PostgreSql" => options.UseNpgsql(connection), "SqlServer" => options.UseSqlServer(connection),
+                    "MySql" => options.UseMySQL(connection), _ => throw new InvalidOperationException()
+                };
+                options.AddInterceptors(interceptor);
+            });
+            services.AddSpecialistTurnStore<RaceContext>();
+            return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        }
 
         async Task<SpecialistTurnDocument?> ClaimContinuation(SpecialistTurnDocument next, int index)
         {
@@ -259,15 +384,32 @@ public sealed class SpecialistJournalProviderTests
         protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.AddSpecialistsModel(Database.ProviderName!);
     }
 
+    private sealed class BeforeOperationInsert(Func<CancellationToken, Task> cancel) : DbCommandInterceptor
+    {
+        private int armed = 1;
+        public int Count { get; private set; }
+        private async ValueTask BeforeAsync(DbCommand command, CancellationToken cancellationToken)
+        {
+            if (command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) && command.CommandText.Contains("elsa_specialist_operations", StringComparison.Ordinal) &&
+                Interlocked.Exchange(ref armed, 0) == 1)
+            { await cancel(cancellationToken); Count++; }
+        }
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        { await BeforeAsync(command, cancellationToken); return result; }
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        { await BeforeAsync(command, cancellationToken); return result; }
+    }
+
     private sealed class RenewalBeforeUpdate(Func<CancellationToken, Task> renew) : DbCommandInterceptor
     {
         private int armed;
+        private string table = "elsa_specialist_turns";
         public int Count { get; private set; }
-        public void Arm() => Volatile.Write(ref armed, 1);
+        public void Arm(string targetTable = "elsa_specialist_turns") { table = targetTable; Volatile.Write(ref armed, 1); }
         public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && command.CommandText.Contains("elsa_specialist_turns", StringComparison.Ordinal) &&
+            if (command.CommandText.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && command.CommandText.Contains(table, StringComparison.Ordinal) &&
                 Interlocked.Exchange(ref armed, 0) == 1)
             {
                 await renew(cancellationToken);

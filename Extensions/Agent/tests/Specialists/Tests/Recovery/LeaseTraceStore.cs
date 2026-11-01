@@ -8,7 +8,15 @@ namespace Elsa.Agent.Specialists.Tests.Recovery;
 
 internal sealed class LeaseTrace
 {
+    internal Func<ValueTask>? AfterReserved { get; set; }
+    internal Func<ValueTask>? AfterDispatched { get; set; }
+    internal Func<ValueTask>? AfterClaimed { get; set; }
     internal Func<ValueTask>? AfterAcceptedRead { get; set; }
+    internal bool HoldCancellation { get; set; }
+    internal bool LoseCancellationResponse { get; init; }
+    internal int CancellationAttempts;
+    internal int CancellationResponsesLost;
+    internal ConcurrentQueue<SpecialistCancellationReceipt> Cancellations { get; } = new();
     internal bool HoldApplication { get; set; }
     internal bool LoseApplicationResponse { get; init; }
     internal int ApplicationAttempts;
@@ -59,7 +67,12 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         return document;
     }
     public ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken) => inner.ReadConversationAsync(conversationId, identity, cancellationToken);
-    public ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken) => inner.ClaimAsync(handle, identity, childInvocationId, fence, now, cancellationToken);
+    public async ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var claimed = await inner.ClaimAsync(handle, identity, childInvocationId, fence, now, cancellationToken);
+        if (claimed is not null && trace.AfterClaimed is { } callback) await callback();
+        return claimed;
+    }
     public async ValueTask<SpecialistTurnDocument?> ApplyAsync(string handle, SpecialistTurnApplication application, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref trace.ApplicationAttempts);
@@ -68,6 +81,16 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         if (result is not null && trace.LoseApplicationResponse && Interlocked.Increment(ref trace.ApplicationResponsesLost) == 1)
             throw new IOException("The committed settlement acknowledgement was lost.");
         return result;
+    }
+    public async ValueTask<SpecialistCancellationReceipt> CancelAsync(SpecialistTurnCancellation cancellation, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref trace.CancellationAttempts);
+        if (trace.HoldCancellation) throw new IOException("Cancellation delivery failed before its journal write.");
+        var receipt = await inner.CancelAsync(cancellation, cancellationToken);
+        trace.Cancellations.Enqueue(receipt);
+        if (trace.LoseCancellationResponse && Interlocked.Increment(ref trace.CancellationResponsesLost) == 1)
+            throw new IOException("The committed cancellation acknowledgement was lost.");
+        return receipt;
     }
     public async ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -85,11 +108,18 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         if (result is not null && trace.AfterReplayBound is { } callback) await callback(identity);
         return result;
     }
-    public ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken) => inner.DispatchAsync(handle, identity, lease, now, cancellationToken);
-    public ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
+    public async ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var dispatched = await inner.DispatchAsync(handle, identity, lease, now, cancellationToken);
+        if (dispatched && trace.AfterDispatched is { } callback) await callback();
+        return dispatched;
+    }
+    public async ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
     {
         trace.Sends.Enqueue((id, contextId));
-        return inner.ReserveModelRequestAsync(handle, identity, lease, reservation, now, cancellationToken);
+        var admitted = await inner.ReserveModelRequestAsync(handle, identity, lease, reservation, now, cancellationToken);
+        if (admitted is not null && trace.AfterReserved is { } callback) await callback();
+        return admitted;
     }
     public ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, IReadOnlyList<string> requestIds, SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken) => inner.CompleteModelResponseAsync(handle, identity, lease, requestIds, observation, now, cancellationToken);
     public async ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken)

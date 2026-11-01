@@ -56,6 +56,42 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                     b.ToTable("elsa_specialist_conversations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistOperationRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("OperationKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("json");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ScopeKey", "OperationKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_specialist_operations", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistTurnRecord", b =>
                 {
                     b.Property<string>("ScopeKey")

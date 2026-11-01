@@ -59,6 +59,21 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                 });
 
             migrationBuilder.CreateTable(
+                name: "elsa_specialist_operations",
+                columns: table => new
+                {
+                    ScopeKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    OperationKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
+                    Payload = table.Column<string>(type: "TEXT", nullable: false),
+                    Version = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_specialist_operations", x => new { x.ScopeKey, x.OperationKey });
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_specialist_turns",
                 columns: table => new
                 {
@@ -93,6 +108,11 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_specialist_operations_SchemaVersion",
+                table: "elsa_specialist_operations",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_specialist_turns_SchemaVersion",
                 table: "elsa_specialist_turns",
                 column: "SchemaVersion");
@@ -115,6 +135,9 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
 
             migrationBuilder.DropTable(
                 name: "elsa_specialist_conversations");
+
+            migrationBuilder.DropTable(
+                name: "elsa_specialist_operations");
 
             migrationBuilder.DropTable(
                 name: "elsa_specialist_turns");

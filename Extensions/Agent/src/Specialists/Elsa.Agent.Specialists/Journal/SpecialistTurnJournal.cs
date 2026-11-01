@@ -32,6 +32,8 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
                 Conversation = request.Descriptor.AllowContinuity ? request.Continuation ?? new(handle, 0) : null,
                 DeliveryProtocol = 1, Deliveries = [new(request.Identity)] };
         try { return (await store.StageAsync(candidate, cancellationToken)).Handle; }
+        catch (SpecialistJournalException exception) when (exception.Code == "specialist.journal.cancelled")
+        { throw Failure("specialist.turn.cancelled", "This native parent has a retained cancellation and cannot admit another model turn.", exception); }
         catch (SpecialistJournalException exception) when (exception.Code == "specialist.journal.conflict")
         {
             throw Failure("specialist.turn.conflict", "The native retry does not match the retained operation fingerprint or supported delivery protocol.", exception);
@@ -85,6 +87,8 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         var claimed = await store.ClaimAsync(handle, identity, childInvocationId, Guid.NewGuid().ToString("N"), now, cancellationToken);
         if (claimed is not null) return claimed;
         var current = await store.ReadAsync(handle, identity, cancellationToken);
+        if (current?.Status == SpecialistTurnStatus.Cancelled)
+            throw Failure("specialist.turn.cancelled", "The retained operation was cancelled; the same operation cannot silently create another provider request.");
         if (current?.Status == SpecialistTurnStatus.Failed)
             throw Failure("specialist.turn.rejected", "The earlier specialist operation was rejected; the same operation cannot silently create another provider request.");
         if (current?.Status == SpecialistTurnStatus.OutcomeUnknown)

@@ -14,12 +14,13 @@ their owning contracts remain in the respective Core packages.
 | Activities.Runtime.Core `IActivityActivationStrategy` | `SpecialistActivationStrategy` | Scoped enumerable contribution for the pinned specialist facade/model-turn consumer |
 | Activities.Runtime.Core `IRuntimeActivityConsumerCapability` | `SpecialistConsumerCapability` | Singleton enumerable contribution advertising supported pinned descriptor schemas |
 | Tasks.Core `IStartupTask` | `SpecialistTypesStartupTask`, `SpecialistJournalRegistrationStartupTask` | Registers native types and refuses missing/duplicate journal backends at activation |
-| Workflows.Runtime.Core `IRuntimeCheckpointCommitEnricher` | `SpecialistCheckpointEnricher` | Scoped enumerable contribution in default phase0; contributes deterministic application responsibility, then validates the final checkpoint envelope; no specialist-store writes during enrichment |
-| Workflows.Runtime.Core `IRuntimePostCommitDurableSourceIntentHandler` | `SpecialistSettlementHandler` | Scoped keyed contribution for `elsa.specialist.applied/1`, registered through `AddRuntimePostCommitIntentHandler` with a required physical source and retry-until-acknowledged policy; verifies native/receipt authority before idempotent journal metadata settlement |
+| Workflows.Runtime.Core `IRuntimeCheckpointCommitEnricher` | `SpecialistCheckpointEnricher` | Scoped enumerable contribution in default phase0; contributes deterministic application/cancellation responsibility, then validates the final checkpoint envelope; no specialist-store writes during enrichment |
+| Workflows.Runtime.Core `IRuntimePostCommitDurableSourceIntentHandler` | `SpecialistSettlementHandler` | Scoped keyed contribution for `elsa.specialist.applied/1` and `elsa.specialist.cancel/1`, registered through `AddRuntimePostCommitIntentHandler` with a required physical source and retry-until-acknowledged policy; verifies native/receipt authority before idempotent journal metadata settlement |
 
 The last two contributions use the [owning Workflows.Runtime catalog](../../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
-Application settlement preserves accepted history. Cancellation/tombstones, retention and complete
-independent-process durable runtime/outbox qualification remain M3 obligations.
+Application and cancellation settlement preserve accepted history and distinguish process application
+from journal acceptance. Retention and complete independent-process durable runtime/outbox qualification
+remain M3 obligations.
 
 Checkpoint and settlement failures preserve their original cause in the specialist-domain exception,
 with `contextId` and `workflowExecutionId` identifying the checkpoint or exact source. Native source

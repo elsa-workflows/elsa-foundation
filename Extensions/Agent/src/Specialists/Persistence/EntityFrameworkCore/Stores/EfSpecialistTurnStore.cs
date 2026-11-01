@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Stores;
 
-internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAccessContextAccessor access) : ISpecialistTurnStore
+internal sealed partial class EfSpecialistTurnStore(DbContext context, IPersistenceAccessContextAccessor access) : ISpecialistTurnStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { MaxDepth = 32 };
     private static readonly UTF8Encoding Utf8 = new(false, true);
@@ -82,12 +82,16 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
                 {
                     await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
                     var owned = transaction.Context<DbContext>();
+                    var operation = await LockOperationAsync(owned, scope, candidate.Identity, cancellationToken);
+                    if (operation is null) continue;
+                    if (SpecialistOperationRules.Cancelled(operation.Value.Document, candidate.Identity))
+                        throw new SpecialistJournalException("specialist.journal.cancelled", null, "This native parent was cancelled before admission.", new InvalidOperationException("A retained cancellation blocks this delivery."));
                     var existing = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
                     if (existing is not null)
                     {
                         var before = Read(existing);
                         var next = Replay(before, candidate);
-                        if (ReferenceEquals(before, next)) return Clone(before);
+                        if (ReferenceEquals(before, next)) { await transaction.CommitAsync(cancellationToken); return Clone(before); }
                         Validate(next);
                         var changed = await owned.Set<SpecialistTurnRecord>().Where(x => x.ScopeKey == scope && x.Handle == existing.Handle &&
                             x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == existing.Version)
@@ -101,6 +105,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
                     await transaction.CommitAsync(cancellationToken);
                     return Clone(candidate);
                 }
+                catch (OperationGateRaceException) { /* A confirmed competing gate insert; reopen in a fresh transaction. */ }
                 catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
                 {
                     // A confirmed competing insert has no inference effect. Register this exact
@@ -141,7 +146,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             document => document with { Status = SpecialistTurnStatus.OutcomeUnknown, FailureCode = "specialist.turn.outcome-unknown" }, cancellationToken);
         return await ChangeAsync(handle, identity, now, requireDeadline: true,
             document => SpecialistTurnLeaseRules.CanClaim(document, identity, childInvocationId, now),
-            document => SpecialistTurnLeaseRules.Claim(document, identity, childInvocationId, fence, now), cancellationToken);
+            document => SpecialistTurnLeaseRules.Claim(document, identity, childInvocationId, fence, now), cancellationToken, claimOperation: true);
     }
 
     public ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken) =>
@@ -230,7 +235,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
     }
 
     private async ValueTask<SpecialistTurnDocument?> ChangeAsync(string handle, SpecialistInvocationIdentity identity, DateTimeOffset now, bool requireDeadline,
-        Func<SpecialistTurnDocument, bool> admits, Func<SpecialistTurnDocument, SpecialistTurnDocument> change, CancellationToken cancellationToken, bool changeConversation = true)
+        Func<SpecialistTurnDocument, bool> admits, Func<SpecialistTurnDocument, SpecialistTurnDocument> change, CancellationToken cancellationToken, bool changeConversation = true, bool claimOperation = false)
     {
         try
         {
@@ -238,55 +243,66 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             Token(handle);
             for (var attempt = 0; attempt < 32; attempt++)
             {
-                await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
-                var owned = transaction.Context<DbContext>();
-                var row = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Handle == handle, cancellationToken);
-                if (row is null) return null;
-                var before = Read(row);
-                if (!SpecialistTurnDeliveryRules.Admits(before, identity) || !admits(before) || requireDeadline && before.Deadline <= now) return null;
-                var next = change(before);
-                Validate(next);
-                SpecialistConversationRecord? conversationRow = null;
-                SpecialistConversationDocument? conversationNext = null;
-                if (changeConversation && before.Conversation is { } admission)
+                try
                 {
-                    conversationRow = await owned.Set<SpecialistConversationRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Id == admission.ConversationId, cancellationToken);
-                    conversationNext = SpecialistConversationRules.Change(before, next, conversationRow is null ? null : ReadConversation(conversationRow));
-                    if (conversationNext is null) return null;
-                    SpecialistConversationRules.Validate(conversationNext);
-                }
-                var payload = Serialize(next);
-                var ticks = now.UtcTicks;
-                var changed = await owned.Set<SpecialistTurnRecord>().Where(x => x.ScopeKey == scope && x.Handle == handle &&
-                    x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == row.Version && x.Status == row.Status && x.Fence == row.Fence &&
-                    (!requireDeadline || x.DeadlineUtcTicks > ticks))
-                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, row.Version + 1).SetProperty(x => x.Status, (int)next.Status)
-                        .SetProperty(x => x.Fence, next.Fence).SetProperty(x => x.Payload, payload), cancellationToken);
-                if (changed != 1) continue;
-                if (conversationNext is not null)
-                {
-                    var conversationPayload = JsonSerializer.Serialize(conversationNext, Json);
-                    if (conversationRow is null)
+                    await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
+                    var owned = transaction.Context<DbContext>();
+                    if (claimOperation)
                     {
-                        owned.Set<SpecialistConversationRecord>().Add(new() { ScopeKey = scope, Id = conversationNext.Id,
-                            SchemaVersion = SpecialistsEfModule.SchemaVersion, Payload = conversationPayload });
-                        await owned.SaveChangesAsync(cancellationToken);
+                        var operation = await LockOperationAsync(owned, scope, identity, cancellationToken);
+                        if (operation is null) continue;
+                        if (SpecialistOperationRules.Cancelled(operation.Value.Document, identity)) return null;
                     }
-                    else
+                    var row = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Handle == handle, cancellationToken);
+                    if (row is null) return null;
+                    var before = Read(row);
+                    if (!SpecialistTurnDeliveryRules.Admits(before, identity) || !admits(before) || requireDeadline && before.Deadline <= now) return null;
+                    var next = change(before);
+                    Validate(next);
+                    SpecialistConversationRecord? conversationRow = null;
+                    SpecialistConversationDocument? conversationNext = null;
+                    if (changeConversation && before.Conversation is { } admission)
                     {
-                        var conversationChanged = await owned.Set<SpecialistConversationRecord>().Where(x => x.ScopeKey == scope && x.Id == conversationRow.Id &&
-                            x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == conversationRow.Version)
-                            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, conversationRow.Version + 1).SetProperty(x => x.Payload, conversationPayload), cancellationToken);
-                        // Disposing this uncommitted transaction also rolls back the preceding turn CAS.
-                        if (conversationChanged != 1) continue;
+                        conversationRow = await owned.Set<SpecialistConversationRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Id == admission.ConversationId, cancellationToken);
+                        conversationNext = SpecialistConversationRules.Change(before, next, conversationRow is null ? null : ReadConversation(conversationRow));
+                        if (conversationNext is null) return null;
+                        SpecialistConversationRules.Validate(conversationNext);
                     }
+                    var payload = Serialize(next);
+                    var ticks = now.UtcTicks;
+                    var changed = await owned.Set<SpecialistTurnRecord>().Where(x => x.ScopeKey == scope && x.Handle == handle &&
+                        x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == row.Version && x.Status == row.Status && x.Fence == row.Fence &&
+                        (!requireDeadline || x.DeadlineUtcTicks > ticks))
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, row.Version + 1).SetProperty(x => x.Status, (int)next.Status)
+                            .SetProperty(x => x.Fence, next.Fence).SetProperty(x => x.Payload, payload), cancellationToken);
+                    if (changed != 1) continue;
+                    if (conversationNext is not null)
+                    {
+                        var conversationPayload = JsonSerializer.Serialize(conversationNext, Json);
+                        if (conversationRow is null)
+                        {
+                            owned.Set<SpecialistConversationRecord>().Add(new() { ScopeKey = scope, Id = conversationNext.Id,
+                                SchemaVersion = SpecialistsEfModule.SchemaVersion, Payload = conversationPayload });
+                            await owned.SaveChangesAsync(cancellationToken);
+                        }
+                        else
+                        {
+                            var conversationChanged = await owned.Set<SpecialistConversationRecord>().Where(x => x.ScopeKey == scope && x.Id == conversationRow.Id &&
+                                x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == conversationRow.Version)
+                                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, conversationRow.Version + 1).SetProperty(x => x.Payload, conversationPayload), cancellationToken);
+                            // Disposing this uncommitted transaction also rolls back the preceding turn CAS.
+                            if (conversationChanged != 1) continue;
+                        }
+                    }
+                    await transaction.CommitAsync(cancellationToken);
+                    return next;
                 }
-                await transaction.CommitAsync(cancellationToken);
-                return next;
+                catch (OperationGateRaceException) { /* A confirmed competing gate insert; retry only this metadata admission. */ }
             }
             return null;
         }
         catch (OperationCanceledException) { throw; }
+        catch (SpecialistJournalException) { throw; }
         catch (Exception exception) { throw Failure(exception, handle); }
     }
 

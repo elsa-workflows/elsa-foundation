@@ -81,9 +81,9 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    access, protected turn/conversation journals, physical request reservations, explicit native
    continuation, finite generation-fenced leases, authenticated caller-lowered execution bounds and
    matching-operation/native-delivery replay, confirmed acceptance-acknowledgement recovery and
-   native checkpoint/outbox application settlement. These are draft increments with separate source,
+   native checkpoint/outbox application/cancellation settlement and pre-admission tombstones. These are draft increments with separate source,
    provider and bounded package receipts on the owning issue; whole-M3 delivery still requires
-   native cancellation/tombstones, retention/compatibility,
+   retention/compatibility and complete native recovery,
    streaming and complete support qualification.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and

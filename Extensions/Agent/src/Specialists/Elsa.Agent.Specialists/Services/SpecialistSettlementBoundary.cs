@@ -7,11 +7,14 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Agent.Specialists.Services;
 
+internal sealed record SpecialistCancelledPayload(int Version, SpecialistInvocationIdentity Identity, string? ChildInvocationId, DateTimeOffset CancelledAt);
+
 internal sealed record SpecialistAppliedPayload(int Version, string Handle, SpecialistInvocationIdentity Identity, string ChildInvocationId, DateTimeOffset AppliedAt);
 
 internal sealed class SpecialistSettlementBoundary(IWorkflowExecutionStateStore workflows, IActivityExecutionStateStore activities,
     IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access)
 {
+    internal const string CancelKind = "elsa.specialist.cancel/1";
     internal const string AppliedKind = "elsa.specialist.applied/1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
 
@@ -52,6 +55,39 @@ internal sealed class SpecialistSettlementBoundary(IWorkflowExecutionStateStore 
             acceptedChild.Provenance.Metadata.GetValueOrDefault(SpecialistNativeBinding.TurnHandleMetadataKey) != handle)
             throw Invalid();
         return new(1, handle, identity, acceptedChild.InvocationId, appliedAt);
+    }
+
+    internal async ValueTask<SpecialistCancelledPayload> CancelledAsync(WorkflowExecutionState workflow, ActivityExecutionState parent,
+        ExecutableNode node, CancellationToken cancellationToken)
+    {
+        if (parent.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Superseded ||
+            workflow.Status != WorkflowExecutionStatus.Cancelled && parent.Status != ActivityExecutionStatus.Cancelled) throw Invalid();
+        var times = new List<DateTimeOffset>();
+        if (parent.Status == ActivityExecutionStatus.Cancelled) times.Add(parent.CompletedAt ?? throw Invalid());
+        if (workflow.Status == WorkflowExecutionStatus.Cancelled) times.Add(workflow.CompletedAt ?? throw Invalid());
+        var identity = SpecialistNativeBinding.CancellationIdentity(workflow, parent, node);
+        var worker = SpecialistNativeBinding.ChildNode(node);
+        string? childId = null;
+        string? continuation = null;
+        do
+        {
+            var page = await activities.ListByParentPageAsync(new(workflow.WorkflowExecutionId, parent.InvocationId, continuationToken: continuation), cancellationToken);
+            foreach (var child in page.Items.Where(item => item.Execution.ExecutableNodeId == worker.ExecutableNodeId))
+            {
+                if (childId is not null || child.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId || child.ParentActivityExecutionId != parent.InvocationId) throw Invalid();
+                childId = child.InvocationId;
+            }
+            if (page.NextContinuationToken is not null && page.NextContinuationToken == continuation) throw Invalid();
+            continuation = page.NextContinuationToken;
+        } while (continuation is not null);
+        return new(1, identity, childId, times.Min());
+    }
+
+    internal static RuntimePostCommitIntent Intent(SpecialistCancelledPayload payload)
+    {
+        var value = JsonSerializer.SerializeToElement(payload, Json);
+        var key = "specialist-cancel:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload, Json))).ToLowerInvariant();
+        return new(key, payload.Identity.WorkflowExecutionId, CancelKind, payload.CancelledAt, payload.Identity.ActivityExecutionId, key, value);
     }
 
     internal static RuntimePostCommitIntent Intent(SpecialistAppliedPayload payload)

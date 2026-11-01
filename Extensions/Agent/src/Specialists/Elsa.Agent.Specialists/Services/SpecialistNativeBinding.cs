@@ -106,6 +106,19 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
             workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
     }
 
+    internal static SpecialistInvocationIdentity CancellationIdentity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
+    {
+        var descriptor = Descriptor(node);
+        if (state.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId || state.Execution.ExecutableNodeId != node.ExecutableNodeId ||
+            state.ContractIdentity is { } contract && contract.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint ||
+            state.InputSnapshot is { } input && (input.InvocationId != state.InvocationId || input.ContractFingerprint != node.ActivityContract!.SchemaFingerprint))
+            throw Failure();
+        // Cancellation also covers a scheduled invocation whose input snapshot/staged handle does
+        // not exist yet. It grants no permission to infer, and never weakens normal entry/worker checks.
+        return new(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, state.InvocationId, state.OperationKey,
+            workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+    }
+
     private static bool Stamped(ExecutableNode node, string key, string? value) =>
         !string.IsNullOrWhiteSpace(value) && node.Metadata.TryGetValue("activity." + key, out var actual) && actual == value;
     private static SpecialistTurnException Failure(Exception? innerException = null) => SpecialistModelRunner.Failure("specialist.native.binding", "The specialist request does not match the committed native execution and artifact.", innerException);

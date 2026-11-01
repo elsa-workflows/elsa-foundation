@@ -467,3 +467,47 @@ Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Applications.init -> v
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Applications.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication!>?
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.ChildInvocationId.get -> string!
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.ChildInvocationId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome.CancelledBeforeAdmission = 0 -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome.Cancelled = 1 -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome.AlreadyTerminal = 3 -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome.AlreadyAccepted = 2 -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome.OtherDeliveryUnchanged = 4 -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.Identity.get -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.ChildInvocationId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.SourceId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.SourceFingerprint.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.Identity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.CancelledAt.get -> System.DateTimeOffset
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.ChildInvocationId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.SourceId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.SourceFingerprint.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.CancelledAt.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Cancellation.get -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation!
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Outcome.get -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.AdmissionGeneration.get -> int?
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Cancellation.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Outcome.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.AdmissionGeneration.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Cancelled = 6 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.ToString() -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation? right) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt? left, Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt? right) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.GetHashCode() -> int
+static Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt? left, Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt? right) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.GetHashCode() -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation? other) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Equals(object? obj) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation!
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.Deconstruct(out Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, out string? ChildInvocationId, out string! SourceId, out string! SourceFingerprint, out System.DateTimeOffset CancelledAt) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt!
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.Deconstruct(out Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation! Cancellation, out Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome Outcome, out int? AdmissionGeneration) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation.SpecialistTurnCancellation(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, string? ChildInvocationId, string! SourceId, string! SourceFingerprint, System.DateTimeOffset CancelledAt) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt.SpecialistCancellationReceipt(Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation! Cancellation, Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome Outcome, int? AdmissionGeneration) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistCancellationOutcome
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.CancelAsync(Elsa.Agent.Specialists.Core.Models.SpecialistTurnCancellation! cancellation, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistCancellationReceipt!>

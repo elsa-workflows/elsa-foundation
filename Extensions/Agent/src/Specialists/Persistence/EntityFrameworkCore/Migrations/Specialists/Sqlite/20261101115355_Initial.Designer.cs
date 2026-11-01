@@ -7,45 +7,40 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.PostgreSql
+namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Specialists.Sqlite
 {
-    [DbContext(typeof(SpecialistsPostgreSqlDbContext))]
-    [Migration("20261101070734_Initial")]
+    [DbContext(typeof(SpecialistsSqliteDbContext))]
+    [Migration("20261101115355_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
             modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistConversationRecord", b =>
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("jsonb");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKey", "Id");
 
@@ -54,48 +49,73 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                     b.ToTable("elsa_specialist_conversations", (string)null);
                 });
 
-            modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistTurnRecord", b =>
+            modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistOperationRecord", b =>
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
-
-                    b.Property<string>("Handle")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
-
-                    b.Property<long>("DeadlineUtcTicks")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Fence")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKey")
-                        .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("jsonb");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .UseCollation("C");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ScopeKey", "OperationKey");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_specialist_operations", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Entities.SpecialistTurnRecord", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Handle")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DeadlineUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Fence")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKey", "Handle");
 
@@ -110,18 +130,17 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -134,46 +153,44 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Family");
 

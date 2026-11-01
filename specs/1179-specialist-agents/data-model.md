@@ -244,3 +244,28 @@ original legacy delivery. Equivalent notifications are idempotent; source confli
 request/result/session, budget/usage and conversation ownership/revision are unchanged. No relational
 model change is required. This is source-native application settlement; cancellation/tombstones,
 retention and complete durable runtime/outbox package qualification remain open.
+
+### Implemented cancellation/operation-gate increment (M3 remains open)
+
+`elsa_specialist_operations` retains full logical pins and up to64 exact-parent cancellation decisions,
+including pre-admission tombstones with no fake protected turn. Memory uses its existing lock; EF Stage,
+Claim and Cancel serialize on this row before changing the turn. Confirmed gate CAS/insert conflicts can
+retry; an uncertain commit cannot. Turn CAS decides acceptance versus cancellation. A cancelled old
+parent does not invalidate another delivery's generation. Unknown ownership can be explicitly released
+without changing the previous accepted reference or a later turn's owner. Reservations remain retained.
+
+The native producer contributes/final-validates deterministic cancel responsibility for cancelled
+facades, including scheduled pre-entry state without inputs/private handle. The source-owned handler
+reopens the physical outbox claim in ordinary scope, validates exact committed native cancellation and
+canonical payload, then rechecks the physical claim before Cancel. The receipt distinguishes
+CancelledBeforeAdmission, Cancelled, AlreadyAccepted, AlreadyTerminal and OtherDeliveryUnchanged.
+Equivalent native responsibility keeps its first source; changed canonical content conflicts.
+
+A delayed cancel notification cannot be the only pre-dispatch guard. Native binding is rechecked after
+journal dispatch before client construction and before/after each physical reservation. Four red cases
+reproduced the original after-claim notification-delay gap; the expanded native suite closes it while
+retaining already-admitted exposure. This does not promise an atomic remote-model cancellation.
+
+The four module Initial migrations were regenerated under the pre-GA policy. Source/native/database
+receipts and complete qualification are separate; this change alone does not establish deployed-data
+upgrade compatibility, independent-process durable runtime/outbox recovery or complete M3 acceptance.

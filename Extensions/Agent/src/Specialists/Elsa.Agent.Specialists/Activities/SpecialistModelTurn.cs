@@ -63,7 +63,8 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
                 if (!await journal.DispatchAsync(document, time.GetUtcNow(), active.Token))
                     throw SpecialistModelRunner.Failure("specialist.turn.fence", "The specialist turn cannot dispatch under this worker lease.");
                 dispatched = true;
-                var result = await runner.RunAsync(request, active.Token, budgets.Create(document, request));
+                await VerifyCurrentBindingAsync(active.Token);
+                var result = await runner.RunAsync(request, active.Token, budgets.Create(document, request, VerifyCurrentBindingAsync));
                 renewal.ThrowIfLost();
                 await VerifyCurrentBindingAsync(active.Token);
                 acceptanceStarted = true;

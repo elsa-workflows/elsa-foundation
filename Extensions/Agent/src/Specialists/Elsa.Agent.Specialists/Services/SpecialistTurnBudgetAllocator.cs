@@ -7,17 +7,17 @@ namespace Elsa.Agent.Specialists.Services;
 
 internal sealed class SpecialistTurnBudgetAllocator(ISpecialistTurnStore store, TimeProvider time)
 {
-    internal SpecialistTurnBudgetAuthority Create(SpecialistTurnDocument document, SpecialistTurnRequest request)
+    internal SpecialistTurnBudgetAuthority Create(SpecialistTurnDocument document, SpecialistTurnRequest request, Func<CancellationToken, ValueTask>? verifyNative = null)
     {
         var limits = SpecialistEffectiveLimits.For(request);
         if (!SpecialistTurnDeliveryRules.OwnsClaim(document, request.Identity) || document.MaximumModelCalls != limits.MaximumModelCalls || document.Fence is null || document.AdmissionGeneration < 1 || document.LeaseExpiresAt is null)
             throw SpecialistModelRunner.Failure("specialist.budget.binding", "The request budget does not match the admitted native turn.");
-        return new(store, time, document, request.Descriptor, limits);
+        return new(store, time, document, request.Descriptor, limits, verifyNative);
     }
 }
 
 internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, TimeProvider time, SpecialistTurnDocument document,
-    SpecialistRuntimeDescriptor descriptor, SpecialistTurnLimits? effectiveLimits = null) : ISpecialistModelDispatchAuthority
+    SpecialistRuntimeDescriptor descriptor, SpecialistTurnLimits? effectiveLimits = null, Func<CancellationToken, ValueTask>? verifyNative = null) : ISpecialistModelDispatchAuthority
 {
     private int maximumOutputTokens;
     private int reservations;
@@ -49,7 +49,11 @@ internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, 
         await admission.WaitAsync(cancellationToken);
         try
         {
+            if (verifyNative is not null) await verifyNative(cancellationToken);
             await ReserveAsync(observation, cancellationToken);
+            // A native cancellation can commit while reservation I/O is in progress. Recheck
+            // immediately before giving the provider permission to send; retain any reservation.
+            if (verifyNative is not null) await verifyNative(cancellationToken);
         }
         finally { admission.Release(); }
     }

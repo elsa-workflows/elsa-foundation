@@ -24,13 +24,14 @@ internal static class SpecialistTurnDocumentRules
         }
         if (document.Key != SpecialistTurnDocument.CalculateOperationKey(document.Identity))
             throw new InvalidDataException("The specialist operation key does not match its native scope and operation.");
+        var unclaimed = document.Status == SpecialistTurnStatus.Prepared || document.Status == SpecialistTurnStatus.Cancelled && document.AdmissionGeneration == 0;
         if (!Enum.IsDefined(document.Status) || string.IsNullOrWhiteSpace(document.ProtectedRequest) ||
             document.Status == SpecialistTurnStatus.Accepted && string.IsNullOrWhiteSpace(document.ProtectedResult) ||
             document.Status != SpecialistTurnStatus.Accepted && document.ProtectedResult is not null ||
-            document.Status == SpecialistTurnStatus.Prepared && (document.ChildInvocationId is not null || document.Fence is not null) ||
-            document.Status != SpecialistTurnStatus.Prepared && (string.IsNullOrWhiteSpace(document.ChildInvocationId) || string.IsNullOrWhiteSpace(document.Fence)) ||
-            document.Status is SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown && string.IsNullOrWhiteSpace(document.FailureCode) ||
-            document.Status is not (SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown) && document.FailureCode is not null)
+            unclaimed && (document.ChildInvocationId is not null || document.Fence is not null) ||
+            !unclaimed && (string.IsNullOrWhiteSpace(document.ChildInvocationId) || string.IsNullOrWhiteSpace(document.Fence)) ||
+            document.Status is SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown or SpecialistTurnStatus.Cancelled && string.IsNullOrWhiteSpace(document.FailureCode) ||
+            document.Status is not (SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown or SpecialistTurnStatus.Cancelled) && document.FailureCode is not null)
             throw new InvalidDataException("The specialist journal lifecycle record is invalid.");
         SpecialistTurnDeliveryRules.Validate(document);
         SpecialistTurnApplicationRules.Validate(document);

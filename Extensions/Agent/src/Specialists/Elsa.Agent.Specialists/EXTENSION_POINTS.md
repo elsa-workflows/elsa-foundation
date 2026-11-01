@@ -134,6 +134,29 @@ no model request or accepted session transition is repeated. Source-native tests
 Durable modes with Memory/SQLite journals, including failure before write and lost acknowledgement.
 This increment does not yet qualify an independent-process durable runtime/outbox package host.
 
-Cancellation dispositions, pre-admission tombstones and retention are still required by T021–T023.
+Cancellation checkpoints contribute `elsa.specialist.cancel/1` with exact native parent, optional
+scheduled model child, pinned workflow/artifact/specialist identity and native cancellation time.
+Scheduled pre-entry state requires neither a materialized input snapshot nor a staged protected handle.
+The required-source handler independently verifies physical source/current claim and committed native
+cancellation before the neutral journal command, then rechecks source authority before mutation.
+AlreadyAccepted preserves the immutable pair and separately records native cancellation; no notification
+claims provider interruption or effect rollback. Equivalent responsibility retains its first source.
+
+The operation gate blocks delayed admission of a cancelled parent while preserving a different
+registered delivery/generation. Matching uncertainty can be explicitly cancelled without rewinding
+accepted history or releasing a newer unrelated conversation owner. Late worker failure/response writes
+cannot replace a cancellation winner. Reservation/usage evidence remains retained.
+
+Native current-state checks also run after journal dispatch before constructing a model client, and
+before/after each physical reservation. Cancellation can commit while its outbox notification is delayed;
+these checks refuse known cancelled/native-invalid work without waiting for journal settlement. A native
+cancellation can still race a last check or arrive after an admitted provider request. Already admitted
+exposure is retained; this is not an atomic transaction with a remote model or a guaranteed interruption.
+
+Source-native tests cover before claim, after claim, after dispatch responsibility, after reservation,
+during an admitted request and after acceptance, including delayed/failed notification and lost
+acknowledgement in Balanced/Durable modes with Memory/SQLite journals. A separately seeded pre-entry
+occurrence exercises real actor/checkpoint/outbox cancellation before a delayed first Stage. It is not
+M4 authoring qualification. Retention and complete recovery/upgrade qualification remain T022–T023 work.
 A committed but unreadable receipt can still leave native work faulted; this remains distinct from
 confirmed recovery and from the qualified facade-read operator retry path.

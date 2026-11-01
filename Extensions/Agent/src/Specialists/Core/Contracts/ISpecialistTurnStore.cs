@@ -31,6 +31,9 @@ public interface ISpecialistTurnStore
     /// <summary>Records one exact accepted native delivery's process application without changing conversation history. Equivalent replay is idempotent; conflicting sources refuse.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistTurnDocument?> ApplyAsync(string handle, SpecialistTurnApplication application, CancellationToken cancellationToken);
+    /// <summary>Atomically records exact-native-parent cancellation, including before turn staging. Accepted history and other deliveries are preserved.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record, source-conflict or scope failure, retaining its cause.</exception>
+    ValueTask<SpecialistCancellationReceipt> CancelAsync(SpecialistTurnCancellation cancellation, CancellationToken cancellationToken);
     /// <summary>Renews a current live claim/dispatch lease without extending the original operation deadline.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken);

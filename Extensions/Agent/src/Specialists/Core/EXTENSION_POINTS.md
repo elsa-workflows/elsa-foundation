@@ -86,8 +86,15 @@ credential durability or end-to-end recovery qualification. `ApplyAsync` records
 native delivery's application as copied metadata, using `SpecialistTurnApplication` source facts.
 Equivalent sources are idempotent, conflicts refuse, and protected result/session and conversation
 state are preserved. The runtime consumer verifies physical native source authority before calling
-this neutral port. Native cancellation, hard input/total-token accounting, retention and complete
-recovery qualification remain separate M3 work.
+this neutral port. `CancelAsync` records an exact native-parent cancellation and returns a retained decision:
+CancelledBeforeAdmission, Cancelled, AlreadyAccepted, AlreadyTerminal or OtherDeliveryUnchanged.
+The backend must serialize staging and pre-dispatch takeover against that parent's tombstone, including
+when no protected turn exists yet. The cancellation consumer supplies verified source facts; they grant
+no authority by themselves. The first equivalent source is retained and changed canonical content
+refuses. Cancelling the current unaccepted delivery invalidates later writes, releases its exact
+conversation owner without advancing history, and retains request reservations/observations. Accepted
+pairs, other deliveries and later conversation owners remain unchanged. Hard input/total-token
+accounting, retention and complete recovery qualification remain separate M3 work.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.

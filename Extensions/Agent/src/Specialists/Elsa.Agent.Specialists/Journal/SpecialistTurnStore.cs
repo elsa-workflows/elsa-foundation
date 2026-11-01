@@ -9,6 +9,7 @@ internal sealed class InMemorySpecialistTurnState
 {
     public Lock Gate { get; } = new();
     public Dictionary<string, SpecialistTurnDocument> Rows { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, SpecialistOperationDocument> Operations { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
     public Dictionary<(string? Tenant, string Partition, string Id), SpecialistConversationDocument> Conversations { get; } = new();
 }
@@ -33,6 +34,9 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         ValidateRecord(candidate, prepared: true);
         lock (gate)
         {
+            var operation = Operation(candidate.Identity);
+            if (SpecialistOperationRules.Cancelled(operation, candidate.Identity))
+                throw new SpecialistJournalException("specialist.journal.cancelled", null, "This native parent was cancelled before admission.", new InvalidOperationException("A retained native cancellation blocks this delivery."));
             if (keys.TryGetValue(candidate.Key, out var handle))
             {
                 var existing = rows[handle];
@@ -42,11 +46,13 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
                 var associated = SpecialistTurnDeliveryRules.Register(existing, candidate.Identity);
                 ValidateRecord(associated, prepared: false);
                 rows[handle] = SpecialistTurnDocumentRules.Copy(associated);
+                state.Operations[candidate.Key] = operation;
                 return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(associated));
             }
             if (rows.Count >= 10_000) throw new SpecialistJournalException("specialist.journal.capacity", null, "The process-local specialist journal is full.", new InvalidOperationException("The development journal capacity was reached."));
             rows.Add(candidate.Handle, SpecialistTurnDocumentRules.Copy(candidate));
             keys.Add(candidate.Key, candidate.Handle);
+            state.Operations[candidate.Key] = operation;
             return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(candidate));
         }
     }
@@ -64,6 +70,8 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         {
             var row = Find(handle, identity);
             if (row is null) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            var operation = Operation(identity);
+            if (SpecialistOperationRules.Cancelled(operation, identity)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
             if (row.Status == SpecialistTurnStatus.Dispatching && (row.LeaseExpiresAt is null || row.LeaseExpiresAt <= now || row.Deadline <= now))
             {
                 _ = TrySave(row with { Status = SpecialistTurnStatus.OutcomeUnknown, FailureCode = "specialist.turn.outcome-unknown" });
@@ -71,7 +79,9 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             }
             if (now >= row.Deadline || !SpecialistTurnLeaseRules.CanClaim(row, identity, childInvocationId, now)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
             row = SpecialistTurnLeaseRules.Claim(row, identity, childInvocationId, fence, now);
-            return ValueTask.FromResult<SpecialistTurnDocument?>(TrySave(row) ? row : null);
+            if (!TrySave(row)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            state.Operations[row.Key] = operation;
+            return ValueTask.FromResult<SpecialistTurnDocument?>(row);
         }
     }
 
@@ -104,6 +114,62 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             rows[handle] = SpecialistTurnDocumentRules.Copy(next);
             return ValueTask.FromResult<SpecialistTurnDocument?>(SpecialistTurnDocumentRules.Copy(next));
         }
+    }
+
+    public ValueTask<SpecialistCancellationReceipt> CancelAsync(SpecialistTurnCancellation cancellation, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            ArgumentNullException.ThrowIfNull(cancellation);
+            EnsureScope(cancellation.Identity);
+            SpecialistOperationRules.Cancellation(cancellation);
+            lock (gate)
+            {
+                var key = SpecialistTurnDocument.CalculateOperationKey(cancellation.Identity);
+                var operation = Operation(cancellation.Identity);
+                var turn = keys.TryGetValue(key, out var handle) ? rows[handle] : null;
+                var decision = SpecialistOperationRules.Cancel(operation, cancellation, turn);
+                if (!ReferenceEquals(decision.Turn, turn) && decision.Turn is { } next)
+                {
+                    // A prepared turn has not reserved a conversation. Terminal metadata may not
+                    // touch a newer conversation owner or replay its accepted history.
+                    if (turn!.Status == SpecialistTurnStatus.Prepared)
+                    {
+                        ValidateRecord(next, prepared: false);
+                        rows[next.Handle] = SpecialistTurnDocumentRules.Copy(next);
+                    }
+                    else if (!TrySave(next)) throw SpecialistOperationRules.Conflict();
+                }
+                state.Operations[key] = decision.Operation;
+                return ValueTask.FromResult(decision.Receipt);
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (SpecialistJournalException) { throw; }
+        catch (Exception exception)
+        { throw new SpecialistJournalException("specialist.journal.cancellation", null, "The scoped specialist cancellation could not be confirmed.", exception); }
+    }
+
+    private SpecialistOperationDocument Operation(SpecialistInvocationIdentity identity)
+    {
+        try { return OperationCore(identity); }
+        catch (SpecialistJournalException) { throw; }
+        catch (Exception exception) { throw new SpecialistJournalException("specialist.journal.identity", null, "The specialist operation identity could not be validated.", exception); }
+    }
+
+    private SpecialistOperationDocument OperationCore(SpecialistInvocationIdentity identity)
+    {
+        SpecialistOperationRules.Identity(identity);
+        var key = SpecialistTurnDocument.CalculateOperationKey(identity);
+        if (!state.Operations.TryGetValue(key, out var operation))
+        {
+            if (state.Operations.Count >= 10_000)
+                throw new SpecialistJournalException("specialist.journal.capacity", null, "The process-local specialist operation journal is full.", new InvalidOperationException("The development operation capacity was reached."));
+            operation = new(identity, []);
+        }
+        SpecialistOperationRules.Match(operation, identity);
+        return operation;
     }
 
     public ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)

@@ -65,6 +65,22 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                 .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
+                name: "elsa_specialist_operations",
+                columns: table => new
+                {
+                    ScopeKey = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    OperationKey = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Payload = table.Column<string>(type: "json", nullable: false),
+                    Version = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_specialist_operations", x => new { x.ScopeKey, x.OperationKey });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
                 name: "elsa_specialist_turns",
                 columns: table => new
                 {
@@ -100,6 +116,11 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_specialist_operations_SchemaVersion",
+                table: "elsa_specialist_operations",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_specialist_turns_SchemaVersion",
                 table: "elsa_specialist_turns",
                 column: "SchemaVersion");
@@ -122,6 +143,9 @@ namespace Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Migrations.Spec
 
             migrationBuilder.DropTable(
                 name: "elsa_specialist_conversations");
+
+            migrationBuilder.DropTable(
+                name: "elsa_specialist_operations");
 
             migrationBuilder.DropTable(
                 name: "elsa_specialist_turns");
