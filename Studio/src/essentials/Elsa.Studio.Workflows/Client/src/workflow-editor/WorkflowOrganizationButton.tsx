@@ -1,4 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
+import { FolderTree } from "lucide-react";
+import "./workflowOrganizationDialog.css";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { capabilityIds, hasCapabilityLink } from "../api/capabilities";
 
@@ -17,5 +20,13 @@ export function WorkflowOrganizationButton({ context, definitionId, name, onSave
     return () => { active = false; };
   }, [context, definitionId]);
   if (!supported) return null;
-  return <><button type="button" onClick={() => setOpen(true)}>Organization</button>{open ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowOrganizationDialog context={context} definitionId={definitionId} name={name} onSaved={onSaved} onClose={() => setOpen(false)} /></Suspense> : null}</>;
+  return <>
+    <section className="wf-organization-entry" aria-label="Workflow organization">
+      <div><h3>Organization</h3><p>Keep this workflow in a folder and classify it with tags.</p></div>
+      <StudioButton onClick={() => setOpen(true)}><FolderTree size={16} aria-hidden="true" />Organize</StudioButton>
+    </section>
+    {open ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}>
+      <WorkflowOrganizationDialog context={context} definitionId={definitionId} name={name} onSaved={onSaved} onClose={() => setOpen(false)} />
+    </Suspense> : null}
+  </>;
 }
