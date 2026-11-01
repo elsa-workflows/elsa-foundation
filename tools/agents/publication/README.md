@@ -1,5 +1,10 @@
 # Specialist publication and lifecycle research
 
+Historical M0 witness: its expected BPMN dependency-gap assertion is source-bound. For current M4
+package-boundary qualification use the [new conformance profile](../conformance/README.md#bpmn-package-boundary-profile).
+The original research fixture intentionally refuses an unexpected closure change and is not the current
+product acceptance runner.
+
 Bounded M0 witness for [#3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533),
 within [Elsa Agents #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
 These external fixture packages are experiments, not shipped extension APIs.

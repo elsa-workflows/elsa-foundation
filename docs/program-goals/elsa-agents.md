@@ -76,8 +76,8 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594), reviewed at `4f3a920836` and
    merged as `8dcbf2345`. Required reviewed-head CI and Studio passed; fresh resulting-main source
    (780 Specialists, 3 required provider cases, 607 Architecture), affected browser (22), normal package
-   recovery (49 packages/73 stages) and three host controls passed. Broader hosted main outcomes remain
-   separately monitored; a passing job does not turn REST quarantine #3261 or opt-in screenshot skips
+   recovery (49 packages/73 stages) and three host controls passed. Hosted main CI and Studio also completed
+   successfully under their configured policies; a passing job does not turn REST quarantine #3261 or opt-in screenshot skips
    into passing tests. Connections prerequisite #3578 delivered T014–T015 through PR #3591.
    Current and retained package receipts distinguish compatible-reader recovery from an older runtime's
    correct schema-rollback refusal. Unresolved/abandoned protected-content retention remains a bounded
@@ -85,6 +85,10 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
 5. M4 [#3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524) is the sole active implementation
    unit for T024–T029: the approved BPMN package separation, exact native/BPMN editorial composition,
    finite revision/approval lifecycle and normal runtime-only package consumers. M5–M7 remain open.
+   The first [package separation increment #3615](https://github.com/elsa-workflows/elsa-foundation/pull/3615)
+   has a bounded independent package receipt at candidate `6a39aba21` (50 packages/70 stages), including
+   authoring-only, runtime-only and combined hosts. The [source-bound follow-up](../reports/elsa-agents-publication-research.md#m4-package-boundary-follow-up)
+   records its status and limits; review, final-head qualification and the remaining editorial tasks stay distinct.
 
 
 

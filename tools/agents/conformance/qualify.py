@@ -27,6 +27,17 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def check_package_boundary(name, libraries):
+    """Refuse authoring in runtime consumers and concrete BPMN execution in the authoring host."""
+    authoring = sorted(identity for identity in libraries if identity.lower().startswith("elsa.") and
+                       (".design" in identity.lower() or ".publishing" in identity.lower()))
+    if name in ["Model", "Consumer", "DurableConsumer", "BpmnConsumer"] and authoring:
+        raise RuntimeError(name + " has an authoring dependency: " + str(authoring))
+    if name == "BpmnAuthor" and any(identity.lower().startswith(("elsa.activities.bpmn/", "bpmn.model/", "bpmn.semantics/")) for identity in libraries):
+        raise RuntimeError("BPMN authoring consumed its concrete runtime or interpreter")
+    return authoring
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -134,11 +145,7 @@ def main():
             assets = json.loads((directory / "obj/project.assets.json").read_text())
             if any(x["type"] != "package" for x in assets["libraries"].values()):
                 raise RuntimeError(name + " consumed a source project reference")
-            authoring = sorted(x for x in assets["libraries"] if x.startswith("Elsa.") and (".Design" in x or ".Publishing" in x))
-            if name in ["Model", "Consumer", "DurableConsumer", "BpmnConsumer"] and authoring:
-                raise RuntimeError(name + " has an authoring dependency: " + str(authoring))
-            if name == "BpmnAuthor" and any(x.startswith(("Elsa.Activities.Bpmn/", "Bpmn.Model/", "Bpmn.Semantics/")) for x in assets["libraries"]):
-                raise RuntimeError("BPMN authoring consumed its concrete runtime or interpreter")
+            authoring = check_package_boundary(name, assets["libraries"])
             shared = {identity.split("/")[0]: identity.split("/")[1] for identity in assets["libraries"]
                       if identity.split("/")[0] in shared_pins}
             if any(version != shared_pins[identity] for identity, version in shared.items()) or name in ["Consumer", "DurableConsumer", "BpmnConsumer"] and set(shared) != set(shared_pins):
