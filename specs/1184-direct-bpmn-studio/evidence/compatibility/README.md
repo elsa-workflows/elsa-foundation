@@ -28,7 +28,7 @@ T017–019 are complete; **19/39 tasks complete**. Next is the actual BPMN → n
 
 The claim writer (`f64a378d7`) changed the shared direct driver and runtime, so the affected compatibility checks were reopened. Products are at `a96f774eb`.
 
-- The whole BPMN hosting project passes: 55 cases plus the corrected retry/cancellation race. That covers every `Legacy*Upgrade*` native family, composites, Runtime-only and the direct/authored host cases.
+- The whole BPMN hosting project passed 55 of 56 cases; the one failure was a retry/cancellation race assertion, corrected and then passed separately. A clean whole-project run on the final head is recorded in [final](../final/README.md). That covers every `Legacy*Upgrade*` native family, composites, Runtime-only and the direct/authored host cases.
 - Both actual frozen saved-Studio families were driven again with the archived `drive-legacy-studio.mjs`. Each re-exported its exact frozen JSON/XML, edited the gateway name, published natively (3.0.0/4.0.0) and completed a Published Run and a Test Run. The original captured runs remain inspectable after a restart.
 - `verify_studio_upgrade.py` passed on a manifest assembled for this head: 2 families, 4 completed new runs, 9 original-run observations, 12 whole stores, 84/92 retained native materials and frozen authoring preserved ([receipt](claim-writer-studio-verification.json)).
 - All twelve screenshots were visually inspected. Raw outputs stay local for the next archive.

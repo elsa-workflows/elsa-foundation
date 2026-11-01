@@ -60,7 +60,7 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
 
 ## Owned HTTP endpoints
 
-- Optional `ActivitiesBpmnDirectPublishing`: `POST interchange/bpmn/versions/{versionId}/publish-direct`, capability `elsa.api.bpmn-publishing` / `bpmn-authored-publish`. Requires both `bpmn:publish` and existing workflow publication management permission for the actual source version. Reads only immutable Design versions; runtime commands use the BPMN Core replacement port and existing store fencing. No event handler, background task or scheduler is added.
+- Optional `ActivitiesBpmnDirectPublishing`: `POST interchange/bpmn/versions/{versionId}/publish-direct`, capability `elsa.api.bpmn-publishing` with relations `bpmn-authored-publish`, `bpmn-authored-service-publish` and `bpmn-authored-claim-publish` on the same route. Requires both `bpmn:publish` and existing workflow publication management permission for the actual source version, and `workflows/runtime:read` on each selected service source reference. Its keyed `BpmnDirectPublishingFaultRenderer` is a cross-domain `IEndpointFaultRenderer` contribution. Reads only immutable Design versions; runtime commands use the BPMN Core replacement port and existing store fencing. No event handler, background task or scheduler is added.
 
 - `POST interchange/bpmn/analyze` / `import` / `export` (`Endpoints/BpmnInterchangeEndpoints.cs`),
   permission-gated by `bpmn-interchange:read` / `bpmn-interchange:manage`, mapped explicitly by the

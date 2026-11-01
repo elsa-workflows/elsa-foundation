@@ -39,3 +39,8 @@ Version identity, immutable presentation and layout/diagram are captured on the 
 The [post-deletion host and Studio qualification](../../../../../specs/1006-bpmn-library-adoption/evidence/post-deletion-host-qualification.md) records normal UI import, default-flow editing, publication, a real published run, reload and downloaded XML. Actual ordinary compensation, called error/escalation, concurrent calls, legacy recovery and broadcast witnesses are linked from the [task ledger](../../../../../specs/1006-bpmn-library-adoption/tasks.md). Each receipt names its source and scope. Final resulting-build/main qualification remains a separate delivery gate.
 
 Permanent frozen authoring descriptors and the original runtime/interchange discovery baseline remain in [the extraction baseline](../../../../../docs/reports/evidence/bpmn-extraction-baseline/README.md). Runtime graph checks use the released graph through the Foundation adapter; the retired embedded engine is not a validator fallback.
+
+## Cross-domain contributions
+
+`ActivitiesBpmnInterchange` and the optional `ActivitiesBpmnDirectPublishing` register keyed `IEndpointFaultRenderer` contributions (`BpmnInterchangeFaultRenderer`, `BpmnDirectPublishingFaultRenderer`) for their own endpoint groups; see the [API catalog](../../../Api/EXTENSION_POINTS.md). Direct publication calls the BPMN Core `IBpmnModelRuntime` replacement port and declares the `elsa.api.bpmn-publishing` capability; it adds no runtime writer of its own.
+
