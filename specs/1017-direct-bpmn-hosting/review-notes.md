@@ -94,3 +94,10 @@ The [source9c Switch frontend adoption](evidence/reviews/round-5/frontend-adopti
 
 
 [Complete-PR round10](evidence/reviews/round-10/README.md) at5ff0/basee26 is not clean: two P2 findings are adopted, none dropped. The broad prior-source guard can wait for obsolete future native compensation scheduling (static production proof; helper bootstrap never ran a scenario), and the new EF lookup leaks I/O/unrequested provider cancellation (actual boundary controls3pass/2fail, private causal5pass). Acceptance has no additional findings. Ten complete rounds,none clean;16total authorized,next11 after narrow fixes and affected qualification. T041/T043/T044 reopen; spec is In progress. The failed private producer is stopped; use existing configured repository infrastructure. Prior valid current-source host/whole-project/API/Studio/frozen receipts retain their exact sources and do not prove these paths. Earlier owner decisions remain settled; broader acceptance and deferrals stay open.
+
+
+## Review13 storage correction and current-source qualification
+
+The authoritative changes request is [Code Review5725109249](https://github.com/elsa-workflows/elsa-foundation/pull/3410#pullrequestreview-5725109249), counted as total round13 after twelve author rounds. The [new current-source receipt](evidence/reviews/round-13/qualification/README.md) records main588 adoption, verified raw/source archives, actual c531 host/nested/ABI proof, actual e28 saved Studio proof and current project/architecture/migration gates. The tracked-tree architecture failure is corrected in72576671d without weakening its guard. Source-bound earlier receipts retain their scopes.
+
+Full author review14 is next within the existing16-round bound. Remote f154 remains draft while the owner history-route card is pending. No force-push, dismissal of the Code Review changes request, required-check bypass or merge has occurred. T043/T044 and strict current-head provider CI, final readiness and resulting-main gates remain open.

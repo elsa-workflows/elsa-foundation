@@ -1,0 +1,14 @@
+{
+  "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-10/corrections/qualification/api/latest-published/packages.lock.json",
+  "archivedOriginalSha256": "eb9840f7af1444e385fe0e076eab62f9316184e1df630717485b96e41e8ef271",
+  "bytes": 22527,
+  "stillLocallyRestored": true,
+  "trackedAfterCorrection": false,
+  "initialArchitecture": {
+    "passed": 593,
+    "failed": 1,
+    "skipped": 0
+  },
+  "correction": "72576671d",
+  "guardChanged": false
+}

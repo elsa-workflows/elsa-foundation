@@ -20,4 +20,6 @@ The complete restore preserves current tracked receipts and source files. Hydrat
 
 [qualification.md](qualification.md) and the current round-10/round-11 correction receipts retain the production evidence and its scope. Earlier raw links use the original archived layout after restoration. The author review loop and current delivery state remain on [PR #3410](https://github.com/elsa-workflows/elsa-foundation/pull/3410).
 
+The [main588-based qualification](reviews/round-13/qualification/README.md) adds fresh actual-host, saved Studio, nested ETL cancellation, ABI and project/guard observations. Its separate pinned archive retains the current raw captures and a small executing-source Git bundle; all166 members were downloaded again and verified. It does not change the original archives or the CI fixture pack. Current review, required CI and production acceptance limits remain explicit in that receipt.
+
 The pinned `sourceHistory` Git bundle also preserves the original branch and executing source commits. In a normal Foundation clone, download that bundle, verify its pinned SHA-256, run `git bundle verify <bundle>`, then use `git fetch <bundle> refs/codex/verification/bpmn-source-f154:refs/archive/bpmn-source-f154` when reproducing an older source. Routine test/CI restoration does not fetch that historical Git pack.

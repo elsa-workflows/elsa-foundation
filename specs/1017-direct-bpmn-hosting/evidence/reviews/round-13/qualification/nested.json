@@ -1,0 +1,167 @@
+{
+  "verdict": "A1 resolved within actual original-input cancellation with compute bindings offline",
+  "source": "c53167925de74d026be739ce4248ed4047c0e578",
+  "reviewedSourceEquivalentHead": "e28ef6701cc468d342803425ba77bed4594fb8db",
+  "originalWriter": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "storesVerified": [
+    {
+      "phase": "original",
+      "store": "elsa",
+      "source": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-elsa.sqlite.gz",
+      "gzipSha256": "cbc0caf5cab087cbf4697b1cf195f706b9b7aa31cdd9e830125082ef30f3f092",
+      "databaseSha256": "0dbe02e70cefcf69965add6b8230fec575fa78c2e9545cce7c34b64384a2e19d",
+      "integrity": "ok"
+    },
+    {
+      "phase": "original",
+      "store": "etl-runtime",
+      "source": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-etl-runtime.sqlite.gz",
+      "gzipSha256": "b9cb3cd9a2282af8adbe36a9cde0d8369736eb9d2a8bbdb9d55fd3d0705c98a1",
+      "databaseSha256": "cc0ca8a47fa2f64e8930cb73cae6809b2754af5593368955e6646304d161a2aa",
+      "integrity": "ok"
+    },
+    {
+      "phase": "original",
+      "store": "etl-design",
+      "source": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-etl-design.sqlite.gz",
+      "gzipSha256": "ba4a7580842991dd67a6ae7634b604985df7327e290773d68393c42ae719012e",
+      "databaseSha256": "18771bf22cbd150d543a08699b7dfa218bb418e688b43d46f11100535516b466",
+      "integrity": "ok"
+    },
+    {
+      "phase": "before",
+      "store": "elsa",
+      "source": "before-elsa.sqlite.gz",
+      "gzipSha256": "56820d6d490b01d9714bf58c321cba294e23585c8ea0775fdb4d020d6fec6e79",
+      "databaseSha256": "0db6474c3846bd83002dd7c1033e9f7bc1a87547db4bdd1b086aa210b168061c",
+      "integrity": "ok"
+    },
+    {
+      "phase": "before",
+      "store": "etl-runtime",
+      "source": "before-etl-runtime.sqlite.gz",
+      "gzipSha256": "623b944a6c195a9757661ddd74f4aad2fc9fdd3d1d66d583eab92d2744664759",
+      "databaseSha256": "cc0ca8a47fa2f64e8930cb73cae6809b2754af5593368955e6646304d161a2aa",
+      "integrity": "ok"
+    },
+    {
+      "phase": "before",
+      "store": "etl-design",
+      "source": "before-etl-design.sqlite.gz",
+      "gzipSha256": "eb9419ed5ffedba9b6eb9e313618acb800abc0f073705ba496c277d29e376df7",
+      "databaseSha256": "18771bf22cbd150d543a08699b7dfa218bb418e688b43d46f11100535516b466",
+      "integrity": "ok"
+    },
+    {
+      "phase": "completed",
+      "store": "elsa",
+      "source": "completed-elsa.sqlite.gz",
+      "gzipSha256": "9e48b313839176dc054f4a3d3c1cb7df40ee30ba7af1a15778b5c3cae5ffb71c",
+      "databaseSha256": "8245ca9e60a32a9e170c044bf973fe4f940f447febe7d1fcab71a8e23eee96ca",
+      "integrity": "ok"
+    },
+    {
+      "phase": "completed",
+      "store": "etl-runtime",
+      "source": "completed-etl-runtime.sqlite.gz",
+      "gzipSha256": "7d9eff74c2d5b247be8851fb7900691385f1a8310d0036fc474c9561b8df3071",
+      "databaseSha256": "baf08493e3bc89b76193eb6ea1d055e77a4e8f7563a4f049b67fa6c7e062d54a",
+      "integrity": "ok"
+    },
+    {
+      "phase": "completed",
+      "store": "etl-design",
+      "source": "completed-etl-design.sqlite.gz",
+      "gzipSha256": "b6339a81e2aa69efe6a6fa220b26595fa5c161ca5b4f4db64b938d8acfa3072a",
+      "databaseSha256": "090d1f657a7d9e8744c7b88b246588e0acd60d1fe90d55cb78dd0f7f237444e6",
+      "integrity": "ok"
+    },
+    {
+      "phase": "retained",
+      "store": "elsa",
+      "source": "retained-elsa.sqlite.gz",
+      "gzipSha256": "97e8f27ee10f2807f4ea38c5dba170f81a64df468428315a6af1276b9ada6ed8",
+      "databaseSha256": "ebe8b3402ee155bc91d939f5653a39161b4634d27cdea1e1ea8d1b0ca319697c",
+      "integrity": "ok"
+    },
+    {
+      "phase": "retained",
+      "store": "etl-runtime",
+      "source": "retained-etl-runtime.sqlite.gz",
+      "gzipSha256": "7d9eff74c2d5b247be8851fb7900691385f1a8310d0036fc474c9561b8df3071",
+      "databaseSha256": "baf08493e3bc89b76193eb6ea1d055e77a4e8f7563a4f049b67fa6c7e062d54a",
+      "integrity": "ok"
+    },
+    {
+      "phase": "retained",
+      "store": "etl-design",
+      "source": "retained-etl-design.sqlite.gz",
+      "gzipSha256": "b6339a81e2aa69efe6a6fa220b26595fa5c161ca5b4f4db64b938d8acfa3072a",
+      "databaseSha256": "090d1f657a7d9e8744c7b88b246588e0acd60d1fe90d55cb78dd0f7f237444e6",
+      "integrity": "ok"
+    }
+  ],
+  "originalNativeModelAndEtlIdentitiesPreserved": true,
+  "fullPinsAuthorityMaterialAndBindingsPreserved": true,
+  "sameTwoNativeWorkersAndTwoModels": true,
+  "actualEtl": {
+    "runId": "etl-0c01015ac05338d8e7775918207ee230620d5c7c22ca002aec2d1661a074705a",
+    "initialStatus": "Running",
+    "finalStatus": "Cancelled",
+    "historicalAcceptedEffects": 2,
+    "outstandingRecords": 0,
+    "outstandingBytes": 0,
+    "activePreparationOrPartitionLeases": 0,
+    "owedBatchIds": 0,
+    "terminalDeliveryDisposition": "ProvenParentTerminal",
+    "deliveryAcknowledged": true,
+    "connectorPartitionAndBindingRowsUnchanged": true
+  },
+  "ordering": {
+    "outerCancelAccepted": "2026-10-31T23:59:00.734313+00:00",
+    "innerCancelAccepted": "2026-10-31T23:59:02.338075+00:00",
+    "etlCancelled": "2026-10-31T23:59:02.896349+00:00",
+    "etlCancelSourceDelivered": "2026-10-31T23:59:02.966832+00:00",
+    "etlTerminalDeliveryAcknowledgedTicks": 639290879431736360,
+    "innerNativeResultAccepted": "2026-10-31T23:59:03.00619+00:00",
+    "cancelEmbeddedDelivered": "2026-10-31T23:59:03.466547+00:00",
+    "innerModelParentSettled": "2026-10-31T23:59:03.881465+00:00",
+    "innerNativeResultSourceDelivered": "2026-10-31T23:59:04.122013+00:00",
+    "outerModelSettled": "2026-11-01T00:00:02.444723+00:00",
+    "outerNativeResultSourceDelivered": "2026-11-01T00:00:04.605738+00:00",
+    "outerCancelSourceDelivered": "2026-11-01T00:00:04.607427+00:00",
+    "etlTerminalDeliveryAcknowledged": "2026-10-31T23:59:03.173636+00:00"
+  },
+  "twoColdApiViewsIdentical": true,
+  "coldEtlRuntimeAndDesignWholeFilesIdentical": true,
+  "coldCombinedRuntimeDesignWholeFilesIdentical": false,
+  "etlCancelPayloadEqualsOriginalFrozenInvocation": true,
+  "unsettledEtlReservations": 0,
+  "combinedStoreChangedTables": [
+    {
+      "table": "elsa_activity_dependency_projection",
+      "completedRows": 1,
+      "retainedRows": 1,
+      "removedOrChangedRows": 1,
+      "addedOrChangedRows": 1
+    },
+    {
+      "table": "elsa_runtime_post_commit_outbox",
+      "completedRows": 19,
+      "retainedRows": 19,
+      "removedOrChangedRows": 2,
+      "addedOrChangedRows": 2
+    }
+  ],
+  "processes": [
+    {
+      "pid": 35909,
+      "recordedExit": -9
+    },
+    {
+      "pid": 36550,
+      "recordedExit": -9
+    }
+  ],
+  "scopeLimit": "No current HTTP compute, retry, new effect, Studio, other-provider or wider acceptance proof; original accepted effects and connector observations are historical."
+}
