@@ -31,13 +31,16 @@ retention, tenant isolation, crash boundaries and extension behavior for each st
 ## M4 cancellation design (#2831)
 
 A private control counter belongs to one local actor mailbox. Only a valid matching Cancel waiting on that mailbox
-registers it; cancellation or acquisition removes that registration. The configured default provider pushes the counter
+registers it; cancellation or acquisition removes that registration. An actual Cancel turn suppresses yielding to other waiters, so
+a same-key retry cannot strand its queued cancellation behind an actor-level Duplicate result. The configured default provider pushes the counter
 through an injected internal async context for its active turn. Both the discrete scheduler and replay-safe completion
 pump check it before beginning another step. The orchestrator distinguishes `Yielded` from quiescence and flushes
 the current segment through the existing ownership-fenced committer before returning. The Cancel then runs through
 the usual serialized command/handler path. No second writer or database polling is introduced.
 
-The configured concrete local provider is also the provider used by distributed placement. Remote delivery and custom
+The configured concrete local provider is also the provider used by distributed placement. Both registration paths use
+one internal factory, shared within Workflows/Runtime; third-party provider authors resolve the public concrete service.
+Behavioral registration-order controls cover core-first and distribution-first composition. Remote delivery and custom
 actor implementations retain their own transport/scheduling responsibilities; this signal never grants authority. An
 already executing activity is not interrupted. In-memory waiter isolation and real SQLite External/ReplaySafe loop
 cases cover all modes, resumption convergence, and deliberate scheduler/fusion/cleanup/flush mutations. See the

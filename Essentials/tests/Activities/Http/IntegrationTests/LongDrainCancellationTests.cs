@@ -12,13 +12,19 @@ namespace Elsa.Activities.Http.IntegrationTests;
 public sealed class LongDrainCancellationTests
 {
     [Theory]
-    [InlineData(PersistenceMode.Durable, false)]
-    [InlineData(PersistenceMode.Balanced, false)]
-    [InlineData(PersistenceMode.Ephemeral, false)]
-    [InlineData(PersistenceMode.Durable, true)]
-    [InlineData(PersistenceMode.Balanced, true)]
-    [InlineData(PersistenceMode.Ephemeral, true)]
-    public async Task Public_cancel_hands_off_a_progressing_unbounded_drain_at_a_checkpoint(PersistenceMode mode, bool replaySafe)
+    [InlineData(PersistenceMode.Durable, false, false)]
+    [InlineData(PersistenceMode.Durable, false, true)]
+    [InlineData(PersistenceMode.Balanced, false, false)]
+    [InlineData(PersistenceMode.Balanced, false, true)]
+    [InlineData(PersistenceMode.Ephemeral, false, false)]
+    [InlineData(PersistenceMode.Ephemeral, false, true)]
+    [InlineData(PersistenceMode.Durable, true, false)]
+    [InlineData(PersistenceMode.Durable, true, true)]
+    [InlineData(PersistenceMode.Balanced, true, false)]
+    [InlineData(PersistenceMode.Balanced, true, true)]
+    [InlineData(PersistenceMode.Ephemeral, true, false)]
+    [InlineData(PersistenceMode.Ephemeral, true, true)]
+    public async Task Public_cancel_hands_off_a_progressing_unbounded_drain_at_a_checkpoint(PersistenceMode mode, bool replaySafe, bool duplicateCancel)
     {
         var probe = new LoopProbe();
         var drains = new ObservedDrains();
@@ -47,12 +53,21 @@ public sealed class LongDrainCancellationTests
             var actor = await actors.GetAgentAsync(new(executionId, WorkflowExecutionActorActivationReason.SchedulerWork,
                 DateTimeOffset.UtcNow, "test", WorkflowExecutionActorCapabilities.InProcessMailbox), timeout.Token);
             var now = DateTimeOffset.UtcNow;
-            var cancel = actor.EnqueueAsync(new("cancel-envelope", executionId,
+            var envelope = new WorkflowExecutionCommandEnvelope("cancel-envelope", executionId,
                 new("cancel", executionId, WorkflowExecutionCommandKind.Cancel, now, null, new Dictionary<string, string>()),
-                "cancel", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now), timeout.Token).AsTask();
+                "cancel", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now);
+            var cancel = actor.EnqueueAsync(envelope, timeout.Token).AsTask();
+            var duplicate = duplicateCancel ? actor.EnqueueAsync(envelope, timeout.Token).AsTask() : null;
             // EnqueueAsync publishes the control wait synchronously before waiting on the busy mailbox.
             probe.Release.TrySetResult();
-            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await cancel.WaitAsync(timeout.Token)).Status);
+            if (duplicate is null)
+                Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await cancel.WaitAsync(timeout.Token)).Status);
+            else
+            {
+                var results = await Task.WhenAll(cancel, duplicate).WaitAsync(timeout.Token);
+                Assert.Single(results, result => result.Status == WorkflowExecutionCommandDispatchStatus.Accepted);
+                Assert.Single(results, result => result.Status == WorkflowExecutionCommandDispatchStatus.Duplicate);
+            }
             await start.WaitAsync(timeout.Token);
             Assert.False(probe.SafetyLimitReached);
             Assert.Equal(1, probe.Calls);
@@ -64,7 +79,15 @@ public sealed class LongDrainCancellationTests
             var completedBody = Assert.Single(states, state => state.Execution.ExecutableNodeId == "body");
             Assert.Equal(ActivityExecutionStatus.Completed, completedBody.Status);
             var before = states.Select(state => (state.Execution.ActivityExecutionId, state.Status)).OrderBy(state => state.ActivityExecutionId).ToArray();
-            await scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new(maxExecutionsPerSweep: 10), timeout.Token);
+            var resumption = scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>();
+            var sweep = await resumption.SweepAsync(new(maxExecutionsPerSweep: 10), timeout.Token);
+            Assert.Equal(0, sweep.OutboxFailedCount);
+            Assert.All(sweep.Dispatches, dispatch => Assert.True(dispatch.Outcome is RuntimeResumptionDispatchOutcome.Accepted or RuntimeResumptionDispatchOutcome.Duplicate));
+            await ReferenceWorkflowRuns.AssertNothingLeftToDrainAsync(fixture);
+            var settled = await resumption.SweepAsync(new(maxExecutionsPerSweep: 10), timeout.Token);
+            Assert.False(settled.DidWork);
+            Assert.Equal(0, settled.OutboxFailedCount);
+            await ReferenceWorkflowRuns.AssertNothingLeftToDrainAsync(fixture);
             var after = await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId);
             Assert.Equal(before, after.Select(state => (state.Execution.ActivityExecutionId, state.Status)).OrderBy(state => state.ActivityExecutionId).ToArray());
             Assert.Equal(WorkflowExecutionStatus.Cancelled, (await fixture.WorkflowExecutionAsync(executionId)).Status);

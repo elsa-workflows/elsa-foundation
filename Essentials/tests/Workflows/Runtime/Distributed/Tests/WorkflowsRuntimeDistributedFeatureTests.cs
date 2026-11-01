@@ -20,7 +20,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
-public sealed class WorkflowsRuntimeDistributedFeatureTests
+public sealed partial class WorkflowsRuntimeDistributedFeatureTests
 {
     // Kept beside the composition test: replacement, the distributed actor provider replaces the in-process one.
     [Fact]

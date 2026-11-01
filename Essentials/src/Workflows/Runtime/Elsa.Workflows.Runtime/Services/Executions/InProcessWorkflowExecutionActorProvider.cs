@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -10,6 +11,11 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable
 {
     internal RuntimeDrainControlContext? DrainControls { private get; init; }
+
+    // Core and distributed composition must use the same wiring, regardless of registration order.
+    internal static InProcessWorkflowExecutionActorProvider Create(IServiceProvider services) =>
+        new(services.GetRequiredService<IWorkflowExecutionCommandExecutor>(), services.GetRequiredService<RuntimeActorEvictionOptions>())
+        { DrainControls = services.GetService<RuntimeDrainControlContext>() };
 
     // In-process diagnostic/routing label only; not persisted across runs (the actor subsystem is in-memory and
     // descriptors are transient), so the nameof value tracks the type name without wire-compatibility risk.
@@ -336,7 +342,10 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 if (_processedIdempotencyKeys.Contains(envelope.IdempotencyKey))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
 
-                using var controlScope = _drainControls?.Push(_workflowExecutionId, _drainControl);
+                // A Cancel turn must consume its queued cancellation even when another Cancel waits, including
+                // a retry with the same key that will subsequently return Duplicate without draining.
+                using var controlScope = _drainControls?.Push(_workflowExecutionId,
+                    envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel ? null : _drainControl);
                 var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
 
                 // Admission shed (RB1, #1235). Deferred is the truthful status either way, but the two refusals differ

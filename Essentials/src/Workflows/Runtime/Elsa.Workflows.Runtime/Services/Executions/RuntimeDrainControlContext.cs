@@ -8,10 +8,10 @@ internal sealed class RuntimeDrainControlContext
     public bool ShouldYield(string executionId) => current.Value is { } frame &&
         StringComparer.Ordinal.Equals(frame.ExecutionId, executionId) && frame.Control.IsPending;
 
-    public IDisposable Push(string executionId, RuntimeDrainControl control)
+    public IDisposable Push(string executionId, RuntimeDrainControl? control)
     {
         var prior = current.Value;
-        current.Value = new(executionId, control);
+        current.Value = control is null ? null : new(executionId, control);
         return new Restore(this, prior);
     }
 

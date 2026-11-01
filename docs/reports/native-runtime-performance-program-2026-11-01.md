@@ -42,6 +42,25 @@ Whole affected suites on the restored candidate: runtime 3,122 passed, HTTP inte
 
 The first compile attempt used the wrong start-dispatch overload; the first behavioral attempt omitted the resumption-service registration in the test fixture. Those setup failures are retained separately and are not causal red controls. A subsequent replay-safe case exposed one extra fused body iteration; the explicit fused-step check fixed it.
 
+### Independent review corrections
+
+The first cancellation review found a same-key retry race: the first Cancel turn could yield to a second waiting
+Cancel, then the second returned Duplicate without draining the first one's queued cancellation. Cancel turns now
+suppress cooperative yielding. The real SQLite matrix has twelve cases, adding two same-key waiters in each
+mode/profile case. Removing that suppression fails the six duplicate cases; restoration passes all twelve.
+
+Review also found that distribution-first registration could retain an unconfigured mailbox factory. Core and
+Distributed now share one internal factory. The same-domain friend grant shares repository DI wiring; third-party
+providers can resolve the configured public concrete mailbox and do not need this internal factory. Two behavioral
+registration-order cases use the configured mailbox and real scheduler. Restoring the old distributed factory fails
+only the distribution-first case; the shared factory passes both.
+
+Recovery assertions now check sweep failures, settled outbox and empty scheduler backlog, followed by a second sweep
+that does no work. Replacing the first sweep with a no-op fails all twelve cases; restoration passes all twelve.
+The corrected whole suites pass: runtime 3,122, Distributed 114, HTTP integration 107, zero failed/skipped. Discovery
+accounts for all cases (runtime's same three delayed theories expand 3,111 discoveries into 3,122 executions).
+All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.

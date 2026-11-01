@@ -509,11 +509,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Explicit factory (not greedy ctor selection) so the eviction options are wired in and the provider owns its
         // self-instrumentation meter; the container disposes the singleton (and its meter) on shutdown.
         // Keep the configured concrete mailbox provider available to distributed placement too.
-        services.TryAddSingleton(serviceProvider =>
-            new InProcessWorkflowExecutionActorProvider(
-                serviceProvider.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
-                serviceProvider.GetRequiredService<RuntimeActorEvictionOptions>())
-            { DrainControls = serviceProvider.GetRequiredService<RuntimeDrainControlContext>() });
+        services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
         services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider => serviceProvider.GetRequiredService<InProcessWorkflowExecutionActorProvider>());
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
