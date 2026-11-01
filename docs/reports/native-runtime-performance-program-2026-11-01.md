@@ -384,3 +384,12 @@ runtime-expanded theory accounting reconcile without missing or unmatched tests.
 after the explicit registration barrier. Native requalification remains pending. This establishes the defect and
 its causal control; the original SQL Server failure did not capture a provider acknowledgement timeline, so its
 specific cause remains consistent with, rather than independently proven to be, that interleaving.
+
+Corrected-head native qualification (`63e4c1fc4`) passes all 245 whole-provider cases, with zero failed/skipped,
+after five separately retained nine-case pump cohorts also pass (45 additional executions of the same nine cases).
+All 15,205 regular files in the source archive match the built source byte for byte. The qualification driver then
+failed while writing an obsolete source-restoration receipt (`NameError: code`); its original failed status, logs
+and cleanup record are preserved. A separate attestation validates every TRX, reconciles all 245 discovered cases,
+checks the unchanged source archive and confirms task-container cleanup. This is a successful test qualification
+with a failed driver bookkeeping step, not an unqualified all-green run. The final timing build uses that explicit
+attestation. Raw records remain under `m4-pumps-63e4c1fc4` on the owned runner pending verified collection.
