@@ -98,7 +98,7 @@ draws with a literal width), it may guard on `html[data-theme-appearance="high-c
 
 ### Independent workspace style and color scheme
 
-Appearance offers `linen`, `minimal`, `sketchbook`, `quiet`, `focus` and `open` workspace styles, independently
+Appearance offers `linen`, `minimal`, `quiet`, `focus` and `open` workspace styles, independently
 of the selected color scheme and mode. A theme can declare optional `workspaceStyle` metadata
 as its default treatment. Without an explicit workspace override, its own font, radii and layout
 remain authoritative. Existing themes without metadata retain their original presentation. See [ADR 0023](adr/0023-separate-workspace-style-and-color-scheme.md).
@@ -368,7 +368,3 @@ shared pattern rather than repeating local spacing values.
 primitive/disclosure styles. `tokens.css` remains available for token-only hosts.
 Both published files include the light-theme primitive defaults; load custom theme
 overrides afterward. See the [module UI guide](module-ui.md) for integration.
-
-### Sketchbook workspace
-
-`sketchbook` is a palette-independent workspace treatment: fine graphite edges, static paper grain, watercolor washes and a serif display face with readable sans/mono controls. `--studio-workspace-canvas-background` is an additive background recipe with a neutral `var(--studio-canvas)` fallback. Like the page/panel recipes, consume it as `background`, with a solid role fallback; never use it as a color or border. High contrast and forced-colors remove the decorative recipe. Module CSS uses the workspace-style guard and public roles, with no palette identity selectors. Graph hit boxes, ports, notation and runtime status colors keep their existing authority.

@@ -35,7 +35,7 @@ logo falls back to the bundled Elsa mark. Empty Subtitle hides the secondary bra
 also sets the browser title. Help and Privacy replace the two header resource links; set either URL to an empty string to hide that link. Names are plain
 text; HTML is never interpreted. Only named public fields are serialized: keep credentials elsewhere.
 
-WorkspaceStyle accepts `linen`, `minimal`, `sketchbook`, `quiet`, `focus`, `open`, or `preset` for a theme's original presentation.
+WorkspaceStyle accepts `linen`, `minimal`, `quiet`, `focus`, `open`, or `preset` for a theme's original presentation.
 PaletteId is an eligible theme ID from the existing [theme store](../src/essentials/Elsa.Studio.Hosting.Themes/README.md).
 Mode accepts `system`, `light`, `dark`, `dim`, `high-contrast`; Navigation accepts `theme`, `left`, `top`.
 Unsupported modes fall back through the existing palette policy. A host default only fills a missing
@@ -98,11 +98,11 @@ Layout, palette and artwork are independent:
 
 | Setting | Choices |
 |---|---|
-| Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image), `sketchbook` (drawing-paper composition) |
-| Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green), `sketchbook` (paper and sage) |
-| Artwork | `ember`, `tidal`, `daybreak`, `canopy`, `sketchbook` |
+| Layout | `split` (image left), `reverse` (image right), `immersive` (full image and opaque form card), `editorial` (arched image) |
+| Palette | `linen` (copper), `tidal` (blue), `daybreak` (rose), `canopy` (green) |
+| Artwork | `ember`, `tidal`, `daybreak`, `canopy` |
 
-The four generated photographs and Sketchbook drawing ship locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
+The four generated photographs ship locally at `/_elsa/identity/login-assets/<artwork>.jpg`; there is no
 CDN dependency. Set ImageUrl to your own asset to replace the image. FocalX/FocalY are percentages
 clamped to 0–100. Use a portrait source for split/editorial and a larger landscape source for immersive;
 check the crop at desktop, tablet and 320px. Artwork is decorative (`alt=""`), so essential instructions
@@ -165,27 +165,3 @@ For a wholly custom browser shell or additional font/CSS assets, select an appli
 `StudioHostingOptions.IndexFile` and use the public SDK/UI contracts described in
 [custom hosting](custom-hosting.md). The theme store supplies palette definitions; host-owned assets
 and presentation do not need a fork of the authentication provider or workflow modules.
-
-## Sketchbook
-
-Choose **Settings → Appearance → Studio presets → Sketchbook** for the coordinated look. Workspace style and Color scheme also offer Sketchbook independently. The preset ID is `builtin:sketchbook`; the workspace ID is `sketchbook`. All four modes are supplied, with decoration removed in High contrast. Custom copies retain the workspace metadata. The default Elsa logo uses the approved pencil-and-watercolor rendition; an explicit host `LogoUrl` always takes precedence.
-
-For host defaults, use Studio's existing `appearance` configuration with `workspaceStyle: "sketchbook"`, `paletteId: "builtin:sketchbook"`, and the desired `mode`. Existing browser choices retain precedence.
-
-The actual credential page is backend-owned and configured independently of browser preferences:
-
-```json
-{
-  "Identity": {
-    "Login": {
-      "Layout": "sketchbook",
-      "Palette": "sketchbook",
-      "Artwork": "sketchbook",
-      "Tagline": "A workspace for your workflows.",
-      "Description": "Design processes, work with decisions and data, and follow each execution."
-    }
-  }
-}
-```
-
-The Sketchbook login follows the OS light/dark preference and contrast settings. Supplied brand/image URLs and the complete renderer override remain supported. Its form, antiforgery fields and validated return URL are unchanged. Bundled assets require no external service.
