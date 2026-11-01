@@ -1,7 +1,7 @@
 import "@xyflow/react/dist/style.css";
 import "./graphCanvas.css";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BaseEdge, EdgeLabelRenderer, Handle, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BaseEdge, EdgeLabelRenderer, Handle, NodeResizeControl, ResizeControlVariant, getBezierPath, getSmoothStepPath, useStore, type EdgeProps, type NodeProps, type ReactFlowState } from "@xyflow/react";
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
@@ -10,7 +10,8 @@ import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
-import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
+import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowNodeResizeContext } from "./contexts";
+import { maxNodeWidth, minNodeWidth } from "../graph-authoring/nodeWidth";
 import { NodeSlotBadges } from "./NodeSlotBadges";
 import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
 import { WorkflowNodeRuntimeBadges } from "./WorkflowNodeRuntimeBadges";
@@ -37,6 +38,10 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
+  const resizeNode = React.useContext(WorkflowNodeResizeContext);
+  // The node's explicit (saved or resized) width. NodeProps.width is the measured size instead, so
+  // applying it would pin every unresized node to whatever it measured on first render.
+  const width = useStore(useCallback((state: ReactFlowState) => state.nodeLookup.get(id)?.width, [id]));
   const ports = useGraphPortLayout(id, sourcePorts.map(port => port.name), showFlowPorts && nodeData.acceptsInbound);
   return (
     <div
@@ -48,8 +53,20 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
-      style={{ minHeight: ports.minHeight }}
+      style={{ minHeight: ports.minHeight, width }}
     >
+      {resizeNode && selected ? (
+        <NodeResizeControl
+          nodeId={id}
+          className="wf-node-resize-control nodrag"
+          variant={ResizeControlVariant.Line}
+          position="right"
+          resizeDirection="horizontal"
+          minWidth={minNodeWidth}
+          maxWidth={maxNodeWidth}
+          onResizeEnd={(_event, params) => resizeNode(id, params.width)}
+        />
+      ) : null}
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
       {nodeData.isStartNode ? (

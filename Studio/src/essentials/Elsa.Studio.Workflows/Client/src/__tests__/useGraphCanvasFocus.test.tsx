@@ -11,6 +11,7 @@ type HookResult = ReturnType<typeof useGraphCanvasInteractions>;
 type HookHarnessProps = {
   nodes: Node<WorkflowNodeData>[];
   result: { current: HookResult | null };
+  commitCanvas?: () => void;
 };
 
 const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -110,7 +111,21 @@ describe("useGraphCanvasInteractions auto-layout", () => {
   });
 });
 
-function renderHook(nodes: Node<WorkflowNodeData>[]) {
+describe("useGraphCanvasInteractions node resize", () => {
+  it("commits the resized width as one canvas transaction", () => {
+    const commitCanvas = vi.fn();
+    const fixture = renderHook([node("a"), node("b")], commitCanvas);
+
+    fixture.result.current!.resizeNode("a", 412.4);
+
+    expect(commitCanvas).toHaveBeenCalledTimes(1);
+    const [committedNodes] = commitCanvas.mock.calls[0] as unknown as [Node<WorkflowNodeData>[]];
+    expect(committedNodes.find(current => current.id === "a")?.width).toBe(412);
+    expect(committedNodes.find(current => current.id === "b")?.width).toBeUndefined();
+  });
+});
+
+function renderHook(nodes: Node<WorkflowNodeData>[], commitCanvas?: () => void) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -119,7 +134,7 @@ function renderHook(nodes: Node<WorkflowNodeData>[]) {
     container,
     result,
     render(nextNodes: Node<WorkflowNodeData>[]) {
-      flushSync(() => root.render(<HookHarness nodes={nextNodes} result={result} />));
+      flushSync(() => root.render(<HookHarness nodes={nextNodes} result={result} commitCanvas={commitCanvas} />));
     }
   };
   mounted.push({ root, container });
@@ -127,7 +142,7 @@ function renderHook(nodes: Node<WorkflowNodeData>[]) {
   return fixture;
 }
 
-function HookHarness({ nodes, result }: HookHarnessProps) {
+function HookHarness({ nodes, result, commitCanvas = vi.fn() }: HookHarnessProps) {
   const hook = useGraphCanvasInteractions({
     nodes,
     edges: [] as WorkflowEdge[],
@@ -139,7 +154,7 @@ function HookHarness({ nodes, result }: HookHarnessProps) {
     selectedNodeId: null,
     catalogByVersion: new Map(),
     select: vi.fn(),
-    commitCanvas: vi.fn(),
+    commitCanvas,
     placeActivity: vi.fn(() => null)
   });
   result.current = hook;
