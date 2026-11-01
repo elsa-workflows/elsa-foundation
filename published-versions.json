@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "9016c1de59e852828203deacca89b1bfcf786ef4",
+  "last_publish_commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -129,8 +129,8 @@
     },
     {
       "package_id": "Elsa.Agent",
-      "version": "4.0.2-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.3-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Agent.Anthropic",
@@ -139,18 +139,18 @@
     },
     {
       "package_id": "Elsa.Agent.Api",
-      "version": "4.0.17-preview",
-      "commit": "077ef2c9aec6183d4b772f0c56e111dee4c9a2ee"
+      "version": "4.0.18-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Agent.Core",
-      "version": "4.0.12-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.13-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Agent.GitHubCopilot",
-      "version": "4.0.13-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.14-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Agent.Specialists",
@@ -174,8 +174,8 @@
     },
     {
       "package_id": "Elsa.Agent.Workflows",
-      "version": "4.0.12-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.13-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Api.AspNetCore",
@@ -694,8 +694,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Api",
-      "version": "4.0.26-preview",
-      "commit": "9016c1de59e852828203deacca89b1bfcf786ef4"
+      "version": "4.0.27-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Workflows.Design.CodeGeneration",
@@ -704,8 +704,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Core",
-      "version": "4.0.16-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.17-preview",
+      "commit": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3"
     },
     {
       "package_id": "Elsa.Workflows.Design.JavaScript",
