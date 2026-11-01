@@ -9,8 +9,8 @@ import type {StudioModuleHostContext, StudioModuleInstance} from "../sdk";
 export interface StudioLoadedModule {manifest: StudioModuleManifest; instance: StudioModuleInstance}
 
 export function disposeStudioModuleInstance(instance:StudioModuleInstance) {
-  if(!instance.connection?.getSnapshot().active?.pendingWrites)instance.connection?.dispose?.();
-  instance.dispose?.();
+  try {instance.connection?.dispose?.();}
+  finally {instance.dispose?.();}
 }
 
 /** Imports and initializes document-owned extensions before any backend-bound module registration. */

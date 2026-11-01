@@ -33,7 +33,7 @@ export class ConfiguredBackendConnection implements StudioConnectionController {
     url.searchParams.set("backend",this.id);
     return `${url.pathname}${url.search}${url.hash}`;
   }
-  dispose() {this.ended=true;if(!this.snapshot.active?.pendingWrites)this.snapshot.active?.dispose();}
+  dispose() {this.ended=true;this.snapshot.active?.retire();}
 }
 
 /** BFCache cannot resurrect retired identity/capability snapshots. */

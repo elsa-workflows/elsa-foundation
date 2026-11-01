@@ -87,6 +87,9 @@ export class StudioBackendConnection implements StudioManagedBackendSession {
   }
   dispose() {
     if (this.writes) throw new Error("Wait for backend changes to finish before switching.");
+    this.retire();
+  }
+  retire() {
     this.ended = true;
     this.abort.abort();
     invalidateBackendCapabilities(this.context);

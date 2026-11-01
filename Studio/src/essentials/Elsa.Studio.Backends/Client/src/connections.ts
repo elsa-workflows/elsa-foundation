@@ -75,6 +75,7 @@ export class BackendConnections {
   private revision?: string;
   private operation = 0;
   private ended = false;
+  private readonly abort = new AbortController();
   private initializing?: Promise<void>;
   private signInCandidate: {profile:StudioBackendProfile;manager:AuthProviderManager} | null = null;
   private readonly localKey: string;
@@ -92,10 +93,11 @@ export class BackendConnections {
     this.localKey = `elsa.studio.backend-profiles.v1:${JSON.stringify([window.location.origin,config.hostId ?? "default",hostIdentity.subject ?? "anonymous",hostIdentity.tenantId ?? "default"])}`;
     this.snapshot = {profiles:this.configured,active:null,loading:true,busy:false,error:null,profileError:null,signInProfile:null};
   }
-  dispose() {this.ended=true;this.operation++;this.signInCandidate=null;if(!this.snapshot.active?.pendingWrites)this.snapshot.active?.dispose();this.listeners.clear();}
+  dispose() {this.ended=true;this.abort.abort();this.operation++;this.signInCandidate=null;this.snapshot.active?.retire();this.listeners.clear();}
   getSnapshot = () => this.snapshot;
   subscribe = (listener:() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  private update(value: Partial<BackendConnectionsSnapshot>) { this.snapshot = {...this.snapshot,...value}; for (const listener of this.listeners) listener(); }
+  private assertActive() {if(this.ended)throw new DOMException("The backend management lifetime has ended.","AbortError");}
+  private update(value: Partial<BackendConnectionsSnapshot>) { if(this.ended)return; this.snapshot = {...this.snapshot,...value}; for (const listener of this.listeners) listener(); }
   private async loadPersonal() {
     if (!this.allowPersonal) return;
     if (this.hostIdentity.status !== "authenticated") {
@@ -107,7 +109,7 @@ export class BackendConnections {
       }
     } else {
       try {
-        const document = await this.hostContext.http.getJson<{revision:string;value:{profiles:unknown}}>(this.config.profileApiPath);
+        const document = await this.hostContext.http.getJson<{revision:string;value:{profiles:unknown}}>(this.config.profileApiPath,{signal:this.abort.signal});
         this.personal = validatePersonalProfiles(document.value.profiles);
         this.revision = document.revision;
       } catch (error) { if (!(error instanceof StudioHttpError && error.status === 404)) throw error; }
@@ -152,6 +154,7 @@ export class BackendConnections {
     }
   }
   private async prepare(profile:StudioBackendProfile,operation=this.operation): Promise<PreparedBackend> {
+    this.assertActive();
     const auth = profile.authenticationProfile ? this.config.backends?.authenticationProfiles?.[profile.authenticationProfile] : undefined;
     if (profile.authenticationProfile && !auth) throw new Error("This profile references an unknown authentication profile.");
     const original = canonicalBackendUrl(this.config.backendBaseUrl ?? "");
@@ -166,6 +169,7 @@ export class BackendConnections {
       const baseUrl = profile.baseUrl;
       manager = createBackendAuthProviderManager({baseUrl,tokenEndpoint:auth?.tokenEndpoint,refreshEndpoint:auth?.refreshEndpoint,shellRelative:true});
       identity = await manager.initialize();
+      this.assertActive();
     }
     if (manager && identity.status !== "authenticated") {
       if (operation === this.operation) {this.signInCandidate = {profile,manager};this.update({signInProfile:profile.id});}
@@ -176,6 +180,7 @@ export class BackendConnections {
     catch (error) { prepared.dispose(); throw error; }
   }
   private guard() {
+    this.assertActive();
     if (this.snapshot.active?.pendingWrites) throw new Error("Wait for backend changes to finish before switching.");
     if (!requestStudioNavigation(`${window.location.pathname}${window.location.search}`,"/settings/backends")) throw new Error("The backend was not changed. Finish or discard the current draft first.");
   }
@@ -229,6 +234,7 @@ export class BackendConnections {
     return capabilities;
   }
   async saveProfiles(profiles:StudioBackendProfile[]) {
+    this.assertActive();
     if (!this.allowPersonal) throw new Error("Personal backend profiles are disabled by your Studio host.");
     const personal = validatePersonalProfiles(profiles.map(metadata));
     if (personal.some(item => this.configured.some(configured => configured.id === item.id))) throw new Error("A configuration-managed backend cannot be replaced.");
@@ -241,7 +247,8 @@ export class BackendConnections {
       localStorage.setItem(this.localKey,JSON.stringify({...value,revision}));
       this.revision = revision;
     } else {
-      const document = await this.hostContext.http.putJson<{revision:string}>(this.config.profileApiPath,{schemaVersion:1,value},{headers:this.revision ? {"If-Match":`"${this.revision}"`} : {"If-None-Match":"*"}});
+      const document = await this.hostContext.http.putJson<{revision:string}>(this.config.profileApiPath,{schemaVersion:1,value},{signal:this.abort.signal,headers:this.revision ? {"If-Match":`"${this.revision}"`} : {"If-None-Match":"*"}});
+      this.assertActive();
       this.revision = document.revision;
     }
     this.personal = personal;
@@ -260,6 +267,7 @@ export class BackendConnections {
     await this.saveProfiles(this.personal.filter(item => item.id !== id));
   }
   qualifyPath(path:string) {
+    this.assertActive();
     const url = new URL(path,window.location.origin);
     if (url.origin !== window.location.origin) throw new Error("Studio navigation must stay on the Studio host.");
     const target=url.searchParams.get("backend");

@@ -5,6 +5,8 @@ import type {AuthProviderManager, AuthSession, ElsaStudioModuleApi, StudioBacken
 export interface StudioManagedBackendSession extends StudioBackendSession {
   readonly manager: AuthProviderManager | null;
   dispose(): void;
+  /** End a document/identity lifetime, including in-flight requests. */
+  retire(): void;
 }
 
 export interface StudioConnectionSnapshot {

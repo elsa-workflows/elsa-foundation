@@ -105,13 +105,42 @@ describe("studio auth mounting", () => {
     finally{await view.unmount();initialize.mockRestore();}
   });
 
+  it.each([false,true])("waits for a prepopulated controller initialization before registration (reject: %s)",async reject=>{
+    stubShellFetch();
+    const {StudioBackendConnection,anonymousAuthSession}=await import("../sdk");
+    const active=new StudioBackendConnection({id:"acme",name:"Acme",baseUrl:"http://backend.example/",environment:"Development",source:"configuration"},null,anonymousAuthSession);
+    const snapshot={active,loading:false,error:null};
+    let resolve!:()=>void,rejectInit!:(error:Error)=>void;
+    const pending=new Promise<void>((yes,no)=>{resolve=yes;rejectInit=no;});
+    const initializeConnection=vi.fn(()=>pending);
+    const register=vi.fn(),dispose=vi.fn(()=>active.retire());
+    const initialize=vi.spyOn(moduleLoader,"initializeStudioModules").mockImplementation(async(_manifests,context)=>({instances:[{manifest:{id:"acme",displayName:"Acme",entry:"",styles:[],version:"1",requiredHostVersion:"*",requiredSdkVersion:"*",capabilities:[]},instance:{register,connection:{hostContext:context.host,hostIdentity:context.identity,subscribe:()=>()=>{},getSnapshot:()=>snapshot,initialize:initializeConnection,qualifyPath:path=>path,dispose}}}],diagnostics:[]}));
+    const view=await renderApp();
+    try {
+      await vi.waitFor(()=>expect(view.container.querySelector('[aria-label="Connecting to backend"]')).not.toBeNull());
+      await vi.waitFor(()=>expect(initializeConnection).toHaveBeenCalledOnce());
+      expect(register).not.toHaveBeenCalled();
+      if(reject){rejectInit(new Error("Deferred Acme failure"));await vi.waitFor(()=>expect(view.container.textContent).toContain("Deferred Acme failure"));expect(register).not.toHaveBeenCalled();}
+      else {resolve();await vi.waitFor(()=>expect(register).toHaveBeenCalled());}
+    } finally {await view.unmount();expect(dispose).toHaveBeenCalledOnce();initialize.mockRestore();}
+  });
+
+  it("always calls controller disposal on teardown with pending writes",async()=>{
+    stubShellFetch();
+    const dispose=vi.fn();
+    const snapshot={active:{pendingWrites:1} as import("../sdk").StudioManagedBackendSession,loading:true,error:null};
+    const initialize=vi.spyOn(moduleLoader,"initializeStudioModules").mockImplementation(async(_manifests,context)=>({instances:[{manifest:{id:"acme",displayName:"Acme",entry:"",styles:[],version:"1",requiredHostVersion:"*",requiredSdkVersion:"*",capabilities:[]},instance:{register:vi.fn(),connection:{hostContext:context.host,hostIdentity:context.identity,subscribe:()=>()=>{},getSnapshot:()=>snapshot,initialize:async()=>{},qualifyPath:path=>path,dispose}}}],diagnostics:[]}));
+    const view=await renderApp();
+    try{await vi.waitFor(()=>expect(view.container.querySelector('[aria-label="Connecting to backend"]')).not.toBeNull());await view.unmount();expect(dispose).toHaveBeenCalledOnce();}finally{initialize.mockRestore();}
+  });
+
   it("boots anonymously and attaches no bearer token when no provider is configured", async () => {
     // No runtime auth config -> anonymous contract: the shell must boot with no login gate.
     const fetchMock = stubShellFetch();
     const { container, unmount } = await renderApp();
 
     expect(createStudioAuthManager({}, "https://studio.example")).toBeNull();
-    expect(container.textContent).toContain("Elsa Studio");
+    await vi.waitFor(()=>expect(container.textContent).toContain("Elsa Studio"));
     expect(container.textContent).not.toContain("Signing in");
 
     // Every request the shell issued must be unauthenticated.

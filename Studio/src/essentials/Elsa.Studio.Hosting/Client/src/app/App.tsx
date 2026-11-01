@@ -1633,7 +1633,7 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   return ()=>{
    abort.abort();
    if(owned){
-    if(!owned.modules.some(item=>item.instance.connection===owned!.connection) && !owned.connection.getSnapshot().active?.pendingWrites)owned.connection.dispose?.();
+    if(!owned.modules.some(item=>item.instance.connection===owned!.connection))owned.connection.dispose?.();
     for(const {instance} of [...owned.modules].reverse())disposeStudioModuleInstance(instance);
    }
   };
@@ -1649,15 +1649,16 @@ function ConnectionApplication({authManager,connections,modules,manifest}:{authM
  const hostAuth=useAuthContext();
  const snapshot=useSyncExternalStore(connections.subscribe,connections.getSnapshot);
  const [initializationError,setInitializationError]=useState<string|null>(null);
+ const [initialized,setInitialized]=useState(false);
  useEffect(()=>{
   let mounted=true;
-  void connections.initialize().catch(error=>{if(mounted)setInitializationError(error instanceof Error?error.message:String(error));});
+  void connections.initialize().then(()=>{if(mounted)setInitialized(true);}).catch(error=>{if(mounted)setInitializationError(error instanceof Error?error.message:String(error));});
   const stopRestore=reloadConnectionOnPageRestore(connections);
   return()=>{mounted=false;stopRestore();};
  },[connections]);
  const navigate=(path:string)=>window.location.assign(path);
- if(!snapshot.active || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
- {snapshot.loading && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
+ if(!snapshot.active || !initialized || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
+ {(!initialized || snapshot.loading) && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
  </ShellFrame></ThemeProvider>;
  const content=<SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} modules={modules} manifest={manifest}/>;
  return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager===authManager ? content : snapshot.active.manager?<AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider>:<AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;
