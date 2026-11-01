@@ -578,3 +578,5 @@ Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.Conversation.get
 Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.Conversation.init -> void
 Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.AdmissionGeneration.get -> int
 Elsa.Agent.Specialists.Core.Models.SpecialistRetentionCandidate.AdmissionGeneration.init -> void
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.SupportsStreaming.get -> bool
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.SupportsStreaming.init -> void

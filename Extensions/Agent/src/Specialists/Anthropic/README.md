@@ -13,3 +13,8 @@ This package uses the official Anthropic SDK independently of Weaver's selected 
 - `ISpecialistModelCapabilitiesSource` and `ISpecialistModelClientFactory` are intra-domain Agent
   contributions for the exact `anthropic` key, registered scoped; their canonical ports are in
   [Specialists Core](../Core/EXTENSION_POINTS.md).
+
+The optional `SpecialistsRuntime.StreamResponses` host setting uses the qualified `stream1` profile
+through MAF. Completion/refusal checks precede accepted result/history; partial output and interrupted
+streams remain unaccepted. See the [runtime boundary](../Elsa.Agent.Specialists/EXTENSION_POINTS.md#optional-streaming-responses)
+and [pinned signal experiment](../../../../../tools/agents/research/streaming/README.md).

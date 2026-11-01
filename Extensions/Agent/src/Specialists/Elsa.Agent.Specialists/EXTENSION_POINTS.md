@@ -46,6 +46,34 @@ to a single physical request; otherwise output accounting retains every reserved
 protected receipt carries these observations separately from the public business JSON. Input/total-token
 hard limits are not claimed. SDK retries and primary redirects remain independently disabled.
 
+## Optional streaming responses
+
+Set `SpecialistsRuntimeFeature.StreamResponses = true` to use MAF `RunStreamingAsync`. Atomic model
+responses remain the default. Streaming requires a lease declaring `SupportsStreaming`; an unqualified
+lease is refused before model dispatch. The built-in providers qualify their `stream1` protocol profile;
+its capability fingerprint changes, so a publication bound to the earlier profile requires republishing
+before new inference. Retained accepted replay requires no provider and remains independent.
+
+The runtime admits at most 16,384 updates and 1 MiB of visible UTF-8 text before MAF aggregation,
+strips reasoning/raw representations/provider identifiers and accepts no session candidate until
+complete successful enumeration, terminal/result/schema validation and journal acceptance. These
+bounds apply to projected SDK updates; they do not impose a byte limit on SDK HTTP/SSE parsing.
+Anthropic requires its raw terminal reason plus message_stop. Azure refusal is checked on its raw
+stream update. Missing terminal, refusal, truncation, unsupported content, inconsistent model/usage,
+cancellation and loss cannot become an accepted JSON prefix. Partial visible output is not a business
+result. This transport option does not enable provider-managed conversations, tools or streaming
+resume tokens, and adds no serialized descriptor/session format.
+
+Physical reservations, point-of-use auth, original deadlines, native cancellation and journal leases
+apply to the whole stream. Accounting commits only after complete validated stream enumeration;
+interrupted/refused streams may retain unknown usage and all reserved ceilings. Incomplete or invalid
+stream evidence retains outcome uncertainty and blocks conversation reuse; explicit refusal/truncation
+is a known failure and never advances its accepted history. No inference retry is
+introduced. Observed cumulative usage is copied separately from business JSON; the Anthropic adapter
+preserves start input counts when a final SDK delta omits them. Input/total hard limits and billable
+cache accounting remain unsupported. Studio partial display requires its own authorized observation
+contract; this increment adds no public partial-result event.
+
 Legacy manifest1/descriptor1 keeps fresh-only public invocation. Manifest2 with explicit continuity
 publishes optional AgentOptions and safe Conversation metadata; see the
 [authoring contract](../Design/EXTENSION_POINTS.md#explicit-continuation-contracts). A new MAF session

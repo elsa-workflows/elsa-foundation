@@ -13,3 +13,8 @@ This package uses the official Azure OpenAI SDK independently of Weaver's select
 - `ISpecialistModelCapabilitiesSource` and `ISpecialistModelClientFactory` are intra-domain Agent
   contributions for the exact `azure-openai` key, registered scoped; their canonical ports are in
   [Specialists Core](../Core/EXTENSION_POINTS.md).
+
+The optional `SpecialistsRuntime.StreamResponses` host setting uses the qualified `stream1` profile
+through MAF. Completion/refusal checks precede accepted result/history; partial output and interrupted
+streams remain unaccepted. See the [runtime boundary](../Elsa.Agent.Specialists/EXTENSION_POINTS.md#optional-streaming-responses)
+and [pinned signal experiment](../../../../../tools/agents/research/streaming/README.md).

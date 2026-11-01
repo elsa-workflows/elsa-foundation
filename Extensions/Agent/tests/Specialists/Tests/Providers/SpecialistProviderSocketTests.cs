@@ -33,7 +33,7 @@ using static Elsa.Agent.Specialists.Tests.Providers.SpecialistConnectionProvider
 
 namespace Elsa.Agent.Specialists.Tests.Providers;
 
-public sealed class SpecialistProviderSocketTests
+public sealed partial class SpecialistProviderSocketTests
 {
     [Theory]
     [InlineData("anthropic", "success")]

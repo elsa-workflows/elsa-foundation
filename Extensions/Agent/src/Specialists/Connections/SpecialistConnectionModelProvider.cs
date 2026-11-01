@@ -27,6 +27,8 @@ public abstract class SpecialistConnectionModelProvider(
     protected abstract string ProtocolProfile { get; }
     /// <summary>Explicit opt-in after qualifying SDK and primary-handler physical request behavior.</summary>
     protected virtual bool SupportsPhysicalRequestReservations => false;
+    /// <summary>Explicit opt-in after qualifying provider streaming completion and refusal signals.</summary>
+    protected virtual bool SupportsStreaming => false;
     /// <summary>Creates an owned SDK client with retries disabled and no ambient credential fallback.</summary>
     protected abstract IChatClient CreateClient(Uri endpoint, string modelId, SensitiveValue apiKey, HttpClient http);
 
@@ -95,7 +97,7 @@ public abstract class SpecialistConnectionModelProvider(
                 Temperature = settings,
                 MaxOutputTokens = profile.Capabilities.MaximumOutputTokens
             }, profile.Capabilities.Fingerprint, version, new OwnedHttpClient(http))
-            { EnforcesDispatchAuthority = SupportsPhysicalRequestReservations && request.DispatchAuthority is not null };
+            { EnforcesDispatchAuthority = SupportsPhysicalRequestReservations && request.DispatchAuthority is not null, SupportsStreaming = SupportsStreaming };
         }
         catch { http.Dispose(); throw; }
     }

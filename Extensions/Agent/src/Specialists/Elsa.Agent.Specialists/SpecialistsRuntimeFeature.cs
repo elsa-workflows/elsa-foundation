@@ -31,6 +31,9 @@ public class SpecialistsRuntimeFeature : IShellFeature
     /// <summary>Allows new logical operations. Disabling keeps matching admitted work, readers and settlement available.</summary>
     public bool AllowNewOperations { get; set; } = true;
 
+    /// <summary>Uses validated streaming model responses. Requires a streaming-qualified model contribution; defaults to false.</summary>
+    public bool StreamResponses { get; set; }
+
     /// <summary>Protected content retention after native workflow completion; active work remains pinned. Defaults to thirty days.</summary>
     public TimeSpan ContentRetention { get; set; } = TimeSpan.FromDays(30);
 
@@ -44,6 +47,7 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddScoped<SpecialistRetentionPruner>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, SpecialistRetentionPumpTask>());
         services.TryAddSingleton(new SpecialistAdmissionPolicy(AllowNewOperations));
+        services.TryAddSingleton(new SpecialistStreamingPolicy(StreamResponses));
         services.TryAddScoped<SpecialistSchemaValidator>();
         services.TryAddScoped<SpecialistNativeBinding>();
         services.TryAddScoped<SpecialistTurnJournal>();

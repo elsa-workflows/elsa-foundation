@@ -27,9 +27,13 @@ internal sealed record SpecialistTurnResult(JsonElement Result, long? InputToken
 internal sealed class SpecialistTurnException(string code, string message, Exception? innerException = null) : Exception(message, innerException)
 {
     public string Code { get; } = code;
+    public bool OutcomeUnknown { get; init; }
 }
 
-internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFactory> factories, SpecialistSchemaValidator schemas, SpecialistSessionCodec sessions)
+internal sealed record SpecialistStreamingPolicy(bool Enabled);
+
+internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFactory> factories, SpecialistSchemaValidator schemas, SpecialistSessionCodec sessions,
+    SpecialistStreamingPolicy? streaming = null)
 {
     public PreparedSpecialistSchema ValidateRequest(SpecialistTurnRequest request)
     {
@@ -76,6 +80,8 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             throw Failure("specialist.model.changed", "The model connection or capabilities no longer satisfy the published specialist.");
         if (authority is not null && !lease.EnforcesDispatchAuthority)
             throw Failure("specialist.budget.provider", "This model lease cannot enforce physical request reservations.");
+        if (streaming?.Enabled == true && !lease.SupportsStreaming)
+            throw Failure("specialist.streaming.unavailable", "The selected model contribution has no qualified streaming profile.");
         // Every invocation gets a new SDK session. Only an explicitly admitted protected snapshot
         // restores earlier accepted messages; MAF session serialization is never persisted.
         var options = lease.Options.Clone();
@@ -99,8 +105,9 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         });
         var session = await agent.CreateSessionAsync(cancellationToken);
         if (prior.Count > 0) history.SetMessages(session, prior.ToList());
-        var response = await agent.RunAsync(request.Inputs.GetRawText(), session,
-            new ChatClientAgentRunOptions(options), cancellationToken);
+        var response = streaming?.Enabled == true
+            ? await agent.RunStreamingAsync(request.Inputs.GetRawText(), session, new ChatClientAgentRunOptions(options), cancellationToken).ToAgentResponseAsync(cancellationToken)
+            : await agent.RunAsync(request.Inputs.GetRawText(), session, new ChatClientAgentRunOptions(options), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (Encoding.UTF8.GetByteCount(response.Text) > SpecialistSchemaValidator.MaximumValueBytes)
             throw Failure("specialist.result.bounds", "The model result exceeds the bounded JSON profile.");
@@ -146,9 +153,19 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             if (authority is not null) await authority.CompleteResponseAsync(response.Usage, response.ModelId, cancellationToken);
             return SpecialistModelResponseFilter.VisibleResult(response);
         }
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
-            CancellationToken cancellationToken = default) =>
-            throw Failure("specialist.streaming.unavailable", "This specialist profile requires an atomic model response.");
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Interlocked.Increment(ref calls) > maximumCalls)
+                throw Failure("specialist.budget.calls", "The specialist model-call budget is exhausted.");
+            var filter = new SpecialistStreamingResponseFilter();
+            await foreach (var update in inner.GetStreamingResponseAsync(messages, options, cancellationToken).WithCancellation(cancellationToken))
+                yield return filter.Filter(update);
+            cancellationToken.ThrowIfCancellationRequested();
+            filter.Complete();
+            if (authority is not null) await authority.CompleteResponseAsync(filter.Usage, filter.ModelId, cancellationToken);
+        }
         public object? GetService(Type serviceType, object? serviceKey = null) => serviceType == typeof(IChatClient) && serviceKey is null ? this : null;
         // The provider lease owns the underlying client; the SDK wrapper owns no additional resource.
         public void Dispose() { }

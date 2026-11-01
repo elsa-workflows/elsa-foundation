@@ -9,3 +9,5 @@ Elsa.Agent.Specialists.SpecialistsRuntimeFeature.AllowNewOperations.get -> bool
 Elsa.Agent.Specialists.SpecialistsRuntimeFeature.AllowNewOperations.set -> void
 Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ContentRetention.get -> System.TimeSpan
 Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ContentRetention.set -> void
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.StreamResponses.get -> bool
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.StreamResponses.set -> void

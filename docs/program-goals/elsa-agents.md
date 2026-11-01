@@ -83,8 +83,11 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    matching-operation/native-delivery replay, confirmed acceptance-acknowledgement recovery and
    native checkpoint/outbox application/cancellation settlement and pre-admission tombstones. These are draft increments with separate source,
    provider and bounded package receipts on the owning issue; whole-M3 delivery still requires
-   retention/compatibility and complete native recovery,
-   streaming and complete support qualification.
+   complete support/deployment compatibility qualification. Bounded retention, disabled new admission,
+   key/codec readers and independent-process packaged native recovery are implemented draft increments;
+   the latter uses file SQLite and a deterministic model in Balanced/Durable, not live inference or
+   power-loss proof. Streaming is being qualified through pinned SDK, actual socket and native tests.
+   Whole-M3 delivery remains open; M4-M7 have not begun.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).

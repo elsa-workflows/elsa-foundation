@@ -406,3 +406,19 @@ acceptance. Primary source provenance and reproduction commands are in the fixtu
 drift, native process/journal recovery, production content/session codecs, actual protocol servers,
 streaming/Responses and live model behavior require their own implementation evidence. This spike
 does not advance M3 execution past M2 or qualify a packaged/custom runtime host.
+
+## M3 streaming signal follow-up
+
+The [pinned streaming probe](../../tools/agents/research/streaming/README.md) observes normally
+returned valid JSON without terminal signals from both adapters, Anthropic `pause_turn` mapped to
+coarse Stop, and Azure refusal only on its raw streaming update. Anthropic's final delta can also
+erase its start input count. Production profiles must validate raw terminal/refusal meaning before
+stripping SDK data and preserve actually observed cumulative accounting. The probe and its terminal
+guard control use injected SSE responses with no sockets/live inference. Actual provider transports,
+native checkpoints and protected history are qualified separately in the owning M3 draft.
+
+Streaming remains a host opt-in using MAF `RunStreamingAsync`; atomic responses remain the default.
+A qualified lease is required, and no partial JSON prefix is a business result. Bounds apply before
+MAF aggregation to projected SDK updates, not to the SDK HTTP/SSE parser. Studio partial display,
+provider-managed conversations and stream resume are separate capabilities. See the implementing
+[runtime contract](../../Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md#optional-streaming-responses).

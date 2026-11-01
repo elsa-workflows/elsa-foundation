@@ -1041,7 +1041,7 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
     }
 
-    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null, PersistenceMode persistenceMode = PersistenceMode.Durable, bool allowNewOperations = true)
+    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null, PersistenceMode persistenceMode = PersistenceMode.Durable, bool allowNewOperations = true, bool streamResponses = false)
     {
         var services = new ServiceCollection();
         if (clock is not null) services.AddSingleton(clock);
@@ -1056,7 +1056,7 @@ public sealed partial class SpecialistNativeTests
         new SerializationFeature().ConfigureServices(services);
         new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
         new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
-        new SpecialistsRuntimeFeature { AllowNewOperations = allowNewOperations }.ConfigureServices(services);
+        new SpecialistsRuntimeFeature { AllowNewOperations = allowNewOperations, StreamResponses = streamResponses }.ConfigureServices(services);
         new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
         if (journalConnection is not null)
             Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration.AddSpecialistsEntityFrameworkCore(services,
@@ -1156,6 +1156,12 @@ public sealed partial class SpecialistNativeTests
         public int Opens { get; private set; }
         public int Calls { get; private set; }
         public int Disposals { get; private set; }
+        public int AtomicCalls { get; private set; }
+        public int StreamingCalls { get; private set; }
+        public bool SupportsStreaming { get; init; } = true;
+        public string StreamMode { get; init; } = "success";
+        public TaskCompletionSource? StreamTerminalGate { get; init; }
+        public TaskCompletionSource StreamPrefixSent { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string? Instructions { get; private set; }
         public string? LastUser { get; private set; }
         public string? ModelId { get; private set; }
@@ -1169,11 +1175,16 @@ public sealed partial class SpecialistNativeTests
         {
             Opens++;
             return ValueTask.FromResult(new SpecialistModelClientLease(new Client(this, request), new ChatOptions { MaxOutputTokens = 4096 }, "fixture/1", 1)
-                { EnforcesDispatchAuthority = enforcesAccounting && request.DispatchAuthority is not null });
+                { EnforcesDispatchAuthority = enforcesAccounting && request.DispatchAuthority is not null, SupportsStreaming = SupportsStreaming });
         }
         private sealed class Client(FixtureFactory owner, SpecialistModelOpenRequest request) : IChatClient
         {
-            public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            {
+                owner.AtomicCalls++;
+                return RespondAsync(messages, options, cancellationToken);
+            }
+            private async Task<ChatResponse> RespondAsync(IEnumerable<ChatMessage> messages, ChatOptions? options, CancellationToken cancellationToken)
             {
                 if (request.DispatchAuthority is { } authority)
                     await authority.BeforeSendAsync(new("fixture", request.Descriptor.Model.ModelId, "fixture-incarnation", 1, "fixture/1", "external-deterministic-one-response/1"), cancellationToken);
@@ -1200,7 +1211,18 @@ public sealed partial class SpecialistNativeTests
                     }
                 };
             }
-            public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+            public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+                [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+            {
+                owner.StreamingCalls++;
+                var response = await RespondAsync(messages, options, cancellationToken);
+                yield return new(ChatRole.Assistant, [new TextReasoningContent("fixture-private-reasoning"), new TextContent(response.Text)]);
+                owner.StreamPrefixSent.TrySetResult();
+                if (owner.StreamTerminalGate is { } gate) await gate.Task.WaitAsync(cancellationToken);
+                if (owner.StreamMode == "missing-terminal") yield break;
+                yield return new ChatResponseUpdate { FinishReason = owner.StreamMode == "refusal" ? ChatFinishReason.ContentFilter : ChatFinishReason.Stop, ModelId = response.ModelId };
+                if (response.Usage is not null) yield return new(ChatRole.Assistant, [new UsageContent(response.Usage)]);
+            }
             public object? GetService(Type serviceType, object? serviceKey = null) => null;
             public void Dispose() => owner.Disposals++;
         }

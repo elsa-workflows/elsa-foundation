@@ -20,3 +20,7 @@ Connections type registry. Keep it separate from the scoped model owner and reso
 
 `IConnectionTypeProvider` from Connections Core is implemented by the stateless type definition;
 the optional vendor features register its exact configured connection type in the owning registry.
+
+`SupportsStreaming` also defaults to false. An owner may opt in only after qualifying its SDK's raw
+completion/refusal signals. The runtime separately bounds and filters projected updates before MAF
+aggregation. The lease flag does not grant tools, provider-managed sessions or automatic stream retries.

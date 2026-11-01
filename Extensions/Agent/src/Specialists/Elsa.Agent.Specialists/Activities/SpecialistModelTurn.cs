@@ -103,7 +103,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             }
             var cause = renewal?.IsLost == true ? renewal.Failure() : exception;
             var code = cause is SpecialistTurnException specialist ? specialist.Code : "specialist.turn.interrupted";
-            var unknown = code == "specialist.turn.outcome-unknown" || dispatched && (cause is not SpecialistTurnException || renewal?.IsLost == true ||
+            var unknown = cause is SpecialistTurnException { OutcomeUnknown: true } || code == "specialist.turn.outcome-unknown" || dispatched && (cause is not SpecialistTurnException || renewal?.IsLost == true ||
                 code is "specialist.turn.fence" or "specialist.turn.deadline" or "specialist.budget.fence" or "specialist.budget.deadline");
             // Waiting/admission failure owns no claim. Never settle the operation occupying that fence.
             if (ownsClaim) await journal.FailAsync(document, code, unknown, CancellationToken.None);

@@ -44,6 +44,9 @@ public sealed class SpecialistModelClientLease(
     /// <summary>True only when this lease invokes the supplied authority before every physical model request.</summary>
     public bool EnforcesDispatchAuthority { get; init; }
 
+    /// <summary>True only when the client validates its streaming terminal and refusal signals.</summary>
+    public bool SupportsStreaming { get; init; }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
