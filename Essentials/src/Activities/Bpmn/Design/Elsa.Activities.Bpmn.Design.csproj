@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />

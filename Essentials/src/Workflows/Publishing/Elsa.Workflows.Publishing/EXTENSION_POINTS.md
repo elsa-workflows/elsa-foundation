@@ -186,6 +186,8 @@ Ordinary edits still follow the coordinator's snapshot semantics; this is not a 
   result is exposed.
 - **Known implementation:** `DispatchPinSource` *(cross-domain — DispatchWorkflow Design)* contributes exact pinned
   child metadata and dependency claims after tenant/liveness/input-contract validation.
+- **Known implementation:** `BpmnEmbeddingPinSource` *(cross-domain — `Elsa.Activities.Bpmn.Design`)* contributes
+  exact live, tenant-matched published model identity/incarnation metadata and dependency claims for `RunBpmn`.
 - **Boundary:** Collection occurs after node compilation and before executable hashing. The compiler canonicalizes
   declared workflow inputs and exact direct dependencies into behavioral identity, then validates every reachable
   child graph by full artifact ID/hash before publication can activate the candidate.

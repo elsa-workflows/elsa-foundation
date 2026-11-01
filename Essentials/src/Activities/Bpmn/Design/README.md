@@ -12,6 +12,13 @@ one structure handler and one model-reference contribution. Publishing hosts sup
 material and source-reference stores. Runtime-only hosts enable `ActivitiesBpmn` and/or
 `ActivitiesBpmnHosting` without this package.
 
+## Cross-domain contributions
+
+- Workflows Design [`IActivityStructureHandler`](../../../Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore):
+  the singleton `BpmnStructureHandler` projects authored children/outcomes and scoped variables, then lowers/remaps the executable graph.
+- Workflows Publishing [`IExecutableCompilationSource`](../../../Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md#iexecutablecompilationsource):
+  the scoped `BpmnEmbeddingPinSource` validates exact live tenant-matched model material and contributes its immutable metadata/dependency pin.
+
 ## Pre-GA source/package migration
 
 `Elsa.Activities.Bpmn.Models.BpmnAuthoredStructure` retains its namespace and JSON shape, but moves

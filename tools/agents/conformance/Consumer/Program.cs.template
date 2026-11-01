@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 #if BPMN
 using Elsa.Activities.Bpmn;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Primitives;
 using Elsa.Primitives.Models;
 using BpmnProcess = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 #endif
@@ -67,7 +68,7 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature)
         typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly,
         typeof(FileSystemLockingFeature).Assembly
 #if BPMN
-        , typeof(ActivitiesBpmnFeature).Assembly
+        , typeof(ActivitiesBpmnFeature).Assembly, typeof(ActivitiesPrimitivesFeature).Assembly
 #endif
 #if COMBINED
         , typeof(ActivitiesBpmnDesignFeature).Assembly
@@ -76,6 +77,7 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature)
     .AddShell("specialist-package", shell => shell.WithFeature<PackageHostFeature>()
         #if BPMN
         .WithFeature<ActivitiesBpmnFeature>()
+        .WithFeature<ActivitiesPrimitivesFeature>()
 #endif
 #if COMBINED
         .WithFeature<ActivitiesBpmnDesignFeature>()

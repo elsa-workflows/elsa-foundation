@@ -13,6 +13,7 @@
     <PackageReference Include="Acme.Specialist.ModelFixture" Version="__VERSION__" />
     <PackageReference Include="Elsa.Agent.Specialists" Version="__VERSION__" />
     <PackageReference Include="Elsa.Activities.Bpmn.Design" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Activities.Primitives" Version="__VERSION__" />
     <PackageReference Include="Elsa.Activities.Bpmn" Version="__VERSION__" />
     <PackageReference Include="Elsa.Activities.Runtime" Version="__VERSION__" />
     <PackageReference Include="Elsa.Serialization.SystemText" Version="__VERSION__" />

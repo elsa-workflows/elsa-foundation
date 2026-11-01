@@ -93,7 +93,7 @@ def main():
 
         roots = PRODUCT_ROOTS + (["Elsa.Agent.Specialists.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
         if args.profile == "bpmn-boundary":
-            roots += ["Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Design"]
+            roots += ["Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Design", "Elsa.Activities.Primitives"]
         for name in roots:
             visit(projects[name])
         solution = ET.Element("Solution")
