@@ -83,3 +83,18 @@ declares streaming support and emits two visible chunks plus terminal/usage upda
 dispatch receipt identifies the selected atomic/stream path. Recovery/settlement still run without a
 model contribution. This is packaged streaming/runtime proof, distinct from the concrete SDK socket
 fixtures and live-provider qualification.
+
+For two retained successful durable receipts, the unchanged-format binary check runs without rebuilding
+either consumer:
+
+```bash
+python3 tools/agents/conformance/compatibility.py --older /absolute/older-atomic-witness --newer /absolute/newer-streaming-witness --output /absolute/new-binary-proof
+```
+
+It rechecks package archives and actual consumer product DLLs, then crosses five distinct processes per
+case in both directions and both persistence modes. The writer starts/accepts using its own package
+closure; the other revision performs model-free recovery, application/ack recovery and final verification
+through normal CShell activation/readiness. Reports retain both source/version/receipt identities and
+the actually used atomic/stream path. This proves this named unchanged-format pair only; it grants no
+arbitrary downgrade, reverse migration, missing-key recovery or live-model support. Input receipts and
+publications remain unchanged.
