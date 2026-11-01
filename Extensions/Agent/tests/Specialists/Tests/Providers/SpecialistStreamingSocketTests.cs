@@ -128,7 +128,21 @@ public sealed partial class SpecialistProviderSocketTests
                 Assert.Null(await store.ClaimAsync(handle, request.Identity, "second-child", "second-fence", DateTimeOffset.UtcNow, CancellationToken.None));
             }
             else Assert.Equal(SpecialistTurnStatus.Accepted, observed.Status);
-            if (mode != "cancel-before") Assert.True(Assert.Single(server.Requests).Body.GetProperty("stream").GetBoolean());
+            if (mode != "cancel-before")
+            {
+                var sent = Assert.Single(server.Requests);
+                Assert.True(sent.Body.GetProperty("stream").GetBoolean());
+                Assert.Equal("HTTP/1.1", sent.Protocol);
+                Assert.Equal("fixture-not-a-real-credential", sent.ApiKey);
+                Assert.Null(sent.Authorization);
+                Assert.Equal(64, sent.Body.GetProperty(vendor == "anthropic" ? "max_tokens" : "max_completion_tokens").GetInt32());
+                var actualSchema = vendor == "anthropic"
+                    ? sent.Body.GetProperty("output_config").GetProperty("format").GetProperty("schema")
+                    : sent.Body.GetProperty("response_format").GetProperty("json_schema").GetProperty("schema");
+                Assert.True(JsonElement.DeepEquals(request.Descriptor.ResultSchema, actualSchema));
+                if (vendor == "anthropic") Assert.Equal("fixture-model", sent.Body.GetProperty("model").GetString());
+                else Assert.Contains("fixture-model", sent.Path, StringComparison.Ordinal);
+            }
         }
         finally { Directory.Delete(directory, true); }
     }
