@@ -12,6 +12,7 @@
     <ProjectReference Include="../../../src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
     <ProjectReference Include="../../../src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
@@ -31,6 +32,7 @@
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="../../../src/Specialists/Editorial/Elsa.Agent.Specialists.Editorial.csproj" />
+    <ProjectReference Include="../../../src/Specialists/EditorialApi/Elsa.Agent.Specialists.Editorial.Api.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />

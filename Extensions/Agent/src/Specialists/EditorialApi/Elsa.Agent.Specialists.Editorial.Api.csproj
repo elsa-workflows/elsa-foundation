@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <ProjectReference Include="../Editorial/Elsa.Agent.Specialists.Editorial.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Agent.Specialists.Tests" />
+  </ItemGroup>
+</Project>
