@@ -1,6 +1,6 @@
 # Container Output Captures Resolve Through Producer-Visible Variable Frames
 
-Status: accepted (2026-07-23; approved for [issue #1004](https://github.com/elsa-workflows/elsa-foundation/issues/1004))
+Status: accepted (2026-07-23; approved for [issue #1004](https://github.com/elsa-workflows/elsa-foundation/issues/1004); §4, §5 and §6 amended 2026-10-23, see [Unordered-capture amendment](#unordered-capture-amendment-2026-10-23))
 
 This decision refines the accepted output-capture slice of
 [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md), operationalizes the
@@ -115,11 +115,14 @@ the same runtime checkpoint commit as:
 - any other capture state owned by that completion.
 
 A container-variable capture updates the canonical variable frame owned by the concrete container
-activation. It does not create a `DurableValueState` row as a shadow variable store. Frame revision
-checks remain the runtime defense against stale concurrent mutation; conflict handling must preserve
-the checkpoint store's existing retry and convergence semantics.
+activation. It does not create a `DurableValueState` row as a shadow variable store. Commits for one
+workflow execution are totally ordered: its execution actor admits one command at a time, one drain
+applies scheduler work items in turn, and checkpoint commits are fenced by the execution's ownership
+token, so a stale owner's commit is refused and its work item is redone by the current owner. The
+frame revision is a version counter that also refuses writes to a closed frame; it is not the
+defense against concurrent mutation.
 
-### 5. Enforce lexical, iteration, and concurrency safety at publication
+### 5. Enforce lexical and iteration safety at publication; warn about unordered captures
 
 Publication accepts a container target only when the declaration is lexically visible from the
 producing node and the target kind is writable:
@@ -130,8 +133,9 @@ producing node and the target kind is writable:
   [ADR 0028](0028-loop-body-runs-in-a-per-iteration-variable-scope.md) and cannot be capture targets;
 - a mutable loop-local declaration uses the normal container-frame model and receives the frame of
   the concrete visible activation;
-- potentially concurrent captures into the same shared frame variable fail publication unless an
-  explicit deterministic merge or reduction governs them; and
+- captures into the same shared frame variable whose order the definition does not fix produce a
+  validation warning, not a refusal. The last commit wins; the warning names every writer and points
+  the author to ordering the branches, separate variables, or one combining write after the join; and
 - data leaving a structured scope still uses an explicit typed return, collection, selection,
   merge, or reduction. Capturing into an ancestor variable is an explicit state mutation, not an
   implicit scope-return mechanism.
@@ -143,8 +147,8 @@ defense in depth. It does not use completion timing as a conflict-resolution pol
 
 Studio may remove the workflow-only restriction only after the backend target contract and
 validation are available. The picker offers writable variables visible from the selected activity's
-lexical position; it excludes read-only iteration entries and targets rejected by static
-concurrency analysis.
+lexical position; it excludes read-only iteration entries. It may flag targets that static ordering
+analysis warns about, but it does not hide them.
 
 Existing invalid references remain visible in repair and diagnostic surfaces so moving a node does
 not silently discard or retarget an authored decision.
@@ -187,8 +191,8 @@ mutation uses the same scoped-write semantics as `Set` within the producing comp
   producing completion commit.
 - The scoped frame resolver should become a shared runtime primitive used by `Set` and output capture
   without exposing authored Design models to Runtime.
-- Publication validation must add lexical visibility, writable-target, shadowing-address,
-  concurrency, and merge/reduction checks for capture edges.
+- Publication validation must add lexical visibility, writable-target and shadowing-address checks
+  for capture edges, and draft validation must warn about unordered captures.
 - Executable inspection and hashing must expose and fingerprint the relative target.
 - Studio must filter by semantic eligibility rather than merely dropping `workflowScopeOnly`.
 - Existing workflow-scope capture artifacts and behavior remain valid.
@@ -202,7 +206,7 @@ The implementing Speckit unit must cover:
 - same-named shadowed variables addressed by stable scope and reference key;
 - sequential loop iterations and parallel iterations;
 - rejection of loop-owned read-only item/index targets;
-- shared-ancestor parallel capture rejection without merge/reduction;
+- shared-ancestor parallel capture warning, with publication still succeeding;
 - retry, resume, redelivery, stale-frame revision, and already-committed completion behavior;
 - closed, invisible, sibling, missing, and undeclared frame failures;
 - inline, explicit-null, and externalized encoded values without a shadow variable store;
@@ -216,3 +220,34 @@ The implementing Speckit unit must cover:
 - Reconcile the remaining useful test objectives from specs 060/061 without restoring their
   superseded active-output or memory-reference mechanisms.
 - Update issue #1004 with the committed ADR/implementation links when the branch is published.
+
+## Unordered-capture amendment (2026-10-23)
+
+[Spec 266](../../specs/266-capture-concurrency/spec.md) ([issue #3198](https://github.com/elsa-workflows/elsa-foundation/issues/3198))
+builds the §5 check for captures. Review of that spec showed that refusing publication was the wrong
+enforcement:
+
+- One workflow execution never applies two writes at the same moment (see the amended §4). What §5
+  called concurrent is two branches whose order the definition does not fix. The final value is the
+  last commit, which is well defined, and the author can change the outcome by ordering the branches,
+  using separate variables, or combining explicitly.
+- Static analysis sees only declared writes: output captures and the Set, Merge and Reduce intrinsics.
+  It cannot see script `setVariable`, C# activities writing through the execution context, writes
+  inside sub-workflows and graph activities that depend on runtime input, or paths decided at run time.
+  A refusal would promise a guarantee the engine cannot keep, while also refusing valid designs.
+- Merge and Reduce currently overwrite exactly like Set, so they are not exempt.
+
+Elsa provides guardrails and diagnostics; it does not restrict what the engineer builds. §5 therefore
+warns, and "last commit wins" is defined behaviour for plain writes: captures, and Set, Merge and
+Reduce as they work today. A write based on an earlier read of the same variable (a stale
+read-modify-write) is not covered here; analysis A-2 and ADR 0092
+([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) define it, so the two rules do not
+contradict each other. The same warning covers the intrinsic writes,
+which draft validation previously refused. Each structure declares how its children relate in time,
+so the warning does not depend on structure kinds the validator knows.
+
+Making the actual run order visible is follow-up work: variable write history in inspection
+([#3290](https://github.com/elsa-workflows/elsa-foundation/issues/3290)), a commit-ordered journal and
+instance comparison ([#3291](https://github.com/elsa-workflows/elsa-foundation/issues/3291)), and a
+runtime trace for overwrites the static analysis cannot see
+([#3292](https://github.com/elsa-workflows/elsa-foundation/issues/3292)).
