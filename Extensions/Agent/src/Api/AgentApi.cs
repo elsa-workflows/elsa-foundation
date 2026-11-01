@@ -294,6 +294,9 @@ public static class AgentApi
                     await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.message.delivery_conflict", "This prompt delivery identity was reused with different input.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
                     return;
                 }
+                // A failure after accepted insertion can precede context retention. Recovery retains only the
+                // original accepted message's own context; the store deduplicates by attachment identity.
+                await sessions.AddContextAsync(sessionId, existing.Context, context.RequestAborted);
                 await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(existing, [new("agent.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
                 return;
             }

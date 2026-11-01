@@ -259,6 +259,14 @@ public sealed class AgentSessionAdmissionTests
         Assert.Equal(1, fixture.Source.Collections);
         Assert.Equal(accepted.Id, Assert.Single(await fixture.UserMessagesAsync(session.Id)).Id);
         AssertProvenance(accepted, "r-1", "Collected #1");
+        // The recovered identity retains exactly its own accepted context for later prompts to reference.
+        var detailed = Assert.Single((await fixture.DetailAsync(session.Id)).GetProperty("contextAttachments").EnumerateArray());
+        Assert.Equal("admission-context", detailed.GetProperty("id").GetString());
+        Assert.Equal("Collected #1", Assert.Single(await fixture.Sessions.ListContextAsync(session.Id)).Summary);
+        // A retry carrying different context is still a delivery conflict and retains nothing.
+        AssertFailure(await fixture.PostAsync(session.Id, Delivery("hello", "r-1", ["admission-context", "other-context"])), 409, "agent.message.delivery_conflict");
+        Assert.Equal("admission-context", Assert.Single(await fixture.Sessions.ListContextAsync(session.Id)).Id);
+        Assert.Equal(1, fixture.Source.Collections);
         if (failure == "context-cache")
         {
             // A forwarding session replacement cannot participate: the update is explicitly unsupported, not shadowed.
@@ -283,6 +291,14 @@ public sealed class AgentSessionAdmissionTests
             Assert.Equal(200, (await fixture.ChangeAsync(session.Id, "full-auto", 1)).Status);
             Assert.Equal(1, Assert.Single(await fixture.UserMessagesAsync(session.Id)).AcceptedPolicy!.Revision);
         }
+
+        // A later prompt referencing the recovered message's retained attachment is admitted.
+        var (followed, followedBody) = await fixture.PostAsync(session.Id, Delivery("follow up", "r-2", ["admission-context"]));
+        Assert.Equal(200, followed);
+        var followUp = Assert.Single(await fixture.UserMessagesAsync(session.Id), x => x.RequestId == "r-2");
+        Assert.Equal(MessageId(followedBody), followUp.Id);
+        Assert.Equal(["admission-context"], followUp.ContextAttachmentIds.ToArray());
+        Assert.Equal("Collected #1", Assert.Single(await fixture.Sessions.ListContextAsync(session.Id)).Summary);
     }
 
     // ---- Terminal display to actual unregister through HTTP (T017) ----
@@ -392,6 +408,12 @@ public sealed class AgentSessionAdmissionTests
     private static object Delivery(string content, string requestId) => new
     {
         content, requestId, promptMode = "explain",
+        source = new { moduleId = "admission.module", actionId = "explain", label = "Explain" }
+    };
+
+    private static object Delivery(string content, string requestId, string[] contextAttachmentIds) => new
+    {
+        content, requestId, promptMode = "explain", contextAttachmentIds,
         source = new { moduleId = "admission.module", actionId = "explain", label = "Explain" }
     };
 
