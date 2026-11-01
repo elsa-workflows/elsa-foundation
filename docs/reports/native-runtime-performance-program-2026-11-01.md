@@ -392,4 +392,26 @@ failed while writing an obsolete source-restoration receipt (`NameError: code`);
 and cleanup record are preserved. A separate attestation validates every TRX, reconciles all 245 discovered cases,
 checks the unchanged source archive and confirms task-container cleanup. This is a successful test qualification
 with a failed driver bookkeeping step, not an unqualified all-green run. The final timing build uses that explicit
-attestation. Raw records remain under `m4-pumps-63e4c1fc4` on the owned runner pending verified collection.
+attestation. The 34-file raw archive has been collected and SHA-256 verified locally: `ba18f869a3259d93b7dbbb8bbf658c4251dd8580c611722aa5dff7e259d4f07f`, under `azure-m4-pumps-63e4c1fc4-evidence` in the program evidence root. Original failure and attestation records are both retained.
+
+### Integrated measurement preflight
+
+The bounded native qualification driver is frozen at `6d77c4402`, using production libraries at `63e4c1fc4`.
+Three local correctness smokes pass (Memory/Balanced/ten leaves/four callers, SQLite/Durable/one leaf/two callers,
+and Memory/EphemeralNoRecord/one leaf/four callers), including exact activity/state counts, distinct generated IDs,
+no residual queued work/incidents/undelivered responsibility, the coordinated validation gate and refusal to replace
+an existing result. Local timing is excluded because this is a shared machine.
+
+The real dotnet-counters 10.0.750501 privacy preflight passes with 136 events, including five Npgsql events whose
+pool labels are hashed; complete numeric JSON and FIFO drain are verified. The synthetic process was stopped.
+The HTTP capture now records WAL snapshots and UTC measurement boundaries, checks failed PostgreSQL sampling,
+and excludes counter shutdown/settlement from its CPU-utilization denominator. Source archives report script hashes
+rather than failing on an absent Git checkout. A real PostgreSQL-runtime/SQLite-diagnostics Http4 preflight then
+settles all 51 exact-output requests, with zero incomplete instances/incidents and successful WAL/counter assertions.
+Its five-second warmup/ten-second window is a tooling smoke and is excluded from throughput evidence.
+
+All preflight attempts remain visible: the first stopped before workload because the helper expected Git metadata;
+the next found an undefined operator storage-path variable before host launch; the third completed warmup but
+stopped when its unprivileged collector could not read the root-created host log. The fourth fixes log ownership
+and passes. These are fixture failures, not passing workload samples. No failed attempt is replaced in the ledger.
+The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open.
