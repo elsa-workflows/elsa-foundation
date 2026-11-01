@@ -7,7 +7,7 @@ internal static class SpecialistTurnDocumentRules
     internal static void Prepared(SpecialistTurnDocument document)
     {
         Validate(document);
-        if (document.Status != SpecialistTurnStatus.Prepared || document.ModelRequests is { Count: > 0 })
+        if (document.Status != SpecialistTurnStatus.Prepared || document.ModelRequests is { Count: > 0 } || document.ResponseObservation is not null)
             throw new InvalidDataException("Only a prepared specialist operation can be staged.");
     }
 
@@ -31,6 +31,14 @@ internal static class SpecialistTurnDocumentRules
             (requests.Count > document.MaximumModelCalls || requests.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != requests.Count))
             throw new InvalidDataException("The specialist journal request budget is invalid.");
         foreach (var reservation in document.ModelRequests ?? []) Reservation(reservation, document.Deadline);
+        if (document.ResponseObservation is { } response)
+        {
+            if (document.Status is SpecialistTurnStatus.Prepared or SpecialistTurnStatus.Claimed || document.ModelRequests is not { Count: > 0 } ||
+                response.ObservedAt >= document.Deadline || response.InputTokens is < 0 || response.OutputTokens is < 0 || response.TotalTokens is < 0 ||
+                !response.UsageAvailable && (response.InputTokens is not null || response.OutputTokens is not null || response.TotalTokens is not null) ||
+                response.ObservedModelId is { } model && (string.IsNullOrWhiteSpace(model) || model.Length > 512 || model.Any(char.IsControl)))
+                throw new InvalidDataException("The specialist model response observation is invalid.");
+        }
     }
 
     internal static SpecialistTurnDocument Copy(SpecialistTurnDocument document) => document with { ModelRequests = document.ModelRequests?.ToArray() };

@@ -64,6 +64,10 @@ public sealed class SpecialistJournalProviderTests
             Assert.Equal(2, reservations.Count(value => value is not null));
             Assert.False(await store.AcceptAsync(handle, identity, "stale-fence", "wrong-owner", now, CancellationToken.None));
             Assert.False(await store.AcceptAsync(handle, identity, winner.Fence!, "expired", candidate.Deadline, CancellationToken.None));
+            Assert.False(await store.AcceptAsync(handle, identity, winner.Fence!, "unobserved-response", now, CancellationToken.None));
+            var reserved = (await store.ReadAsync(handle, identity, CancellationToken.None))!.ModelRequests!;
+            Assert.True(await store.CompleteModelResponseAsync(handle, identity, winner.Fence!, reserved.Select(value => value.Id).ToArray(),
+                new(now, true, 11, 7, 18, "reported-model"), now, CancellationToken.None));
             Assert.True(await store.AcceptAsync(handle, identity, winner.Fence!, "opaque-protected-result-and-session", now, CancellationToken.None));
             await store.FailAsync(handle, identity, winner.Fence!, "late-failure", true, CancellationToken.None);
         }
@@ -75,6 +79,8 @@ public sealed class SpecialistJournalProviderTests
         Assert.Equal(SpecialistTurnStatus.Accepted, accepted.Status);
         Assert.Equal("opaque-protected-result-and-session", accepted.ProtectedResult);
         Assert.Equal(2, accepted.ModelRequests!.Count);
+        Assert.Equal("reported-model", accepted.ResponseObservation!.ObservedModelId);
+        Assert.Equal(7, accepted.ResponseObservation.OutputTokens);
         Assert.Equal(candidate.Deadline, accepted.Deadline);
         var replay = await recovered.StageAsync(candidate with { Handle = new string('c', 64), Deadline = now.AddHours(1) }, CancellationToken.None);
         Assert.Equal(accepted.ProtectedResult, replay.ProtectedResult);

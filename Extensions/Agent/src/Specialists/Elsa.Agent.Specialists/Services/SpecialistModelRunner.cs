@@ -12,7 +12,13 @@ namespace Elsa.Agent.Specialists.Services;
 internal sealed record SpecialistTurnRequest(SpecialistInvocationIdentity Identity, SpecialistRuntimeDescriptor Descriptor, ActivityContract Contract, JsonElement Inputs, string BindingFingerprint,
     SpecialistSessionReference? PreparedSession = null, SpecialistSessionTarget? SessionTarget = null);
 internal sealed record SpecialistTurnResult(JsonElement Result, long? InputTokens, long? OutputTokens, long? TotalTokens, int ModelCalls, int ConnectionVersion,
-    SpecialistSessionReference? Session = null);
+    SpecialistSessionReference? Session = null)
+{
+    public IReadOnlyList<SpecialistModelRequestReservation>? ModelRequests { get; init; }
+    public SpecialistModelResponseObservation? ResponseObservation { get; init; }
+    public bool IsOutputUsageKnown { get; init; }
+    public long? AccountedOutputTokens { get; init; }
+}
 internal sealed class SpecialistTurnException(string code, string message, Exception? innerException = null) : Exception(message, innerException)
 {
     public string Code { get; } = code;
@@ -70,7 +76,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         options.Tools = null;
         options.ToolMode = ChatToolMode.None;
         options.Instructions = null;
-        using var bounded = new BoundedClient(lease.Client, descriptor.Limits.MaximumModelCalls);
+        using var bounded = new BoundedClient(lease.Client, descriptor.Limits.MaximumModelCalls, authority);
         var history = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
         {
             StorageInputResponseMessageFilter = SpecialistSessionCodec.VisibleMessages
@@ -107,12 +113,16 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         if (authority is not null && authority.Reservations < 1)
             throw Failure("specialist.budget.protocol", "The model provider returned a result without its required physical reservation.");
         var acceptedSession = descriptor.AllowContinuity ? sessions.Capture(history.GetMessages(session), request.Identity, request.SessionTarget!) : null;
-        return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, authority?.Reservations ?? bounded.Calls, lease.ConnectionVersion, acceptedSession);
+        return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, authority?.Reservations ?? bounded.Calls, lease.ConnectionVersion, acceptedSession)
+        {
+            ModelRequests = authority?.ModelRequests, ResponseObservation = authority?.ResponseObservation,
+            IsOutputUsageKnown = authority?.IsOutputUsageKnown ?? false, AccountedOutputTokens = authority?.AccountedOutputTokens
+        };
     }
 
     internal static SpecialistTurnException Failure(string code, string message, Exception? innerException = null) => new(code, message, innerException);
 
-    private sealed class BoundedClient(IChatClient inner, int maximumCalls) : IChatClient
+    private sealed class BoundedClient(IChatClient inner, int maximumCalls, SpecialistTurnBudgetAuthority? authority) : IChatClient
     {
         private int calls;
         public int Calls => Volatile.Read(ref calls);
@@ -122,6 +132,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             if (Interlocked.Increment(ref calls) > maximumCalls)
                 throw Failure("specialist.budget.calls", "The specialist model-call budget is exhausted.");
             var response = await inner.GetResponseAsync(messages, options, cancellationToken);
+            if (authority is not null) await authority.CompleteResponseAsync(response.Usage, response.ModelId, cancellationToken);
             return SpecialistModelResponseFilter.VisibleResult(response);
         }
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,

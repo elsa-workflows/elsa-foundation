@@ -295,3 +295,28 @@ static Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ope
 static Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? right) -> bool
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.CompleteModelResponseAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! fence, System.Collections.Generic.IReadOnlyList<string!>! requestIds, Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation! observation, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.Deconstruct(out System.DateTimeOffset ObservedAt, out bool UsageAvailable, out long? InputTokens, out long? OutputTokens, out long? TotalTokens, out string? ObservedModelId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.InputTokens.get -> long?
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.InputTokens.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.ObservedAt.get -> System.DateTimeOffset
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.ObservedAt.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.ObservedModelId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.ObservedModelId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.OutputTokens.get -> long?
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.OutputTokens.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.SpecialistModelResponseObservation(System.DateTimeOffset ObservedAt, bool UsageAvailable, long? InputTokens, long? OutputTokens, long? TotalTokens, string? ObservedModelId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.TotalTokens.get -> long?
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.TotalTokens.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.UsageAvailable.get -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.UsageAvailable.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ResponseObservation.get -> Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ResponseObservation.init -> void
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? right) -> bool

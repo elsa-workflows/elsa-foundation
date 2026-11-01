@@ -22,6 +22,8 @@ public sealed record SpecialistTurnDocument(string Handle, string Key, string Re
     public int MaximumModelCalls { get; init; } = 1;
     /// <summary>Retained reservations, including requests with unknown outcomes or usage.</summary>
     public IReadOnlyList<SpecialistModelRequestReservation>? ModelRequests { get; init; }
+    /// <summary>The completed response freezes further requests; unknown counts retain their reservations.</summary>
+    public SpecialistModelResponseObservation? ResponseObservation { get; init; }
 
     /// <summary>
     /// Identifies one operation in its native workflow and ordinary tenant/partition scope.

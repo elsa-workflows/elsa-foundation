@@ -64,12 +64,16 @@ is dispatching under its live fence/deadline and finite `MaximumModelCalls`. Reu
 does not grant another send. Output ceilings and configured resource observations remain in the
 reservation even after unknown usage/outcome. The runtime authenticates the request maximum against
 the protected staged descriptor. Returned collection values cannot mutate retained in-memory state.
-This initial reservation slice does not claim hard input/total-token accounting or known-usage
-reconciliation; accepted response usage and the conservative reservation remain distinct evidence.
+`CompleteModelResponseAsync` records available response counts and the provider-reported model ID
+for the exact reserved request set under the live fence/deadline. It freezes further request admission;
+acceptance with reservations requires that observation. A response with unavailable or partial usage
+keeps missing counts unknown. The accepted protected receipt distinguishes known single-request output
+usage from conservative reserved output when attribution is unavailable. Input/total-token hard limits
+are not established by this mechanism. Configured model identity and reported identity remain distinct.
 
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
 credential durability or end-to-end recovery qualification. This initial conditional turn boundary
-does not yet provide conversation admission, delivery rebinding, complete usage reconciliation or retention controls.
+does not yet provide conversation admission, delivery rebinding, hard input/total-token accounting or retention controls.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.

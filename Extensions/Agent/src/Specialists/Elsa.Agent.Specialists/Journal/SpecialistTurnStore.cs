@@ -83,7 +83,8 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || now >= row.Deadline) return ValueTask.FromResult(false);
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || now >= row.Deadline ||
+                row.ModelRequests is { Count: > 0 } && row.ResponseObservation is null) return ValueTask.FromResult(false);
             Save(row with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult });
             return ValueTask.FromResult(true);
         }
@@ -108,11 +109,28 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now ||
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now || row.ResponseObservation is not null ||
                 (row.ModelRequests?.Count ?? 0) >= row.MaximumModelCalls || (row.ModelRequests ?? []).Any(x => x.Id == reservation.Id))
                 return ValueTask.FromResult<SpecialistModelRequestReservation?>(null);
             Save(row with { ModelRequests = [.. row.ModelRequests ?? [], reservation] });
             return ValueTask.FromResult<SpecialistModelRequestReservation?>(reservation);
+        }
+    }
+
+    public ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, string fence, IReadOnlyList<string> requestIds,
+        SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(requestIds);
+        ArgumentNullException.ThrowIfNull(observation);
+        lock (gate)
+        {
+            var row = Find(handle, identity);
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now || row.ResponseObservation is not null ||
+                requestIds.Count == 0 || !(row.ModelRequests ?? []).Select(x => x.Id).SequenceEqual(requestIds, StringComparer.Ordinal))
+                return ValueTask.FromResult(false);
+            Save(row with { ResponseObservation = observation });
+            return ValueTask.FromResult(true);
         }
     }
 

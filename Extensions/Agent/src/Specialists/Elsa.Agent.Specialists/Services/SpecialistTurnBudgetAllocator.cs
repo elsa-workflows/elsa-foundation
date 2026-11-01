@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
+using Microsoft.Extensions.AI;
 
 namespace Elsa.Agent.Specialists.Services;
 
@@ -20,7 +21,15 @@ internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, 
     private int maximumOutputTokens;
     private int reservations;
     private readonly SemaphoreSlim admission = new(1, 1);
+    private readonly List<SpecialistModelRequestReservation> reserved = [];
+    private SpecialistModelResponseObservation? completed;
     internal int Reservations => Volatile.Read(ref reservations);
+    internal IReadOnlyList<SpecialistModelRequestReservation> ModelRequests => reserved.ToArray();
+    internal SpecialistModelResponseObservation? ResponseObservation => completed;
+    // Attribution is qualified only for one physical request. An SDK response spanning more
+    // requests cannot release their conservative ceilings based on an unattributed usage value.
+    internal bool IsOutputUsageKnown => reserved.Count == 1 && completed?.OutputTokens is not null;
+    internal long AccountedOutputTokens => IsOutputUsageKnown ? completed!.OutputTokens!.Value : reserved.Sum(x => (long)x.MaximumOutputTokens);
 
     internal void BindOutputLimit(int? limit)
     {
@@ -61,5 +70,30 @@ internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, 
             throw SpecialistModelRunner.Failure("specialist.budget.calls", "The physical model request has no remaining budget reservation; dispatch was refused.");
         }
         Interlocked.Increment(ref reservations);
+        reserved.Add(reservation);
+    }
+
+    internal async ValueTask CompleteResponseAsync(UsageDetails? usage, string? observedModelId, CancellationToken cancellationToken)
+    {
+        await admission.WaitAsync(cancellationToken);
+        try
+        {
+            if (reserved.Count == 0 || completed is not null)
+                throw SpecialistModelRunner.Failure("specialist.budget.protocol", "The response does not have one admitted physical request set.");
+            var now = time.GetUtcNow();
+            var invalidUsage = usage?.InputTokenCount is < 0 || usage?.OutputTokenCount is < 0 || usage?.TotalTokenCount is < 0;
+            var invalidModelId = observedModelId is { } model && (string.IsNullOrWhiteSpace(model) || model.Length > 512 || model.Any(char.IsControl));
+            var observation = new SpecialistModelResponseObservation(now, usage is not null,
+                invalidUsage ? null : usage?.InputTokenCount, invalidUsage ? null : usage?.OutputTokenCount,
+                invalidUsage ? null : usage?.TotalTokenCount, invalidModelId ? null : observedModelId);
+            if (!await store.CompleteModelResponseAsync(document.Handle, document.Identity, document.Fence!, reserved.Select(x => x.Id).ToArray(), observation, now, cancellationToken))
+                throw SpecialistModelRunner.Failure("specialist.turn.fence", "The response observation cannot commit under this journal fence.");
+            completed = observation;
+            if (invalidUsage || invalidModelId)
+                throw SpecialistModelRunner.Failure("specialist.result.metadata", "The provider returned invalid usage or model metadata; reservations remain conservative.");
+            if (observation.OutputTokens is { } output && output > reserved.Sum(x => (long)x.MaximumOutputTokens))
+                throw SpecialistModelRunner.Failure("specialist.budget.output-overrun", "The provider reported output usage above the admitted output ceiling.");
+        }
+        finally { admission.Release(); }
     }
 }

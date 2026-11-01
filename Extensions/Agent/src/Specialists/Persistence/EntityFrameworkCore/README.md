@@ -34,6 +34,11 @@ and deadline checks. Concurrent reservations cannot exceed the staged finite req
 Retained output ceilings and configured resource observations survive response loss and host restart;
 missing usage does not release a reservation. Native runtime checks authenticate the staged request
 maximum before creating its transport authority. This is not a hard input/total-token accounting claim.
+Completing the exact reserved request set records nullable usage and the reported model ID while
+freezing further reservations. Acceptance with reservations requires that completed response. Wrong
+request sets, stale fences, expired completion and later observation replacement are refused. The
+accepted protected receipt uses known single-request output usage or conservative reserved ceilings
+when output usage cannot be attributed; no absent value is treated as zero.
 
 Business input, accepted output and the conversation candidate are protected by the runtime using
 the selected Secrets protector/key ring. Retain the required keys across host restarts. Store

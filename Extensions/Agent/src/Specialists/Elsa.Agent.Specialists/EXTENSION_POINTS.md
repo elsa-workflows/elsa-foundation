@@ -28,9 +28,14 @@ The native worker creates a journal-bound physical-request authority. Qualified 
 reserve before every SDK HTTP send; the reservation requires the current dispatch fence, deadline
 and authenticated finite request maximum. An unavailable backend, exhausted budget or lost fence
 permits no send. A missing provider accounting capability is refused before asking for a response.
-Output ceilings are bound to the actual runtime options. Reservations are retained conservatively
-when no response/usage is available; this slice does not claim hard input/total-token accounting or
-known-usage reconciliation. SDK retries and primary redirects remain independently disabled.
+Output ceilings are bound to the actual runtime options. Before finish/privacy/result validation,
+the runtime records the response's available counts and reported model ID for its exact reserved
+request set and freezes further sends. Refusal or invalid business output can therefore retain
+observed usage without accepting history or a business result. Invalid metadata and reported output
+overruns are explicit faults. Missing counts remain unknown. A known output count is attributed only
+to a single physical request; otherwise output accounting retains every reserved ceiling. The accepted
+protected receipt carries these observations separately from the public business JSON. Input/total-token
+hard limits are not claimed. SDK retries and primary redirects remain independently disabled.
 
 Current native invocation controls remain fresh-only, with a new MAF session for every turn and no tool or streaming
 admission. A definition's continuity capability does not implicitly reuse history. The private

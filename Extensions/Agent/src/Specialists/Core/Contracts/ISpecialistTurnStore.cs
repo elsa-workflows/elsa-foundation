@@ -29,6 +29,10 @@ public interface ISpecialistTurnStore
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, string fence,
         SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>Records response evidence for the exact request set and freezes further physical admission.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
+    ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, string fence, IReadOnlyList<string> requestIds,
+        SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Atomically accepts the protected result/session pair only for its live dispatch fence.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, string fence, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken);

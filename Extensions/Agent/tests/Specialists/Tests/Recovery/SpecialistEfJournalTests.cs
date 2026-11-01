@@ -30,6 +30,63 @@ public sealed class SpecialistEfJournalTests
     private static SpecialistTurnDocument Document => new(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));
 
     [Fact]
+    public async Task Usage_without_single_request_attribution_keeps_every_reserved_output_ceiling()
+    {
+        var store = new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        await store.StageAsync(Document with { MaximumModelCalls = 2 }, CancellationToken.None);
+        var claimed = (await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None))!;
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
+        var descriptor = new SpecialistRuntimeDescriptor("fixture", new("fixture", "connection", "model"), Json("{}"), Json("{}"), Json("{}"), "fixture/1",
+            SpecialistRuntimeIds.SchemaProfile, new(MaximumModelCalls: 2, MaximumOutputTokens: 64), false);
+        var contract = new ActivityContract("specialist", "1", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],
+            new(new("System.Text.Json.JsonElement"), true, ActivityValuePolicy.Default, []), ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.FacadeCapability));
+        var authority = new SpecialistTurnBudgetAllocator(store, new FixedTime()).Create(claimed, new(Identity, descriptor, contract, Json("{}"), "bindings"));
+        authority.BindOutputLimit(64);
+        var observed = new SpecialistModelDispatchObservation("fixture", "model", "incarnation", 1, "fixture/1", "fixture-accounted/1");
+        await authority.BeforeSendAsync(observed, CancellationToken.None);
+        await authority.BeforeSendAsync(observed, CancellationToken.None);
+        await authority.CompleteResponseAsync(new UsageDetails { InputTokenCount = 11, OutputTokenCount = 7 }, "reported-model", CancellationToken.None);
+        Assert.Equal(2, authority.Reservations);
+        Assert.Equal(7, authority.ResponseObservation!.OutputTokens);
+        Assert.False(authority.IsOutputUsageKnown);
+        Assert.Equal(128, authority.AccountedOutputTokens);
+        await Assert.ThrowsAsync<SpecialistTurnException>(async () => await authority.BeforeSendAsync(observed, CancellationToken.None));
+    }
+
+    private sealed class FixedTime : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task An_exact_response_freezes_requests_and_observations_before_acceptance(bool durable, bool unknownUsage)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        await store.StageAsync(Document with { MaximumModelCalls = 2 }, CancellationToken.None);
+        Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
+        Assert.NotNull(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(0), Now, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, "fence", "premature", Now, CancellationToken.None));
+        var observation = new SpecialistModelResponseObservation(Now, !unknownUsage, unknownUsage ? null : 11, unknownUsage ? null : 7,
+            unknownUsage ? null : 18, "observed-model");
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "foreign", [Reservation(0).Id], observation, Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(1).Id], observation, Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(0).Id], observation, Document.Deadline, CancellationToken.None));
+        Assert.True(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(0).Id], observation, Now, CancellationToken.None));
+        Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(1), Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(0).Id], observation with { OutputTokens = 0 }, Now, CancellationToken.None));
+        Assert.True(await store.AcceptAsync(Document.Handle, Identity, "fence", "accepted-pair", Now, CancellationToken.None));
+        var restored = await (durable ? Store(context) : store).ReadAsync(Document.Handle, Identity, CancellationToken.None);
+        Assert.Equal(observation, restored!.ResponseObservation);
+        Assert.Equal(64, Assert.Single(restored.ModelRequests!).MaximumOutputTokens);
+        Assert.Equal("accepted-pair", restored.ProtectedResult);
+        Assert.Equal(SpecialistTurnStatus.Accepted, restored.Status);
+    }
+
+    [Fact]
     public async Task Concurrent_database_reservations_are_finite_fenced_and_retained_when_the_outcome_is_unknown()
     {
         await using var database = await Database.CreateAsync();

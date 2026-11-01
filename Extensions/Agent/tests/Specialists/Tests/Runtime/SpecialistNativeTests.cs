@@ -25,6 +25,60 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistNativeTests
 {
+    [Theory]
+    [InlineData("known")]
+    [InlineData("missing")]
+    [InlineData("partial")]
+    public async Task Accepted_native_receipts_distinguish_observed_usage_from_unknown_counts(string usageMode)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"accepted\"}", usageMode: usageMode);
+        await using var provider = await ServicesAsync(factory);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!;
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflow.Status);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var boundary = states.Single(state => state.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        var child = states.Single(state => state.Execution.ExecutableNodeId == executable.RootActivity.ChildSlots.Single().Activities.Single().ExecutableNodeId);
+        var descriptor = SpecialistNativeBinding.Descriptor(executable.RootActivity);
+        var identity = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, boundary.InvocationId,
+            boundary.OperationKey, workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+        var handle = child.Completion!.Result.InlineValue!.Value.GetString()!;
+        var result = await provider.GetRequiredService<SpecialistTurnJournal>().ResultAsync(handle, identity, child.InvocationId, CancellationToken.None);
+        Assert.Equal("accepted", result.Result.GetProperty("Article").GetString());
+        Assert.NotNull(result.Session);
+        Assert.Equal(1, result.ModelCalls);
+        Assert.Equal(4096, Assert.Single(result.ModelRequests!).MaximumOutputTokens);
+        Assert.Equal(usageMode != "missing", result.ResponseObservation!.UsageAvailable);
+        Assert.Equal(usageMode == "missing" ? (long?)null : 5, result.ResponseObservation.InputTokens);
+        Assert.Equal(usageMode == "known" ? 3 : (long?)null, result.ResponseObservation.OutputTokens);
+        Assert.Equal(usageMode == "known", result.IsOutputUsageKnown);
+        Assert.Equal(usageMode == "known" ? 3 : 4096, result.AccountedOutputTokens);
+        Assert.Equal("provider-reported-fixture-model", result.ResponseObservation.ObservedModelId);
+        Assert.Single(boundary.Completion!.Result.InlineValue!.Value.EnumerateObject());
+    }
+
+    [Theory]
+    [InlineData("negative", "specialist.result.metadata")]
+    [InlineData("overrun", "specialist.budget.output-overrun")]
+    public async Task Invalid_or_overrun_usage_cannot_create_an_accepted_native_result(string mode, string code)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not accept\"}", usageMode: mode);
+        await using var provider = await ServicesAsync(factory);
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider));
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        Assert.Contains(states, state => state.Fault?.Code == code);
+        Assert.All(states, state => Assert.Null(state.Completion));
+    }
+
     [Fact]
     public async Task A_provider_with_unknown_physical_accounting_is_refused_before_any_external_response_call()
     {
@@ -379,9 +433,10 @@ public sealed class SpecialistNativeTests
     }
 
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
-    private sealed class FixtureFactory(string response, bool enforcesAccounting = true) : ISpecialistModelClientFactory
+    private sealed class FixtureFactory(string response, bool enforcesAccounting = true, string usageMode = "known") : ISpecialistModelClientFactory
     {
         private string Response { get; } = response;
+        private string UsageMode { get; } = usageMode;
         public string ProviderKey => "fixture";
         public int Opens { get; private set; }
         public int Calls { get; private set; }
@@ -407,7 +462,18 @@ public sealed class SpecialistNativeTests
                 owner.Instructions = options?.Instructions;
                 owner.ModelId = options?.ModelId;
                 owner.Schema = (options?.ResponseFormat as ChatResponseFormatJson)?.Schema;
-                return new ChatResponse(new ChatMessage(ChatRole.Assistant, owner.Response)) { Usage = new UsageDetails { InputTokenCount = 5, OutputTokenCount = 3 } };
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, owner.Response))
+                {
+                    ModelId = "provider-reported-fixture-model",
+                    Usage = owner.UsageMode switch
+                    {
+                        "missing" => null,
+                        "partial" => new UsageDetails { InputTokenCount = 5 },
+                        "negative" => new UsageDetails { InputTokenCount = 5, OutputTokenCount = -1 },
+                        "overrun" => new UsageDetails { InputTokenCount = 5, OutputTokenCount = 8192 },
+                        _ => new UsageDetails { InputTokenCount = 5, OutputTokenCount = 3 }
+                    }
+                };
             }
             public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public object? GetService(Type serviceType, object? serviceKey = null) => null;

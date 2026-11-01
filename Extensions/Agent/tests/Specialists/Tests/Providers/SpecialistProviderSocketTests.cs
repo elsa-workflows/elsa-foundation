@@ -9,6 +9,7 @@ using Elsa.Agent.Specialists.AzureOpenAI;
 using Elsa.Agent.Specialists.Connections;
 using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Agent.Specialists.Services;
+using Elsa.Agent.Specialists.Journal;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Core.Contracts;
@@ -44,7 +45,7 @@ public sealed class SpecialistProviderSocketTests
     public async Task Every_actual_SDK_send_requires_a_durable_reservation_and_unknown_usage_keeps_it(string vendor, string mode)
     {
         using var certificate = Certificate();
-        await using var server = await Server.StartAsync(certificate, context => mode == "loss" ? Abort(context) : Success(context, vendor, "success"));
+        await using var server = await Server.StartAsync(certificate, context => mode == "loss" ? Abort(context) : Success(context, vendor, "observed-model"));
         var connection = new Resolved(vendor);
         connection.Values["endpoint"] = server.Address;
         connection.Hosts = Elsa.Connections.Core.Models.AllowedHostsPolicy.Fixed("127.0.0.1");
@@ -81,8 +82,14 @@ public sealed class SpecialistProviderSocketTests
                 options.ModelId = descriptor.Model.ModelId;
                 options.MaxOutputTokens = 64;
                 options.ResponseFormat = ChatResponseFormat.ForJsonSchema(descriptor.ResultSchema, "specialist_result");
-                var first = await Record.ExceptionAsync(async () => await lease.Client.GetResponseAsync([new(ChatRole.User, "fixture")], options));
-                if (mode == "success") Assert.Null(first);
+                ChatResponse? response = null;
+                var first = await Record.ExceptionAsync(async () => response = await lease.Client.GetResponseAsync([new(ChatRole.User, "fixture")], options));
+                if (mode == "success")
+                {
+                    Assert.Null(first);
+                    Assert.NotNull(response);
+                    await authority.CompleteResponseAsync(response.Usage, response.ModelId, CancellationToken.None);
+                }
                 else Assert.NotNull(first);
                 await Assert.ThrowsAnyAsync<Exception>(async () => await lease.Client.GetResponseAsync([new(ChatRole.User, "must not send")], options));
                 Assert.Equal(mode == "exhausted" ? 0 : 1, server.Requests.Count);
@@ -94,6 +101,15 @@ public sealed class SpecialistProviderSocketTests
             Assert.Equal(1, recovered.MaximumModelCalls);
             Assert.Equal(SpecialistTurnStatus.Dispatching, recovered.Status);
             Assert.Null(recovered.ProtectedResult);
+            if (mode == "success")
+            {
+                Assert.True(recovered.ResponseObservation!.UsageAvailable);
+                Assert.Equal(11, recovered.ResponseObservation.InputTokens);
+                Assert.Equal(7, recovered.ResponseObservation.OutputTokens);
+                Assert.Equal("provider-reported-other-model", recovered.ResponseObservation.ObservedModelId);
+                Assert.Equal("fixture-model", reservation.Observation.ConfiguredModelId);
+            }
+            else Assert.Null(recovered.ResponseObservation);
             if (mode != "exhausted") Assert.Equal(connection.IncarnationId, reservation.Observation.ConnectionIncarnation);
 
             SpecialistsSqliteDbContext Context() => new(new DbContextOptionsBuilder<SpecialistsSqliteDbContext>().UseSqlite(connectionString).Options);
@@ -132,19 +148,32 @@ public sealed class SpecialistProviderSocketTests
         var runner = new SpecialistModelRunner([provider], new SpecialistSchemaValidator(),
             new SpecialistSessionCodec(protection.GetRequiredService<ISecretValueProtector>(), new Access()));
         var request = new SpecialistTurnRequest(Identity(), descriptor, contract, SpecialistConnectionProviderTests.Json("{}"), "bindings");
+        var store = new InMemorySpecialistTurnStore(new Access(), new());
+        var journal = new SpecialistTurnJournal(store, protection.GetRequiredService<ISecretValueProtector>(), new Access());
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, CancellationToken.None);
+        var claim = await journal.ClaimAsync(handle, request.Identity, "child", now, CancellationToken.None);
+        Assert.True(await journal.DispatchAsync(claim, now, CancellationToken.None));
+        var authority = new SpecialistTurnBudgetAllocator(store, TimeProvider.System).Create(claim, request);
         if (refusal is not null)
         {
-            var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await runner.RunAsync(request, CancellationToken.None));
+            var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await runner.RunAsync(request, CancellationToken.None, authority));
             Assert.Equal(refusal, error.Code);
         }
         else
         {
-            var result = await runner.RunAsync(request, CancellationToken.None);
+            var result = await runner.RunAsync(request, CancellationToken.None, authority);
             Assert.Equal("Fixture", result.Result.GetProperty("headline").GetString());
             Assert.Equal(11, result.InputTokens);
             Assert.Equal(7, result.OutputTokens);
             Assert.DoesNotContain("fixture-private-reasoning", JsonSerializer.Serialize(result), StringComparison.Ordinal);
         }
+        var observed = (await store.ReadAsync(handle, request.Identity, CancellationToken.None))!;
+        Assert.Single(observed.ModelRequests!);
+        Assert.NotNull(observed.ResponseObservation);
+        Assert.Equal(11, observed.ResponseObservation.InputTokens);
+        Assert.Equal(7, observed.ResponseObservation.OutputTokens);
+        Assert.Null(observed.ProtectedResult);
         Assert.Single(server.Requests);
     }
 
@@ -256,8 +285,8 @@ public sealed class SpecialistProviderSocketTests
         if (mode == "thinking") content.Add(new { type = "thinking", thinking = "fixture-private-reasoning", signature = "fixture-signature" });
         content.Add(new { type = "text", text = "{\"headline\":\"Fixture\"}" });
         object body = vendor == "anthropic"
-            ? new { id = "msg-fixture", type = "message", role = "assistant", model = "fixture-model", content, stop_reason = mode == "refusal" ? "refusal" : mode == "truncated" ? "max_tokens" : mode == "pause" ? "pause_turn" : "end_turn", stop_sequence = (string?)null, usage = new { input_tokens = 11, output_tokens = 7 } }
-            : new { id = "chatcmpl-fixture", @object = "chat.completion", created = 1700000000, model = "fixture-model", choices = new[] { new { index = 0, message = new { role = "assistant", content = mode == "refusal" ? null : "{\"headline\":\"Fixture\"}", refusal = mode == "refusal" ? "Fixture refusal" : null }, finish_reason = mode == "truncated" ? "length" : "stop" } }, usage = new { prompt_tokens = 11, completion_tokens = 7, total_tokens = 18 } };
+            ? new { id = "msg-fixture", type = "message", role = "assistant", model = mode == "observed-model" ? "provider-reported-other-model" : "fixture-model", content, stop_reason = mode == "refusal" ? "refusal" : mode == "truncated" ? "max_tokens" : mode == "pause" ? "pause_turn" : "end_turn", stop_sequence = (string?)null, usage = new { input_tokens = 11, output_tokens = 7 } }
+            : new { id = "chatcmpl-fixture", @object = "chat.completion", created = 1700000000, model = mode == "observed-model" ? "provider-reported-other-model" : "fixture-model", choices = new[] { new { index = 0, message = new { role = "assistant", content = mode == "refusal" ? null : "{\"headline\":\"Fixture\"}", refusal = mode == "refusal" ? "Fixture refusal" : null }, finish_reason = mode == "truncated" ? "length" : "stop" } }, usage = new { prompt_tokens = 11, completion_tokens = 7, total_tokens = 18 } };
         await context.Response.WriteAsync(JsonSerializer.Serialize(body));
     }
 

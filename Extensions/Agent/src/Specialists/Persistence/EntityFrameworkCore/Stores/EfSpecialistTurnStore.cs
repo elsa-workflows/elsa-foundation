@@ -137,7 +137,8 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         Fence(fence);
         ArgumentException.ThrowIfNullOrWhiteSpace(protectedResult);
         return await ChangeAsync(handle, identity, now, requireDeadline: true,
-            document => document.Status == SpecialistTurnStatus.Dispatching && document.Fence == fence,
+            document => document.Status == SpecialistTurnStatus.Dispatching && document.Fence == fence &&
+                (document.ModelRequests is not { Count: > 0 } || document.ResponseObservation is not null),
             document => document with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult }, cancellationToken) is not null;
     }
 
@@ -150,16 +151,28 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         for (var attempt = 0; attempt < 32; attempt++)
         {
             var changed = await ChangeAsync(handle, identity, now, requireDeadline: true,
-                document => document.Status == SpecialistTurnStatus.Dispatching && document.Fence == fence &&
+                document => document.Status == SpecialistTurnStatus.Dispatching && document.Fence == fence && document.ResponseObservation is null &&
                     (document.ModelRequests?.Count ?? 0) < document.MaximumModelCalls &&
                     !(document.ModelRequests ?? []).Any(x => x.Id == reservation.Id),
                 document => document with { ModelRequests = [.. document.ModelRequests ?? [], reservation] }, cancellationToken);
             if (changed is not null) return reservation;
             var current = await ReadAsync(handle, identity, cancellationToken);
-            if (current is null || current.Status != SpecialistTurnStatus.Dispatching || current.Fence != fence || current.Deadline <= now ||
+            if (current is null || current.Status != SpecialistTurnStatus.Dispatching || current.Fence != fence || current.Deadline <= now || current.ResponseObservation is not null ||
                 (current.ModelRequests?.Count ?? 0) >= current.MaximumModelCalls || (current.ModelRequests ?? []).Any(x => x.Id == reservation.Id)) return null;
         }
         return null;
+    }
+
+    public async ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, string fence, IReadOnlyList<string> requestIds,
+        SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        Fence(fence);
+        ArgumentNullException.ThrowIfNull(requestIds);
+        ArgumentNullException.ThrowIfNull(observation);
+        return await ChangeAsync(handle, identity, now, requireDeadline: true,
+            document => document.Status == SpecialistTurnStatus.Dispatching && document.Fence == fence && document.ResponseObservation is null &&
+                requestIds.Count > 0 && (document.ModelRequests ?? []).Select(x => x.Id).SequenceEqual(requestIds, StringComparer.Ordinal),
+            document => document with { ResponseObservation = observation }, cancellationToken) is not null;
     }
 
     public async ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, string fence, string code, bool outcomeUnknown, CancellationToken cancellationToken)
