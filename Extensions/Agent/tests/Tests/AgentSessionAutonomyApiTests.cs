@@ -287,6 +287,82 @@ public sealed class AgentSessionAutonomyApiTests
     }
 
     [Fact]
+    public async Task Accepted_prompt_detail_and_stream_disclose_only_the_public_session_policy()
+    {
+        // data-model.md: the client receives the effective mode, allowed modes/ceiling and an opaque revision,
+        // never internal denied-capability lists or unrelated private policy data.
+        using var fixture = new Fixture();
+        var session = await fixture.CreateAsync(PrivatePolicy);
+
+        var (accepted, acceptedBody) = await fixture.SendRawResponseAsync("PostMessage", JsonSerializer.Serialize(new { content = "hello", requestId = "r-1" }), session.Id);
+        var (duplicate, duplicateBody) = await fixture.SendRawResponseAsync("PostMessage", JsonSerializer.Serialize(new { content = "hello", requestId = "r-1" }), session.Id);
+        var stream = await fixture.StreamAsync(session.Id);
+        var (detail, detailBody) = await fixture.SendRawResponseAsync("GetSession", null, session.Id);
+
+        Assert.Equal([200, 200, 200], new[] { accepted, duplicate, detail });
+        foreach (var json in new[] { acceptedBody, duplicateBody })
+        {
+            using var document = JsonDocument.Parse(json);
+            var acceptedPolicy = document.RootElement.GetProperty("data").GetProperty("message").GetProperty("acceptedPolicy");
+            Assert.Equal(["allowedAutonomyModes", "autonomyMode", "maxAutonomyMode", "revision"],
+                acceptedPolicy.EnumerateObject().Select(x => x.Name).Order(StringComparer.Ordinal).ToArray());
+            Assert.Equal("manual", acceptedPolicy.GetProperty("autonomyMode").GetString());
+            Assert.Equal("auto-read-only", acceptedPolicy.GetProperty("maxAutonomyMode").GetString());
+            Assert.Equal(["manual", "auto-read-only"], acceptedPolicy.GetProperty("allowedAutonomyModes").EnumerateArray().Select(x => x.GetString()!).ToArray());
+            Assert.Equal(1, acceptedPolicy.GetProperty("revision").GetInt64());
+        }
+        Assert.Contains("data: ", stream);
+        foreach (var json in new[] { acceptedBody, duplicateBody, stream, detailBody })
+            AssertNoPrivatePolicy(json);
+        // The owner keeps the whole frozen policy for server-side attribution.
+        Assert.Equal(["secret.capability"], Assert.Single(await fixture.Sessions.ListMessagesAsync(session.Id), x => x.Role == AgentRole.User).AcceptedPolicy!.Policy.DeniedCapabilityIds);
+    }
+
+    [Fact]
+    public void The_accepted_message_projection_keeps_every_other_message_field_unchanged()
+    {
+        var now = new DateTimeOffset(2026, 11, 2, 0, 0, 0, TimeSpan.Zero);
+        var attachment = new AgentContextAttachment("ctx-1", "source", "source-1", "Label", "text/plain", AgentContextSensitivity.Internal,
+            "selection", "summary", "content", new Dictionary<string, string> { ["k"] = "v" }) { ModuleId = "module" };
+        var result = new AgentToolResult("call-1", "echo", true, "ok");
+        var message = new AgentMessage("m-1", "s-1", AgentRole.User, "hello", AgentMessageStatus.Pending, "cap-1", now, now.AddMinutes(1),
+            new AgentError("code", "message", 409), ["ctx-1"], ["p-1"], [attachment])
+        {
+            RequestId = "r-1",
+            Source = new("module", "action", "label"),
+            Client = new("client", "generation"),
+            PromptMode = "build",
+            DeliveryFingerprint = "ABC",
+            ToolResults = [result],
+            HasDisclosureProvenance = true,
+            DisclosureHistory = [new([attachment], [result])],
+            AcceptedPolicy = new(PrivatePolicy, 7)
+        };
+        var domainOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
+
+        var domain = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(message, domainOptions))!.AsObject();
+        var response = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(
+            AgentApiResponse<AgentMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
+            AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
+
+        Assert.Equal(domain.Select(x => x.Key).ToArray(), response.Select(x => x.Key).ToArray());
+        domain.Remove("acceptedPolicy");
+        response.Remove("acceptedPolicy");
+        Assert.Equal(domain.ToJsonString(), response.ToJsonString());
+    }
+
+    [Fact]
+    public void An_accepted_message_without_owner_attribution_serializes_a_null_accepted_policy()
+    {
+        var message = new AgentMessage("m", "s", AgentRole.User, "c", AgentMessageStatus.Pending, null, DateTimeOffset.UtcNow, null, null, [], [], []);
+        var json = JsonSerializer.Serialize(AgentApiResponse<AgentMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
+            AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("data").GetProperty("message").GetProperty("acceptedPolicy").ValueKind);
+    }
+
+    [Fact]
     public void A_message_without_owner_attribution_reads_back_a_null_accepted_revision()
     {
         var view = new AgentMessage("m", "s", AgentRole.User, "c", AgentMessageStatus.Completed, null, DateTimeOffset.UtcNow, null, null, [], [], [])
@@ -298,6 +374,27 @@ public sealed class AgentSessionAutonomyApiTests
     }
 
     // ---- Helpers ----
+
+    /// <summary>A session policy whose private members are all distinguishable from the public shape.</summary>
+    private static readonly AgentPolicy PrivatePolicy = AgentPolicy.Default with
+    {
+        AutonomyMode = AgentAutonomyMode.Manual,
+        MaxAutonomyMode = AgentAutonomyMode.AutoReadOnly,
+        MaxContextSensitivity = AgentContextSensitivity.Internal,
+        AllowedContextKinds = ["*", "private.context.kind"],
+        DeniedCapabilityIds = ["secret.capability"],
+        RetentionLabel = "Private retention label"
+    };
+
+    private static void AssertNoPrivatePolicy(string json)
+    {
+        foreach (var forbidden in new[]
+                 {
+                     "deniedCapabilityIds", "allowedContextKinds", "maxContextSensitivity", "retentionLabel", "contextVisibility",
+                     "requiresApprovalForMutations", "\"enabled\"", "secret.capability", "private.context.kind", "Private retention label"
+                 })
+            Assert.DoesNotContain(forbidden, json, StringComparison.Ordinal);
+    }
 
     private static void AssertPolicy(JsonElement policy, string mode, long revision)
     {
@@ -376,9 +473,25 @@ public sealed class AgentSessionAutonomyApiTests
 
         public async Task<(int Status, JsonDocument Body)> SendRawAsync(string operation, string? json, string? sessionId = null, ClaimsPrincipal? user = null)
         {
+            var (status, body) = await SendRawResponseAsync(operation, json, sessionId, user);
+            return (status, JsonDocument.Parse(body));
+        }
+
+        /// <summary>Runs the session's SSE route to the end of the admitted turn and returns the raw event text.</summary>
+        public async Task<string> StreamAsync(string sessionId)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var (_, body) = await SendRawResponseAsync("StreamSession", null, sessionId, aborted: timeout.Token);
+            Assert.False(timeout.IsCancellationRequested, "The stream did not finish its turn.");
+            return body;
+        }
+
+        public async Task<(int Status, string Body)> SendRawResponseAsync(string operation, string? json, string? sessionId = null, ClaimsPrincipal? user = null,
+            CancellationToken aborted = default)
+        {
             var endpoint = Assert.Single(_endpoints, x => x.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName == "ElsaAgentApiEndpoints" + operation);
             using var request = Root.CreateScope();
-            var context = new DefaultHttpContext { RequestServices = request.ServiceProvider, User = user ?? Principal(Actor, Tenant) };
+            var context = new DefaultHttpContext { RequestServices = request.ServiceProvider, User = user ?? Principal(Actor, Tenant), RequestAborted = aborted };
             if (sessionId is not null)
                 context.Request.RouteValues["sessionId"] = sessionId;
             if (json is not null)
@@ -393,7 +506,7 @@ public sealed class AgentSessionAutonomyApiTests
 
             await endpoint.RequestDelegate!(context);
 
-            return (context.Response.StatusCode, JsonDocument.Parse(response.ToArray()));
+            return (context.Response.StatusCode, Encoding.UTF8.GetString(response.ToArray()));
         }
 
         public void Dispose()

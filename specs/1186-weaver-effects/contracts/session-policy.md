@@ -56,8 +56,11 @@ Readback and attribution:
   It is omitted only when the composition cannot read it back (Unsupported).
 - Each session-detail message view gains `acceptedPolicyRevision`. It is always serialized, as
   `null` when the installed store does not own revisions.
-- The accepted-prompt response serializes the domain `AgentMessage`, so its `message.acceptedPolicy`
-  is `{ "policy": <whole frozen AgentPolicy>, "revision" }`. See [Open items](#open-items-before-freeze).
+- The accepted-prompt response projects the domain `AgentMessage` through `AgentAcceptedMessageResponse`:
+  every other message member keeps its name and value, and `message.acceptedPolicy` is the same public
+  session-policy shape (`autonomyMode`, `maxAutonomyMode`, `allowedAutonomyModes`, `revision`), or
+  `null` when the store does not own revisions. Denied capabilities, admitted context kinds, the
+  sensitivity ceiling and the retention label stay on the server-side frozen `AgentMessage.AcceptedPolicy`.
 - Prompt admission whose authorized revision moved before insertion returns 409
   `agent.message.policy_changed` and inserts nothing. An identical retry of an already accepted
   delivery (same request ID and fingerprint) returns the original message with its original
@@ -97,7 +100,8 @@ omission and existing backend/generation isolation.
 `IAgentAuditReader.ListAsync` remains a trusted, unscoped in-process read and is not an
 authorization boundary. Agent API models add `AgentSessionPolicyResponse`, `AgentSessionAutonomyRequest`,
 `AgentCreateSessionResponse.Policy`, `AgentSessionDetailsResponse.Policy` and
-`AgentMessageViewModelResponse.AcceptedPolicyRevision`.
+`AgentMessageViewModelResponse.AcceptedPolicyRevision`, and `AgentMessageAcceptedResponse.Message`
+becomes `AgentAcceptedMessageResponse`, whose `AcceptedPolicy` is an `AgentSessionPolicyResponse?`.
 
 ## Session replacement owner
 
@@ -310,11 +314,6 @@ remains a public, trusted in-process member; removing it would be a Major change
 
 ## Open items before freeze
 
-- The accepted-prompt response's `acceptedPolicy` serializes the whole `AgentPolicy`, including
-  `deniedCapabilityIds`, `allowedContextKinds` and `retentionLabel`.
-  [data-model.md](../data-model.md#conversation-and-accepted-policy) says the client receives no
-  internal denied-capability lists. Before T026, either narrow the wire shape to the revision (the
-  detail view already does) or amend the data model.
 - Decide whether the new replacement contracts join `AgentRegistrationValidator`'s single-registration
   check (§2.6.2) or stay with the domain's existing undiagnosed `TryAdd*` behavior.
 

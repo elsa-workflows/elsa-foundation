@@ -297,7 +297,7 @@ public static class AgentApi
                 // A failure after accepted insertion can precede context retention. Recovery retains only the
                 // original accepted message's own context; the store deduplicates by attachment identity.
                 await sessions.AddContextAsync(sessionId, existing.Context, context.RequestAborted);
-                await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(existing, [new("agent.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+                await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(existing.ToAcceptedResponse([new("agent.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
                 return;
             }
         }
@@ -398,7 +398,7 @@ public static class AgentApi
         }
         await sessions.AddContextAsync(sessionId, contextItems, context.RequestAborted);
         var warnings = collected.Value.Diagnostics.Select(x => new AgentViolation(x.Code, x.Message, x.ContributorId)).ToList();
-        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(message, warnings)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(message.ToAcceptedResponse(warnings)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
     }
 
     private static async Task HandleCancelTurnAsync(HttpContext context)

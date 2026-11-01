@@ -162,8 +162,40 @@ public sealed record AgentMessageViewModelResponse(
 }
 
 public sealed record AgentMessageAcceptedResponse(
-    AgentMessage Message,
+    AgentAcceptedMessageResponse Message,
     IReadOnlyCollection<AgentViolation> Warnings);
+
+/// <summary>
+/// The accepted message as the client sees it: the members the domain <see cref="AgentMessage"/> has always
+/// serialized, with the frozen accepted policy projected to its public session-policy shape. The client never
+/// receives denied capabilities, admitted context kinds, sensitivity ceilings or retention labels (#3440).
+/// </summary>
+public sealed record AgentAcceptedMessageResponse(
+    string Id,
+    string SessionId,
+    AgentRole Role,
+    string Content,
+    AgentMessageStatus Status,
+    string? CapabilityId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt,
+    AgentError? Error,
+    IReadOnlyCollection<string> ContextAttachmentIds,
+    IReadOnlyCollection<string> ProposalIds,
+    IReadOnlyCollection<AgentContextAttachment> Context)
+{
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public string? PromptMode { get; init; }
+    public string? DeliveryFingerprint { get; init; }
+    public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
+    public bool HasDisclosureProvenance { get; init; }
+    public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
+
+    /// <summary>Experimental (#3440, not frozen): the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
+    public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+}
 
 public sealed class AgentSessionRouteRequest
 {
@@ -338,6 +370,34 @@ public static class AgentApiMapping
         {
             AcceptedPolicyRevision = message.AcceptedPolicy?.Revision
         };
+
+    /// <summary>Projects an accepted domain message for the client; the frozen policy stays with the owner for attribution.</summary>
+    public static AgentMessageAcceptedResponse ToAcceptedResponse(this AgentMessage message, IReadOnlyCollection<AgentViolation> warnings)
+        => new(new(
+                message.Id,
+                message.SessionId,
+                message.Role,
+                message.Content,
+                message.Status,
+                message.CapabilityId,
+                message.CreatedAt,
+                message.CompletedAt,
+                message.Error,
+                message.ContextAttachmentIds,
+                message.ProposalIds,
+                message.Context)
+            {
+                RequestId = message.RequestId,
+                Source = message.Source,
+                Client = message.Client,
+                PromptMode = message.PromptMode,
+                DeliveryFingerprint = message.DeliveryFingerprint,
+                ToolResults = message.ToolResults,
+                HasDisclosureProvenance = message.HasDisclosureProvenance,
+                DisclosureHistory = message.DisclosureHistory,
+                AcceptedPolicy = message.AcceptedPolicy?.ToResponse()
+            },
+            warnings);
 
     public static AgentSessionPolicyResponse ToResponse(this AgentSessionPolicyState state)
         => new(
