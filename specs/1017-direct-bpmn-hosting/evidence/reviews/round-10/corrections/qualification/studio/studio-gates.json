@@ -1,0 +1,34 @@
+[
+  {
+    "name": "workflow-frontend",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "pnpm",
+      "--filter",
+      "@elsa-workflows/studio-workflows",
+      "test"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 40.90961712494027
+  },
+  {
+    "name": "studio-typecheck",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "pnpm",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 62.82449312508106
+  },
+  {
+    "name": "studio-lint",
+    "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+    "arguments": [
+      "pnpm",
+      "lint"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 38.07424795906991
+  }
+]

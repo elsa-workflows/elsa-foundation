@@ -1,0 +1,17 @@
+{
+  "source": "e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9",
+  "originalInput": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/actual-legacy-cancel-before-fix/parent-cancel-consumed.sqlite.gz",
+  "sourceOutboxItemId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+  "executionStateSeeded": false,
+  "modelUnchanged": true,
+  "originalWorkerStillRunning": true,
+  "cancelSourceFailedRetryable": true,
+  "deliveredAt": null,
+  "queuedModelInputs": 0,
+  "snapshot": {
+    "path": "deferred-cancel-runtime.sqlite.gz",
+    "sha256": "2e1193f346b6393bce645ad9dde11f8c9c9e1aaf0e3a95bf7cfe5a1f20bcf90d",
+    "decodedSha256": "98a5f63d9ffaa48615e086b88da09cb15455d77328bbcad4cbb6bbe009f3c9d7"
+  },
+  "standardHostRecoveryProved": false
+}

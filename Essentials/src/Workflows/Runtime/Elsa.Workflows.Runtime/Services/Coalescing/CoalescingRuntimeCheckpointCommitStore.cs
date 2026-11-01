@@ -56,6 +56,12 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     private readonly IRuntimeCheckpointCommitStore _inner;
 
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
+    bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
+    bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) => _inner.CanCommitModelState(reader);
+    bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => _inner.SupportsModelAdmission;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => _inner.CanCommitModelAdmission(reader, executions, activities, outbox);
     public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
         IActivityExecutionStateStore activities) => _inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
 
@@ -64,6 +70,31 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
+
+        if (commit.ExpectedModelParentWait is not null)
+        {
+            if (!_inner.SupportsModelParentAdmission)
+                throw new NotSupportedException("The physical writer cannot compare a model child's live native parent wait.");
+            commit.EnsureModelParentAdmissionShape();
+        }
+
+        if (commit.ExpectedModelExecution is not null)
+        {
+            if (!_inner.SupportsModelAdmission || decision.Mode != RuntimeCheckpointPersistenceMode.Immediate ||
+                sessionAccessor.Current is { HasBufferedChanges: true } admissionSession && admissionSession.AppliesTo(commit.WorkflowExecutionId))
+                throw new NotSupportedException("Initial model-owned native worker admission requires its own immediate physical checkpoint.");
+            commit.EnsureModelAdmissionShape();
+        }
+
+        if (commit.ModelState is not null)
+        {
+            if (!_inner.SupportsModelCheckpoint || sessionAccessor.Current?.AppliesTo(commit.WorkflowExecutionId) == true)
+                throw new NotSupportedException("Model decisions require a qualified physical writer outside a native coalescing session.");
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model decisions cannot be deferred or skipped.");
+            commit.EnsureModelStateShape();
+            return await _inner.CommitAsync(commit, decision, cancellationToken);
+        }
 
         if (commit.ExpectedBookmarkResume is not null && !SupportsExactBookmarkResume)
             throw new NotSupportedException("The physical checkpoint store cannot enforce exact bookmark resume admission.");
@@ -314,6 +345,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     // Operational (lease/heartbeat/ownership — condition E), incident, and bookmark writes must never be buffered:
     // they are durability-critical and are flushed immediately even if they ride on a deferrable checkpoint name.
     private static bool HasBoundaryState(RuntimeCheckpointCommit commit) =>
+        commit.ExpectedModelExecution is not null ||
         commit.ExpectedBookmarkResume is not null ||
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||

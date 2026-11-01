@@ -61,6 +61,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new ActivityExecutionInspectionEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionHierarchyEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutionStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeModelExecutionEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeModelInputEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowAlterationPlanEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowAlterationJobEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowTestScopeEntityConfiguration());

@@ -1,0 +1,29 @@
+{
+  "round": 14,
+  "head": "d3f6ff69593200610f983c47ac4643a5489ec0ce",
+  "base": "588da3eb01d0949ba3c9721b61c09fbc2334a335",
+  "verdict": "not clean",
+  "correctness": "no actionable findings",
+  "acceptance": "no actionable findings",
+  "standards": [
+    {
+      "id": "S1",
+      "priority": "P2",
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelExecutionReader.cs",
+      "lines": [
+        31,
+        49,
+        87
+      ],
+      "scenario": "All three model read operations leak IOException and unrequested OperationCanceledException instead of their declared contextual availability exception.",
+      "independentlyConfirmedByParent": true,
+      "adopted": true
+    }
+  ],
+  "findingsDropped": [],
+  "completedRounds": 14,
+  "reviewLimit": 16,
+  "nextFullRound": 15,
+  "remoteDraftHeadUnchanged": "f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a",
+  "historyRouteDecision": "pending"
+}

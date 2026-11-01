@@ -1,0 +1,16 @@
+{
+  "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--filter",
+    "FullyQualifiedName~DelayedCompensationWorkbenchTests",
+    "--logger",
+    "trx;LogFileName=host.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-review10-corrections/host"
+  ]
+}

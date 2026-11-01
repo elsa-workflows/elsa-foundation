@@ -1,0 +1,24 @@
+{
+  "baseSource": "40b4ec233c27656693370cd7b630f14e42eb11de",
+  "testSourceSha256": "064f3e5d6dfe7efae5fa1f45b744c8851ae0fd2105f0518e938c4ace32e8dca8",
+  "productionUnchanged": true,
+  "arguments": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+    "-c",
+    "Release",
+    "-m:1",
+    "-p:BuildInParallel=false",
+    "-p:UseSharedCompilation=false",
+    "-p:RestoreLockedMode=true",
+    "--filter",
+    "FullyQualifiedName~Material_io_and_unrequested_cancellation_retain_context|FullyQualifiedName~Material_provider_failures_remain_contextual|FullyQualifiedName~Material_save_failure_discards_staging_and_allows_the_same_material_to_retry|FullyQualifiedName~Material_inflight_cancellation_keeps_the_requested_token",
+    "--logger",
+    "trx;LogFileName=round15-material-red-complete.trx",
+    "--nologo"
+  ],
+  "exitCode": 1,
+  "seconds": 10.87,
+  "reason": "Adds six in-flight cancellation controls before any production fix; original11 controls unchanged."
+}

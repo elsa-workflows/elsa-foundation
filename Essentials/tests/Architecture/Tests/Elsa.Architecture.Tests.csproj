@@ -71,6 +71,8 @@
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Elsa.Agent.Specialists\Elsa.Agent.Specialists.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
+    <ProjectReference Include="..\..\..\src\Activities\Bpmn\Api\Elsa.Activities.Bpmn.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Activities\Bpmn\Core\Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />

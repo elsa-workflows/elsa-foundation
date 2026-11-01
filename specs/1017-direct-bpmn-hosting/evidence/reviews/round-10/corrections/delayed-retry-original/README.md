@@ -1,0 +1,7 @@
+# C1: authentic delayed retry before the settlement correction
+
+Producer b519c833d uses built-in CompensationScope, WriteLine and Fault, explicit closed worker inputs, real WorkflowsRuntimeResumptionFeature, system clock, actual SQLite provider, ordinary publication/start/model cancellation/outbox/actors. The compiled publication helper completes optional Fault inputs. The additional earlier setup run correctly refused delayed scheduling because that fixture had not composed resumption; its failure is retained separately and is not a C1 counterexample.
+
+The executed producer reaches a genuine one-hour compensation retry, cancels the model and original native worker, queues the original native terminal result, then attempts normal model consumption. Expected TerminalSettled; actual TerminalPendingSettlement. The native worker is physically Cancelled and its obsolete future EnqueueSchedulerWork source remains Pending, more than50minutes from availability. The original queued result has no accepted model receipt. This is the intended C1 behavioral red, separate from all earlier setup failures.
+
+Three complete Runtime stores and SDK observations are captured at waiting, queued-result before consumption, and after the failed result. These files are authentic production-port state, without source/clock/claim/state/result editing. Compressed/decoded hashes are indexed. Capture preceded every C1 production correction. These SDK/harness receipts do not claim cold actual-host recovery, Studio, broader ETL or program acceptance.

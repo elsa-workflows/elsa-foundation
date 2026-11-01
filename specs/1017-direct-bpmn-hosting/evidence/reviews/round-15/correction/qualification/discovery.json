@@ -1,0 +1,80 @@
+[
+  {
+    "name": "runtime-ef",
+    "source": "db76b980e75e8d2ce29a9ea704ec581c2eeae5ef",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--list-tests",
+      "--nologo"
+    ],
+    "listedDisplays": 1839,
+    "executedCases": 1839,
+    "counters": {
+      "total": "1839",
+      "executed": "1839",
+      "passed": "1839",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "allDiscoveredCasesAccountedFor": true,
+    "runtimeExpandedTheories": {}
+  },
+  {
+    "name": "actual-hosts",
+    "source": "db76b980e75e8d2ce29a9ea704ec581c2eeae5ef",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--list-tests",
+      "--nologo"
+    ],
+    "listedDisplays": 46,
+    "executedCases": 2,
+    "counters": {
+      "total": "2",
+      "executed": "2",
+      "passed": "2",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "selectedCases": [
+      "Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbenchTests.Actual_native_execution_and_pin_survive_an_owned_host_restart",
+      "Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host"
+    ],
+    "unselectedDisplays": 44,
+    "scope": "Only authenticated direct recovery and original native execution/pin recovery selected after exception-only correction. Full46 actual9d host suite remains at its original source; unselected cases are not claimed newly run or skipped."
+  }
+]

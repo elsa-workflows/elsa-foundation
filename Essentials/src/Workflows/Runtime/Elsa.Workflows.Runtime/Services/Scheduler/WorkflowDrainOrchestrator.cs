@@ -25,9 +25,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
     private readonly CheckpointRuleViolationWorkflowFaulter _checkpointRuleViolationFaulter;
     private readonly WorkflowDrainOrchestratorOptions _options;
-    private readonly IRuntimeExecutionOwnershipService _ownershipService;
-    private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
-    private readonly IPersistenceOperationScopeFactory? _heartbeatScopeFactory;
+    private readonly RuntimeExecutionLeaseRunner _leaseRunner;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
@@ -172,9 +170,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
         _checkpointRuleViolationFaulter = checkpointRuleViolationFaulter;
         _options = options ?? new WorkflowDrainOrchestratorOptions();
-        _ownershipService = ownershipService;
-        _ownershipContextAccessor = ownershipContextAccessor;
-        _heartbeatScopeFactory = heartbeatScopeFactory;
+        _leaseRunner = new(ownershipService, ownershipContextAccessor, heartbeatScopeFactory, timeProvider ?? TimeProvider.System);
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _persistenceModeResolver = persistenceModeResolver;
@@ -196,141 +192,25 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         if (!string.Equals(request.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new InvalidOperationException($"Scheduler drain request workflow execution ID '{request.WorkflowExecutionId}' does not match command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
 
-        // Single-writer ownership: claim a fencing lease for this drain and expose it as the active ownership
-        // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
-        // heartbeat to operational state, giving the recovery scanner real data. Renewal keeps long-running drains from
-        // expiring their own lease; process failure leaves the lease in place so interrupted execution stays detectable,
-        // while every in-process completion path stops renewal and releases it to avoid false-positive recovery. Both
-        // collaborators are required by construction (C1), so there is no unfenced fallback path.
-        var lease = await _ownershipService.AcquireAsync(request.WorkflowExecutionId, cancellationToken);
-        using (_ownershipContextAccessor.Push(lease))
-        using (var renewalStop = new CancellationTokenSource())
-        using (var drainCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        return await _leaseRunner.RunAsync(request.WorkflowExecutionId, envelope.Partition, async token =>
         {
-            var renewalTask = RenewOwnershipUntilStoppedAsync(lease, envelope.Partition, renewalStop.Token, drainCancellation);
             RuntimeSchedulerDrainResult? result = null;
-            Exception? drainFailure = null;
-            Exception? renewalFailure = null;
-            Exception? releaseFailure = null;
+            Exception? failure = null;
+            try { result = await DrainCoreAsync(envelope, request, token); }
+            catch (Exception exception) { failure = exception; }
+            // This policy belongs to native execution. It runs inside the shared ownership fence.
             try
             {
-                try
-                {
-                    result = await DrainCoreAsync(envelope, request, drainCancellation.Token);
-                }
-                catch (Exception exception)
-                {
-                    drainFailure = exception;
-                }
-
-                // #1780: a commit a checkpoint rule refused is refused again on every redelivery, so the execution is
-                // faulted instead of left non-terminal. This runs while the lease is still held, so the fault commit is
-                // fenced like the drain's own. The drain's result or failure is reported unchanged; only a fault commit
-                // that itself fails is added to it, because then the execution was not faulted. The envelope goes with
-                // it for #1799: a refused FIRST commit leaves no state to fault, and for a dispatched child the command
-                // is the only place its identity still exists.
-                try
-                {
-                    await _checkpointRuleViolationFaulter.FaultIfCheckpointRuleViolatedAsync(
-                        request.WorkflowExecutionId,
-                        result,
-                        drainFailure,
-                        envelope,
-                        drainCancellation.Token);
-                }
-                catch (Exception exception)
-                {
-                    drainFailure = drainFailure is null ? exception : new AggregateException(drainFailure, exception);
-                }
-            }
-            finally
-            {
-                await renewalStop.CancelAsync();
-                try
-                {
-                    await renewalTask;
-                }
-                catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
-                {
-                    // Expected when the drain completes before the next heartbeat cadence.
-                }
-                catch (Exception exception)
-                {
-                    renewalFailure = exception;
-                }
-
-                try
-                {
-                    var release = await _ownershipService.ReleaseAsync(lease, CancellationToken.None);
-                    if (!release.Succeeded && release.Status != RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
-                        releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", release.Status);
-                }
-                catch (Exception exception)
-                {
-                    releaseFailure = new RuntimeExecutionOwnershipLostException(lease, "release", transitionStatus: null, exception);
-                }
-            }
-
-            if (renewalFailure is not null)
-                ExceptionDispatchInfo.Capture(renewalFailure).Throw();
-
-            if (drainFailure is not null)
-                ExceptionDispatchInfo.Capture(drainFailure).Throw();
-
-            if (releaseFailure is not null)
-                ExceptionDispatchInfo.Capture(releaseFailure).Throw();
-
-            return result ?? throw new InvalidOperationException("Workflow execution draining completed without a result.");
-        }
-    }
-
-    private async Task RenewOwnershipUntilStoppedAsync(
-        RuntimeExecutionLease lease,
-        WorkflowExecutionPartition partition,
-        CancellationToken stopToken,
-        CancellationTokenSource drainCancellation)
-    {
-        var duration = lease.ExpiresAt - lease.AcquiredAt;
-        var cadence = TimeSpan.FromTicks(Math.Max(1, duration.Ticks / 3));
-        while (true)
-        {
-            await Task.Delay(cadence, _timeProvider, stopToken);
-            RuntimeExecutionOwnershipTransitionResult heartbeat;
-            try
-            {
-                heartbeat = await HeartbeatAsync(lease, partition, stopToken);
-            }
-            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
-            {
-                throw;
+                await _checkpointRuleViolationFaulter.FaultIfCheckpointRuleViolatedAsync(
+                    request.WorkflowExecutionId, result, failure, envelope, token);
             }
             catch (Exception exception)
             {
-                await drainCancellation.CancelAsync();
-                throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", transitionStatus: null, exception);
+                failure = failure is null ? exception : new AggregateException(failure, exception);
             }
-
-            if (heartbeat.Succeeded || heartbeat.Status == RuntimeExecutionOwnershipTransitionStatus.AlreadyApplied)
-                continue;
-
-            await drainCancellation.CancelAsync();
-            throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", heartbeat.Status);
-        }
-    }
-
-    private async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(
-        RuntimeExecutionLease lease,
-        WorkflowExecutionPartition partition,
-        CancellationToken cancellationToken)
-    {
-        if (_heartbeatScopeFactory is null)
-            return await _ownershipService.HeartbeatAsync(lease, cancellationToken);
-
-        await using var scope = await _heartbeatScopeFactory.CreateAsync(
-            new PersistenceScope(partition.Value),
-            cancellationToken);
-        var ownershipService = scope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>();
-        return await ownershipService.HeartbeatAsync(lease, cancellationToken);
+            if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+            return result ?? throw new InvalidOperationException("Workflow execution draining completed without a result.");
+        }, cancellationToken);
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainCoreAsync(
