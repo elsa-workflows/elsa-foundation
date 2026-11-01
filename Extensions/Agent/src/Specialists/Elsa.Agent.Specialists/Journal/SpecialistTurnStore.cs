@@ -134,7 +134,8 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
     {
         cancellationToken.ThrowIfCancellationRequested();
         EnsureScope(identity);
-        SpecialistTurnDocumentRules.Token(conversationId);
+        try { SpecialistTurnDocumentRules.Token(conversationId); }
+        catch (Exception exception) { throw new SpecialistJournalException("specialist.journal.record", null, "The specialist conversation identity is invalid.", exception); }
         lock (gate)
         {
             state.Conversations.TryGetValue((identity.TenantId, identity.PersistencePartition, conversationId), out var document);

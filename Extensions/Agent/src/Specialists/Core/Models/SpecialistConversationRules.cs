@@ -34,17 +34,7 @@ internal static class SpecialistConversationRules
     internal static void Validate(SpecialistConversationDocument document)
     {
         SpecialistTurnDocumentRules.Token(document.Id);
-        ArgumentNullException.ThrowIfNull(document.Owner);
-        foreach (var value in new[] { document.Owner.PersistencePartition, document.Owner.WorkflowExecutionId, document.Owner.DefinitionVersionId, document.Owner.TemplateHash })
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(value);
-            _ = new System.Text.UTF8Encoding(false, true).GetByteCount(value);
-        }
-        if (document.Owner.TenantId is { } tenant)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
-            _ = new System.Text.UTF8Encoding(false, true).GetByteCount(tenant);
-        }
+        ValidateOwner(document.Owner);
         if (document.Revision < 0 || (document.Revision == 0) != (document.AcceptedTurn is null) ||
             (document.ActiveTurnHandle is null) != (document.ActiveFence is null) || document.OutcomeUnknown && document.ActiveTurnHandle is null)
             throw new InvalidDataException("The specialist conversation lifecycle is invalid.");
@@ -54,6 +44,22 @@ internal static class SpecialistConversationRules
             SpecialistTurnDocumentRules.Token(accepted.Handle);
             if (document.Owner != SpecialistConversationOwner.FromInvocation(accepted.Identity) || string.IsNullOrWhiteSpace(accepted.ChildInvocationId))
                 throw new InvalidDataException("The accepted specialist conversation reference has another owner.");
+        }
+    }
+
+    internal static void ValidateOwner(SpecialistConversationOwner owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        var utf8 = new System.Text.UTF8Encoding(false, true);
+        foreach (var value in new[] { owner.PersistencePartition, owner.WorkflowExecutionId, owner.DefinitionVersionId, owner.TemplateHash })
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value);
+            _ = utf8.GetByteCount(value);
+        }
+        if (owner.TenantId is { } tenant)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
+            _ = utf8.GetByteCount(tenant);
         }
     }
 }

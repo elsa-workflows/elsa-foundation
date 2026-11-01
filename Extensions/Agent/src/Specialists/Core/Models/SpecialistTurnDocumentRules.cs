@@ -19,6 +19,7 @@ internal static class SpecialistTurnDocumentRules
         if (document.Conversation is { } conversation)
         {
             Token(conversation.ConversationId);
+            SpecialistConversationRules.ValidateOwner(SpecialistConversationOwner.FromInvocation(document.Identity));
             if (conversation.ExpectedRevision is < 0 or long.MaxValue) throw new InvalidDataException("The specialist conversation base revision is invalid.");
         }
         if (document.Key != SpecialistTurnDocument.CalculateOperationKey(document.Identity))

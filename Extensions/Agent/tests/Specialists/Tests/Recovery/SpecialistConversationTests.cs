@@ -23,6 +23,23 @@ public sealed class SpecialistConversationTests
     private static readonly string ConversationId = Token("conversation");
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Invalid_owner_or_conversation_identity_uses_the_journal_exception_boundary(bool durable, bool malformedUnicode)
+    {
+        await using var fixture = await Fixture.CreateAsync(durable);
+        await fixture.Use(async store =>
+        {
+            var candidate = Document("invalid", 0, Identity with { DefinitionVersionId = malformedUnicode ? "\ud800" : "" });
+            var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(candidate, default));
+            if (malformedUnicode) Assert.IsType<EncoderFallbackException>(error.InnerException);
+            await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.ReadConversationAsync("invalid", Identity, default));
+        });
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Revision_admission_is_exclusive_scoped_and_survives_a_new_store(bool durable)

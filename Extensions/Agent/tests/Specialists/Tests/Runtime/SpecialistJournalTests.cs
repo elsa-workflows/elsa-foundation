@@ -34,6 +34,25 @@ public sealed class SpecialistJournalTests
     }
 
     [Fact]
+    public async Task Acceptance_requires_the_candidate_session_to_match_the_admitted_revision()
+    {
+        await using var services = Services();
+        var store = Memory();
+        var journal = Journal(store, services);
+        var request = Request();
+        request = request with { Descriptor = request.Descriptor with { AllowContinuity = true } };
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        var claim = await journal.ClaimAsync(handle, request.Identity, "child", now, default);
+        Assert.True(await journal.DispatchAsync(claim, now, default));
+        var candidate = new SpecialistTurnResult(Json("{}"), null, null, null, 1, 1, new(handle, 2, "candidate"));
+        var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.AcceptAsync(claim, candidate, now, default));
+        Assert.Equal("specialist.session.admission", error.Code);
+        Assert.Null((await journal.ReadAsync(handle, request.Identity, default)).Document.ProtectedResult);
+        Assert.Equal(0, (await store.ReadConversationAsync(handle, request.Identity, default))!.Revision);
+    }
+
+    [Fact]
     public async Task A_mutated_plain_journal_maximum_cannot_raise_the_authenticated_request_budget()
     {
         await using var services = Services();
