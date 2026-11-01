@@ -170,6 +170,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Design",
+          "path": "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Bpmn",
           "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
         },
@@ -913,6 +918,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Expressions.Core",
+          "path": "Essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -924,6 +934,75 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj",
+      "name": "Elsa.Activities.Bpmn.Design",
+      "kind": "source",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Bpmn.Design",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Activities.Bpmn.Design",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Core",
+          "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Core",
+          "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Core",
+          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.12"
         }
       ]
@@ -954,16 +1033,6 @@
           "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Design.Core",
-          "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Workflows.Publishing.Core",
-          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
         },
         {
           "type": "internal",
@@ -1051,8 +1120,8 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.Activities.Bpmn",
-          "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
+          "id": "Elsa.Activities.Bpmn.Design",
+          "path": "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj"
         },
         {
           "type": "internal",
@@ -1108,16 +1177,6 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Bpmn.Semantics",
-          "version": "0.5.0"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
         }
       ]
     },
@@ -10203,6 +10262,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Design",
+          "path": "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Bpmn",
           "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
         },
@@ -10502,6 +10566,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Bpmn.Api",
           "path": "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Design",
+          "path": "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj"
         },
         {
           "type": "internal",
@@ -13220,6 +13289,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Bpmn.Core",
           "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn",
+          "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
         },
         {
           "type": "internal",
@@ -21590,6 +21664,11 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Design",
+          "path": "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Activities.Bpmn",
