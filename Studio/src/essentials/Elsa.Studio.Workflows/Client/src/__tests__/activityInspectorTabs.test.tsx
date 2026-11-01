@@ -176,6 +176,24 @@ describe("activity Inspector tabs", () => {
     expect(activity.structure!.schemaVersion).toBe("1.0.0");
   });
 
+  it("prefers the recommended condition version over another compatible catalog version", () => {
+    const legacy = collectionActivity("switch");
+    const current = structuredClone(legacy);
+    current.activityVersionId = "switch-4.1";
+    const facet = current.designFacets![0] as { schemaVersion: string; payload: { slots: Record<string, unknown>[] } };
+    facet.schemaVersion = "2.0.0";
+    Object.assign(facet.payload.slots[0], { itemIdProperty: "caseId", conditionProperty: "condition" });
+    const recommended = { ...current, activityVersionId: "switch-4.2" };
+    const onChange = vi.fn();
+    const container = render(<Harness selectedNode={createActivityNode(legacy, "switch")}
+      activityDescriptor={{ typeName: legacy.activityTypeKey, inputs: [], outputs: [], ports: [] }}
+      catalog={[legacy, recommended]} knownCatalog={[legacy, current, recommended]} onChange={onChange} />);
+
+    click([...container.querySelectorAll("button")].find(button => button.textContent === "Upgrade to case conditions")!);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].activityVersionId).toBe(recommended.activityVersionId);
+  });
+
   it("starts on Inputs and orders the complete conditional tab set", () => {
     const container = render(<Harness supportsVariables slots={[bodySlot]} />);
     const allTabs = tabs(container);
