@@ -1,0 +1,50 @@
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CShells.Lifecycle;
+using Elsa.Activities.Bpmn;
+using Elsa.Events;
+using Elsa.Tasks.Core;
+
+var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+var services = new ServiceCollection();
+services.AddLogging(); services.AddWorkflowRuntime();
+services.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess());
+new EventsFeature().ConfigureServices(services);
+new ActivitiesBpmnHostingFeature { AdmitNewExecutions = false }.ConfigureServices(services);
+services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions {
+ Provider = "Sqlite", ConnectionString = $"Data Source={args[0]};Mode=ReadWrite;Pooling=False", Pooling=false,
+ CacheWorkflowExecutables=false,RecoveryContinuationSigningKey=new string('r',32),HierarchyCursorSigningKey=new string('r',32) });
+services.AddPersistenceModes();
+services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new OneItem()));
+await using var provider = services.BuildServiceProvider();
+foreach(var initializer in provider.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
+await using var scope=provider.CreateAsyncScope();var sdk=scope.ServiceProvider;
+foreach(var task in sdk.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
+var models=sdk.GetRequiredService<IRuntimeModelExecutionReader>();
+var before=(await models.ListPageAsync(new())).Items.Single();
+var origin=before.Payload.GetProperty("work").EnumerateArray().Single().GetProperty("nativeWork").Deserialize<RuntimeModelNativeWorkOrigin>(json)!;
+var workflow=await sdk.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId);
+var outbox=sdk.GetRequiredService<IRuntimePostCommitOutboxStore>();
+var pending=(await outbox.GetDeliverableAsync(new(DateTimeOffset.UtcNow,20,origin.WorkerExecutionId))).ToArray();
+var cancel=pending.Single(x=>x.Intent.Kind=="Elsa.Etl.Cancel.v1");
+var result=pending.Single(x=>x.Intent.Kind=="Elsa.Bpmn.NativeWorkResult.v1");
+Console.WriteLine(JsonSerializer.Serialize(new { phase="before",model=before,worker=workflow,cancelSource=cancel,resultSource=result},json));
+var delivery=await sdk.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(1,origin.WorkerExecutionId,"Elsa.Bpmn.NativeWorkResult.v1"));
+var now=DateTimeOffset.UtcNow;var id="acceptance-cancel-order:"+Guid.NewGuid().ToString("N");
+var actor=await sdk.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(before.ExecutionId,WorkflowExecutionActorActivationReason.Recovery,now,"acceptance-review",WorkflowExecutionActorCapabilities.InProcessMailbox,partition:new(origin.Scope.Value)));
+var drained=await actor.EnqueueAsync(new(id,before.ExecutionId,new(id,before.ExecutionId,WorkflowExecutionCommandKind.RunSchedulerWork,now,null,new Dictionary<string,string>()),id,WorkflowExecutionCommandDeliveryMode.AtLeastOnce,now,partition:new(origin.Scope.Value)));
+var after=await models.FindAsync(before.ExecutionId);
+var lookup=sdk.GetRequiredService<IPostCommitOutboxLookupStore>();
+object Product(Assembly assembly)=>new {name=assembly.GetName().Name,version=assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,sha256=Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(assembly.Location)))};
+Console.WriteLine(JsonSerializer.Serialize(new { phase="after",delivery,drained,model=after,receipt=await models.FindInputAsync(before.ExecutionId,origin.ResultInputId),cancelSource=await lookup.FindDurableAsync(cancel.OutboxItemId),resultSource=await lookup.FindDurableAsync(result.OutboxItemId),products=new[]{Product(typeof(ActivitiesBpmnHostingFeature).Assembly),Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly)}},json));
+
+internal sealed class ScopedAccess: IPersistenceAccessContextAccessor { public PersistenceAccessContext Current=>PersistenceAccessContext.Scoped(new(PersistenceScope.DefaultValue)); }
+internal sealed class OneItem: IWorkflowSchedulerDrainPolicy { public RuntimeSchedulerDrainRequest? CreateDrainRequest(WorkflowExecutionCommandEnvelope e,RuntimeSchedulerWorkItem item)=>new(item.WorkflowExecutionId,maxWorkItems:1); }

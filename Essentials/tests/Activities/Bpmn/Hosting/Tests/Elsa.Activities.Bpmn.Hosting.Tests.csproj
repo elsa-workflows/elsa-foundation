@@ -1,0 +1,87 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <WorkbenchProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj'))</WorkbenchProject>
+    <SnapshotReaderProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj'))</SnapshotReaderProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-10/corrections/delayed-retry-original/queued-result.sqlite.gz"
+          Link="Fixtures/delayed-compensation/queued-result.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz"
+          Link="Fixtures/prior-scope-cancel/queued-result.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/after-cancel-*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/after-cancel-*-physical.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/process.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/cancel-response.json"
+          Link="Fixtures/legacy-nested-cancel/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-6/corrections/inputs/*"
+          Link="Fixtures/legacy-timer/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/current-writer/*.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/current-writer/*.sqlite.gz"
+          Link="Fixtures/templates-current-writer/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/manifest.json"
+          Link="Fixtures/templates-current-writer/manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/admitted-old-writer.log.gz" Link="Fixtures/legacy-fault/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/waiting-old-writer/old-waiting.snapshot.sqlite.gz" Link="Fixtures/legacy-fault/old-waiting.snapshot.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/waiting-old-writer/producer-ready.log" Link="Fixtures/legacy-fault/waiting-old-writer.log" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/acceptance/old-embedded/old-pending-parent.snapshot.sqlite.gz" Link="Fixtures/legacy-fault/old-pending-parent.snapshot.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/corrections/transport/deferred-cancel-runtime.sqlite.gz" Link="Fixtures/legacy-fault/old-parent-cancel-source-deferred.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/corrections/transport/result.json" Link="Fixtures/legacy-fault/old-parent-cancel-source-deferred.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/acceptance/old-embedded/producer-partition.log" Link="Fixtures/legacy-fault/pending-parent-old-writer.log" CopyToOutputDirectory="PreserveNewest" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <PackageReference Include="Bpmn.Model" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <ProjectReference Include="../../../../../src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
+    <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../../../tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/retained-runtime.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/retained-design.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/late-before-crash.json"
+          Link="Fixtures/signal-cancellation-input/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json"
+          Link="Fixtures/legacy-baseline-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/api.json"
+          Link="Fixtures/legacy-native-terminal-baseline.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/runtime.sqlite.gz"
+          Link="Fixtures/legacy-native-terminal-baseline.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/design.sqlite.gz"
+          Link="Fixtures/legacy-native-terminal-design.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*-api.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*-marker.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*.sqlite.gz"
+          Link="Fixtures/native-parent-pending/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/*-held-api.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/*-marker.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/*-held.sqlite.gz"
+          Link="Fixtures/called-ack/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/before-selection.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/after-cohort.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/after-resume.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/empty-cohort.json"
+          Link="Fixtures/broadcast/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/called-control-prepare.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/concurrent-prepare.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/compensation-handler-b.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/*-checked.json"
+          Link="Fixtures/legacy-controls/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/api.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/physical-checked.json"
+          Link="Fixtures/multi-instance-and-studio/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/cases.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/runtime.sqlite;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/design.sqlite"
+          Link="Fixtures/legacy-partial-forks/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Build and launch the real host; never load its assembly or reproduce its composition in this test process. -->
+  <Target Name="DescribeBpmnHostingWorkbench" BeforeTargets="GetAssemblyAttributes">
+    <MSBuild Projects="$(WorkbenchProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)" BuildInParallel="false">
+      <Output TaskParameter="TargetOutputs" ItemName="BpmnHostingWorkbenchOutput" />
+    </MSBuild>
+    <MSBuild Projects="$(SnapshotReaderProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)" BuildInParallel="false">
+      <Output TaskParameter="TargetOutputs" ItemName="BpmnHostingSnapshotReaderOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BpmnHostingReaderAssembly</_Parameter1>
+        <_Parameter2>@(BpmnHostingSnapshotReaderOutput)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BpmnHostingWorkbenchAssembly</_Parameter1>
+        <_Parameter2>@(BpmnHostingWorkbenchOutput)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BpmnHostingWorkbenchSource</_Parameter1>
+        <_Parameter2>$([System.IO.Path]::GetDirectoryName('$(WorkbenchProject)'))</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+</Project>

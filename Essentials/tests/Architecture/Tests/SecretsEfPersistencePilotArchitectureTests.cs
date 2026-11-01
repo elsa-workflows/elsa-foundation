@@ -60,6 +60,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Persistence/EntityFramework/EfHostStoreOptions.cs",
         "Essentials/src/Persistence/EntityFramework/EfMigrateOptions.cs",
         "Essentials/src/Persistence/EntityFramework/EfMigratePolicy.cs",
+        "Essentials/src/Persistence/EntityFramework/EfMigrationHistoryRepository.cs",
+        "Essentials/src/Persistence/EntityFramework/EfMigrationIncludesAttribute.cs",
         "Essentials/src/Persistence/EntityFramework/EfMigrationsHistory.cs",
         "Essentials/src/Persistence/EntityFramework/EfModuleAttribute.cs",
         "Essentials/src/Persistence/EntityFramework/EfModuleBinding.cs",

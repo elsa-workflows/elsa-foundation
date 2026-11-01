@@ -41,6 +41,8 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <!-- Real RunBpmn model admission observes the loaded schema-reader capabilities. -->
+    <ProjectReference Include="..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <!-- EF Sqlite runtime stores: the graph exit durable-cancellation test (spec 237, SC-002) runs on both store kinds. -->
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
 

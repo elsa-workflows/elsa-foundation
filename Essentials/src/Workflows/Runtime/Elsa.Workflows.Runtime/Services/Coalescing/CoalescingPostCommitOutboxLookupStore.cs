@@ -18,6 +18,10 @@ internal sealed class CoalescingPostCommitOutboxLookupStore(
     public ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
         inner.Value.FindDurableAsync(outboxItemId, cancellationToken);
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId, IReadOnlyCollection<string> excludedIntentKinds,
+        CancellationToken cancellationToken = default) =>
+        inner.Value.FindUndeliveredDurableAsync(workflowExecutionId, excludedIntentKinds, cancellationToken);
+
     /// <summary>The session's item when it holds one, otherwise <paramref name="lookup"/>'s answer.</summary>
     internal static ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         IRuntimeCoalescingSessionAccessor sessionAccessor,

@@ -35,6 +35,7 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
         RuntimeCheckpointNames.WorkflowCompleted,
         RuntimeCheckpointNames.WorkflowFaulted,
         RuntimeCheckpointNames.WorkflowCancelled,
+        RuntimeCheckpointNames.NativeModelWorkStartRetired,
         RuntimeCheckpointNames.IncidentRecorded,
         RuntimeCheckpointNames.IncidentResolutionBatchApplied,
         RuntimeCheckpointNames.ActivitySuspended,

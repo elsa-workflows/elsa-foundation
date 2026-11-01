@@ -58,8 +58,11 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     EfSchemaChain IEfSchemaVersionedContext.SchemaChain => WorkflowsDesignEfModule.Chain;
 
     /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
         EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
+        EfMigrationsHistory.EnsureAdded(optionsBuilder);
+    }
 
     /// <summary>
     /// The string columns this module compares or orders in SQL beyond the ones a key or an index already

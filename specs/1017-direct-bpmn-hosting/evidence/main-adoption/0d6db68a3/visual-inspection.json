@@ -1,0 +1,30 @@
+{
+  "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+  "screenshots": {
+    "studio-layout/legacy-run.png": "cefd95539b81f199ffd55befbb1ee10707779582c0dfee6f9fec44480afa75db",
+    "studio-layout/open.png": "396de802994b9e0380dbe72c651ea5d83e615ab4f84231babf47856b3d267a67",
+    "studio-layout/published-run.png": "771192c35fc1067d761f8d7e2bbdd82dac9a5efe33927074251784eb518bb533",
+    "studio-layout/published.png": "0ebb9347edfebdf0c7a5c3bfcb2695bd5c2e657b310fbc5cb9a1365014311f84",
+    "studio-layout/restarted-published-run.png": "3a4d423e6112ab04c24345206a4a5c065925cbe2d8971ecfdd2fb027e9c0aab0",
+    "studio-layout/test-run.png": "877ad1c37444e4fee3d6a953211e951c50b15a6ea15179699a67ba3f38366ebb",
+    "studio-original/legacy-run.png": "a3418bbb6ea26f91a931afe5c452653cd685aa2a509e4d8ba7536f365727d35a",
+    "studio-original/open.png": "946580be18929969ed574556f9b6c87e18155911a1a26151e5bfa23ae0ff7b4e",
+    "studio-original/published-run.png": "6cd3b2daea78f4397d8b505263f1b80d8916e9f214d00d3877a124a8a148ff28",
+    "studio-original/published.png": "8fd873ad85bebd4ae9e10756d877e760d4b7a6ce0fafdd2101c985df5afec1f2",
+    "studio-original/restarted-test-run.png": "3d2712b9e5fc0cec10d4a097cfc70c04fce63ab9e8a6b904253eb89fb2406021",
+    "studio-original/test-run.png": "92207a3aa877398a80c11c927ce2e91fc0bc2bb9e7415d631bcd64a80167b272"
+  },
+  "all12VisuallyInspected": true,
+  "observations": [
+    "Original and layout authoring definitions opened with their respective saved layouts; exact pre-edit JSON/XML exports match captures.",
+    "Publication success dialogs show3.0.0/original and4.0.0/layout; published and Test Runs show Completed/no active incidents and truthful kinds.",
+    "Same Test Run/original and Published Run/layout remain completed after actual owned host restarts. Old runs remain inspectable.",
+    "The layout Published Run retains saved DI. Test Run uses prior fallback geometry; compared visually against archived9d source layout/test-run.jpg. No broader direct-model Studio acceptance claim."
+  ],
+  "priorFallbackComparison": {
+    "source": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+    "archiveMember": "studio/layout/test-run.jpg",
+    "sha256": "a8ecd9d4796f0b2dbe2bfe35a2b98ab9d32f4a54222af7c2822913c7e376e83c"
+  },
+  "captureOutputRelocation": "screenshot-output-reconciliation.json records relocation of the first six current PNG/DOM pairs and verified restoration of all12 historical raw files."
+}

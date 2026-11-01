@@ -1,0 +1,16 @@
+{
+  "workflowExecutionId": "14mKh7PMVrH",
+  "artifactId": "artifact-0ad24e4359c1",
+  "artifactVersion": "1.0.0",
+  "artifactHash": "sha256:0ad24e4359c190b071c14cf227f3f88a69b845783aba759a7d6d6d7c05d371ef",
+  "commandDispatchStatus": "Accepted",
+  "envelopeId": "14mKh7Qpdm6",
+  "agentId": "inprocess:14mKh7PMVrH:1",
+  "agentProviderName": "InProcessWorkflowExecutionActorProvider",
+  "reason": null,
+  "sourceReferenceId": "activation-ref:publication-14mKh6HXAem",
+  "publicationId": "publication-14mKh6HXAem",
+  "slotId": "activation-slot:11:14mKh5quFos:7:default",
+  "shed": false,
+  "retryAfterSeconds": null
+}
