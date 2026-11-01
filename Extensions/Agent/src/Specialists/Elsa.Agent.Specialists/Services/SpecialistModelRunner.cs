@@ -13,6 +13,8 @@ internal sealed record SpecialistTurnRequest(SpecialistInvocationIdentity Identi
     SpecialistSessionReference? PreparedSession = null, SpecialistSessionTarget? SessionTarget = null)
 {
     public SpecialistConversationAdmission? Continuation { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public SpecialistTurnLimits? EffectiveLimits { get; init; }
 }
 internal sealed record SpecialistTurnResult(JsonElement Result, long? InputTokens, long? OutputTokens, long? TotalTokens, int ModelCalls, int ConnectionVersion,
     SpecialistSessionReference? Session = null)
@@ -43,6 +45,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         if (descriptor.SchemaProfile != SpecialistRuntimeIds.SchemaProfile || descriptor.Limits is null ||
             descriptor.Limits.MaximumModelCalls is < 1 or > 32 || descriptor.Limits.TimeoutMilliseconds is < 1_000 or > 1_800_000 || descriptor.Limits.MaximumOutputTokens is <= 0)
             throw Failure("specialist.descriptor.invalid", "The specialist descriptor is outside the supported execution profile.");
+        _ = SpecialistEffectiveLimits.For(request);
         var inputSchema = schemas.Prepare(descriptor.InputSchema).Schema;
         var resultSchema = schemas.Prepare(descriptor.ResultSchema).Schema;
         if (inputSchema is null || resultSchema is null || inputSchema.Validate(request.Inputs).Count != 0 ||
@@ -56,6 +59,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
     {
         cancellationToken.ThrowIfCancellationRequested();
         var resultSchema = ValidateRequest(request);
+        var limits = SpecialistEffectiveLimits.For(request);
         var descriptor = request.Descriptor;
         // Entry validation precedes journal staging. Only the admitted worker requires this target;
         // a fresh continuity-enabled definition must still be able to enter its native checkpoint.
@@ -77,13 +81,13 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         var options = lease.Options.Clone();
         options.ModelId = descriptor.Model.ModelId;
         options.ResponseFormat = ChatResponseFormat.ForJsonSchema(descriptor.ResultSchema, "specialist_result");
-        options.MaxOutputTokens = descriptor.Limits.MaximumOutputTokens is { } published
+        options.MaxOutputTokens = limits.MaximumOutputTokens is { } published
             ? Math.Min(published, options.MaxOutputTokens ?? published) : options.MaxOutputTokens;
         authority?.BindOutputLimit(options.MaxOutputTokens);
         options.Tools = null;
         options.ToolMode = ChatToolMode.None;
         options.Instructions = null;
-        using var bounded = new BoundedClient(lease.Client, descriptor.Limits.MaximumModelCalls, authority);
+        using var bounded = new BoundedClient(lease.Client, limits.MaximumModelCalls, authority);
         var history = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
         {
             StorageInputResponseMessageFilter = SpecialistSessionCodec.VisibleMessages

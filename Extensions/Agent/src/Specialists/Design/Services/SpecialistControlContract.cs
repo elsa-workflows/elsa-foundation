@@ -8,8 +8,8 @@ namespace Elsa.Agent.Specialists.Design.Services;
 internal static class SpecialistControlContract
 {
     private static readonly ActivityInputContract Input = new(SpecialistInvocationControls.InputKey, SpecialistInvocationControls.InputName,
-        new(SpecialistInvocationControls.JsonType), false, false, null, "elsa.json", DisplayName: "Conversation options",
-        Description: "Omit for a fresh conversation, or reuse a Conversation output. Its revision must match the accepted conversation revision.");
+        new(SpecialistInvocationControls.JsonType), false, false, null, "elsa.json", DisplayName: "Invocation options",
+        Description: "Omit for a fresh conversation, reuse an accepted Conversation output, or lower the published call, time and output limits.");
     private static readonly ActivityOutputContract Output = new(SpecialistInvocationControls.OutputKey, SpecialistInvocationControls.OutputName,
         new(SpecialistInvocationControls.JsonType), true, false, "elsa.json", DisplayName: "Conversation",
         Description: "Accepted conversation ID and revision; private history is not exposed.", SourceRepresentation: ValueRepresentation.StructuredValue);

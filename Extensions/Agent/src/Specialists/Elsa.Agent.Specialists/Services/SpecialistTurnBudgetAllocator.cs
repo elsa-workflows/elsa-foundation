@@ -9,14 +9,15 @@ internal sealed class SpecialistTurnBudgetAllocator(ISpecialistTurnStore store, 
 {
     internal SpecialistTurnBudgetAuthority Create(SpecialistTurnDocument document, SpecialistTurnRequest request)
     {
-        if (document.Identity != request.Identity || document.MaximumModelCalls != request.Descriptor.Limits.MaximumModelCalls || document.Fence is null || document.AdmissionGeneration < 1 || document.LeaseExpiresAt is null)
+        var limits = SpecialistEffectiveLimits.For(request);
+        if (document.Identity != request.Identity || document.MaximumModelCalls != limits.MaximumModelCalls || document.Fence is null || document.AdmissionGeneration < 1 || document.LeaseExpiresAt is null)
             throw SpecialistModelRunner.Failure("specialist.budget.binding", "The request budget does not match the admitted native turn.");
-        return new(store, time, document, request.Descriptor);
+        return new(store, time, document, request.Descriptor, limits);
     }
 }
 
 internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, TimeProvider time, SpecialistTurnDocument document,
-    SpecialistRuntimeDescriptor descriptor) : ISpecialistModelDispatchAuthority
+    SpecialistRuntimeDescriptor descriptor, SpecialistTurnLimits? effectiveLimits = null) : ISpecialistModelDispatchAuthority
 {
     private int maximumOutputTokens;
     private int reservations;
@@ -33,7 +34,8 @@ internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, 
 
     internal void BindOutputLimit(int? limit)
     {
-        if (limit is not (>= 1 and <= 1_000_000) || descriptor.Limits.MaximumOutputTokens is { } published && limit > published)
+        if (limit is not (>= 1 and <= 1_000_000) || descriptor.Limits.MaximumOutputTokens is { } published && limit > published ||
+            effectiveLimits?.MaximumOutputTokens is { } requested && limit > requested)
             throw SpecialistModelRunner.Failure("specialist.budget.output", "The model has no enforceable finite output limit for this turn.");
         if (Interlocked.CompareExchange(ref maximumOutputTokens, limit.Value, 0) != 0)
             throw SpecialistModelRunner.Failure("specialist.budget.binding", "The admitted output limit is already bound.");

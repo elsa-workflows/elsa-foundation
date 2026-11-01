@@ -28,6 +28,123 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 public sealed class SpecialistNativeTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_retained_continuation_profile_does_not_admit_new_limit_controls(bool limits)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"accepted\"}");
+        await using var provider = await ServicesAsync(factory);
+        var executable = await ExecutableAsync(provider, allowContinuity: true, invocationControls: true,
+            optionsBinding: OptionsBinding(limits ? "{\"limits\":{\"maximumModelCalls\":1}}" : "{}"), controlsProfile: SpecialistInvocationControls.LegacyProfile);
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        if (limits) Assert.Null(claim);
+        else await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim!);
+        await DrainAsync(actor);
+        Assert.Equal(limits ? 0 : 1, factory.Calls);
+        Assert.Equal(limits ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed,
+            (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        if (limits) Assert.Contains(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run"), state => state.Fault?.Code == "specialist.controls.invalid");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Native_invocation_lowers_effective_limits_without_rewriting_the_published_descriptor(bool durable)
+    {
+        using var files = new JournalFiles();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var factory = new FixtureFactory("{\"Article\":\"accepted\"}");
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock);
+        var requested = new SpecialistTurnLimits(1, 20_000, 32);
+        var published = new SpecialistTurnLimits(8, 300_000, 64);
+        var options = OptionsBinding("{\"limits\":{\"maximumModelCalls\":1,\"timeoutMilliseconds\":20000,\"maximumOutputTokens\":32}}");
+        var executable = await ExecutableAsync(provider, allowContinuity: true, invocationControls: true, optionsBinding: options, limits: published);
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        var (document, request) = await NativeTurnAsync(provider, executable);
+        Assert.Equal(SpecialistTurnStatus.Accepted, document.Status);
+        Assert.Equal(published, request.Descriptor.Limits);
+        Assert.Equal(requested, request.EffectiveLimits);
+        Assert.Equal(1, document.MaximumModelCalls);
+        Assert.Equal(clock.GetUtcNow().AddSeconds(20), document.Deadline);
+        Assert.Equal(32, Assert.Single(document.ModelRequests!).MaximumOutputTokens);
+        Assert.Equal(32, factory.MaximumOutputTokens);
+        Assert.Equal(1, factory.Calls);
+        Assert.DoesNotContain("limits", factory.LastUser!, StringComparison.Ordinal);
+        Assert.DoesNotContain("maximumOutputTokens", factory.LastUser!, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_lowered_native_deadline_stops_waiting_inference_without_releasing_its_reservation(bool durable)
+    {
+        using var files = new JournalFiles();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var factory = new FixtureFactory("{\"Article\":\"late\"}") { ResponseGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock);
+        var executable = await ExecutableAsync(provider, allowContinuity: true, invocationControls: true,
+            optionsBinding: OptionsBinding("{\"limits\":{\"timeoutMilliseconds\":1000}}"));
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
+        var running = provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await factory.RequestSent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        clock.Advance(TimeSpan.FromMilliseconds(1001));
+        await running.WaitAsync(TimeSpan.FromSeconds(10));
+        await DrainAsync(actor);
+        var (document, request) = await NativeTurnAsync(provider, executable);
+        Assert.Equal(1000, request.EffectiveLimits!.TimeoutMilliseconds);
+        Assert.Equal(300_000, request.Descriptor.Limits.TimeoutMilliseconds);
+        Assert.Equal(SpecialistTurnStatus.OutcomeUnknown, document.Status);
+        Assert.Single(document.ModelRequests!);
+        Assert.Null(document.ProtectedResult);
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+    }
+
+    [Theory]
+    [InlineData("{\"maximumModelCalls\":0}")]
+    [InlineData("{\"maximumModelCalls\":9}")]
+    [InlineData("{\"timeoutMilliseconds\":999}")]
+    [InlineData("{\"timeoutMilliseconds\":300001}")]
+    [InlineData("{\"maximumOutputTokens\":0}")]
+    [InlineData("{\"maximumOutputTokens\":65}")]
+    public async Task Native_invocation_refuses_nonpositive_or_widened_limits_before_staging(string limits)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not run\"}");
+        await using var provider = await ServicesAsync(factory);
+        var executable = await ExecutableAsync(provider, allowContinuity: true, invocationControls: true,
+            optionsBinding: OptionsBinding("{\"limits\":" + limits + "}"), limits: new(8, 300_000, 64));
+        var (actor, _) = await StartAsync(provider, executable);
+        await DrainAsync(actor);
+        Assert.Equal(0, factory.Opens);
+        Assert.Equal(0, factory.Calls);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        Assert.Contains(states, x => x.Fault?.Code == "specialist.limits.invalid");
+        Assert.Null(await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)));
+    }
+
+    private static RuntimeInputBinding OptionsBinding(string json) => new(SpecialistInvocationControls.InputKey, new(SpecialistInvocationControls.JsonType),
+        ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+        literal: ValueEnvelope.Inline(new(SpecialistInvocationControls.JsonType), Json(json), ValueProtectionPolicy.InstanceInline));
+
+    private static async ValueTask<(SpecialistTurnDocument Document, SpecialistTurnRequest Request)> NativeTurnAsync(ServiceProvider provider, WorkflowExecutable executable)
+    {
+        var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!;
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var parent = states.Single(x => x.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        var child = states.Single(x => x.Execution.ExecutableNodeId == SpecialistNativeBinding.ChildNode(executable.RootActivity).ExecutableNodeId);
+        var descriptor = SpecialistNativeBinding.Descriptor(executable.RootActivity);
+        var identity = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, parent.InvocationId,
+            parent.OperationKey, workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+        return await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(child.Provenance.Metadata[SpecialistNativeBinding.TurnHandleMetadataKey], identity, default);
+    }
+
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -184,6 +301,13 @@ public sealed class SpecialistNativeTests
     }
 
     [Theory]
+    [InlineData("{\"limits\":null}")]
+    [InlineData("{\"limits\":[]}")]
+    [InlineData("{\"limits\":{\"owner\":\"caller\"}}")]
+    [InlineData("{\"limits\":{\"maximumModelCalls\":1,\"maximumModelCalls\":2}}")]
+    [InlineData("{\"limits\":{\"maximumModelCalls\":\"1\"}}")]
+    [InlineData("{\"limits\":{\"timeoutMilliseconds\":1.5}}")]
+    [InlineData("{\"limits\":{\"maximumOutputTokens\":null}}")]
     [InlineData("null")]
     [InlineData("[]")]
     [InlineData("\"conversation\"")]
@@ -641,10 +765,10 @@ public sealed class SpecialistNativeTests
         public void Dispose() => Directory.Delete(directory, true);
     }
 
-    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null, bool allowContinuity = false, bool invocationControls = false, RuntimeInputBinding? optionsBinding = null)
+    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null, bool allowContinuity = false, bool invocationControls = false, RuntimeInputBinding? optionsBinding = null, SpecialistTurnLimits? limits = null, string? controlsProfile = null)
     {
         // The authoring fixture is disposed, including its three SQLite stores, before execution starts.
-        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures, allowContinuity, invocationControls, optionsBinding: optionsBinding);
+        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures, allowContinuity, invocationControls, optionsBinding: optionsBinding, limits: limits);
         var root = published.Placement.Root;
         if (resultPolicyMode is not null)
         {
@@ -659,6 +783,17 @@ public sealed class SpecialistNativeTests
                 original.Inputs.Values, result, original.Outcomes, original.Activation, original.SideEffectProfile, original.SupportsBackgroundExecution);
             root = new(root.ExecutableNodeId, root.AuthoredActivityId, root.ActivityType, root.ActivityTypeVersion, root.Descriptor,
                 root.InputBindings, root.Metadata, root.ChildSlots, root.Structure, contract);
+        }
+        if (controlsProfile is not null)
+        {
+            // Retained compiled reader fixture: change only the old profile identity, preserving
+            // the pinned runtime descriptor/contract pair and native child placement.
+            var payload = JsonSerializer.SerializeToElement(SpecialistNativeBinding.Descriptor(root) with { InvocationControlsProfile = controlsProfile }, SpecialistJson.Options);
+            var before = root.ActivityContract!;
+            var contract = new ActivityContract(before.ActivityTypeKey, before.ContractVersion, before.DescriptorKind, payload,
+                before.Inputs.Values, before.Result, before.Outcomes, before.Activation, before.SideEffectProfile, before.SupportsBackgroundExecution);
+            root = new(root.ExecutableNodeId, root.AuthoredActivityId, root.ActivityType, root.ActivityTypeVersion,
+                new RuntimeActivityDescriptor(root.DescriptorType, root.DescriptorSchemaVersion, payload), root.InputBindings, root.Metadata, root.ChildSlots, root.Structure, contract);
         }
         var executable = new WorkflowExecutable(new("editorial", "workflow", "workflow-v1", "1.0.0", "artifact-hash"), root,
             published.Placement.ResumeTargets, DateTimeOffset.UtcNow, new Dictionary<string, string>(), inputContract: null, dependencies: null,
@@ -701,6 +836,7 @@ public sealed class SpecialistNativeTests
         public string? Instructions { get; private set; }
         public string? LastUser { get; private set; }
         public string? ModelId { get; private set; }
+        public int? MaximumOutputTokens { get; private set; }
         public JsonElement? Schema { get; private set; }
         public TaskCompletionSource? ResponseGate { get; init; }
         public TaskCompletionSource RequestSent { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -724,6 +860,7 @@ public sealed class SpecialistNativeTests
                 owner.LastUser = messages.Last(x => x.Role == ChatRole.User).Text;
                 owner.Instructions = options?.Instructions;
                 owner.ModelId = options?.ModelId;
+                owner.MaximumOutputTokens = options?.MaxOutputTokens;
                 owner.Schema = (options?.ResponseFormat as ChatResponseFormatJson)?.Schema;
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, owner.Response))
                 {

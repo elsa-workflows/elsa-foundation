@@ -128,6 +128,8 @@ public sealed class SpecialistProviderSocketTests
     [InlineData("azure-openai", "truncated", "specialist.result.truncated")]
     [InlineData("anthropic", "thinking", null)]
     [InlineData("anthropic", "pause", "specialist.result.content")]
+    [InlineData("anthropic", "lowered", null)]
+    [InlineData("azure-openai", "lowered", null)]
     public async Task Production_acceptance_checks_provider_finish_and_visible_result(string vendor, string mode, string? refusal)
     {
         using var certificate = Certificate();
@@ -147,7 +149,8 @@ public sealed class SpecialistProviderSocketTests
         await using var protection = codecServices.BuildServiceProvider();
         var runner = new SpecialistModelRunner([provider], new SpecialistSchemaValidator(),
             new SpecialistSessionCodec(protection.GetRequiredService<ISecretValueProtector>(), new Access()));
-        var request = new SpecialistTurnRequest(Identity(), descriptor, contract, SpecialistConnectionProviderTests.Json("{}"), "bindings");
+        var request = new SpecialistTurnRequest(Identity(), descriptor, contract, SpecialistConnectionProviderTests.Json("{}"), "bindings")
+        { EffectiveLimits = mode == "lowered" ? new(1, 10_000, 32) : null };
         var store = new InMemorySpecialistTurnStore(new Access(), new());
         var journal = new SpecialistTurnJournal(store, protection.GetRequiredService<ISecretValueProtector>(), new Access());
         var now = DateTimeOffset.UtcNow;
@@ -174,7 +177,14 @@ public sealed class SpecialistProviderSocketTests
         Assert.Equal(11, observed.ResponseObservation.InputTokens);
         Assert.Equal(7, observed.ResponseObservation.OutputTokens);
         Assert.Null(observed.ProtectedResult);
-        Assert.Single(server.Requests);
+        var sent = Assert.Single(server.Requests);
+        if (mode == "lowered")
+        {
+            Assert.Equal(64, request.Descriptor.Limits.MaximumOutputTokens);
+            Assert.Equal(32, sent.Body.GetProperty(vendor == "anthropic" ? "max_tokens" : "max_completion_tokens").GetInt32());
+            Assert.Equal(32, Assert.Single(observed.ModelRequests!).MaximumOutputTokens);
+            Assert.Equal(now.AddSeconds(10), observed.Deadline);
+        }
     }
 
     public static IEnumerable<object[]> Cases() =>

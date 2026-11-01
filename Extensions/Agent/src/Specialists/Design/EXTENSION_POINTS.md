@@ -50,4 +50,14 @@ The compiler emits descriptor2 and an explicit control profile for this contract
 fingerprint. Runtime retains descriptor1 readers; a profile/schema mismatch is refused. Changing the
 native metadata/whole-result contract contributes a major compatibility change through the generic
 publisher. Manifest2 with continuity disabled remains fresh-only and cannot publish retained control
-members. Budget overrides and other later invocation capabilities are not part of this control profile.
+members. Current compiler2.1 emits `elsa.specialist.invocation/2`; the retained
+`elsa.specialist.continuation/1` reader accepts only its original conversation controls and refuses
+limit overrides. Unsupported profiles fail before client use.
+
+The current profile also accepts `{"limits":{"maximumModelCalls":1,"timeoutMilliseconds":20000,
+"maximumOutputTokens":32}}`, optionally alongside a conversation reference. Each omitted limit keeps
+its published value. Supplied values must be integers: calls must be at least1, timeout at least1000ms
+and output tokens positive. None can exceed a finite published bound. Empty limits preserve the
+published values. Null, duplicate or unknown members are refused. The optional limits apply to fresh
+or continuing calls under this control-enabled profile; schema1 and continuity-disabled public
+contracts retain their existing shapes.

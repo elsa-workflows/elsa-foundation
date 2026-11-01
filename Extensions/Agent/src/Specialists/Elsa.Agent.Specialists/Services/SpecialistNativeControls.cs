@@ -11,7 +11,7 @@ internal static class SpecialistNativeControls
     internal static bool Enabled(SpecialistRuntimeDescriptor descriptor)
     {
         if (descriptor.InvocationControlsProfile is null) return false;
-        if (descriptor.InvocationControlsProfile != SpecialistInvocationControls.Profile || !descriptor.AllowContinuity) throw Invalid();
+        if (descriptor.InvocationControlsProfile is not (SpecialistInvocationControls.Profile or SpecialistInvocationControls.LegacyProfile) || !descriptor.AllowContinuity) throw Invalid();
         return true;
     }
 
@@ -30,19 +30,46 @@ internal static class SpecialistNativeControls
             inputProperties.EnumerateObject().Any(x => StringComparer.OrdinalIgnoreCase.Equals(x.Name, input.Name)) || outputProperties.EnumerateObject().Any(x => OutputCollision(x.Name))) throw Invalid();
     }
 
-    internal static SpecialistConversationAdmission? Read(SpecialistRuntimeDescriptor descriptor, ActivityContract contract, IReadOnlyDictionary<string, object?> inputs)
+    internal sealed record Invocation(SpecialistConversationAdmission? Continuation, SpecialistTurnLimits? Limits);
+
+    internal static Invocation Read(SpecialistRuntimeDescriptor descriptor, ActivityContract contract, IReadOnlyDictionary<string, object?> inputs)
     {
         ValidateContract(descriptor, contract);
-        if (!Enabled(descriptor) || !inputs.TryGetValue(SpecialistInvocationControls.InputKey, out var value)) return null;
-        if (value is not JsonElement json) throw Invalid();
-        if (json.ValueKind != JsonValueKind.Object || json.GetRawText().Length > 4096) throw Invalid();
+        if (!Enabled(descriptor) || !inputs.TryGetValue(SpecialistInvocationControls.InputKey, out var value)) return new(null, null);
+        if (value is not JsonElement json || json.ValueKind != JsonValueKind.Object || json.GetRawText().Length > 4096) throw Invalid();
         var properties = json.EnumerateObject().ToArray();
-        if (properties.Length == 0) return null;
-        if (properties.Length != 2 || properties.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() != 2 ||
-            !json.TryGetProperty("conversationId", out var id) || id.ValueKind != JsonValueKind.String ||
-            !SpecialistTurnDocumentRules.IsToken(id.GetString()) || !json.TryGetProperty("revision", out var revision) ||
-            revision.ValueKind != JsonValueKind.Number || !revision.TryGetInt64(out var expected) || expected is < 1 or long.MaxValue) throw Invalid();
-        return new(id.GetString()!, expected);
+        if (properties.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() != properties.Length ||
+            properties.Any(x => x.Name is not ("conversationId" or "revision" or "limits") || x.Name == "limits" && descriptor.InvocationControlsProfile == SpecialistInvocationControls.LegacyProfile)) throw Invalid();
+        var hasId = json.TryGetProperty("conversationId", out var id);
+        var hasRevision = json.TryGetProperty("revision", out var revision);
+        SpecialistConversationAdmission? continuation = null;
+        if (hasId != hasRevision) throw Invalid();
+        if (hasId)
+        {
+            if (id.ValueKind != JsonValueKind.String || !SpecialistTurnDocumentRules.IsToken(id.GetString()) ||
+                revision.ValueKind != JsonValueKind.Number || !revision.TryGetInt64(out var expected) || expected is < 1 or long.MaxValue) throw Invalid();
+            continuation = new(id.GetString()!, expected);
+        }
+        SpecialistTurnLimits? limits = null;
+        if (json.TryGetProperty("limits", out var requested))
+        {
+            if (requested.ValueKind != JsonValueKind.Object) throw Invalid();
+            var members = requested.EnumerateObject().ToArray();
+            if (members.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() != members.Length ||
+                members.Any(x => x.Name is not ("maximumModelCalls" or "timeoutMilliseconds" or "maximumOutputTokens"))) throw Invalid();
+            var published = descriptor.Limits;
+            limits = new(ReadInteger("maximumModelCalls", published.MaximumModelCalls)!.Value,
+                ReadInteger("timeoutMilliseconds", published.TimeoutMilliseconds)!.Value,
+                ReadInteger("maximumOutputTokens", published.MaximumOutputTokens));
+            if (limits == published) limits = null;
+            int? ReadInteger(string name, int? fallback)
+            {
+                if (!requested.TryGetProperty(name, out var number)) return fallback;
+                if (number.ValueKind != JsonValueKind.Number || !number.TryGetInt32(out var result)) throw Invalid();
+                return result;
+            }
+        }
+        return new(continuation, limits);
     }
 
     internal static JsonElement Complete(SpecialistRuntimeDescriptor descriptor, SpecialistTurnResult accepted)
@@ -58,5 +85,5 @@ internal static class SpecialistNativeControls
     private static bool JsonType(ValueTypeDescriptor type) => type.Alias == SpecialistInvocationControls.JsonType && type.CollectionKind == CollectionKind.Single && type.Schema is null && type.SchemaVersion is null;
     private static bool OutputCollision(string name) => StringComparer.OrdinalIgnoreCase.Equals(name.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault(), SpecialistInvocationControls.OutputName);
     private static bool Reserved(string key) => key.StartsWith("$specialist.", StringComparison.OrdinalIgnoreCase);
-    private static SpecialistTurnException Invalid() => SpecialistModelRunner.Failure("specialist.controls.invalid", "Conversation controls require the exact published contract, conversation ID and positive expected revision.");
+    private static SpecialistTurnException Invalid() => SpecialistModelRunner.Failure("specialist.controls.invalid", "Invocation controls require the exact published contract, a valid conversation reference and integer limit values.");
 }

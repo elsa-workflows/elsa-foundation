@@ -92,16 +92,20 @@ public sealed class SpecialistJournalTests
         Assert.Equal(0, (await store.ReadConversationAsync(handle, request.Identity, default))!.Revision);
     }
 
-    [Fact]
-    public async Task A_mutated_plain_journal_maximum_cannot_raise_the_authenticated_request_budget()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_mutated_plain_journal_maximum_cannot_raise_the_authenticated_request_budget(bool lowered)
     {
         await using var services = Services();
         var state = new InMemorySpecialistTurnState();
         var store = new InMemorySpecialistTurnStore(new Access("tenant"), state);
         var journal = Journal(store, services);
-        var request = Request();
+        var original = Request();
+        var request = lowered ? original with { EffectiveLimits = new(1, 1000, 32) } : original;
         var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
-        state.Rows[handle] = state.Rows[handle] with { MaximumModelCalls = 32 };
+        Assert.Equal(lowered ? 1 : original.Descriptor.Limits.MaximumModelCalls, state.Rows[handle].MaximumModelCalls);
+        state.Rows[handle] = state.Rows[handle] with { MaximumModelCalls = lowered ? original.Descriptor.Limits.MaximumModelCalls : 32 };
         var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ReadAsync(handle, request.Identity, CancellationToken.None));
         Assert.Equal("specialist.journal.protection", error.Code);
     }
@@ -250,6 +254,43 @@ public sealed class SpecialistJournalTests
         var handle = await Journal(Memory(), services).StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
         var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await Journal(Memory(), services).ReadAsync(handle, request.Identity, CancellationToken.None));
         Assert.Equal("specialist.journal.missing", exception.Code);
+    }
+
+    [Fact]
+    public async Task A_legacy_request_without_effective_limits_keeps_its_original_authenticated_shape()
+    {
+        await using var services = Services();
+        var request = Request();
+        var body = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(request, SpecialistJson.Options))!.AsObject();
+        body.Remove("effectiveLimits");
+        var oldJson = body.ToJsonString(SpecialistJson.Options);
+        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(oldJson))).ToLowerInvariant();
+        var protector = services.GetRequiredService<ISecretValueProtector>();
+        var envelope = JsonSerializer.Serialize(new { purpose = "elsa.specialist.turn/request/1", identity = request.Identity, hash, request = Json(oldJson) }, SpecialistJson.Options);
+        var document = new SpecialistTurnDocument(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(request.Identity), hash, request.Identity,
+            protector.Protect(envelope), DateTimeOffset.UtcNow.AddMinutes(5)) { MaximumModelCalls = request.Descriptor.Limits.MaximumModelCalls };
+        var store = Memory();
+        await store.StageAsync(document, default);
+        var read = await Journal(store, services).ReadAsync(document.Handle, request.Identity, default);
+        Assert.Null(read.Request.EffectiveLimits);
+        Assert.Equal(hash, read.Document.RequestHash);
+    }
+
+    [Fact]
+    public async Task Lowered_limits_remain_pinned_across_stage_replay_and_changed_bounds_conflict()
+    {
+        await using var services = Services();
+        var journal = Journal(Memory(), services);
+        var request = Request() with { EffectiveLimits = new(1, 20_000, 32) };
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        Assert.Equal(handle, await journal.StageAsync(request, now.AddDays(1), default));
+        var read = await journal.ReadAsync(handle, request.Identity, default);
+        Assert.Equal(now.AddSeconds(20), read.Document.Deadline);
+        Assert.Equal(request.EffectiveLimits, read.Request.EffectiveLimits);
+        var conflict = await Assert.ThrowsAsync<SpecialistJournalException>(async () =>
+            await journal.StageAsync(request with { EffectiveLimits = new(2, 20_000, 32) }, now, default));
+        Assert.Equal("specialist.journal.conflict", conflict.Code);
     }
 
     private static InMemorySpecialistTurnStore Memory() => new(new Access("tenant"), new());

@@ -104,3 +104,10 @@ The descriptor's optional `InvocationControlsProfile` is omitted while null, pre
 serialized descriptor shape. The runtime validates the exact profile/schema pair and retains both
 readers. Native public controls are defined by the provider's reviewed contract, not by model settings
 or a connection credential. See [the authoring contract](../Design/EXTENSION_POINTS.md#explicit-continuation-contracts).
+
+Invocation controls are interpreted by the native runtime under their exact descriptor profile. The
+current invocation/2 profile may only lower the published call/time/output bounds; the legacy
+continuation/1 reader refuses the new limits member. Protected request material retains effective
+limits separately from the immutable provider descriptor. A custom physical accounting contribution
+must respect the bound output options and current journal reservation maximum; a control value grants
+no connection, owner or tool authority.

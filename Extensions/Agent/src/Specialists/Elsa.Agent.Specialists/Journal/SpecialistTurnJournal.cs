@@ -17,6 +17,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
     public async ValueTask<string> StageAsync(SpecialistTurnRequest request, DateTimeOffset now, CancellationToken cancellationToken)
     {
         EnsureScope(request.Identity);
+        var limits = SpecialistEffectiveLimits.For(request);
         var serialized = JsonSerializer.Serialize(request, SpecialistJson.Options);
         var hash = Hash(serialized);
         var key = SpecialistTurnDocument.CalculateOperationKey(request.Identity);
@@ -25,7 +26,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         var handle = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var candidate = new SpecialistTurnDocument(handle, key, hash, request.Identity,
             protector.Protect(JsonSerializer.Serialize(new RequestEnvelope(RequestPurpose, request.Identity, hash, request), SpecialistJson.Options)),
-            now.AddMilliseconds(request.Descriptor.Limits.TimeoutMilliseconds)) { MaximumModelCalls = request.Descriptor.Limits.MaximumModelCalls,
+            now.AddMilliseconds(limits.TimeoutMilliseconds)) { MaximumModelCalls = limits.MaximumModelCalls,
                 Conversation = request.Descriptor.AllowContinuity ? request.Continuation ?? new(handle, 0) : null };
         return (await store.StageAsync(candidate, cancellationToken)).Handle;
     }
@@ -39,7 +40,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         catch (Exception exception) { throw Failure("specialist.journal.protection", "The staged specialist request cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != RequestPurpose || envelope.Identity != identity || envelope.Request.Identity != identity || envelope.Hash != document.RequestHash ||
             Hash(JsonSerializer.Serialize(envelope.Request, SpecialistJson.Options)) != document.RequestHash ||
-            document.MaximumModelCalls != envelope.Request.Descriptor.Limits.MaximumModelCalls ||
+            document.MaximumModelCalls != SpecialistEffectiveLimits.For(envelope.Request).MaximumModelCalls ||
             document.Conversation != (envelope.Request.Descriptor.AllowContinuity ? envelope.Request.Continuation ?? new(document.Handle, 0) : null))
             throw Failure("specialist.journal.protection", "The staged specialist request does not match this native invocation.");
         return (document, envelope.Request);

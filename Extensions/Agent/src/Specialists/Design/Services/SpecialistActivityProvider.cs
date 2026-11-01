@@ -26,7 +26,7 @@ internal sealed class SpecialistActivityProvider(
 {
     private static readonly ActivityOutcomeContract Done = new("done", "Done", true);
     public string ProviderKey => SpecialistRuntimeIds.ProviderKey;
-    public string CompilerFingerprint => "elsa.specialist/compiler/2.0.0";
+    public string CompilerFingerprint => "elsa.specialist/compiler/2.1.0";
     public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema, SpecialistRuntimeIds.ContinuityManifestSchema };
     public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new("Specialist",
         [new(SpecialistRuntimeIds.ManifestSchema, true, new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema }),

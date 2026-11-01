@@ -200,3 +200,12 @@ native-provider tests force renewal races with response recording and acceptance
 CAS may retry, while unconfirmed commits cannot. Stable operation versus new-attempt delivery,
 cancellation/applied settlement and retention remain required before M3 can close. This note records the implemented
 boundary; the proposed broader logical model above remains the Program target.
+
+The invocation-limit increment uses the explicit invocation/2 profile and compiler2.1, retaining the
+conversation-only continuation/1 reader. Native controls can lower call/time/output bounds for a
+fresh or continuing control-enabled invocation. Effective limits are separate protected request
+material; the published descriptor stays pinned. Journal maximum/deadline and actual SDK output
+options enforce the effective values. Identical staging preserves its deadline; changed limits
+conflict. Missing override fields preserve legacy request serialization. Known entry validation
+refusals become coded native structural faults without scheduling a model child. This adds no
+input/total-token hard-limit claim and does not change schema1/continuity-disabled public contracts.

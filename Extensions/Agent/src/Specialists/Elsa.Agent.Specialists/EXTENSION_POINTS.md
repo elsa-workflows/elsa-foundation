@@ -51,7 +51,13 @@ Legacy manifest1/descriptor1 keeps fresh-only public invocation. Manifest2 with 
 publishes optional AgentOptions and safe Conversation metadata; see the
 [authoring contract](../Design/EXTENSION_POINTS.md#explicit-continuation-contracts). A new MAF session
 still restores only the admitted accepted prefix. No tool or streaming admission is supplied by these
-controls. A definition's continuity capability does not implicitly reuse history. The private
+controls. The current invocation/2 profile can lower call/time/output limits separately from the
+immutable published descriptor. Effective limits are protected with the staged request, bind the
+persisted request maximum and original deadline, and clamp actual MAF/SDK output options before
+physical reservations. Staged replay cannot reset these bounds; changed limits conflict. The old
+continuation/1 profile retains conversation-only controls and rejects the new limit member. Known
+entry refusals return their safe specialist code through a native structural fault without scheduling
+a model child. A definition's continuity capability does not implicitly reuse history. The private
 `elsa.specialist.text-history/1` codec now produces protected candidates for continuity-enabled turns;
 the journal accepts that candidate and business result together. Restoration requires a trusted
 admitted conversation/revision reference, selected ordinary owner scope and exact specialist version.
