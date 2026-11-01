@@ -1,0 +1,21 @@
+{
+  "testSourceSha256": "064f3e5d6dfe7efae5fa1f45b744c8851ae0fd2105f0518e938c4ace32e8dca8",
+  "initialRegression": {
+    "failed": 8,
+    "passed": 3,
+    "skipped": 0
+  },
+  "completeRed": {
+    "failed": 14,
+    "passed": 3,
+    "skipped": 0
+  },
+  "focusedGreen": {
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0
+  },
+  "latestChange": "After focused green, normalize the material-page message as a generic identity rather than calling the scope a workflow executable. Whole committed-source qualification will verify that label-only refinement.",
+  "scope": "Physical SQLite I/O/unrequested cancellation, requested cancellation both before and during I/O, provider controls, staged-save rollback/clean context/original incarnation/same-material retry. No actual host/Studio pass inferred from these controls.",
+  "remaining": "Commit correction; complete affected qualification and full16. Existing delivery and broader holds remain."
+}

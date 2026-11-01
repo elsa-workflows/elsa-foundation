@@ -1,0 +1,149 @@
+{
+  "source": "d8969d8e5272b00cb403477ead0cd9521a67f651",
+  "qualifiedRelevantTree": "9d4221e872c7f991e3a46919d8810a97ffee4e83",
+  "products": [
+    {
+      "Location": "/private/tmp/elsa-2898-c531-followup/review15/standards-material-probe/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "informationalVersion": "1.0.0\u002B9d4221e872c7f991e3a46919d8810a97ffee4e83",
+      "sha256": "1b5652e3451ab4b8feaf5500a850f4181bd77495f342d073d86684597ca1c8f2"
+    },
+    {
+      "Location": "/private/tmp/elsa-2898-c531-followup/review15/standards-material-probe/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll",
+      "informationalVersion": "1.0.0\u002B9d4221e872c7f991e3a46919d8810a97ffee4e83",
+      "sha256": "93d30f2f9832e12b3b14e1c0afb3d2a363227264cd7e30abf5a523cf4d35cbc8"
+    },
+    {
+      "Location": "/private/tmp/elsa-2898-c531-followup/review15/standards-material-probe/bin/Release/net10.0/Elsa.Persistence.EntityFramework.dll",
+      "informationalVersion": "1.0.0\u002B9d4221e872c7f991e3a46919d8810a97ffee4e83",
+      "sha256": "f8ee37a80831c759c5ba3eaf43b9c1ce8f81f04352ceed4ab4f8d5b70b7932e9"
+    }
+  ],
+  "results": [
+    {
+      "operation": "FindMaterialAsync",
+      "failure": "provider",
+      "exception": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": false,
+      "requestedTokenPreserved": false,
+      "attempts": 0,
+      "message": "The EF runtime artifact store failed while reading runtime artifact \u0027requested-model\u0027."
+    },
+    {
+      "operation": "FindMaterialAsync",
+      "failure": "io",
+      "exception": "System.IO.IOException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": true,
+      "requestedTokenPreserved": false,
+      "attempts": 1,
+      "message": "Authoritative material read failed."
+    },
+    {
+      "operation": "FindMaterialAsync",
+      "failure": "unrequested-cancellation",
+      "exception": "System.OperationCanceledException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": true,
+      "requestedTokenPreserved": false,
+      "attempts": 1,
+      "message": "Unrequested authoritative material read cancellation."
+    },
+    {
+      "operation": "FindMaterialAsync",
+      "failure": "requested-cancellation",
+      "exception": "System.OperationCanceledException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": false,
+      "requestedTokenPreserved": true,
+      "attempts": 0,
+      "message": "The operation was canceled."
+    },
+    {
+      "operation": "ListMaterialPageAsync",
+      "failure": "provider",
+      "exception": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": false,
+      "requestedTokenPreserved": false,
+      "attempts": 0,
+      "message": "The EF runtime artifact store failed while listing model/native material runtime artifact \u0027tenant-a\u0027."
+    },
+    {
+      "operation": "ListMaterialPageAsync",
+      "failure": "io",
+      "exception": "System.IO.IOException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": true,
+      "requestedTokenPreserved": false,
+      "attempts": 1,
+      "message": "Authoritative material read failed."
+    },
+    {
+      "operation": "ListMaterialPageAsync",
+      "failure": "unrequested-cancellation",
+      "exception": "System.OperationCanceledException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": true,
+      "requestedTokenPreserved": false,
+      "attempts": 1,
+      "message": "Unrequested authoritative material read cancellation."
+    },
+    {
+      "operation": "ListMaterialPageAsync",
+      "failure": "requested-cancellation",
+      "exception": "System.OperationCanceledException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": false,
+      "requestedTokenPreserved": true,
+      "attempts": 0,
+      "message": "The operation was canceled."
+    },
+    {
+      "operation": "SaveModelAsync",
+      "failure": "provider",
+      "exception": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions.RuntimeArtifactEntityFrameworkPersistenceException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": false,
+      "requestedTokenPreserved": false,
+      "attempts": 0,
+      "message": "The EF runtime artifact store failed while reading runtime artifact \u0027sha256:e471a0f8fdb2f8f914f4cc75a98c917e021539d9fbd4f91bb192bb75da90ccf4\u0027."
+    },
+    {
+      "operation": "SaveModelAsync",
+      "failure": "io",
+      "exception": "System.IO.IOException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": true,
+      "requestedTokenPreserved": false,
+      "attempts": 1,
+      "message": "Authoritative material read failed."
+    },
+    {
+      "operation": "SaveModelAsync",
+      "failure": "unrequested-cancellation",
+      "exception": "System.OperationCanceledException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": true,
+      "requestedTokenPreserved": false,
+      "attempts": 1,
+      "message": "Unrequested authoritative material read cancellation."
+    },
+    {
+      "operation": "SaveModelAsync",
+      "failure": "requested-cancellation",
+      "exception": "System.OperationCanceledException",
+      "causePreservedAsInner": false,
+      "escapedSameCause": false,
+      "requestedTokenPreserved": true,
+      "attempts": 0,
+      "message": "The operation was canceled."
+    },
+    {
+      "operation": "FindAsync-existing-native",
+      "exception": "System.IO.IOException",
+      "escapedSameCause": true,
+      "attempts": 1
+    }
+  ]
+}

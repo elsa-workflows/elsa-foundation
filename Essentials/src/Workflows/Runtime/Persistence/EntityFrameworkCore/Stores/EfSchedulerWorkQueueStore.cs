@@ -35,6 +35,8 @@ public sealed class EfSchedulerWorkQueueStore(
 
     public bool SupportsClaimTransitions => true;
 
+    public bool SupportsClaimValidation => true;
+
     public bool SupportsTargetedDeletion => true;
 
     public bool SupportsClaimableBacklogDiscovery => true;
@@ -335,6 +337,8 @@ public sealed class EfSchedulerWorkQueueStore(
             if (row is null)
                 return null;
             var item = ReadChecked(row, scope.Value, request.WorkflowExecutionId);
+            if (request.ValidateBeforeClaim is { } validate)
+                await validate(item, cancellationToken);
             if (!IsVisibleAt(row, request.Now.UtcTicks))
                 return null;
 
@@ -603,7 +607,7 @@ public sealed class EfSchedulerWorkQueueStore(
         return await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
     }
 
-    private static SchedulerWorkItemEntity ToEntity(RuntimeSchedulerWorkItem item, string scope, string id, long revision) => new()
+    private SchedulerWorkItemEntity ToEntity(RuntimeSchedulerWorkItem item, string scope, string id, long revision) => new()
     {
         Id = id,
         ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
@@ -619,7 +623,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RecordedAtUtcTicks = item.RecordedAt.UtcTicks,
         RecordedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(item.RecordedAt),
         ContentJson = RuntimeArtifactJson.Serialize(item),
-        SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+        SchemaVersion = RuntimeSchedulerWorkWriteVersion.For(context, item),
         Revision = revision
     };
 
@@ -670,7 +674,7 @@ public sealed class EfSchedulerWorkQueueStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedWorkItemId = null)
     {
-        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) || row.Revision <= 0 ||
+        if (EfSchemaVersion.NotReadable(RuntimeSchedulerWorkEfModule.Chain, row.SchemaVersion) || row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The scheduler-work row scope, schema, or revision projection is corrupt.");
@@ -678,7 +682,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RuntimeSchedulerWorkItem item;
         try
         {
-            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeOperationalStateEfModule.Chain.Upcast<SchedulerWorkItemEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
+            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeSchedulerWorkEfModule.Chain.Upcast<SchedulerWorkItemEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {
@@ -719,6 +723,7 @@ public sealed class EfSchedulerWorkQueueStore(
 
     private void AttachForUpdate(SchedulerWorkItemEntity row, long originalRevision)
     {
+        row.SchemaVersion = RuntimeSchedulerWorkWriteVersion.For(context, ReadChecked(row, EfRuntimeOperationalStoreSupport.Decode(row.ScopeKey)), row.SchemaVersion);
         DetachTracked(row.Id);
         context.SchedulerWorkItems.Attach(row);
         context.Entry(row).Property(entity => entity.Revision).OriginalValue = originalRevision;

@@ -436,11 +436,9 @@
       "elsa.agent.specialists.jsonschema": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "JsonSchema.Net": "[9.2.0, )",
-          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+          "JsonSchema.Net": "[9.2.0, )"
         }
       },
       "elsa.api.aspnetcore": {
@@ -736,6 +734,7 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",

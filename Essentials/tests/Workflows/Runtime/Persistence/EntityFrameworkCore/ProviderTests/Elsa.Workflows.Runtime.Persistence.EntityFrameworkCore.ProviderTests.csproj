@@ -25,6 +25,8 @@
     <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz"
+          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\Tests\BeforeExecutableCoordinationRead.cs" Link="BeforeExecutableCoordinationRead.cs" />
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
