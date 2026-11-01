@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "6c886da435bce45d640ef11bb2f3a9b9c0af81d3",
+  "last_publish_commit": "5be59cebcd37ce6c41a49d6827a60c2e0e22a948",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -219,8 +219,8 @@
     },
     {
       "package_id": "Elsa.Connections",
-      "version": "4.0.6-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.7-preview",
+      "commit": "5be59cebcd37ce6c41a49d6827a60c2e0e22a948"
     },
     {
       "package_id": "Elsa.Connections.Api",
@@ -229,13 +229,18 @@
     },
     {
       "package_id": "Elsa.Connections.Core",
-      "version": "4.0.5-preview",
-      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
+      "version": "4.0.6-preview",
+      "commit": "5be59cebcd37ce6c41a49d6827a60c2e0e22a948"
     },
     {
       "package_id": "Elsa.Connections.Design",
       "version": "4.0.4-preview",
       "commit": "6e677745bb828dcb1117379859068f8e735dac47"
+    },
+    {
+      "package_id": "Elsa.Connections.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-preview",
+      "commit": "5be59cebcd37ce6c41a49d6827a60c2e0e22a948"
     },
     {
       "package_id": "Elsa.Connections.Workflows",
@@ -539,8 +544,8 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.34-preview",
-      "commit": "0d6db68a37fd9bf8879c962e14d5dfe4ba76729b"
+      "version": "4.0.35-preview",
+      "commit": "5be59cebcd37ce6c41a49d6827a60c2e0e22a948"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
