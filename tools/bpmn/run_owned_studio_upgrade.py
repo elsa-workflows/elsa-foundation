@@ -32,10 +32,66 @@ Api, REPO, digest, process_field, write_json = (_qualification.Api, _qualificati
     _qualification.digest, _qualification.process_field, _qualification.write_json)
 
 
+LOOKUP = "id\n1\n2\n3\n4\n"
+
+
 def free_port():
     with socket.socket() as server:
         server.bind(("127.0.0.1", 0))
         return server.getsockname()[1]
+
+
+def compose_host_roots(backend_root, studio_root, backend_url, studio_url, *, direct_human):
+    """Copy current host configuration into owned roots; returns the unsaved shells document and default features."""
+    backend_source = REPO / "Essentials/apps/Elsa.Workbench"
+    studio_source = REPO / "Studio/src/apps/Elsa.Studio.Web"
+    for source, target in ((backend_source, backend_root), (studio_source, studio_root)):
+        for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
+            shutil.copyfile(source / name, target / name)
+        if (source / "nuplane-management.json").exists():
+            shutil.copyfile(source / "nuplane-management.json", target / "nuplane-management.json")
+        (target / "packages").mkdir()
+    shells = json.loads((backend_root / "shells.json").read_text())
+    features = shells["CShells"]["Shells"]["default"]["Features"]
+    if direct_human:
+        # Same single-node composition as the actual authored-publication hosting test.
+        features["ActivitiesBpmnHosting"] = {"AdmitNewExecutions": True}
+        features["ActivitiesBpmnHostingApi"] = {}
+        features["ActivitiesBpmnDirectPublishing"] = {}
+        for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
+            features.pop(name, None)
+    features["WorkflowsRuntimeEntityFrameworkCore"]["ConnectionString"] = "Data Source=runtime.db"
+    for name in ("ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore"):
+        if name in features:
+            features[name]["ConnectionString"] = "Data Source=design.db"
+    if "FoundationIdentityAspNetCoreIdentity" in features:
+        features["FoundationIdentityAspNetCoreIdentity"]["AllowedReturnUrlOrigins"] = [studio_url]
+    config = json.loads((backend_root / "appsettings.json").read_text())
+    config["Cors"]["AllowedOrigins"] = [studio_url]
+    write_json(backend_root / "appsettings.json", config)
+    config = json.loads((studio_root / "appsettings.json").read_text())
+    config["Studio"]["BackendBaseUrl"] = backend_url
+    write_json(studio_root / "appsettings.json", config)
+    return shells, features
+
+
+def compose_direct_etl(features, etl_root, etl_url):
+    """Bind the owned ETL stores and file/HTTP roots; the lookup must already hold its exact bytes."""
+    lookup = etl_root / "lookup.csv"
+    features["EtlDesign"] = {}
+    features["EtlDesignEntityFrameworkCore"] = {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-design.db;Pooling=False"}
+    features["EtlDesignApi"] = {"CursorSigningKey": "owned-direct-etl-design-cursor-key-for-isolated-e2e"}
+    features["EtlRuntimeEntityFrameworkCore"] = {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-runtime.db;Pooling=False"}
+    features["EtlRuntimeApi"] = {"CursorSigningKey": "owned-direct-etl-runtime-cursor-key-for-isolated-e2e"}
+    features["EtlWorkflowsDesign"] = {}
+    features["EtlWorkflowsRuntime"] = {}
+    features["EtlRuntime"] = {"SnapshotRoot": str(etl_root / "snapshots"), "FileBindings": [
+        {"TenantId": "default", "PersistencePartition": "default", "Alias": alias, "Role": role, "Revision": alias + "-v1", "Path": str(etl_root / folder), "IsCurrent": True, "AtomicPublication": True}
+        for alias, role, folder in (("output", "MainOutput", "main-output"), ("errors", "ErrorOutput", "error-output"))
+    ] + [{"TenantId": "default", "PersistencePartition": "default", "Alias": "lookup", "Role": "Lookup", "Revision": "lookup-v1", "Path": str(lookup),
+        "IsCurrent": True, "ImmutableInput": True, "ExpectedSha256": digest(lookup)}], "HttpBindings": [{"TenantId": "default", "PersistencePartition": "default", "Alias": "http-source", "Role": "Source", "Revision": "http-source-v1",
+        "Endpoint": etl_url + "/source/shard-a/page", "AllowedPaths": ["/source/shard-a/page", "/source/shard-b/page"], "AllowHttp": True,
+        "Shards": [{"Id": shard, "SeedUri": etl_url + "/source/" + shard + "/page"} for shard in ("shard-a", "shard-b")]}]}
 
 
 def main():
@@ -72,31 +128,9 @@ def main():
         inputs[name] = asset["sha256"]
         with gzip.open(baseline / name, "rb") as source, (backend_root / f"{store}.db").open("wb") as target:
             shutil.copyfileobj(source, target)
-    backend_source = REPO / "Essentials/apps/Elsa.Workbench"
-    studio_source = REPO / "Studio/src/apps/Elsa.Studio.Web"
-    for source, target in ((backend_source, backend_root), (studio_source, studio_root)):
-        for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
-            shutil.copyfile(source / name, target / name)
-        if (source / "nuplane-management.json").exists():
-            shutil.copyfile(source / "nuplane-management.json", target / "nuplane-management.json")
-        (target / "packages").mkdir()
     backend_url = f"http://127.0.0.1:{free_port()}"
     studio_url = f"http://127.0.0.1:{free_port()}"
-    shells = json.loads((backend_root / "shells.json").read_text())
-    features = shells["CShells"]["Shells"]["default"]["Features"]
-    if direct_human:
-        # Same single-node composition as the actual authored-publication hosting test.
-        features["ActivitiesBpmnHosting"] = {"AdmitNewExecutions": True}
-        features["ActivitiesBpmnHostingApi"] = {}
-        features["ActivitiesBpmnDirectPublishing"] = {}
-        for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
-            features.pop(name, None)
-    features["WorkflowsRuntimeEntityFrameworkCore"]["ConnectionString"] = "Data Source=runtime.db"
-    for name in ("ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore"):
-        if name in features:
-            features[name]["ConnectionString"] = "Data Source=design.db"
-    if "FoundationIdentityAspNetCoreIdentity" in features:
-        features["FoundationIdentityAspNetCoreIdentity"]["AllowedReturnUrlOrigins"] = [studio_url]
+    shells, features = compose_host_roots(backend_root, studio_root, backend_url, studio_url, direct_human=direct_human)
     clr_source_binding = {"readOnly": True, "sourceIds": []} if direct_human else json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly),
         "--read-clr-source-identities", str(backend_root / "design.db")], text=True))
     if clr_source_binding.get("readOnly") is not True:
@@ -111,12 +145,6 @@ def main():
         options["SourceId"] = source_ids[0]
         # Identity is opaque configuration; FolderPath continues to scan the current app directory.
     write_json(backend_root / "shells.json", shells)
-    config = json.loads((backend_root / "appsettings.json").read_text())
-    config["Cors"]["AllowedOrigins"] = [studio_url]
-    write_json(backend_root / "appsettings.json", config)
-    config = json.loads((studio_root / "appsettings.json").read_text())
-    config["Studio"]["BackendBaseUrl"] = backend_url
-    write_json(studio_root / "appsettings.json", config)
     products = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly), "--inspect-host-products", str(args.workbench_assembly)], text=True))
     source = products["sourceCommit"]
     studio_products = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly), "--inspect-studio-products", str(args.studio_assembly)], text=True))
@@ -257,21 +285,8 @@ def main():
             etl_url = "http://127.0.0.1:" + str(json.loads(ready_path.read_text())["port"])
             etl_root = root / "etl"
             for name in ("main-output", "error-output", "snapshots"): (etl_root / name).mkdir(parents=True)
-            lookup = etl_root / "lookup.csv"; lookup.write_text("id\n1\n2\n3\n4\n")
-            features["EtlDesign"] = {}
-            features["EtlDesignEntityFrameworkCore"] = {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-design.db;Pooling=False"}
-            features["EtlDesignApi"] = {"CursorSigningKey": "owned-direct-etl-design-cursor-key-for-isolated-e2e"}
-            features["EtlRuntimeEntityFrameworkCore"] = {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-runtime.db;Pooling=False"}
-            features["EtlRuntimeApi"] = {"CursorSigningKey": "owned-direct-etl-runtime-cursor-key-for-isolated-e2e"}
-            features["EtlWorkflowsDesign"] = {}
-            features["EtlWorkflowsRuntime"] = {}
-            features["EtlRuntime"] = {"SnapshotRoot": str(etl_root / "snapshots"), "FileBindings": [
-                {"TenantId": "default", "PersistencePartition": "default", "Alias": alias, "Role": role, "Revision": alias + "-v1", "Path": str(etl_root / folder), "IsCurrent": True, "AtomicPublication": True}
-                for alias, role, folder in (("output", "MainOutput", "main-output"), ("errors", "ErrorOutput", "error-output"))
-            ] + [{"TenantId": "default", "PersistencePartition": "default", "Alias": "lookup", "Role": "Lookup", "Revision": "lookup-v1", "Path": str(lookup),
-                "IsCurrent": True, "ImmutableInput": True, "ExpectedSha256": digest(lookup)}], "HttpBindings": [{"TenantId": "default", "PersistencePartition": "default", "Alias": "http-source", "Role": "Source", "Revision": "http-source-v1",
-                "Endpoint": etl_url + "/source/shard-a/page", "AllowedPaths": ["/source/shard-a/page", "/source/shard-b/page"], "AllowHttp": True,
-                "Shards": [{"Id": shard, "SeedUri": etl_url + "/source/" + shard + "/page"} for shard in ("shard-a", "shard-b")]}]}
+            (etl_root / "lookup.csv").write_text(LOOKUP)
+            compose_direct_etl(features, etl_root, etl_url)
             write_json(backend_root / "shells.json", shells)
         backend = start(args.workbench_assembly, backend_root, backend_url, "workbench")
         ready(backend, backend_url + "/health/ready")
