@@ -18,6 +18,8 @@ Use the current BPMN canvas, workflow drafts/versions, model runtime, mailbox/ch
 
 **Testing**: xUnit, existing domain fixtures, Vitest/component checks and actual owned Workbench/browser journeys. Per-implementation/registration checks apply. For this work unit, run a failing control before behavioral regression fixes and focused checks alongside implementation; complete real acceptance before review. Elsa has no global test-cadence gate; this is a local delivery choice, not an amendment.
 
+**Qualification cadence (owner-authorized 1 November)**: Use focused behavioral and affected-project checks during fixes, actual browser/host proof at completed-journey milestones, and full compatibility/architecture/API/package/independent review/required CI on the stable delivery candidate. Batch pushes at those milestones. Preserve a source/hash record for each result; a changed state format or shared runtime contract immediately reopens its affected compatibility checks. Capture actual legacy/pre-claim writers before changing them. Reuse unchanged product builds during harness-only diagnosis, recording the executing product source separately from the harness digest. Final delivery still requires the exact reviewed head and resulting main; no check, protection or human hold is bypassed.
+
 **Target Platform**: Existing ASP.NET hosts and desktop/mobile browsers, including runtime-only/admission-off compositions.
 
 **Project Type**: Additive domain API, runtime commands and Studio UI within existing feature packages.

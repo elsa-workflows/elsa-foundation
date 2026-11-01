@@ -53,7 +53,7 @@ def verify(path):
             all(p['role'] == 'standard' and Path(p['executable']).name == 'dotnet' and p['controllerProcessId'] > 0 and v.timestamp(p['startedAtUtc']) for p in owned),
             'The actual partial-fork processes lost their original owner, start, executable or configured root.')
         products = case['binaries']
-        require(len(products) == 11 and {p['file'] for p in products} == v.PRODUCTS and
+        require(v.known_products(products) and
             all(p['productVersion'].endswith('+' + source) for p in products if p['file'].startswith('Elsa.')) and
             all(re.fullmatch('[0-9a-f]{64}', p['sha256']) for p in products) and
             all(p['productVersion'].startswith('0.5.0+') for p in products if p['file'].startswith('Bpmn.')),
