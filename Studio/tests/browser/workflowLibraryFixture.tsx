@@ -1,5 +1,7 @@
+import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { WorkflowOrganizationButton } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowOrganizationButton";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import type { WorkflowLibraryView, WorkflowOrganization, WorkflowTag, WorkflowTagAssignment, WorkflowTagBulkOutcome, WorkflowTagFilter, WorkflowTagInput } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowOrganization";
@@ -9,6 +11,13 @@ import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const parameters = new URLSearchParams(window.location.search);
+if (parameters.get("palette") === "classic") {
+  const dark = parameters.get("theme") === "dark";
+  document.documentElement.dataset.theme = "classic";
+  document.documentElement.dataset.themeMode = dark ? "dark" : "light";
+  const palette = getTheme("classic")![dark ? "dark" : "light"];
+  for (const token of themeTokenNames) document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
+}
 const readonly = parameters.get("permissions") === "read";
 const permissions = { canAssignTags: !readonly, canManageFolders: !readonly, canManageTags: !readonly, canShareViews: !readonly };
 const date = "2026-10-31T12:00:00Z";
@@ -26,6 +35,9 @@ const tags: WorkflowTag[] = [
   { id: "critical", name: "Critical", mode: "marker", cardinality: "single", deprecated: false, revision: "1", values: [] },
   { id: "team", name: "Owning team", mode: "controlled", cardinality: "single", deprecated: false, revision: "1", values: [{ id: "value-billing", name: "Billing" }, { id: "value-support", name: "Support" }] }
 ];
+if (parameters.get("tags") === "empty") tags.splice(0);
+if (parameters.get("tags") === "many") tags.push(...Array.from({ length: 40 }, (_, index): WorkflowTag => ({ id: `extra-${index}`, name: `Additional classification ${index + 1}`, mode: "marker", cardinality: "single", deprecated: false, revision: "1", values: [] })));
+if (parameters.has("long-folder")) folder.name = "Customer operations / European customer onboarding and retention / Payment collection and exception handling";
 const definitions: WorkflowDefinitionSummary[] = [
   { id: "collect-payment", name: "Collect overdue payment", createdAt: date, lastModifiedAt: date, draftId: "draft-payment", latestVersionId: "version-payment", versionCount: 1, publicationState: "published", folderId: folder.id, folderBreadcrumb: [{ id: folder.id, name: folder.name }], tags: [{ tagId: "team", valueId: "value-billing" }], favorite: false },
   { id: "welcome", name: "Welcome new customer", createdAt: date, lastModifiedAt: date, draftId: "draft-welcome", versionCount: 0, folderId: null, folderBreadcrumb: [], tags: [], favorite: false }
@@ -183,6 +195,7 @@ const ai = { promptActions: { list: () => [] }, dispatchPrompt: () => undefined 
 
 function Library() {
   const session = useWorkflowDefinitionBrowseSession(context);
+  if (parameters.get("organization-surface") === "properties") return <main className="wf-canvas-shell wf-tokens" style={{ height: "100vh" }}><WorkflowOrganizationButton context={context} definitionId="welcome" name="Welcome new customer" onSaved={() => undefined} /><div className="wf-properties-view"><section className="wf-properties-section"><h3>Information</h3><p>Welcome new customer</p></section></div></main>;
   return <main className="wf-page wf-page--definitions"><WorkflowDefinitions context={context} ai={ai} session={session} onOpen={() => undefined} /></main>;
 }
 export function WorkflowLibraryFixture() { return <QueryClientProvider client={queryClient}><Library /></QueryClientProvider>; }

@@ -36,7 +36,7 @@
 .wf-library-controls button,
 .wf-library-controls select,
 .wf-library-controls input,
-.wf-organization-dialog button,
+.wf-organization-dialog button:not(.studio-button),
 .wf-organization-dialog select,
 .wf-organization-dialog input,
 .wf-organization-dialog textarea {
