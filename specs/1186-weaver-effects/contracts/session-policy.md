@@ -20,6 +20,37 @@ implement and qualify, not a frozen API or a new module-specific orchestration p
 - Accepted messages/turn results identify the policy that admitted them. A later selector value is
   never the authority for attributing an earlier result.
 
+**Candidate wire shape (T009/T010, not frozen).**
+
+- `PUT /_elsa/agent/sessions/{sessionId}/autonomy`, using the existing `Use` permission. Body:
+  `{ "autonomyMode": "manual" | "auto-read-only" | "full-auto", "expectedRevision": <number> }`.
+- On success it returns 200 with `data` set to the session policy:
+  `{ "autonomyMode", "maxAutonomyMode", "allowedAutonomyModes": [...], "revision" }`. An unchanged
+  idle request returns the current revision.
+- Failures carry no data. The client reads back through session detail.
+
+  | Condition | Status | Error code |
+  | --- | --- | --- |
+  | Malformed body, or unknown/undefined mode | 400 | `agent.session.autonomy_invalid` |
+  | Missing, foreign actor or foreign tenant | 404 | Existing session-authorization codes |
+  | Stale expected revision | 409 | `agent.session.policy_stale` |
+  | Outstanding work | 409 | `agent.session.busy` |
+  | Closed or expired | 409 | `agent.session.closed` |
+  | Unsupported composition | 409 | `agent.session.autonomy_unsupported` |
+
+- Create-session and session-detail responses gain an additive `policy` object of the same shape.
+  It is absent only when the composition cannot read it back.
+- The session-detail message view gains a nullable `acceptedPolicyRevision`. The accepted prompt in
+  the message response already carries its domain `acceptedPolicy`.
+- Prompt admission that loses to a policy change returns 409 `agent.message.policy_changed`.
+- Client rules:
+  - Send at most one update per session at a time, with the last acknowledged revision as `expectedRevision`.
+  - Keep dependent prompt submission blocked while an update is unresolved.
+  - After a lost response, retry the same conditional request. A `policy_stale` answer means another
+    write committed, so read detail back and show that authoritative state, without claiming which
+    intent won.
+  - Ignore responses for another backend, session or client generation.
+
 Use the existing selected-backend HTTP transport and stream URL resolution. Preserve ambient-cookie
 omission and existing backend/generation isolation. Public wire names and methods are recorded here
 after causal selection and before final contract review.
