@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from autonomy_journeys import (MODE_CASES, EXPECTED_CASES, DIAGNOSTIC_CASES, EVIDENCE_CATEGORY,
-    require_complete_autonomy, require_diagnostic_manifest, verify_mode_observation,
-    require_size_owner_journey, diagnose_autonomy, _frames)
+from autonomy_journeys import (MODE_CASES, EXPECTED_CASES, MODE_CASE_IDS, EVIDENCE_CATEGORY, MODE_QUALIFICATION,
+    ModeCaseFailure, require_complete_autonomy, require_mode_qualification, verify_mode_observation,
+    require_size_owner_journey, qualify_autonomy_modes, execute_mode_case, _frames)
 from case_records import retained
 
 
@@ -52,21 +52,33 @@ class AutonomyEvidenceTests(unittest.TestCase):
         path.write_text(json.dumps(rows))
         return fixture
 
+    @staticmethod
+    def domain_policy(mode):
+        """The accepted message's domain AgentPolicy, serialized with the API's camelCase enums."""
+        names = {"manual": "manual", "full-auto": "fullAuto"}
+        return {"id": "default", "enabled": True, "contextVisibility": True, "maxContextSensitivity": "sensitive",
+                "allowedContextKinds": ["*"], "autonomyMode": names[mode], "maxAutonomyMode": "fullAuto",
+                "deniedCapabilityIds": [], "retentionLabel": "Configured by administrator",
+                "requiresApprovalForMutations": mode != "full-auto",
+                "allowedAutonomyModes": ["manual", "autoReadOnly", "fullAuto"]}
+
     def fixture(self, provider="copilot", key="automatic-size-control"):
         self.sequence += 1
         output = self.root / str(self.sequence)
         output.mkdir()
         write = lambda name, value: self.write(output, name, value)
         initial, requested = MODE_CASES[key]
-        outcome = "automatic" if initial == "full-auto" else "review"
-        expected = "automatic" if requested == "full-auto" else "review"
-        mismatch = outcome != expected
-        applied = outcome == "automatic" or not mismatch
+        transition = initial != requested
+        outcome = "automatic" if requested == "full-auto" else "review"
         w = self.witness
+        base = "http://127.0.0.1:52001"
+        created = {"autonomyMode": initial, "maxAutonomyMode": "full-auto", "allowedAutonomyModes": ["manual", "auto-read-only", "full-auto"], "revision": 0}
+        acknowledged = {**created, "autonomyMode": requested, "revision": 1} if transition else None
+        effective = acknowledged or created
         before = {"widgetId": w["widgetId"], "revision": "rev-1", "size": "medium", "hostId": w["hostId"]}
-        after = {**before, "size": "small", "revision": "rev-2"} if applied else copy.deepcopy(before)
+        after = {**before, "size": "small", "revision": "rev-2"}
         decision = copy.deepcopy(after if outcome == "automatic" else before)
-        owner = lambda name, value: write(name, {"status": 200, "url": "http://127.0.0.1:52001" + w["sizeOwnerEndpoint"], "value": value})
+        owner = lambda name, value: write(name, {"status": 200, "url": base + w["sizeOwnerEndpoint"], "value": value})
         bref, aref, dref = owner("before", before), owner("after", after), owner("decision", decision)
         document = lambda value: ('{"namespace":"home-layout","schemaVersion":1,"revision":"' + value["revision"] +
             '","value":{"widgets":[{"id":"' + w["widgetId"] + '","size":"' + value["size"] +
@@ -94,40 +106,69 @@ class AutonomyEvidenceTests(unittest.TestCase):
                   {"id": "event-read", "kind": "contributedResult", "resultKind": "moduleResult", "error": None, "payload": read},
                   {"id": "event-size-started", "kind": "started", "payload": {"turnId": "turn-size"}}]
         if outcome == "review":
-            frames += [{"id": "event-proposal", "kind": "proposalCreated", "payload": proposal},
-                {"id": "event-approval", "kind": "toolApprovalRequested", "proposalId": proposal["id"]}]
-        if applied and outcome == "automatic":
-            frames.append({"id": "event-size", "kind": "contributedResult", "resultKind": "moduleResult", "error": None, "payload": result})
-        if applied and outcome == "review":
             # The observed review resume carries response text/completion, not another mutation result event.
-            frames += [{"id": "event-resume-message", "kind": "messageDelta", "content": "Synthetic receipt continuation."},
+            frames += [{"id": "event-proposal", "kind": "proposalCreated", "payload": proposal},
+                       {"id": "event-approval", "kind": "toolApprovalRequested", "proposalId": proposal["id"]},
+                       {"id": "event-resume-message", "kind": "messageDelta", "content": "Synthetic receipt continuation."},
                        {"id": "event-resume-completed", "kind": "completed"}]
-        sse = [self.stream("".join("data: " + json.dumps(value) + "\n\n" for value in frames))]
-        write("agent-streams", sse)
+        else:
+            frames.append({"id": "event-size", "kind": "contributedResult", "resultKind": "moduleResult", "error": None, "payload": result})
+        write("agent-streams", [self.stream("".join("data: " + json.dumps(value) + "\n\n" for value in frames))])
         write("autonomy-native-bootstrap", {"status": 200, "value": {"data": {"capabilities": [
             {"id": "acme.home.read", "moduleId": w["moduleId"]}, {"id": w["sizeCapability"], "moduleId": w["moduleId"]}]}}})
-        native_messages = []
-        requests = [{"url": "http://127.0.0.1:52001/_elsa/agent/sessions", "method": "POST", "body": {"autonomyMode": initial}}]
-        for label, identity in (("read", "message-read"), ("size", "message-size")):
+        create_body = {"autonomyMode": initial}
+        write("autonomy-create-session", {"url": base + "/_elsa/agent/sessions", "status": 200, "request": create_body,
+            "response": {"data": {"sessionId": "session-1", "status": "active", "policy": created}, "error": None}})
+        requests = [{"url": base + "/_elsa/agent/sessions", "method": "POST", "body": create_body}]
+        update_url = base + "/_elsa/agent/sessions/session-1/autonomy"
+        update_ref, network, selection = None, [], []
+        details = {}
+        for label, identity, policy, mode in (("read", "message-read", created, initial), ("size", "message-size", effective, effective["autonomyMode"])):
+            if label == "size" and transition:
+                body = {"autonomyMode": requested, "expectedRevision": created["revision"]}
+                selection = [{"url": update_url, "method": "PUT", "body": body}]
+                requests += selection
+                response = {"data": acknowledged, "error": None}
+                update_ref = write("autonomy-mode-update", {"url": update_url, "method": "PUT", "status": 200, "request": body, "response": response})
+                write("autonomy-mode-update-http", {"url": update_url, "method": "PUT", "status": 200, "rawBody": json.dumps(response)})
+                metadata = {"url": update_url, "responseUrl": update_url, "requestObservationCount": 1, "responseObservationCount": 1,
+                            "termination": "loadingFinished", "errorText": None, "canceled": False}
+                network = [{**metadata, "requestId": "autonomy-preflight", "method": "OPTIONS", "resourceType": "Preflight",
+                            "initiatorType": "preflight", "responseResourceType": "Preflight", "status": 204},
+                           {**metadata, "requestId": "autonomy-put", "method": "PUT", "resourceType": "Fetch",
+                            "initiatorType": "script", "responseResourceType": "Fetch", "status": 200}]
             body = {"requestId": "request-" + label, "requestedCapabilities": ["acme.home.read"],
                     "source": {"moduleId": w["moduleId"], "actionId": w["readTool"] if label == "read" else w["sizeTool"]}}
-            message = {"sessionId": "session-1", "id": identity, "requestId": body["requestId"], "role": "user",
-                "context": [{"moduleId": w["moduleId"], "contentType": w["contextType"], "contributorId": "acme.home.widget-context", "target": target("rev-1")}]}
+            message = {"sessionId": "session-1", "id": identity, "requestId": body["requestId"], "role": "user", "status": "pending",
+                "context": [{"moduleId": w["moduleId"], "contentType": w["contextType"], "contributorId": "acme.home.widget-context", "target": target("rev-1")}],
+                "acceptedPolicy": {"policy": self.domain_policy(mode), "revision": policy["revision"]}}
             write("autonomy-" + label + "-message", {"status": 200, "request": body, "response": {"data": {"message": message}, "error": None}})
-            native_messages.append(message)
-            requests.append({"url": "http://127.0.0.1:52001/_elsa/agent/sessions/session-1/messages", "method": "POST", "body": body})
-        if applied:
-            native_messages.append({"role": "tool", "status": "completed", "content": json.dumps(result)})
-        if outcome == "review" and not mismatch:
-            url = "http://127.0.0.1:52001/_elsa/agent/proposals/proposal-1/execute"
+            details[label] = {"id": identity, "role": "user", "content": "", "status": "completed", "acceptedPolicyRevision": policy["revision"]}
+            requests.append({"url": base + "/_elsa/agent/sessions/session-1/messages", "method": "POST", "body": body})
+        tool = {"id": "message-tool", "role": "tool", "status": "completed", "content": json.dumps(result), "acceptedPolicyRevision": effective["revision"]}
+        if outcome == "review":
+            url = base + "/_elsa/agent/proposals/proposal-1/execute"
             request = {"actorId": "studio", "revision": "rev-1"} # Native API resolves the actual actor; this field grants no authority.
             response = {"data": {"proposalId": "proposal-1", "executed": True, "status": "executed", "resourceType": w["resourceType"],
                                  "resourceId": w["widgetId"], "toolResult": result}, "error": None}
+            requests.append({"url": base + "/_elsa/agent/proposals/proposal-1/approve", "method": "POST", "body": {"revision": "rev-1"}})
             requests.append({"url": url, "method": "POST", "body": request})
             write("autonomy-size-execute", {"url": url, "status": 200, "request": request, "response": response})
             write("autonomy-size-execute-http", {"url": url, "status": 200, "rawBody": json.dumps(response)})
         write("agent-requests", requests)
-        session = write("session-after", {"status": 200, "value": {"data": {"sessionId": "session-1", "messages": native_messages}}})
+        write("autonomy-network", network)
+        detail = lambda name, policy, messages: write(name, {"status": 200, "url": base + "/_elsa/agent/sessions/session-1",
+            "value": {"data": {"sessionId": "session-1", "status": "active", "policy": policy, "messages": messages}}})
+        session_before = detail("session-before", created, [details["read"]])
+        session_selected = detail("session-selected", effective, [details["read"]])
+        session = detail("session-after", effective, [details["read"], details["size"], tool])
+        label = {"manual": "Manual review", "full-auto": "Autopilot"}[effective["autonomyMode"]]
+        write("autonomy-mode-selector", {"state": "acknowledged", "pendingMode": None, "ariaBusy": "false", "label": label,
+                                         "statusCount": 0, "mode": effective["autonomyMode"]})
+        write("autonomy-ui-attribution", [{"role": "user", "revision": None, "autonomyMode": None},
+            {"role": "assistant", "revision": str(created["revision"]), "autonomyMode": initial},
+            {"role": "user", "revision": None, "autonomyMode": None},
+            {"role": "assistant", "revision": str(effective["revision"]), "autonomyMode": effective["autonomyMode"]}])
         commands = [{"commandId": "command-read", "toolName": w["readTool"], "arguments": {}},
                     {"commandId": "command-size", "toolName": w["sizeTool"], "arguments": {"size": "small"}}]
         for value in commands: write("command-" + value["commandId"], value)
@@ -138,12 +179,11 @@ class AutonomyEvidenceTests(unittest.TestCase):
             req = {"tools": [{"name": command["toolName"]}], "sessionId": "session-1"} if provider == "copilot" else {
                 "tools": [{"name": command["toolName"]}], "messages": [{"role": "user", "contents": []}]}
             rows += [row("request", command, **req), row("call", command, toolName=command["toolName"], arguments=command["arguments"])]
-            if identity == "command-size" and not applied:
-                if provider == "copilot": rows.append(row("return", command, result={"status": "awaiting-approval", "executed": False, "proposalId": proposal["id"], "preview": preview}))
-            elif provider == "copilot":
-                returned = {"status": "awaiting-approval", "executed": False, "proposalId": proposal["id"], "preview": preview} if identity == "command-size" and outcome == "review" else tool_result
+            if provider == "copilot":
+                pending = identity == "command-size" and outcome == "review"
+                returned = {"status": "awaiting-approval", "executed": False, "proposalId": proposal["id"], "preview": preview} if pending else tool_result
                 rows.append(row("return", command, result=returned))
-                if identity == "command-size" and outcome == "review":
+                if pending:
                     rows.append(row("request", command, sessionId="session-1", tools=[]))
                     rows.append(row("continuation", command, sessionId="session-1", results=[tool_result]))
             else:
@@ -152,15 +192,16 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 rows.append(row("continuation", command, results=[function_result]))
         tref = write("actual-trace", rows)
         trace = {"records": rows, "incompleteTailBytes": 0, "nextOffset": 100, "receipt": tref}
-        transport = SimpleNamespace(protocol_trace=lambda offset: trace, http=SimpleNamespace(base="http://127.0.0.1:52001"))
-        autonomy = {"caseKey": key, "initialMode": initial, "requestedMode": requested, "expectedOutcome": expected,
+        transport = SimpleNamespace(protocol_trace=lambda offset: trace, http=SimpleNamespace(base=base))
+        autonomy = {"caseKey": key, "initialMode": initial, "requestedMode": requested, "expectedOutcome": outcome,
             "outcomeAtDecision": outcome, "sameSessionId": "session-1", "readCommandId": "command-read", "sizeCommandId": "command-size",
             "readMessageId": "message-read", "sizeMessageId": "message-size", "readRequestId": "request-read", "sizeRequestId": "request-size",
-            "selectionRequests": [], "targetSize": "small", "applied": applied, "modeMismatch": mismatch, "policyAcknowledgementClaimed": False,
-            "ownerAtDecision": dref, "sessionAfter": session}
-        observation = {"provider": provider, "journey": "autonomy-size", "status": "failed" if mismatch else "passed", "pageErrors": [],
+            "selectionRequests": selection, "targetSize": "small", "applied": True, "modeMismatch": False,
+            "policyAcknowledgementClaimed": transition, "createdPolicy": created, "acknowledgedPolicy": acknowledged,
+            "effectivePolicy": effective, "policyUpdate": update_ref, "ownerAtDecision": dref,
+            "sessionBefore": session_before, "sessionAfterSelection": session_selected, "sessionAfter": session}
+        observation = {"provider": provider, "journey": "autonomy-size", "status": "passed", "pageErrors": [],
             "autonomy": autonomy, "ownerBefore": bref, "ownerAfter": aref, "evidence": []}
-        if mismatch: observation.update(expectedFailureObserved=True, actual={"stage": "session-mode", "diagnostic": "autonomy.mode_mismatch"})
         return output, observation, transport, trace
 
     @staticmethod
@@ -173,25 +214,30 @@ class AutonomyEvidenceTests(unittest.TestCase):
         output, observation, transport, _ = fixture
         return verify_mode_observation(output, observation, self.witness, provider, transport)
 
-    def test_both_actual_adapter_shapes_keep_four_controls_and_precise_failed_transitions(self):
+    def test_both_actual_adapters_pass_all_four_mode_cases_with_acknowledged_policy(self):
         records = []
         for provider in ("copilot", "anthropic"):
             for key in MODE_CASES:
                 with self.subTest(provider=provider, key=key):
                     record = self.verify(self.fixture(provider, key), provider)
                     records.append(record)
+                    transition = "-to-" in key
                     self.assertFalse(record["qualified"])
-                    self.assertEqual(record["status"], "failed" if "-to-" in key else "passed")
-                    self.assertEqual(record["correlation"]["completeProviderJourney"], key != "manual-to-automatic")
-        require_diagnostic_manifest(records)
-        self.assertEqual(4, sum(row["status"] == "failed" for row in records))
+                    self.assertEqual("passed", record["status"])
+                    self.assertIsNone(record["cause"])
+                    self.assertTrue(record["correlation"]["completeProviderJourney"])
+                    self.assertEqual("review" if key.endswith("manual") or key.startswith("reviewed") else "automatic", record["outcomeAtDecision"])
+                    self.assertEqual({"acknowledged": transition, "updateRequests": int(transition), "corsPreflights": int(transition),
+                                      "createdRevision": 0, "effectiveRevision": int(transition),
+                                      "effectiveMode": MODE_CASES[key][1]}, record["policy"])
+        require_mode_qualification(records)
 
     def test_exact_observed_options_preflights_preserve_each_native_mode_outcome(self):
         for provider in ("copilot", "anthropic"):
             for key in MODE_CASES:
                 with self.subTest(provider=provider, key=key):
                     record = self.verify(self.with_preflights(self.fixture(provider, key)), provider)
-                    self.assertEqual("failed" if "-to-" in key else "passed", record["status"])
+                    self.assertEqual("passed", record["status"])
 
     def test_captured_other_preflight_and_legacy_preflight_require_the_observed_initiator(self):
         for resource_type in ("Other", "Preflight"):
@@ -274,8 +320,8 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError): self.verify(fixture)
 
     def test_complete_native_approval_pause_abort_is_preserved_without_hiding_failed_get(self):
-        for provider in ("copilot", "anthropic"):
-            fixture = self.fixture(provider, "reviewed-size-control"); path = fixture[0] / "agent-streams.json"
+        for provider, key in (("copilot", "reviewed-size-control"), ("anthropic", "reviewed-size-control"), ("copilot", "automatic-to-manual")):
+            fixture = self.fixture(provider, key); path = fixture[0] / "agent-streams.json"
             body = json.loads(path.read_text())[0]["rawBody"]
             split = body.index('data: {"id": "event-resume-message"')
             pause = self.stream(body[:split], "native-pause")
@@ -391,11 +437,12 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     path.write_text(json.dumps(streams))
                     with self.assertRaises((RuntimeError, ValueError)): self.verify(fixture, provider)
 
-    def test_deferred_call_requires_real_advertisement_and_single_call(self):
+    def test_acknowledged_transitions_require_real_advertisement_and_single_call(self):
         for provider in ("copilot", "anthropic"):
-            for mutation in ("missing-call", "duplicate-call", "wrong-tool", "wrong-arguments", "not-advertised", "continuation", "foreign-command"):
-                with self.subTest(provider=provider, mutation=mutation):
-                    fixture = self.fixture(provider, "manual-to-automatic")
+            for key, mutation in [(key, mutation) for key in ("manual-to-automatic", "automatic-to-manual") for mutation in
+                                  ("missing-call", "duplicate-call", "wrong-tool", "wrong-arguments", "not-advertised", "continuation", "foreign-command")]:
+                with self.subTest(provider=provider, key=key, mutation=mutation):
+                    fixture = self.fixture(provider, key)
                     rows = fixture[3]["records"]
                     selected = [row for row in rows if row["data"]["commandId"] == "command-size"]
                     call = next(row for row in selected if row["kind"] == provider + ".call")
@@ -404,14 +451,14 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     elif mutation == "wrong-tool": call["data"]["toolName"] = "other"
                     elif mutation == "wrong-arguments": call["data"]["arguments"] = {"size": "medium"}
                     elif mutation == "not-advertised": selected[0]["data"]["tools"] = []
-                    elif mutation == "continuation": rows.append({"kind": provider + ".continuation", "data": {"commandId": "command-size", "results": []}})
+                    elif mutation == "continuation": rows.append({"kind": provider + ".continuation", "data": {"commandId": "command-size", "sessionId": "session-1", "results": []}})
                     else: rows.append({"kind": provider + ".request", "data": {"commandId": "other", "tools": []}})
                     with self.assertRaises(RuntimeError): self.verify(fixture, provider)
 
-    def test_provider_transport_auth_busy_and_error_frames_are_not_mode_mismatch(self):
+    def test_provider_transport_auth_busy_and_error_frames_cannot_pass_a_transition(self):
         for mutation in ("browser-failure", "page-error", "sse-http", "sse-capture", "sse-error", "truncated-proposal", "duplicate-event", "trace-tail"):
             with self.subTest(mutation=mutation):
-                fixture = self.fixture(key="manual-to-automatic")
+                fixture = self.fixture(key="automatic-to-manual")
                 output, observation, _, trace = fixture
                 if mutation == "browser-failure": observation["failure"] = {"type": "TimeoutError"}
                 elif mutation == "page-error": observation["pageErrors"] = ["Error"]
@@ -426,10 +473,10 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     path.write_text(json.dumps(streams))
                 with self.assertRaises(RuntimeError): self.verify(fixture)
 
-    def test_pending_review_cannot_claim_effect_or_use_another_prepared_target(self):
+    def test_acknowledged_review_cannot_claim_effect_or_use_another_prepared_target(self):
         for mutation in ("wrong-target", "stale", "no-approval", "wrong-proposal", "effect", "sdk-applied"):
             with self.subTest(mutation=mutation):
-                fixture = self.fixture(key="manual-to-automatic")
+                fixture = self.fixture(key="automatic-to-manual")
                 output, _, _, trace = fixture
                 path = output / "agent-streams.json"; streams = json.loads(path.read_text())
                 values = [json.loads(raw.removeprefix("data: ")) for raw in streams[0]["rawBody"].strip().split("\n\n")]
@@ -438,7 +485,10 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 elif mutation == "stale": proposal["preparedInvocation"]["target"]["revision"] = "rev-0"
                 elif mutation == "no-approval": proposal["requiresApproval"] = False
                 elif mutation == "wrong-proposal": next(row for row in values if row["kind"] == "toolApprovalRequested")["proposalId"] = "other"
-                elif mutation == "effect": values.append({"id": "forbidden-effect", "kind": "contributedResult", "payload": {"toolName": self.witness["sizeTool"]}})
+                elif mutation == "effect":
+                    result = json.loads((output / "autonomy-size-execute.json").read_text())["response"]["data"]["toolResult"]
+                    result["payload"]["data"]["size"] = "medium"
+                    values.append({"id": "forbidden-effect", "kind": "contributedResult", "resultKind": "moduleResult", "payload": result})
                 else: next(row for row in trace["records"] if row["kind"] == "copilot.return" and row["data"]["commandId"] == "command-size")["data"]["result"]["executed"] = True
                 streams[0]["rawBody"] = "".join("data: " + json.dumps(value) + "\n\n" for value in values)
                 path.write_text(json.dumps(streams))
@@ -492,7 +542,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     require_size_owner_journey(output, observation, self.witness)
 
     def test_second_conversation_missing_provenance_and_relabeling_are_rejected(self):
-        for mutation in ("new-session", "source", "accepted-target", "relabel", "fake-ack", "same-request", "selection-request"):
+        for mutation in ("new-session", "source", "accepted-target", "relabel", "fake-ack", "same-request", "selection-request", "relabeled-policy"):
             with self.subTest(mutation=mutation):
                 fixture = self.fixture(key="manual-to-automatic"); output, observation, _, _ = fixture
                 if mutation == "new-session":
@@ -501,9 +551,10 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     path = output / "autonomy-size-message.json"; value = json.loads(path.read_text()); value["response"]["data"]["message"]["context"][0]["contributorId"] = "other"; path.write_text(json.dumps(value))
                 elif mutation == "accepted-target":
                     path = output / "autonomy-size-message.json"; value = json.loads(path.read_text()); value["response"]["data"]["message"]["context"][0]["target"]["revision"] = "other"; path.write_text(json.dumps(value))
-                elif mutation == "relabel": observation["status"] = "passed"
-                elif mutation == "fake-ack": observation["autonomy"]["policyAcknowledgementClaimed"] = True
+                elif mutation == "relabel": observation["autonomy"]["expectedOutcome"] = "review"
+                elif mutation == "fake-ack": observation["autonomy"]["policyAcknowledgementClaimed"] = False
                 elif mutation == "selection-request": observation["autonomy"]["selectionRequests"] = [{"method": "PATCH", "url": "/unimplemented", "status": 404}]
+                elif mutation == "relabeled-policy": observation["autonomy"]["effectivePolicy"] = {**observation["autonomy"]["effectivePolicy"], "revision": 0}
                 else: observation["autonomy"]["sizeRequestId"] = observation["autonomy"]["readRequestId"]
                 with self.assertRaises(RuntimeError): self.verify(fixture)
 
@@ -530,8 +581,8 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     requests_path = output / "agent-requests.json"; requests = json.loads(requests_path.read_text()); requests[2]["body"] = request; requests_path.write_text(json.dumps(requests))
                 with self.assertRaises(RuntimeError): self.verify(fixture)
 
-    def test_owner_changed_at_review_is_not_a_deferred_outcome(self):
-        fixture = self.fixture(key="manual-to-automatic")
+    def test_owner_changed_at_review_is_not_a_reviewed_outcome(self):
+        fixture = self.fixture(key="automatic-to-manual")
         path = Path(fixture[1]["autonomy"]["ownerAtDecision"]["path"])
         value = json.loads(path.read_text()); value["value"]["size"] = "small"; value["value"]["revision"] = "rev-2"
         path.write_text(json.dumps(value)); fixture[1]["autonomy"]["ownerAtDecision"] = retained(path)
@@ -545,6 +596,182 @@ class AutonomyEvidenceTests(unittest.TestCase):
             else:
                 path = self.root / "foreign-owner.json"; path.write_bytes(Path(reference["path"]).read_bytes()); fixture[1]["ownerBefore"] = retained(path)
             with self.assertRaises(RuntimeError): self.verify(fixture)
+
+
+    def edit(self, output, name, change):
+        path = Path(output) / (name + ".json"); value = json.loads(path.read_text()); change(value); path.write_text(json.dumps(value))
+        return retained(path)
+
+    def test_transition_needs_exactly_one_acknowledged_put_with_the_created_revision(self):
+        cases = {
+            "missing-put": "Mode changes must be exactly one acknowledged PUT",
+            "two-puts": "Mode changes must be exactly one acknowledged PUT",
+            "put-after-size": "Mode changes must be exactly one acknowledged PUT",
+            "wrong-revision-body": "only the requested mode and the revision acknowledged at creation",
+            "wrong-mode-body": "only the requested mode and the revision acknowledged at creation",
+            "extra-body-field": "only the requested mode and the revision acknowledged at creation",
+            "foreign-session": "unrecognized native Agent request",
+            "busy-409": "did not acknowledge the mode change with HTTP 200",
+            "error-envelope": "did not acknowledge the mode change with HTTP 200",
+            "raw-mismatch": "did not acknowledge the mode change with HTTP 200",
+            "ack-revision": "requested mode at the next revision",
+            "ack-mode": "requested mode at the next revision",
+            "ack-ceiling": "requested mode at the next revision",
+            "ack-extra-field": "acknowledgement carries no readable policy",
+            "unretained": "actual autonomy exchange was not retained",
+        }
+        for key in ("automatic-to-manual", "manual-to-automatic"):
+            for mutation, message in cases.items():
+                with self.subTest(key=key, mutation=mutation):
+                    fixture = self.fixture("anthropic", key); output, observation, _, _ = fixture
+                    a = observation["autonomy"]
+                    def requests(change): self.edit(output, "agent-requests", change)
+                    def exchange(change):
+                        a["policyUpdate"] = self.edit(output, "autonomy-mode-update", change)
+                        http = output / "autonomy-mode-update-http.json"; raw = json.loads(http.read_text())
+                        raw.update(status=json.loads(Path(a["policyUpdate"]["path"]).read_text())["status"],
+                                   rawBody=json.dumps(json.loads(Path(a["policyUpdate"]["path"]).read_text())["response"]))
+                        http.write_text(json.dumps(raw))
+                    if mutation == "missing-put": requests(lambda value: value.pop(2))
+                    elif mutation == "two-puts": requests(lambda value: value.insert(2, copy.deepcopy(value[2])))
+                    elif mutation == "put-after-size": requests(lambda value: value.insert(3, value.pop(2)))
+                    elif mutation in ("wrong-revision-body", "wrong-mode-body", "extra-body-field"):
+                        def body(value):
+                            changed = value[2]["body"] if isinstance(value, list) else value["request"]
+                            if mutation == "wrong-revision-body": changed["expectedRevision"] = 7
+                            elif mutation == "wrong-mode-body": changed["autonomyMode"] = "auto-read-only"
+                            else: changed["actorId"] = "caller-selected"
+                        requests(body); exchange(body)
+                    elif mutation == "foreign-session": requests(lambda value: value[2].update(url=value[2]["url"].replace("session-1", "session-2")))
+                    elif mutation == "busy-409": exchange(lambda value: value.update(status=409, response={"data": None, "error": {"code": "agent.session.busy"}}))
+                    elif mutation == "error-envelope": exchange(lambda value: value["response"].update(error={"code": "agent.session.policy_stale"}))
+                    elif mutation == "raw-mismatch": self.edit(output, "autonomy-mode-update-http", lambda value: value.update(rawBody="{}"))
+                    elif mutation == "ack-revision": exchange(lambda value: value["response"]["data"].update(revision=2))
+                    elif mutation == "ack-mode": exchange(lambda value: value["response"]["data"].update(autonomyMode="auto-read-only"))
+                    elif mutation == "ack-ceiling": exchange(lambda value: value["response"]["data"].update(maxAutonomyMode="auto-read-only"))
+                    elif mutation == "ack-extra-field": exchange(lambda value: value["response"]["data"].update(sessionId="session-1"))
+                    else: a["policyUpdate"] = observation["ownerBefore"]
+                    with self.assertRaisesRegex(RuntimeError, message): self.verify(fixture, "anthropic")
+
+    def test_unchanged_control_with_any_autonomy_request_fails(self):
+        for key in ("automatic-size-control", "reviewed-size-control"):
+            for mutation in ("put", "retained-exchange", "network-put", "network-preflight", "claimed"):
+                with self.subTest(key=key, mutation=mutation):
+                    fixture = self.fixture("copilot", key); output, observation, _, _ = fixture
+                    initial = MODE_CASES[key][0]
+                    url = "http://127.0.0.1:52001/_elsa/agent/sessions/session-1/autonomy"
+                    put = {"url": url, "method": "PUT", "body": {"autonomyMode": initial, "expectedRevision": 0}}
+                    if mutation == "put":
+                        self.edit(output, "agent-requests", lambda value: value.insert(2, put))
+                        message = "exactly one acknowledged PUT"
+                    elif mutation == "retained-exchange":
+                        self.write(output, "autonomy-mode-update", {"url": url, "method": "PUT", "status": 200, "request": put["body"], "response": {}})
+                        message = "unchanged control cannot carry a policy update"
+                    elif mutation in ("network-put", "network-preflight"):
+                        self.write(output, "autonomy-network", [{"requestId": "x", "method": "PUT" if mutation == "network-put" else "OPTIONS", "url": url}])
+                        message = "Only one actual PUT and at most its CORS preflight"
+                    else:
+                        observation["autonomy"]["policyAcknowledgementClaimed"] = True
+                        message = "relabeled the acknowledged policy"
+                    with self.assertRaisesRegex(RuntimeError, message): self.verify(fixture)
+
+    def test_autonomy_network_admits_only_the_exact_put_and_its_preflight(self):
+        fixture = self.fixture("copilot", "automatic-to-manual"); output = fixture[0]
+        self.edit(output, "autonomy-network", lambda value: value.pop(0)) # A cached/absent preflight is admitted.
+        self.verify(fixture)
+        for mutation in ("missing-put", "two-puts", "two-preflights", "put-xhr", "put-409", "put-failed", "put-canceled", "put-query",
+                         "foreign-origin", "response-url", "repeated-request", "preflight-200", "preflight-initiator", "preflight-type",
+                         "preflight-response-type", "preflight-open", "get"):
+            with self.subTest(mutation=mutation):
+                fixture = self.fixture("copilot", "automatic-to-manual"); output = fixture[0]
+                def change(rows):
+                    preflight, put = rows
+                    if mutation == "missing-put": rows.pop()
+                    elif mutation == "two-puts": rows.append(dict(put, requestId="put-2"))
+                    elif mutation == "two-preflights": rows.append(dict(preflight, requestId="preflight-2"))
+                    elif mutation == "put-xhr": put.update(resourceType="XHR", responseResourceType="XHR")
+                    elif mutation == "put-409": put["status"] = 409
+                    elif mutation == "put-failed": put.update(termination="loadingFailed", errorText="net::ERR_FAILED")
+                    elif mutation == "put-canceled": put["canceled"] = True
+                    elif mutation == "put-query": put["url"] = None
+                    elif mutation == "foreign-origin": put["url"] = put["responseUrl"] = put["url"].replace(":52001", ":52002")
+                    elif mutation == "response-url": put["responseUrl"] = None
+                    elif mutation == "repeated-request": put["requestObservationCount"] = 2
+                    elif mutation == "preflight-200": preflight["status"] = 200
+                    elif mutation == "preflight-initiator": preflight["initiatorType"] = "script"
+                    elif mutation == "preflight-type": preflight["resourceType"] = "Fetch"
+                    elif mutation == "preflight-response-type": preflight["responseResourceType"] = "Fetch"
+                    elif mutation == "preflight-open": preflight["termination"] = "open"
+                    else: preflight["method"] = "GET"
+                self.edit(output, "autonomy-network", change)
+                with self.assertRaises(RuntimeError): self.verify(fixture)
+
+    def test_readback_attribution_and_selector_must_name_the_acknowledged_revision(self):
+        cases = {
+            "create-policy-missing": "created session did not acknowledge a readable policy",
+            "create-mode": "did not acknowledge the selected initial mode",
+            "before-readback": "does not read back the acknowledged policy",
+            "selected-readback": "does not read back the acknowledged policy",
+            "final-readback": "does not read back the acknowledged policy",
+            "final-old-revision": "does not read back the acknowledged policy",
+            "read-not-terminal": "was not terminal in its owner",
+            "size-accepted-old": "size prompt was not accepted under its acknowledged policy revision",
+            "size-accepted-mode": "size prompt was not accepted under its acknowledged policy revision",
+            "size-accepted-missing": "accepted size prompt carries no accepted policy",
+            "size-derived-approval": "size prompt was not accepted under its acknowledged policy revision",
+            "read-relabeled": "read prompt was not accepted under its acknowledged policy revision",
+            "unrelated-policy": "altered unrelated accepted policy",
+            "history-size": "Session history is not attributed",
+            "history-read-relabeled": "Session history is not attributed",
+            "history-missing": "Session history is not attributed",
+            "selector-pending": "selector did not settle",
+            "selector-label": "selector did not settle",
+            "selector-status": "selector did not settle",
+            "ui-relabeled": "Visible results are not attributed",
+            "ui-mode": "Visible results are not attributed",
+            "ui-missing": "Visible results are not attributed",
+        }
+        for mutation, message in cases.items():
+            with self.subTest(mutation=mutation):
+                fixture = self.fixture("copilot", "manual-to-automatic"); output, observation, _, _ = fixture
+                a = observation["autonomy"]
+                detail = lambda name, change: self.edit(output, name, lambda value: change(value["value"]["data"]))
+                accepted = lambda label, change: self.edit(output, "autonomy-" + label + "-message", lambda value: change(value["response"]["data"]["message"]))
+                if mutation == "create-policy-missing": self.edit(output, "autonomy-create-session", lambda value: value["response"]["data"].pop("policy"))
+                elif mutation == "create-mode": self.edit(output, "autonomy-create-session", lambda value: value["response"]["data"]["policy"].update(autonomyMode="full-auto"))
+                elif mutation == "before-readback": a["sessionBefore"] = detail("session-before", lambda value: value.update(policy=a["effectivePolicy"]))
+                elif mutation == "selected-readback": a["sessionAfterSelection"] = detail("session-selected", lambda value: value.update(policy=a["createdPolicy"]))
+                elif mutation == "final-readback": a["sessionAfter"] = detail("session-after", lambda value: value.pop("policy"))
+                elif mutation == "final-old-revision": a["sessionAfter"] = detail("session-after", lambda value: value["policy"].update(revision=0))
+                elif mutation == "read-not-terminal": a["sessionBefore"] = detail("session-before", lambda value: value["messages"][0].update(status="pending"))
+                elif mutation == "size-accepted-old": accepted("size", lambda value: value["acceptedPolicy"].update(revision=0))
+                elif mutation == "size-accepted-mode": accepted("size", lambda value: value["acceptedPolicy"]["policy"].update(autonomyMode="manual"))
+                elif mutation == "size-accepted-missing": accepted("size", lambda value: value.pop("acceptedPolicy"))
+                elif mutation == "size-derived-approval": accepted("size", lambda value: value["acceptedPolicy"]["policy"].update(requiresApprovalForMutations=True))
+                elif mutation == "read-relabeled": accepted("read", lambda value: value["acceptedPolicy"].update(revision=1))
+                elif mutation == "unrelated-policy": accepted("size", lambda value: value["acceptedPolicy"]["policy"].update(retentionLabel="changed"))
+                elif mutation == "history-size": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][1].update(acceptedPolicyRevision=0))
+                elif mutation == "history-read-relabeled": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][0].update(acceptedPolicyRevision=1))
+                elif mutation == "history-missing": a["sessionAfter"] = detail("session-after", lambda value: value["messages"][2].pop("acceptedPolicyRevision"))
+                elif mutation == "selector-pending": self.edit(output, "autonomy-mode-selector", lambda value: value.update(state="pending", pendingMode="full-auto"))
+                elif mutation == "selector-label": self.edit(output, "autonomy-mode-selector", lambda value: value.update(label="Manual review"))
+                elif mutation == "selector-status": self.edit(output, "autonomy-mode-selector", lambda value: value.update(statusCount=1))
+                elif mutation == "ui-relabeled": self.edit(output, "autonomy-ui-attribution", lambda value: value[1].update(revision="1", autonomyMode="full-auto"))
+                elif mutation == "ui-mode": self.edit(output, "autonomy-ui-attribution", lambda value: value[3].update(autonomyMode="manual"))
+                else: self.edit(output, "autonomy-ui-attribution", lambda value: value[3].update(revision=None))
+                with self.assertRaisesRegex(RuntimeError, message): self.verify(fixture)
+
+    def test_mode_mismatch_or_expected_failure_is_now_a_real_failure(self):
+        for mutation in ("outcome", "status", "expected-failure", "actual", "failure", "not-applied"):
+            with self.subTest(mutation=mutation):
+                fixture = self.fixture("copilot", "automatic-to-manual"); observation = fixture[1]
+                if mutation == "outcome": observation["autonomy"]["outcomeAtDecision"] = "automatic"
+                elif mutation == "status": observation["status"] = "failed"
+                elif mutation == "expected-failure": observation["expectedFailureObserved"] = True
+                elif mutation == "actual": observation["actual"] = {"stage": "session-mode", "diagnostic": "autonomy.mode_mismatch"}
+                elif mutation == "failure": observation["failure"] = {"type": "AutonomyFailure", "cause": "autonomy.mode_mismatch"}
+                else: observation["autonomy"]["applied"] = False
+                with self.assertRaises(RuntimeError): self.verify(fixture)
 
 
 class NativeRequestMetadataCaptureTests(unittest.TestCase):
@@ -616,10 +843,10 @@ class AutonomyManifestTests(unittest.TestCase):
                 "cases": [{"id": identity, "provider": identity.split("-", 1)[0], "caseKey": identity.split("-", 1)[1], "status": "passed", "nativeEvidenceVerified": True,
                            "modeMismatch": False, "evidence": [{"synthetic": True}]} for identity in sorted(EXPECTED_CASES)]}
 
-    def test_exact_final_manifest_is_twenty_six_and_initial_eight_is_incomplete(self):
-        self.assertEqual(26, len(EXPECTED_CASES)); self.assertEqual(8, len(DIAGNOSTIC_CASES))
+    def test_exact_final_manifest_is_twenty_six_and_mode_eight_is_incomplete(self):
+        self.assertEqual(26, len(EXPECTED_CASES)); self.assertEqual(8, len(MODE_CASE_IDS))
         section = self.final_section(); require_complete_autonomy(section)
-        section["cases"] = [row for row in section["cases"] if row["id"] in DIAGNOSTIC_CASES]
+        section["cases"] = [row for row in section["cases"] if row["id"] in MODE_CASE_IDS]
         with self.assertRaises(RuntimeError): require_complete_autonomy(section)
 
     def test_final_missing_duplicate_wrong_adapter_or_unverified_case_refuses(self):
@@ -636,30 +863,131 @@ class AutonomyManifestTests(unittest.TestCase):
                 else: section["cases"][0]["evidence"] = []
                 with self.assertRaises(RuntimeError): require_complete_autonomy(section)
 
-    def test_incomplete_or_wrong_cause_diagnostic_does_not_complete(self):
-        records = [{"id": identity, "provider": identity.split("-", 1)[0], "caseKey": identity.split("-", 1)[1], "status": "passed",
-                    "modeMismatch": False, "nativeEvidenceVerified": True, "qualified": False} for identity in sorted(DIAGNOSTIC_CASES)]
-        require_diagnostic_manifest(records)
-        for mutation in ("missing", "duplicate", "timeout", "qualification"):
+    @staticmethod
+    def mode_records():
+        records = []
+        for identity in sorted(MODE_CASE_IDS):
+            provider, key = identity.split("-", 1)
+            transition = "-to-" in key
+            records.append({"id": identity, "provider": provider, "caseKey": key, "status": "passed", "cause": None, "modeMismatch": False,
+                            "nativeEvidenceVerified": True, "qualified": False, "evidence": [{"synthetic": True}],
+                            "policy": {"acknowledged": transition, "updateRequests": int(transition)}})
+        return records
+
+    def test_mode_qualification_needs_all_eight_passed_with_acknowledgement(self):
+        records = self.mode_records(); require_mode_qualification(records)
+        transition = next(index for index, row in enumerate(records) if "-to-" in row["caseKey"])
+        control = next(index for index, row in enumerate(records) if "-to-" not in row["caseKey"])
+        for mutation in ("missing", "duplicate", "failed", "mismatch", "cause", "unverified", "qualified", "no-evidence",
+                         "unacknowledged-transition", "missing-update", "two-updates", "control-update", "control-acknowledged"):
             with self.subTest(mutation=mutation):
                 changed = copy.deepcopy(records)
                 if mutation == "missing": changed.pop()
                 elif mutation == "duplicate": changed[-1] = copy.deepcopy(changed[0])
-                elif mutation == "timeout": changed[0].update(status="failed", cause="timeout", modeMismatch=True)
-                else: changed[0]["qualified"] = True
-                with self.assertRaises(RuntimeError): require_diagnostic_manifest(changed)
+                elif mutation == "failed": changed[0]["status"] = "failed"
+                elif mutation == "mismatch": changed[0].update(status="failed", cause="autonomy.mode_mismatch", modeMismatch=True)
+                elif mutation == "cause": changed[0]["cause"] = "timeout"
+                elif mutation == "unverified": changed[0]["nativeEvidenceVerified"] = False
+                elif mutation == "qualified": changed[0]["qualified"] = True
+                elif mutation == "no-evidence": changed[0]["evidence"] = []
+                elif mutation == "unacknowledged-transition": changed[transition]["policy"]["acknowledged"] = False
+                elif mutation == "missing-update": changed[transition]["policy"]["updateRequests"] = 0
+                elif mutation == "two-updates": changed[transition]["policy"]["updateRequests"] = 2
+                elif mutation == "control-update": changed[control]["policy"]["updateRequests"] = 1
+                else: changed[control]["policy"]["acknowledged"] = True
+                with self.assertRaises(RuntimeError): require_mode_qualification(changed)
 
-    def test_native_failure_keeps_original_case_and_never_promotes_package_witness(self):
+    @staticmethod
+    def qualification_runtime(directory):
+        original = [{"id": "module-add", "status": "passed"}]
+        run = SimpleNamespace(root=Path(directory), report={"cases": copy.deepcopy(original), "independentPackageWitness": False},
+                              source="frozen", save=Mock(), assert_immutable_inputs=Mock())
+        return SimpleNamespace(run=run, select_provider=Mock()), original
+
+    def test_all_eight_passed_cases_complete_mode_qualification_without_package_witness(self):
+        records = {row["id"]: row for row in self.mode_records()}
         with tempfile.TemporaryDirectory() as directory:
-            original = [{"id": "module-add", "status": "passed"}]
-            run = SimpleNamespace(root=Path(directory), report={"cases": copy.deepcopy(original), "independentPackageWitness": False}, source="frozen", save=Mock())
-            runtime = SimpleNamespace(run=run, select_provider=Mock())
-            with patch("autonomy_journeys.execute_mode_case", side_effect=RuntimeError("native-failure")), self.assertRaisesRegex(RuntimeError, "native-failure"):
-                diagnose_autonomy(runtime)
-            self.assertEqual(original, run.report["cases"])
-            self.assertFalse(run.report["independentPackageWitness"])
-            self.assertEqual("diagnostic-failed", run.report["autonomyBaselineDiagnostic"]["status"])
-            self.assertEqual("diagnostic-failed", json.loads((run.root / "baseline-diagnostic.json").read_text())["status"])
+            runtime, original = self.qualification_runtime(directory)
+            with patch("autonomy_journeys.execute_mode_case", side_effect=lambda _runtime, provider, key: copy.deepcopy(records[provider + "-" + key])):
+                section = qualify_autonomy_modes(runtime)
+            self.assertEqual("passed", section["status"])
+            self.assertEqual(8, len(section["cases"]))
+            self.assertFalse(section["qualified"]); self.assertFalse(section["independentPackageWitness"])
+            self.assertEqual(original, runtime.run.report["cases"])
+            self.assertFalse(runtime.run.report["independentPackageWitness"])
+            self.assertIs(section, runtime.run.report[MODE_QUALIFICATION])
+            self.assertEqual("passed", json.loads((Path(directory) / "autonomy-mode-qualification.json").read_text())["status"])
+            self.assertEqual(["copilot", "anthropic"], [call.args[0] for call in runtime.select_provider.call_args_list])
+
+    def test_failed_case_keeps_its_precise_cause_runs_the_rest_and_fails_qualification(self):
+        records = {row["id"]: row for row in self.mode_records()}
+        def execute(_runtime, provider, key):
+            if provider == "copilot" and key == "automatic-to-manual":
+                raise ModeCaseFailure("browser failed", "autonomy.update_refused", {"path": "/observation.json", "sha256": "0"})
+            if provider == "anthropic" and key == "manual-to-automatic":
+                raise RuntimeError("Session detail does not read back the acknowledged policy")
+            return copy.deepcopy(records[provider + "-" + key])
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, original = self.qualification_runtime(directory)
+            with patch("autonomy_journeys.execute_mode_case", side_effect=execute), self.assertRaises(RuntimeError):
+                qualify_autonomy_modes(runtime)
+            section = runtime.run.report[MODE_QUALIFICATION]
+            self.assertEqual("failed", section["status"])
+            self.assertEqual(8, len(section["cases"]))
+            failed = {row["id"]: row for row in section["cases"] if row["status"] == "failed"}
+            self.assertEqual({"copilot-automatic-to-manual": "autonomy.update_refused", "anthropic-manual-to-automatic": "verification"},
+                             {identity: row["cause"] for identity, row in failed.items()})
+            self.assertEqual({"path": "/observation.json", "sha256": "0"}, failed["copilot-automatic-to-manual"]["observation"])
+            self.assertTrue(all(row["nativeEvidenceVerified"] is False and row["qualified"] is False for row in failed.values()))
+            self.assertEqual(original, runtime.run.report["cases"])
+            self.assertFalse(runtime.run.report["independentPackageWitness"])
+            self.assertEqual("failed", json.loads((Path(directory) / "autonomy-mode-qualification.json").read_text())["status"])
+
+    def test_browser_failure_is_raised_with_its_precise_retained_cause(self):
+        for failure, cause in (({"type": "AutonomyFailure", "message": "HTTP 409 agent.session.busy", "cause": "autonomy.update_refused"}, "autonomy.update_refused"),
+                               ({"type": "TimeoutError", "message": "locator timeout"}, "browser.failed"), (None, "browser.failed")):
+            with self.subTest(cause=cause, failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); trace = root / "trace.jsonl"; trace.write_bytes(b"")
+                def run(name, command, cwd, env=None):
+                    output = Path(json.loads(Path(command[-1]).read_text())["output"]); output.mkdir()
+                    if failure is not None:
+                        (output / "observation.json").write_text(json.dumps({"status": "failed", "failure": failure}))
+                    raise RuntimeError(name + " failed (1)")
+                def output(name):
+                    path = root / name; path.mkdir(); return path
+                runtime = SimpleNamespace(provider="copilot", run=SimpleNamespace(assert_immutable_inputs=Mock(), run=run, root=root, source="frozen"),
+                    sign_in=Mock(), output=output, studio_origin="http://127.0.0.1:52002", backend_origin="http://127.0.0.1:52001",
+                    active_identity={"storageState": str(root / "state.json")}, command_file=root / "command.json",
+                    transport=lambda _name: SimpleNamespace(trace_file=trace), witness={})
+                with self.assertRaises(ModeCaseFailure) as raised: execute_mode_case(runtime, "copilot", "automatic-to-manual")
+                self.assertEqual(cause, raised.exception.cause)
+                self.assertEqual(failure is not None, raised.exception.observation is not None)
+                if failure: self.assertIn(failure["message"], str(raised.exception))
+
+    def test_mode_mismatch_failure_is_a_real_failed_case(self):
+        records = {row["id"]: row for row in self.mode_records()}
+        def execute(_runtime, provider, key):
+            if key == "manual-to-automatic": raise ModeCaseFailure("mismatch", "autonomy.mode_mismatch")
+            return copy.deepcopy(records[provider + "-" + key])
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, _ = self.qualification_runtime(directory)
+            with patch("autonomy_journeys.execute_mode_case", side_effect=execute), self.assertRaises(RuntimeError):
+                qualify_autonomy_modes(runtime)
+            failed = [row for row in runtime.run.report[MODE_QUALIFICATION]["cases"] if row["status"] == "failed"]
+            self.assertEqual(2, len(failed))
+            self.assertTrue(all(row["modeMismatch"] is True and row["cause"] == "autonomy.mode_mismatch" for row in failed))
+
+    def test_immutable_input_drift_stops_the_matrix_and_never_promotes_package_witness(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, original = self.qualification_runtime(directory)
+            runtime.run.assert_immutable_inputs.side_effect = RuntimeError("inputs changed")
+            with patch("autonomy_journeys.execute_mode_case", side_effect=RuntimeError("native-failure")), self.assertRaisesRegex(RuntimeError, "inputs changed"):
+                qualify_autonomy_modes(runtime)
+            section = runtime.run.report[MODE_QUALIFICATION]
+            self.assertEqual(1, len(section["cases"]))
+            self.assertEqual("failed", section["status"])
+            self.assertEqual(original, runtime.run.report["cases"])
+            self.assertFalse(runtime.run.report["independentPackageWitness"])
 
 
 if __name__ == "__main__":

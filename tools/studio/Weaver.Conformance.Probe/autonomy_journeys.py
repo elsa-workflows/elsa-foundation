@@ -1,8 +1,10 @@
-"""Same-session native mode diagnostics and the final, exact lifecycle manifest.
+"""Same-session native mode qualification and the final, exact lifecycle manifest.
 
-The four initial cases are diagnostic inputs, not a complete package witness.
-Provider and owning-resource proof comes from retained native bytes, never a
-selector label, provider text, synthetic result or inferred successful write.
+The four mode cases per actual adapter (T012) require an actual acknowledged
+policy update, authoritative readback and accepted-policy attribution. They are
+not a complete package witness. Provider and owning-resource proof comes from
+retained native bytes, never a selector label, provider text, synthetic result
+or inferred successful write.
 """
 from __future__ import annotations
 
@@ -18,8 +20,7 @@ from urllib.parse import quote, urlparse
 
 from agent_transport import _json as strict_json
 from artifacts import TOOL, check, sha
-from case_records import (retained, correlate_browser_protocol, _normalized_result,
-                          _current_function_results)
+from case_records import retained, correlate_browser_protocol, _normalized_result
 from disclosure_journeys import require_stored_result
 from journey_runtime import browser_inputs, same
 from runtime import RUNTIME_ENVIRONMENT, private_json
@@ -36,12 +37,24 @@ LIFECYCLE_CASES = (*MODE_CASES, "denied-result-continuation", "duplicate-effect-
     "cancel-before-effect", "interrupted-after-effect", "stale-target-continuation",
     "authority-refusal-continuation", "visibility-review-control", "workflow-review-control", "busy-policy-lifecycle")
 EXPECTED_CASES = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key in LIFECYCLE_CASES)
-DIAGNOSTIC_CASES = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key in MODE_CASES)
+MODE_CASE_IDS = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key in MODE_CASES)
 EVIDENCE_CATEGORY = "deterministic-provider-protocol"
+MODE_QUALIFICATION = "autonomyModeQualification"
+MODE_LABELS = {"manual": "Manual review", "full-auto": "Autopilot"}
+# Accepted messages carry the domain policy, serialized with the API's camelCase enum names.
+ACCEPTED_MODES = {"manual": "manual", "autoReadOnly": "auto-read-only", "fullAuto": "full-auto"}
+POLICY_FIELDS = {"autonomyMode", "maxAutonomyMode", "allowedAutonomyModes", "revision"}
+
+
+class ModeCaseFailure(RuntimeError):
+    """A browser journey that ended with its own precise, retained cause."""
+    def __init__(self, message, cause, observation=None):
+        super().__init__(message)
+        self.cause, self.observation = cause, observation
 
 
 def require_complete_autonomy(section):
-    """Mandatory final gate; the initial eight observations can never satisfy it."""
+    """Mandatory final gate; the eight mode observations alone can never satisfy it."""
     check(isinstance(section, dict) and section.get("evidenceCategory") == EVIDENCE_CATEGORY
           and section.get("liveProvider") is False and section.get("status") == "passed",
           "Final autonomy qualification needs explicit complete native evidence")
@@ -57,21 +70,20 @@ def require_complete_autonomy(section):
     return records
 
 
-def require_diagnostic_manifest(records):
-    check(len(records) == len(DIAGNOSTIC_CASES) and {row.get("id") for row in records} == DIAGNOSTIC_CASES,
-          "The bounded baseline needs exactly four mode cases per actual adapter")
+def require_mode_qualification(records):
+    """T012: all four mode cases on each actual adapter passed with acknowledged policy evidence."""
+    check(isinstance(records, list) and len(records) == len(MODE_CASE_IDS) and {row.get("id") for row in records} == MODE_CASE_IDS,
+          "Mode qualification needs exactly four mode cases per actual adapter")
     for row in records:
         check(row.get("provider") in PROVIDERS and row.get("caseKey") in MODE_CASES
-              and row["id"] == row["provider"] + "-" + row["caseKey"]
-              and row.get("nativeEvidenceVerified") is True and row.get("qualified") is False,
-              "A diagnostic needs its exact actual-adapter proof without a qualification claim")
-        if row.get("status") == "failed":
-            check(row.get("caseKey") in ("automatic-to-manual", "manual-to-automatic")
-                  and row.get("modeMismatch") is True and row.get("cause") == "autonomy.mode_mismatch",
-                  "Only the precise established-session mode contrast is an expected diagnostic failure")
-        else:
-            check(row.get("status") == "passed" and row.get("modeMismatch") is False,
-                  "Unexpected, unfinished or wrong-cause diagnostic outcomes are not accepted")
+              and row["id"] == row["provider"] + "-" + row["caseKey"], "A mode case must name its exact actual adapter")
+        initial, requested = MODE_CASES[row["caseKey"]]
+        policy = row.get("policy")
+        check(row.get("status") == "passed" and row.get("modeMismatch") is False and row.get("cause") is None
+              and row.get("nativeEvidenceVerified") is True and row.get("qualified") is False and row.get("evidence")
+              and isinstance(policy, dict) and policy.get("acknowledged") is (initial != requested)
+              and policy.get("updateRequests") == (1 if initial != requested else 0),
+              "Failed, mismatched, unacknowledged or unverified mode cases cannot pass mode qualification")
     return records
 
 
@@ -251,7 +263,7 @@ def _messages(output, a, witness, before):
               "The native accepted message/request/session correlation changed")
         request = record.get("request", {})
         requested = request.get("requestedCapabilities")
-        check(same(requests[index + 1]["body"], request) and isinstance(requested, list) and len(requested) == 1
+        check(same(messages[index]["body"], request) and isinstance(requested, list) and len(requested) == 1
               and requested[0] in installed and request.get("source", {}).get("moduleId") == witness["moduleId"]
               and request["source"].get("actionId") == tool,
               "The actual installed capability and module action source must admit each exact prompt")
@@ -318,43 +330,14 @@ def _proposal(frames, a, witness, before):
     return proposal
 
 
-def require_deferred_diagnostic(trace, commands, frames, a, witness, before, provider):
-    """Prove a real pending call, explicitly NOT a completed provider/result journey."""
-    grouped = _actual_calls(trace, commands, provider, a["sameSessionId"])
-    proposal = _proposal(frames, a, witness, before)
-    size_rows = grouped[a["sizeCommandId"]]
-    check(sum(row["kind"] == provider + ".request" for row in size_rows) == 1
-          and not any(row["kind"] == provider + ".continuation" for row in size_rows),
-          "A pending review cannot contain an admitted result continuation")
-    returns = [row["data"].get("result") for row in size_rows if row["kind"] == provider + ".return"]
+def _pending_size_returns(rows, provider, proposal):
+    """A reviewed call's SDK return describes the pause; it never claims application."""
+    returns = [row["data"].get("result") for row in rows if row["kind"] == provider + ".return"]
     check(len(returns) <= (1 if provider == "copilot" else 0), "Duplicate or unexpected pending function returns")
     for value in returns:
         check(isinstance(value, dict) and value.get("status") == "awaiting-approval" and value.get("executed") is False
               and value.get("proposalId") == proposal["id"] and not value.get("receipt")
               and same(value.get("preview"), proposal["preparedInvocation"].get("preview")), "A pending SDK return claimed application")
-    check(not any(row.get("kind") == "contributedResult" and row.get("payload", {}).get("toolName") == witness["sizeTool"] for row in frames),
-          "A pending size operation already exposed a result")
-    # The first read has a completed result, rather than a failing setup disguised as a review stop.
-    native_reads = [row.get("payload") for row in frames if row.get("kind") == "contributedResult"
-                    and row.get("resultKind") == "moduleResult" and row.get("payload", {}).get("toolName") == witness["readTool"]]
-    check(len(native_reads) == 1 and native_reads[0].get("succeeded") is True and not native_reads[0].get("receipt"),
-          "The original harmless read did not complete natively")
-    read_rows = grouped[a["readCommandId"]]
-    if provider == "copilot":
-        check([row["kind"] for row in read_rows] == ["copilot.request", "copilot.call", "copilot.return"],
-              "The original harmless SDK read must complete once without another request")
-        results = [row["data"].get("result") for row in read_rows if row["kind"] == "copilot.return"]
-        check(len(results) == 1 and same(results[0], native_reads[0]), "The actual first SDK read differs from native evidence")
-    else:
-        check([row["kind"] for row in read_rows] == ["anthropic.request", "anthropic.call", "anthropic.request", "anthropic.continuation"],
-              "The first actual host-driven read needs its complete result continuation")
-        items = read_rows[-1]["data"].get("results")
-        check(isinstance(items, list) and len(items) == 1 and items[0].get("kind") == "functionResult"
-              and items[0].get("callId") == a["readCommandId"] and same(_current_function_results(read_rows[-2]["data"]), items)
-              and isinstance(items[0].get("result"), str) and same(strict_json(items[0]["result"]), native_reads[0]),
-              "The actual first host-driven result differs from native evidence")
-    return {"kind": "deferred-call-diagnostic", "completeProviderJourney": False, "proposalId": proposal["id"],
-            "oneActualSizeCall": True, "sizeContinuationCount": 0, "sizeEffectCount": 0}
 
 
 def _reviewed_effect(output, requests, frames, a, witness, before, inline_results, backend_origin):
@@ -446,55 +429,179 @@ def _effect(output, requests, frames, a, witness, before, after, session, backen
     return result
 
 
+def _policy(value, message):
+    check(isinstance(value, dict) and set(value) == POLICY_FIELDS and isinstance(value["autonomyMode"], str)
+          and isinstance(value["maxAutonomyMode"], str) and isinstance(value["allowedAutonomyModes"], list)
+          and all(isinstance(item, str) for item in value["allowedAutonomyModes"])
+          and type(value["revision"]) is int and value["revision"] >= 0, message)
+    return value
+
+
+def _request_kind(row, session, backend_origin):
+    url = urlparse(row.get("url", ""))
+    check(backend_origin == url.scheme + "://" + url.netloc and not url.query and not url.fragment,
+          "A native Agent request left the owned backend")
+    base = "/_elsa/agent/sessions"
+    exact = {(base, "POST"): "create", (base + "/" + quote(session, safe="") + "/messages", "POST"): "message",
+             (base + "/" + quote(session, safe="") + "/autonomy", "PUT"): "autonomy"}
+    kind = exact.get((url.path, row.get("method")))
+    if kind is None and row.get("method") == "POST":
+        match = re.fullmatch(r"/_elsa/agent/proposals/[^/]+/(approve|execute)", url.path)
+        kind = match[1] if match else None
+    check(kind is not None, "An unrecognized native Agent request is not part of this mode journey")
+    return kind
+
+
+def _accepted_policy(message, mode_message):
+    accepted = message.get("acceptedPolicy") if isinstance(message, dict) else None
+    check(isinstance(accepted, dict) and type(accepted.get("revision")) is int and isinstance(accepted.get("policy"), dict)
+          and ACCEPTED_MODES.get(accepted["policy"].get("autonomyMode")) is not None, mode_message)
+    return accepted
+
+
+def require_policy_acknowledgement(output, a, requests, backend_origin, owned_root):
+    """The mode in effect is the owner's acknowledgement, read back and stamped on accepted work.
+
+    A transition needs exactly one actual conditional PUT carrying the requested mode and the
+    revision acknowledged at creation, an HTTP 200 policy at the next revision and unchanged limits.
+    An unchanged control sends none. Readback, accepted-message attribution, session history and
+    visible attribution must all name the same revisions; the selector label is only corroboration.
+    """
+    output = Path(output)
+    initial, requested = MODE_CASES[a["caseKey"]]
+    transition = initial != requested
+    session = a["sameSessionId"]
+    create = strict_json((output / "autonomy-create-session.json").read_text())
+    created = _policy(create.get("response", {}).get("data", {}).get("policy"), "The created session did not acknowledge a readable policy")
+    check(create.get("status") == 200 and create.get("request", {}).get("autonomyMode") == initial
+          and created["autonomyMode"] == initial and initial in created["allowedAutonomyModes"] and requested in created["allowedAutonomyModes"],
+          "The created session did not acknowledge the selected initial mode within its allowed modes")
+    kinds = [_request_kind(row, session, backend_origin) for row in requests]
+    review = a["outcomeAtDecision"] == "review"
+    check(kinds == ["create", "message"] + (["autonomy"] if transition else []) + ["message"] + (["approve", "execute"] if review else []),
+          "Mode changes must be exactly one acknowledged PUT between the original prompts; controls send none")
+    update_url = backend_origin + "/_elsa/agent/sessions/" + quote(session, safe="") + "/autonomy"
+    structured, raw = output / "autonomy-mode-update.json", output / "autonomy-mode-update-http.json"
+    if transition:
+        check(_owned_ref(owned_root, a.get("policyUpdate")).resolve() == structured.resolve() and raw.is_file(),
+              "The actual autonomy exchange was not retained")
+        exchange, http = strict_json(structured.read_text()), strict_json(raw.read_text())
+        put = requests[kinds.index("autonomy")]
+        check(exchange.get("url") == http.get("url") == put["url"] == update_url and exchange.get("method") == http.get("method") == "PUT"
+              and same(exchange.get("request"), put.get("body"))
+              and same(exchange.get("request"), {"autonomyMode": requested, "expectedRevision": created["revision"]}),
+              "The autonomy request must carry only the requested mode and the revision acknowledged at creation")
+        check(exchange.get("status") == http.get("status") == 200 and isinstance(http.get("rawBody"), str)
+              and same(strict_json(http["rawBody"]), exchange.get("response")) and isinstance(exchange.get("response"), dict)
+              and exchange["response"].get("error") is None, "The owning backend did not acknowledge the mode change with HTTP 200")
+        acknowledged = _policy(exchange["response"].get("data"), "The acknowledgement carries no readable policy")
+        check(acknowledged["autonomyMode"] == requested and acknowledged["revision"] == created["revision"] + 1
+              and acknowledged["maxAutonomyMode"] == created["maxAutonomyMode"]
+              and same(acknowledged["allowedAutonomyModes"], created["allowedAutonomyModes"]),
+              "The acknowledgement is not the requested mode at the next revision with unchanged limits")
+    else:
+        check(a.get("policyUpdate") is None and not structured.exists() and not raw.exists(), "An unchanged control cannot carry a policy update")
+        acknowledged = None
+    effective = acknowledged or created
+    check(same(a.get("createdPolicy"), created) and same(a.get("acknowledgedPolicy"), acknowledged) and same(a.get("effectivePolicy"), effective)
+          and a.get("policyAcknowledgementClaimed") is transition, "The browser relabeled the acknowledged policy")
+    network = strict_json((output / "autonomy-network.json").read_text())
+    check(isinstance(network, list) and all(isinstance(row, dict) for row in network), "Autonomy network metadata was not retained")
+    puts = [row for row in network if row.get("method") == "PUT"]
+    preflights = [row for row in network if row.get("method") == "OPTIONS"]
+    check(len(puts) + len(preflights) == len(network) and len(puts) == (1 if transition else 0) and len(preflights) <= len(puts),
+          "Only one actual PUT and at most its CORS preflight may reach the autonomy route")
+    for row in network:
+        put = row.get("method") == "PUT"
+        check(row.get("url") == row.get("responseUrl") == update_url and row.get("requestObservationCount") == 1
+              and row.get("responseObservationCount") == 1 and row.get("termination") == "loadingFinished"
+              and not row.get("errorText") and row.get("canceled") is False
+              and (row.get("resourceType") == row.get("responseResourceType") == "Fetch" and row.get("status") == 200 if put else
+                   row.get("resourceType") in ("Other", "Preflight") and row.get("initiatorType") == "preflight"
+                   and row.get("responseResourceType") == "Preflight" and row.get("status") == 204),
+              "Autonomy PUT/preflight metadata is failed, foreign, repeated or not the exact owned route")
+    before = _owner(owned_root, a["sessionBefore"]).get("data", {})
+    selected = _owner(owned_root, a["sessionAfterSelection"]).get("data", {})
+    final = _owner(owned_root, a["sessionAfter"]).get("data", {})
+    check(before.get("sessionId") == selected.get("sessionId") == final.get("sessionId") == session
+          and same(before.get("policy"), created) and same(selected.get("policy"), effective) and same(final.get("policy"), effective),
+          "Session detail does not read back the acknowledged policy")
+    check(any(row.get("id") == a["readMessageId"] and row.get("status") == "completed" for row in before.get("messages", [])),
+          "The original read was not terminal in its owner before the mode decision")
+    messages = final.get("messages", [])
+    index = next((position for position, row in enumerate(messages) if row.get("id") == a["sizeMessageId"]), -1)
+    check(index > 0 and all(type(row.get("acceptedPolicyRevision")) is int
+                            and row["acceptedPolicyRevision"] == (created if position < index else effective)["revision"]
+                            for position, row in enumerate(messages)),
+          "Session history is not attributed to the policy revisions that accepted it")
+    accepted = []
+    for label, policy in (("read", created), ("size", effective)):
+        message = strict_json((output / ("autonomy-" + label + "-message.json")).read_text()).get("response", {}).get("data", {}).get("message", {})
+        value = _accepted_policy(message, "The accepted " + label + " prompt carries no accepted policy")
+        derived = value["policy"].get("requiresApprovalForMutations", policy["autonomyMode"] != "full-auto")
+        check(value["revision"] == policy["revision"] and ACCEPTED_MODES[value["policy"]["autonomyMode"]] == policy["autonomyMode"]
+              and ACCEPTED_MODES.get(value["policy"].get("maxAutonomyMode")) == policy["maxAutonomyMode"]
+              and derived is (policy["autonomyMode"] != "full-auto"),
+              "The " + label + " prompt was not accepted under its acknowledged policy revision")
+        # Only the mode (and the approval requirement derived from it) may differ between the two prompts.
+        accepted.append({key: item for key, item in value["policy"].items() if key not in ("autonomyMode", "requiresApprovalForMutations")})
+    check(same(accepted[0], accepted[1]), "The mode change altered unrelated accepted policy")
+    selector = strict_json((output / "autonomy-mode-selector.json").read_text())
+    check(selector == {"state": "acknowledged", "pendingMode": None, "ariaBusy": "false", "label": MODE_LABELS[effective["autonomyMode"]],
+                       "statusCount": 0, "mode": effective["autonomyMode"]},
+          "The selector did not settle on only the acknowledged mode")
+    visible = [row for row in strict_json((output / "autonomy-ui-attribution.json").read_text()) if row.get("revision") is not None]
+    modes = {str(created["revision"]): created["autonomyMode"], str(effective["revision"]): effective["autonomyMode"]}
+    check(len(visible) >= 2 and all(modes.get(row["revision"]) == row.get("autonomyMode") for row in visible)
+          and visible[0]["revision"] == str(created["revision"]) and visible[-1]["revision"] == str(effective["revision"]),
+          "Visible results are not attributed to the policy that admitted their turn")
+    references = [retained(output / name) for name in ("autonomy-create-session.json", "autonomy-network.json",
+                  "autonomy-mode-selector.json", "autonomy-ui-attribution.json")]
+    references += [a["sessionBefore"], a["sessionAfterSelection"]] + ([a["policyUpdate"], retained(raw)] if transition else [])
+    return {"acknowledged": transition, "updateRequests": len(puts), "corsPreflights": len(preflights),
+            "createdRevision": created["revision"], "effectiveRevision": effective["revision"],
+            "effectiveMode": effective["autonomyMode"]}, references
+
+
 def verify_mode_observation(output, observation, witness, provider, transport, *, offset=0, owned_root=None):
     output = Path(output)
+    owned_root = owned_root or output
     check(provider in PROVIDERS and isinstance(observation, dict) and not observation.get("failure")
           and observation.get("provider") == provider and observation.get("journey") == "autonomy-size"
-          and not observation.get("pageErrors"), "An unexpected browser/provider/transport failure is not a mode contrast")
+          and not observation.get("pageErrors") and observation.get("status") == "passed"
+          and not observation.get("expectedFailureObserved") and "actual" not in observation,
+          "An unfinished, failed or expected-failure browser journey cannot qualify a mode case")
     a = observation.get("autonomy", {})
     key = a.get("caseKey")
     check(key in MODE_CASES and (a.get("initialMode"), a.get("requestedMode")) == MODE_CASES[key]
-          and a.get("outcomeAtDecision") in ("review", "automatic") and a.get("policyAcknowledgementClaimed") is False,
-          "The baseline must retain actual initial/requested modes without fabricated acknowledgement")
-    check(a.get("selectionRequests") == [],
-          "This source-local selector baseline cannot stand in for a failed or unqualified policy-update request")
+          and a.get("outcomeAtDecision") in ("review", "automatic"), "The case must retain its actual initial/requested modes")
     expected = "review" if a["requestedMode"] == "manual" else "automatic"
-    mismatch = a["outcomeAtDecision"] != expected
-    check(a.get("expectedOutcome") == expected and a.get("modeMismatch") is mismatch
-          and a.get("applied") is (a["outcomeAtDecision"] == "automatic" or not mismatch), "The mode outcome was relabeled")
-    if mismatch:
-        check(key in ("automatic-to-manual", "manual-to-automatic") and observation.get("status") == "failed"
-              and observation.get("expectedFailureObserved") is True
-              and observation.get("actual") == {"stage": "session-mode", "diagnostic": "autonomy.mode_mismatch"}, "Wrong-cause failure cannot satisfy the baseline")
-    else:
-        check(observation.get("status") == "passed" and not observation.get("expectedFailureObserved"), "An unchanged-mode control did not pass")
+    check(a.get("expectedOutcome") == expected and a["outcomeAtDecision"] == expected and a.get("modeMismatch") is False
+          and a.get("applied") is True, "autonomy.mode_mismatch: the acknowledged mode did not govern the native outcome")
     before, after = require_size_owner_journey(output, observation, witness)
     requests, session = _messages(output, a, witness, before)
+    policy, policy_refs = require_policy_acknowledgement(output, a, requests, transport.http.base, owned_root)
+    check(same(a.get("selectionRequests"), [row for row in requests if urlparse(row["url"]).path.endswith("/autonomy")]),
+          "The browser selection requests differ from the actual retained Agent requests")
     commands = _commands(output, a, witness)
     frames, sse = _frames(output, a["sameSessionId"], transport.http.base)
     trace = transport.protocol_trace(offset)
     check(trace["incompleteTailBytes"] == 0, "An incomplete actual factory trace cannot prove the outcome")
-    _actual_calls(trace, commands, provider, a["sameSessionId"])
+    grouped = _actual_calls(trace, commands, provider, a["sameSessionId"])
+    if a["outcomeAtDecision"] == "review":
+        _pending_size_returns(grouped[a["sizeCommandId"]], provider, _proposal(frames, a, witness, before))
+    # The autonomy PUT is policy, not an effect: only execute/ACK can carry a reviewed application.
     effect_requests = [row for row in requests if urlparse(row["url"]).path.endswith(("/execute", "/acknowledgements"))]
-    if not a["applied"]:
-        check(not effect_requests and not a.get("selectionRequests"), "The deferred baseline must not execute or fabricate a policy acknowledgement")
-        correlation = require_deferred_diagnostic(trace, commands, frames, a, witness, before, provider)
-        proof = retained(Path(output) / "deferred-call-diagnostic.json") if (Path(output) / "deferred-call-diagnostic.json").exists() else None
-        check(proof is None, "Never replace a prior deferred diagnostic")
-        private_json(Path(output) / "deferred-call-diagnostic.json", correlation)
-        correlation_refs = [retained(Path(output) / "deferred-call-diagnostic.json"), trace["receipt"]]
-    else:
-        check(len(effect_requests) == (1 if a["outcomeAtDecision"] == "review" else 0), "Automatic work must not issue execute and reviewed work executes once")
-        _effect(output, requests, frames, a, witness, before, after, session, transport.http.base)
-        correlated = correlate_browser_protocol(transport, output, provider, offset=offset)
-        correlation_refs = [correlated["receipt"], correlated["trace"]]
-        correlation = {"kind": "completed-native-result", "completeProviderJourney": True}
-    references = [observation["ownerBefore"], observation["ownerAfter"], sse, *observation.get("evidence", []), *correlation_refs]
-    for reference in references: _owned_ref(owned_root or output, reference)
+    check(len(effect_requests) == (1 if a["outcomeAtDecision"] == "review" else 0), "Automatic work must not issue execute and reviewed work executes once")
+    _effect(output, requests, frames, a, witness, before, after, session, transport.http.base)
+    correlated = correlate_browser_protocol(transport, output, provider, offset=offset)
+    references = [observation["ownerBefore"], observation["ownerAfter"], sse, *observation.get("evidence", []),
+                  correlated["receipt"], correlated["trace"], *policy_refs]
+    for reference in references: _owned_ref(owned_root, reference)
     return {"id": provider + "-" + key, "provider": provider, "caseKey": key,
-            "status": observation["status"], "modeMismatch": mismatch, "cause": "autonomy.mode_mismatch" if mismatch else None,
-            "source": None, "qualified": False, "nativeEvidenceVerified": True, "correlation": correlation,
-            "sessionId": a["sameSessionId"], "initialMode": a["initialMode"], "requestedMode": a["requestedMode"],
+            "status": "passed", "modeMismatch": False, "cause": None, "source": None, "qualified": False,
+            "nativeEvidenceVerified": True, "correlation": {"kind": "completed-native-result", "completeProviderJourney": True},
+            "policy": policy, "sessionId": a["sameSessionId"], "initialMode": a["initialMode"], "requestedMode": a["requestedMode"],
             "outcomeAtDecision": a["outcomeAtDecision"], "ownerBefore": observation["ownerBefore"], "ownerAfter": observation["ownerAfter"],
             "evidence": references}
 
@@ -514,9 +621,18 @@ def execute_mode_case(runtime, provider, key):
     path = transport.trace_file
     prefix = path.read_bytes() if path.exists() else b""
     node = shutil.which("node")
-    check(node, "The real browser mode diagnostic needs Node")
-    runtime.run.run("autonomy-" + provider + "-" + key, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
-                    env={name: value for name, value in os.environ.items() if name in RUNTIME_ENVIRONMENT})
+    check(node, "The real browser mode journey needs Node")
+    try:
+        runtime.run.run("autonomy-" + provider + "-" + key, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
+                        env={name: value for name, value in os.environ.items() if name in RUNTIME_ENVIRONMENT})
+    except RuntimeError as error:
+        # Retain the browser's own precise cause; a failed journey is never an expected outcome.
+        observed = output / "observation.json"
+        value = strict_json(observed.read_text()) if observed.is_file() else {}
+        failure = value.get("failure") if isinstance(value, dict) else None
+        cause = failure.get("cause") if isinstance(failure, dict) and isinstance(failure.get("cause"), str) else "browser.failed"
+        detail = failure.get("message") if isinstance(failure, dict) and isinstance(failure.get("message"), str) else "no browser failure retained"
+        raise ModeCaseFailure(str(error) + "; browser: " + detail[:500], cause, retained(observed) if observed.is_file() else None) from None
     check(path.is_file() and path.read_bytes()[:len(prefix)] == prefix, "The prior actual factory trace was replaced")
     observation = strict_json((output / "observation.json").read_text())
     record = verify_mode_observation(output, observation, runtime.witness, provider, transport, offset=len(prefix), owned_root=runtime.run.root)
@@ -526,32 +642,44 @@ def execute_mode_case(runtime, provider, key):
     return record
 
 
-def diagnose_autonomy(runtime):
-    """Initial eight-case diagnostic ONLY; never promotes an independent package witness."""
+def qualify_autonomy_modes(runtime):
+    """T012: eight acknowledged mode cases; never promotes an independent package witness.
+
+    Each case runs once. A failed case keeps its precise cause and the remaining cases still
+    run, so one native attempt observes the whole matrix. Success requires all eight passed.
+    """
     run = runtime.run
-    check("autonomyBaselineDiagnostic" not in run.report and run.report.get("independentPackageWitness") is False,
-          "Use a fresh diagnostic, never replace a qualified or partial observation")
-    diagnostic_path = run.root / "baseline-diagnostic.json"
-    check(not diagnostic_path.exists(), "Never overwrite a retained diagnostic")
-    section = {"status": "diagnostic-running", "source": run.source, "evidenceCategory": EVIDENCE_CATEGORY,
-               "liveProvider": False, "qualified": False, "independentPackageWitness": False,
-               "expectedCaseIds": sorted(DIAGNOSTIC_CASES), "finalRequiredCaseIds": sorted(EXPECTED_CASES), "cases": []}
-    run.report["autonomyBaselineDiagnostic"] = section
+    check(MODE_QUALIFICATION not in run.report and run.report.get("independentPackageWitness") is False,
+          "Use a fresh mode qualification, never replace a qualified or partial observation")
+    section_path = run.root / "autonomy-mode-qualification.json"
+    check(not section_path.exists(), "Never overwrite a retained mode qualification")
+    section = {"status": "running", "scope": "established-session-mode-cases", "source": run.source,
+               "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "qualified": False, "independentPackageWitness": False,
+               "expectedCaseIds": sorted(MODE_CASE_IDS), "finalRequiredCaseIds": sorted(EXPECTED_CASES), "cases": []}
+    run.report[MODE_QUALIFICATION] = section
     run.save()
     try:
         for provider in PROVIDERS:
             runtime.select_provider(provider)
             for key in MODE_CASES:
-                record = execute_mode_case(runtime, provider, key)
+                try:
+                    record = execute_mode_case(runtime, provider, key)
+                except RuntimeError as error:
+                    record = {"id": provider + "-" + key, "provider": provider, "caseKey": key, "status": "failed",
+                              "cause": error.cause if isinstance(error, ModeCaseFailure) else "verification",
+                              "message": str(error)[:1000], "observation": getattr(error, "observation", None),
+                              "modeMismatch": isinstance(error, ModeCaseFailure) and error.cause == "autonomy.mode_mismatch",
+                              "nativeEvidenceVerified": False, "qualified": False, "source": run.source}
                 section["cases"].append(record)
                 run.save()
-        require_diagnostic_manifest(section["cases"])
-        section["status"] = "diagnostic-complete"
+                run.assert_immutable_inputs()
+        require_mode_qualification(section["cases"])
+        section["status"] = "passed"
     except BaseException as error:
-        section.update(status="diagnostic-failed", failure={"type": type(error).__name__})
+        section.update(status="failed", failure={"type": type(error).__name__, "message": str(error)[:1000]})
         raise
     finally:
-        check(run.report.get("independentPackageWitness") is False, "A bounded diagnostic cannot promote package qualification")
-        private_json(diagnostic_path, section)
+        check(run.report.get("independentPackageWitness") is False, "Mode qualification cannot promote package qualification")
+        private_json(section_path, section)
         run.save()
     return section

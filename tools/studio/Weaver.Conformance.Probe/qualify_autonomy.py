@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Run eight bounded mode diagnostics through fresh independent packages/hosts.
+"""Qualify the eight established-session mode cases through fresh independent packages/hosts.
 
-This intentionally does NOT execute or qualify the original38+4 package witness.
-It never sets independentPackageWitness=True, even when all eight outcomes pass.
-An outer owner must bound overall production/startup/cleanup time as documented.
+Success requires all eight cases passed: each actual adapter acknowledges its mode change
+through the owned backend, reads it back and attributes the accepted work to it (#3440 T012).
+This intentionally does NOT execute or qualify the original38+4 package witness and never
+sets independentPackageWitness=True. An outer owner bounds production/startup/cleanup time.
 """
 from __future__ import annotations
 
@@ -14,10 +15,10 @@ import re
 import secrets
 
 
-def diagnose(output, version):
+def qualify(output, version):
     from artifacts import ConformanceRun
     from authors import build_authors
-    from autonomy_journeys import diagnose_autonomy
+    from autonomy_journeys import qualify_autonomy_modes
     from case_records import CaseRecords
     from consumers import prepare_consumers, configure_runtime, freeze_consumer_baseline, capture_consumer_after
     from journey_runtime import JourneyRuntime
@@ -31,7 +32,7 @@ def diagnose(output, version):
         build_authors(run)
         prepare_consumers(run)
         run.assert_immutable_inputs()
-        run.report.update(status="diagnostic-running", independentPackageWitness=False, liveProvider=False)
+        run.report.update(status="autonomy-mode-qualification-running", independentPackageWitness=False, liveProvider=False)
         run.save()
         admin = {"username": "weaver-" + secrets.token_hex(10), "password": secrets.token_urlsafe(40) + "!aA1"}
         backend, studio = owned_origin(), owned_origin()
@@ -48,15 +49,15 @@ def diagnose(output, version):
             _bootstrap(runtime)
             freeze_consumer_baseline(run)
             _install(runtime, setup)
-            diagnose_autonomy(runtime)
+            qualify_autonomy_modes(runtime)
             capture_consumer_after(run)
             run.assert_immutable_inputs()
         run.assert_immutable_inputs()
-        run.report.update(status="diagnostic-complete", independentPackageWitness=False)
+        run.report.update(status="autonomy-mode-qualification-passed", independentPackageWitness=False)
         run.save()
     except BaseException as error:
-        run.report.update(status="diagnostic-failed", independentPackageWitness=False,
-                          diagnosticFailure={"type": type(error).__name__})
+        run.report.update(status="autonomy-mode-qualification-failed", independentPackageWitness=False,
+                          qualificationFailure={"type": type(error).__name__})
         run.save()
         raise
     return run.report
@@ -69,13 +70,23 @@ def main():
     args = parser.parse_args()
     if not args.output.is_absolute(): parser.error("--output must be absolute")
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", args.version): parser.error("Use a candidate semantic version")
-    report = diagnose(args.output.resolve(), args.version)
-    records = report["autonomyBaselineDiagnostic"]["cases"]
-    print(json.dumps({"status": report["status"], "source": report["source"], "qualified": False,
+    try:
+        qualify(args.output.resolve(), args.version)
+    finally:
+        summarize(args.output.resolve())
+
+
+def summarize(output):
+    # Print the retained outcome, including each failed case's precise cause, on success or failure.
+    from autonomy_journeys import MODE_QUALIFICATION
+    path = output / "report.json"
+    report = json.loads(path.read_text()) if path.is_file() else {}
+    records = report.get(MODE_QUALIFICATION, {}).get("cases", [])
+    print(json.dumps({"status": report.get("status"), "source": report.get("source"), "qualified": False,
                       "independentPackageWitness": False, "observations": len(records),
-                      "passed": sum(row["status"] == "passed" for row in records),
-                      "failed": sum(row["status"] == "failed" for row in records),
-                      "report": str(args.output / "report.json")}))
+                      "passed": sum(row.get("status") == "passed" for row in records),
+                      "failed": {row["id"]: row.get("cause") for row in records if row.get("status") != "passed"},
+                      "report": str(path)}))
 
 
 if __name__ == "__main__":

@@ -52,3 +52,21 @@ mandatory. This evidence is deterministic provider-protocol qualification, not a
 Modules link tools to their exact disclosure source and own `AdmitDisclosureAsync`; see the
 [Agent catalog](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#context-and-result-disclosure-3439-under-qualification).
 Session stores must preserve complete journal provenance before a result can be sent to a provider.
+
+## Established-session autonomy (#3440)
+
+`qualify_autonomy.py` runs the four mode cases on each actual adapter through the same fresh
+package-composed hosts. Each established conversation must change mode through exactly one actual
+conditional `PUT /_elsa/agent/sessions/{id}/autonomy` carrying the revision acknowledged at creation,
+receive HTTP 200 at the next revision with unchanged limits, read it back from session detail and
+admit the size prompt under that revision; unchanged controls send no autonomy request. The CDP
+metadata admits only that PUT and its CORS preflight. A native outcome that contradicts the
+acknowledged mode is a failed case with cause `autonomy.mode_mismatch`, never an expected one; every
+failed case keeps its precise browser or verification cause and the remaining cases still run once.
+Success needs all eight passed. It never sets `qualified` or `independentPackageWitness`: the
+complete thirteen-case matrix and package witness remain T015/T025.
+
+```sh
+python3 tools/studio/Weaver.Conformance.Probe/qualify_autonomy.py \
+  --output /absolute/new-owned-autonomy-proof --version 4.0.0-weaver3440.local1
+```
