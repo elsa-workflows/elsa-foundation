@@ -101,6 +101,7 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
 - [ ] T034 [US7] Reuse generic publication/history/lifecycle in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistHistory.tsx`; add exact occurrence links through the owning Studio SDK/shared inspector contribution with no hardcoded specialist branch.
 - [ ] T035 [US7] Implement permitted turn/process timeline/result/usage/approval/incident views in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistInvocationPage.tsx`, including completed/not-applied and unknown outcome.
 - [ ] T036 [US7] Prove real create/edit/test/publish/picker/use/inspect/history, conflict/save/undo, denied/read-only/source-owned, keyboard/narrow and runtime occurrence behavior in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/__tests__/` and `Studio/tests/browser/specialist-agents.spec.ts`.
+- [ ] T061 [US7] Deliver configuration-defined specialists (FR-027). Add a configuration source that contributes the same specialist manifest through the existing activity reconciliation lifecycle (`ActivityVersionsReconciling`, as the JSON activity source does) as source-owned content, then publish exact versions. Cover: per-definition validation diagnostics; connection names only; changed configuration producing a new version without rewriting bindings; read-only Studio presentation with copy or fork; restart idempotency; native and BPMN use.
 
 ## Phase 6 — Saved evaluations and comparison (US6; M5)
 
@@ -196,6 +197,7 @@ not permission to exceed Program WIP or run simultaneous solution builds.
 | FR-023–FR-024 | T014–T015,T018,T023–T026,T029,T051–T053,T056 | A13 |
 | FR-025 | T054 | A14 |
 | FR-026 | T013,T055,T058–T060 | A15 |
+| FR-027 | T061,T036 | A1,A12 |
 | SC-001–SC-007 | All story proofs plus T051–T060 | Complete observed A1–A15 |
 
 ### M3 review follow-up owned by M7
