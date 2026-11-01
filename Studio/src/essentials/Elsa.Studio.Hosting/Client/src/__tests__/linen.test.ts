@@ -18,7 +18,7 @@ describe("Linen defaults", () => {
     expect(normalizeThemeStore().defaultThemeId).toBe("linen");
     expect(builtInThemeDefinitions.map(theme => theme.id)).toContain("classic");
     expect(builtInThemeDefinitions.map(theme => theme.id)).toEqual(expect.arrayContaining(["linen", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"]));
-    expect(builtInThemeDefinitions).toHaveLength(12);
+    expect(builtInThemeDefinitions).toHaveLength(13);
   });
   it("keeps rounded sans geometry across palettes", () => {
     const result = applyWorkspaceStyle(builtInThemeDefinitions[0], "linen");
