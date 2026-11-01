@@ -617,10 +617,12 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** each tick obtains the finite partition snapshot through `IPersistenceScopeRunner` and opens one fresh ordinary scope per partition. Within each bounded partition sweep it renews placements this node holds, discovers visible transport backlog, claims any it can own, leases commands, verifies each stored envelope still matches the current partition, dispatches it with that partition, and acks on a delivered outcome. Deferred/Rejected dispatches stay leased so lease expiry re-drives them (the failover loop). The runner visits the remaining partitions before surfacing failures; the task's aggregate consecutive-failure count controls its node-wide backoff interval. All cadence/bounds come from `ExecutionPlacementPumpOptions` evaluated against `TimeProvider`.
 
 
+### `IRuntimeExecutionIdGenerator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+
 - **Kind:** Replacement (one generator owns runtime command-dispatch IDs for a runtime composition).
 - **Signature:** `NewWorkflowExecutionId()`, `NewWorkflowExecutionCommandId()`, `NewWorkflowExecutionCommandEnvelopeId()`, `NewActivityExecutionId()`.
 - **Usage:** provides runtime-owned identifiers for workflow execution start dispatch and concrete activity executions without leaking API, persistence, or provider-specific identity generation into command construction.
-- **Default implementation:** `ShortRuntimeExecutionIdGenerator`.
+- **Default implementation:** internal `RuntimeExecutionIdGenerator`, using 32-character UUIDv7 source IDs from the configured `TimeProvider`. No worker-number coordination is required. Internal ownership/heartbeat and folded-checkpoint/commit IDs use the same source. Existing persisted IDs and deterministic successor derivation remain unchanged; `ShortRuntimeExecutionIdGenerator` remains an explicit compact option with its original 22-random-bit-per-millisecond behavior.
 
 ### `IWorkflowStartDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns conversion from executable artifact start requests into workflow execution agent commands).

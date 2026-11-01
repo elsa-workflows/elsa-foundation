@@ -100,6 +100,34 @@ summary; the final whole suites ran against the current source.
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.
 
+### Source identifier collisions: independently reproduced defect
+
+The former production default used a timestamp plus 22 random bits per millisecond. With the original runtime DLL
+and a fixed clock, 100,000 generated IDs contained 1,142 duplicates. That finite source space also matters across
+nodes; a worker number is not present. The candidate uses the platform's UUIDv7 generator for new workflow,
+command, envelope, activity, ownership and folded-checkpoint source IDs. Persisted IDs remain opaque strings.
+Deterministic replay-chain derivation is unchanged, and explicitly configured generators remain supported.
+UUIDv7 has a larger random source space, not a mathematical uniqueness guarantee or a strictly monotonic clock.
+See [the .NET API](https://learn.microsoft.com/en-us/dotnet/api/system.guid.createversion7?view=net-10.0) and
+[RFC 9562 section 5.7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7).
+
+A bounded full-engine diagnostic freezes the clock and installs the actual production generator, replacing the
+testing harness's deterministic generator. With the original runtime and compact source it rejected a fresh start
+as Duplicate after 1,882 successful starts. The same current candidate with only the compact generator selected
+also rejected a fresh start, after 3,472 successes. With the candidate default, both runtime-generated and
+caller-generated workflow-ID cases completed 10,002/10,002 distinct executions, with no nonterminal state,
+queued work or errors. The original-runtime caller-ID case also completed 10,002 executions. These are modified
+diagnostic-harness runs, not unchanged original Perf runs or throughput measurements. Their failure fingerprint
+is a Duplicate rejection, unlike the original Running/WorkflowStarted snapshots; the historical cause remains open.
+
+Seven new focused cases cover each ID purpose under 65,536 concurrent fixed-clock calls, rollback of the clock,
+ownership IDs and actual folded checkpoint IDs. Restoring the old source fails all seven; the candidate passes.
+The frozen-clock allocation probe costs 88 rather than 48 bytes per generated ID, a 40-byte tradeoff for the larger
+source space. Full affected suites pass: runtime 3,130, Distributed 114, EF persistence 1,851 and HTTP integration
+107, zero failed/skipped. Discovery reconciles every execution, including the three delayed runtime theories.
+Final integrated timing must use the actual production default; the original benchmark explicitly selected the
+compact generator, and its memory state count did not independently establish distinct workflow IDs.
+
 ## Evidence custody and remaining work
 
 Raw logs, TRX, source snapshots, rejected cache patches, hashes and experiment scripts are retained at `/private/tmp/elsa-runtime-efficiency-program` on the qualification machine. Frozen original binaries and original failed results remain under `/private/tmp/elsa-native-perf-20261031`. Heap files, if captured, are private diagnostic artifacts and are not committed.

@@ -511,7 +511,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Keep the configured concrete mailbox provider available to distributed placement too.
         services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
         services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider => serviceProvider.GetRequiredService<InProcessWorkflowExecutionActorProvider>());
-        services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
+        services.TryAddSingleton<IRuntimeExecutionIdGenerator, RuntimeExecutionIdGenerator>();
         services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
         {
             var policies = serviceProvider.GetServices<IWorkflowExecutableStartPolicy>().ToArray();
