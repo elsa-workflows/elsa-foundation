@@ -36,6 +36,7 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddScoped<SpecialistTurnJournal>();
         services.TryAddScoped<SpecialistModelRunner>();
         services.TryAddScoped<SpecialistTurnBudgetAllocator>();
+        services.TryAddScoped<SpecialistTurnLeaseRenewer>();
         services.TryAddScoped<SpecialistSessionCodec>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
@@ -74,7 +75,7 @@ public class SpecialistsInMemoryJournalFeature : IShellFeature
     }
 }
 
-internal sealed class SpecialistActivationStrategy(SpecialistNativeBinding binding, SpecialistTurnJournal journal, SpecialistModelRunner runner, TimeProvider time, SpecialistTurnBudgetAllocator budgets) : IActivityActivationStrategy
+internal sealed class SpecialistActivationStrategy(SpecialistNativeBinding binding, SpecialistTurnJournal journal, SpecialistModelRunner runner, TimeProvider time, SpecialistTurnBudgetAllocator budgets, SpecialistTurnLeaseRenewer leases) : IActivityActivationStrategy
 {
     public string ConsumerKey => SpecialistRuntimeIds.ConsumerKey;
     public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema, SpecialistRuntimeIds.ContinuityDescriptorSchema];
@@ -87,7 +88,7 @@ internal sealed class SpecialistActivationStrategy(SpecialistNativeBinding bindi
         IActivity activity = request.Contract.Activation.Capability switch
         {
             SpecialistRuntimeIds.FacadeCapability => new SpecialistActivity(binding, journal, runner),
-            SpecialistRuntimeIds.TurnCapability when request.Contract.SupportsBackgroundExecution && request.Contract.Inputs.Count == 0 => new SpecialistModelTurn(binding, journal, runner, time, budgets),
+            SpecialistRuntimeIds.TurnCapability when request.Contract.SupportsBackgroundExecution && request.Contract.Inputs.Count == 0 => new SpecialistModelTurn(binding, journal, runner, time, budgets, leases),
             _ => throw new InvalidOperationException("The specialist activation capability is unsupported.")
         };
         return ValueTask.FromResult(new ActivityActivationLease(activity));

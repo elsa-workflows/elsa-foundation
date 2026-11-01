@@ -19,6 +19,46 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 public sealed class SpecialistJournalTests
 {
     [Fact]
+    public async Task An_accepted_receipt_authenticates_its_claim_generation()
+    {
+        await using var services = Services();
+        var state = new InMemorySpecialistTurnState();
+        var store = new InMemorySpecialistTurnStore(new Access("tenant"), state);
+        var journal = Journal(store, services);
+        var request = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        _ = await store.ClaimAsync(handle, request.Identity, "child", "reused", now, default);
+        var claim = (await store.ClaimAsync(handle, request.Identity, "child", "reused", now.AddSeconds(30), default))!;
+        Assert.True(await journal.DispatchAsync(claim, now.AddSeconds(31), default));
+        Assert.True(await journal.AcceptAsync(claim, new(Json("{}"), null, null, null, 1, 1), now.AddSeconds(31), default));
+        state.Rows[handle] = state.Rows[handle] with { AdmissionGeneration = 1 };
+        var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ResultAsync(handle, request.Identity, "child", default));
+        Assert.Equal("specialist.journal.protection", error.Code);
+    }
+
+    [Fact]
+    public async Task Legacy_accepted_unleased_receipts_remain_readable_without_new_dispatch()
+    {
+        await using var services = Services();
+        var state = new InMemorySpecialistTurnState();
+        var store = new InMemorySpecialistTurnStore(new Access("tenant"), state);
+        var journal = Journal(store, services);
+        var request = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        var claim = await journal.ClaimAsync(handle, request.Identity, "child", now, default);
+        Assert.True(await journal.DispatchAsync(claim, now, default));
+        Assert.True(await journal.AcceptAsync(claim, new(Json("{}"), null, null, null, 1, 1), now, default));
+        var protector = services.GetRequiredService<ISecretValueProtector>();
+        var old = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(state.Rows[handle].ProtectedResult!))!.AsObject();
+        old.Remove("admissionGeneration");
+        state.Rows[handle] = state.Rows[handle] with { AdmissionGeneration = 0, LeaseExpiresAt = null, ProtectedResult = protector.Protect(old.ToJsonString()) };
+        Assert.Equal(JsonValueKind.Object, (await journal.ResultAsync(handle, request.Identity, "child", default)).Result.ValueKind);
+        Assert.Null(await store.ClaimAsync(handle, request.Identity, "child", "new", now, default));
+    }
+
+    [Fact]
     public async Task Conversation_admission_header_must_match_the_protected_request()
     {
         await using var services = Services();

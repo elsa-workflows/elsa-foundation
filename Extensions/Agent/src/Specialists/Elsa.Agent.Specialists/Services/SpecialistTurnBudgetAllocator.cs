@@ -9,7 +9,7 @@ internal sealed class SpecialistTurnBudgetAllocator(ISpecialistTurnStore store, 
 {
     internal SpecialistTurnBudgetAuthority Create(SpecialistTurnDocument document, SpecialistTurnRequest request)
     {
-        if (document.Identity != request.Identity || document.MaximumModelCalls != request.Descriptor.Limits.MaximumModelCalls || document.Fence is null)
+        if (document.Identity != request.Identity || document.MaximumModelCalls != request.Descriptor.Limits.MaximumModelCalls || document.Fence is null || document.AdmissionGeneration < 1 || document.LeaseExpiresAt is null)
             throw SpecialistModelRunner.Failure("specialist.budget.binding", "The request budget does not match the admitted native turn.");
         return new(store, time, document, request.Descriptor);
     }
@@ -62,10 +62,10 @@ internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, 
         if (now >= document.Deadline)
             throw SpecialistModelRunner.Failure("specialist.turn.deadline", "The specialist deadline expired before its physical request.");
         var reservation = new SpecialistModelRequestReservation(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(), output, now, observation);
-        if (await store.ReserveModelRequestAsync(document.Handle, document.Identity, document.Fence!, reservation, now, cancellationToken) is null)
+        if (await store.ReserveModelRequestAsync(document.Handle, document.Identity, SpecialistTurnLeaseRules.Token(document), reservation, now, cancellationToken) is null)
         {
             var current = await store.ReadAsync(document.Handle, document.Identity, cancellationToken);
-            if (current is null || current.Status != SpecialistTurnStatus.Dispatching || current.Fence != document.Fence)
+            if (current is null || current.Status != SpecialistTurnStatus.Dispatching || !SpecialistTurnLeaseRules.Live(current, SpecialistTurnLeaseRules.Token(document), now))
                 throw SpecialistModelRunner.Failure("specialist.turn.fence", "The physical model request has no current journal dispatch fence.");
             throw SpecialistModelRunner.Failure("specialist.budget.calls", "The physical model request has no remaining budget reservation; dispatch was refused.");
         }
@@ -86,7 +86,7 @@ internal sealed class SpecialistTurnBudgetAuthority(ISpecialistTurnStore store, 
             var observation = new SpecialistModelResponseObservation(now, usage is not null,
                 invalidUsage ? null : usage?.InputTokenCount, invalidUsage ? null : usage?.OutputTokenCount,
                 invalidUsage ? null : usage?.TotalTokenCount, invalidModelId ? null : observedModelId);
-            if (!await store.CompleteModelResponseAsync(document.Handle, document.Identity, document.Fence!, reserved.Select(x => x.Id).ToArray(), observation, now, cancellationToken))
+            if (!await store.CompleteModelResponseAsync(document.Handle, document.Identity, SpecialistTurnLeaseRules.Token(document), reserved.Select(x => x.Id).ToArray(), observation, now, cancellationToken))
                 throw SpecialistModelRunner.Failure("specialist.turn.fence", "The response observation cannot commit under this journal fence.");
             completed = observation;
             if (invalidUsage || invalidModelId)

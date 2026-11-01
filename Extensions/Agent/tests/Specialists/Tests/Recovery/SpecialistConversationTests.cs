@@ -51,9 +51,9 @@ public sealed class SpecialistConversationTests
             await store.StageAsync(first, default);
             Assert.Null(await store.ReadConversationAsync(ConversationId, Identity, default)); // Staging is not admission.
             Assert.NotNull(await store.ClaimAsync(first.Handle, first.Identity, "child-first", "first-fence", Now, default));
-            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, "first-fence", Now, default));
-            Assert.False(await store.AcceptAsync(first.Handle, first.Identity, "wrong-fence", "wrong", Now, default));
-            Assert.True(await store.AcceptAsync(first.Handle, first.Identity, "first-fence", "first-accepted", Now, default));
+            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, new("first-fence", 1), Now, default));
+            Assert.False(await store.AcceptAsync(first.Handle, first.Identity, new("wrong-fence", 1), "wrong", Now, default));
+            Assert.True(await store.AcceptAsync(first.Handle, first.Identity, new("first-fence", 1), "first-accepted", Now, default));
         });
         var contenders = Enumerable.Range(0, 8).Select(index => Document("next-" + index, 1)).ToArray();
         foreach (var candidate in contenders) await fixture.Use(async store => { await store.StageAsync(candidate, default); });
@@ -66,10 +66,10 @@ public sealed class SpecialistConversationTests
             Assert.Equal(1, conversation.Revision);
             Assert.Equal(winner.Handle, conversation.ActiveTurnHandle);
             Assert.Equal(first.Handle, conversation.AcceptedTurn!.Handle);
-            Assert.True(await store.DispatchAsync(winner.Handle, winner.Identity, winner.Fence!, Now, default));
-            Assert.False(await store.AcceptAsync(winner.Handle, winner.Identity, winner.Fence!, "expired", first.Deadline, default));
-            Assert.True(await store.AcceptAsync(winner.Handle, winner.Identity, winner.Fence!, "second-accepted", Now, default));
-            await store.FailAsync(first.Handle, first.Identity, "first-fence", "late", true, default);
+            Assert.True(await store.DispatchAsync(winner.Handle, winner.Identity, new(winner.Fence!, winner.AdmissionGeneration), Now, default));
+            Assert.False(await store.AcceptAsync(winner.Handle, winner.Identity, new(winner.Fence!, winner.AdmissionGeneration), "expired", first.Deadline, default));
+            Assert.True(await store.AcceptAsync(winner.Handle, winner.Identity, new(winner.Fence!, winner.AdmissionGeneration), "second-accepted", Now, default));
+            await store.FailAsync(first.Handle, first.Identity, new("first-fence", 1), "late", true, default);
             var replay = await store.StageAsync(first with { Handle = Token("replay"), Deadline = Now.AddHours(1) }, default);
             Assert.Equal("first-accepted", replay.ProtectedResult);
             Assert.Equal(2, (await store.ReadConversationAsync(ConversationId, Identity, default))!.Revision);
@@ -102,12 +102,12 @@ public sealed class SpecialistConversationTests
         {
             await store.StageAsync(first, default);
             Assert.NotNull(await store.ClaimAsync(first.Handle, first.Identity, "child", "first", Now, default));
-            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, "first", Now, default));
-            Assert.True(await store.AcceptAsync(first.Handle, first.Identity, "first", "accepted", Now, default));
+            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, new("first", 1), Now, default));
+            Assert.True(await store.AcceptAsync(first.Handle, first.Identity, new("first", 1), "accepted", Now, default));
             await store.StageAsync(second, default);
             Assert.NotNull(await store.ClaimAsync(second.Handle, second.Identity, "child", "second", Now, default));
-            Assert.True(await store.DispatchAsync(second.Handle, second.Identity, "second", Now, default));
-            await store.FailAsync(second.Handle, second.Identity, "second", "fixture-rejection", unknown, default);
+            Assert.True(await store.DispatchAsync(second.Handle, second.Identity, new("second", 1), Now, default));
+            await store.FailAsync(second.Handle, second.Identity, new("second", 1), "fixture-rejection", unknown, default);
         });
         await fixture.Use(async store =>
         {
@@ -118,7 +118,7 @@ public sealed class SpecialistConversationTests
             await store.StageAsync(third, default);
             var claim = await store.ClaimAsync(third.Handle, third.Identity, "child", "third", Now, default);
             if (unknown) Assert.Null(claim); else Assert.NotNull(claim);
-            Assert.False(await store.AcceptAsync(second.Handle, second.Identity, "second", "late-candidate", Now, default));
+            Assert.False(await store.AcceptAsync(second.Handle, second.Identity, new("second", 1), "late-candidate", Now, default));
         });
     }
 
@@ -133,8 +133,8 @@ public sealed class SpecialistConversationTests
             var first = Document("first", 0);
             await store.StageAsync(first, default);
             Assert.NotNull(await store.ClaimAsync(first.Handle, first.Identity, "child", "first", Now, default));
-            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, "first", Now, default));
-            Assert.True(await store.AcceptAsync(first.Handle, first.Identity, "first", "accepted", Now, default));
+            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, new("first", 1), Now, default));
+            Assert.True(await store.AcceptAsync(first.Handle, first.Identity, new("first", 1), "accepted", Now, default));
             foreach (var identity in new[] { Identity with { WorkflowExecutionId = "foreign" }, Identity with { DefinitionVersionId = "different" }, Identity with { TemplateHash = "different" } })
             {
                 var foreign = Document("foreign-" + identity.WorkflowExecutionId + identity.DefinitionVersionId + identity.TemplateHash, 1, identity);
@@ -155,12 +155,12 @@ public sealed class SpecialistConversationTests
         {
             await store.StageAsync(first, default);
             Assert.NotNull(await store.ClaimAsync(first.Handle, first.Identity, "child", "first", Now, default));
-            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, "first", Now, default));
+            Assert.True(await store.DispatchAsync(first.Handle, first.Identity, new("first", 1), Now, default));
         });
         var cause = new IOException("injected conversation write failure");
         await using (var context = fixture.Context(new RejectConversationWrite(cause)))
         {
-            var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await new EfSpecialistTurnStore(context, new Access()).AcceptAsync(first.Handle, first.Identity, "first", "candidate", Now, default));
+            var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await new EfSpecialistTurnStore(context, new Access()).AcceptAsync(first.Handle, first.Identity, new("first", 1), "candidate", Now, default));
             Assert.Same(cause, error.InnerException);
         }
         await fixture.Use(async store =>

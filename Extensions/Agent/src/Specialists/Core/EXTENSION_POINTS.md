@@ -55,9 +55,19 @@ Providers isolate the ordinary tenant/partition scope before accessing a record,
 operation index with `SpecialistTurnDocument.CalculateOperationKey`, and refuse conflicting request
 fingerprints. An identical stage replays the original handle, ciphertext and absolute deadline.
 Claim, dispatch and acceptance compare the exact native identity, lifecycle state and fence in storage;
-claim and acceptance require an unexpired deadline. Acceptance stores the protected result/session pair
+owned mutations require the current admission generation and an unexpired finite lease/deadline. Acceptance stores the protected result/session pair
 atomically and is immutable. Uncertain dispatch is terminal `OutcomeUnknown`, never an implicit retry.
 The runtime authenticates the opaque protected material before using it.
+
+The initial lease profile is 30 seconds, capped by the original absolute deadline. Claim returns an
+incremented `AdmissionGeneration` and finite `LeaseExpiresAt`; owned mutations use the complete
+`SpecialistTurnLeaseToken` (nonce and generation). Renew only a still-live Claimed/Dispatching lease;
+renewal cannot reset the operation deadline. After pre-dispatch expiry, only the exact same native
+child can reclaim the turn, incrementing its generation even if a nonce is reused. Expired dispatch
+becomes OutcomeUnknown and retains its reservations and conversation block. It cannot admit another
+model request. Failure settlement may record uncertainty after expiry but cannot change another
+generation or an accepted/unknown terminal decision. Legacy accepted documents with generation zero
+and no lease remain readable; they do not acquire inference authority from that legacy shape.
 
 `ReserveModelRequestAsync` conditionally appends one unique physical-send reservation while the turn
 is dispatching under its live fence/deadline and finite `MaximumModelCalls`. Reusing a reservation ID

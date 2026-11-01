@@ -17,15 +17,17 @@ internal static class SpecialistConversationRules
             }
             else if (admission.ExpectedRevision == 0) return null;
             if (current.Owner != owner || current.Revision != admission.ExpectedRevision || current.OutcomeUnknown || current.ActiveTurnHandle is not null) return null;
-            return current with { ActiveTurnHandle = before.Handle, ActiveFence = next.Fence };
+            return current with { ActiveTurnHandle = before.Handle, ActiveFence = next.Fence, ActiveAdmissionGeneration = next.AdmissionGeneration };
         }
         if (current is null || current.Owner != owner || current.Revision != admission.ExpectedRevision || current.OutcomeUnknown ||
-            current.ActiveTurnHandle != before.Handle || current.ActiveFence != before.Fence) return null;
+            current.ActiveTurnHandle != before.Handle || current.ActiveFence != before.Fence || current.ActiveAdmissionGeneration != before.AdmissionGeneration) return null;
+        if (before.Status == SpecialistTurnStatus.Claimed && next.Status == SpecialistTurnStatus.Claimed && next.AdmissionGeneration == before.AdmissionGeneration + 1)
+            return current with { ActiveFence = next.Fence, ActiveAdmissionGeneration = next.AdmissionGeneration };
         return next.Status switch
         {
-            SpecialistTurnStatus.Accepted => current with { Revision = checked(current.Revision + 1), ActiveTurnHandle = null, ActiveFence = null,
+            SpecialistTurnStatus.Accepted => current with { Revision = checked(current.Revision + 1), ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0,
                 AcceptedTurn = new(before.Handle, before.Identity, before.ChildInvocationId!) },
-            SpecialistTurnStatus.Failed => current with { ActiveTurnHandle = null, ActiveFence = null },
+            SpecialistTurnStatus.Failed => current with { ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0 },
             SpecialistTurnStatus.OutcomeUnknown => current with { OutcomeUnknown = true },
             _ => current
         };
@@ -36,7 +38,8 @@ internal static class SpecialistConversationRules
         SpecialistTurnDocumentRules.Token(document.Id);
         ValidateOwner(document.Owner);
         if (document.Revision < 0 || (document.Revision == 0) != (document.AcceptedTurn is null) ||
-            (document.ActiveTurnHandle is null) != (document.ActiveFence is null) || document.OutcomeUnknown && document.ActiveTurnHandle is null)
+            (document.ActiveTurnHandle is null) != (document.ActiveFence is null) || document.OutcomeUnknown && document.ActiveTurnHandle is null ||
+            document.ActiveAdmissionGeneration < 0 || document.ActiveTurnHandle is null && document.ActiveAdmissionGeneration != 0)
             throw new InvalidDataException("The specialist conversation lifecycle is invalid.");
         if (document.ActiveTurnHandle is { } active) { SpecialistTurnDocumentRules.Token(active); SpecialistTurnDocumentRules.Fence(document.ActiveFence!); }
         if (document.AcceptedTurn is { } accepted)

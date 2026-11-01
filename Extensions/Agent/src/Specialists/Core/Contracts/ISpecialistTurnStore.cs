@@ -22,24 +22,27 @@ public interface ISpecialistTurnStore
     /// <summary>Reads conversation metadata only for the same verified workflow owner and exact specialist version.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken);
-    /// <summary>Claims a prepared, unexpired turn once and binds its native child and journal fence.</summary>
+    /// <summary>Claims an unexpired prepared turn, or safely takes over an expired pre-dispatch claim for the same native child. Expired dispatch becomes unknown.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>Renews a current live claim/dispatch lease without extending the original operation deadline.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
+    ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Persists dispatch responsibility under the live claim before inference can begin.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
-    ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, string fence, DateTimeOffset now, CancellationToken cancellationToken);
+    ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Reserves one physical model request before sending, under the live dispatch fence and finite limit.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
-    ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, string fence,
+    ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease,
         SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Records response evidence for the exact request set and freezes further physical admission.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
-    ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, string fence, IReadOnlyList<string> requestIds,
+    ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, IReadOnlyList<string> requestIds,
         SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Atomically accepts the protected result/session pair only for its live dispatch fence.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
-    ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, string fence, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken);
+    ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Settles a matching nonterminal claim; accepted results and other fences are preserved.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
-    ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, string fence, string code, bool outcomeUnknown, CancellationToken cancellationToken);
+    ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string code, bool outcomeUnknown, CancellationToken cancellationToken);
 }

@@ -71,7 +71,7 @@ public sealed class SpecialistProviderSocketTests
                 ISpecialistTurnStore store = new EfSpecialistTurnStore(context, new Access());
                 await store.StageAsync(document, CancellationToken.None);
                 var claim = (await store.ClaimAsync(document.Handle, Identity(), "child", "fence", now, CancellationToken.None))!;
-                Assert.True(await store.DispatchAsync(document.Handle, Identity(), "fence", now, CancellationToken.None));
+                Assert.True(await store.DispatchAsync(document.Handle, Identity(), new("fence", 1), now, CancellationToken.None));
                 var authority = new SpecialistTurnBudgetAllocator(store, TimeProvider.System).Create(claim, request);
                 authority.BindOutputLimit(64);
                 if (mode == "exhausted")

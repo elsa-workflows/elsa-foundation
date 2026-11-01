@@ -59,71 +59,97 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Prepared || now >= row.Deadline) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
-            row = row with { Status = SpecialistTurnStatus.Claimed, ChildInvocationId = childInvocationId, Fence = fence };
+            if (row is null) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            if (row.Status == SpecialistTurnStatus.Dispatching && (row.LeaseExpiresAt is null || row.LeaseExpiresAt <= now || row.Deadline <= now))
+            {
+                _ = TrySave(row with { Status = SpecialistTurnStatus.OutcomeUnknown, FailureCode = "specialist.turn.outcome-unknown" });
+                return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            }
+            if (now >= row.Deadline || !SpecialistTurnLeaseRules.CanClaim(row, childInvocationId, now)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            row = SpecialistTurnLeaseRules.Claim(row, childInvocationId, fence, now);
             return ValueTask.FromResult<SpecialistTurnDocument?>(TrySave(row) ? row : null);
         }
     }
 
-    public ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, string fence, DateTimeOffset now, CancellationToken cancellationToken)
+    public ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        SpecialistTurnDocumentRules.Lease(lease);
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Claimed || row.Fence != fence || now >= row.Deadline) return ValueTask.FromResult(false);
+            if (row is null || row.Status is not (SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching) || !SpecialistTurnLeaseRules.Live(row, lease, now))
+                return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            var expiry = SpecialistTurnLeaseRules.Expires(row, now);
+            var next = row with { LeaseExpiresAt = expiry > row.LeaseExpiresAt ? expiry : row.LeaseExpiresAt };
+            return ValueTask.FromResult<SpecialistTurnDocument?>(TrySave(next) ? next : null);
+        }
+    }
+
+    public ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        SpecialistTurnDocumentRules.Lease(lease);
+        lock (gate)
+        {
+            var row = Find(handle, identity);
+            if (row is null || row.Status != SpecialistTurnStatus.Claimed || !SpecialistTurnLeaseRules.Live(row, lease, now)) return ValueTask.FromResult(false);
             return ValueTask.FromResult(TrySave(row with { Status = SpecialistTurnStatus.Dispatching }));
         }
     }
 
-    public ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, string fence, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken)
+    public ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        SpecialistTurnDocumentRules.Lease(lease);
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || now >= row.Deadline ||
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || !SpecialistTurnLeaseRules.Live(row, lease, now) ||
                 row.ModelRequests is { Count: > 0 } && row.ResponseObservation is null) return ValueTask.FromResult(false);
             return ValueTask.FromResult(TrySave(row with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult }));
         }
     }
 
-    public ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, string fence, string code, bool outcomeUnknown, CancellationToken cancellationToken)
+    public ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string code, bool outcomeUnknown, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        SpecialistTurnDocumentRules.Lease(lease);
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is not null && row.Fence == fence && row.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching)
+            if (row is not null && SpecialistTurnLeaseRules.Matches(row, lease) && row.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching)
                 _ = TrySave(row with { Status = outcomeUnknown ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Failed, FailureCode = code });
         }
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, string fence,
+    public ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease,
         SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        SpecialistTurnDocumentRules.Lease(lease);
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now || row.ResponseObservation is not null ||
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || !SpecialistTurnLeaseRules.Live(row, lease, now) || row.ResponseObservation is not null ||
                 (row.ModelRequests?.Count ?? 0) >= row.MaximumModelCalls || (row.ModelRequests ?? []).Any(x => x.Id == reservation.Id))
                 return ValueTask.FromResult<SpecialistModelRequestReservation?>(null);
             return ValueTask.FromResult<SpecialistModelRequestReservation?>(TrySave(row with { ModelRequests = [.. row.ModelRequests ?? [], reservation] }) ? reservation : null);
         }
     }
 
-    public ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, string fence, IReadOnlyList<string> requestIds,
+    public ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, IReadOnlyList<string> requestIds,
         SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        SpecialistTurnDocumentRules.Lease(lease);
         ArgumentNullException.ThrowIfNull(requestIds);
         ArgumentNullException.ThrowIfNull(observation);
         lock (gate)
         {
             var row = Find(handle, identity);
-            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now || row.ResponseObservation is not null ||
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || !SpecialistTurnLeaseRules.Live(row, lease, now) || row.ResponseObservation is not null ||
                 requestIds.Count == 0 || !(row.ModelRequests ?? []).Select(x => x.Id).SequenceEqual(requestIds, StringComparer.Ordinal))
                 return ValueTask.FromResult(false);
             return ValueTask.FromResult(TrySave(row with { ResponseObservation = observation }));

@@ -33,6 +33,10 @@ internal static class SpecialistTurnDocumentRules
             document.Status is not (SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown) && document.FailureCode is not null)
             throw new InvalidDataException("The specialist journal lifecycle record is invalid.");
         if (document.Fence is { } fence) Fence(fence);
+        if (document.AdmissionGeneration < 0 || (document.AdmissionGeneration == 0) != (document.LeaseExpiresAt is null) ||
+            document.Status == SpecialistTurnStatus.Prepared && document.AdmissionGeneration != 0 || document.LeaseExpiresAt > document.Deadline ||
+            document.Status == SpecialistTurnStatus.Claimed && (document.ModelRequests is { Count: > 0 } || document.ResponseObservation is not null))
+            throw new InvalidDataException("The specialist journal lease record is invalid.");
         if (document.MaximumModelCalls is < 1 or > 32 || document.ModelRequests is { } requests &&
             (requests.Count > document.MaximumModelCalls || requests.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != requests.Count))
             throw new InvalidDataException("The specialist journal request budget is invalid.");
@@ -70,5 +74,11 @@ internal static class SpecialistTurnDocumentRules
     {
         if (value is null || value.Length is < 1 or > 64 || value.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')))
             throw new ArgumentException("The specialist journal fence is invalid.");
+    }
+    internal static void Lease(SpecialistTurnLeaseToken lease)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        Fence(lease.Fence);
+        if (lease.Generation < 1) throw new ArgumentOutOfRangeException(nameof(lease), "A live specialist claim needs a positive generation.");
     }
 }

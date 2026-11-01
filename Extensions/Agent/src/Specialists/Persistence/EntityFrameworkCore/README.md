@@ -26,7 +26,7 @@ changes or enlist in its transaction. Resolve a separate scoped store for each c
 The operation index hashes the exact tenant, partition, workflow and operation identity, using a
 structured encoding. Malformed UTF-16 is refused before hashing. Caller-supplied keys must match.
 Identical stage replay preserves the original deadline and ciphertext. The store compares record
-schema, version, lifecycle, fence and deadline in conditional database writes. It never replaces
+schema, version, lifecycle, fence, admission generation and finite lease/deadline in conditional database writes. It never replaces
 an accepted result, and it refuses unsupported record schemas without mutation.
 
 Physical model requests append unique reservations under the same conditional version/state/fence
@@ -49,7 +49,8 @@ a reachability or credential-durability check.
 The specialist test project covers SQLite behavior, native workflow execution, protected pair recovery,
 scope/schema refusals and consumer-owned contexts. `Elsa.Agent.Specialists.ProviderTests` applies the
 actual migrations on PostgreSQL, SQL Server and MySQL and exercises competing stages/claims, live
-fences, acceptance and fresh-host replay. Full tier sets `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`
+leases, acceptance and fresh-host replay. It forces renewal commits between a response/acceptance read
+and its conditional update, verifying safe metadata retries on all three actual database engines. Full tier sets `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`
 for this suite, so an unavailable required database fails rather than skipping.
 
 The conversation table retains owner/version, revision, active turn/fence, uncertainty and the last
@@ -60,8 +61,14 @@ releases the active revision without adding history; unknown outcome blocks furt
 The initial owner is a verified workflow execution in the exact tenant/partition and specialist
 version/template. Cross-workflow ownership policies are not supplied by business input.
 
-Stable operation replay across native attempts, public invocation controls, native delivery settlement
-and content retention remain part of M3. A fresh service provider/context test proves encrypted pair
+Lease generation/expiry are payload fields in the existing record schema; this increment adds no table
+or migration. Each owned mutation validates the current payload, then binds its update to the row's
+version. A rejected row/conversation CAS rolls back and retries a fresh metadata transaction, up to32
+attempts. An exception or unconfirmed commit is never retried. Renewal cannot extend the original
+deadline, and expired dispatch is recorded as OutcomeUnknown without releasing reservations.
+
+Stable operation replay across new native attempts, native delivery settlement and content retention
+remain part of M3. A fresh service provider/context test proves encrypted pair
 recovery; it is not independent-process or live-model qualification.
 
 See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with

@@ -28,6 +28,13 @@ public sealed record SpecialistTurnDocument(string Handle, string Key, string Re
     /// <summary>Optional workflow-owned conversation admission. A zero revision creates a fresh conversation at claim.</summary>
     public SpecialistConversationAdmission? Conversation { get; init; }
 
+    /// <summary>Monotonic claim generation; zero identifies a prepared or legacy unleased record.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int AdmissionGeneration { get; init; }
+    /// <summary>Finite journal claim expiry, renewed separately from native background delivery ownership.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? LeaseExpiresAt { get; init; }
+
     /// <summary>
     /// Identifies one operation in its native workflow and ordinary tenant/partition scope.
     /// Attempts and dispatch ownership remain separate conditional journal state.
@@ -61,3 +68,6 @@ public sealed record SpecialistTurnDocument(string Handle, string Key, string Re
 
 /// <summary>The configured journal backend; reachability and provider/host qualification are separate evidence.</summary>
 public sealed record SpecialistJournalCapabilities(string Provider, bool IsDurable);
+
+/// <summary>One journal claim's opaque fence and monotonic admission generation. It grants no resource access on its own.</summary>
+public sealed record SpecialistTurnLeaseToken(string Fence, int Generation);

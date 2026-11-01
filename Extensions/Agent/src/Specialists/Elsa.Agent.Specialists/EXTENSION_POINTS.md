@@ -19,10 +19,19 @@ The opt-out changes reconciliation, not runtime alias registration or existing a
 
 The native entry checkpoint stages a protected request and opaque handle alongside child scheduling.
 The worker checks the committed parent, child slot, scheduling handle, scoped workflow and immutable
-artifact/contract/input fingerprints. Only its admitted fence may dispatch and accept the turn. Its
+artifact/contract/input fingerprints. Only its admitted nonce/generation under a finite live lease may dispatch and accept the turn. Its
 native completion carries an opaque receipt; the parent verifies that receipt and contributes the
 accepted `JsonElement` through the native typed completion checkpoint. Journal acceptance and process
 application are distinct boundaries.
+
+The worker renews the initial 30-second journal lease in fresh ordinary partition-bound persistence
+scopes, independently of the model callback's store/DbContext. A denied or unconfirmed renewal cancels
+the waiting model operation and prevents acceptance; a dispatched turn records OutcomeUnknown.
+Redelivery of the exact same native child waits for the existing live lease, bounded by native
+cancellation and the original operation deadline. It may recover an expired pre-dispatch claim with
+a new generation. Expired dispatched work is never reissued. This does not supply rebinding to a new
+native attempt/child. Protected accepted receipts also authenticate the admission generation while
+retaining the reader for legacy generation-zero accepted receipts.
 
 The native worker creates a journal-bound physical-request authority. Qualified provider transports
 reserve before every SDK HTTP send; the reservation requires the current dispatch fence, deadline

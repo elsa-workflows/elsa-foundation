@@ -192,6 +192,11 @@ The runtime worker restores only this admitted accepted reference. The following
 explicit manifest2/descriptor2 continuation controls, retaining fresh-only schema1 readers and business
 schemas. The safe Conversation value can flow through native output capture/variable bindings; its
 revision is used as the expected base revision. Normal published graph/direct-reference authoring
-remains M4 qualification. Stable operation versus new-attempt delivery, finite lease recovery,
+remains M4 qualification. The next draft increment adds 30-second leases capped by the original
+deadline, nonce/generation fencing and fresh-scope renewal. Only the same native child may recover
+expired pre-dispatch work; expired dispatched work becomes OutcomeUnknown and retains reservations.
+Protected receipts authenticate the admitted generation, retaining legacy accepted readers. Required
+native-provider tests force renewal races with response recording and acceptance; rejected metadata
+CAS may retry, while unconfirmed commits cannot. Stable operation versus new-attempt delivery,
 cancellation/applied settlement and retention remain required before M3 can close. This note records the implemented
 boundary; the proposed broader logical model above remains the Program target.

@@ -8,6 +8,7 @@ using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Services;
 using Elsa.Agent.Specialists.Journal;
 using Elsa.Agent.Specialists.Tests.Publication;
+using Elsa.Agent.Specialists.Tests.Recovery;
 using Elsa.Primitives.Models;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
@@ -19,12 +20,114 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistNativeTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Native_redelivery_recovers_expired_predispatch_but_never_repeats_expired_dispatch(bool durable, bool dispatched)
+    {
+        using var files = new JournalFiles();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var trace = new LeaseTrace();
+        var factory = new FixtureFactory("{\"Article\":\"accepted\"}");
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock, trace);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!;
+        var parent = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Single(x => x.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        var handle = SpecialistNativeBinding.Handle(parent);
+        var descriptor = SpecialistNativeBinding.Descriptor(executable.RootActivity);
+        var identity = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, parent.InvocationId,
+            parent.OperationKey, workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+        var workStore = provider.GetRequiredService<IBackgroundActivityWorkStore>();
+        var delivery = (await workStore.ClaimNextAsync("recovered-worker", clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
+        var item = (await workStore.FindAsync("run", delivery.WorkId))!;
+        var store = provider.GetRequiredService<ISpecialistTurnStore>();
+        var crashed = (await store.ClaimAsync(handle, identity, item.Request.ActivityExecutionId, "crashed-worker", clock.GetUtcNow(), default))!;
+        if (dispatched)
+        {
+            var token = new SpecialistTurnLeaseToken(crashed.Fence!, crashed.AdmissionGeneration);
+            Assert.True(await store.DispatchAsync(handle, identity, token, clock.GetUtcNow(), default));
+            Assert.NotNull(await store.ReserveModelRequestAsync(handle, identity, token,
+                new(new string('e', 64), 64, clock.GetUtcNow(), new("fixture", "fixture-model", "incarnation", 1, "fixture/1", "fixture/1")), clock.GetUtcNow(), default));
+        }
+        var redelivered = provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), delivery);
+        await trace.ClaimedRead.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(redelivered.IsCompleted);
+        Assert.Equal(0, factory.Opens);
+        clock.Advance(TimeSpan.FromSeconds(31));
+        await redelivered.WaitAsync(TimeSpan.FromSeconds(10));
+        await DrainAsync(actor);
+        var restored = (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, identity, default)).Document;
+        Assert.Equal(crashed.Deadline, restored.Deadline);
+        Assert.Equal(dispatched ? 1 : 2, restored.AdmissionGeneration);
+        Assert.Equal(dispatched ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Accepted, restored.Status);
+        Assert.Equal(dispatched ? 0 : 1, factory.Opens);
+        Assert.Equal(dispatched ? 0 : 1, factory.Calls);
+        Assert.Single(restored.ModelRequests!);
+        if (dispatched) Assert.True((await store.ReadConversationAsync(handle, identity, default))!.OutcomeUnknown);
+    }
+
+    [Theory]
+    [InlineData(false, "success")]
+    [InlineData(false, "lost")]
+    [InlineData(false, "uncertain")]
+    [InlineData(true, "success")]
+    [InlineData(true, "lost")]
+    [InlineData(true, "uncertain")]
+    public async Task Native_worker_renews_in_a_fresh_scope_and_stops_on_uncertain_renewal(bool durable, string mode)
+    {
+        using var files = new JournalFiles();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var loseLease = mode != "success";
+        var trace = new LeaseTrace { RejectRenewal = mode == "lost", LoseRenewalResponse = mode == "uncertain" };
+        var factory = new FixtureFactory("{\"Article\":\"accepted\"}") { ResponseGate = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock, trace);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        var parent = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Single(x => x.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        var handle = SpecialistNativeBinding.Handle(parent);
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", clock.GetUtcNow(), TimeSpan.FromMinutes(2));
+        Assert.NotNull(claim);
+        var running = provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await factory.RequestSent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        clock.Advance(TimeSpan.FromSeconds(10));
+        var renewal = await trace.Renewed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        if (mode == "lost") Assert.Null(renewal);
+        else Assert.NotNull(renewal);
+        if (!loseLease)
+        {
+            factory.ResponseGate.TrySetResult();
+        }
+        await running.WaitAsync(TimeSpan.FromSeconds(10));
+        await DrainAsync(actor);
+        Assert.Equal(1, factory.Calls);
+        var send = Assert.Single(trace.Sends);
+        Assert.All(trace.Renewals, current => Assert.NotEqual(send.Store, current.Store));
+        if (durable) Assert.All(trace.Renewals, current => { Assert.NotNull(current.Context); Assert.NotEqual(send.Context, current.Context); });
+        var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!;
+        var descriptor = SpecialistNativeBinding.Descriptor(executable.RootActivity);
+        var identity = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, parent.InvocationId,
+            parent.OperationKey, workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+        var document = (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, identity, default)).Document;
+        Assert.Equal(loseLease ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Accepted, document.Status);
+        Assert.Single(document.ModelRequests!);
+        Assert.Equal(loseLease ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed, workflow.Status);
+        if (loseLease)
+        {
+            Assert.Equal("specialist.turn.lease", document.FailureCode);
+            Assert.True((await provider.GetRequiredService<ISpecialistTurnStore>().ReadConversationAsync(handle, identity, default))!.OutcomeUnknown);
+        }
+    }
+
     [Fact]
     public async Task Continuation_profile_cannot_be_reinterpreted_as_a_legacy_descriptor()
     {
@@ -480,9 +583,10 @@ public sealed class SpecialistNativeTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
     }
 
-    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null)
+    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null)
     {
         var services = new ServiceCollection();
+        if (clock is not null) services.AddSingleton(clock);
         services.AddLogging();
         services.AddWorkflowRuntime();
         services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry>(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
@@ -498,6 +602,7 @@ public sealed class SpecialistNativeTests
             Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration.AddSpecialistsEntityFrameworkCore(services,
                 new() { Provider = "Sqlite", ConnectionString = journalConnection });
         services.AddSingleton<ISpecialistModelClientFactory>(factory);
+        leaseTrace?.Decorate(services);
         services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
         services.AddPersistenceModes();
         var provider = services.BuildServiceProvider();
@@ -581,6 +686,8 @@ public sealed class SpecialistNativeTests
         public string? LastUser { get; private set; }
         public string? ModelId { get; private set; }
         public JsonElement? Schema { get; private set; }
+        public TaskCompletionSource? ResponseGate { get; init; }
+        public TaskCompletionSource RequestSent { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
         public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
         {
@@ -596,6 +703,8 @@ public sealed class SpecialistNativeTests
                     await authority.BeforeSendAsync(new("fixture", request.Descriptor.Model.ModelId, "fixture-incarnation", 1, "fixture/1", "external-deterministic-one-response/1"), cancellationToken);
                 owner.Calls++;
                 owner.Requests.Add(messages.ToArray());
+                owner.RequestSent.TrySetResult();
+                if (owner.ResponseGate is not null) await owner.ResponseGate.Task.WaitAsync(cancellationToken);
                 owner.LastUser = messages.Last(x => x.Role == ChatRole.User).Text;
                 owner.Instructions = options?.Instructions;
                 owner.ModelId = options?.ModelId;

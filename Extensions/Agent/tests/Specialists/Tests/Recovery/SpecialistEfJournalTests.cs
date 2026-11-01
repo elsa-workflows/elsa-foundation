@@ -29,13 +29,97 @@ public sealed class SpecialistEfJournalTests
     private static SpecialistInvocationIdentity Identity => new("tenant", "tenant", "workflow", "activity", "operation", "artifact", "hash", "version", "template");
     private static SpecialistTurnDocument Document => new(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Expired_predispatch_claim_can_recover_but_old_generation_never_regains_ownership(bool durable)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var candidate = Document with { Conversation = new(new string('e', 64), 0) };
+        await store.StageAsync(candidate, default);
+        var first = (await store.ClaimAsync(candidate.Handle, Identity, "child", "reused-nonce", Now, default))!;
+        Assert.Equal(Now.AddSeconds(30), first.LeaseExpiresAt);
+        Assert.Equal(1, first.AdmissionGeneration);
+        Assert.Null(await store.ClaimAsync(candidate.Handle, Identity, "child", "other", Now.AddSeconds(29), default));
+        Assert.Null(await store.ClaimAsync(candidate.Handle, Identity, "foreign-child", "other", Now.AddSeconds(30), default));
+        var second = (await store.ClaimAsync(candidate.Handle, Identity, "child", "reused-nonce", Now.AddSeconds(30), default))!;
+        Assert.Equal(2, second.AdmissionGeneration);
+        Assert.Equal(first.Fence, second.Fence); // Even reuse of a nonce cannot revive an older generation.
+        var stale = new SpecialistTurnLeaseToken(first.Fence!, first.AdmissionGeneration);
+        var live = new SpecialistTurnLeaseToken(second.Fence!, second.AdmissionGeneration);
+        Assert.False(await store.DispatchAsync(candidate.Handle, Identity, stale, Now.AddSeconds(31), default));
+        Assert.Null(await store.RenewAsync(candidate.Handle, Identity, stale, Now.AddSeconds(31), default));
+        await store.FailAsync(candidate.Handle, Identity, stale, "stale-failure", true, default);
+        Assert.Equal(SpecialistTurnStatus.Claimed, (await store.ReadAsync(candidate.Handle, Identity, default))!.Status);
+        var conversation = (await store.ReadConversationAsync(candidate.Conversation.ConversationId, Identity, default))!;
+        Assert.Equal(2, conversation.ActiveAdmissionGeneration);
+        Assert.True(await store.DispatchAsync(candidate.Handle, Identity, live, Now.AddSeconds(31), default));
+        var reservation = Reservation(0) with { ReservedAt = Now.AddSeconds(31) };
+        Assert.Null(await store.ReserveModelRequestAsync(candidate.Handle, Identity, stale, reservation, Now.AddSeconds(31), default));
+        Assert.NotNull(await store.ReserveModelRequestAsync(candidate.Handle, Identity, live, reservation, Now.AddSeconds(31), default));
+        var observation = new SpecialistModelResponseObservation(Now.AddSeconds(31), false, null, null, null, null);
+        Assert.False(await store.CompleteModelResponseAsync(candidate.Handle, Identity, stale, [reservation.Id], observation, Now.AddSeconds(31), default));
+        Assert.True(await store.CompleteModelResponseAsync(candidate.Handle, Identity, live, [reservation.Id], observation, Now.AddSeconds(31), default));
+        Assert.False(await store.AcceptAsync(candidate.Handle, Identity, stale, "stale", Now.AddSeconds(31), default));
+        Assert.True(await store.AcceptAsync(candidate.Handle, Identity, live, "accepted", Now.AddSeconds(31), default));
+        Assert.Equal(1, (await store.ReadConversationAsync(candidate.Conversation.ConversationId, Identity, default))!.Revision);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Renewals_extend_only_a_live_lease_and_preserve_the_absolute_deadline(bool durable)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var candidate = Document with { Deadline = Now.AddSeconds(55) };
+        await store.StageAsync(candidate, default);
+        var claim = (await store.ClaimAsync(candidate.Handle, Identity, "child", "fence", Now, default))!;
+        var token = new SpecialistTurnLeaseToken(claim.Fence!, claim.AdmissionGeneration);
+        var renewal = (await store.RenewAsync(candidate.Handle, Identity, token, Now.AddSeconds(20), default))!;
+        Assert.Equal(Now.AddSeconds(50), renewal.LeaseExpiresAt);
+        Assert.Equal(candidate.Deadline, renewal.Deadline);
+        renewal = (await store.RenewAsync(candidate.Handle, Identity, token, Now.AddSeconds(40), default))!;
+        Assert.Equal(candidate.Deadline, renewal.LeaseExpiresAt);
+        Assert.Null(await store.RenewAsync(candidate.Handle, Identity, token, candidate.Deadline, default));
+        Assert.False(await store.DispatchAsync(candidate.Handle, Identity, token, candidate.Deadline, default));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Expired_dispatch_retains_reservations_and_blocks_fresh_inference_and_history(bool durable)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var candidate = Document with { Conversation = new(new string('e', 64), 0) };
+        await store.StageAsync(candidate, default);
+        var claim = (await store.ClaimAsync(candidate.Handle, Identity, "child", "fence", Now, default))!;
+        var token = new SpecialistTurnLeaseToken(claim.Fence!, claim.AdmissionGeneration);
+        Assert.True(await store.DispatchAsync(candidate.Handle, Identity, token, Now, default));
+        Assert.NotNull(await store.ReserveModelRequestAsync(candidate.Handle, Identity, token, Reservation(0), Now, default));
+        Assert.Null(await store.RenewAsync(candidate.Handle, Identity, token, Now.AddSeconds(30), default));
+        Assert.False(await store.AcceptAsync(candidate.Handle, Identity, token, "late", Now.AddSeconds(30), default));
+        Assert.Null(await store.ClaimAsync(candidate.Handle, Identity, "child", "replacement", Now.AddSeconds(30), default));
+        var restored = (await store.ReadAsync(candidate.Handle, Identity, default))!;
+        Assert.Equal(SpecialistTurnStatus.OutcomeUnknown, restored.Status);
+        Assert.Single(restored.ModelRequests!);
+        Assert.Equal(1, restored.AdmissionGeneration);
+        Assert.True((await store.ReadConversationAsync(candidate.Conversation.ConversationId, Identity, default))!.OutcomeUnknown);
+        Assert.Null(await store.ReserveModelRequestAsync(candidate.Handle, Identity, token, Reservation(1), Now.AddSeconds(31), default));
+    }
+
     [Fact]
     public async Task Usage_without_single_request_attribution_keeps_every_reserved_output_ceiling()
     {
         var store = new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
         await store.StageAsync(Document with { MaximumModelCalls = 2 }, CancellationToken.None);
         var claimed = (await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None))!;
-        Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, new("fence", 1), Now, CancellationToken.None));
         var descriptor = new SpecialistRuntimeDescriptor("fixture", new("fixture", "connection", "model"), Json("{}"), Json("{}"), Json("{}"), "fixture/1",
             SpecialistRuntimeIds.SchemaProfile, new(MaximumModelCalls: 2, MaximumOutputTokens: 64), false);
         var contract = new ActivityContract("specialist", "1", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],
@@ -67,18 +151,18 @@ public sealed class SpecialistEfJournalTests
         ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
         await store.StageAsync(Document with { MaximumModelCalls = 2 }, CancellationToken.None);
         Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
-        Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
-        Assert.NotNull(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(0), Now, CancellationToken.None));
-        Assert.False(await store.AcceptAsync(Document.Handle, Identity, "fence", "premature", Now, CancellationToken.None));
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, new("fence", 1), Now, CancellationToken.None));
+        Assert.NotNull(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(0), Now, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, new("fence", 1), "premature", Now, CancellationToken.None));
         var observation = new SpecialistModelResponseObservation(Now, !unknownUsage, unknownUsage ? null : 11, unknownUsage ? null : 7,
             unknownUsage ? null : 18, "observed-model");
-        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "foreign", [Reservation(0).Id], observation, Now, CancellationToken.None));
-        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(1).Id], observation, Now, CancellationToken.None));
-        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(0).Id], observation, Document.Deadline, CancellationToken.None));
-        Assert.True(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(0).Id], observation, Now, CancellationToken.None));
-        Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(1), Now, CancellationToken.None));
-        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, "fence", [Reservation(0).Id], observation with { OutputTokens = 0 }, Now, CancellationToken.None));
-        Assert.True(await store.AcceptAsync(Document.Handle, Identity, "fence", "accepted-pair", Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, new("foreign", 1), [Reservation(0).Id], observation, Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, new("fence", 1), [Reservation(1).Id], observation, Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, new("fence", 1), [Reservation(0).Id], observation, Document.Deadline, CancellationToken.None));
+        Assert.True(await store.CompleteModelResponseAsync(Document.Handle, Identity, new("fence", 1), [Reservation(0).Id], observation, Now, CancellationToken.None));
+        Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(1), Now, CancellationToken.None));
+        Assert.False(await store.CompleteModelResponseAsync(Document.Handle, Identity, new("fence", 1), [Reservation(0).Id], observation with { OutputTokens = 0 }, Now, CancellationToken.None));
+        Assert.True(await store.AcceptAsync(Document.Handle, Identity, new("fence", 1), "accepted-pair", Now, CancellationToken.None));
         var restored = await (durable ? Store(context) : store).ReadAsync(Document.Handle, Identity, CancellationToken.None);
         Assert.Equal(observation, restored!.ResponseObservation);
         Assert.Equal(64, Assert.Single(restored.ModelRequests!).MaximumOutputTokens);
@@ -94,26 +178,26 @@ public sealed class SpecialistEfJournalTests
         {
             var store = Store(seed);
             await store.StageAsync(Document with { MaximumModelCalls = 2 }, CancellationToken.None);
-            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(0), Now, CancellationToken.None));
+            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(0), Now, CancellationToken.None));
             Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
-            Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
-            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "wrong-fence", Reservation(0), Now, CancellationToken.None));
-            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(0), Document.Deadline, CancellationToken.None));
+            Assert.True(await store.DispatchAsync(Document.Handle, Identity, new("fence", 1), Now, CancellationToken.None));
+            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("wrong-fence", 1), Reservation(0), Now, CancellationToken.None));
+            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(0), Document.Deadline, CancellationToken.None));
         }
         var attempts = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
         {
             await using var context = database.Context();
-            return await Store(context).ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(index), Now, CancellationToken.None);
+            return await Store(context).ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(index), Now, CancellationToken.None);
         }));
         Assert.Equal(2, attempts.Count(value => value is not null));
         await using (var context = database.Context())
-            await Store(context).FailAsync(Document.Handle, Identity, "fence", "response-lost", true, CancellationToken.None);
+            await Store(context).FailAsync(Document.Handle, Identity, new("fence", 1), "response-lost", true, CancellationToken.None);
         await using var restarted = database.Context();
         var restored = await Store(restarted).ReadAsync(Document.Handle, Identity, CancellationToken.None);
         Assert.Equal(SpecialistTurnStatus.OutcomeUnknown, restored!.Status);
         Assert.Equal(2, restored.ModelRequests!.Count);
         Assert.Equal(128, restored.ModelRequests.Sum(value => value.MaximumOutputTokens));
-        Assert.Null(await Store(restarted).ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(9), Now, CancellationToken.None));
+        Assert.Null(await Store(restarted).ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(9), Now, CancellationToken.None));
         Assert.Null(await Store(restarted).ClaimAsync(Document.Handle, Identity, "replacement", "new-fence", Now, CancellationToken.None));
     }
 
@@ -126,12 +210,12 @@ public sealed class SpecialistEfJournalTests
         mutable.Add(Reservation(0));
         Assert.Empty((await store.ReadAsync(Document.Handle, Identity, CancellationToken.None))!.ModelRequests!);
         Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
-        Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
-        Assert.NotNull(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(1), Now, CancellationToken.None));
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, new("fence", 1), Now, CancellationToken.None));
+        Assert.NotNull(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(1), Now, CancellationToken.None));
         var exposed = (await store.ReadAsync(Document.Handle, Identity, CancellationToken.None))!.ModelRequests!;
         ((IList<SpecialistModelRequestReservation>)exposed)[0] = Reservation(2);
         Assert.Equal(Reservation(1), Assert.Single((await store.ReadAsync(Document.Handle, Identity, CancellationToken.None))!.ModelRequests!));
-        Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(1), Now, CancellationToken.None));
+        Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, new("fence", 1), Reservation(1), Now, CancellationToken.None));
     }
 
     private static SpecialistModelRequestReservation Reservation(int index) => new(
@@ -147,7 +231,7 @@ public sealed class SpecialistEfJournalTests
         await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document with
             { Status = status, ChildInvocationId = "forged-child", Fence = "forged-fence" }, CancellationToken.None));
         Assert.Null(await store.ReadAsync(Document.Handle, Identity, CancellationToken.None));
-        Assert.False(await store.AcceptAsync(Document.Handle, Identity, "forged-fence", "forged-acceptance", Now, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, new("forged-fence", 1), "forged-acceptance", Now, CancellationToken.None));
     }
 
     [Theory]
@@ -355,12 +439,12 @@ public sealed class SpecialistEfJournalTests
             Assert.True((await store.GetCapabilitiesAsync()).IsDurable);
             await store.StageAsync(Document, CancellationToken.None);
             Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
-            Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
-            Assert.True(await store.AcceptAsync(Document.Handle, Identity, "fence", "opaque-protected-result-and-session", Now, CancellationToken.None));
+            Assert.True(await store.DispatchAsync(Document.Handle, Identity, new("fence", 1), Now, CancellationToken.None));
+            Assert.True(await store.AcceptAsync(Document.Handle, Identity, new("fence", 1), "opaque-protected-result-and-session", Now, CancellationToken.None));
         }
         await using var restarted = database.Context();
         var restored = Store(restarted);
-        await restored.FailAsync(Document.Handle, Identity, "fence", "late-failure", true, CancellationToken.None);
+        await restored.FailAsync(Document.Handle, Identity, new("fence", 1), "late-failure", true, CancellationToken.None);
         var accepted = await restored.ReadAsync(Document.Handle, Identity, CancellationToken.None);
         Assert.NotNull(accepted);
         Assert.Equal(SpecialistTurnStatus.Accepted, accepted.Status);
@@ -395,12 +479,12 @@ public sealed class SpecialistEfJournalTests
         var winner = Assert.Single(claims, item => item is not null)!;
         await using var verify = database.Context();
         var store = Store(verify);
-        Assert.False(await store.DispatchAsync(Document.Handle, Identity, "foreign", Now, CancellationToken.None));
-        Assert.False(await store.AcceptAsync(Document.Handle, Identity, winner.Fence!, "premature", Now, CancellationToken.None));
-        Assert.True(await store.DispatchAsync(Document.Handle, Identity, winner.Fence!, Now, CancellationToken.None));
-        Assert.False(await store.AcceptAsync(Document.Handle, Identity, "foreign", "wrong-owner", Now, CancellationToken.None));
-        Assert.False(await store.AcceptAsync(Document.Handle, Identity, winner.Fence!, "late", Document.Deadline, CancellationToken.None));
-        Assert.True(await store.AcceptAsync(Document.Handle, Identity, winner.Fence!, "accepted", Now, CancellationToken.None));
+        Assert.False(await store.DispatchAsync(Document.Handle, Identity, new("foreign", 1), Now, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, new(winner.Fence!, winner.AdmissionGeneration), "premature", Now, CancellationToken.None));
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, new(winner.Fence!, winner.AdmissionGeneration), Now, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, new("foreign", 1), "wrong-owner", Now, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, new(winner.Fence!, winner.AdmissionGeneration), "late", Document.Deadline, CancellationToken.None));
+        Assert.True(await store.AcceptAsync(Document.Handle, Identity, new(winner.Fence!, winner.AdmissionGeneration), "accepted", Now, CancellationToken.None));
     }
 
     [Fact]

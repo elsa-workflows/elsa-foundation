@@ -17,4 +17,9 @@ public sealed record SpecialistAcceptedTurnReference(string Handle, SpecialistIn
 
 /// <summary>Scoped revision admission and the last accepted history reference, committed atomically with turn state.</summary>
 public sealed record SpecialistConversationDocument(string Id, SpecialistConversationOwner Owner, long Revision,
-    string? ActiveTurnHandle, string? ActiveFence, bool OutcomeUnknown, SpecialistAcceptedTurnReference? AcceptedTurn);
+    string? ActiveTurnHandle, string? ActiveFence, bool OutcomeUnknown, SpecialistAcceptedTurnReference? AcceptedTurn)
+{
+    /// <summary>Current claim generation, zero only when inactive or in a legacy unleased record.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int ActiveAdmissionGeneration { get; init; }
+}
