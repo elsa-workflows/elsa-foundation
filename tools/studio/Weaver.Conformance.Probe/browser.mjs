@@ -887,7 +887,28 @@ async function consumedIntentRemount() {
   expect(callsFor(selected.commandId)).toHaveLength(1);
   const sessionPath = new URL(sent.response.url()).pathname.replace(/\/messages$/, "");
   const sessionBefore = await owner("session-before-remount", sessionPath);
-  // Use native SPA navigation so the App retaining the consumed shell intent survives.
+  // Refresh the actual capability document through the module's public SDK action.
+  // Keep App state and the consumed shell intent in this document while the registry/dock remount.
+  const registryDock = await dock().elementHandle();
+  need(registryDock, "The original assistant must exist before capability refresh.");
+  const originalTimeOrigin = await page.evaluate(() => performance.timeOrigin);
+  const capabilities = page.waitForResponse(response => new URL(response.url()).origin === backend
+    && new URL(response.url()).pathname === "/capabilities");
+  const registryBootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
+    && new URL(request.url()).pathname === "/_elsa/agent/bootstrap");
+  await nativeEnter("remount-capability-refresh", page.getByRole("button", { name: "Refresh backend capabilities", exact: true }), "Refresh actual backend capabilities");
+  need((await capabilities).status() === 200, "The real capability read failed.");
+  await expect.poll(() => registryDock.evaluate(element => element.isConnected)).toBe(false);
+  await expect(dock()).toBeVisible();
+  need((await (await registryBootstrap).response())?.status() === 200, "The automatically remounted assistant bootstrap failed.");
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalTimeOrigin);
+  expect(requests.filter(request => new URL(request.url).pathname.endsWith("/messages"))).toHaveLength(1);
+  expect(callsFor(selected.commandId)).toHaveLength(1);
+  result.evidence.push(retain("capability-registry-remount", { sameDocument: true, automaticDockRemount: true,
+    realCapabilityRead: true, originalTimeOrigin, commandId: selected.commandId, providerCalls: callsFor(selected.commandId) }));
+  // Native SPA navigation keeps that consumed-intent App state until Studio feature Apply retires the document.
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
@@ -906,8 +927,6 @@ async function consumedIntentRemount() {
   const catalog = await hostRead("/modularity/features");
   const target = catalog.features.find(feature => feature.id === witness.studioFeature);
   need(target?.enabled === true, "The installed resource Studio feature must be enabled before its real remount transition.");
-  const oldDock = await dock().elementHandle();
-  need(oldDock, "The original assistant must exist before native feature application.");
   const timeOrigin = await page.evaluate(() => performance.timeOrigin);
   const moduleEvents = [];
   await page.exposeFunction("observeQualificationModulesChanged", event => moduleEvents.push(event));
@@ -920,8 +939,6 @@ async function consumedIntentRemount() {
   await expect(dialog).toBeVisible();
   const applied = page.waitForResponse(response => new URL(response.url()).origin === studio
     && new URL(response.url()).pathname === "/modularity/features/apply" && response.request().method() === "POST");
-  const bootstrap = page.waitForResponse(response => new URL(response.url()).origin === backend
-    && new URL(response.url()).pathname === "/_elsa/agent/bootstrap");
   await nativeEnter("remount-apply", dialog.getByRole("button", { name: "Apply", exact: true }), "Apply reviewed Studio feature change");
   const appliedResponse = await applied;
   need(appliedResponse.status() === 200, "The native Studio feature apply was refused.");
@@ -930,16 +947,25 @@ async function consumedIntentRemount() {
     "Native feature apply did not report a new configuration and shell generation.");
   expect(appliedValue.catalog.features.find(feature => feature.id === target.id)?.enabled).toBe(false);
   await expect.poll(() => moduleEvents.length).toBe(1);
-  await expect.poll(() => oldDock.evaluate(element => element.isConnected)).toBe(false);
-  const bootstrapResponse = await bootstrap;
-  need(bootstrapResponse.status() === 200, "The remounted assistant bootstrap failed.");
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
+  await expect(page).toHaveURL(studioRoute("/"));
+  await expect(dock()).toHaveCount(0);
+  await page.getByLabel("Search modules", { exact: true }).fill("Features");
+  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await expect(page).toHaveURL(studioRoute("/features"));
+  await page.getByLabel("Search modules", { exact: true }).fill("");
+  const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
+    && new URL(request.url()).pathname === "/_elsa/agent/bootstrap");
+  await nativeEnter("remount-reopen-weaver", page.getByRole("button", { name: "Weaver", exact: true }), "Reopen Weaver in the new document");
+  const bootstrapResponse = await (await bootstrap).response();
+  need(bootstrapResponse?.status() === 200, "The remounted assistant bootstrap failed.");
   const bootstrapValue = await bootstrapResponse.json();
   expect(bootstrapValue).toMatchObject({ error: null, data: { enabled: true, providerStatus: "available", provider: { isAvailable: true } } });
   result.evidence.push(retain("remount-bootstrap", { url: diagnosticUrl(bootstrapResponse.url()), status: bootstrapResponse.status(),
     enabled: bootstrapValue.data.enabled, providerStatus: bootstrapValue.data.providerStatus,
     providerId: bootstrapValue.data.provider.providerId, isAvailable: bootstrapValue.data.provider.isAvailable }));
-  // Features contributes no Weaver capability. Verify that policy before moving
-  // this same remounted dock to a route where an old retained intent could run.
+  // Features contributes no Weaver capability. Verify the new document policy before moving
+  // its explicitly reopened dock to a route where any replay could run.
   await expect(page).toHaveURL(studioRoute("/features"));
   await expect(dock().getByTestId("weaver-provider-status")).toContainText("No Weaver capabilities are enabled for this screen.");
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeDisabled();
@@ -959,7 +985,7 @@ async function consumedIntentRemount() {
   const generationAfter = await hostRead("/__qualification/generation");
   need(generationBefore.generation && generationAfter.generation !== generationBefore.generation,
     "The actual Studio serving generation did not change.");
-  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+  expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
   expect(requests.filter(request => new URL(request.url).pathname.endsWith("/messages"))).toHaveLength(1);
   expect(callsFor(selected.commandId)).toHaveLength(1);
   const sessionAfter = await owner("session-after-remount", sessionPath);
@@ -972,9 +998,9 @@ async function consumedIntentRemount() {
   result.evidence.push(retain("native-intent-remount", { nativeOperation: "Studio feature apply", featureId: target.id,
     enabledBefore: target.enabled, enabledAfter: false, catalogRevisionBefore: catalog.revision,
     catalogRevisionAfter: appliedValue.catalog.revision, reloadedShellCount: appliedValue.reloadedShellCount,
-    generationBefore, generationAfter, moduleEvents, featuresState, workflowsState, originalRequestId: original.requestId, originalSource: original.source,
+    generationBefore, generationAfter, moduleEvents, documentReset: true, timeOriginBefore: timeOrigin, timeOriginAfter: await page.evaluate(() => performance.timeOrigin), featuresState, workflowsState, originalRequestId: original.requestId, originalSource: original.source,
     commandId: selected.commandId, providerCalls: callsFor(selected.commandId), observationWindowMilliseconds: Date.now() - windowStartedAt }));
-  result.observations = { nativeReconciliation: true, noResubmission: true };
+  result.observations = { nativeReconciliation: true, capabilityRegistryRemount: true, moduleDocumentReset: true, noResubmission: true };
   await screenshot("native-remount-without-replay");
 }
 

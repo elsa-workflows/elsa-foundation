@@ -22,7 +22,10 @@ export class ConfiguredBackendConnection implements StudioConnectionController {
     const active=new StudioBackendConnection({id:this.id,name:"Configured backend",baseUrl:this.baseUrl,environment:"Development",source:"configuration"},this.manager,this.hostIdentity);
     try {await active.refreshCapabilities();}
     catch(error){active.discoveryError=studioConnectionError(error);}
-    if(this.ended){active.dispose();return;}
+    if(this.ended){active.retire();return;}
+    const location=this.qualifyPath(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+    if(!location){active.retire();this.update({loading:false});return;}
+    window.history.replaceState(window.history.state,"",location);
     this.update({active,loading:false,error:active.discoveryError ?? null});
   }
   qualifyPath(path:string) {

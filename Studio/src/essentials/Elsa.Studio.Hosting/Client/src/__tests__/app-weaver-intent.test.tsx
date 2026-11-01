@@ -16,13 +16,13 @@ afterEach(() => {
 });
 
 describe("shell-owned Weaver intent", () => {
-  it.each(["same dock", "close/reopen", "registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
+  it.each(["same dock", "close/reopen", "registry reconciliation", "immediate registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
     const registries: ElsaStudioModuleApi[] = [];
     let releaseRegistry: (() => void) | undefined;
     vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, api) => {
       registries.push(api);
       api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read the selected resource.", kind: "answer", risk: "read-only", surfaces: ["*"] });
-      if (registries.length === 2) await new Promise<void>(resolve => { releaseRegistry = resolve; });
+      if (registries.length === 2 && transition === "registry reconciliation") await new Promise<void>(resolve => { releaseRegistry = resolve; });
       return;
     });
     const client: clients.AgentClient = {
@@ -56,11 +56,15 @@ describe("shell-owned Weaver intent", () => {
         flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Close assistant"]')!.click());
         expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull();
         flushSync(() => container.querySelector<HTMLButtonElement>(".agent-launcher")!.click());
-      } else if (transition === "registry reconciliation") {
+      } else if (transition.includes("registry reconciliation")) {
+        const oldDock=container.querySelector('[aria-label="Weaver assistant"]')!;
         flushSync(() => window.dispatchEvent(new CustomEvent("elsa:backend-capabilities-changed",{detail:{key:registries[0].backendSession!.key,refreshed:true}})));
-        await vi.waitFor(() => expect(releaseRegistry).toBeTypeOf("function"));
-        await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull());
-        releaseRegistry!();
+        if(transition === "registry reconciliation") {
+          await vi.waitFor(() => expect(releaseRegistry).toBeTypeOf("function"));
+          await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull());
+          releaseRegistry!();
+        }
+        await vi.waitFor(()=>expect(oldDock.isConnected).toBe(false));
       }
       await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).not.toBeNull());
       await settle();

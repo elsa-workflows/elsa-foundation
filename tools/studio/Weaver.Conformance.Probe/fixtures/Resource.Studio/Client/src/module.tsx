@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   registerHomeWidget,
+  studioBackendCapabilitiesChangedEvent,
   type ElsaStudioModuleApi,
   type StudioAgentContextAttachment,
   type StudioAgentContextCollection,
@@ -116,6 +117,15 @@ export function register(api: ElsaStudioModuleApi) {
       catch (failure) { setError(errorMessage(failure)); }
       finally { setDispatching(false); }
     }
+    async function refreshCapabilities() {
+      if (!api.backendSession || dispatching) return;
+      setDispatching(true); setError("");
+      try {
+        await api.backendSession.refreshCapabilities();
+        window.dispatchEvent(new CustomEvent(studioBackendCapabilitiesChangedEvent, { detail: { key: api.backendSession.key, refreshed: true } }));
+      } catch (failure) { setError(errorMessage(failure)); }
+      finally { setDispatching(false); }
+    }
     return <section className="acme-home-settings" aria-label="Acme status card settings">
       <h1>Acme status card</h1>
       <p>Read the current personal setting or review a visibility change. Settings remain available when the card is hidden.</p>
@@ -127,6 +137,7 @@ export function register(api: ElsaStudioModuleApi) {
       <div className="acme-home-actions">
         <button type="button" disabled={!value || dispatching} onClick={() => void request(readTool, {}, "Read Acme status card")}>Read with Weaver</button>
         <button type="button" disabled={!value || dispatching} onClick={() => void request(writeTool, { visible: desiredVisible }, "Review Acme status card visibility")}>Review visibility change</button>
+        <button type="button" disabled={!api.backendSession || dispatching} onClick={() => void refreshCapabilities()}>Refresh backend capabilities</button>
         <a href="/dashboard">Reload Home</a>
       </div>
       {error ? <p role="alert">{error}</p> : null}

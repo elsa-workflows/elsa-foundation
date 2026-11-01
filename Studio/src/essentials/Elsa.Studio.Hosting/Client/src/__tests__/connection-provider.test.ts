@@ -17,6 +17,14 @@ describe("document-owned connection providers",()=>{
   expect(connection.getSnapshot().active?.capabilities).toEqual({capabilities:[]});
   expect(fetch).toHaveBeenCalledTimes(1);expect(String(fetch.mock.calls[0][0])).toContain("/shell/capabilities");
  });
+ it("qualifies an initial deep link before publishing the default session",async()=>{
+  window.history.replaceState({},"","/workflows/shared?definition=resource#details");
+  vi.stubGlobal("fetch",vi.fn(async()=>Response.json({capabilities:[]})));
+  const connection=new ConfiguredBackendConnection(host.host,host.identity,null,"http://backend.example/shell/");
+  const ready=vi.fn(()=>{if(connection.getSnapshot().active)expect(window.location.search).toBe("?definition=resource&backend=legacy");});
+  connection.subscribe(ready);await connection.initialize();
+  expect(window.location.pathname).toBe("/workflows/shared");expect(window.location.hash).toBe("#details");expect(ready).toHaveBeenCalled();
+ });
  it("refuses a foreign resource link before calling the configured backend",async()=>{
   window.history.replaceState({},"","/workflows/foreign?backend=retired");
   const fetch=vi.fn();vi.stubGlobal("fetch",fetch);

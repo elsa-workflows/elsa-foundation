@@ -180,6 +180,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
+  const [registryGeneration,setRegistryGeneration]=useState(0);
   const [path, setPath] = useState(normalizePath(window.location.pathname));
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
@@ -358,6 +359,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
 
         if (!disposed) {
           setApi(registry);
+          setRegistryGeneration(value=>value+1);
           setState("ready");
         }
       } catch (e) {
@@ -484,7 +486,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
-        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
+        <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );

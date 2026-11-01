@@ -136,7 +136,7 @@ test.describe("backend connections against composed hosts",()=>{
       await expect(review).toContainText("Backend connections");
       imported.length=0;
       await review.getByRole("button",{name:"Apply",exact:true}).click();
-      await expect(page).toHaveURL(process.env.ELSA_STUDIO_URL+"/");
+      await expect(page).toHaveURL(process.env.ELSA_STUDIO_URL+"/?backend=legacy");
       await expect(page.getByRole("heading",{name:"Home",exact:true,level:2})).toBeVisible();
       await expect(page.getByRole("button",{name:/Select backend/})).toHaveCount(0);
       await expect(page.getByRole("link",{name:"Backends",exact:true})).toHaveCount(0);
