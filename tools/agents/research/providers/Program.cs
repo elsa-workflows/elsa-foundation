@@ -19,9 +19,11 @@ var schema = JsonSerializer.SerializeToElement(new
     required = new[] { "headline" }, additionalProperties = false
 });
 var status = "InProgress";
+var providers = args.Contains("--provider=azure") ? new[] { "azure" }
+    : args.Contains("--provider=anthropic") ? new[] { "anthropic" } : new[] { "anthropic", "azure" };
 try
 {
-    foreach (var provider in new[] { "anthropic", "azure" })
+    foreach (var provider in providers)
     {
         await Success(provider);
         await Retry(provider, defaultPolicy: true);
@@ -31,8 +33,11 @@ try
         await Cancellation(provider, beforeSend: true);
         await Cancellation(provider, beforeSend: false);
     }
-    await RichContent();
-    await TokenRefresh();
+    if (providers.Contains("anthropic"))
+    {
+        await RichContent();
+        await TokenRefresh();
+    }
     status = "PassedProviderProtocolSpike";
 }
 catch (Exception exception)
@@ -45,7 +50,7 @@ finally
 {
     await File.WriteAllTextAsync(Path.Combine(output, "report.json"), JsonSerializer.Serialize(new
     {
-        status, liveProvider = false, inferenceCharge = false,
+        status, providers, liveProvider = false, inferenceCharge = false,
         boundary = "Injected HTTP transport calls; no sockets or provider effects are exercised.",
         packages = new { maf = "1.27.0", meaiOpenAI = "10.10.1", anthropic = "12.32.0", azureOpenAI = "2.1.0" },
         observations
@@ -112,7 +117,7 @@ async Task Retry(string provider, bool defaultPolicy)
     try { await agent.RunAsync("A fixture brief.", options: Options()); }
     catch (Exception exception) { failure = exception; }
     Check(failure is not null, provider + ": retryable error is surfaced");
-    Check(defaultPolicy ? transport.Count > 1 : transport.Count == 1, provider + (defaultPolicy ? ": default retries are observed" : ": disabled retries make one transport request"));
+    Check(defaultPolicy ? transport.Count == (provider == "anthropic" ? 3 : 4) : transport.Count == 1, provider + (defaultPolicy ? ": pinned default retry count is observed" : ": disabled retries make one transport request"));
     observations.Add(new { name = provider + (defaultPolicy ? "-default-retry" : "-no-retry"), transportRequests = transport.Count, transportEntries = transport.Entries, errorType = failure!.GetType().FullName });
 }
 

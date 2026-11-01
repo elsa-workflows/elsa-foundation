@@ -12,10 +12,15 @@ else
     probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/elsa-provider-protocol.XXXXXX")"
     probe_dir="$(cd -- "$probe_dir" && pwd -P)"
 fi
+if [[ "$probe_dir/" == "$foundation_root/"* ]]; then
+    rmdir -- "$probe_dir" # Only the empty directory just created by this invocation.
+    echo 'The probe project must be outside this checkout; choose an external --output directory.' >&2
+    exit 2
+fi
 printf 'Retained research evidence: %s\n' "$probe_dir"
 for flag in "$@"; do
     case "$flag" in
-        --enable-retries|--drop-schema|--drop-cancellation|--flatten-reasoning) ;;
+        --enable-retries|--drop-schema|--drop-cancellation|--flatten-reasoning|--provider=anthropic|--provider=azure) ;;
         *) echo "Unknown probe flag: $flag" >&2; exit 2 ;;
     esac
 done
@@ -23,6 +28,10 @@ cp "$research_dir/Program.cs" "$probe_dir/Program.cs"
 cp "$research_dir/Probe.csproj.template" "$probe_dir/Probe.csproj"
 cp "$research_dir/packages.lock.json.template" "$probe_dir/packages.lock.json"
 cp "$foundation_root/global.json" "$probe_dir/global.json"
+# Stop unrelated machine/project parents from contributing MSBuild or package settings.
+for barrier in Directory.Build.props Directory.Build.targets Directory.Packages.props; do
+    printf '<Project />\n' > "$probe_dir/$barrier"
+done
 cat > "$probe_dir/NuGet.Config" <<'XML'
 <configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>
 XML

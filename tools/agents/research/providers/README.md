@@ -12,8 +12,9 @@ Requires .NET 10 (the repository's `global.json`), Python 3 and NuGet access. Th
 an isolated project from the templates, compares a normal restore with the complete committed lock,
 performs a locked restore, builds and runs the probe. It prints and retains its owned temporary
 directory, including restore/build logs, `report.json`, `evidence.json`, the resolved dependency graph
-and fixture hashes. `--output /absolute/new/directory` chooses the destination; an existing directory
-is refused. Templates keep the research graph outside Foundation's central pins, solution and lock
+and fixture hashes. `--output /absolute/new/directory` chooses an external destination; existing
+directories and destinations within this checkout are refused. Local MSBuild/package import barriers
+prevent unrelated parent settings from entering the experiment. Templates keep the research graph outside Foundation's central pins, solution and lock
 ownership. No production assembly or source-project reference is involved.
 
 All SDK clients use explicit fixture credentials and an injected HTTP handler restricted to
@@ -108,6 +109,9 @@ bash tools/agents/research/providers/run.sh --flatten-reasoning
 The controls alter actual SDK options, cancellation propagation or the result projection. They do not
 replace the vendor clients with fake chat clients. A failed restore/build is an infrastructure failure,
 not a successful negative control; its logs remain in the retained directory.
+Repeat the first three controls with `--provider=azure` to exercise Azure's guards independently;
+the expected failure prefix is `azure:`. `--provider=anthropic` explicitly selects the Anthropic profile.
+Reasoning flattening applies only to the Anthropic thinking fixture.
 
 No live model, streaming, Responses API, hosted tool, model capability inventory, credential rotation,
 Elsa journal, restart/replay, production session codec or packaged/custom host is qualified here.
