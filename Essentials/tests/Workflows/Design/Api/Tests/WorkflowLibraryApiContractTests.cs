@@ -32,6 +32,7 @@ public sealed class WorkflowLibraryApiContractTests
         await using var host = await StartAsync(new LibraryProbe(), organizationEnabled: configured);
         var relations = await RelationsAsync(host);
         Assert.Contains("workflow-definitions-page", relations);
+        Assert.Contains("workflow-definitions-query", relations);
         foreach (var relation in new[] { "workflow-folders", "workflow-folder-rename", "workflow-folder-move",
                      "workflow-folder-delete-empty", "workflow-definition-folder-move", "workflow-organization",
                      "workflow-tags", "workflow-tag", "workflow-tags-bulk", "workflow-views", "workflow-view", "workflow-favorites" })
@@ -203,6 +204,7 @@ public sealed class WorkflowLibraryApiContractTests
         var relations = await RelationsAsync(present);
         Assert.Contains("workflow-folders", relations);
         Assert.Contains("workflow-definitions-page", relations);
+        Assert.Contains("workflow-definitions-query", relations);
         Assert.Contains("workflow-organization", relations);
         Assert.Contains("workflow-views", relations);
         Assert.Contains("workflow-favorites", relations);

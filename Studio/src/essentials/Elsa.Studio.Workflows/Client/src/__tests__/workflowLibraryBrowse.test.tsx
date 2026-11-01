@@ -7,14 +7,40 @@ import {
 import { parseWorkflowDefinitionBrowseLocation, updateWorkflowDefinitionBrowseUrl, workflowLibraryFilterKey } from "../workflow-editor/workflowDefinitionBrowseLocation";
 
 function libraryCapabilities() {
-  const capabilities = pagedDefinitionCapabilities({ folders: true });
+  const capabilities = pagedDefinitionCapabilities({ folders: true, queryOptions: true });
   capabilities.capabilities[0].links.push({ rel: "workflow-tags", href: "design/workflows/tags" }, { rel: "workflow-organization", href: "design/workflows/organization/{definitionId}" }, { rel: "workflow-favorites", href: "design/workflows/favorites/{definitionId}" });
   return capabilities;
 }
 
 describe("workflow library query boundaries", () => {
+  it("withholds newer query controls on an older paged host and clears only its unsupported options", async () => {
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("definition-pages")) {
+        requests.push(url);
+        // This host deliberately ignores the newer publication/sort/descendant query grammar.
+        return response({ items: [definition({ name: "Older host draft", publicationState: "draft" })] });
+      }
+      if (url.pathname.endsWith("folders/finance")) return response({ folder: { id: "finance", name: "Finance", parentId: null }, ancestors: [] });
+      return response({ items: [] });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions?folderId=finance&includeDescendants=true&sort=modified&publicationState=published&columns=location", fetchMock, pagedDefinitionCapabilities({ folders: true }));
+    await waitForText(container, "Some organization filters are unavailable");
+    expect(requests).toHaveLength(0);
+    expect(container.querySelector('[aria-label="Sort workflows"]')).toBeNull();
+    await click(button(container, "Clear unavailable organization filters"));
+    await waitForText(container, "Older host draft");
+    expect(requests.at(-1)?.searchParams.get("folderId")).toBe("finance");
+    for (const key of ["includeDescendants", "sort", "publicationState"]) expect(requests.at(-1)?.searchParams.has(key)).toBe(false);
+    await waitForCondition(() => expect(button(container, "Columns"), [...container.querySelectorAll("button")].map(button => button.textContent).join(" | ")).not.toBeNull());
+    await click(button(container, "Columns"));
+    expect(container.querySelector('[aria-label="Publication filter"]')).toBeNull();
+    expect(container.textContent).toContain("Optional columns");
+  });
+
   it("recovers a missing tag operation without losing supported folder, favorite and column choices", async () => {
-    const capabilities = pagedDefinitionCapabilities({ folders: true });
+    const capabilities = pagedDefinitionCapabilities({ folders: true, queryOptions: true });
     capabilities.capabilities[0].links.push({ rel: "workflow-favorites", href: "design/workflows/favorites/{definitionId}", templated: true });
     const requests: URL[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -54,7 +80,7 @@ describe("workflow library query boundaries", () => {
         }
         return response({ items: [] });
       });
-      const { container } = await renderWorkflowRoute(`/workflows/definitions?${scope}&search=invoice&state=all&sort=modified&publicationState=published&columns=tags,location&custom=keep`, fetchMock, pagedDefinitionCapabilities());
+      const { container } = await renderWorkflowRoute(`/workflows/definitions?${scope}&search=invoice&state=all&sort=modified&publicationState=published&columns=tags,location&custom=keep`, fetchMock, pagedDefinitionCapabilities({ queryOptions: true }));
       await waitForText(container, "Some organization filters are unavailable");
       expect(requests).toHaveLength(0);
       expect(container.querySelector('[role="table"]')).toBeNull();

@@ -10,7 +10,7 @@ Two independent source-only reviews inspected backend and Studio behavior. Findi
 
 ## Availability, authorization and mutation paths
 
-- **Decision**: Keep `workflow-definitions-page` whenever a library store exists. Gate other library relations and their handlers. Preserve trusted query visibility, counts/cursors, tenant scope and per-definition/folder authorization, even when response organization metadata is suppressed.
+- **Decision**: Keep `workflow-definitions-page` and `workflow-definitions-query` whenever a library store exists. The latter explicitly signals extended query grammar; base paging predates those options. Gate organization relations and their handlers. Preserve trusted query visibility, counts/cursors, tenant scope and per-definition/folder authorization, even when response organization metadata is suppressed.
 - **Source**: `WorkflowLibraryCapabilitySource`, `WorkflowLibraryAccess`, `DefinitionPageEndpoint`, `WorkflowLibraryProjection`, ordinary details readers and create endpoint.
 - **Important bypass**: Ordinary create accepts `FolderId`; refusal must happen before `addCommand.Execute`. Existing organization endpoints funnel through the access helper.
 - **Decision**: Refuse active organization predicates on the paged route while disabled. The legacy flat list never supports these predicates; reject recognized organization query keys there while disabled rather than allowing a stale caller to interpret a broad response as filtered. Default-enabled legacy behavior remains unchanged.
@@ -18,7 +18,7 @@ Two independent source-only reviews inspected backend and Studio behavior. Findi
 
 ## Studio recovery and independent operations
 
-- **Decision**: Use relation-based operation facts, not a palette ID or a global frontend flag. Keep paging, sort and publication-state transport support independent of the organization relation.
+- **Decision**: Use relation-based operation facts, not a palette ID or a global frontend flag. Keep paging, sort and publication-state transport support independent of organization availability. Extended options require `workflow-definitions-query`, with `workflow-organization` retained only as the existing library-server compatibility signal; a base paged host can ignore newer query keys. Keep supported folder selection when only descendants/options are unavailable.
 - **Source**: `workflowOrganizationCapabilities.ts`, `workflowDesign.ts`, `WorkflowDefinitions.tsx`, `WorkflowLibraryControls.tsx` and `workflowDefinitionBrowseLocation.ts`.
 - **Decision**: Hold organization-scoped browse while required facts are unresolved or unavailable. Explain the unavailable constraints and clear only those constraints plus the selected-view association through the existing location/session transition. Preserve search, lifecycle, backend, unrelated URL values and stored column choices.
 - **Decision**: Intersect visible organization columns and metadata/actions with their owning operations. Re-enable restores the saved choices; do not overwrite them merely because a backend cannot offer them.

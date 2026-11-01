@@ -27,6 +27,7 @@ import {
   resolveCapabilityLink
 } from "./capabilities";
 import type { WorkflowTagFilter } from "./workflowOrganization";
+import { workflowQueryOptionsAvailable } from "./workflowOrganizationCapabilities";
 
 export interface DefinitionListRequest {
   search: string;
@@ -226,6 +227,10 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
 
   // Older paged hosts can ignore unknown query parameters. Never turn an unsupported
   // organization predicate into a broader apparently successful result.
+  const needsQueryOptions = Boolean(request.tagFilters?.length || request.includeDescendants || request.favoritesOnly || request.publicationState || (request.sort && request.sort !== "name"));
+  if (needsQueryOptions && !await workflowQueryOptionsAvailable(context)) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-definitions-query");
+  }
   if ((request.folderId || request.unfiled || request.includeDescendants) && !await isWorkflowFolderBrowsingAvailable(context)) {
     throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folders");
   }
@@ -236,7 +241,9 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
     throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-favorites");
   }
 
-  const pagedPath = await definitionPagePath(context);
+  const pagedPath = needsQueryOptions && await hasCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions-query")
+    ? await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-definitions-query")
+    : await definitionPagePath(context);
   if (pagedPath) {
     parameters.set("pageSize", String(request.pageSize));
     if (request.continuationToken) parameters.set("continuationToken", request.continuationToken);
@@ -244,7 +251,7 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
     if (request.unfiled) parameters.set("unfiled", "true");
     if (request.includeDescendants) parameters.set("includeDescendants", "true");
     if (request.favoritesOnly) parameters.set("favoritesOnly", "true");
-    if (request.sort) parameters.set("sort", request.sort);
+    if (request.sort && request.sort !== "name") parameters.set("sort", request.sort);
     if (request.tagFilters?.length) parameters.set("tagFilters", JSON.stringify(request.tagFilters));
     if (request.publicationState) parameters.set("publicationState", request.publicationState);
     const response = await context.http.getJson<{

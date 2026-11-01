@@ -12,6 +12,7 @@ internal sealed class WorkflowLibraryCapabilitySource(IWorkflowLibraryStore? sto
         ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(store is null ? [] :
         [new(WorkflowDesignApiCapabilities.CapabilityId, 1,
             [new("workflow-definitions-page", "design/workflows/definitions/page"),
+             new("workflow-definitions-query", "design/workflows/definitions/page"),
              ..organization is { Enabled: false } ? Array.Empty<ApiCapabilityLink>() : [new("workflow-folders", "design/workflows/folders"),
              new("workflow-folder-rename", "design/workflows/folders/{folderId}/rename", templated: true),
              new("workflow-folder-move", "design/workflows/folders/{folderId}/move", templated: true),

@@ -53,6 +53,7 @@ let nextIdentity = 1;
 const capabilities = { capabilities: [{ id: "elsa.api.workflow-design", contractVersion: "1", links: [
   { rel: "workflow-definitions", href: "fixture/library/definitions" },
   { rel: "workflow-definitions-page", href: "fixture/library/pages" },
+  { rel: "workflow-definitions-query", href: "fixture/library/pages" },
   { rel: "workflow-folders", href: "fixture/library/folders" },
   { rel: "workflow-definition-folder-move", href: "fixture/library/placement" },
   { rel: "workflow-folder-rename", href: "fixture/library/folders/{folderId}/rename", templated: true },
@@ -66,7 +67,7 @@ const capabilities = { capabilities: [{ id: "elsa.api.workflow-design", contract
   { rel: "workflow-view", href: "fixture/library/views/{viewId}", templated: true },
   { rel: "workflow-favorites", href: "fixture/library/favorites/{definitionId}", templated: true }
 ].filter(link => (parameters.get("folders") !== "unavailable" || !link.rel.includes("folder"))
-  && (parameters.get("organization") !== "off" || ["workflow-definitions", "workflow-definitions-page"].includes(link.rel))) }] };
+  && (parameters.get("organization") !== "off" || ["workflow-definitions", "workflow-definitions-page", "workflow-definitions-query"].includes(link.rel))) }] };
 
 Object.assign(window, { workflowLibraryRequests: requests, workflowLibraryDefinitions: definitions });
 

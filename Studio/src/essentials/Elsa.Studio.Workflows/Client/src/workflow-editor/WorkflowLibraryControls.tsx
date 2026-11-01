@@ -104,12 +104,12 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
 
   return <section className="wf-library-controls" aria-label={support.tags || support.views || support.folders || support.favorites ? "Workflow library organization" : "Workflow library filters"}>
     <div className="wf-library-control-row">
-      {support.favorites ? <button type="button" aria-pressed={location.favoritesOnly === true} onClick={() => change({ favoritesOnly: !location.favoritesOnly })}>Favorites</button> : null}
-      {support.folders && typeof location.folderSelection === "object" ? <label className="wf-library-check"><input type="checkbox" checked={location.includeDescendants ?? false} onChange={event => change({ includeDescendants: event.target.checked })} /> Include subfolders</label> : null}
-      {support.paging ? <label>Sort <select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
+      {support.favorites && support.queryOptions ? <button type="button" aria-pressed={location.favoritesOnly === true} onClick={() => change({ favoritesOnly: !location.favoritesOnly })}>Favorites</button> : null}
+      {support.folders && support.queryOptions && typeof location.folderSelection === "object" ? <label className="wf-library-check"><input type="checkbox" checked={location.includeDescendants ?? false} onChange={event => change({ includeDescendants: event.target.checked })} /> Include subfolders</label> : null}
+      {support.queryOptions ? <label>Sort <select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
         <option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="modified">Recently modified</option>
       </select></label> : null}
-      {support.tags || support.paging ? <button type="button" aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}>Filters{activeCount ? ` (${activeCount})` : ""}</button> : null}
+      {support.tags || support.folders || support.queryOptions ? <button type="button" aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}>{support.queryOptions ? `Filters${activeCount ? ` (${activeCount})` : ""}` : "Columns"}</button> : null}
       {support.views ? <>
         <label>View <select aria-label="Saved workflow view" value={location.viewId ?? ""} onChange={event => {
           const view = views.find(item => item.id === event.target.value);
@@ -127,11 +127,11 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     {support.folders && location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <button type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</button></p> : null}
     {error ? <p role="alert">{error} <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</button></p> : null}
 
-    {filtersOpen && (support.tags || support.paging) ? <div className="wf-library-filter-panel" id={filtersId}>
-      {support.paging ? <label>Publication <select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
+    {filtersOpen && (support.tags || support.folders || support.queryOptions) ? <div className="wf-library-filter-panel" id={filtersId}>
+      {support.queryOptions ? <label>Publication <select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
         <option value="">Any publication state</option><option value="published">Published</option>{location.publicationState && location.publicationState !== "published" ? <option value={location.publicationState}>Unsupported state: {location.publicationState}</option> : null}
       </select></label> : null}
-      {support.tags ? <><div className="wf-library-control-row"><label>Find tag <input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></label><button type="button" disabled={catalogLoading} onClick={() => setCatalogTerm(catalogSearch)}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</div>
+      {support.tags && support.queryOptions ? <><div className="wf-library-control-row"><label>Find tag <input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></label><button type="button" disabled={catalogLoading} onClick={() => setCatalogTerm(catalogSearch)}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</div>
       {(location.tagFilters ?? []).map((filter, index) => {
         const tag = tags.find(item => item.id === filter.tagId);
         return <div className="wf-library-filter-clause" key={`${index}-${filter.tagId}`}>

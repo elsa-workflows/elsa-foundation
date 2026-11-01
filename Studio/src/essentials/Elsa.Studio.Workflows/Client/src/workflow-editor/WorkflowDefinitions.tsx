@@ -126,7 +126,10 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
   const createInFlightRef = useRef(false);
-  const catalogGenerationRef = useRef(0);
+  // Retired dialogs can still finish writes. Their callbacks belong to the originating authority/context.
+  const workGenerationRef = useRef(0);
+  const renderGeneration = workGenerationRef.current;
+  const isCurrentGeneration = () => renderGeneration === workGenerationRef.current;
   const handledHomeCreateRequestRef = useRef<string | null>(null);
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
@@ -328,17 +331,17 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   const loadCatalog = useCallback(async () => {
     if (catalogState === "loading" || catalogState === "ready") return;
-    const generation = catalogGenerationRef.current;
+    const generation = workGenerationRef.current;
     setCatalogState("loading");
     setCatalogError("");
     try {
       const { listActivities } = await import("../api/activityDesign");
       const response = await listActivities(context);
-      if (generation !== catalogGenerationRef.current) return;
+      if (generation !== workGenerationRef.current) return;
       setCatalog(response.activities ?? []);
       setCatalogState("ready");
     } catch (e) {
-      if (generation !== catalogGenerationRef.current) return;
+      if (generation !== workGenerationRef.current) return;
       setCatalogState("failed");
       setCatalogError(e instanceof Error ? e.message : String(e));
     }
@@ -379,13 +382,17 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
         ...initialDocument,
         ...(folderId ? { folderId } : {})
       });
+      if (!isCurrentGeneration()) return;
       setCreateDraft(null);
       onOpen(details.definition.id);
     } catch (e) {
+      if (!isCurrentGeneration()) return;
       setCreateError(e instanceof Error ? e.message : String(e));
     } finally {
-      createInFlightRef.current = false;
-      setCreating(false);
+      if (isCurrentGeneration()) {
+        createInFlightRef.current = false;
+        setCreating(false);
+      }
     }
   };
 
@@ -395,6 +402,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   };
 
   const refreshAfterMutation = async () => {
+    if (!isCurrentGeneration()) return;
     if (definitions.length === 1 && page > 1) {
       changePage(page - 1);
       return;
@@ -418,7 +426,9 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     setFocusRefreshAfterMove(false);
   }, [focusRefreshAfterMove, moveDialogOpen]);
 
+  const closeMoveDialog = () => { if (isCurrentGeneration()) setMoveDialogOpen(false); };
   const movedDefinitions = async () => {
+    if (!isCurrentGeneration()) return;
     rebase(true);
     const count = selectedDefinitionIds.size;
     setStatus(`Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`);
@@ -426,6 +436,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   };
 
   const foldersMutated = async (nextFolderSelection?: WorkflowFolderSelection) => {
+    if (!isCurrentGeneration()) return;
     if (nextFolderSelection) {
       navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolderSelection }, "replace", true);
       return;
@@ -461,23 +472,29 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder, includeDescendants: typeof nextFolder === "object" ? browseLocation.includeDescendants : false }, "push", true);
   };
   const changeLibraryLocation = useCallback((next: WorkflowDefinitionBrowseLocation) => navigateBrowseLocation(next, "push", true), [navigateBrowseLocation]);
-  const organizationSaved = () => { rebase(true); setStatus("Workflow organization updated"); };
-  const closeOrganization = () => { setOrganizationTarget(null); setBulkTagTargets(null); requestAnimationFrame(() => refreshButtonRef.current?.focus()); };
+  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); setStatus("Workflow organization updated"); } };
+  const closeOrganization = () => {
+    if (!isCurrentGeneration()) return;
+    setOrganizationTarget(null); setBulkTagTargets(null);
+    requestAnimationFrame(() => { if (isCurrentGeneration()) refreshButtonRef.current?.focus(); });
+  };
   const changeFavorite = async (definition: WorkflowDefinitionSummary) => {
-    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); setStatus(definition.favorite ? "Removed from favorites" : "Added to favorites"); rebase(true); }
-    catch (caught) { setStatus(caught instanceof Error ? caught.message : "Couldn't change this favorite."); }
+    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); if (!isCurrentGeneration()) return; setStatus(definition.favorite ? "Removed from favorites" : "Added to favorites"); rebase(true); }
+    catch (caught) { if (isCurrentGeneration()) setStatus(caught instanceof Error ? caught.message : "Couldn't change this favorite."); }
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
-    if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`, confirmLabel: "Delete", tone: "danger" }))) return;
+    if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrentGeneration()) return;
     setStatus("");
     setRequestError(null);
     try {
       await deleteDefinition(context, definition.id);
+      if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
       setStatus(`Deleted ${definition.name}`);
       await refreshAfterMutation();
     } catch (e) {
+      if (!isCurrentGeneration()) return;
       setRequestError({ identity: targetIdentity, message: e instanceof Error ? e.message : String(e) });
     }
   };
@@ -487,24 +504,28 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     setRequestError(null);
     try {
       await restoreDefinition(context, definition.id);
+      if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
       setStatus(`Restored ${definition.name}`);
       await refreshAfterMutation();
     } catch (e) {
+      if (!isCurrentGeneration()) return;
       setRequestError({ identity: targetIdentity, message: e instanceof Error ? e.message : String(e) });
     }
   };
 
   const permanentDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
-    if (!(await getDialogs().confirm({ message: `Permanently delete workflow definition "${definition.name}"? This removes its drafts, versions, layouts, and validations and cannot be undone.`, confirmLabel: "Delete permanently", tone: "danger" }))) return;
+    if (!(await getDialogs().confirm({ message: `Permanently delete workflow definition "${definition.name}"? This removes its drafts, versions, layouts, and validations and cannot be undone.`, confirmLabel: "Delete permanently", tone: "danger" })) || !isCurrentGeneration()) return;
     setStatus("");
     setRequestError(null);
     try {
       await deleteDefinitionPermanently(context, definition.id);
+      if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
       setStatus(`Permanently deleted ${definition.name}`);
       await refreshAfterMutation();
     } catch (e) {
+      if (!isCurrentGeneration()) return;
       setRequestError({ identity: targetIdentity, message: e instanceof Error ? e.message : String(e) });
     }
   };
@@ -532,11 +553,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const renderResultRows = isCurrentData || hasPreviousData;
 
   useLayoutEffect(() => {
-    catalogGenerationRef.current += 1;
-    setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false);
+    workGenerationRef.current += 1;
+    setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false); setStatus("");
+    createInFlightRef.current = false; setCreating(false);
     setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
     setLastSuccess(null); setRequestError(null);
-    return () => { catalogGenerationRef.current += 1; };
+    return () => { workGenerationRef.current += 1; };
   }, [authorityRevision, context]);
 
   useEffect(() => {
@@ -553,7 +575,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     setOrganizationTarget(null); setBulkTagTargets(null);
     void workflowOrganizationSupport(context).then(support => { if (!cancelled) setLibrarySupport(support); }).catch(caught => {
       if (cancelled) return;
-      setLibrarySupport({ tags: false, organization: false, bulk: false, views: false, favorites: false, folders: false, paging: false });
+      setLibrarySupport({ tags: false, organization: false, bulk: false, views: false, favorites: false, folders: false, paging: false, queryOptions: false });
       setLibrarySupportError(caught instanceof Error ? caught.message : "Couldn't inspect workflow support. Refresh the page to retry.");
     });
     return () => { cancelled = true; };
@@ -773,8 +795,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             submitError={createError}
             ai={ai}
             suggestMetadataAction={suggestMetadataAction}
-            onChange={nextDraft => setCreateDraft(nextDraft)}
-            onClose={() => setCreateDraft(null)}
+            onChange={nextDraft => { if (isCurrentGeneration()) setCreateDraft(nextDraft); }}
+            onClose={() => { if (isCurrentGeneration()) setCreateDraft(null); }}
             onRetryCatalog={() => void loadCatalog()}
             onSubmit={submitCreate}
           />
@@ -785,7 +807,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           <MoveWorkflowDefinitionsDialog
             context={context}
             definitionIds={[...selectedDefinitionIds]}
-            onClose={() => setMoveDialogOpen(false)}
+            onClose={closeMoveDialog}
             onMoved={movedDefinitions}
           />
         </Suspense>

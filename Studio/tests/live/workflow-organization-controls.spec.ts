@@ -15,7 +15,7 @@ const apiBase = process.env.ELSA_ORGANIZATION_API ?? "http://api-a.studio.localh
 interface Definition { id: string; name: string; folderId?: string; tags?: unknown[]; favorite: boolean; publishedVersionId?: string }
 interface Folder { id: string; parentId: string | null; name: string }
 interface View { id: string; name: string; shared: boolean; ownerId: string; query: unknown; columns: string[]; revision: string }
-interface Snapshot { definition: Definition; organization: unknown; folders: Folder[]; tags: unknown; views: View[]; executable: { artifactId: string; references: { id: string }[] }; url: string; secondary: string; configuration: unknown }
+interface Snapshot { definition: Definition; organization: unknown; folders: Folder[]; tags: unknown; views: View[]; executable: { artifactId: string; liveSourceReferenceCount: number; references: { id: string }[] }; url: string; secondary: string; configuration: unknown }
 interface AuthoredNode { inputs?: { referenceKey: string; value?: { expressionType: string; value?: unknown } }[]; structure?: { payload?: { activities?: AuthoredNode[] } } }
 interface DraftDocument { id: string; state: { rootActivity?: AuthoredNode }; layout: unknown[]; activityPresentation?: unknown[] }
 
@@ -48,7 +48,7 @@ async function snapshot(page: Page, bearer: string, definitionId: string, second
   const folders = [...roots.items, ...children.flatMap(page => page.items)].sort((a, b) => a.id.localeCompare(b.id));
   const tags = await read(page, bearer, "design/workflows/tags?pageSize=100");
   const views = (await read<{ items: View[] }>(page, bearer, "design/workflows/views")).items.sort((a, b) => a.id.localeCompare(b.id));
-  const executable = (await read<{ items: (Snapshot["executable"] & { definitionId: string })[] }>(page, bearer, "runtime/workflows/executables")).items.find(item => item.definitionId === definitionId)!;
+  const executable = (await read<{ items: (Snapshot["executable"] & { definitionId: string })[] }>(page, bearer, "runtime/workflows/executables")).items.find(item => item.definitionId === definitionId && item.liveSourceReferenceCount > 0)!;
   expect(executable).toBeTruthy();
   return { definition, organization, folders, tags, views, executable, secondary,
     url: `/workflows/definitions?backend=authoring&folderId=${definition.folderId}&columns=tags,location`,
@@ -121,6 +121,7 @@ test("reviewed organization availability preserves the actual library across dis
     expect(after.definition.favorite).toBe(before.definition.favorite);
     expect(after.definition.folderId).toBe(before.definition.folderId);
     expect(after.definition.tags).toEqual(before.definition.tags);
+    writeFileSync(`${proofFile}.restored.json`, JSON.stringify(after, null, 2));
     await testInfo.attach("restored-library", { body: JSON.stringify(after, null, 2), contentType: "application/json" });
   } else {
     const definitions = await read<{ items: Definition[] }>(page, bearer, "design/workflows/definitions/page?pageSize=100");
@@ -177,6 +178,7 @@ test("reviewed organization availability preserves the actual library across dis
     const published = await read<{ definition: { publishedVersionId?: string }; versions: unknown[] }>(page, bearer, `design/workflows/definitions/${definition.id}`);
     expect(published.definition.publishedVersionId).toBeTruthy();
     expect(published.definition.publishedVersionId).not.toBe(definition.publishedVersionId);
+    writeFileSync(`${proofFile}.disabled.json`, JSON.stringify({ before, execution: execution.body, run, published }, null, 2));
     await testInfo.attach("disabled-organization-published-run", { body: JSON.stringify({ execution: execution.body, run }, null, 2), contentType: "application/json" });
     await testInfo.attach("disabled-organization-new-publication", { body: JSON.stringify(published, null, 2), contentType: "application/json" });
     await testInfo.attach("retained-library-before", { body: JSON.stringify(before, null, 2), contentType: "application/json" });

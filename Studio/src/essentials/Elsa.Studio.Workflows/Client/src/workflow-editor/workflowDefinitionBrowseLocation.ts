@@ -22,17 +22,19 @@ interface BrowseSupport {
   favorites: boolean;
   views: boolean;
   paging: boolean;
+  queryOptions: boolean;
 }
 
 /** A constrained link stays constrained until its owner explicitly removes unavailable predicates. */
 export function unavailableWorkflowBrowseConstraints(location: WorkflowDefinitionBrowseLocation, support: BrowseSupport) {
   return {
-    folders: !support.folders && (location.folderSelection !== "all" || location.includeDescendants === true),
-    tags: Boolean(location.invalidTagFilters || ((!support.tags || !support.paging) && location.tagFilters?.length)),
-    favorites: (!support.favorites || !support.paging) && location.favoritesOnly === true,
+    folders: !support.folders && location.folderSelection !== "all",
+    descendants: (!support.folders || !support.queryOptions) && location.includeDescendants === true,
+    tags: Boolean(location.invalidTagFilters || ((!support.tags || !support.queryOptions) && location.tagFilters?.length)),
+    favorites: (!support.favorites || !support.queryOptions) && location.favoritesOnly === true,
     view: !support.views && Boolean(location.viewId),
-    sort: !support.paging && Boolean(location.sort && location.sort !== "name"),
-    publication: !support.paging && Boolean(location.publicationState)
+    sort: !support.queryOptions && Boolean(location.sort && location.sort !== "name"),
+    publication: !support.queryOptions && Boolean(location.publicationState)
   };
 }
 
@@ -40,7 +42,8 @@ export function clearUnavailableWorkflowBrowseConstraints(location: WorkflowDefi
   const unavailable = unavailableWorkflowBrowseConstraints(location, support);
   if (!Object.values(unavailable).some(Boolean)) return location;
   return { ...location, viewId: undefined,
-    ...(unavailable.folders ? { folderSelection: "all", includeDescendants: false } : {}),
+    ...(unavailable.folders ? { folderSelection: "all" } : {}),
+    ...(unavailable.descendants ? { includeDescendants: false } : {}),
     ...(unavailable.tags ? { tagFilters: [], invalidTagFilters: undefined } : {}),
     ...(unavailable.favorites ? { favoritesOnly: false } : {}),
     ...(unavailable.sort ? { sort: "name" } : {}),

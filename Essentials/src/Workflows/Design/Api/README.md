@@ -74,7 +74,15 @@ snapshot. After a successful reviewed Server Apply, Studio refreshes capabilitie
 and retires the old route/dialog generation. A stale organization-filtered link holds browsing
 until the user explicitly clears unavailable predicates; recovery retains supported ordinary
 filters, backend selection and saved column choices. Clients should discover each operation's
-relation independently. Paged browsing does not depend on organization being enabled.
+relation independently. Paged browsing does not depend on organization being enabled. A composed
+library store is still required; enabling the setting does not add storage to an unsupported host.
+
+`workflow-definitions-query` advertises the extended paged query grammar: tag conditions,
+descendants, favorites, sort and publication-state filtering. It remains available when organization
+is disabled, while the disabled organization predicates are still refused. The older
+`workflow-definitions-page` relation alone does not establish support for these options. Studio
+accepts the original `workflow-organization` relation as the compatibility signal on older
+library-capable servers, then checks the specific folder/tag/favorite operation as appropriate.
 
 Workflow library pages enforce visibility before counting and paging. A host that registers any
 `IPermissionResourceHandler` must also register an `IWorkflowLibraryVisibilityPolicy` whose

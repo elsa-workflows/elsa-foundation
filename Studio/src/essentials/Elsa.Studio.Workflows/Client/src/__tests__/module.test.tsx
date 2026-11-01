@@ -368,7 +368,7 @@ describe("workflows module", () => {
       "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Opaque workflow");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Opaque workflow")).not.toBeNull());
     const row = rowByLabel(container, "Open workflow definition Opaque workflow");
     const nameLink = row!.querySelector<HTMLAnchorElement>("a");
     expect(nameLink).not.toBeNull();
@@ -398,7 +398,7 @@ describe("workflows module", () => {
       "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Opaque workflow");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Opaque workflow")).not.toBeNull());
     const row = rowByLabel(container, "Open workflow definition Opaque workflow");
 
     await click(checkboxByLabel(row!, "Select workflow definition Opaque workflow"));
@@ -811,7 +811,7 @@ describe("workflows module", () => {
       "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=hello", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Hello World");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Hello World")).not.toBeNull());
     await click(rowByLabel(container, "Open workflow definition Hello World"));
 
     const parameters = new URLSearchParams(window.location.search);
