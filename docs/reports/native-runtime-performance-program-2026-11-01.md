@@ -360,3 +360,27 @@ all three SQLite cases pass again; the native-provider project builds and discov
 pump cases. Native execution is pending. Raw custody: `m4-pumps-*` under the program's temporary evidence root.
 The shared-contract extraction initially needed an explicit Resumption test reference and extension namespace;
 those compilation attempts ran no tests and are retained separately from passing qualification.
+
+### In-flight claim-renewal acknowledgement
+
+The first native whole-provider run at `071d755fb` executed 245 cases: **244 passed, one failed, zero skipped**.
+The SQL Server timer context case completed all four dispatch queries but left one timer. Its prior focused
+nine-provider-case run passed; neither result supersedes the other. Timing qualification was held.
+
+A deterministic control then exposed a shared lease defect consistent with that residue: when dispatch returned,
+`RunRenewingAsync` cancelled the same token used by an in-flight renewal. A provider write can already have advanced
+the revision while its acknowledgement is pending, leaving settlement with the prior revision. Finishing dispatch
+now stops future renewals but awaits the started renewal using the caller's I/O cancellation token. Only delay
+cancellation is a normal stop. Unrequested provider cancellation loses the claim, and caller shutdown prevents
+settlement even if it arrives after the activity body returns. No claim is completed from an uncertain revision.
+
+The final six new controls on the original helper produce **five failures and one passing shutdown control**;
+restoring the corrected helper passes all fourteen lease cases. A partial-fix control independently fails both
+unrequested-provider-cancellation cases and shutdown after body completion (three failed, three passed). The
+value-task source explicitly acknowledges await registration and resumes inline without a test synchronization
+context; these are controlled interleavings, not performance thresholds. After repair, ten affected whole suites
+pass **7,057 tests, zero failed/skipped**, including 3,194 Runtime and 25 Activity Scheduling cases; discovery and
+runtime-expanded theory accounting reconcile without missing or unmatched tests. Final focused guards are rerun
+after the explicit registration barrier. Native requalification remains pending. This establishes the defect and
+its causal control; the original SQL Server failure did not capture a provider acknowledgement timeline, so its
+specific cause remains consistent with, rather than independently proven to be, that interleaving.
