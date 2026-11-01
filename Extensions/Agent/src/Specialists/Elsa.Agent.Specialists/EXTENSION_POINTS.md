@@ -62,4 +62,4 @@ conversation admission or native delivery recovery.
 
 The [model provider port](../Core/EXTENSION_POINTS.md) owns actual credential resolution/current
 authorization and physical SDK/HTTP retry guarantees. Durable sessions, journal/cancellation/process
-settlement, provider adapters, tools, teams and the final support matrix remain Program #3519 work.
+settlement, complete provider qualification, tools, teams and the final support matrix remain Program #3519 work.

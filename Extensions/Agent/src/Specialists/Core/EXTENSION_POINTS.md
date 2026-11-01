@@ -69,7 +69,7 @@ reconciliation; accepted response usage and the conservative reservation remain 
 
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
 credential durability or end-to-end recovery qualification. This initial conditional turn boundary
-does not yet provide conversation admission, delivery rebinding, reservations or retention controls.
+does not yet provide conversation admission, delivery rebinding, complete usage reconciliation or retention controls.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.
