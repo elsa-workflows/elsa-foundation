@@ -176,3 +176,19 @@ lease expiry/supersession, both journal cancellation winners, pre-admission tomb
 cancellation, crash after provider dispatch, after journal acceptance, before/after native receipt, and
 before/after settlement acknowledgement. Include unknown usage and retained-reader/key rotation/purge.
 Observe accepted journal/session revisions and native parent completion/effect count independently.
+
+## M3 implementation boundary: workflow-owned conversation admission
+
+Draft PR #3594 adds a conversation row to the existing turn journal, with the same scoped backend
+selection. The first owner profile derives tenant, partition, workflow execution and exact specialist
+version/template from verified native provenance. It does not infer a user principal or grant
+cross-workflow access. Claim reserves the expected revision and fence in the same transaction as the
+turn claim. Acceptance advances one revision and points at the immutable accepted turn receipt;
+the protected session remains in that receipt rather than a second history copy. Known failures
+release the revision; unknown outcomes retain the active reference and block continuation. Replaying
+an older accepted turn returns its original receipt without changing current conversation state.
+
+The runtime worker restores only this admitted accepted reference. Public native controls, stable
+operation versus new-attempt delivery, finite lease recovery, cancellation/applied settlement and
+retention are still required before T018–T023 or M3 can close. This note records the implemented
+boundary; the proposed broader logical model above remains the Program target.

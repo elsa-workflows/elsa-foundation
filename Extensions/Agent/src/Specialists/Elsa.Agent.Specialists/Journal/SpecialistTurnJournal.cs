@@ -20,9 +20,13 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         var serialized = JsonSerializer.Serialize(request, SpecialistJson.Options);
         var hash = Hash(serialized);
         var key = SpecialistTurnDocument.CalculateOperationKey(request.Identity);
-        var candidate = new SpecialistTurnDocument(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(), key, hash, request.Identity,
+        if (request.Continuation is not null && !request.Descriptor.AllowContinuity)
+            throw Failure("specialist.session.disallowed", "This published specialist does not allow conversation continuity.");
+        var handle = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        var candidate = new SpecialistTurnDocument(handle, key, hash, request.Identity,
             protector.Protect(JsonSerializer.Serialize(new RequestEnvelope(RequestPurpose, request.Identity, hash, request), SpecialistJson.Options)),
-            now.AddMilliseconds(request.Descriptor.Limits.TimeoutMilliseconds)) { MaximumModelCalls = request.Descriptor.Limits.MaximumModelCalls };
+            now.AddMilliseconds(request.Descriptor.Limits.TimeoutMilliseconds)) { MaximumModelCalls = request.Descriptor.Limits.MaximumModelCalls,
+                Conversation = request.Descriptor.AllowContinuity ? request.Continuation ?? new(handle, 0) : null };
         return (await store.StageAsync(candidate, cancellationToken)).Handle;
     }
 
@@ -35,7 +39,8 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         catch (Exception exception) { throw Failure("specialist.journal.protection", "The staged specialist request cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != RequestPurpose || envelope.Identity != identity || envelope.Request.Identity != identity || envelope.Hash != document.RequestHash ||
             Hash(JsonSerializer.Serialize(envelope.Request, SpecialistJson.Options)) != document.RequestHash ||
-            document.MaximumModelCalls != envelope.Request.Descriptor.Limits.MaximumModelCalls)
+            document.MaximumModelCalls != envelope.Request.Descriptor.Limits.MaximumModelCalls ||
+            document.Conversation != (envelope.Request.Descriptor.AllowContinuity ? envelope.Request.Continuation ?? new(document.Handle, 0) : null))
             throw Failure("specialist.journal.protection", "The staged specialist request does not match this native invocation.");
         return (document, envelope.Request);
     }
@@ -70,8 +75,31 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
     public ValueTask<bool> AcceptAsync(SpecialistTurnDocument document, SpecialistTurnResult result, DateTimeOffset now, CancellationToken cancellationToken)
     {
         EnsureScope(document.Identity);
+        if (document.Conversation is { } conversation && (result.Session is not { } session || session.ConversationId != conversation.ConversationId || session.Revision != conversation.ExpectedRevision + 1))
+            throw Failure("specialist.session.admission", "The candidate session does not match the admitted conversation revision.");
         var envelope = new ResultEnvelope(ResultPurpose, document.Identity, document.RequestHash, document.ChildInvocationId!, document.Fence!, result);
         return store.AcceptAsync(document.Handle, document.Identity, document.Fence!, protector.Protect(JsonSerializer.Serialize(envelope, SpecialistJson.Options)), now, cancellationToken);
+    }
+
+    public async ValueTask<SpecialistTurnRequest> PrepareSessionAsync(SpecialistTurnDocument document, SpecialistTurnRequest request, CancellationToken cancellationToken)
+    {
+        EnsureScope(document.Identity);
+        if (document.Identity != request.Identity)
+            throw Failure("specialist.session.admission", "Conversation history requires the exact admitted native request.");
+        if (document.Conversation is not { } admission) return request;
+        var conversation = await store.ReadConversationAsync(admission.ConversationId, document.Identity, cancellationToken);
+        if (conversation is null || conversation.Revision != admission.ExpectedRevision || conversation.ActiveTurnHandle != document.Handle ||
+            conversation.ActiveFence != document.Fence || conversation.OutcomeUnknown)
+            throw Failure("specialist.session.admission", "This worker does not hold the admitted conversation revision.");
+        SpecialistSessionReference? previous = null;
+        if (admission.ExpectedRevision > 0)
+        {
+            var accepted = conversation.AcceptedTurn ?? throw Failure("specialist.session.unavailable", "The accepted conversation history is unavailable.");
+            previous = (await ResultAsync(accepted.Handle, accepted.Identity, accepted.ChildInvocationId, cancellationToken)).Session;
+            if (previous is null || previous.ConversationId != admission.ConversationId || previous.Revision != admission.ExpectedRevision)
+                throw Failure("specialist.session.unavailable", "The accepted conversation history does not match this revision.");
+        }
+        return request with { PreparedSession = previous, SessionTarget = new(admission.ConversationId, admission.ExpectedRevision + 1) };
     }
 
     public ValueTask FailAsync(SpecialistTurnDocument document, string code, bool unknown, CancellationToken cancellationToken)

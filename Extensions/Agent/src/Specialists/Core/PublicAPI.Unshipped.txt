@@ -320,3 +320,81 @@ override Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.G
 override Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.ToString() -> string!
 static Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelResponseObservation? right) -> bool
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.ReadConversationAsync(string! conversationId, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument?>
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference!
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.ChildInvocationId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.ChildInvocationId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Deconstruct(out string! Handle, out Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, out string! ChildInvocationId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Handle.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Handle.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Identity.get -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Identity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.SpecialistAcceptedTurnReference(string! Handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, string! ChildInvocationId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.ConversationId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.ConversationId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.Deconstruct(out string! ConversationId, out long ExpectedRevision) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.ExpectedRevision.get -> long
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.ExpectedRevision.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.SpecialistConversationAdmission(string! ConversationId, long ExpectedRevision) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.AcceptedTurn.get -> Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference?
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.AcceptedTurn.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.ActiveFence.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.ActiveFence.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.ActiveTurnHandle.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.ActiveTurnHandle.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Deconstruct(out string! Id, out Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner! Owner, out long Revision, out string? ActiveTurnHandle, out string? ActiveFence, out bool OutcomeUnknown, out Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? AcceptedTurn) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Id.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Id.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.OutcomeUnknown.get -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.OutcomeUnknown.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Owner.get -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Owner.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Revision.get -> long
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Revision.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.SpecialistConversationDocument(string! Id, Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner! Owner, long Revision, string? ActiveTurnHandle, string? ActiveFence, bool OutcomeUnknown, Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? AcceptedTurn) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.Deconstruct(out string? TenantId, out string! PersistencePartition, out string! WorkflowExecutionId, out string! DefinitionVersionId, out string! TemplateHash) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.DefinitionVersionId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.DefinitionVersionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.PersistencePartition.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.PersistencePartition.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.SpecialistConversationOwner(string? TenantId, string! PersistencePartition, string! WorkflowExecutionId, string! DefinitionVersionId, string! TemplateHash) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.TemplateHash.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.TemplateHash.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.TenantId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.TenantId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.WorkflowExecutionId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.WorkflowExecutionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Conversation.get -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Conversation.init -> void
+override Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? left, Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? left, Elsa.Agent.Specialists.Core.Models.SpecialistAcceptedTurnReference? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationAdmission? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.FromInvocation(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity) -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner!
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? right) -> bool

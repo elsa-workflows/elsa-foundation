@@ -42,7 +42,8 @@ admission. A definition's continuity capability does not implicitly reuse histor
 `elsa.specialist.text-history/1` codec now produces protected candidates for continuity-enabled turns;
 the journal accepts that candidate and business result together. Restoration requires a trusted
 admitted conversation/revision reference, selected ordinary owner scope and exact specialist version.
-This codec increment does not yet deliver the durable conversation-admission/control path.
+The journal now admits a workflow-owned revision before dispatch and restores only its previous
+accepted receipt. Native public continuation controls remain pending.
 It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
 and uses the existing Secrets key ring with retained configured decryption keys. Histories are bounded to64
 messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.
@@ -62,8 +63,8 @@ for a fresh model request. This profile establishes no durable recovery or distr
 The [EF journal](../Persistence/EntityFrameworkCore/README.md) now implements the same conditional
 turn lifecycle over relational storage and supports consumer-owned contexts. A selected database
 survives development-feature registration order; conflicting explicit selections and missing/duplicate
-startup registrations are refused. This initial storage increment does not establish durable
-conversation admission or native delivery recovery.
+startup registrations are refused. Conversation claim/accept/failure transitions now commit with the associated turn;
+native delivery recovery remains separate work.
 
 The [model provider port](../Core/EXTENSION_POINTS.md) owns actual credential resolution/current
 authorization and physical SDK/HTTP retry guarantees. Durable sessions, journal/cancellation/process

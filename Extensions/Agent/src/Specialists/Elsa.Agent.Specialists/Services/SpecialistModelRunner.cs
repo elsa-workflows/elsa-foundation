@@ -10,7 +10,10 @@ using Microsoft.Extensions.AI;
 namespace Elsa.Agent.Specialists.Services;
 
 internal sealed record SpecialistTurnRequest(SpecialistInvocationIdentity Identity, SpecialistRuntimeDescriptor Descriptor, ActivityContract Contract, JsonElement Inputs, string BindingFingerprint,
-    SpecialistSessionReference? PreparedSession = null, SpecialistSessionTarget? SessionTarget = null);
+    SpecialistSessionReference? PreparedSession = null, SpecialistSessionTarget? SessionTarget = null)
+{
+    public SpecialistConversationAdmission? Continuation { get; init; }
+}
 internal sealed record SpecialistTurnResult(JsonElement Result, long? InputTokens, long? OutputTokens, long? TotalTokens, int ModelCalls, int ConnectionVersion,
     SpecialistSessionReference? Session = null)
 {
@@ -29,8 +32,10 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
     public PreparedSpecialistSchema ValidateRequest(SpecialistTurnRequest request)
     {
         var descriptor = request.Descriptor;
-        if (request.PreparedSession is not null && !descriptor.AllowContinuity)
+        if ((request.PreparedSession is not null || request.Continuation is not null) && !descriptor.AllowContinuity)
             throw Failure("specialist.session.disallowed", "This published specialist does not allow conversation continuity.");
+        if (request.Continuation is { } continuation && (!SpecialistTurnDocumentRules.IsToken(continuation.ConversationId) || continuation.ExpectedRevision is < 1 or long.MaxValue))
+            throw Failure("specialist.session.admission", "Explicit continuation requires a conversation and a positive retained base revision.");
         if (request.Contract.Inputs.Values.Any(x => x.Policy.RequiresEncryption || x.IsCredential) || request.Contract.Result.Policy.RequiresEncryption ||
             request.Contract.Result.Projections.Values.Any(x => x.Policy.RequiresEncryption))
             throw Failure("specialist.value.encryption", "This execution profile cannot recover native encryption-required business values.");

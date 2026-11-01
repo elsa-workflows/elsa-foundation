@@ -124,6 +124,21 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             document => document with { Status = SpecialistTurnStatus.Claimed, ChildInvocationId = childInvocationId, Fence = fence }, cancellationToken);
     }
 
+    public async ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var scope = Scope(identity);
+            Token(conversationId);
+            var row = await context.Set<SpecialistConversationRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Id == conversationId, cancellationToken);
+            if (row is null) return null;
+            var document = ReadConversation(row);
+            return document.Owner == SpecialistConversationOwner.FromInvocation(identity) ? document : null;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception) { throw Failure(exception); }
+    }
+
     public async ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, string fence, DateTimeOffset now, CancellationToken cancellationToken)
     {
         Fence(fence);
@@ -199,6 +214,15 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             if (before.Identity != identity || !admits(before) || requireDeadline && before.Deadline <= now) return null;
             var next = change(before);
             Validate(next);
+            SpecialistConversationRecord? conversationRow = null;
+            SpecialistConversationDocument? conversationNext = null;
+            if (before.Conversation is { } admission)
+            {
+                conversationRow = await owned.Set<SpecialistConversationRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Id == admission.ConversationId, cancellationToken);
+                conversationNext = SpecialistConversationRules.Change(before, next, conversationRow is null ? null : ReadConversation(conversationRow));
+                if (conversationNext is null) return null;
+                SpecialistConversationRules.Validate(conversationNext);
+            }
             var payload = Serialize(next);
             var ticks = now.UtcTicks;
             var changed = await owned.Set<SpecialistTurnRecord>().Where(x => x.ScopeKey == scope && x.Handle == handle &&
@@ -207,6 +231,24 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
                 .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, row.Version + 1).SetProperty(x => x.Status, (int)next.Status)
                     .SetProperty(x => x.Fence, next.Fence).SetProperty(x => x.Payload, payload), cancellationToken);
             if (changed != 1) return null;
+            if (conversationNext is not null)
+            {
+                var conversationPayload = JsonSerializer.Serialize(conversationNext, Json);
+                if (conversationRow is null)
+                {
+                    owned.Set<SpecialistConversationRecord>().Add(new() { ScopeKey = scope, Id = conversationNext.Id,
+                        SchemaVersion = SpecialistsEfModule.SchemaVersion, Payload = conversationPayload });
+                    await owned.SaveChangesAsync(cancellationToken);
+                }
+                else
+                {
+                    var conversationChanged = await owned.Set<SpecialistConversationRecord>().Where(x => x.ScopeKey == scope && x.Id == conversationRow.Id &&
+                        x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == conversationRow.Version)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, conversationRow.Version + 1).SetProperty(x => x.Payload, conversationPayload), cancellationToken);
+                    // Disposing this uncommitted transaction also rolls back the preceding turn CAS.
+                    if (conversationChanged != 1) return null;
+                }
+            }
             await transaction.CommitAsync(cancellationToken);
             return next;
         }
@@ -258,6 +300,16 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         if (payload.Length > MaximumRecordBytes || Utf8.GetByteCount(payload) > MaximumRecordBytes)
             throw new InvalidDataException("The specialist journal record exceeds the storage profile.");
         return payload;
+    }
+
+    private static SpecialistConversationDocument ReadConversation(SpecialistConversationRecord row)
+    {
+        if (row.SchemaVersion != SpecialistsEfModule.SchemaVersion || row.Version < 0 || row.Payload.Length > MaximumRecordBytes)
+            throw new InvalidDataException("The specialist conversation record schema or bounds are unsupported.");
+        var document = JsonSerializer.Deserialize<SpecialistConversationDocument>(row.Payload, Json) ?? throw new InvalidDataException("The specialist conversation record is missing.");
+        SpecialistConversationRules.Validate(document);
+        if (document.Id != row.Id) throw new InvalidDataException("The specialist conversation header does not match its record.");
+        return document;
     }
     private static SpecialistTurnDocument Clone(SpecialistTurnDocument document) => JsonSerializer.Deserialize<SpecialistTurnDocument>(Serialize(document), Json)!;
     private static SpecialistJournalException Failure(Exception exception, string? handle = null) =>

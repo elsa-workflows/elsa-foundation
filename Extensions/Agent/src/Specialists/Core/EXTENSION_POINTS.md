@@ -72,10 +72,19 @@ usage from conservative reserved output when attribution is unavailable. Input/t
 are not established by this mechanism. Configured model identity and reported identity remain distinct.
 
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
-credential durability or end-to-end recovery qualification. This initial conditional turn boundary
-does not yet provide conversation admission, delivery rebinding, hard input/total-token accounting or retention controls.
+credential durability or end-to-end recovery qualification. Delivery rebinding, hard input/total-token accounting and retention controls remain separate M3 work.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.
 Cancellation remains cancellation. An exception means the transition is unconfirmed; it never permits
 another inference request. Callers do not infer remote absence from a failed journal write.
+
+Optional `SpecialistTurnDocument.Conversation` admits a base revision during claim. The initial owner
+is derived from verified native provenance: tenant, partition, workflow execution and exact specialist
+version/template. `ReadConversationAsync` requires that same owner; a conversation ID is not a grant.
+Revision zero creates a fresh conversation. A positive revision must match the last accepted revision,
+with no active operation or unresolved uncertainty. Claim and conversation admission form one atomic
+write; acceptance commits the protected result/session and advances the conversation once in that
+same transaction. Known failure releases the base revision without adding history. OutcomeUnknown
+retains the active operation and blocks continuation. Old accepted operation replay never rewinds the
+conversation. A custom backend must preserve all of these paired conditional transitions.

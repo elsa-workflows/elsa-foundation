@@ -19,6 +19,21 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 public sealed class SpecialistJournalTests
 {
     [Fact]
+    public async Task Conversation_admission_header_must_match_the_protected_request()
+    {
+        await using var services = Services();
+        var state = new InMemorySpecialistTurnState();
+        var store = new InMemorySpecialistTurnStore(new Access("tenant"), state);
+        var journal = Journal(store, services);
+        var request = Request();
+        request = request with { Descriptor = request.Descriptor with { AllowContinuity = true } };
+        var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, default);
+        state.Rows[handle] = state.Rows[handle] with { Conversation = new(new string('b', 64), 9) };
+        var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ReadAsync(handle, request.Identity, default));
+        Assert.Equal("specialist.journal.protection", error.Code);
+    }
+
+    [Fact]
     public async Task A_mutated_plain_journal_maximum_cannot_raise_the_authenticated_request_budget()
     {
         await using var services = Services();

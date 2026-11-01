@@ -16,6 +16,11 @@ internal static class SpecialistTurnDocumentRules
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(document.Identity);
         Token(document.Handle); Token(document.Key); Token(document.RequestHash);
+        if (document.Conversation is { } conversation)
+        {
+            Token(conversation.ConversationId);
+            if (conversation.ExpectedRevision is < 0 or long.MaxValue) throw new InvalidDataException("The specialist conversation base revision is invalid.");
+        }
         if (document.Key != SpecialistTurnDocument.CalculateOperationKey(document.Identity))
             throw new InvalidDataException("The specialist operation key does not match its native scope and operation.");
         if (!Enum.IsDefined(document.Status) || string.IsNullOrWhiteSpace(document.ProtectedRequest) ||

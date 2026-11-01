@@ -72,6 +72,9 @@ public sealed class OrdinalCollationMigrationTests
         ("Specialists", "elsa_specialist_turns", "OperationKey"),
         ("Specialists", "elsa_specialist_turns", "SchemaVersion"),
         ("Specialists", "elsa_specialist_turns", "Fence"),
+        ("Specialists", "elsa_specialist_conversations", "ScopeKey"),
+        ("Specialists", "elsa_specialist_conversations", "Id"),
+        ("Specialists", "elsa_specialist_conversations", "SchemaVersion"),
         ("WorkflowsDesign", "elsa_workflow_definitions_v2", "IdLookupHash"),
         ("WorkflowsDesign", "elsa_workflow_definition_versions", "SemVerSortKey")
     ];
@@ -88,6 +91,7 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_definitions", "DisplayName"),
         ("ClusterMembership", "elsa_cluster_members", "ReportJson"),
         ("Specialists", "elsa_specialist_turns", "Payload"),
+        ("Specialists", "elsa_specialist_conversations", "Payload"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentJson"),
         ("IdentityIam", "identity_users", "PasswordHash"),
         ("IdentityIam", "identity_roles", "PermissionsJson"),

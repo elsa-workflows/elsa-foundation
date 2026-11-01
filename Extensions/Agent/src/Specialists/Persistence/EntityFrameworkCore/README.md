@@ -52,10 +52,17 @@ actual migrations on PostgreSQL, SQL Server and MySQL and exercises competing st
 fences, acceptance and fresh-host replay. Full tier sets `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`
 for this suite, so an unavailable required database fails rather than skipping.
 
-This initial storage increment covers the existing native turn lifecycle. Durable conversation
-admission, stable operation replay across native attempts, physical request reservations, delivery
-settlement and content retention remain part of M3. A fresh service provider/context test proves
-encrypted pair recovery; it is not independent-process or live-model qualification.
+The conversation table retains owner/version, revision, active turn/fence, uncertainty and the last
+accepted receipt reference. Staging alone does not create a conversation. Claim atomically admits
+one operation at its expected revision. Acceptance advances the revision and stores the turn result
+in one transaction; a conversation CAS/write failure rolls back the turn mutation too. Known failure
+releases the active revision without adding history; unknown outcome blocks further continuation.
+The initial owner is a verified workflow execution in the exact tenant/partition and specialist
+version/template. Cross-workflow ownership policies are not supplied by business input.
+
+Stable operation replay across native attempts, public invocation controls, native delivery settlement
+and content retention remain part of M3. A fresh service provider/context test proves encrypted pair
+recovery; it is not independent-process or live-model qualification.
 
 See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with
 `bash tools/ef/generate-module-migrations.sh 'Specialists.*DbContext'`; temporarily remove the generated

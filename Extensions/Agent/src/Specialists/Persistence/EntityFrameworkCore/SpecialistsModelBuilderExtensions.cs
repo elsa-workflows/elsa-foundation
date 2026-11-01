@@ -12,6 +12,7 @@ public static class SpecialistsModelBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.ApplyConfiguration(new SpecialistTurnRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new SpecialistConversationRecordConfiguration());
         var payloadType = providerName switch
         {
             EfProviderNames.Sqlite => "TEXT", EfProviderNames.SqlServer => "nvarchar(max)",
@@ -19,6 +20,9 @@ public static class SpecialistsModelBuilderExtensions
             _ => throw new ArgumentOutOfRangeException(nameof(providerName))
         };
         modelBuilder.Entity<SpecialistTurnRecord>().Property(x => x.Payload).HasColumnType(payloadType);
+        modelBuilder.Entity<SpecialistConversationRecord>().Property(x => x.Payload).HasColumnType(payloadType);
+        EfOrdinalCollation.ApplyToEntities(modelBuilder, providerName, new[] { typeof(SpecialistConversationRecord) },
+            nameof(SpecialistConversationRecord.ScopeKey), nameof(SpecialistConversationRecord.Id), nameof(SpecialistConversationRecord.SchemaVersion));
         EfOrdinalCollation.ApplyToEntities(modelBuilder, providerName, new[] { typeof(SpecialistTurnRecord) },
             nameof(SpecialistTurnRecord.ScopeKey), nameof(SpecialistTurnRecord.Handle), nameof(SpecialistTurnRecord.OperationKey), nameof(SpecialistTurnRecord.SchemaVersion), nameof(SpecialistTurnRecord.Fence));
         return modelBuilder;

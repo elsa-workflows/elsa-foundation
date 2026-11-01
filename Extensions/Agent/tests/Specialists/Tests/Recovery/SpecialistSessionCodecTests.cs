@@ -170,6 +170,47 @@ public sealed class SpecialistSessionCodecTests
         Assert.DoesNotContain("private-reasoning", plaintext, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Admitted_history_restores_from_an_accepted_receipt_and_old_replay_does_not_rewind_it()
+    {
+        using var protection = Protection("old", ("old", "fixture-old-key"));
+        var access = new Access(PersistenceAccessContext.Scoped(new("tenant")));
+        var state = new Elsa.Agent.Specialists.Journal.InMemorySpecialistTurnState();
+        var store = new Elsa.Agent.Specialists.Journal.InMemorySpecialistTurnStore(access, state);
+        var journal = new Elsa.Agent.Specialists.Journal.SpecialistTurnJournal(store, protection.GetRequiredService<ISecretValueProtector>(), access);
+        var factory = new Factory();
+        var runner = new SpecialistModelRunner([factory], new SpecialistSchemaValidator(), Codec(protection));
+        var firstRequest = Request("one") with { SessionTarget = null };
+        var first = await Run(firstRequest);
+        var secondRequest = Request("two") with { SessionTarget = null,
+            Identity = Identity with { OperationKey = "second", ActivityExecutionId = "second" }, Continuation = new(first.Result.Session!.ConversationId, 1) };
+        var second = await Run(secondRequest);
+        Assert.Equal(4, Codec(protection).Restore(second.Result.Session!, Identity).Count);
+        Assert.Equal(new[] { 1, 3 }, factory.Requests.Select(x => x.Count));
+        Assert.Equal(first.Handle, await journal.StageAsync(firstRequest, DateTimeOffset.UtcNow, default));
+        var replay = await journal.ResultAsync(first.Handle, firstRequest.Identity, "child-first", default);
+        Assert.Equal(1, replay.Session!.Revision);
+        Assert.Equal(2, (await store.ReadConversationAsync(first.Result.Session.ConversationId, Identity, default))!.Revision);
+        Assert.Equal(2, factory.Opens);
+        var stale = secondRequest with { Identity = secondRequest.Identity with { OperationKey = "stale", ActivityExecutionId = "stale" } };
+        var staged = await journal.StageAsync(stale, DateTimeOffset.UtcNow, default);
+        await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ClaimAsync(staged, stale.Identity, "stale", DateTimeOffset.UtcNow, default));
+        Assert.Equal(2, factory.Opens);
+
+        async Task<(string Handle, SpecialistTurnResult Result)> Run(SpecialistTurnRequest request)
+        {
+            runner.ValidateRequest(request);
+            var now = DateTimeOffset.UtcNow;
+            var handle = await journal.StageAsync(request, now, default);
+            var claim = await journal.ClaimAsync(handle, request.Identity, request.Continuation is null ? "child-first" : "child-second", now, default);
+            var admitted = await journal.PrepareSessionAsync(claim, request, default);
+            Assert.True(await journal.DispatchAsync(claim, now, default));
+            var result = await runner.RunAsync(admitted, default);
+            Assert.True(await journal.AcceptAsync(claim, result, DateTimeOffset.UtcNow, default));
+            return (handle, result);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

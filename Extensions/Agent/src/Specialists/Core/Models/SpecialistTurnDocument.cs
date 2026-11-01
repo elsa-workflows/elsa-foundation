@@ -25,6 +25,9 @@ public sealed record SpecialistTurnDocument(string Handle, string Key, string Re
     /// <summary>The completed response freezes further requests; unknown counts retain their reservations.</summary>
     public SpecialistModelResponseObservation? ResponseObservation { get; init; }
 
+    /// <summary>Optional workflow-owned conversation admission. A zero revision creates a fresh conversation at claim.</summary>
+    public SpecialistConversationAdmission? Conversation { get; init; }
+
     /// <summary>
     /// Identifies one operation in its native workflow and ordinary tenant/partition scope.
     /// Attempts and dispatch ownership remain separate conditional journal state.

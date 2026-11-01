@@ -10,6 +10,7 @@ internal sealed class InMemorySpecialistTurnState
     public Lock Gate { get; } = new();
     public Dictionary<string, SpecialistTurnDocument> Rows { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> Keys { get; } = new(StringComparer.Ordinal);
+    public Dictionary<(string? Tenant, string Partition, string Id), SpecialistConversationDocument> Conversations { get; } = new();
 }
 
 internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAccessor access, InMemorySpecialistTurnState state) : ISpecialistTurnStore
@@ -60,8 +61,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             var row = Find(handle, identity);
             if (row is null || row.Status != SpecialistTurnStatus.Prepared || now >= row.Deadline) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
             row = row with { Status = SpecialistTurnStatus.Claimed, ChildInvocationId = childInvocationId, Fence = fence };
-            Save(row);
-            return ValueTask.FromResult<SpecialistTurnDocument?>(row);
+            return ValueTask.FromResult<SpecialistTurnDocument?>(TrySave(row) ? row : null);
         }
     }
 
@@ -72,8 +72,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         {
             var row = Find(handle, identity);
             if (row is null || row.Status != SpecialistTurnStatus.Claimed || row.Fence != fence || now >= row.Deadline) return ValueTask.FromResult(false);
-            Save(row with { Status = SpecialistTurnStatus.Dispatching });
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(TrySave(row with { Status = SpecialistTurnStatus.Dispatching }));
         }
     }
 
@@ -85,8 +84,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             var row = Find(handle, identity);
             if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || now >= row.Deadline ||
                 row.ModelRequests is { Count: > 0 } && row.ResponseObservation is null) return ValueTask.FromResult(false);
-            Save(row with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult });
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(TrySave(row with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult }));
         }
     }
 
@@ -97,7 +95,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         {
             var row = Find(handle, identity);
             if (row is not null && row.Fence == fence && row.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching)
-                Save(row with { Status = outcomeUnknown ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Failed, FailureCode = code });
+                _ = TrySave(row with { Status = outcomeUnknown ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Failed, FailureCode = code });
         }
         return ValueTask.CompletedTask;
     }
@@ -112,8 +110,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now || row.ResponseObservation is not null ||
                 (row.ModelRequests?.Count ?? 0) >= row.MaximumModelCalls || (row.ModelRequests ?? []).Any(x => x.Id == reservation.Id))
                 return ValueTask.FromResult<SpecialistModelRequestReservation?>(null);
-            Save(row with { ModelRequests = [.. row.ModelRequests ?? [], reservation] });
-            return ValueTask.FromResult<SpecialistModelRequestReservation?>(reservation);
+            return ValueTask.FromResult<SpecialistModelRequestReservation?>(TrySave(row with { ModelRequests = [.. row.ModelRequests ?? [], reservation] }) ? reservation : null);
         }
     }
 
@@ -129,15 +126,36 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now || row.ResponseObservation is not null ||
                 requestIds.Count == 0 || !(row.ModelRequests ?? []).Select(x => x.Id).SequenceEqual(requestIds, StringComparer.Ordinal))
                 return ValueTask.FromResult(false);
-            Save(row with { ResponseObservation = observation });
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(TrySave(row with { ResponseObservation = observation }));
         }
     }
 
-    private void Save(SpecialistTurnDocument document)
+    public ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureScope(identity);
+        SpecialistTurnDocumentRules.Token(conversationId);
+        lock (gate)
+        {
+            state.Conversations.TryGetValue((identity.TenantId, identity.PersistencePartition, conversationId), out var document);
+            return ValueTask.FromResult(document?.Owner == SpecialistConversationOwner.FromInvocation(identity) ? document : null);
+        }
+    }
+
+    private bool TrySave(SpecialistTurnDocument document)
     {
         ValidateRecord(document, prepared: false);
+        if (document.Conversation is { } admission)
+        {
+            var key = (document.Identity.TenantId, document.Identity.PersistencePartition, admission.ConversationId);
+            state.Conversations.TryGetValue(key, out var current);
+            var next = SpecialistConversationRules.Change(rows[document.Handle], document, current);
+            if (next is null) return false;
+            SpecialistConversationRules.Validate(next);
+            state.Conversations[key] = next;
+        }
         rows[document.Handle] = SpecialistTurnDocumentRules.Copy(document);
+        return true;
     }
 
     private static void ValidateRecord(SpecialistTurnDocument document, bool prepared)

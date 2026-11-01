@@ -9,3 +9,4 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: ManifestExtension("efModules", "Specialists")]
 [assembly: EfSchemaFamily(SpecialistsEfModule.SchemaFamily, "Specialists", SpecialistsEfModule.SchemaVersion)]
 [assembly: EfSchemaContent(SpecialistsEfModule.SchemaFamily, typeof(SpecialistTurnRecord), nameof(SpecialistTurnRecord.Payload))]
+[assembly: EfSchemaContent(SpecialistsEfModule.SchemaFamily, typeof(SpecialistConversationRecord), nameof(SpecialistConversationRecord.Payload))]
