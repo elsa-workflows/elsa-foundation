@@ -72,10 +72,11 @@ public sealed partial class SpecialistNativeTests
         }
         var physical = provider.GetRequiredService<IPostCommitOutboxLookupStore>();
         var overlay = new OverlayOnlySource(claim.Item);
-        var expiry = new ExpiringCancelSource(physical, clock);
+        var expiry = new ExpiringCancelParentRead(activities, clock, parent.InvocationId);
         var selected = defect == "privileged" ? new SettlementAccess(PersistenceAccessContext.PrivilegedScoped(scope, new("test"))) : access;
-        var reader = defect == "overlay" ? (IPostCommitOutboxLookupStore)overlay : defect == "expired-after-proof" ? expiry : physical;
-        var handler = new SpecialistSettlementHandler(provider.GetRequiredService<SpecialistSettlementBoundary>(), activities, reader, selected, clock,
+        var reader = defect == "overlay" ? (IPostCommitOutboxLookupStore)overlay : physical;
+        var nativeReader = defect == "expired-after-proof" ? expiry : activities;
+        var handler = new SpecialistSettlementHandler(provider.GetRequiredService<SpecialistSettlementBoundary>(), nativeReader, reader, selected, clock,
             provider.GetRequiredService<SpecialistTurnJournal>(), provider.GetRequiredService<ISpecialistTurnStore>());
         await Assert.ThrowsAnyAsync<Exception>(() => handler.HandleAsync(presented).AsTask());
         Assert.Equal(1, trace.CancellationAttempts);
@@ -95,15 +96,20 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal(2, trace.CancellationAttempts);
     }
 
-    private sealed class ExpiringCancelSource(IPostCommitOutboxLookupStore inner, FakeTimeProvider clock) : IPostCommitOutboxLookupStore
+    private sealed class ExpiringCancelParentRead(IActivityExecutionStateStore inner, FakeTimeProvider clock, string parentId) : IActivityExecutionStateStore
     {
-        private int reads;
-        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string id, CancellationToken cancellationToken = default) => throw new InvalidOperationException("An overlay read cannot authorize cancellation.");
-        public ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string id, CancellationToken cancellationToken = default)
+        private int expired;
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) => inner.SaveAsync(state, cancellationToken);
+        public async ValueTask<ActivityExecutionState?> FindAsync(string workflow, string activity, CancellationToken cancellationToken = default)
         {
-            if (Interlocked.Increment(ref reads) == 2) clock.Advance(TimeSpan.FromSeconds(61));
-            return inner.FindDurableAsync(id, cancellationToken);
+            var state = await inner.FindAsync(workflow, activity, cancellationToken);
+            // Expiry is caused by native-proof I/O, independently of whether a final source
+            // lookup exists. Removing that guard must not remove the race being tested.
+            if (activity == parentId && Interlocked.Exchange(ref expired, 1) == 0) clock.Advance(TimeSpan.FromSeconds(61));
+            return state;
         }
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default) => inner.ListPageAsync(query, cancellationToken);
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken cancellationToken = default) => inner.ListByParentPageAsync(query, cancellationToken);
     }
 
     public static IEnumerable<object[]> NativeCancellationJourneys() =>
@@ -111,18 +117,19 @@ public sealed partial class SpecialistNativeTests
         from phase in new[] { "before-claim", "claimed", "dispatched", "reserved", "dispatching", "accepted" }
         from mode in new[] { "normal", "before-write", "lost-response" }
         from persistence in new[] { PersistenceMode.Balanced, PersistenceMode.Durable }
-        select new object[] { durable, phase, mode, persistence };
+        from continuity in new[] { false, true }
+        select new object[] { durable, phase, mode, persistence, continuity };
 
     [Theory]
     [MemberData(nameof(NativeCancellationJourneys))]
-    public async Task Real_actor_cancellation_has_durable_idempotent_responsibility_without_native_application(bool durable, string phase, string mode, PersistenceMode persistence)
+    public async Task Real_actor_cancellation_has_durable_idempotent_responsibility_without_native_application(bool durable, string phase, string mode, PersistenceMode persistence, bool continuity)
     {
         using var files = new JournalFiles();
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         var trace = new LeaseTrace { HoldCancellation = mode == "before-write", LoseCancellationResponse = mode == "lost-response" };
         var factory = new FixtureFactory("{\"Article\":\"returned model text\"}");
         await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, clock, trace, persistence);
-        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var executable = await ExecutableAsync(provider, allowContinuity: continuity);
         var (actor, _) = await StartAsync(provider, executable);
         var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
         async ValueTask CancelAsync()
@@ -180,19 +187,19 @@ public sealed partial class SpecialistNativeTests
         Assert.Null(document.Applications);
         Assert.Equal(WorkflowExecutionStatus.Cancelled, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
         Assert.All(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run"), state => Assert.Null(state.Completion));
+        if (phase is "before-claim" or "claimed" or "dispatched") Assert.Empty(document.ModelRequests ?? []);
+        else Assert.Single(document.ModelRequests!);
         var source = (await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(cancellation.Cancellation.SourceId))!;
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, source.Status);
         Assert.True(source.RetryPolicy.RetryUntilAcknowledged);
         Assert.Equal(cancellation.Cancellation.SourceFingerprint, RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent));
         var conversation = await provider.GetRequiredService<ISpecialistTurnStore>().ReadConversationAsync(document.Handle, request.Identity, default);
-        if (phase == "before-claim") Assert.Null(conversation);
+        if (phase == "before-claim" || !continuity) Assert.Null(conversation);
         else
         {
             Assert.Equal(phase == "accepted" ? 1 : 0, conversation!.Revision);
             Assert.Null(conversation.ActiveTurnHandle);
             Assert.False(conversation.OutcomeUnknown);
-            if (phase is "claimed" or "dispatched") Assert.Empty(document.ModelRequests ?? []);
-            else Assert.Single(document.ModelRequests!);
         }
     }
 

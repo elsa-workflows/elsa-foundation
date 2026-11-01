@@ -271,9 +271,37 @@ public sealed class SpecialistJournalProviderTests
             Assert.Equal(SpecialistTurnStatus.Cancelled, (await recovered.ReadAsync(preClaim.Handle, preClaim.Identity, CancellationToken.None))!.Status);
         }
 
-        foreach (var acceptsFirst in new[] { false, true })
+        var fanout = RaceDocument("two-cancelled-parents");
+        await recovered.StageAsync(fanout, CancellationToken.None);
+        var parentA = fanout.Identity with { ActivityExecutionId = "cancel-parent-a" };
+        var parentB = fanout.Identity with { ActivityExecutionId = "cancel-parent-b" };
+        await recovered.StageAsync(fanout with { Identity = parentA, Deliveries = [new(parentA)] }, CancellationToken.None);
+        await recovered.StageAsync(fanout with { Identity = parentB, Deliveries = [new(parentB)] }, CancellationToken.None);
+        var cancelledB = CancelRequest(parentB) with { SourceId = "cancel-source:parent-b", SourceFingerprint = Hash("cancel-parent-b") };
+        var cancelledA = CancelRequest(parentA) with { SourceId = "cancel-source:parent-a", SourceFingerprint = Hash("cancel-parent-a") };
+        var independent = new RenewalBeforeUpdate(async cancellationToken =>
         {
-            var contested = RaceDocument(acceptsFirst ? "accept-before-cancel" : "cancel-before-accept");
+            await using var scope = restarted.CreateAsyncScope();
+            Assert.Equal(SpecialistCancellationOutcome.OtherDeliveryUnchanged,
+                (await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().CancelAsync(cancelledB, cancellationToken)).Outcome);
+        });
+        independent.Arm("elsa_specialist_operations");
+        await using (var host = RaceHost(independent))
+        await using (var scope = host.CreateAsyncScope())
+        {
+            Assert.Equal(SpecialistCancellationOutcome.OtherDeliveryUnchanged,
+                (await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().CancelAsync(cancelledA, CancellationToken.None)).Outcome);
+            Assert.Equal(1, independent.Count);
+        }
+        Assert.Null(await recovered.ClaimAsync(fanout.Handle, parentA, "cancelled-a-child", "cancelled-a-fence", now.AddSeconds(2), CancellationToken.None));
+        Assert.Null(await recovered.ClaimAsync(fanout.Handle, parentB, "cancelled-b-child", "cancelled-b-fence", now.AddSeconds(2), CancellationToken.None));
+        Assert.NotNull(await recovered.ClaimAsync(fanout.Handle, fanout.Identity, "uncancelled-child", "uncancelled-fence", now.AddSeconds(2), CancellationToken.None));
+
+        foreach (var acceptsFirst in new[] { false, true })
+        foreach (var continuity in new[] { false, true })
+        {
+            var contested = RaceDocument((acceptsFirst ? "accept-before-cancel" : "cancel-before-accept") + (continuity ? "-continuity" : "-fresh"));
+            if (!continuity) contested = contested with { Conversation = null };
             await recovered.StageAsync(contested, CancellationToken.None);
             Assert.NotNull(await recovered.ClaimAsync(contested.Handle, contested.Identity, "contested-child", "contested-fence", now, CancellationToken.None));
             var token = new SpecialistTurnLeaseToken("contested-fence", 1);
@@ -296,9 +324,12 @@ public sealed class SpecialistJournalProviderTests
             var retained = (await recovered.ReadAsync(contested.Handle, contested.Identity, CancellationToken.None))!;
             Assert.Equal(acceptsFirst ? SpecialistTurnStatus.Accepted : SpecialistTurnStatus.Cancelled, retained.Status);
             Assert.Equal(acceptsFirst ? "accepted-winner" : null, retained.ProtectedResult);
-            var retainedConversation = (await recovered.ReadConversationAsync(contested.Conversation!.ConversationId, contested.Identity, CancellationToken.None))!;
-            Assert.Equal(acceptsFirst ? 1 : 0, retainedConversation.Revision);
-            Assert.Null(retainedConversation.ActiveTurnHandle);
+            if (continuity)
+            {
+                var retainedConversation = (await recovered.ReadConversationAsync(contested.Conversation!.ConversationId, contested.Identity, CancellationToken.None))!;
+                Assert.Equal(acceptsFirst ? 1 : 0, retainedConversation.Revision);
+                Assert.Null(retainedConversation.ActiveTurnHandle);
+            }
         }
 
         var transferred = RaceDocument("old-cancel-after-new-claim");
@@ -321,6 +352,7 @@ public sealed class SpecialistJournalProviderTests
             Assert.Null(receipt.AdmissionGeneration);
             Assert.Equal(1, transfer.Count);
         }
+        Assert.Null(await recovered.ClaimAsync(transferred.Handle, transferred.Identity, "old-child", "late-old-fence", now.AddSeconds(60), CancellationToken.None));
         Assert.True(await recovered.DispatchAsync(transferred.Handle, successorIdentity, new("new-delivery-fence", 2), now.AddSeconds(31), CancellationToken.None));
         Assert.True(await recovered.AcceptAsync(transferred.Handle, successorIdentity, new("new-delivery-fence", 2), "new-delivery-result", now.AddSeconds(31), CancellationToken.None));
         await using (var host = Host())
