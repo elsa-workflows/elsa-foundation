@@ -69,7 +69,9 @@ package/feature identity. Make Interchange specialize the Design feature.
 Interchange also refers to runtime constants/activity identities; simply moving the three files does
 not create an independent authoring deployment. Runtime `BpmnGraphAdapter` consumes retained-condition
 refusal vocabulary. The M0 native consumer is Design-free; its BPMN consumer contains two Design.Core
-assemblies, accurately recorded `ObservedUnresolved`.
+assemblies, accurately recorded `ObservedUnresolved` at its original source. The
+[M4 follow-up](../../docs/reports/elsa-agents-publication-research.md#m4-package-boundary-follow-up)
+records the independent package separation proof and its exact candidate; the original M0 receipt is not relabelled.
 
 **Implementation consequence**: Core owns shared graph records and frozen identifiers; Design owns
 authored structure/projection/lowering; runtime retains heavy interpreter packages. Preserve aliases,

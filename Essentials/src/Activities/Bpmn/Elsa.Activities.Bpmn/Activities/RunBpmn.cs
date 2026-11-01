@@ -1,4 +1,5 @@
 using Elsa.Activities.Bpmn.Contracts;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -12,7 +13,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 [RefusesSecretBinding(nameof(Model), SecretBindingRefusalReason.FixedAtPublish)]
 public sealed class RunBpmn(IBpmnModelActivityRuntime runtime) : StatefulActivity<RunBpmnResult, RunBpmnState, RunBpmnCompletion>
 {
-    public const string ActivityType = "Elsa.Activities.Bpmn.Activities.RunBpmn";
+    public const string ActivityType = BpmnActivityIdentities.RunType;
 
     [ActivityInput(Key = nameof(Model), Order = 0)]
     [Required]

@@ -5,7 +5,7 @@ using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
-using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
@@ -42,7 +42,7 @@ internal sealed class BpmnWorkBinder : IBpmnWorkBinder
                 BpmnDocumentImporter.DefaultDispatchWorkflowActivityVersionId, Literal("WorkflowDefinitionId", request.WorkflowDefinitionId),
                 Literal("WaitForCompletion", request.WaitForCompletion)),
             BpmnWorkBindingKind.NestedProcess when request.NestedProcess is not null => request.NestedProcess with
-                { Inputs = [Literal(nameof(BpmnProcessActivity.CanStartWorkflow), false)] },
+                { Inputs = [Literal(BpmnProcessActivity.CanStartWorkflowInput, false)] },
             _ => null
         };
         if (activity is not null)

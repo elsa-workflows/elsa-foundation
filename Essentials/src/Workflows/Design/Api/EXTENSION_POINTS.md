@@ -202,6 +202,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
 Known implementations:
 - `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — `SupportsScopedVariables = true`)*.
 - `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — `SupportsScopedVariables = true`)*.
+- `BpmnStructureHandler` (`Elsa.Activities.Bpmn.Design`) *(cross-domain — authored BPMN children/outcomes, scoped variables and executable graph lowering)*.
 - `CompensationScopeStructureHandler` (`Elsa.Activities.Compensation`) *(cross-domain — implements `ChildrenCompletedBefore`: a handler sees its own step's result first)*.
 
 ---

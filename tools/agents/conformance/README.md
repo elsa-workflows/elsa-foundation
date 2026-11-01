@@ -40,6 +40,24 @@ subsequent qualification work. The executable is seeded from the real placed spe
 not claim M4's ordinary workflow/BPMN publication journey.
 
 
+## BPMN package boundary profile
+
+Run `qualify.py --profile bpmn-boundary --source HEAD --version <unique-local-version>
+--output <new-absolute-directory>` with the same Python and .NET prerequisites.
+This profile builds the committed BPMN Core, Design and runtime packages alongside the specialist
+packages. After real specialist publication/placement, an independent authoring process activates
+the Design feature, projects the exact specialist child and lowers/remaps its BPMN graph through
+the public structure handler. Only the compiled graph and immutable placement enter the runtime.
+The authoring package closure and loaded assemblies exclude the concrete BPMN runtime/interpreter.
+
+A separate runtime-only package consumer activates the normal CShells lifecycle and executes that
+graph with the real specialist facade/background worker and deterministic MAF contribution. Its
+resolved packages and loaded assemblies must contain zero Design/Publishing assemblies. Another
+consumer activates the combined runtime/Design features and proves the same execution retains one
+authoring handler and one publication pin contribution. Every candidate archive/extracted DLL is
+checked against the isolated consumer cache. `PassedBpmnBoundaryProfile` is this finite package
+boundary receipt; it does not qualify the editorial revision loop, human review, Studio or a live model.
+
 ## File-backed native recovery profile
 
 Run the separate profile with the bundled Python runtime:
