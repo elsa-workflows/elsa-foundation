@@ -117,20 +117,34 @@ public sealed class AgentSessionAutonomyApiTests
         await AssertUnchangedAsync(fixture, session.Id);
     }
 
+    [Fact]
+    public async Task A_missing_session_is_not_found_without_state_change()
+    {
+        using var fixture = new Fixture();
+        var session = await fixture.CreateAsync();
+
+        var (status, body) = await fixture.SendAsync("ChangeAutonomy", new { autonomyMode = "full-auto", expectedRevision = 1 }, "missing");
+
+        AssertFailure(status, body, 404, "agent.session.not_found");
+        await AssertUnchangedAsync(fixture, session.Id);
+    }
+
     [Theory]
-    [InlineData("missing", Actor, Tenant)]
-    [InlineData(null, "actor-2", Tenant)]
-    [InlineData(null, Actor, "tenant-2")]
-    [InlineData(null, null, null)]
-    public async Task A_missing_or_foreign_session_is_not_found_without_state_change(string? sessionId, string? actor, string? tenant)
+    [InlineData("actor-2", Tenant)]
+    [InlineData(Actor, "tenant-2")]
+    [InlineData(null, null)]
+    public async Task A_foreign_session_is_refused_by_the_shared_session_authorization_without_state_change(string? actor, string? tenant)
     {
         using var fixture = new Fixture();
         var session = await fixture.CreateAsync();
 
         var (status, body) = await fixture.SendAsync("ChangeAutonomy", new { autonomyMode = "full-auto", expectedRevision = 1 },
-            sessionId ?? session.Id, Principal(actor, tenant));
+            session.Id, Principal(actor, tenant));
 
-        AssertFailure(status, body, 404, "agent.session.not_found");
+        // Same status and code as every other session-scoped route.
+        AssertFailure(status, body, 403, "agent.session.forbidden");
+        var (detailStatus, detailBody) = await fixture.SendRawAsync("GetSession", null, session.Id, Principal(actor, tenant));
+        AssertFailure(detailStatus, detailBody, 403, "agent.session.forbidden");
         await AssertUnchangedAsync(fixture, session.Id);
     }
 
@@ -144,7 +158,7 @@ public sealed class AgentSessionAutonomyApiTests
             new { autonomyMode = "full-auto", expectedRevision = 1, actorId = Actor, tenantId = Tenant, sessionId = session.Id },
             session.Id, Principal("actor-2", "tenant-2"));
 
-        AssertFailure(status, body, 404, "agent.session.not_found");
+        AssertFailure(status, body, 403, "agent.session.forbidden");
         await AssertUnchangedAsync(fixture, session.Id);
     }
 

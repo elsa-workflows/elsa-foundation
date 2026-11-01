@@ -226,8 +226,7 @@ public static class AgentApi
         var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
-            // A foreign session is indistinguishable from a missing one on this write.
-            await WritePolicyFailureAsync(context, new("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404));
+            await WritePolicyFailureAsync(context, error);
             return;
         }
         var policies = context.RequestServices.GetService<IAgentSessionPolicyService>();
