@@ -15,3 +15,5 @@ Read-only Studio inspection on the upgraded hosts passes. The successful replace
 Two refusal controls stop before any host starts: a `--product-source` naming the legacy source, and a one-byte change to the archive. At the exact product source, 26 API state-view cases and 41 ETL RunEtl/native-boundary/projector cases pass with zero failures or skips. The 41-case selection is narrower than the earlier 68-case run and does not repeat it. See the [receipt](qualification.json) and [upgrade receipts](upgrade/). Raw screenshots and host logs are hashed in the receipt and stay local until the next evidence archive.
 
 **T026 is complete.** Still unproved: the general ApiCompat/version-magnitude gate for the two default interface members (T036), renewed theme/responsive/keyboard checks, final compatibility, claims/interruption, current-head CI and independent full review (0/6).
+
+**Repeat on the claim writer:** the same `--upgrade-archive` inspection passed with products `a96f774eb` against the archived `41f1828cb` stores ([controller receipt](upgrade/claim-writer-inspection-controller.json)).

@@ -24,4 +24,8 @@ Limits:
 - The owner is shown as the raw subject id; resolving it to a display name needs an identity lookup outside this scope.
 - A raw-published process without a saved diagram is listed without its canvas.
 - Both end events report Completed/Done, so Studio does not distinguish the timeout path; the backend refusal and the absence of any completion establish it.
-- Not renewed here: theme/responsive/keyboard checks for the new controls.
+- Theme, responsive and keyboard checks for the new controls were added in the repeat below.
+
+## Repeat on the claim writer with keyboard and themes
+
+Products `a96f774eb`, the same driver extended. The first claim is made by keyboard: 14 Tab presses, then Enter. The claimed run was captured in light and dark at 1280 and 320px with no horizontal overflow. At 320px the current-work panel stacks below the canvas and is reached by vertical scrolling, as recorded for P1. The whole journey passed again with no page errors ([receipt](claim-writer-rerun-receipt.json)).

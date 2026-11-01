@@ -16,12 +16,12 @@ Each functional requirement and success criterion maps to its evidence, or to an
 | FR-008 native work identity, no new scheduler | Passed (actual) | [ETL recovery](../etl/actual-recovery.md), [compatibility](../compatibility/README.md) |
 | FR-009 ETL pipeline selection | Passed (actual) | [ETL](../etl/README.md), [ETL recovery](../etl/actual-recovery.md) (v1 pins kept after v2 published) |
 | FR-010 held failure and exact retry | Passed (actual) | [ETL retry](../etl/retry.md), [ETL recovery](../etl/actual-recovery.md) |
-| FR-011 BPMN ↔ native ↔ ETL navigation | Passed (actual) | [ETL navigation](../etl/navigation.md), [cleared-state](../etl/cleared-state/README.md) |
-| FR-012 interruption and settlement truth | Passed (actual) | [operations](../operations/README.md) in Studio; real-host claim/cancel and completion/timer in both orders; retry/cancellation race below, with an admitted replacement settled under a winning cancellation |
+| FR-011 BPMN ↔ native ↔ ETL navigation | Passed (actual) | [ETL navigation](../etl/navigation.md), [cleared-state](../etl/cleared-state/README.md), repeated on products `a96f774eb` after the scoped-store and StateCleared fixes |
+| FR-012 interruption and settlement truth | Passed (actual; Studio settlement display is component) | Claimed-work interruption is shown truthfully in Studio ([operations](../operations/README.md)). Real-host claim/cancel and completion/timer in both orders, and the retry/cancellation race with settled native cancellation, are proved through the API. Studio's "awaiting settlement" display is covered by component tests only, because the Studio journeys have no owed native settlement |
 | FR-013 capability- and authorization-aware actions | Passed (component + actual) | [claims Studio](../claims/README.md#studio-t032--component-proof), [authoring](../authoring/README.md), [operations](../operations/README.md) other-owner refusal |
 | FR-014 scope changes and durable links | Component; actual links only | Durable run/ETL links and fresh-session discovery are actual ([human P1](../human/README.md), [ETL navigation](../etl/navigation.md)). Switching backend or account during a pending operation is proved by component tests only |
 | FR-015 runtime-only and admission-off | Passed (actual) | [compatibility](../compatibility/README.md), [inspection](../inspection/README.md); claim work stays claimable, completable and cancellable after a real restart with admission off (`BpmnHumanClaimUpgradeTests`) |
-| FR-016 existing compatibility; prior writers captured | Passed (actual) | [compatibility](../compatibility/README.md); on the claim writer, the whole hosting project (all `Legacy*Upgrade*` native families and composites) and the [pre-claim](../preclaim/README.md) captures pass; the saved-Studio families are repeated below |
+| FR-016 existing compatibility; prior writers captured | Passed (actual) | [compatibility](../compatibility/README.md#re-qualification-on-the-claim-writer): on the claim writer at `a96f774eb`, the whole hosting project passes (all `Legacy*Upgrade*` native families) and both frozen saved-Studio families pass the independent verifier; the [pre-claim](../preclaim/README.md) captures pass unchanged |
 | FR-017 same semantics engine | Passed (actual) | [compatibility](../compatibility/README.md) shared traces; the shared-profile hosting families pass again on the claim writer |
 | FR-018 editor quality, keyboard, themes | Passed (actual) | [human P1](../human/README.md); the claim controls are reached by keyboard and checked in both themes at 1280 and 320px in the repeated [operations](../operations/README.md) journey |
 | FR-019 real evidence at declared source | Passed | Every actual entry above names its product source and whole stores |
@@ -41,9 +41,21 @@ Owner deferrals that remain outside this feature: Orleans and clustered placemen
 `BpmnServiceRetryCancellationTests` drives the production Workbench. It publishes an always-faulting native worker (the primitive Fault activity) under `HoldForRetry` with a two-attempt budget, and waits for the actual held incident.
 
 - **Cancel first:** the execution settles Cancelled; the original failure is retained as Retired; the later retry is refused as `execution-terminal`; and no replacement worker ever exists.
-- **Retry first:** the retry is accepted and a cancellation follows immediately. Exactly one replacement attempt exists. Whichever wins is truthful: Cancelled with the replacement NotAdmitted or Cancelled, and the cancel accepted; or Faulted with the replacement Faulted, and the cancel refused. The physical worker count equals the admitted attempts. The exact retry replays without another attempt, and a fresh retry is refused.
+- **Retry first:** the retry is accepted and a cancellation follows immediately. Exactly one replacement attempt exists. Whichever wins is truthful:
+  - Cancelled, with the cancel accepted. The replacement is NotAdmitted, or Cancelled, or (when its worker was already running) Faulted, recorded only for settlement. Any admitted replacement carries a settled NativeCancellation.
+  - Faulted, with the replacement Faulted and the cancel refused.
+- **Both orders:** the physical worker count equals the admitted attempts. The exact retry replays without another attempt, and a fresh retry is refused.
 
-Both orders passed three consecutive runs. The first version wrongly assumed the replacement worker is always admitted; the actual host showed the cancellation retiring its start before admission, and the assertion now reads the persisted attempts.
+The actual host corrected the test twice. It showed the cancellation retiring a replacement before admission, and, in the whole-project run, a winning cancellation recording an already running replacement's actual fault. Both are designed settlement behaviour. On the current assertion, the race and the three real-host claim tests passed four consecutive runs, 5/5 each (log hashes `f5d85287`, `8c642028`, `12bb92d9`, `ed0d2c0e`).
+
+## Real-host claim tests (round 1)
+
+`BpmnHumanClaimUpgradeTests` passes 3/3 at `a96f774eb` (log `6bf73829`):
+- Two independently signed-in subjects claim the same work concurrently, three times; each time exactly one is accepted and the other gets `already-claimed`.
+- After a real restart with new admission off, claim work is claimed, completed and cancelled. Cancel-before-claim and claimed-completion-before-cancel both keep the first winner, and cancellation replays after a further restart while a conflicting reuse is refused.
+- The timer orders (claimed completion before and after a 4s boundary) run after admission is turned back on, because new timed executions must be started.
+
+The whole BPMN hosting project passed 55 cases at `a96f774eb` (log `98a86ad2`); its one failure was the retry assertion corrected above.
 
 ## Candidate qualification (T036)
 

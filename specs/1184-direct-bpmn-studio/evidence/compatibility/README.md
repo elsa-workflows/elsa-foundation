@@ -23,3 +23,12 @@ The archive separately retains setup diagnostics: initial row/button locators, t
 Reproduce from source358ec420e with the pinned baseline restored by `tools/bpmn/restore_evidence.py`, current Release host/reader paths and new output directories. The raw archive contains the actual legacy browser driver, final manifests and verifier sources. `tools/bpmn/verify_runbpmn_recovery.py`, `verify_parallel_embedding.py`, `verify_studio_upgrade.py` and `qualify-hosting.py` read the corresponding downloaded manifests without starting a host. The separate authored checker takes the retained mixed-suite TRX and current read-only observer explicitly.
 
 T017–019 are complete; **19/39 tasks complete**. Next is the actual BPMN → native RunEtl → retained failure/restart/retry journey. ETL, human claims/interruption and wider #2908 production acceptance remain open. Full architecture/composition, API/ApiCompat/package magnitude, final affected regression, independent full-PR review, exact-head required CI and resulting-main gates are deferred to the stable delivery candidate; they remain required. State-format/shared-runtime changes immediately reopen their affected compatibility checks. This milestone does not accept ADRs, close #2907/#2908/#2892 or treat quarantines as green. PR3603 remains draft/Partial; full review rounds0. #2898 remains completed.
+
+## Re-qualification on the claim writer
+
+The claim writer (`f64a378d7`) changed the shared direct driver and runtime, so the affected compatibility checks were reopened. Products are at `a96f774eb`.
+
+- The whole BPMN hosting project passes: 55 cases plus the corrected retry/cancellation race. That covers every `Legacy*Upgrade*` native family, composites, Runtime-only and the direct/authored host cases.
+- Both actual frozen saved-Studio families were driven again with the archived `drive-legacy-studio.mjs`. Each re-exported its exact frozen JSON/XML, edited the gateway name, published natively (3.0.0/4.0.0) and completed a Published Run and a Test Run. The original captured runs remain inspectable after a restart.
+- `verify_studio_upgrade.py` passed on a manifest assembled for this head: 2 families, 4 completed new runs, 9 original-run observations, 12 whole stores, 84/92 retained native materials and frozen authoring preserved ([receipt](claim-writer-studio-verification.json)).
+- All twelve screenshots were visually inspected. Raw outputs stay local for the next archive.
