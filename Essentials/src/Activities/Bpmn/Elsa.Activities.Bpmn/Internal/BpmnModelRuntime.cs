@@ -69,7 +69,12 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
                 throw new BpmnModelValidationException("A native event binding requires one named signal catch.");
             ValidateEventWorker(worker.RootActivity, name);
         }
-        var profile = definition.FormatVersion == 1 ? BpmnModelProtocol.Profile : BpmnModelProtocol.NativeWorkProfile;
+        var profile = definition.FormatVersion switch
+        {
+            1 => BpmnModelProtocol.Profile,
+            6 => BpmnModelProtocol.ClaimsProfile,
+            _ => BpmnModelProtocol.NativeWorkProfile
+        };
         var material = new RuntimeModelMaterial(1, seed, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), profile,
             JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], dependencies, []);
         await driver.ValidateMaterialAsync(material, cancellationToken);
@@ -172,7 +177,8 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
                 source = new(reference); // Accepted work retains its frozen provenance even after source retirement.
             var work = document.Work.Select(item => new BpmnInspectionWork(item.Timer is not null ? "Timer" : item.NativeWork is not null ? "Native" : "Human",
                 item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId,
-                item.NativeWork?.WorkerExecutionId, item.Timer?.DueAt)).ToArray();
+                item.NativeWork?.WorkerExecutionId, item.Timer?.DueAt)
+                { ClaimRequired = definition.ClaimBindings?.Contains(item.BindingId, StringComparer.Ordinal) == true, Claim = CurrentClaim(document, item) }).ToArray();
             var attempts = InspectAttempts(state, model, document);
             var incidents = (document.Failures ?? []).OrderBy(item => item.IncidentId, StringComparer.Ordinal).Select(item => Incident(document, item)).ToArray();
             var settlements = (document.Cancellations ?? []).Select(item => new BpmnInspectionSettlement("NativeCancellation",
@@ -232,13 +238,28 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             after = cursor.After;
         }
         var document = BpmnDirectExecutionDriver.Read(state);
+        var claimBindings = document.Claims is null ? null : await ClaimBindingsAsync(state, cancellationToken);
         var items = document.Work.Where(item => item.NativeWork is null && item.Timer is null).OrderBy(item => item.InvocationId, StringComparer.Ordinal)
             .Where(item => after is null || string.CompareOrdinal(item.InvocationId, after) > 0).Take(request.Limit + 1).ToArray();
         var more = items.Length > request.Limit;
         if (more) items = items[..request.Limit];
         var next = more ? continuations.Encode(WorkPagePurpose,
             JsonSerializer.SerializeToUtf8Bytes(new WorkCursor(scopeKey, executionId, state.Revision, items[^1].InvocationId), Web)) : null;
-        return new(request, items.Select(item => new BpmnHumanWork(item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId)).ToArray(), next);
+        return new(request, items.Select(item => new BpmnHumanWork(item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId)
+            { ClaimRequired = claimBindings?.Contains(item.BindingId, StringComparer.Ordinal) == true, Claim = CurrentClaim(document, item) }).ToArray(), next);
+    }
+
+    private static BpmnHumanClaim? CurrentClaim(BpmnDirectExecutionDriver.Document document, BpmnDirectExecutionDriver.Work work) =>
+        document.Claims?.SingleOrDefault(item => item.InvocationId == work.InvocationId && item.AttemptId == work.AttemptId) is { } claim
+            ? new(claim.ClaimId, claim.ClaimantId, claim.ClaimedAt) : null;
+
+    private async ValueTask<IReadOnlyList<string>> ClaimBindingsAsync(RuntimeModelExecutionState state, CancellationToken cancellationToken)
+    {
+        var material = await materials.FindMaterialAsync(state.Executable.ArtifactId, cancellationToken);
+        if (material?.Model is not { } model || material.IncarnationId != state.MaterialIncarnationId || model.Protocol != state.Protocol ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.Executable))
+            throw new BpmnModelValidationException("The exact material for this BPMN execution is unavailable.");
+        return BpmnDirectExecutionDriver.Definition(model).ClaimBindings ?? [];
     }
 
     public async ValueTask<RuntimeStorePage<BpmnServiceIncident>> ListIncidentsAsync(string executionId, RuntimeStorePageRequest request,
@@ -292,6 +313,28 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "complete-human",
             JsonSerializer.SerializeToElement(new { invocationId, attemptId, outcomes = outcomes is { Length: > 0 } ? outcomes : ["Done"] }, Web), state.Authority, state.TenantId);
+        return await DispatchAsync(executionId, command, caller, cancellationToken);
+    }
+
+    public async ValueTask<BpmnModelCommandOutcome> ClaimHumanAsync(string executionId, string requestId, string invocationId,
+        string attemptId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
+    {
+        Scope(caller); InputId(requestId);
+        var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        // The claimant is the authenticated caller; Authority remains the execution's immutable start authority.
+        var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "claim-human",
+            JsonSerializer.SerializeToElement(new { invocationId, attemptId, claimantId = caller.ActorId }, Web), state.Authority, state.TenantId);
+        return await DispatchAsync(executionId, command, caller, cancellationToken);
+    }
+
+    public async ValueTask<BpmnModelCommandOutcome> CompleteClaimedHumanAsync(string executionId, string requestId, string invocationId,
+        string attemptId, string claimId, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken = default)
+    {
+        Scope(caller); InputId(requestId);
+        var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "complete-claimed-human",
+            JsonSerializer.SerializeToElement(new { invocationId, attemptId, claimId, claimantId = caller.ActorId,
+                outcomes = outcomes is { Length: > 0 } ? outcomes : ["Done"] }, Web), state.Authority, state.TenantId);
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 

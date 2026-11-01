@@ -42,7 +42,7 @@ internal sealed class BpmnHostingPermissionContributor : IPermissionContributor
         new(BpmnHostingApi.Read, "Read BPMN executions", "BPMN", "Inspect model executions, human work and command outcomes."),
         new(BpmnHostingApi.Publish, "Publish BPMN models", "BPMN", "Publish supported immutable BPMN model material."),
         new(BpmnHostingApi.Execute, "Start BPMN executions", "BPMN", "Start an execution from an authorized live model source."),
-        new(BpmnHostingApi.CompleteHuman, "Complete BPMN human work", "BPMN", "Complete an exact active human invocation and attempt."),
+        new(BpmnHostingApi.CompleteHuman, "Complete BPMN human work", "BPMN", "Claim and complete an exact active human invocation and attempt."),
         new(BpmnHostingApi.Cancel, "Cancel BPMN executions", "BPMN", "Cancel an execution and retain its downstream settlement responsibility."),
         new(BpmnHostingApi.RetryService, "Retry a held BPMN service", "BPMN", "Retry an exact current held failure within its pinned attempt budget.")
     ];
@@ -141,6 +141,8 @@ internal sealed record StartBpmnModelRequest(string SourceReferenceId, string Re
 internal sealed record GetBpmnExecutionRequest(string Id);
 internal sealed record ListBpmnWorkRequest(string Id, int Limit = RuntimeStorePageRequest.DefaultLimit, string? ContinuationToken = null);
 internal sealed record CompleteBpmnHumanRequest(string Id, string Invocation, string RequestId, string AttemptId, string[]? Outcomes = null);
+internal sealed record ClaimBpmnHumanRequest(string Id, string Invocation, string RequestId, string AttemptId);
+internal sealed record CompleteClaimedBpmnHumanRequest(string Id, string Invocation, string RequestId, string AttemptId, string ClaimId, string[]? Outcomes = null);
 internal sealed record GetBpmnCommandRequest(string Id, string Request);
 internal sealed record CancelBpmnExecutionRequest(string Id, string RequestId, string? Reason = null);
 internal sealed record ListBpmnIncidentsRequest(string Id, int Limit = RuntimeStorePageRequest.DefaultLimit, string? ContinuationToken = null);
@@ -244,6 +246,37 @@ internal sealed class CompleteHumanEndpoint(IBpmnModelRuntime runtime, BpmnApiCa
     }
 }
 
+[Post("bpmn/executions/{id}/work/{invocation}/claim")]
+[RequirePermission(BpmnHostingApi.CompleteHuman)]
+internal sealed class ClaimHumanEndpoint(IBpmnModelRuntime runtime, BpmnApiCaller caller) : ApiEndpointWithResult<ClaimBpmnHumanRequest, BpmnModelCommandOutcome>
+{
+    public override void Configure(ApiEndpointOptions options)
+    { options.Operation = "ClaimBpmnHumanWork"; options.Accepts = ["application/json"]; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; }
+    public override async Task<EndpointResult<BpmnModelCommandOutcome>> HandleAsync(ClaimBpmnHumanRequest request, CancellationToken cancellationToken)
+    {
+        var id = BpmnHostingApi.Route(HttpContext, "id");
+        // The resource permission is rechecked for this execution; the claimant comes only from the authenticated caller.
+        var result = await runtime.ClaimHumanAsync(id, request.RequestId, BpmnHostingApi.Route(HttpContext, "invocation"), request.AttemptId,
+            await caller.ForExecutionAsync(id, BpmnHostingApi.CompleteHuman, cancellationToken), cancellationToken);
+        return EndpointResult.Status(BpmnHostingApi.CommandStatus(result), result);
+    }
+}
+
+[Post("bpmn/executions/{id}/work/{invocation}/complete-claimed")]
+[RequirePermission(BpmnHostingApi.CompleteHuman)]
+internal sealed class CompleteClaimedHumanEndpoint(IBpmnModelRuntime runtime, BpmnApiCaller caller) : ApiEndpointWithResult<CompleteClaimedBpmnHumanRequest, BpmnModelCommandOutcome>
+{
+    public override void Configure(ApiEndpointOptions options)
+    { options.Operation = "CompleteClaimedBpmnHumanWork"; options.Accepts = ["application/json"]; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; }
+    public override async Task<EndpointResult<BpmnModelCommandOutcome>> HandleAsync(CompleteClaimedBpmnHumanRequest request, CancellationToken cancellationToken)
+    {
+        var id = BpmnHostingApi.Route(HttpContext, "id");
+        var result = await runtime.CompleteClaimedHumanAsync(id, request.RequestId, BpmnHostingApi.Route(HttpContext, "invocation"), request.AttemptId,
+            request.ClaimId, request.Outcomes, await caller.ForExecutionAsync(id, BpmnHostingApi.CompleteHuman, cancellationToken), cancellationToken);
+        return EndpointResult.Status(BpmnHostingApi.CommandStatus(result), result);
+    }
+}
+
 [Post("bpmn/executions/{id}/cancel")]
 [RequirePermission(BpmnHostingApi.Cancel)]
 internal sealed class CancelEndpoint(IBpmnModelRuntime runtime, BpmnApiCaller caller) : ApiEndpointWithResult<CancelBpmnExecutionRequest, BpmnModelCommandOutcome>
@@ -306,6 +339,8 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
 [JsonSerializable(typeof(GetBpmnExecutionRequest))]
 [JsonSerializable(typeof(ListBpmnWorkRequest))]
 [JsonSerializable(typeof(CompleteBpmnHumanRequest))]
+[JsonSerializable(typeof(ClaimBpmnHumanRequest))]
+[JsonSerializable(typeof(CompleteClaimedBpmnHumanRequest))]
 [JsonSerializable(typeof(GetBpmnCommandRequest))]
 [JsonSerializable(typeof(CancelBpmnExecutionRequest))]
 [JsonSerializable(typeof(ListBpmnIncidentsRequest))]

@@ -40,6 +40,7 @@ internal static class BpmnAuthoredDirectProjection
             if (authored.Activities.Count != 0 || authored.Pools.Count != 0 || authored.MessageFlows.Count != 0)
                 throw new BpmnModelValidationException("The initial authored direct profile does not support native children or collaboration/message-flow bindings.");
             var humans = new List<string>();
+            var claims = new List<string>();
             var services = new List<ServiceSelection>();
             var elements = new List<LibModel.BpmnElement>();
             foreach (var element in authored.Elements)
@@ -56,8 +57,8 @@ internal static class BpmnAuthoredDirectProjection
                     services.Add(service);
                     binding = service.Binding.BindingId;
                 }
-                else if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var metadata))
-                    ValidateHumanBinding(element, metadata);
+                else if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var metadata) &&
+                    ValidateHumanBinding(element, metadata)) claims.Add(binding!);
                 elements.Add(new LibModel.BpmnElement(element.ElementId, element.ElementType, element.Name, binding,
                     element.LaneId, element.DefaultFlowId,
                     element.EventDefinitions.Select(value => new LibModel.BpmnEventDefinition(value.Type, value.Properties)).ToArray(),
@@ -88,9 +89,12 @@ internal static class BpmnAuthoredDirectProjection
                 new WorkflowExecutableActivityPresentationRecord(record.NodeId, record.DisplayName, record.Description)).ToList();
             if (!presentation.Any(record => record.ExecutableNodeId == root.NodeId))
                 presentation.Add(new(root.NodeId, "BPMN process"));
-            var material = services.Count == 0
-                ? new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, Strict), humans)
-                : new BpmnModelDefinition(3, JsonSerializer.SerializeToElement(process, Strict), humans, services.Select(value => value.Binding).ToArray());
+            // Claim-required work selects the explicit format 6 profile; unclaimed human processes keep format 1 unchanged.
+            var material = services.Count != 0
+                ? new BpmnModelDefinition(3, JsonSerializer.SerializeToElement(process, Strict), humans, services.Select(value => value.Binding).ToArray())
+                : claims.Count != 0
+                    ? new BpmnModelDefinition(6, JsonSerializer.SerializeToElement(process, Strict), humans, null, null, null, claims)
+                    : new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, Strict), humans);
             return (material, new(version.Id, version.Version, records, presentation), services);
         }
         catch (JsonException exception)
@@ -112,7 +116,8 @@ internal static class BpmnAuthoredDirectProjection
         }
     }
 
-    private static void ValidateHumanBinding(BpmnElement element, string metadata)
+    /// <summary>Validates one owned human binding and returns whether its completion requires a claim.</summary>
+    private static bool ValidateHumanBinding(BpmnElement element, string metadata)
     {
         using var document = JsonDocument.Parse(BpmnDirectBindingMetadata.Validate(metadata, element.ElementId));
         var value = document.RootElement;
@@ -122,8 +127,9 @@ internal static class BpmnAuthoredDirectProjection
             !value.TryGetProperty("formatVersion", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number != 1 ||
             !value.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String || kind.GetString() != "human" ||
             element.ElementType != BpmnElementTypes.UserTask ||
-            value.TryGetProperty("claimRequired", out var claim) && claim.ValueKind != JsonValueKind.False)
-            throw new BpmnModelValidationException($"Element '{element.ElementId}' requires a supported direct human binding; claimed work is not admitted by this authoring increment.");
+            value.TryGetProperty("claimRequired", out var claim) && claim.ValueKind is not (JsonValueKind.False or JsonValueKind.True))
+            throw new BpmnModelValidationException($"Element '{element.ElementId}' requires a supported direct human binding.");
+        return value.TryGetProperty("claimRequired", out var required) && required.ValueKind == JsonValueKind.True;
     }
 
     internal sealed record ServiceSelection(BpmnNativeServiceBinding Binding, string SourceReferenceId);

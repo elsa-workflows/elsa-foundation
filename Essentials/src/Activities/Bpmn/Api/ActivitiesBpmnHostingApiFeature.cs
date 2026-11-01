@@ -39,6 +39,10 @@ public class ActivitiesBpmnHostingApiFeature : IWebShellFeature
              new("bpmn-cancel", "bpmn/executions/{id}/cancel", true), new("bpmn-incidents", "bpmn/executions/{id}/incidents", true),
              new("bpmn-retry-service", "bpmn/executions/{id}/retry-service", true),
              new("bpmn-command", "bpmn/executions/{id}/commands/{request}", true)], "ActivitiesBpmnHostingApi"));
+        // Claims are advertised separately so clients never offer them to hosts that accept only unclaimed completion.
+        ApiCapabilityRegistration.Add(services, new ApiCapabilityDeclaration("elsa.api.bpmn-claims", 1,
+            [new("bpmn-claim-human", "bpmn/executions/{id}/work/{invocation}/claim", true),
+             new("bpmn-complete-claimed-human", "bpmn/executions/{id}/work/{invocation}/complete-claimed", true)], "ActivitiesBpmnHostingApi"));
         services.AddPermissionContributor<BpmnHostingPermissionContributor>();
         services.TryAddKeyedScoped<IEndpointFaultRenderer, BpmnHostingFaultRenderer>(BpmnHostingApi.Owner);
     }

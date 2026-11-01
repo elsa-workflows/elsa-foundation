@@ -59,7 +59,6 @@ public sealed class BpmnAuthoredDirectPublisherTests
     [InlineData("{\"kind\":\"human\"}")]
     [InlineData("{\"formatVersion\":1,\"kind\":\"human\",\"kind\":\"human\"}")]
     [InlineData("{\"formatVersion\":1,\"kind\":\"nativeService\"}")]
-    [InlineData("{\"formatVersion\":1,\"kind\":\"human\",\"claimRequired\":true}")]
     [InlineData("{\"formatVersion\":1,\"kind\":\"human\",\"claimRequired\":\"false\"}")]
     [InlineData("{\"formatVersion\":1,\"kind\":\"human\",\"unknownMeaning\":true}")]
     public async Task Unsupported_binding_meaning_is_refused_before_runtime_publication(string metadata)
@@ -67,6 +66,22 @@ public sealed class BpmnAuthoredDirectPublisherTests
         var fixture = new Fixture(metadata);
         await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
         Assert.Equal(0, fixture.Publications);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Claim_required_human_work_selects_the_explicit_claim_format(bool claimRequired)
+    {
+        var fixture = new Fixture("{\"formatVersion\":1,\"kind\":\"human\",\"claimRequired\":" + (claimRequired ? "true" : "false") + "}");
+        await fixture.Publish();
+        Assert.Equal(1, fixture.Publications);
+        Assert.Equal(claimRequired ? 6 : 1, fixture.Model!.FormatVersion);
+        Assert.Equal(["human:human"], fixture.Model.HumanBindings);
+        if (claimRequired) Assert.Equal(["human:human"], fixture.Model.ClaimBindings);
+        else Assert.Null(fixture.Model.ClaimBindings);
+        var human = fixture.Model.Process.GetProperty("elements").EnumerateArray().Single(value => value.GetProperty("elementId").GetString() == "human");
+        Assert.Empty(human.GetProperty("properties").EnumerateObject());
     }
 
     [Theory]

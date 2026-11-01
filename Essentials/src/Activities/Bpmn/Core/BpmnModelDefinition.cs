@@ -18,12 +18,18 @@ public sealed class BpmnModelDefinition
         IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings, IReadOnlyList<string>? timerBindings)
         : this(formatVersion, process, humanBindings, serviceBindings, timerBindings, null) { }
 
-    [JsonConstructor]
     public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
         IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings, IReadOnlyList<string>? timerBindings,
         IReadOnlyList<BpmnNativeEventBinding>? nativeEventBindings)
+        : this(formatVersion, process, humanBindings, serviceBindings, timerBindings, nativeEventBindings, null) { }
+
+    /// <summary>Format 6 names the human bindings whose work requires one exact current claim before completion.</summary>
+    [JsonConstructor]
+    public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
+        IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings, IReadOnlyList<string>? timerBindings,
+        IReadOnlyList<BpmnNativeEventBinding>? nativeEventBindings, IReadOnlyList<string>? claimBindings)
     {
-        if (formatVersion is not (1 or 2 or 3 or 4 or 5)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
+        if (formatVersion is not (1 or 2 or 3 or 4 or 5 or 6)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
         if (process.ValueKind != JsonValueKind.Object) throw new ArgumentException("A BPMN process must be an object.", nameof(process));
         ArgumentNullException.ThrowIfNull(humanBindings);
         if (humanBindings.Any(string.IsNullOrWhiteSpace) || humanBindings.Distinct(StringComparer.Ordinal).Count() != humanBindings.Count)
@@ -39,8 +45,17 @@ public sealed class BpmnModelDefinition
                 throw new ArgumentException("Native event binding identities must be unique.", nameof(nativeEventBindings));
             NativeEventBindings = Array.AsReadOnly(nativeEventBindings.OrderBy(binding => binding.BindingId, StringComparer.Ordinal).ToArray());
         }
-        if (formatVersion == 4 ? timerBindings is not { Count: > 0 } : timerBindings is not null)
-            throw new ArgumentException("Duration timers require model format 4 and its complete binding inventory.", nameof(timerBindings));
+        if (formatVersion == 4 ? timerBindings is not { Count: > 0 } : formatVersion == 6 ? timerBindings is { Count: 0 } : timerBindings is not null)
+            throw new ArgumentException("Duration timers require model format 4 or 6 and their complete binding inventory.", nameof(timerBindings));
+        if (formatVersion == 6 ? claimBindings is not { Count: > 0 } || serviceBindings is not null : claimBindings is not null)
+            throw new ArgumentException("Claim-required human work requires model format 6, its complete claim inventory and no native service work.", nameof(claimBindings));
+        if (claimBindings is not null)
+        {
+            if (claimBindings.Any(string.IsNullOrWhiteSpace) || claimBindings.Distinct(StringComparer.Ordinal).Count() != claimBindings.Count ||
+                claimBindings.Any(binding => !HumanBindings.Contains(binding, StringComparer.Ordinal)))
+                throw new ArgumentException("Claim-required bindings must be unique declared human work.", nameof(claimBindings));
+            ClaimBindings = Array.AsReadOnly(claimBindings.Order(StringComparer.Ordinal).ToArray());
+        }
         if (timerBindings is not null)
         {
             if (timerBindings.Any(string.IsNullOrWhiteSpace) || timerBindings.Distinct(StringComparer.Ordinal).Count() != timerBindings.Count ||
@@ -71,6 +86,8 @@ public sealed class BpmnModelDefinition
     public IReadOnlyList<string>? TimerBindings { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<BpmnNativeEventBinding>? NativeEventBindings { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? ClaimBindings { get; }
 }
 
 /// <summary>One signal catch's complete published native Event worker pin.</summary>
@@ -143,4 +160,6 @@ public static class BpmnModelProtocol
     public const int Version = 1;
     public const string Profile = "foundation-direct-v1";
     public const string NativeWorkProfile = "foundation-native-work-v1";
+    /// <summary>Format 6 claim-required human material; older hosts refuse this profile and its state frame.</summary>
+    public const string ClaimsProfile = "foundation-direct-claims-v1";
 }

@@ -49,6 +49,24 @@ public sealed class BpmnCatalogTests
         Assert.Contains(routes, route => route!.TrimStart('/') == "bpmn/executions/{id}/inspection");
     }
 
+    [Fact]
+    public async Task Hosting_feature_advertises_claims_separately_and_maps_both_claim_routes()
+    {
+        var builder = WebApplication.CreateBuilder();
+        var feature = new ActivitiesBpmnHostingApiFeature();
+        feature.ConfigureServices(builder.Services); feature.ConfigureServices(builder.Services);
+        await using var app = builder.Build(); feature.MapEndpoints(app, null);
+        var routes = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText!.TrimStart('/')).ToArray();
+        var claims = Assert.Single(app.Services.GetServices<ApiCapabilityDeclaration>(), c => c.CapabilityId == "elsa.api.bpmn-claims");
+        Assert.Equal(["bpmn-claim-human", "bpmn-complete-claimed-human"], claims.Links.Select(link => link.Rel));
+        foreach (var link in claims.Links) Assert.Contains(link.Href, routes);
+        // Unclaimed completion keeps its own runtime relation; claims are never implied by it.
+        var runtime = Assert.Single(app.Services.GetServices<ApiCapabilityDeclaration>(), c => c.CapabilityId == "elsa.api.bpmn-runtime");
+        Assert.Contains(runtime.Links, link => link.Rel == "bpmn-complete-human");
+        Assert.DoesNotContain(runtime.Links, link => link.Rel.Contains("claim", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

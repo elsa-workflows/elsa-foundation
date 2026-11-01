@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Bpmn.Core;
@@ -65,6 +66,11 @@ public sealed class BpmnInspectionWork(string kind, string elementId, string bin
     public string AttemptId { get; } = attemptId;
     public string? WorkerExecutionId { get; } = workerExecutionId;
     public DateTimeOffset? DueAt { get; } = dueAt;
+    /// <summary>Whether completion requires an exact current claim; unclaimed profiles omit it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ClaimRequired { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BpmnHumanClaim? Claim { get; init; }
 }
 
 /// <summary>One retained physical native attempt. Requested does not mean that the native worker has started.</summary>

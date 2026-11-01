@@ -337,3 +337,32 @@ override Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.GetHashCode() -> in
 override Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.ToString() -> string!
 static Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.operator !=(Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? left, Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? right) -> bool
 static Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics.operator ==(Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? left, Elsa.Activities.Bpmn.Models.BpmnLoopCharacteristics? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnHumanClaim!
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.BpmnHumanClaim(string! ClaimId, string! ClaimantId, System.DateTimeOffset ClaimedAt) -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ClaimId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ClaimId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ClaimantId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ClaimantId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ClaimedAt.get -> System.DateTimeOffset
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ClaimedAt.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.Deconstruct(out string! ClaimId, out string! ClaimantId, out System.DateTimeOffset ClaimedAt) -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanClaim.Equals(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.Claim.get -> Elsa.Activities.Bpmn.Core.BpmnHumanClaim?
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.Claim.init -> void
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.ClaimRequired.get -> bool
+Elsa.Activities.Bpmn.Core.BpmnHumanWork.ClaimRequired.init -> void
+Elsa.Activities.Bpmn.Core.BpmnInspectionWork.Claim.get -> Elsa.Activities.Bpmn.Core.BpmnHumanClaim?
+Elsa.Activities.Bpmn.Core.BpmnInspectionWork.Claim.init -> void
+Elsa.Activities.Bpmn.Core.BpmnInspectionWork.ClaimRequired.get -> bool
+Elsa.Activities.Bpmn.Core.BpmnInspectionWork.ClaimRequired.init -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings, System.Collections.Generic.IReadOnlyList<string!>? timerBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding!>? nativeEventBindings, System.Collections.Generic.IReadOnlyList<string!>? claimBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.ClaimBindings.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.ClaimHumanAsync(string! executionId, string! requestId, string! invocationId, string! attemptId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.CompleteClaimedHumanAsync(string! executionId, string! requestId, string! invocationId, string! attemptId, string! claimId, string![]? outcomes, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.ClaimsProfile = "foundation-direct-claims-v1" -> string!
+override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnHumanClaim.ToString() -> string!
+static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator !=(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnHumanClaim.operator ==(Elsa.Activities.Bpmn.Core.BpmnHumanClaim? left, Elsa.Activities.Bpmn.Core.BpmnHumanClaim? right) -> bool
