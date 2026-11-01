@@ -91,7 +91,10 @@ internal sealed class SpecialistSessionCodec(ISecretValueProtector protector, IP
         var incoming = JsonSerializer.SerializeToUtf8Bytes(new PortableMessage("user", input), Json).Length;
         var header = JsonSerializer.SerializeToUtf8Bytes(new SessionEnvelope(Purpose, Codec, identity.TenantId, identity.PersistencePartition,
             identity.DefinitionVersionId, identity.TemplateHash, target.ConversationId, target.Revision, []), Json).Length;
-        if (messages.Count + 2 > MaximumMessages || used + incoming + header + 2L * SpecialistSchemaValidator.MaximumValueBytes + 64 > MaximumSessionBytes)
+        // Even the relaxed encoder escapes supplementary scalars as two \uXXXX sequences.
+        // Its maximum per UTF-16 character is conservative per valid UTF-8 input byte as well.
+        var reservedResult = (long)Json.Encoder!.MaxOutputCharactersPerInputCharacter * SpecialistSchemaValidator.MaximumValueBytes;
+        if (messages.Count + 2 > MaximumMessages || used + incoming + header + reservedResult + 64 > MaximumSessionBytes)
             throw Bounds();
     }
 

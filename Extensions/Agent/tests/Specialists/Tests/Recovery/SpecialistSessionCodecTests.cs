@@ -131,6 +131,22 @@ public sealed class SpecialistSessionCodecTests
     }
 
     [Fact]
+    public async Task Supplementary_character_expansion_is_reserved_before_any_model_open()
+    {
+        using var protection = Protection("old", ("old", "fixture-old-key"));
+        var codec = Codec(protection);
+        var history = Enumerable.Range(0, 6).Select(index => new ChatMessage(index % 2 == 0 ? ChatRole.User : ChatRole.Assistant,
+            JsonSerializer.Serialize(new Dictionary<string, string> { [index % 2 == 0 ? "brief" : "headline"] = new string('x', 900_000) }))).ToArray();
+        var retained = codec.Capture(history, Identity, new(Conversation, 3));
+        var factory = new Factory { Response = "{\"headline\":\"" + string.Concat(Enumerable.Repeat("😀", 262_130)) + "\"}" };
+        var runner = new SpecialistModelRunner([factory], new SpecialistSchemaValidator(), codec);
+        var request = Request("next") with { PreparedSession = retained, SessionTarget = new(Conversation, 4) };
+        var refusal = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await runner.RunAsync(request, CancellationToken.None));
+        Assert.Equal("specialist.session.bounds", refusal.Code);
+        Assert.Equal(0, factory.Opens);
+    }
+
+    [Fact]
     public async Task Actual_MAF_restores_one_prefix_and_a_new_fresh_target_stays_isolated()
     {
         using var protection = Protection("old", ("old", "fixture-old-key"));
@@ -201,6 +217,7 @@ public sealed class SpecialistSessionCodecTests
     {
         public string ProviderKey => "fixture";
         public int Opens { get; private set; }
+        public string Response { get; set; } = "{\"headline\":\"accepted\"}";
         public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
         public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
         {
@@ -214,7 +231,7 @@ public sealed class SpecialistSessionCodecTests
                 Assert.Equal("private-system-instructions", options!.Instructions);
                 owner.Requests.Add(messages.ToArray());
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                    [new TextReasoningContent("private-reasoning"), new TextContent("{\"headline\":\"accepted\"}")]))
+                    [new TextReasoningContent("private-reasoning"), new TextContent(owner.Response)]))
                 { FinishReason = ChatFinishReason.Stop, Usage = new() { InputTokenCount = 11, OutputTokenCount = 7 } });
             }
             public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();

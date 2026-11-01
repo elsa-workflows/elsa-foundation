@@ -31,7 +31,7 @@ the journal accepts that candidate and business result together. Restoration req
 admitted conversation/revision reference, selected ordinary owner scope and exact specialist version.
 This codec increment does not yet deliver the durable conversation-admission/control path.
 It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
-and uses the existing Secrets key ring, retaining older readers/keys. Histories are bounded to64
+and uses the existing Secrets key ring with retained configured decryption keys. Histories are bounded to64
 messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.
 Portable history excludes private reasoning, SDK raw state and system-role instruction fields. Validate business
 inputs and outputs against both the exact schema and declared native conversion. Withheld,
