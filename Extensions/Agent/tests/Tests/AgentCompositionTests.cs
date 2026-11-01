@@ -40,7 +40,8 @@ public sealed class AgentCompositionTests
         typeof(IAgentTurnStateStore),
         typeof(IAgentToolInvoker),
         typeof(IAgentStreamingService),
-        typeof(IAgentProviderRegistry)
+        typeof(IAgentProviderRegistry),
+        typeof(IAgentSessionPolicyService)
     ];
 
     [Theory]
