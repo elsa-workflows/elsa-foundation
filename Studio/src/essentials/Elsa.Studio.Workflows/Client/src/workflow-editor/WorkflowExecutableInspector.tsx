@@ -59,6 +59,12 @@ import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
+import { WorkflowExecutableCanvasHeader } from "./WorkflowExecutableCanvasHeader";
+import {
+  describeExecutableReferenceSelection,
+  resolveExecutableInspectorDisplayName,
+  type ExecutableInspectorIdentity
+} from "./executableInspectorIdentity";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -78,13 +84,14 @@ type SourceDefinitionState =
   | { status: "absent" }
   | { status: "failed"; error: string };
 
-export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
+export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEditors, artifactId, sourceReferenceId, onSelectReference, onIdentityChange }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   artifactId: string;
   sourceReferenceId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
+  onIdentityChange?(identity: ExecutableInspectorIdentity): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
@@ -182,6 +189,14 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
     return () => { cancelled = true; };
   }, [chosenReference?.definitionId, context]);
 
+  useEffect(() => {
+    onIdentityChange?.({
+      definitionName: sourceDefinition.status === "ready" ? sourceDefinition.definition.name : null,
+      artifactId,
+      version: chosenReference?.artifactVersion ?? null
+    });
+  }, [artifactId, chosenReference?.artifactVersion, onIdentityChange, sourceDefinition]);
+
   const graph = useMemo(
     () => data ? buildExecutableActivityGraph(
       data.detail.rootActivity,
@@ -275,6 +290,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
             activityCatalog={data.activityCatalog}
             graph={graph}
             chosenReference={chosenReference}
+            displayName={resolveExecutableInspectorDisplayName(
+              sourceDefinition.status === "ready" ? sourceDefinition.definition.name : null,
+              data.detail.artifactId
+            )}
             frames={frames}
             onNavigateToScope={setFrames}
             selectedNodeId={selectedNodeId}
@@ -314,11 +333,12 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEdit
   );
 }
 
-function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
+function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenReference, displayName, frames, onNavigateToScope, selectedNodeId, onSelectNode }: {
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   graph: ExecutableActivityGraph;
   chosenReference: WorkflowExecutableReference | null;
+  displayName: string;
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
   selectedNodeId: string | null;
@@ -330,20 +350,18 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
   );
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(canvas.nodes);
   const scopeKey = frames.length === 0 ? "root" : frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
+  const selectionLabel = detail.chosenReference
+    ? describeExecutableReferenceSelection(detail.chosenReference.selection, detail.chosenReference.sourceReferenceId)
+    : "No source reference; automatic layout";
 
   return (
     <section className="wf-instance-canvas-shell" aria-label="Executable canvas">
-      <header>
-        <div>
-          <span>Executable</span>
-          <h3>{detail.artifactId} <small>{chosenReference ? `Version ${chosenReference.artifactVersion}` : detail.rootActivityType}</small></h3>
-        </div>
-        {detail.chosenReference ? (
-          <span className="wf-executable-selection">{describeReferenceSelection(detail.chosenReference.selection, detail.chosenReference.sourceReferenceId)}</span>
-        ) : (
-          <span className="wf-executable-selection">No source reference; automatic layout</span>
-        )}
-      </header>
+      <WorkflowExecutableCanvasHeader
+        displayName={displayName}
+        version={chosenReference?.artifactVersion ?? null}
+        artifactId={detail.artifactId}
+        selectionLabel={selectionLabel}
+      />
       <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
       <div className="wf-instance-canvas">
         {canvas.nodes.length === 0 ? <div className="wf-empty">This executable has no renderable activities.</div> : (
@@ -722,14 +740,6 @@ function findChosenReference(detail: WorkflowExecutableDetails | null): Workflow
   return detail.references.find(reference => reference.sourceReferenceId === chosenId)
     ?? detail.references[0]
     ?? null;
-}
-
-function describeReferenceSelection(selection: string, sourceReferenceId: string) {
-  const normalized = selection.trim().toLowerCase();
-  if (normalized === "requested") return `Showing requested reference ${sourceReferenceId}`;
-  if (normalized === "newest-live") return `Showing newest live reference ${sourceReferenceId}`;
-  if (normalized === "newest") return `Showing newest reference ${sourceReferenceId} (no live references remain)`;
-  return `Showing reference ${sourceReferenceId}`;
 }
 
 function formatExecutableLoadError(error: unknown, artifactId: string) {

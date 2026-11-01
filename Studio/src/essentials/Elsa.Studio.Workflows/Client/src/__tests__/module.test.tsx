@@ -2360,7 +2360,11 @@ describe("workflows module", () => {
     // Identity panel: artifact id, hash, node/resume-target counts.
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
-    expect(container.textContent).toContain("Executable Inspector");
+    await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
+    expect(container.querySelector(".studio-page-eyebrow")?.textContent).toBe("Inspector");
+    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Hello World");
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).not.toContain("artifact-1");
 
     // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
     await waitForText(container, "Log greeting");
@@ -2514,7 +2518,7 @@ describe("workflows module", () => {
           await waitForText(container, "Review & publish");
           await click(buttonByText(container, "Artifacts"));
         }
-        await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
+        await waitForText(container, scenario.surface === "inspector" ? "Hello World · 2.0.0" : scenario.artifactId);
         await click(scenario.surface === "artifacts"
           ? await waitForButtonByLabel(container, `Run executable ${scenario.artifactId}`)
           : await waitForButtonByText(container, "Run"));

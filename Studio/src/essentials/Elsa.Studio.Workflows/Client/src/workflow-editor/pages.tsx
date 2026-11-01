@@ -7,6 +7,10 @@ import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 import { useWorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 import { readRunSelection } from "./runSelectionUrl";
+import {
+  formatExecutableInspectorPageTitle,
+  type ExecutableInspectorIdentity
+} from "./executableInspectorIdentity";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
@@ -125,9 +129,13 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
 
 export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
+  const [identity, setIdentity] = useState<ExecutableInspectorIdentity | null>(null);
 
   useEffect(() => {
-    const syncFromLocation = () => setLocation(readExecutableInspectorLocation());
+    const syncFromLocation = () => {
+      setLocation(readExecutableInspectorLocation());
+      setIdentity(null);
+    };
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
@@ -147,8 +155,11 @@ export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }
     setLocation(readExecutableInspectorLocation());
   }, []);
 
+  const pageTitle = formatExecutableInspectorPageTitle(identity?.definitionName, location.artifactId, identity?.version);
+  const resolvedName = identity?.definitionName?.trim();
+
   return (
-    <WorkflowsPageFrame title="Executable Inspector" workbench>
+    <WorkflowsPageFrame title={pageTitle} eyebrow={resolvedName ? "Inspector" : undefined} workbench>
       <WorkflowLazyBoundary label="executable inspector">
         <WorkflowExecutableInspectorWorkbench
           context={context}
@@ -157,6 +168,7 @@ export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }
           artifactId={location.artifactId}
           sourceReferenceId={location.sourceReferenceId}
           onSelectReference={selectReference}
+          onIdentityChange={setIdentity}
         />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
@@ -223,16 +235,17 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   );
 }
 
-function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
+function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, eyebrow, children }: {
   title?: string;
   context?: React.ReactNode;
   workbench?: boolean;
   definitions?: boolean;
+  eyebrow?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
-      {title ? <StudioPageHeader title={title} headingLevel={2} actions={context} /> : null}
+      {title ? <StudioPageHeader title={title} eyebrow={eyebrow} headingLevel={2} actions={context} /> : null}
       {children}
     </section>
   );
