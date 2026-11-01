@@ -123,13 +123,18 @@ internal sealed class SpecialistActivityProvider(
             return new(null, diagnostics);
         }
         SpecialistModelCapabilities capabilities;
-        try { capabilities = await owners[0].GetCapabilitiesAsync(manifest.Model, cancellationToken); }
+        bool supportsResult;
+        try
+        {
+            capabilities = await owners[0].GetCapabilitiesAsync(manifest.Model, cancellationToken);
+            supportsResult = await owners[0].SupportsResultSchemaAsync(manifest.Model, schema.Result!.Schema, cancellationToken);
+        }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             diagnostics.Add(Problem("specialist.model.unavailable", "Current authorized model metadata is unavailable.", subject, "/model"));
             return new(null, diagnostics);
         }
-        if (string.IsNullOrWhiteSpace(capabilities.Fingerprint) || !capabilities.SupportsJsonSchema || capabilities.MaximumOutputTokens < 1 ||
+        if (string.IsNullOrWhiteSpace(capabilities.Fingerprint) || !capabilities.SupportsJsonSchema || !supportsResult || capabilities.MaximumOutputTokens < 1 ||
             manifest.Limits.MaximumOutputTokens is { } tokens && tokens > capabilities.MaximumOutputTokens)
             diagnostics.Add(Problem("specialist.model.capability", "The selected model cannot satisfy the published JSON result or token limit.", subject, "/model"));
         var settings = validator.Prepare(capabilities.SettingsSchema);

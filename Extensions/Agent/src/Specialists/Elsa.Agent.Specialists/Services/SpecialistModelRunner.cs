@@ -92,9 +92,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             if (Interlocked.Increment(ref calls) > maximumCalls)
                 throw Failure("specialist.budget.calls", "The specialist model-call budget is exhausted.");
             var response = await inner.GetResponseAsync(messages, options, cancellationToken);
-            if (response.Messages.SelectMany(x => x.Contents).Any(x => x is not TextContent))
-                throw Failure("specialist.result.content", "This specialist profile accepts text containing its JSON business result.");
-            return response;
+            return SpecialistModelResponseFilter.VisibleResult(response);
         }
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
             CancellationToken cancellationToken = default) =>

@@ -15,6 +15,9 @@ This registry is independent of Weaver's selected assistant provider.
 fingerprint identifies the effective settings/schema/token support. The supplied settings schema must
 use the [bounded JSON profile](../JsonSchema/README.md); unsupported or invalid settings refuse
 publication. Treat unsupported or unknown structured-result support as unavailable.
+`SupportsResultSchemaAsync` admits the actual expanded result schema before publication. Its compatibility
+default preserves the original declaration of support for the bounded profile; contributors with narrower
+SDK support override it. A false result refuses publication even when general JSON support is true.
 
 `OpenAsync` resolves the logical operational connection at point of use, checks current access and
 revocation against the supplied native provenance, and returns an owned transient client lease. The
@@ -23,9 +26,9 @@ SDK objects never enter the descriptor or journal material. The lease's capabili
 match publication and its connection version must be positive. The runtime owns model selection,
 response schema, maximum output tokens and tool admission; it clones the supplied options.
 
-No production model adapter ships with the initial kernel. The separately qualified deterministic
-model contribution establishes the extension boundary; Anthropic/Azure OpenAI, their physical-request
-retry behavior and live connections remain subsequent Program work.
+The [connection-backed contributors](../Connections/README.md) add separate Anthropic and Azure OpenAI
+profiles. Their configured support metadata and physical-request controls remain distinct from durable
+specialist acceptance and the Program's later live-provider qualification.
 
 ## Internal storage
 

@@ -174,3 +174,4 @@ static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.operator ==(Elsa.
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.GetCapabilitiesAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities!>
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.ProviderKey.get -> string!
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.SupportsResultSchemaAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Text.Json.JsonElement schema, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

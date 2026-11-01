@@ -17,6 +17,17 @@ namespace Elsa.Agent.Specialists.Tests.Publication;
 public sealed class SpecialistProviderTests
 {
     [Fact]
+    public async Task Actual_result_schema_is_admitted_before_publication_even_when_json_support_is_declared()
+    {
+        var factory = new MetadataFactory { SupportsSchema = false };
+        await using var services = Services(factory);
+        var result = await services.GetRequiredService<IActivityTemplateProviderCompiler>().CompileAsync(Request());
+        Assert.Null(result.ExecutableRoot);
+        Assert.Contains(result.Diagnostics, x => x.Code == "specialist.model.capability");
+        Assert.Equal("Article", Assert.Single(factory.ResultSchema.GetProperty("properties").EnumerateObject()).Name);
+    }
+
+    [Fact]
     public async Task Compiles_a_native_boundary_and_background_leaf_without_a_model_call()
     {
         var factory = new MetadataFactory();
@@ -173,6 +184,13 @@ public sealed class SpecialistProviderTests
         public string ProviderKey => "fixture";
         public int MetadataCalls { get; private set; }
         public bool Unavailable { get; set; }
+        public bool SupportsSchema { get; set; } = true;
+        public JsonElement ResultSchema { get; private set; }
+        public ValueTask<bool> SupportsResultSchemaAsync(SpecialistModelReference model, JsonElement schema, CancellationToken cancellationToken = default)
+        {
+            ResultSchema = schema.Clone();
+            return ValueTask.FromResult(SupportsSchema);
+        }
         public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default)
         {
             MetadataCalls++;
