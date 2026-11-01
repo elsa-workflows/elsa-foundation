@@ -81,9 +81,31 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
             ToolResult = proposal.PreparedInvocation is { } prepared ? LifecycleResult(prepared, "uncertain", summary) : null
         };
 
+    internal const string LifecycleOutcomeType = "agent.operation-outcome";
+    internal const string LifecycleOutcomeSchemaVersion = "1";
+
     internal static AgentToolResult LifecycleResult(AgentPreparedToolInvocation prepared, string status, string summary)
         => new(prepared.ToolCallId, prepared.ToolName, false, summary,
-            new("agent.operation-outcome", "1", JsonSerializer.SerializeToElement(new { status, prepared.InvocationId })));
+            new(LifecycleOutcomeType, LifecycleOutcomeSchemaVersion, JsonSerializer.SerializeToElement(new { status, prepared.InvocationId })));
+
+    /// <summary>
+    /// Recognizes the engine's own receipt-less lifecycle envelope (<see cref="LifecycleResult"/>) for the stamped
+    /// original invocation of a mutating tool. A module never authors such a result: proposal execution replaces a
+    /// module refusal or receipt-less return with this envelope, and the invoker refuses failed mutation dispatch.
+    /// A read tool's own result, any receipt or success, and any other status, schema or identity are not lifecycle outcomes.
+    /// </summary>
+    internal static bool IsLifecycleResult(AgentToolResult result, AgentToolDescriptor tool)
+    {
+        if (result.Succeeded || result.Receipt is not null || tool.Mutability != AgentToolMutability.Mutating || result.ToolName != tool.Name
+            || string.IsNullOrEmpty(result.ToolCallId) || result.Access is not { InvocationId.Length: > 0 } access
+            || result.Payload is not { TypeId: LifecycleOutcomeType, SchemaVersion: LifecycleOutcomeSchemaVersion, Data: var data }
+            || data.ValueKind != JsonValueKind.Object || data.EnumerateObject().Count() != 2)
+            return false;
+        return data.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String
+            && status.GetString() is "denied" or "refused" or "uncertain"
+            && data.TryGetProperty(nameof(AgentPreparedToolInvocation.InvocationId), out var identity)
+            && identity.ValueKind == JsonValueKind.String && identity.GetString() == access.InvocationId;
+    }
 
     private static AgentToolResult FreezeResult(AgentToolResult value) => value with
     {

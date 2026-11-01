@@ -1030,9 +1030,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         || receipt.After.ModuleId != access.ModuleId || string.IsNullOrEmpty(receipt.After.ResourceType)
                         || receipt.InvocationId != access.InvocationId))
                     return AgentResult<AgentContextContribution>.Failure("agent.result.provenance_unavailable", "The original installed result owner or contract is unavailable.", 409);
-                var authorized = await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, access.Target, token);
+                // An engine lifecycle outcome (denied/refused/uncertain, no receipt) discloses no owner result
+                // data, so withdrawn mutation authority cannot withhold it from its originating turn. It still
+                // requires the owning module's current read/disclosure decision for exactly this outcome and target.
+                var allowed = DefaultAgentActionProposalExecutor.IsLifecycleResult(result, tool.Descriptor)
+                    ? (await contextCollector.CollectAsync(session.Policy, new(session.Id, string.Empty, new Dictionary<string, string>())
+                        { Disclosure = new(session.Id, [], [result], continuation) { IsHistorical = historical } }, token)).Succeeded
+                    : (await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, access.Target, token)).Allowed;
                 var policy = await policyEvaluator.EvaluateCapabilityAsync(session.Policy, tool.Descriptor.Name, token);
-                if (!authorized.Allowed || !policy.Allowed)
+                if (!allowed || !policy.Allowed)
                     return AgentResult<AgentContextContribution>.Failure("agent.result.disclosure_denied", "Current authority or host policy withholds the retained outcome details. Its accepted effect remains recorded and will not be repeated.", 403);
             }
 
