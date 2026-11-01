@@ -7,9 +7,20 @@ namespace Elsa.Agent.Services;
 /// <summary>Routes the stored preparation to the same installed module, with current server authorization.</summary>
 internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocationResolver resolver) : IAgentActionProposalExecutor
 {
+    /// <summary>A known zero-effect cancellation observed before the owning module or client was dispatched.</summary>
+    internal const string CancelledBeforeDispatchCode = "agent.proposal.cancelled";
+
     public async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
-        var resolved = await resolver.ResolveAsync(proposal, cancellationToken);
+        (IAgentTool? Tool, AgentError? Error) resolved;
+        // The current-authority recheck precedes any module or client dispatch, so cancellation here
+        // is a known zero-effect outcome rather than an uncertain one.
+        try { resolved = await resolver.ResolveAsync(proposal, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return AgentResult<AgentProposalExecutionResult>.Failure(CancelledBeforeDispatchCode,
+                "Execution was cancelled before dispatch to the owning module. No effect occurred.", 409);
+        }
         if (resolved.Error is { } error)
             return AgentResult<AgentProposalExecutionResult>.Failure(error.Code, error.Message, error.StatusCode);
         var prepared = proposal.PreparedInvocation!;

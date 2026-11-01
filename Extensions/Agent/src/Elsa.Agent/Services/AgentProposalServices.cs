@@ -334,7 +334,9 @@ internal sealed class InMemoryAgentProposalService(
         if (proposal.PreparedInvocation is { } original && outcome.Value?.ToolResult is { } observedResult)
             outcome = outcome with { Value = outcome.Value with { ToolResult = AgentResultProvenance.Stamp(observedResult, original) } };
         var value = outcome.Value;
-        var status = !outcome.Succeeded ? AgentActionProposalStatus.Failed
+        var cancelled = !outcome.Succeeded && outcome.Error?.Code == DefaultAgentActionProposalExecutor.CancelledBeforeDispatchCode;
+        var status = cancelled ? AgentActionProposalStatus.Cancelled
+            : !outcome.Succeeded ? AgentActionProposalStatus.Failed
             : value?.Executed == true ? AgentActionProposalStatus.Executed
             : value?.Status == "awaiting-client" ? AgentActionProposalStatus.AwaitingClient
             : value?.Status == "uncertain" ? AgentActionProposalStatus.Uncertain
@@ -343,7 +345,11 @@ internal sealed class InMemoryAgentProposalService(
         if (value?.ToolResult is { } result)
             store.Results[proposal.Id] = result;
         else if (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared)
-            store.Results[proposal.Id] = DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", "The owning executor refused application before reporting an effect.");
+            // Module disclosure owners admit only denied/refused/uncertain lifecycle envelopes; a cancellation
+            // before dispatch is a zero-effect refusal of the original invocation.
+            store.Results[proposal.Id] = DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", cancelled
+                ? "The operation was cancelled before dispatch to its owning module. No effect occurred."
+                : "The owning executor refused application before reporting an effect.");
         Transition(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload });
         return outcome;
     }
