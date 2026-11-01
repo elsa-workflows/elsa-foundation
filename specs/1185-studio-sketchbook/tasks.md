@@ -8,6 +8,6 @@
 - [x] T006 Document selection, host configuration and additive public background roles.
 - [x] T007 Verify focused/affected unit tests, typecheck, lint, build and rendered browser matrix; inspect the actual component experience and capture screenshots.
 - [x] T009 Add and qualify matching backend-owned Sketchbook login presentation and assets.
-- [ ] T008 Complete required architecture/maps gates, current-main integration, exact-head self-review, local commit and reviewable PR with explicit evidence and limits.
+- [x] T008 Complete required architecture/maps gates, current-main integration, exact-head self-review, local commit and reviewable PR with explicit evidence and limits.
 
 Task review: each FR/SC maps to T002–T009. No backend semantics or application data migration. Local preview is isolated from the existing Studio process.
