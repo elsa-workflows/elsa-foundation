@@ -255,6 +255,19 @@ button.wf-node-slot-badge:focus-visible {
   background: color-mix(in srgb, var(--wf-accent) 45%, transparent);
 }
 
+/* Focusable keyboard target filling the strip; Arrow keys resize, Home/End jump to the limits. */
+.wf-node-resize-handle {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.wf-node-resize-handle:focus-visible {
+  outline: 2px solid var(--wf-accent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--wf-accent) 45%, transparent);
+}
+
 .wf-node-port-label {
   position: absolute;
   max-width: 128px;
