@@ -1,3 +1,4 @@
+import { directHumanMode } from "./bpmnDirectBinding";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
@@ -21,7 +22,7 @@ import {
 export interface BpmnNodeData extends Record<string, unknown> {
   element: BpmnElement;
   label: string;
-  /** Direct model inspection supplies its own truthful work description. */
+  /** Explicit authoring or direct inspection work description, without a synthetic child activity. */
   bindingLabel?: string;
   boundActivity?: {
     nodeId: string;
@@ -129,6 +130,7 @@ function createBpmnNode(
       element,
       label: element.name?.trim() || boundActivity?.label || "",
       boundActivity,
+      bindingLabel: directHumanMode(element) === "human" ? "Human wait" : undefined,
       runtimeNodeId: boundActivity?.nodeId ?? element.elementId,
       childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : [],
       collectionSlots: boundActivityNode ? getCollectionSlots(boundActivityNode, catalogItem) : []
