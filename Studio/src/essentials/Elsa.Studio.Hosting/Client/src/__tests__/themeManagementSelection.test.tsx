@@ -27,7 +27,7 @@ afterEach(async () => {
   await update(() => root.unmount());
   container.remove();
   document.documentElement.removeAttribute("style");
-  for (const name of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode"]) document.documentElement.removeAttribute(name);
+  for (const name of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "data-sidebar-color"]) document.documentElement.removeAttribute(name);
 });
 
 describe("theme management with an empty selectable default", () => {
@@ -40,6 +40,18 @@ describe("theme management with an empty selectable default", () => {
     expect(container.querySelector('[role="radiogroup"][aria-label="Theme"]')).toBeNull();
     expect(container.querySelectorAll('[role="radiogroup"][aria-label="Colour mode"] [role="radio"]').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('[role="radiogroup"][aria-label="Navigation"] [role="radio"]').length).toBeGreaterThan(0);
+  });
+
+  it("names the top bar and keeps High contrast's own navigation on the sidebar color card", async () => {
+    localStorage.setItem("elsa-studio-nav-mode", "top");
+    localStorage.setItem("elsa-studio-theme-mode", "high-contrast");
+    const context = { http: { getJson: async () => ({ themes: [], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }) } } as unknown as StudioEndpointContext;
+    await update(() => root.render(<ThemeProvider storeContext={context}><AppearancePage onNavigate={() => {}} /></ThemeProvider>));
+
+    const options = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Navigation bar color"] [role="radio"]'));
+    expect(container.textContent).toContain("Navigation bar color");
+    expect(options.map(option => option.getAttribute("aria-label"))).toEqual(["Theme default", "Light", "Dark (default)"]);
+    expect(options.every(option => option.disabled)).toBe(true);
   });
 
   it("selects an existing management-inventory entry after deleting a custom theme when no theme is selectable", async () => {
