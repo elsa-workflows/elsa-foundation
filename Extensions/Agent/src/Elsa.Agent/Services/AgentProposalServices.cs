@@ -37,6 +37,11 @@ internal sealed class InMemoryAgentProposalService(
     public async Task<AgentActionProposal> AddAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // A human decision is recorded only by ApproveAsync. A review-required insertion that already carries
+        // an approval would otherwise satisfy current review policy without any decision.
+        if (proposal.RequiresApproval && (proposal.ApprovedBy is not null || proposal.ApprovedAt is not null
+            || proposal.Status is not (AgentActionProposalStatus.Draft or AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited)))
+            throw new AgentContributionException("A review-required operation must be inserted awaiting review; only an approval decision records approval.");
         // The proposal claim exists before the store can expose the proposal, so a preparation claim can
         // hand off to it without an idle gap. Direct callers are covered the same way.
         var claim = _owner?.AcquireProposal(proposal.SessionId, proposal.PreparedInvocation?.ExpiresAt);
@@ -102,7 +107,10 @@ internal sealed class InMemoryAgentProposalService(
             var proposal = access.Proposal!;
             if (!RevisionMatches(proposal, expectedRevision))
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.revision_conflict", "Approval does not match the prepared revision.", 409);
-            if (proposal.ApprovedBy == actorId && proposal.Status is AgentActionProposalStatus.Approved or AgentActionProposalStatus.AwaitingClient or AgentActionProposalStatus.Executed)
+            // Only a recorded review decision is idempotent. An automatic approval is not one, so approving it
+            // cannot report or relabel it as a human decision.
+            if (proposal.RequiresApproval && proposal.ApprovedBy == actorId
+                && proposal.Status is AgentActionProposalStatus.Approved or AgentActionProposalStatus.AwaitingClient or AgentActionProposalStatus.Executed)
                 return AgentResult<AgentActionProposal>.Success(proposal);
             if (proposal.Status is not AgentActionProposalStatus.AwaitingApproval and not AgentActionProposalStatus.Edited)
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", "This operation is not awaiting review.", 409);
