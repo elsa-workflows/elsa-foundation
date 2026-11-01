@@ -51,6 +51,12 @@ reaffirms full end-to-end delivery and extends the review ceiling to 20 total ro
 Completed rounds remain counted: #3514 resumes at round 7. Independent review, exact-head checks,
 authorized merge, resulting-main verification and all charter boundaries remain required.
 
+The [1 November standing continuation](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6556812743)
+supersedes the earlier numerical review ceiling: necessary independent review and integration continue
+with cumulative numbering and no reset. Full M0–M5 delivery remains authorized. Every substantive gate,
+claim/WIP/readiness rule and resulting-main check remains required. The narrowly authorized one-file
+owner-account workflow update is complete; ordinary writes and merges use the worker's own App.
+
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
