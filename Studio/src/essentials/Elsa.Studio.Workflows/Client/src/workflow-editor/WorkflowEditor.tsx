@@ -190,6 +190,8 @@ export function WorkflowEditor({
   }, []);
   const directPublisherAvailable = !!backendSession && !backendSession.disposed && evaluateBackendRequirements(backendSession,
     [{ id: "elsa.api.bpmn-publishing", contractVersion: "1", relations: ["bpmn-authored-publish"] }]).state === "available";
+  const directServicePublisherAvailable = !!backendSession && !backendSession.disposed && evaluateBackendRequirements(backendSession,
+    [{ id: "elsa.api.bpmn-publishing", contractVersion: "1", relations: ["bpmn-authored-service-publish"] }]).state === "available";
   const publicationUnavailableReason = operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined;
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
@@ -987,6 +989,8 @@ export function WorkflowEditor({
     targetLabelFor: bpmnFlowTargetLabel,
     readOnly: editorDoc.pinned,
     directHumanAvailable: directBpmnRoot,
+    directServiceSession: directBpmnRoot && directServicePublisherAvailable ? backendSession : undefined,
+    directServiceDocumentId: draft ? `${definitionId}:${draft.id}` : undefined,
     isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
     conversionBlockedReason: bpmnGatewayConversionBlocker(scopeOwner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined

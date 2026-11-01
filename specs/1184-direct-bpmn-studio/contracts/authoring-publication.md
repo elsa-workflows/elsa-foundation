@@ -19,3 +19,5 @@ New source-aware publication carries server-read immutable version/label/layout;
 ## ETL selection
 
 Choose a closed published service workflow or create a normal RunEtl service workflow with the existing pipeline selector and save/review/publish lifecycle. Bind full worker pin/live source. No hidden publication/GC path, arbitrary worker inputs or second ETL dispatcher. Later pipeline versions cannot change accepted pins.
+
+The optional `bpmn-authored-service-publish` capability relation advertises service support on the existing authored-publication route. Studio requires it in addition to the paged workflow and exact executable reads; the original human-publication relation and contract version stay unchanged.

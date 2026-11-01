@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
+import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { bpmnElementTypeLabel, isDecisionGatewayType, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
 import { directBindingProperty, directHumanMode, directHumanPatch } from "./bpmnDirectBinding";
+import { BpmnServiceBindingEditor } from "./BpmnServiceBindingEditor";
 
 interface BpmnElementInspectorProps {
   element: BpmnElement;
@@ -11,6 +13,8 @@ interface BpmnElementInspectorProps {
   targetLabelFor(flow: BpmnSequenceFlow): string;
   readOnly?: boolean;
   directHumanAvailable?: boolean;
+  directServiceSession?: StudioBackendSession;
+  directServiceDocumentId?: string;
   isDecision?: boolean;
   onAddDecision?(): void;
   conversionBlockedReason?: string;
@@ -42,11 +46,12 @@ export function BpmnElementInspector(props: BpmnElementInspectorProps) {
 // Shared with the activity inspector so bound gateways retain both expression and routing editors.
 export function BpmnElementConfiguration({
   element, outboundFlows, onChangeElement, onChangeFlow, onSetDefaultFlow, targetLabelFor,
-  readOnly = false, directHumanAvailable = false, isDecision = false, onAddDecision, conversionBlockedReason
+  readOnly = false, directHumanAvailable = false, directServiceSession, directServiceDocumentId, isDecision = false, onAddDecision, conversionBlockedReason
 }: BpmnElementInspectorProps) {
   const gateway = isDecisionGatewayType(element.elementType);
   const humanMode = directHumanMode(element);
-  const directControl = ["task", "userTask"].includes(element.elementType)
+  const [serviceEditor, setServiceEditor] = useState<string | null>(null);
+  const directControl = ["task", "userTask", "serviceTask"].includes(element.elementType)
     && (directHumanAvailable || element.properties?.[directBindingProperty] !== undefined);
   return (
     <section aria-label="BPMN routing">
@@ -63,18 +68,26 @@ export function BpmnElementConfiguration({
             onChange={event => {
               if (readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported") return;
               const mode = event.target.value;
-              if (mode === "human" || mode === "unbound") onChangeElement(element.elementId, directHumanPatch(element, mode));
+              if (mode === "human" || mode === "unbound") { setServiceEditor(null); onChangeElement(element.elementId, directHumanPatch(element, mode)); }
             }}>
             <option value="unbound">Task (unbound)</option>
             <option value="human">Human wait — direct BPMN</option>
+            {humanMode === "service" ? <option value="service">Published native service</option> : null}
             {humanMode === "native" ? <option value="native">Native activity</option> : null}
             {humanMode === "unsupported" ? <option value="unsupported">Unsupported binding</option> : null}
           </select>
         </label>
         <p className="wf-muted" role="note">{humanMode === "unsupported"
           ? "This binding is kept unchanged. Its settings need a compatible backend or correction before publication."
-          : humanMode === "native" ? "This task has a native activity binding. Unbind it before choosing a human wait."
+          : humanMode === "native" ? "This task has a native activity binding. Unbind it before choosing direct work."
+            : humanMode === "service" ? "This task invokes the selected immutable native workflow publication."
             : "A human wait pauses the published BPMN process until an authorized person completes it from BPMN runs."}</p>
+        {directServiceSession && directServiceDocumentId && directHumanAvailable && humanMode !== "native" && humanMode !== "unsupported" ? <>
+          {humanMode === "service" || serviceEditor === element.elementId ? <BpmnServiceBindingEditor session={directServiceSession} documentId={directServiceDocumentId} element={element} readOnly={readOnly}
+            onChange={patch => { if (!readOnly) { onChangeElement(element.elementId, patch); setServiceEditor(null); } }} />
+            : <button type="button" disabled={readOnly} onClick={() => setServiceEditor(element.elementId)}>Bind a published service workflow</button>}
+          {serviceEditor === element.elementId && humanMode !== "service" ? <button type="button" disabled={readOnly} onClick={() => setServiceEditor(null)}>Cancel service selection</button> : null}
+        </> : null}
       </> : null}
       {gateway || isDecision ? <>
         <label className="wf-form-field">

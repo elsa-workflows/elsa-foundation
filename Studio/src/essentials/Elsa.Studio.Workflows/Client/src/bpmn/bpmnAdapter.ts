@@ -130,7 +130,7 @@ function createBpmnNode(
       element,
       label: element.name?.trim() || boundActivity?.label || "",
       boundActivity,
-      bindingLabel: directHumanMode(element) === "human" ? "Human wait" : undefined,
+      bindingLabel: directHumanMode(element) === "human" ? "Human wait" : directHumanMode(element) === "service" ? "Native service" : undefined,
       runtimeNodeId: boundActivity?.nodeId ?? element.elementId,
       childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : [],
       collectionSlots: boundActivityNode ? getCollectionSlots(boundActivityNode, catalogItem) : []
