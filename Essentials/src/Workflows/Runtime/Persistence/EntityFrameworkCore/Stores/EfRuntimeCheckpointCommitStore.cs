@@ -2,6 +2,7 @@ using System.Transactions;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -14,8 +15,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Opt-in EF Core checkpoint writer for bounded Runtime participant slices.</summary>
 /// <remarks>
 /// The durable replay marker, supported participant projections, and execution fence share one transaction.
-/// Workflow-execution writes also run inside the established root executable write-lease boundary; replay remains
-/// resolvable before a lease is required. Unsupported participants are rejected explicitly until their EF adapters
+/// Creating or changing an executable root runs inside its established write-lease boundary. An eligible unchanged
+/// native root can instead use an update-only check inside the fenced transaction; replay remains resolvable before
+/// a lease is required. Unsupported participants are rejected explicitly until their EF adapters
 /// can stage changes through this same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
@@ -24,6 +26,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
     TimeProvider? timeProvider = null,
     IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null) : IRuntimeCheckpointCommitStore
 {
+    internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -255,6 +259,27 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 throw new InvalidOperationException(
                     "A workflow execution checkpoint write requires IWorkflowExecutableRootWriteLeaseManager.");
 
+            // The session only hints that a root was persisted. The actual row must still exist with the exact
+            // same pin inside the fenced transaction, and its revision CAS must succeed. Never turn this path
+            // into an unprotected insert if retention, alteration or another writer changed that row.
+            if (commit.ModelState is null && commit.ExpectedModelExecution is null && commit.ExpectedModelParentWait is null &&
+                commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is null && commit.ExpectedFence is not null &&
+                CoalescingSessions?.Current is { HasDurableRecord: true } session && session.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
+                context.Database.GetEnlistedTransaction() is null && Transaction.Current is null)
+            {
+                try
+                {
+                    var updated = await CommitNewAsync(cancellationToken, pinned);
+                    EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+                    return updated;
+                }
+                catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
+                {
+                    // No SaveChanges occurred. Rollback/disposal completed before entering the ordinary leased path.
+                }
+            }
+
             RuntimeCheckpointCommitStoreResult? result = null;
             async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
                 result = await CommitNewAsync(leaseCancellationToken);
@@ -275,7 +300,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
         return immediate;
 
-        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
+        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
             var marker = ToEntity(commit, scope, id, fingerprint);
             var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
@@ -327,7 +352,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         scope,
                         commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt,
                         touchedTestScopes,
-                        writeCancellationToken);
+                        writeCancellationToken,
+                        requiredExistingRoot);
                 }
 
                 if (commit.StateChanges.Scheduler is { } schedulerChange)
@@ -404,6 +430,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 EnsureExactBookmarkDeadline(commit);
                 await transaction.CommitAsync(writeCancellationToken);
                 return ResultFor(commit, marker);
+            }
+            catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
+            {
+                await RollbackAndRestoreAsync(transaction);
+                throw;
             }
             catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {

@@ -61,6 +61,41 @@ The corrected whole suites pass: runtime 3,122, Distributed 114, HTTP integratio
 accounts for all cases (runtime's same three delayed theories expand 3,111 discoveries into 3,122 executions).
 All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due.
 
+## Unchanged native roots: candidate #2586
+
+An eligible fenced native checkpoint can update an existing workflow row without acquiring another executable
+root-write lease. The live session's durable-record flag is only an eligibility hint. The staging query checks the
+actual row and exact full pinned identity inside the transaction; its normal revision CAS prevents deletion or
+replacement from becoming an insert. Missing/changed roots roll back before SaveChanges and retry through the
+ordinary leased path. Initial roots, model/admission writes, unfenced calls and dirty/externally transacted contexts
+keep the leased path. Replay and uncertain-acknowledgement reconciliation retain the immutable marker contract.
+
+| SQLite fixture | Before this change | Candidate | Removed commands |
+|---|---:|---:|---:|
+| Durable ten WriteLines | 336 | 329 | 7 |
+| Durable HTTP reference | 204 | 183 | 21 |
+| Durable fork/join/resume | 253 | 246 | 7 |
+| Balanced/Ephemeral ten WriteLines | 90 | 90 | 0 |
+| Balanced/Ephemeral HTTP reference | 104 | 97 | 7 |
+| Balanced/Ephemeral fork/join/resume | 180 | 173 | 7 |
+
+Disabling this optimization restores all measured pre-change counts. The previous committed budgets were
+347/206/256 Durable and 101/106/183 Balanced/Ephemeral; those are budgets, not the measured baseline in this table.
+Budgets are now lowered to the measured candidate. No throughput improvement is claimed from command counts alone.
+
+Twelve focused controls cover unchanged-root update/replay, stale hints, changed artifact or equal-ID/different-hash
+pins, absent record hints, other executions, unfenced/dirty calls, stale fencing, row revision/deletion races and
+ambiguous commit acknowledgement. Disabling the optimization fails five controls; removing the actual-row guard
+fails three; removing the workflow revision token fails the replacement case. Restoration passes all cases. The row
+race controls mutate the SQL row within the test transaction immediately before SaveChanges; they establish the
+conditional write and rollback behavior, and are not independent-host race evidence.
+
+Whole local EF persistence: 1,851 passed; HTTP integration: 107 passed, zero failed/skipped. Discovery reconciles all
+executions. Four-provider/root-GC qualification, independent review and final program gates remain due. Initial fixture
+attempts omitted required codecs/run-health state and expected the wrong stale-fence exception; they are retained
+separately, not counted as causal controls. The saved mutation source differs from the final source only in its XML
+summary; the final whole suites ran against the current source.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.

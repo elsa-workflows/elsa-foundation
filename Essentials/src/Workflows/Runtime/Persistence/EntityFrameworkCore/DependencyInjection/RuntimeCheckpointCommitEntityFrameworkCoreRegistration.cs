@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,7 +38,12 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             foreach (var descriptor in contracts)
                 services.Remove(descriptor);
 
-            services.TryAddScoped<EfRuntimeCheckpointCommitStore>();
+            services.TryAddScoped(provider => new EfRuntimeCheckpointCommitStore(
+                provider.GetRequiredService<RuntimeDbContext>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                provider.GetService<TimeProvider>(),
+                provider.GetService<IWorkflowExecutableRootWriteLeaseManager>())
+            { CoalescingSessions = provider.GetService<IRuntimeCoalescingSessionAccessor>() });
             var concrete = services.Single(descriptor => descriptor.ServiceType == typeof(EfRuntimeCheckpointCommitStore));
             var contract = ServiceDescriptor.Scoped<IRuntimeCheckpointCommitStore>(provider =>
                 provider.GetRequiredService<EfRuntimeCheckpointCommitStore>());

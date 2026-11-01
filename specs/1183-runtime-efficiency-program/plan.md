@@ -45,3 +45,16 @@ actor implementations retain their own transport/scheduling responsibilities; th
 already executing activity is not interrupted. In-memory waiter isolation and real SQLite External/ReplaySafe loop
 cases cover all modes, resumption convergence, and deliberate scheduler/fusion/cleanup/flush mutations. See the
 [continuation receipt](../../docs/reports/native-runtime-performance-program-2026-11-01.md).
+
+## M4 retained native root design (#2586)
+
+The live coalescing session's `HasDurableRecord` gates an optional optimization, never authority. An eligible native,
+fenced checkpoint with a clean context tries an update-only transaction. The ordinary workflow staging query validates
+the actual persisted row and compares its full pin with the proposed pin. If the row is missing or changed, a private
+staging signal rolls back before any SaveChanges and retries through the original root-write lease. The normal workflow
+revision CAS and execution fence remain in the same transaction as participants and the marker.
+
+Initial roots without the hint, model/admission writes, unfenced calls and dirty/externally transacted contexts keep the
+ordinary path. Replay is resolved before lease work. An ambiguous acknowledgement still reconciles only through the
+immutable marker. Guards cover stale hints, equal-ID/different-hash pins, replaced/deleted rows, stale ownership and
+uncertain commits. Source mutations disable the optimization, actual-row check and workflow revision token separately.
