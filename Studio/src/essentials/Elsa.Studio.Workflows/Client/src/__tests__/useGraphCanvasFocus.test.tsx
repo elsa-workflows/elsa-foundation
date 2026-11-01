@@ -116,12 +116,21 @@ describe("useGraphCanvasInteractions node resize", () => {
     const commitCanvas = vi.fn();
     const fixture = renderHook([node("a"), node("b")], commitCanvas);
 
-    fixture.result.current!.resizeNode("a", 412.4);
+    fixture.result.current!.resizeNode("a", 412.4, 246);
 
     expect(commitCanvas).toHaveBeenCalledTimes(1);
     const [committedNodes] = commitCanvas.mock.calls[0] as unknown as [Node<WorkflowNodeData>[]];
     expect(committedNodes.find(current => current.id === "a")?.width).toBe(412);
     expect(committedNodes.find(current => current.id === "b")?.width).toBeUndefined();
+  });
+
+  it("commits nothing when a click on the handle leaves the width unchanged", () => {
+    const commitCanvas = vi.fn();
+    const fixture = renderHook([node("a")], commitCanvas);
+
+    fixture.result.current!.resizeNode("a", 246.3, 246);
+
+    expect(commitCanvas).not.toHaveBeenCalled();
   });
 });
 

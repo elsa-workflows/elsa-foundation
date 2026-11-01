@@ -486,6 +486,16 @@ describe("workflow adapter", () => {
     expect(canvas.nodes.find(current => current.id === "plain")?.width).toBeUndefined();
   });
 
+  it("clamps saved node widths to the range the resize handle allows", () => {
+    const canvas = buildCanvas(firstScope(flowchartRoot([node("narrow"), node("huge")])), [writeLine], [
+      { nodeId: "narrow", x: 0, y: 0, width: 40 },
+      { nodeId: "huge", x: 440, y: 0, width: 5000 }
+    ]);
+
+    expect(canvas.nodes.find(current => current.id === "narrow")?.width).toBe(246);
+    expect(canvas.nodes.find(current => current.id === "huge")?.width).toBe(640);
+  });
+
   it("persists a resized node width and keeps saved widths for untouched nodes", () => {
     const layout = updateLayout(
       [{ nodeId: "resized", x: 0, y: 0, width: 300 }, { nodeId: "kept", x: 440, y: 0, width: 380 }],

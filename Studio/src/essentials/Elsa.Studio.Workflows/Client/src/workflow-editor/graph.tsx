@@ -42,6 +42,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   // The node's explicit (saved or resized) width. NodeProps.width is the measured size instead, so
   // applying it would pin every unresized node to whatever it measured on first render.
   const width = useStore(useCallback((state: ReactFlowState) => state.nodeLookup.get(id)?.width, [id]));
+  const resizeStartWidthRef = useRef(0);
   const ports = useGraphPortLayout(id, sourcePorts.map(port => port.name), showFlowPorts && nodeData.acceptsInbound);
   return (
     <div
@@ -64,7 +65,8 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           resizeDirection="horizontal"
           minWidth={minNodeWidth}
           maxWidth={maxNodeWidth}
-          onResizeEnd={(_event, params) => resizeNode(id, params.width)}
+          onResizeStart={(_event, params) => { resizeStartWidthRef.current = params.width; }}
+          onResizeEnd={(_event, params) => resizeNode(id, params.width, resizeStartWidthRef.current)}
         />
       ) : null}
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />

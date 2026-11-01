@@ -60,6 +60,11 @@ describe("computeAutoLayout", () => {
     expect(positions.get("merge")?.x).toBe(440 + 400 + 194);
   });
 
+  it("spaces columns by the clamped width of an out-of-range node", () => {
+    const positions = computeAutoLayout([{ id: "huge", width: 5000 }, { id: "next" }], [edge("huge", "next")], "flowchart");
+    expect(positions.get("next")?.x).toBe(640 + 194);
+  });
+
   it("does not loop forever on a cycle", () => {
     const positions = computeAutoLayout(
       nodes("a", "b", "c"),

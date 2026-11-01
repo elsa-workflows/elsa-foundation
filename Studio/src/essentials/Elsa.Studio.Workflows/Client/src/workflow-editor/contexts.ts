@@ -26,7 +26,7 @@ export interface WorkflowNodeActions {
 export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeActions | null>(null);
 
 /** Commits a node's resized width. Provided only by editable flowchart canvases; others render no resize handle. */
-export type WorkflowNodeResize = (nodeId: string, width: number) => void;
+export type WorkflowNodeResize = (nodeId: string, width: number, startWidth: number) => void;
 
 export const WorkflowNodeResizeContext = React.createContext<WorkflowNodeResize | null>(null);
 
