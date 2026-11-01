@@ -108,7 +108,7 @@ const consoleTargetDefinitions: Record<ConsoleHostId, Pick<ConsoleTarget, "id" |
   server: { id: "server", label: "Server", endpointPrefix: "/_elsa/server/diagnostics/console-logs" },
   studio: { id: "studio", label: "Studio", endpointPrefix: "/_elsa/studio/diagnostics/console-logs" }
 };
-const defaultConsoleHostId: ConsoleHostId = "studio";
+const defaultConsoleHostId: ConsoleHostId = "server";
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
 const consoleStreamServerTimeoutInMilliseconds = 120_000;

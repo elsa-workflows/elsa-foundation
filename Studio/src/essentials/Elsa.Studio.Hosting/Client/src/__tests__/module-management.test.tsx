@@ -47,6 +47,17 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("selects the Server host by default on the modules and package feeds pages", async () => {
+    for (const render of [renderModuleManagementPage, renderPackageFeedsPage]) {
+      const { container, unmount } = await render(stubApi(), null);
+      const hostTabs = container.querySelector("[aria-label='Hosts']");
+
+      expect(hostTabs?.querySelector("[aria-selected='true']")?.getAttribute("data-tab-id")).toBe("server");
+
+      await unmount();
+    }
+  });
+
   it("keeps drop-folder package management inline instead of opening a dialog", async () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi());
     await clickSourceButton(container, "Nuplane");
@@ -1158,7 +1169,7 @@ function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePacka
   return registry;
 }
 
-async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
+async function renderModuleManagementPage(api: ElsaStudioModuleApi, hostId: "studio" | "server" | null = "studio") {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -1167,6 +1178,10 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
     root.render(withQueryClient(<ModuleManagementPage api={api} />));
   });
   await flushPromises();
+  if (hostId) {
+    selectHostTab(container, hostId);
+    await flushPromises();
+  }
 
   return {
     container,
@@ -1177,7 +1192,7 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
   };
 }
 
-async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
+async function renderPackageFeedsPage(api: ElsaStudioModuleApi, hostId: "studio" | "server" | null = "studio") {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -1186,6 +1201,10 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
     root.render(withQueryClient(<PackageFeedsPage api={api} />));
   });
   await flushPromises();
+  if (hostId) {
+    selectHostTab(container, hostId);
+    await flushPromises();
+  }
 
   return {
     container,
@@ -1194,6 +1213,12 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
       container.remove();
     }
   };
+}
+
+// The pages default to the Server host; most cases here exercise the Studio registry, so select it explicitly.
+function selectHostTab(container: Element, hostId: "studio" | "server") {
+  const tab = container.querySelector<HTMLButtonElement>(`[aria-label='Hosts'] [data-tab-id='${hostId}']`);
+  flushSync(() => tab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
 async function flushAnimationFrame() {

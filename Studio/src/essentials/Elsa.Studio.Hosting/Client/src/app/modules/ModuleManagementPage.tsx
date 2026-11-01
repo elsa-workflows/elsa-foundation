@@ -58,7 +58,7 @@ const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
 
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
-  const [activeHostId, setActiveHostId] = useState<HostId>("studio");
+  const [activeHostId, setActiveHostId] = useState<HostId>("server");
   // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
   // Query cache, not here.
   const [viewByHost, setViewByHost] = useState<Record<HostId, HostViewState>>(() => ({
