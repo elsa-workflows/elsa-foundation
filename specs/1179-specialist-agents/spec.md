@@ -236,7 +236,7 @@ consumer, process restart, migration/rollback and disabling new admission while 
   - is compiled through the same provider compiler and preflight as Studio publication, and published as an exact, immutable, source-owned version;
   - is read-only in Studio, but can be copied or forked into an editable draft where permitted;
   - never carries credentials;
-  - is validated by its configuration source before contribution. An invalid definition, or changed content without a version bump, is left out with an actionable per-definition diagnostic, and every other activity still reconciles;
+  - is validated before contribution, and again at compile and preflight. An invalid definition, changed content without a version bump, or a definition that fails compile or preflight is left out with an actionable per-definition diagnostic, and every other activity still reconciles;
   - composes identically in native and BPMN workflows.
 
 ### Key Entities *(include if feature involves data)*

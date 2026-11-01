@@ -91,8 +91,10 @@ publication (`SourceOwnedActivityVersionPublisher` → `ExecutableNodeCompiler.C
 root node and never calls a provider compiler. It must be extended so that provider-backed source content is
 compiled through the registered `IActivityTemplateProviderCompiler`, with the same preflight as Studio publication:
 schema, model capability, runtime and storage. That extension is generic Essentials publishing work, not a specialist
-fork. Today one invalid reconciliation entry aborts the whole pass, so per-definition isolation belongs to the
-configuration source. Versions are operator-declared; reconciliation keeps rejecting same-version content changes.
+fork. It generalizes `ActivityTemplateCompiler` beyond drafts and reports a compile or preflight failure for that one
+version without aborting the pass. Today one invalid reconciliation entry aborts the whole pass, so per-definition
+isolation is split: the configuration source validates the manifest and version before contribution, and the
+publication bridge isolates compile and preflight failures. Versions are operator-declared; reconciliation keeps rejecting same-version content changes.
 [Publication contract](contracts/publication.md), FR-027, T061–T062.
 
 Detailed meanings live in the [glossary](../../docs/glossary/elsa.md); state/support decisions live in the linked documents. Proposed public signatures stabilize only after the first independent package consumer and owning implementation review.
