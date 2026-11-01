@@ -2659,6 +2659,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Attention.Core",
           "path": "Essentials/src/Attention/Core/Elsa.Attention.Core.csproj"
         },
@@ -3160,6 +3165,11 @@
           "type": "internal",
           "id": "Elsa.Api.AspNetCore",
           "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -3690,6 +3700,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.OpenTelemetry.Core",
           "path": "Essentials/src/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj"
         },
@@ -3993,6 +4008,11 @@
           "type": "internal",
           "id": "Elsa.Api.AspNetCore",
           "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -6412,6 +6432,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Core",
           "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
         },
@@ -7393,6 +7418,11 @@
           "type": "internal",
           "id": "Elsa.Api.AspNetCore",
           "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -21895,6 +21925,11 @@
           "type": "internal",
           "id": "Elsa.Api.AspNetCore",
           "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
