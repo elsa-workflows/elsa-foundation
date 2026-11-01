@@ -15,6 +15,7 @@ import {
   sequenceStructureKind,
   spliceWorkflowEdge,
   syncCanvasToScope,
+  updateLayout,
   updateScopeActivities,
   withFlowchartConnections,
   type CanvasScope,
@@ -473,6 +474,41 @@ describe("workflow adapter", () => {
     const canvas = buildUnsupportedActivityCanvas(node("explicit-icon"), [{ ...writeLine, icon: "trigger" }], []);
 
     expect(canvas.nodes[0].data.catalogIcon).toBe("trigger");
+  });
+
+  it("applies a saved node width from the layout", () => {
+    const canvas = buildCanvas(firstScope(flowchartRoot([node("wide"), node("plain")])), [writeLine], [
+      { nodeId: "wide", x: 0, y: 0, width: 360 },
+      { nodeId: "plain", x: 440, y: 0 }
+    ]);
+
+    expect(canvas.nodes.find(current => current.id === "wide")?.width).toBe(360);
+    expect(canvas.nodes.find(current => current.id === "plain")?.width).toBeUndefined();
+  });
+
+  it("clamps saved node widths to the range the resize handle allows", () => {
+    const canvas = buildCanvas(firstScope(flowchartRoot([node("narrow"), node("huge")])), [writeLine], [
+      { nodeId: "narrow", x: 0, y: 0, width: 40 },
+      { nodeId: "huge", x: 440, y: 0, width: 5000 }
+    ]);
+
+    expect(canvas.nodes.find(current => current.id === "narrow")?.width).toBe(246);
+    expect(canvas.nodes.find(current => current.id === "huge")?.width).toBe(640);
+  });
+
+  it("persists a resized node width and keeps saved widths for untouched nodes", () => {
+    const layout = updateLayout(
+      [{ nodeId: "resized", x: 0, y: 0, width: 300 }, { nodeId: "kept", x: 440, y: 0, width: 380 }],
+      [
+        { id: "resized", position: { x: 0, y: 0 }, width: 412.6, data: {} },
+        { id: "kept", position: { x: 440, y: 0 }, data: {} },
+        { id: "fresh", position: { x: 880, y: 0 }, data: {} }
+      ]
+    );
+
+    expect(layout.find(record => record.nodeId === "resized")?.width).toBe(413);
+    expect(layout.find(record => record.nodeId === "kept")?.width).toBe(380);
+    expect(layout.find(record => record.nodeId === "fresh")).not.toHaveProperty("width");
   });
 
   it("preserves authored Sequence order regardless of saved horizontal positions", () => {

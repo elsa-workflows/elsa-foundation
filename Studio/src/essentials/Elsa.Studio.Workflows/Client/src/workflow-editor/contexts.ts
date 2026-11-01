@@ -25,6 +25,11 @@ export interface WorkflowNodeActions {
 
 export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeActions | null>(null);
 
+/** Commits a node's resized width. Provided only by editable flowchart canvases; others render no resize handle. */
+export type WorkflowNodeResize = (nodeId: string, width: number, startWidth: number) => void;
+
+export const WorkflowNodeResizeContext = React.createContext<WorkflowNodeResize | null>(null);
+
 // Slot-badge navigation for canvas nodes. A single context handler (instead of a per-node closure in
 // node data) keeps node data identity stable across drag re-renders, so container nodes don't
 // re-render on every pointer-move while an unrelated node is dragged. A per-node data.onEnterSlot

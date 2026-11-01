@@ -241,6 +241,33 @@ button.wf-node-slot-badge:focus-visible {
   opacity: 1;
 }
 
+/* Full-height grab strip on the right edge; the outcome port handle renders above it. */
+.wf-node .react-flow__resize-control.wf-node-resize-control.line.right {
+  width: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  transition: background var(--transition-fast, 0.15s ease);
+}
+
+.wf-node .react-flow__resize-control.wf-node-resize-control.line.right:hover,
+.wf-node .react-flow__resize-control.wf-node-resize-control.line.right:active {
+  background: color-mix(in srgb, var(--wf-accent) 45%, transparent);
+}
+
+/* Focusable keyboard target filling the strip; Arrow keys resize, Home/End jump to the limits. */
+.wf-node-resize-handle {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.wf-node-resize-handle:focus-visible {
+  outline: 2px solid var(--wf-accent);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--wf-accent) 45%, transparent);
+}
+
 .wf-node-port-label {
   position: absolute;
   max-width: 128px;
