@@ -53,7 +53,7 @@ accept caller-authored envelopes through the content decision API.
 
 Dispatch targets the exact saved bookmark using existing `IBookmarkResumeDispatcher` and native
 idempotency/source receipts. Always supply explicit PayloadType and ProviderId so native TriggerDelivery
-identity exists; do not rely on undeclared-delivery fallback. Register `SpecialistEditorialResumeGuard` as an inline
+identity exists; do not rely on undeclared-delivery fallback. Register `HumanReviewResumeGuard` as an inline
 `IEventHandler<ActivityResumeValidating>` following the existing DispatchWorkflow guard. This event
 runs before the initial trigger claim. It verifies envelope purpose/scope/content and current actor
 permission/expiry before the wait can be consumed. An unavailable dependency leaves resume owed;

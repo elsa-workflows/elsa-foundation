@@ -12,7 +12,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 public sealed class AspNetCoreIdentityCurrentSubjectPermissionTests
 {
     private const string Tenant = "tenant-a";
-    private const string Granted = "editorial-reviews:decide";
+    private const string Granted = "agent-reviews:decide";
 
     [Fact]
     public async Task Role_membership_and_direct_grants_are_read_now_and_revocation_takes_effect_at_once()
@@ -111,6 +111,6 @@ public sealed class AspNetCoreIdentityCurrentSubjectPermissionTests
 
     private sealed class EditorialPermissions : IPermissionContributor
     {
-        public IEnumerable<Permission> Contribute() => [new(Granted, "Decide reviews", "Editorial", "Decide editorial reviews.")];
+        public IEnumerable<Permission> Contribute() => [new(Granted, "Decide reviews", "Agents", "Decide agent reviews.")];
     }
 }

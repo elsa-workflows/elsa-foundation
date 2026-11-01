@@ -27,7 +27,7 @@ The package adds no general task inbox, user-task platform, approval store or ge
 | Contract | Lifetime | Notes |
 |---|---|---|
 | `IHumanReviews` | Scoped | Reads and decides one exact wait for a tenant and actor that the host derives and the caller supplies. Receipts reconcile from native records: the consumed trigger delivery while admission is in flight, then the terminal typed result. |
-| `HumanReview` | Activity | `StatefulActivity` with outcomes `Approved` and `Rejected`. `Content` is any JSON value, up to 64 KiB. Optional `Title` and `Notes` give the reviewer context. |
+| `HumanReview` | Activity | `StatefulActivity` with outcomes `Approved` and `Rejected`. `Content` is any JSON value, up to 64 KiB in its canonical compact UTF-8 encoding. Optional `Title` and `Notes` give the reviewer context. |
 
 A durably claimed replay of the same delivery is historical. To match it, the guard checks:
 - the attempt claim metadata;

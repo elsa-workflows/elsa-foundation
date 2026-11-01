@@ -81,9 +81,11 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
         return claims;
     }
 
-    // Hashes the compact serialized form, so whitespace from any persistence round trip cannot change the identity.
-    internal static string HashContent(JsonElement content) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(content))));
+    // One canonical encoding (compact, default encoder) bounds, hashes and identifies content, so neither whitespace nor
+    // the escaping of any upstream writer or persistence round trip changes its size or identity.
+    internal static byte[] CanonicalBytes(JsonElement content) => JsonSerializer.SerializeToUtf8Bytes(content);
+
+    internal static string HashContent(JsonElement content) => Convert.ToHexStringLower(SHA256.HashData(CanonicalBytes(content)));
 
     internal static string WaitId(string workflowExecutionId, string activityExecutionId, string contentHash) =>
         "agent-review:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(

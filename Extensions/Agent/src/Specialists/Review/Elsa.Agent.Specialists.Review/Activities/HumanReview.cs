@@ -34,7 +34,7 @@ public sealed class HumanReview(IWorkflowExecutionStateStore workflows, IPersist
 
     protected override async ValueTask<ActivityTransition<HumanReviewResult, HumanReviewState>> ExecuteAsync(ActivityExecutionContext context)
     {
-        if (Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null || Content.GetRawText().Length > HumanReviewIds.MaximumContentBytes ||
+        if (Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null || ReviewDecisionCodec.CanonicalBytes(Content).Length > HumanReviewIds.MaximumContentBytes ||
             Title?.Length > HumanReviewIds.MaximumTextCharacters || Notes?.Length > HumanReviewIds.MaximumTextCharacters)
             return Fault(new("agent.review.input-invalid", "The content, title or notes are outside the human review bounds."));
         var parent = await workflows.FindAsync(context.WorkflowExecutionId, context.CancellationToken);
