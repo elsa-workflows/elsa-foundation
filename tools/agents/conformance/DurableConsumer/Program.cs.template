@@ -29,6 +29,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -170,8 +171,28 @@ else
             await Task.Delay(50);
         }
         Check(settled, "native completion application settled through its actual durable outbox and resumption service");
+        Check(false, "recovery crash hook must stop after application before physical source acknowledgement");
     }
-    if (role is "recover" or "verify")
+    if (role == "settle")
+    {
+        using var lost = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "ack-crash.json")));
+        var sourceId = lost.RootElement.GetProperty("sourceId").GetString()!;
+        var physical = await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(sourceId);
+        Check(physical?.Status == RuntimePostCommitOutboxStatus.Delivering && before.Applications?.Count == 1, "application survived process loss while its physical acknowledgement remains owed");
+        var expires = physical!.DeliveryVisibleAfter!.Value;
+        if (expires - DateTimeOffset.UtcNow > TimeSpan.FromSeconds(90)) throw new InvalidOperationException("Source visibility exceeds the fixture's finite recovery bound.");
+        while (DateTimeOffset.UtcNow <= expires) await Task.Delay(250);
+        var settled = false;
+        for (var attempt = 0; attempt < 16; attempt++)
+        {
+            await provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new(32, 32, 32, maxExecutionsPerSweep: 1));
+            physical = await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(sourceId);
+            if (physical?.Status == RuntimePostCommitOutboxStatus.Delivered) { settled = true; break; }
+            await Task.Delay(50);
+        }
+        Check(settled && physical!.DeliveryFencingToken > lost.RootElement.GetProperty("fence").GetInt64(), "new physical source claim acknowledged idempotent application after real expiry");
+    }
+    if (role is "settle" or "verify")
     {
         var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
         var parent = await provider.GetRequiredService<IActivityExecutionStateStore>().FindAsync(executionId, handoff.Identity.ActivityExecutionId);
@@ -203,6 +224,12 @@ public sealed class DurablePackageHostFeature : IShellFeature
         services.AddWorkflowRuntime();
         services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = Persistence });
         services.AddPersistenceModes();
+        if (Role == "recover")
+        {
+            var directory = Directory;
+            services.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitIntentDispatcher>(provider =>
+                new CrashAfterApplicationDispatcher(ActivatorUtilities.CreateInstance<RuntimePostCommitIntentDispatcher>(provider), provider, directory)));
+        }
         if (Role == "worker")
         {
             services.AddFixtureModel();
@@ -235,5 +262,31 @@ public sealed class CrashAfterAcceptanceActivator(IActivityActivator inner, ISer
             await File.WriteAllTextAsync(Path.Combine(directory, "crash.json"), JsonSerializer.Serialize(new { phase = "journal-accepted-before-native-receipt", processId = Environment.ProcessId, claimExpires = work.VisibleUntil }));
             Environment.Exit(197);
         }
+    }
+}
+
+
+// Fault injection through the public dispatcher replacement port. Handler contributions, source
+// requirements, persistence owners and the real specialist handler remain untouched.
+public sealed class CrashAfterApplicationDispatcher(IRuntimePostCommitIntentDispatcher inner, IServiceProvider services, string directory) : IRuntimePostCommitIntentDispatcher
+{
+    public bool RequiresDurableSource(string kind) => inner.RequiresDurableSource(kind);
+    public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) => inner.DispatchAsync(intent, cancellationToken);
+    public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        await inner.DispatchAsync(source, cancellationToken);
+        if (source.Intent.Kind != "elsa.specialist.applied/1") return;
+        var handoff = JsonSerializer.Deserialize<DurableHandoff>(await File.ReadAllTextAsync(Path.Combine(directory, "handoff.json"), cancellationToken))!;
+        var turn = await services.GetRequiredService<ISpecialistTurnStore>().ReadAsync(handoff.Handle, handoff.Identity, cancellationToken);
+        var physical = await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(source.SourceOutboxItemId, cancellationToken);
+        if (turn?.Applications?.Count != 1 || turn.Applications.Single().SourceId != source.SourceOutboxItemId ||
+            physical?.Status != RuntimePostCommitOutboxStatus.Delivering || physical.DeliveryFencingToken != source.Claim.FencingToken)
+            throw new InvalidOperationException("The acknowledgement crash requires actual applied journal metadata and the current unacknowledged physical source.");
+        await File.WriteAllTextAsync(Path.Combine(directory, "ack-crash.json"), JsonSerializer.Serialize(new
+        {
+            phase = "application-written-before-source-ack", processId = Environment.ProcessId,
+            sourceId = source.SourceOutboxItemId, fence = physical.DeliveryFencingToken, claimExpires = physical.DeliveryVisibleAfter
+        }), cancellationToken);
+        Environment.Exit(198);
     }
 }

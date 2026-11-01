@@ -194,16 +194,17 @@ def main():
                 cases = []
                 for persistence in ["Balanced", "Durable"]:
                     case = out / "durable-recovery" / persistence
-                    for role in ["start", "worker", "recover", "verify"]:
+                    for role in ["start", "worker", "recover", "settle", "verify"]:
                         run("Durable-" + persistence + "-" + role, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--no-build", "--",
-                            str(out / "runtime-inbox"), role, str(case), persistence], directory, expected_exit=197 if role == "worker" else 0)
-                    receipts = {role: json.loads((case / (role + "-receipt.json")).read_text()) for role in ["start", "recover", "verify"]}
+                            str(out / "runtime-inbox"), role, str(case), persistence], directory, expected_exit={"worker": 197, "recover": 198}.get(role, 0))
+                    receipts = {role: json.loads((case / (role + "-receipt.json")).read_text()) for role in ["start", "settle", "verify"]}
                     crash = json.loads((case / "crash.json").read_text())
-                    if crash["phase"] != "journal-accepted-before-native-receipt" or len({value["processId"] for value in [*receipts.values(), crash]}) != 4:
-                        raise RuntimeError("durable case did not cross four distinct processes and the declared crash boundary")
+                    ack_crash = json.loads((case / "ack-crash.json").read_text())
+                    if crash["phase"] != "journal-accepted-before-native-receipt" or ack_crash["phase"] != "application-written-before-source-ack" or len({value["processId"] for value in [*receipts.values(), crash, ack_crash]}) != 5:
+                        raise RuntimeError("durable case did not cross five distinct processes and both declared crash boundaries")
                     if len(list((case / "dispatches").glob("dispatch-*.json"))) != 1:
                         raise RuntimeError("durable recovery repeated or omitted a model dispatch")
-                    cases.append({"persistenceMode": persistence, "processes": receipts, "expectedCrash": crash, "databaseSha256": sha(case / "runtime.db"), "modelDispatches": 1})
+                    cases.append({"persistenceMode": persistence, "processes": receipts, "expectedCrashes": [crash, ack_crash], "databaseSha256": sha(case / "runtime.db"), "modelDispatches": 1})
                 report["durableRecoveryCases"] = cases
             inspect(name, directory)
         report["status"] = "PassedDurableRecoveryProfile" if args.profile == "durable-recovery" else "PassedBoundedKernelProfile"
