@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: In progress — authored publication, durable discovery/inspection, actual Runtime-only accepted-work recovery, typed Studio client, direct-human editor/publication and process/run navigation controls verified; actual direct-human Studio P1 recovery/replay verified on source11437c0bd; existing saved-Studio/native/Runtime-only compatibility verified on sources5618ed377/358ec420e; real ETL/claim/interruption/final delivery gates remain open.
+**Status**: In progress — authored publication, durable discovery/inspection, actual Runtime-only accepted-work recovery, typed Studio client, direct-human editor/publication and process/run navigation controls verified; actual direct-human Studio P1 recovery/replay verified on source11437c0bd; existing saved-Studio/native/Runtime-only compatibility verified on sources5618ed377/358ec420e; actual finite HTTP/file ETL failure/restart/exact UI retry/replay verified on source41f1828cb; completed RunEtl→ETL navigation, claim/interruption and final delivery gates remain open.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 
