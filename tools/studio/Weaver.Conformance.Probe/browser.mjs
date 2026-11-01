@@ -925,6 +925,7 @@ async function consumedIntentRemount() {
   };
   const generationBefore = await hostRead("/__qualification/generation");
   const catalog = await hostRead("/modularity/features");
+  need(typeof catalog.revision === "string" && catalog.revision.length > 0, "The owning Studio feature catalog has no configuration revision.");
   const target = catalog.features.find(feature => feature.id === witness.studioFeature);
   need(target?.enabled === true, "The installed resource Studio feature must be enabled before its real remount transition.");
   const timeOrigin = await page.evaluate(() => performance.timeOrigin);
@@ -942,13 +943,19 @@ async function consumedIntentRemount() {
   await nativeEnter("remount-apply", dialog.getByRole("button", { name: "Apply", exact: true }), "Apply reviewed Studio feature change");
   const appliedResponse = await applied;
   need(appliedResponse.status() === 200, "The native Studio feature apply was refused.");
-  const appliedValue = await appliedResponse.json();
-  need(appliedValue.reloadedShellCount > 0 && appliedValue.catalog.revision !== catalog.revision,
-    "Native feature apply did not report a new configuration and shell generation.");
-  expect(appliedValue.catalog.features.find(feature => feature.id === target.id)?.enabled).toBe(false);
   await expect.poll(() => moduleEvents.length).toBe(1);
   await page.waitForURL(studioRoute("/"), { waitUntil: "domcontentloaded" });
   expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
+  // Apply retires its document, so Chromium may release the old response body.
+  // Read the owning catalog after navigation; the serving generation is checked below.
+  const catalogAfter = await hostRead("/modularity/features");
+  need(typeof catalogAfter.revision === "string" && catalogAfter.revision.length > 0 && catalogAfter.revision !== catalog.revision,
+    "Native feature apply did not change the owning configuration revision.");
+  expect(catalogAfter.features.find(feature => feature.id === target.id)?.enabled).toBe(false);
+  result.evidence.push(retain("native-feature-apply-readback", { url: diagnosticUrl(appliedResponse.url()),
+    status: appliedResponse.status(), featureId: target.id, enabledBefore: target.enabled, enabledAfter: false,
+    catalogRevisionBefore: catalog.revision, catalogRevisionAfter: catalogAfter.revision,
+    configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("link", { name: "Features", exact: true }).click();
@@ -997,7 +1004,8 @@ async function consumedIntentRemount() {
   result.ownerAfter = after.receipt;
   result.evidence.push(retain("native-intent-remount", { nativeOperation: "Studio feature apply", featureId: target.id,
     enabledBefore: target.enabled, enabledAfter: false, catalogRevisionBefore: catalog.revision,
-    catalogRevisionAfter: appliedValue.catalog.revision, reloadedShellCount: appliedValue.reloadedShellCount,
+    catalogRevisionAfter: catalogAfter.revision, applyHttpStatus: appliedResponse.status(),
+    configurationReadbackVerified: true, reloadObserved: generationAfter.generation !== generationBefore.generation,
     generationBefore, generationAfter, moduleEvents, documentReset: true, timeOriginBefore: timeOrigin, timeOriginAfter: await page.evaluate(() => performance.timeOrigin), featuresState, workflowsState, originalRequestId: original.requestId, originalSource: original.source,
     commandId: selected.commandId, providerCalls: callsFor(selected.commandId), observationWindowMilliseconds: Date.now() - windowStartedAt }));
   result.observations = { nativeReconciliation: true, capabilityRegistryRemount: true, moduleDocumentReset: true, noResubmission: true };
