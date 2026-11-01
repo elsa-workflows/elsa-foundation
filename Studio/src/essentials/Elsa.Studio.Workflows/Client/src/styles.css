@@ -5298,7 +5298,7 @@ button.wf-reference-select {
 }
 
 .wf-reference-list--collection .wf-reference-item[data-active="true"] {
-  border-color: var(--studio-border);
+  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
   background: var(--studio-surface-muted);
 }
 
@@ -5315,14 +5315,14 @@ button.wf-reference-select {
   grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
 }
 
-.wf-reference-collection > div {
+.wf-reference-collection > span {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
   align-items: start;
 }
 
-.wf-reference-collection dt {
+.wf-reference-collection-label {
   color: var(--studio-text-muted);
   font-size: 11px;
   font-weight: 700;
@@ -5330,17 +5330,13 @@ button.wf-reference-select {
   text-transform: var(--wf-label-transform, uppercase);
 }
 
-.wf-reference-collection dd {
-  margin: 0;
-  color: var(--studio-text);
-  font-size: 12px;
-}
-
 .wf-reference-collection .wf-identity-cell {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  color: var(--studio-text);
+  font-size: 12px;
 }
 
 /* Scope chips: Published keeps the default accent chip tone; test runs get the warning tint their
@@ -7154,6 +7150,7 @@ html[data-theme-material] .wf-instance-canvas-shell,
 html[data-theme-material] .wf-instance-canvas-shell > header,
 html[data-theme-material] .wf-instance-inspector,
 html[data-theme-material] .wf-instance-inspector header,
+html[data-theme-material] .wf-executable-identity,
 html[data-theme-material] .wf-instance-tabs,
 html[data-theme-material] .wf-instance-activity,
 html[data-theme-material] .wf-instance-incident,

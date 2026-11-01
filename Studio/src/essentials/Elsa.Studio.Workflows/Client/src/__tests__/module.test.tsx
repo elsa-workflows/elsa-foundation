@@ -2394,7 +2394,7 @@ describe("workflows module", () => {
     expect(referenceList?.textContent).toContain("Version");
     expect(referenceList?.textContent).toContain("2.0.0");
     expect(referenceList?.textContent).toContain("Published");
-    await click(buttonByLabel(container, "Show reference ref-0"));
+    await click(buttonByLabel(container, "Show Hello World version 1.0.0"));
     await waitForText(container, "Showing requested reference ref-0");
 
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
@@ -2466,12 +2466,38 @@ describe("workflows module", () => {
     const items = [...container.querySelectorAll(".wf-reference-list--collection .wf-reference-item")];
     expect(items).toHaveLength(2);
     expect(items[0]?.querySelector(".wf-reference-origin")?.textContent).toBe("Invoice settlement");
-    expect([...items[0]?.querySelectorAll("dt") ?? []].map(dt => dt.textContent)).toEqual(["Version", "Scope", "Published"]);
+    expect([...items[0]?.querySelectorAll(".wf-reference-collection-label") ?? []].map(label => label.textContent)).toEqual(["Version", "Scope", "Published"]);
+    expect(items[0]?.querySelector("dl")).toBeNull();
+    expect(items[0]?.querySelector(".wf-reference-scope-published")?.textContent).toBe("Published");
     expect(items[0]?.textContent).toContain("2.0.0");
-    expect(items[0]?.textContent).toContain("Published");
     expect(items[0]?.textContent).toContain("Shown");
+    expect(buttonByLabel(container, "Show Invoice settlement version 2.0.0")).toBeTruthy();
 
     await unmount();
+  });
+
+  it("falls back to Executable when the source definition is missing or unnamed", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    for (const definitionResponse of [
+      { status: 404, body: null },
+      { status: 200, body: { definition: definition({ name: "   " }), draft: null, versions: [] } }
+    ]) {
+      vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/executables/artifact-1")) return response(executableDetail());
+        if (url.includes("/activities")) return response({ activities: [] });
+        if (url.includes("/definitions/definition-1")) return response(definitionResponse.body, definitionResponse.status);
+        return response(null, 404);
+      }));
+      const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+      await waitForText(container, "Resume targets");
+      await vi.waitFor(() => expect(container.querySelector(".wf-executable-identity h3")?.textContent).toBe("Executable"));
+      await unmount();
+    }
   });
 
   it("collects workflow inputs before running from the Executable Inspector", async () => {

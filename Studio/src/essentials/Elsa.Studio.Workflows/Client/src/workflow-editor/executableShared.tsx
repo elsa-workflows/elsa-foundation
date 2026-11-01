@@ -66,27 +66,43 @@ export function ExecutableReferenceList({ references, activeReferenceId, onSelec
         const status = getExecutableReferenceStatus(reference);
         const active = reference.sourceReferenceId === activeReferenceId;
         const displayName = (reference.definitionId && definitionNames?.get(reference.definitionId)) || reference.definitionId || "Untitled workflow";
+        const datedAt = reference.publishedAt || reference.createdAt;
+        const selectLabel = `Show ${displayName} version ${reference.artifactVersion}`;
         const body = variant === "collection" ? (
           <>
             <strong className="wf-reference-origin">{displayName}</strong>
-            <dl className="wf-reference-collection">
-              <div>
-                <dt>Version</dt>
-                <dd className="wf-identity-cell">{reference.artifactVersion}</dd>
-              </div>
-              <div>
-                <dt>Scope</dt>
-                <dd className="wf-identity-cell">
-                  <span>{formatReferenceScope(reference.scope)}</span>
+            <span className="wf-reference-collection">
+              <span>
+                <span className="wf-reference-collection-label">Version</span>
+                <span className="wf-identity-cell">{reference.artifactVersion}</span>
+              </span>
+              <span>
+                <span className="wf-reference-collection-label">Scope</span>
+                <span className="wf-identity-cell">
+                  <span className={`wf-chip wf-reference-scope-${reference.scope.toLowerCase()}`}>{formatReferenceScope(reference.scope)}</span>
                   {status !== "live" ? <span className="wf-chip wf-reference-retired">{status === "retired" ? "Retired" : "Expired"}</span> : null}
                   {active ? <span className="wf-chip">Shown</span> : null}
-                </dd>
-              </div>
-              <div>
-                <dt>{reference.publishedAt ? "Published" : "Created"}</dt>
-                <dd className="wf-identity-cell">{formatDate(reference.publishedAt ?? reference.createdAt)}</dd>
-              </div>
-            </dl>
+                </span>
+              </span>
+              {datedAt ? (
+                <span>
+                  <span className="wf-reference-collection-label">{reference.publishedAt ? "Published" : "Created"}</span>
+                  <span className="wf-identity-cell">{formatDate(datedAt)}</span>
+                </span>
+              ) : null}
+              {reference.expiresAt ? (
+                <span>
+                  <span className="wf-reference-collection-label">Expires</span>
+                  <span className="wf-identity-cell">{formatDate(reference.expiresAt)}</span>
+                </span>
+              ) : null}
+              {reference.deletedReason ? (
+                <span>
+                  <span className="wf-reference-collection-label">Reason</span>
+                  <span className="wf-identity-cell">{reference.deletedReason}</span>
+                </span>
+              ) : null}
+            </span>
           </>
         ) : (
           <>
@@ -110,7 +126,7 @@ export function ExecutableReferenceList({ references, activeReferenceId, onSelec
         return (
           <li key={reference.sourceReferenceId} className="wf-reference-item" data-active={active ? "true" : undefined}>
             {onSelect ? (
-              <button type="button" className="wf-reference-select" aria-label={`Show reference ${reference.sourceReferenceId}`} onClick={() => onSelect(reference)}>
+              <button type="button" className="wf-reference-select" aria-label={selectLabel} onClick={() => onSelect(reference)}>
                 {body}
               </button>
             ) : (
