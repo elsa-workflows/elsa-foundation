@@ -460,3 +460,31 @@ and its raw archive. This cohort does not complete integrated multi-host/failure
 The first PostgreSQL schema-only boundary-host attempt also failed before workload: that qualification project
 advertised PostgreSQL but omitted the host's provider package. Its package reference and lock are corrected;
 the failed primer/controller records remain separate. No production library change is involved.
+
+### Existing finite file ETL profile
+
+The available finite ETL implementation passes six independent-process **100,000-row** samples on a dedicated
+D2s_v6 worker (two vCPU / 8 GiB, Linux x64 .NET 10.0.8, SQLite on its OS volume). The workload performs a pinned
+one-row lookup over synthetic unique names with 128 padding characters, eight partitions and 1,000-record batches.
+Each sample starts a fresh host and executes its first finite invocation; no diagnostics exporter is composed.
+
+| Live attempts | Observed records / second (two samples) | Wall seconds | Allocated bytes / record | Peak process working set |
+|---|---:|---:|---:|---:|
+| 1 | 3,501–3,588 | 27.87–28.57 | 17,402–22,477 | 186–190 MB |
+| 4 | 4,448–4,475 | 22.34–22.48 | 22,374–22,385 | 194 MB |
+| 8 | 3,941–4,490 | 22.27–25.38 | 22,543–22,615 | 224–231 MB |
+
+The measurement runs from admission through durable terminal acceptance, including preparation, worker wakeup/JIT
+and 100-ms status polling. Input generation, compilation, host migration/startup, validation and native callback
+are outside that interval. All samples complete exactly 100,000 accepted records with zero rejected/filtered or
+outstanding records/bytes, every partition complete and all output hashes/rows checked. All **600,000 output rows**
+and collected chunk digests are independently re-read locally after verified transfer. Chunk filenames address the
+effect identity; their content hashes are separately validated against the accepted manifest.
+
+This is standalone ETL acceptance throughput. Each run explicitly owes **one native callback** because no native
+adapter is composed; it is not a fully drained parent workflow, clustered ETL or an apples-to-apples native/BPMN
+comparison. Two samples show an observed range without confidence intervals. Four live attempts are a useful tested
+configuration on this fixture; eight provide no clear gain and consume more memory. This does not justify a global
+default change. The [evidence receipt](evidence/runtime-efficiency-program-2026-11-01/README.md#finite-file-etl-cohort)
+contains all selected raw files and exclusions. Timing libraries remain pinned to `63e4c1fc4`; final main integration
+is qualified separately.

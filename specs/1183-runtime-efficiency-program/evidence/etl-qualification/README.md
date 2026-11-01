@@ -2,7 +2,7 @@
 
 A bounded, one-off Runtime Efficiency #2531 fixture for the existing finite file ETL runtime and SQLite provider.
 It uses public compilation/admission services, the real worker, immutable input snapshots, scoped file bindings,
-lookup, partition/batch limits, content-addressed output and durable acceptance. It creates a fresh absolute output
+lookup, partition/batch limits, immutable effect-addressed output with separately checked content hashes and durable acceptance. It creates a fresh absolute output
 directory and refuses an existing one. Inputs are synthetic unique names with a pinned one-row lookup.
 
 The sample measures admission through durable terminal acceptance, including snapshot preparation, worker wakeup

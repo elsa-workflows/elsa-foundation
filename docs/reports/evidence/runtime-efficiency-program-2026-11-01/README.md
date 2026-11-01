@@ -26,3 +26,22 @@ wait counts are observations, not wait durations. `%util` alone does not establi
 Analysis scripts retain their original temporary evidence-root paths for provenance; set their `r`/`root` variables
 to an extracted copy to reproduce elsewhere. Use Python 3.14 (supports .NET seven-digit timestamps); chart generation
 used matplotlib 3.11.2. The scripts write derived files and never run workloads. The chart was visually inspected.
+
+## Finite file ETL cohort
+
+`etl-six-cases-r1.tar.xz` contains 667 selected raw files from six successful 100,000-row runs on worker
+`elsa-eff-i67-w3` (D2s_v6, two vCPU / 8 GiB). SHA-256:
+`e5726bb83a6e130740c522e94a64a6fb0d8e2e0c107d922e18893eafd085662d` (809,948 bytes).
+It includes configurations, logs, results, synthetic input/snapshot CSV and every output JSONL chunk; SQLite database
+binaries and process dumps are excluded. Its manifest verifies every file. `etl-summary.json` also records a separate
+local re-read of all 600,000 output rows: exact names/categories, no duplicates/missing rows, all chunk digests and
+expected chunk count. The qualification process itself compares each chunk's digest/length with the accepted durable
+manifest before returning success. Filenames hash the effect identity, not the chunk contents; output is immutable
+and effect-addressed, with separately verified content hashes.
+
+The two samples at each configured attempt count are fresh processes / first finite invocations, with eight
+partitions, 1,000-record batches, 128 padding characters per synthetic name and a one-row lookup. SQLite runs on that
+worker's OS volume. Host migration, dataset generation and compilation are excluded; actual worker preparation/JIT,
+wakeup, durable acceptance and 100-ms status polling are included. Each standalone run intentionally owes one native
+callback because no native adapter is composed. No clustered ETL, complete parent-workflow drain or cross-model
+comparison is claimed. Actual ranges remain visible rather than selecting the fastest sample.
