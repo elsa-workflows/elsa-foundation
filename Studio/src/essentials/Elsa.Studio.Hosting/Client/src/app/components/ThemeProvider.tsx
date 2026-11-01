@@ -27,7 +27,7 @@ import {
 } from "../themes/appearance";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 import { applyWorkspaceStyle, getWorkspaceStyle, isWorkspaceStyle, type WorkspaceStyle } from "../themes/workspaceStyles";
-import { studioPresets, type StudioPresetId } from "../themes/studioPresets";
+import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
 import {
   resolveNavigationColors,
   resolveSidebarColor,
@@ -49,7 +49,7 @@ interface ThemeContextType {
   modePreference: ThemeModePreference;
   setTheme: (themeId: string) => void;
   /** Explicitly applies a complete reference combination; one-axis setters keep their semantics. */
-  applyPreset: (themeId: StudioPresetId) => void;
+  applyPreset: (themeId: MinimalStudioPresetId) => void;
   /** Accepts a concrete mode or `system`. Same implementation as `setModePreference`. */
   setMode: (mode: ThemeModePreference) => void;
   setModePreference: (preference: ThemeModePreference) => void;
@@ -226,13 +226,13 @@ export function ThemeProvider({
     setCurrentTheme(nextTheme);
   };
 
-  const handleApplyPreset = (themeId: StudioPresetId) => {
-    const preset = studioPresets.find(candidate => candidate.id === themeId);
+  const handleApplyPreset = (themeId: MinimalStudioPresetId) => {
+    const preset = minimalStudioPresets.find(candidate => candidate.id === themeId);
     const nextTheme = getSelectableThemes(store).find(candidate => candidate.id === themeId);
     if (!preset || !nextTheme) return;
-    writeAppearancePreferences({ themeId, workspaceStyle: preset.workspaceStyle, colorSchemeId: null, mode: preset.mode });
+    writeAppearancePreferences({ themeId, workspaceStyle: "minimal", colorSchemeId: null, mode: preset.mode });
     setPreview(undefined);
-    setWorkspaceStyleState(preset.workspaceStyle);
+    setWorkspaceStyleState("minimal");
     setColorSchemeId(null);
     setCurrentTheme(nextTheme);
     setModePreferenceState(preset.mode);
