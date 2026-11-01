@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioBackendSession, StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EtlRunsPage } from "../EtlRunsPage";
 import {
@@ -44,6 +44,105 @@ describe("ETL runs page", () => {
   afterEach(() => {
     cleanupActive();
     vi.resetAllMocks();
+  });
+
+  it("reopens the exact authorized run from its durable URL without finding it in the catalog", async () => {
+    const previous = window.location.href;
+    const context = endpointContext();
+    const session = { key: "connection", profile: { id: "backend-1", baseUrl: context.baseUrl }, context,
+      identity: { status: "authenticated", subject: "author", tenantId: "tenant-1" }, disposed: false } as unknown as StudioBackendSession;
+    const returnTo = "/workflows/instances/native-run?backend=backend-1&selected=native-activity&tab=activity";
+    window.history.replaceState(null, "", `/etl/runs?${new URLSearchParams({ backend: "backend-1", runId: "run-1", returnTo })}`);
+    vi.mocked(listEtlRuns).mockResolvedValue(page([]));
+    try {
+      const rendered = mount(context, undefined, session);
+      await waitFor(() => expect(getEtlRun).toHaveBeenCalledWith(context, "run-1", expect.any(AbortSignal)));
+      await waitFor(() => expect(rendered.host.textContent).toContain("Run inspection"));
+      const back = [...rendered.host.querySelectorAll<HTMLAnchorElement>("a")].find(link => link.textContent === "Back to native run");
+      expect(back?.getAttribute("href")).toBe(returnTo);
+    } finally { cleanupActive(); window.history.replaceState(null, "", previous); }
+  });
+
+  it("does not wait for the run catalog before reading an exact URL selection", async () => {
+    const previous = window.location.href, context = endpointContext();
+    let finishList!: (value: EtlPage<EtlRunSummaryView>) => void;
+    vi.mocked(listEtlRuns).mockImplementationOnce(() => new Promise(resolve => { finishList = resolve; }));
+    window.history.replaceState(null, "", "/etl/runs?backend=backend-1&runId=run-1");
+    try {
+      const rendered = mount(context, undefined, backendSession(context));
+      await waitFor(() => expect(rendered.host.textContent).toContain("Run inspection"));
+      expect(getEtlRun).toHaveBeenCalledWith(context, "run-1", expect.any(AbortSignal));
+      finishList(page([]));
+    } finally { cleanupActive(); window.history.replaceState(null, "", previous); }
+  });
+
+  it("retains normal selection in the URL, reopens it and drops a return link when selecting another ETL run", async () => {
+    const previous = window.location.href, context = endpointContext(), session = backendSession(context);
+    const returnTo = "/workflows/instances/native?backend=backend-1&selected=activity";
+    window.history.replaceState(null, "", `/etl/runs?${new URLSearchParams({ backend: "backend-1", runId: "run-1", returnTo })}`);
+    vi.mocked(listEtlRuns).mockResolvedValue(page([summary("run-1", "running"), summary("run-2", "succeeded")]));
+    vi.mocked(getEtlRun).mockImplementation(async (_context, id) => detail(id, "succeeded"));
+    try {
+      let rendered = mount(context, undefined, session);
+      await waitFor(() => expect(buttonContaining(rendered.host, "run-2")).toBeTruthy());
+      click(buttonContaining(rendered.host, "run-2")!);
+      await waitFor(() => expect(getEtlRun).toHaveBeenCalledWith(context, "run-2", expect.any(AbortSignal)));
+      expect(new URL(window.location.href).searchParams.get("runId")).toBe("run-2");
+      expect(new URL(window.location.href).searchParams.has("returnTo")).toBe(false);
+      expect(rendered.host.querySelector("a")).toBeNull();
+      cleanupActive(); vi.mocked(getEtlRun).mockClear();
+      rendered = mount(context, undefined, session);
+      await waitFor(() => expect(getEtlRun).toHaveBeenCalledWith(context, "run-2", expect.any(AbortSignal)));
+    } finally { cleanupActive(); window.history.replaceState(null, "", previous); }
+  });
+
+  it("retires an outstanding read when browser history selects another run", async () => {
+    const previous = window.location.href, context = endpointContext();
+    let finish!: (value: EtlRunDetailView) => void;
+    vi.mocked(getEtlRun).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue(detail("run-2", "succeeded"));
+    window.history.replaceState(null, "", "/etl/runs?backend=backend-1&runId=run-1");
+    try {
+      const rendered = mount(context, undefined, backendSession(context));
+      await waitFor(() => expect(getEtlRun).toHaveBeenCalledOnce());
+      flushSync(() => { window.history.replaceState(null, "", "/etl/runs?backend=backend-1&runId=run-2"); window.dispatchEvent(new PopStateEvent("popstate")); });
+      await waitFor(() => expect(rendered.host.textContent).toContain("Run inspection"));
+      finish({ ...detail("run-1", "running"), bindingAliases: { source: "obsolete-source", lookup: "lookup-v1", output: "accepted-v1", errors: "errors-v1" } });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(rendered.host.textContent).not.toContain("obsolete-source");
+      expect(new URL(window.location.href).searchParams.get("runId")).toBe("run-2");
+    } finally { cleanupActive(); window.history.replaceState(null, "", previous); }
+  });
+
+  it.each(["backend", "subject", "tenant", "disposed"])("does not display a late URL-selected result across a changed %s", async changed => {
+    const previous = window.location.href, context = endpointContext(), session = backendSession(context);
+    let finish!: (value: EtlRunDetailView) => void;
+    vi.mocked(getEtlRun).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue(detail("run-1", "running"));
+    window.history.replaceState(null, "", "/etl/runs?backend=backend-1&runId=run-1");
+    try {
+      const rendered = mount(context, undefined, session);
+      await waitFor(() => expect(getEtlRun).toHaveBeenCalledOnce());
+      if (changed === "backend") rendered.render(context, { ...session, key: "new", profile: { ...session.profile, id: "backend-2" } });
+      if (changed === "subject") rendered.render(context, { ...session, identity: { ...session.identity, subject: "other" } });
+      if (changed === "tenant") rendered.render(context, { ...session, identity: { ...session.identity, tenantId: "other" } });
+      if (changed === "disposed") Object.defineProperty(session, "disposed", { value: true });
+      finish({ ...detail("run-1", "running"), bindingAliases: { source: "obsolete-source", lookup: "lookup-v1", output: "accepted-v1", errors: "errors-v1" } });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(rendered.host.textContent).not.toContain("obsolete-source");
+      if (changed === "backend") { expect(getEtlRun).toHaveBeenCalledOnce(); expect(rendered.host.textContent).toContain("another or unavailable backend"); }
+    } finally { cleanupActive(); window.history.replaceState(null, "", previous); }
+  });
+
+  it.each(["forbidden", "missing", "mismatch"])("keeps unavailable URL-selected details undisclosed: %s", async unavailable => {
+    const previous = window.location.href, context = endpointContext();
+    if (unavailable === "mismatch") vi.mocked(getEtlRun).mockResolvedValue(detail("other-run", "running"));
+    else vi.mocked(getEtlRun).mockRejectedValue(new EtlApiError("Unavailable", unavailable === "forbidden" ? 403 : 404, "etl.unavailable"));
+    window.history.replaceState(null, "", "/etl/runs?backend=backend-1&runId=run-1");
+    try {
+      const rendered = mount(context, undefined, backendSession(context));
+      await waitFor(() => expect(rendered.host.querySelector(".etl-run-detail [role='alert']")).not.toBeNull());
+      expect(rendered.host.querySelector(".etl-run-detail")?.textContent).not.toContain("Run inspection");
+      expect(listEtlRunPartitions).not.toHaveBeenCalled(); expect(listEtlRunConnectorPartitions).not.toHaveBeenCalled();
+    } finally { cleanupActive(); window.history.replaceState(null, "", previous); }
   });
 
   it("loads scoped runs and selected partitions page by page, retaining the list after a failed load-more", async () => {
@@ -305,15 +404,16 @@ function cleanupActive() {
   current?.cleanup();
 }
 
-function mount(context: StudioEndpointContext, dialogs = createDialogs()) {
+function mount(context: StudioEndpointContext, dialogs = createDialogs(), backendSession?: StudioBackendSession) {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
   const rendered = {
     host,
     root,
-    render(nextContext: StudioEndpointContext) {
-      flushSync(() => root.render(<EtlRunsPage context={nextContext} dialogs={dialogs} />));
+    render(nextContext: StudioEndpointContext, nextSession = backendSession) {
+      const props = { context: nextContext, dialogs, backendSession: nextSession };
+      flushSync(() => root.render(<EtlRunsPage {...props} />));
     },
     cleanup() {
       flushSync(() => root.unmount());
@@ -335,6 +435,11 @@ function createDialogs(confirmed = true): StudioDialogApi {
 
 function endpointContext(name = "host"): StudioEndpointContext {
   return { baseUrl: `https://${name}.example/studio`, http: {} as StudioEndpointContext["http"] };
+}
+
+function backendSession(context: StudioEndpointContext): StudioBackendSession {
+  return { key: "connection", profile: { id: "backend-1", baseUrl: context.baseUrl }, context,
+    identity: { status: "authenticated", subject: "author", tenantId: "tenant-1" }, disposed: false } as unknown as StudioBackendSession;
 }
 
 function summary(runId: string, status: EtlRunSummaryView["status"]): EtlRunSummaryView {

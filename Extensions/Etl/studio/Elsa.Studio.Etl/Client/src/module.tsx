@@ -4,9 +4,10 @@ import { evaluateBackendRequirements } from "@elsa-workflows/studio-sdk";
 import { EtlDefinitionsPage } from "./EtlDefinitionsPage";
 import { EtlRunsPage } from "./EtlRunsPage";
 import { EtlPublishedSelectionEditor } from "./EtlPublishedSelectionEditor";
+import { etlNativeRunLinks, runEtlActivityType } from "./etlRunNavigation";
 import "./styles.css";
 
-export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "propertyEditors" | "backend" | "dialogs" | "backendSession">) {
+export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "propertyEditors" | "backend" | "dialogs" | "backendSession" | "workflowRunRelatedLinks">) {
   const design = [{id:"elsa.api.etl-design-v2",contractVersion:"1"}];
   const runtime = [{id:"elsa.api.etl-runtime",contractVersion:"1"}];
   const authoringAvailable = evaluateBackendRequirements(api.backendSession,design).state === "available";
@@ -29,7 +30,7 @@ export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "proper
       { id: "etl-connectors", path: "/etl/connectors", label: "Connector pipelines", requiresBackend:design,
         component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} profile="connector" /> },
       { id: "etl-runs", path: "/etl/runs", label: "ETL runs", requiresBackend:runtime,
-        component: () => <EtlRunsPage context={api.backend} dialogs={api.dialogs} /> }
+        component: () => <EtlRunsPage context={api.backend} backendSession={api.backendSession} dialogs={api.dialogs} /> }
     ]
   });
   api.propertyEditors.add({
@@ -38,5 +39,10 @@ export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "proper
     supports: (descriptor, context) => descriptor.name === "Pipeline"
       && descriptor.uiHint === "etl-published-selection" && context.scope !== "collection",
     component: props => <EtlPublishedSelectionEditor {...props} endpointContext={api.backend} />
+  });
+  api.workflowRunRelatedLinks?.add({
+    id: "etl-native-run", order: 100, requiresBackend: runtime,
+    activityTypes: [runEtlActivityType], viewKind: "etl.run-reference", viewVersion: 1,
+    getLinks: context => etlNativeRunLinks(context, api.backendSession?.profile.id)
   });
 }

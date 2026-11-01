@@ -1,7 +1,8 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { appendUnique } from "./paging";
-import React, { useEffect, useRef, useState } from "react";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { StudioBackendSession, StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { buildEtlRunPath, etlBackendScope, readEtlRunLocation } from "./etlRunNavigation";
 import {
   cancelEtlRun,
   classifyEtlApiError,
@@ -30,7 +31,16 @@ interface RequestFailure {
   missingCapability: boolean;
 }
 
-export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
+interface EtlRunsPageProps { context: StudioEndpointContext; dialogs: StudioDialogApi; backendSession?: StudioBackendSession }
+
+export function EtlRunsPage(props: EtlRunsPageProps) {
+  return <EtlRunsWorkbench key={etlBackendScope(props.backendSession)} {...props} />;
+}
+
+function EtlRunsWorkbench({ context, dialogs, backendSession }: EtlRunsPageProps) {
+  const scope = etlBackendScope(backendSession);
+  const sessionActive = useCallback(() => !backendSession || !backendSession.disposed && backendSession.context === context
+    && etlBackendScope(backendSession) === scope, [backendSession, context, scope]);
   const currentContext = useRef(context);
   currentContext.current = context;
   const scopeGeneration = useRef(0);
@@ -67,11 +77,53 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
   const [cancelling, setCancelling] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [cancelFailure, setCancelFailure] = useState<RequestFailure | null>(null);
+  const [returnTo, setReturnTo] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
-  const contextIsLoaded = loadedContext === context;
+  const contextIsLoaded = loadedContext === context && sessionActive();
   const visibleRuns = contextIsLoaded ? runs : [];
   const visibleDetail = contextIsLoaded && runDetail?.runId === selectedRunId ? runDetail : null;
   const visiblePartitions = contextIsLoaded && runDetail?.runId === selectedRunId ? partitions : [];
+
+  const isCurrentList = useCallback((requestContext: StudioEndpointContext, generation: number, controller: AbortController) => {
+    return sessionActive() && !controller.signal.aborted && currentContext.current === requestContext && scopeGeneration.current === generation;
+  }, [sessionActive]);
+
+  const isCurrentDetail = useCallback((requestContext: StudioEndpointContext, runId: string, controller: AbortController, generation: number) => {
+    return sessionActive() && !controller.signal.aborted && currentContext.current === requestContext && selectedRunRef.current === runId &&
+      selectedRunId === runId && generation === detailGeneration.current;
+  }, [sessionActive, selectedRunId]);
+
+  const isCurrentPartition = useCallback((requestContext: StudioEndpointContext, runId: string, controller: AbortController, generation: number) => {
+    return sessionActive() && !controller.signal.aborted && currentContext.current === requestContext && selectedRunRef.current === runId &&
+      selectedRunId === runId && generation === partitionGeneration.current;
+  }, [sessionActive, selectedRunId]);
+
+  const loadFirstRunsPage = useCallback(async (requestContext: StudioEndpointContext, scope: number, markContextLoaded: boolean) => {
+    const controller = new AbortController();
+    listController.current?.abort();
+    listMoreController.current?.abort();
+    listController.current = controller;
+    const requestId = ++listGeneration.current;
+    setRunsLoading(true);
+    setRunsMoreLoading(false);
+    setRunsFailure(null);
+    setRunsMoreFailure(null);
+    try {
+      const page = await listEtlRuns(requestContext, { limit: pageSize }, controller.signal);
+      if (!isCurrentList(requestContext, scope, controller) || requestId !== listGeneration.current) return;
+      setRuns(page.items);
+      setRunsCursor(page.nextCursor);
+    } catch (error) {
+      if (!isCurrentList(requestContext, scope, controller) || requestId !== listGeneration.current) return;
+      setRunsFailure(failureOf(error));
+    } finally {
+      if (isCurrentList(requestContext, scope, controller) && requestId === listGeneration.current) {
+        setRunsLoading(false);
+        if (markContextLoaded) setLoadedContext(requestContext);
+      }
+    }
+  }, [isCurrentList]);
 
   useEffect(() => {
     const generation = ++scopeGeneration.current;
@@ -82,15 +134,17 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     partitionMoreController.current?.abort();
     cancelController.current?.abort();
     cancelOperation.current = null;
-    selectedRunRef.current = null;
-    setLoadedContext(null);
+    const location = readEtlRunLocation(window.location.href, backendSession?.profile.id);
+    selectedRunRef.current = location.runId;
+    setReturnTo(location.returnTo); setLocationError(location.error);
+    setLoadedContext(context);
     setRuns([]);
     setRunsCursor(null);
     setRunsLoading(true);
     setRunsMoreLoading(false);
     setRunsFailure(null);
     setRunsMoreFailure(null);
-    setSelectedRunId(null);
+    setSelectedRunId(location.runId);
     setRunDetail(null);
     setDetailLoading(false);
     setDetailFailure(null);
@@ -103,7 +157,8 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     setCancelling(false);
     setCancelMessage(null);
     setCancelFailure(null);
-    void loadFirstRunsPage(context, generation, true);
+    if (sessionActive()) void loadFirstRunsPage(context, generation, true);
+    else setRunsLoading(false);
 
     return () => {
       listController.current?.abort();
@@ -112,11 +167,24 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
       partitionController.current?.abort();
       partitionMoreController.current?.abort();
       cancelController.current?.abort();
-      if (scopeGeneration.current === generation) scopeGeneration.current++;
+      scopeGeneration.current = generation + 1;
       cancelOperation.current = null;
       selectedRunRef.current = null;
     };
-  }, [context]);
+  }, [context, backendSession, scope, sessionActive, loadFirstRunsPage]);
+
+  useEffect(() => {
+    const syncLocation = () => {
+      if (!sessionActive()) return;
+      const location = readEtlRunLocation(window.location.href, backendSession?.profile.id);
+      cancelController.current?.abort(); cancelOperation.current = null;
+      selectedRunRef.current = location.runId; setSelectedRunId(location.runId);
+      setReturnTo(location.returnTo); setLocationError(location.error);
+      setCancelling(false); setCancelMessage(null); setCancelFailure(null);
+    };
+    window.addEventListener("popstate", syncLocation);
+    return () => window.removeEventListener("popstate", syncLocation);
+  }, [context, backendSession, scope, sessionActive]);
 
   useEffect(() => {
     const runId = selectedRunId;
@@ -162,6 +230,7 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     void getEtlRun(context, runId, detailRequest.signal)
       .then(detail => {
         if (!isCurrentDetail(context, runId, detailRequest, detailRequestId)) return;
+        if (detail.runId !== runId) throw new Error("ETL run identity did not match the selected run.");
         setRunDetail(detail);
         void loadInitialPartitions(detail);
       })
@@ -178,47 +247,10 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
       detailRequest.abort();
       partitionRequest.abort();
     };
-  }, [context, contextIsLoaded, selectedRunId, refreshSelection]);
+  }, [context, contextIsLoaded, selectedRunId, refreshSelection, isCurrentDetail, isCurrentPartition]);
 
-  function isCurrentList(requestContext: StudioEndpointContext, generation: number, controller: AbortController) {
-    return !controller.signal.aborted && currentContext.current === requestContext && scopeGeneration.current === generation;
-  }
 
-  function isCurrentDetail(requestContext: StudioEndpointContext, runId: string, controller: AbortController, generation: number) {
-    return !controller.signal.aborted && currentContext.current === requestContext && selectedRunRef.current === runId &&
-      selectedRunId === runId && generation === detailGeneration.current;
-  }
 
-  function isCurrentPartition(requestContext: StudioEndpointContext, runId: string, controller: AbortController, generation: number) {
-    return !controller.signal.aborted && currentContext.current === requestContext && selectedRunRef.current === runId &&
-      selectedRunId === runId && generation === partitionGeneration.current;
-  }
-
-  async function loadFirstRunsPage(requestContext: StudioEndpointContext, scope: number, markContextLoaded: boolean) {
-    const controller = new AbortController();
-    listController.current?.abort();
-    listMoreController.current?.abort();
-    listController.current = controller;
-    const requestId = ++listGeneration.current;
-    setRunsLoading(true);
-    setRunsMoreLoading(false);
-    setRunsFailure(null);
-    setRunsMoreFailure(null);
-    try {
-      const page = await listEtlRuns(requestContext, { limit: pageSize }, controller.signal);
-      if (!isCurrentList(requestContext, scope, controller) || requestId !== listGeneration.current) return;
-      setRuns(page.items);
-      setRunsCursor(page.nextCursor);
-    } catch (error) {
-      if (!isCurrentList(requestContext, scope, controller) || requestId !== listGeneration.current) return;
-      setRunsFailure(failureOf(error));
-    } finally {
-      if (isCurrentList(requestContext, scope, controller) && requestId === listGeneration.current) {
-        setRunsLoading(false);
-        if (markContextLoaded) setLoadedContext(requestContext);
-      }
-    }
-  }
 
   async function loadMoreRuns() {
     if (!runsCursor || runsMoreLoading || runsLoading || !contextIsLoaded) return;
@@ -272,16 +304,22 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
   }
 
   function selectRun(runId: string) {
+    if (!sessionActive()) return;
     cancelController.current?.abort();
     cancelOperation.current = null;
+    const retainedReturn = selectedRunRef.current === runId ? returnTo : null;
     selectedRunRef.current = runId;
     setSelectedRunId(runId);
+    setReturnTo(retainedReturn); setLocationError(null);
+    if (backendSession && window.location.pathname === "/etl/runs")
+      window.history.replaceState(window.history.state, "", buildEtlRunPath(runId, backendSession.profile.id, retainedReturn));
     setCancelling(false);
     setCancelMessage(null);
     setCancelFailure(null);
   }
 
   function refresh() {
+    if (!sessionActive()) return;
     const requestContext = context;
     const scope = scopeGeneration.current;
     if (hasMissingCapabilityFailure()) invalidateEtlApiCapabilityCache(requestContext);
@@ -303,7 +341,7 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
 
   async function cancelSelectedRun() {
     const run = visibleDetail;
-    if (!run || !isActive(run) || cancelOperation.current) return;
+    if (!sessionActive() || !run || !isActive(run) || cancelOperation.current) return;
     const requestContext = context;
     const runId = run.runId;
     const operation = {};
@@ -334,10 +372,10 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
       setRefreshSelection(value => value + 1);
       void loadFirstRunsPage(requestContext, scopeGeneration.current, false);
     } catch (error) {
-      if (currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation)
+      if (isCurrentOperation(requestContext, runId, operation))
         setCancelFailure(failureOf(error));
     } finally {
-      if (currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation) {
+      if (isCurrentOperation(requestContext, runId, operation)) {
         cancelOperation.current = null;
         setCancelling(false);
       }
@@ -345,13 +383,15 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
   }
 
   function isCurrentOperation(requestContext: StudioEndpointContext, runId: string, operation: object) {
-    return currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation;
+    return sessionActive() && currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation;
   }
 
   return <section className="studio-page etl-shell etl-runs-page" aria-label="ETL runs">
     <StudioPageHeader headingLevel={1} title={<>ETL runs</>} description={<>Runtime</>} actions={<><StudioButton type="button" className="etl-refresh-button" onClick={refresh} disabled={!contextIsLoaded || runsLoading}>
         {runsLoading && visibleRuns.length > 0 ? "Refreshing…" : "Refresh"}
       </StudioButton></>} />
+    {returnTo && sessionActive() ? <p><a href={returnTo} onClick={event => { if (!sessionActive()) event.preventDefault(); }}>Back to native run</a></p> : null}
+    {locationError ? <p role="status">{locationError}</p> : null}
 
     <div className="etl-runs-layout">
       <section className="etl-runs-list" aria-labelledby="etl-runs-list-heading">
