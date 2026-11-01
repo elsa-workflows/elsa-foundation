@@ -155,7 +155,7 @@ function studioRegistry() {
   };
 }
 
-// These tests exercise the Studio host's registry queries, so the pages are switched off their default (Server) tab.
+// The pages default to the Server host; these cases exercise the Studio registry, so select it explicitly.
 function renderModuleManagementPage(api: ElsaStudioModuleApi) {
   return selectStudioHost(renderWithClient(<ModuleManagementPage api={api} />));
 }
@@ -164,10 +164,9 @@ function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
   return selectStudioHost(renderWithClient(<PackageFeedsPage api={api} />));
 }
 
-function selectStudioHost<T extends { container: HTMLElement }>(rendered: T) {
-  const studioTab = Array.from(rendered.container.querySelectorAll("[aria-label='Hosts'] button")).find(button => button.textContent === "Studio");
-  expect(studioTab).toBeTruthy();
-  flushSync(() => studioTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+function selectStudioHost<T extends { container: Element }>(rendered: T) {
+  const tab = rendered.container.querySelector<HTMLButtonElement>("[aria-label='Hosts'] [data-tab-id='studio']");
+  flushSync(() => tab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   return rendered;
 }
 

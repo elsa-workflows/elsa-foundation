@@ -8,11 +8,11 @@ public sealed class LoginPageOptions
     public string Description { get; set; } = "Bring your ideas to life, one thoughtful workflow at a time.";
     public string? LogoUrl { get; set; }
     public string? ImageUrl { get; set; }
-    /// <summary>Bundled artwork: ember, tidal, daybreak, canopy or sketchbook.</summary>
+    /// <summary>Bundled artwork: ember, tidal, daybreak or canopy.</summary>
     public string Artwork { get; set; } = "ember";
-    /// <summary>split, reverse, immersive, editorial or sketchbook.</summary>
+    /// <summary>split, reverse, immersive or editorial.</summary>
     public string Layout { get; set; } = "split";
-    /// <summary>linen, tidal, daybreak, canopy or sketchbook; independent of layout and artwork.</summary>
+    /// <summary>linen, tidal, daybreak or canopy; independent of layout and artwork.</summary>
     public string Palette { get; set; } = "linen";
     /// <summary>Horizontal/vertical focal coordinates from 0 to 100.</summary>
     public double FocalX { get; set; } = 50;

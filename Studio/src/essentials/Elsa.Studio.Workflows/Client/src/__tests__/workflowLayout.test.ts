@@ -15,8 +15,8 @@ describe("computeAutoLayout", () => {
   it("assigns flowchart columns by longest path", () => {
     const positions = computeAutoLayout(nodes("a", "b", "c"), [edge("a", "b"), edge("b", "c")], "flowchart");
     expect(positions.get("a")?.x).toBe(0);
-    expect(positions.get("b")?.x).toBe(320);
-    expect(positions.get("c")?.x).toBe(640);
+    expect(positions.get("b")?.x).toBe(440);
+    expect(positions.get("c")?.x).toBe(880);
   });
 
   it("stacks branches in the same column on separate rows", () => {
@@ -25,8 +25,8 @@ describe("computeAutoLayout", () => {
       [edge("root", "left"), edge("root", "right")],
       "flowchart"
     );
-    expect(positions.get("left")?.x).toBe(320);
-    expect(positions.get("right")?.x).toBe(320);
+    expect(positions.get("left")?.x).toBe(440);
+    expect(positions.get("right")?.x).toBe(440);
     expect(positions.get("left")?.y).not.toBe(positions.get("right")?.y);
   });
 
@@ -37,7 +37,7 @@ describe("computeAutoLayout", () => {
       "flowchart"
     );
     // merge follows the a -> b -> c chain, so it must sit in column 3.
-    expect(positions.get("merge")?.x).toBe(960);
+    expect(positions.get("merge")?.x).toBe(1320);
   });
 
   it("does not loop forever on a cycle", () => {
@@ -59,7 +59,7 @@ describe("computeAutoLayout", () => {
       "flowchart"
     );
     // a -> b spans columns 0 and 1; the disconnected node goes to column 2.
-    expect(positions.get("lonely")?.x).toBe(640);
+    expect(positions.get("lonely")?.x).toBe(880);
   });
 
   it("returns an empty map for no nodes", () => {
