@@ -16,6 +16,7 @@ using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
 using Elsa.Events;
+using Elsa.Cluster.Readability;
 using Elsa.Locking.FileSystem;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
@@ -44,6 +45,7 @@ Directory.CreateDirectory(locks);
 var services = new ServiceCollection();
 services.AddLogging();
 services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+services.AddEfSchemaReadability();
 services.AddCShells(builder => builder.WithAssemblies(typeof(DurablePackageHostFeature).Assembly,
         typeof(SpecialistsRuntimeFeature).Assembly, typeof(SpecialistsEntityFrameworkCoreFeature).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,

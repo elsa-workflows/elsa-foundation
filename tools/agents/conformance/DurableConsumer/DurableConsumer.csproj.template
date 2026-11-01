@@ -10,6 +10,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Acme.Specialist.ModelFixture" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Cluster.Readability" Version="__VERSION__" />
     <PackageReference Include="Elsa.Agent.Specialists.Persistence.EntityFrameworkCore" Version="__VERSION__" />
     <PackageReference Include="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" Version="__VERSION__" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="__EF_CORE_VERSION__" />

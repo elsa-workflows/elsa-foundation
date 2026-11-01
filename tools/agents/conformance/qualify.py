@@ -88,7 +88,7 @@ def main():
                 visit(project.parent / include)
             selected.append(project)
 
-        roots = PRODUCT_ROOTS + (["Elsa.Agent.Specialists.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore"] if args.profile == "durable-recovery" else [])
+        roots = PRODUCT_ROOTS + (["Elsa.Agent.Specialists.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
         for name in roots:
             visit(projects[name])
         solution = ET.Element("Solution")
