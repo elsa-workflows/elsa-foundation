@@ -93,9 +93,11 @@ import {
 } from "./settings/settingsSections";
 import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
+import sketchbookLogo from "../assets/images/elsa-sketchbook.png";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./themes/workspaceStyles.css";
+import "./themes/sketchbook.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
@@ -678,7 +680,7 @@ export function ShellFrame({
         <div className="sidebar-top">
           <a className="brand" href={qualifyStudioBackendPath("/")} onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
-              <img src={branding.logoUrl ?? elsaLogo} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
+              <img src={branding.logoUrl ?? (workspaceStyle === "sketchbook" ? sketchbookLogo : elsaLogo)} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
             </span>
             <span className="nav-label">
               <strong>{branding.productName}</strong>

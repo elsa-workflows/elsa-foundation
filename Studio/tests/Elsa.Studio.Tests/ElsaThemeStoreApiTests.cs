@@ -22,7 +22,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private bool _started;
     private readonly StudioThemeStoreOptions _themeConfig = new();
     private string? _rawMode;
-    private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
+    private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "builtin:sketchbook", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
     private HttpClient _client = null!;
 
     [Theory]
@@ -228,6 +228,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("builtin:porcelain")]
     [InlineData("builtin:atelier")]
     [InlineData("builtin:graphite")]
+    [InlineData("builtin:sketchbook")]
     public async Task EverySignatureThemeCanBeSetAsTheDefaultBuiltInTheme(string themeId)
     {
         var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = themeId });
@@ -237,8 +238,10 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal(themeId, store?.DefaultThemeId);
     }
 
-    [Fact]
-    public async Task CustomThemeRoundTripsDimHighContrastTypographyAndShape()
+    [Theory]
+    [InlineData("minimal")]
+    [InlineData("sketchbook")]
+    public async Task CustomThemeRoundTripsDimHighContrastTypographyAndShape(string workspaceStyle)
     {
         var theme = CustomTheme() with
         {
@@ -248,7 +251,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
             // Incidental whitespace is accepted, matching the client-side validator.
             Shape = new StudioThemeShape("4px", " 6px ", null, null, "0.75rem"),
             Layout = "editorial",
-            WorkspaceStyle = "minimal"
+            WorkspaceStyle = workspaceStyle
         };
 
         var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme);
@@ -261,7 +264,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal("\"Instrument Serif\", serif", saved?.Typography?.Display);
         Assert.Equal("0.75rem", saved?.Shape?.RadiusXl);
         Assert.Equal("editorial", saved?.Layout);
-        Assert.Equal("minimal", saved?.WorkspaceStyle);
+        Assert.Equal(workspaceStyle, saved?.WorkspaceStyle);
     }
 
     [Theory]
@@ -271,6 +274,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("builtin:porcelain")]
     [InlineData("builtin:atelier")]
     [InlineData("builtin:graphite")]
+    [InlineData("builtin:sketchbook")]
     public async Task SavingACustomThemeWithABuiltInIdIsRejected(string themeId)
     {
         var theme = CustomTheme() with { Id = themeId };

@@ -38,6 +38,7 @@
   --studio-edge-subtle: var(--studio-border);
   --studio-edge-control: var(--studio-border);
   --studio-canvas: var(--studio-bg);
+  --studio-workspace-canvas-background: var(--studio-canvas);
   --studio-panel: var(--studio-surface);
   /* Background-only recipes: neutral for independently hosted modules. */
   --studio-workspace-page-background: var(--studio-bg);
