@@ -32,7 +32,7 @@ implement and qualify, not a frozen API or a new module-specific orchestration p
   | Condition | Status | Error code |
   | --- | --- | --- |
   | Malformed body, or unknown/undefined mode | 400 | `agent.session.autonomy_invalid` |
-  | Missing, foreign actor or foreign tenant | 404 | Existing session-authorization codes |
+  | Missing session, or foreign actor or tenant | 404 / 403 | Unchanged existing session-authorization codes and statuses, as on every other session route |
   | Stale expected revision | 409 | `agent.session.policy_stale` |
   | Outstanding work | 409 | `agent.session.busy` |
   | Closed or expired | 409 | `agent.session.closed` |
