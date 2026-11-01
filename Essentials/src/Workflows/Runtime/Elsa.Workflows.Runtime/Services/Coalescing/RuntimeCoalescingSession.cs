@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 
 namespace Elsa.Workflows.Runtime.Services.Coalescing;
@@ -53,6 +54,7 @@ public sealed class RuntimeCoalescingSession
     private readonly List<string> _outboxOrder = [];
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durablyPersistedOutboxIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _immediateSchedulerOutboxIds = new(StringComparer.Ordinal);
     private bool _mayReceiveDurableSchedulerDeliveries;
     private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
     private readonly RuntimeCoalescingDurableValuePageMemo? _durableValuePageMemo;
@@ -660,6 +662,22 @@ public sealed class RuntimeCoalescingSession
             .ToArray();
     }
 
+    // Only the successful committer can establish that this overlay item came from a declared immediate
+    // continuation. Its RecordedAt/AvailableAt remain unchanged for durable replay identity. A wall-clock rollback
+    // must not turn this drain's own non-delayed continuation into a timer and end the drain before its first step.
+    internal void RecordImmediateSchedulerIntents(RuntimeCheckpointCommit commit)
+    {
+        foreach (var intent in commit.PostCommitIntents)
+        {
+            if (intent.Kind != RuntimePostCommitIntentKinds.EnqueueSchedulerWork || intent.NotBefore is not null)
+                continue;
+            var id = RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent);
+            if (_outboxItems.TryGetValue(id, out var item) && item.Status == RuntimePostCommitOutboxStatus.Pending &&
+                item.DeliveryAttemptCount == 0 && item.Intent.IsEquivalentTo(intent))
+                _immediateSchedulerOutboxIds.Add(id);
+        }
+    }
+
     private bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {
         if (item.Status is not (RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.FailedRetryable))
@@ -675,8 +693,21 @@ public sealed class RuntimeCoalescingSession
         if (query.IntentKind is not null && !StringComparer.Ordinal.Equals(item.Intent.Kind, query.IntentKind))
             return false;
 
-        return (item.AvailableAt ?? DateTimeOffset.MinValue) <= query.Now;
+        return IsOwnedImmediateSchedulerIntent(item) ||
+               (item.AvailableAt ?? DateTimeOffset.MinValue) <= query.Now;
     }
+
+    private bool IsOwnedImmediateSchedulerIntent(RuntimePostCommitOutboxItem item) =>
+        item.Status == RuntimePostCommitOutboxStatus.Pending && item.DeliveryAttemptCount == 0 &&
+        _immediateSchedulerOutboxIds.Contains(item.OutboxItemId);
+
+    private RuntimePostCommitOutboxClaimRequest OverlayClaimRequest(RuntimePostCommitOutboxItem item,
+        RuntimePostCommitOutboxClaimRequest request) =>
+        IsOwnedImmediateSchedulerIntent(item) && item.AvailableAt is { } at && at > request.Now
+            // Evaluate only this proven non-delayed, session-owned item at its own commit timestamp. Keep the
+            // canonical item and the shared fence transition intact; explicit delays/retries never use this clock.
+            ? new(request.OwnerId, at, request.VisibilityTimeout, request.Limit, request.WorkflowExecutionId, request.IntentKind)
+            : request;
 
     public bool OwnsOutboxItem(string outboxItemId) => _outboxItems.ContainsKey(outboxItemId);
 
@@ -697,7 +728,7 @@ public sealed class RuntimeCoalescingSession
         // Same stable causal ordering as GetDeliverableOutbox: same-tick items claim in recording order.
         var claimable = _outboxOrder
             .Select(id => _outboxItems[id])
-            .Where(item => admitsOverlay(item) && RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+            .Where(item => admitsOverlay(item) && RuntimePostCommitOutboxClaimTransitions.CanClaim(item, OverlayClaimRequest(item, request)))
             .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.RecordedAt)
             .Take(request.Limit)
@@ -705,7 +736,7 @@ public sealed class RuntimeCoalescingSession
         var claims = new RuntimePostCommitOutboxClaim[claimable.Length];
         for (var index = 0; index < claimable.Length; index++)
         {
-            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], request);
+            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(claimable[index], OverlayClaimRequest(claimable[index], request));
             _outboxItems[claim.OutboxItemId] = claim.Item;
             claims[index] = claim;
         }
@@ -737,6 +768,8 @@ public sealed class RuntimeCoalescingSession
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found in the coalescing session.");
         if (existing.Status == RuntimePostCommitOutboxStatus.Delivering)
             throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is claimed; its owner and fencing token are required.");
+
+        _immediateSchedulerOutboxIds.Remove(result.OutboxItemId);
 
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
         var status = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
@@ -774,6 +807,7 @@ public sealed class RuntimeCoalescingSession
             throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found in the coalescing session.");
 
         _outboxItems[claim.OutboxItemId] = RuntimePostCommitOutboxClaimTransitions.Complete(existing, claim, result);
+        _immediateSchedulerOutboxIds.Remove(claim.OutboxItemId);
     }
 
     /// <summary>

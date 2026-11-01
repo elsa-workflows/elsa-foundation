@@ -107,6 +107,19 @@ One restart with a large backlog, or one broken run, must not overwhelm or starv
 - The position moves past a failed re-drive; that run keeps its work and its back-off, and a later walk reaches it again.
 - A queue without claimable discovery keeps the older first-page listing, and the sweep logs a warning once per queue type per host.
 
+## Wall-clock rollback during an active segment
+
+An active native segment knows which scheduler continuations its successful commits declared without an explicit
+`NotBefore`. Those continuations can advance immediately even if the wall clock moves behind their recorded commit
+time. The overlay evaluates only those initial claims at their own availability timestamp; it keeps the existing
+claim/fence transition and persisted outbox representation. This avoids returning a trivial start at
+`WorkflowStarted` with its first activity still undelivered. It works independently of the materialized-hop toggle.
+
+Explicit due times, retry waits, bare materialized outbox rows, durable-store reads and other intent kinds retain
+their visibility rules. This is local segment provenance, not a clock override for another execution or host.
+`StartClockRollbackTests` covers all three modes on memory and SQLite;
+`RuntimeDelayedScheduleDeliveryTests` checks the declared-source boundary, explicit times and retry waits.
+
 ## Claims that outlive their lease
 
 The outbox processor and the durable timer pump each claim a batch of rows under one visibility timeout (1 minute by default), then work through the batch one row at a time. Claims near the end of a long batch can lapse, and another node re-claims them.

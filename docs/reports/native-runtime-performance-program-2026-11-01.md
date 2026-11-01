@@ -91,14 +91,61 @@ race controls mutate the SQL row within the test transaction immediately before 
 conditional write and rollback behavior, and are not independent-host race evidence.
 
 Whole local EF persistence: 1,851 passed; HTTP integration: 107 passed, zero failed/skipped. Discovery reconciles all
-executions. Four-provider/root-GC qualification, independent review and final program gates remain due. Initial fixture
+executions. Independent review, cluster root-deletion races and final program gates remain due. Initial fixture
 attempts omitted required codecs/run-health state and expected the wrong stale-fence exception; they are retained
 separately, not counted as causal controls. The saved mutation source differs from the final source only in its XML
 summary; the final whole suites ran against the current source.
 
+### Production relational providers
+
+At `29df383ba1124575a26b6424ae854597e9e49245`, the strict native-provider suite passed all 236 discovered/executed
+cases over PostgreSQL 16, SQL Server 2022 CU18 and MySQL 8.4.11, zero failed/skipped. The retained-root matrix
+passed 24/24; disabling the optimization failed 18 and passed six, and restoring it passed 24/24. Together with
+the SQLite controls this covers the actual fast path on all four providers, including public deletion and uncertain
+acknowledgement; it does not establish independent-host race behavior or throughput.
+
+Two earlier Azure attempts ran no tests because readiness failed. Retained startup logs identified a MySQL client
+password variable interfering with first-time initialization. The next whole run passed 233 and failed three older
+smoke tests whose run-health assertions used an unscoped `SingleAsync` against a shared database. Scoping those
+assertions to their workflow and persistence scope produced the fresh 236/236 pass. All failed/setup receipts are
+retained separately. The task-owned database containers bound only to loopback and were removed, with their
+volumes, after every attempt. The existing Azure runner returns to its initial deallocated state after collection.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.
+
+### Immediate continuation hidden by clock rollback
+
+A new bounded diagnostic, using the original runtime DLL and a modified harness, moves the clock backwards one
+tick while validating `WorkflowStarted`. All three accepted starts stop Running at that checkpoint, with no
+activity, incident or scheduler row. Their immediate outbox continuation is still pending. A separate end-to-end
+fixture reproduces the stall in all six memory/SQLite by Durable/Balanced/Ephemeral cases on the current candidate
+before correction. This establishes a concrete defect that can produce the observed shape. The historical runs did
+not retain per-call clock readings or their outbox rows, so this does not confirm their particular cause.
+The same diagnostic harness against the corrected candidate completes all three distinct starts with no residual
+work or errors. This is a correctness control, with no timing inference.
+
+The correction records local provenance for scheduler continuations a successful commit explicitly declared
+without `NotBefore`. While that same segment owns them, its overlay evaluates their initial claim at their
+availability timestamp when the wall clock is behind it. The shared claim/fence transition, canonical outbox fields
+and checkpoint replay fingerprints remain unchanged. Explicit due times, retry waits, bare materialized rows,
+other intent kinds and durable-store visibility retain their rules. The provenance is removed when delivery settles
+and does not depend on the materialized-hop option.
+
+All six engine cases now complete their one activity exactly once, with no incident, pending outbox or scheduler
+work. Removing the provenance handoff fails all six and two focused owned-continuation cases. Ignoring an explicit
+due time fails its control; inferring provenance from a bare outbox row fails its control. Restoration passes the
+six engine and four focused cases; all 21 existing/new delayed-delivery cases pass. Earlier fixture compile errors
+and an initial query-only candidate that omitted the overlay's claim path are retained, not counted as causal reds.
+The restored whole suites pass: runtime 3,134, Distributed 114, EF 1,851 and HTTP integration 113, zero
+failed/skipped. Discovery reconciles every execution. The final source differs from the saved mutation candidate
+only in a comment describing the provenance handoff. Independent final review and program integration remain due.
+
+The original memory harness counted successful state lookups over its submitted-ID bag, rather than independently
+counting distinct stored executions. Its raw `PendingOutbox: 0` field was a placeholder; the incomplete snapshot
+retained state/activity/incidents but no outbox observation. Those limitations do not invalidate the missing leaf or
+the retained Running state, and must not be read as proof that the continuation was permanently lost.
 
 ### Source identifier collisions: independently reproduced defect
 
