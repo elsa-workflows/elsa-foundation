@@ -171,6 +171,15 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await ReadAsync(response, path, expected);
     }
 
+    /// <summary>Posts a command whose winner is legitimately unordered and returns its actual status with the domain body.</summary>
+    internal async Task<(HttpStatusCode Status, JsonNode Body)> PostOutcomeAsync(string path, object value)
+    {
+        using var response = await client.PostAsJsonAsync(path, value);
+        if (response.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Conflict))
+            throw Failure($"Owned-host request {path} returned HTTP {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        return (response.StatusCode, await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document"));
+    }
+
     public async Task RestartAsync(double? recoverySweepSeconds = null)
     {
         await StopAsync();
