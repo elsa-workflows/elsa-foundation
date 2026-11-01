@@ -55,6 +55,7 @@ internal sealed partial class EditorialReviewService(IWorkflowExecutionStateStor
         {
             return new(EditorialDecisionReceiptStatus.NotFound, Reason: exception.Message);
         }
+        catch (Elsa.Primitives.Exceptions.SchemaWriteRefusedException) { throw; } // the API answers the framework 409 with its dormancy detail
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             return new(EditorialDecisionReceiptStatus.Unavailable, "A review dependency is temporarily unavailable; retry with the same request ID.");
@@ -107,9 +108,12 @@ internal sealed partial class EditorialReviewService(IWorkflowExecutionStateStor
         var stillQueued = await QueuedAsync(review, idempotencyKey, cancellationToken) is not null;
         var after = await activities.FindAsync(review.WorkflowExecutionId, review.ActivityExecutionId, cancellationToken) ?? activity;
         if (Admitted(after) is { } settled) return Reconcile(settled, command, decider);
-        if (stillQueued) return new(EditorialDecisionReceiptStatus.Pending);
+        // A terminal activity can never admit, even while a residual queued resume awaits the sweep's purge.
         if (after.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or
-            ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded || dispatched.Status == BookmarkResumeDispatchStatus.NotFound)
+            ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded)
+            return new(EditorialDecisionReceiptStatus.Closed, "The review wait is no longer open.");
+        if (stillQueued) return new(EditorialDecisionReceiptStatus.Pending);
+        if (dispatched.Status == BookmarkResumeDispatchStatus.NotFound)
             return new(EditorialDecisionReceiptStatus.Closed, "The review wait is no longer open.");
         return new(EditorialDecisionReceiptStatus.Refused, "This decision was not admitted; check your permission and submit a new request ID.");
     }

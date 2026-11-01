@@ -169,7 +169,7 @@ public sealed class EditorialCompositionTests
 
         Assert.Equal(EditorialReviewStatus.Pending, (await host.ReadReviewAsync(pending.InvocationId))!.Status);
         Assert.Contains(await host.IncidentsAsync(), x => x.Message.Contains("no longer holds the review permission", StringComparison.Ordinal));
-        // Within this host the refused request ID stays refused; it never reports Pending again.
+        // While the runtime still remembers it, the refused request ID is refused again rather than reported Pending.
         host.Subjects.Grant(Reviewer);
         Assert.Equal(EditorialDecisionReceiptStatus.Refused, (await host.DecideAsync(Command(host, pending, view, EditorialDecision.Approve, "request-revoked"), Reviewer)).Status);
         host.Subjects.Revoke(Reviewer);

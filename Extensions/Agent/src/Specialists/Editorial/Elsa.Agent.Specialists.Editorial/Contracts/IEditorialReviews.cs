@@ -75,7 +75,8 @@ public enum EditorialDecisionReceiptStatus
 
     /// <summary>
     /// Native admission refused this request (for example expiry or revoked permission); the wait stays open. Submit a
-    /// new request ID. A refusal is not a durable receipt: after a host restart the same ID is evaluated afresh.
+    /// new request ID. A refusal is not a durable receipt: once the runtime forgets the request (a restart, actor
+    /// passivation or idempotency-cache eviction) the same ID is evaluated afresh.
     /// </summary>
     Refused
 }

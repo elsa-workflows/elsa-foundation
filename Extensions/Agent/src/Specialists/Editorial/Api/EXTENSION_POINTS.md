@@ -15,6 +15,7 @@ closed schema (`round`, `articleHash`, `decision`, `comment`, `requestId`), so a
 other unmapped member is refused with 400. On GET, a missing or foreign review is 404. The decision route
 answers a well-formed request with a typed receipt status: `Accepted`, `Pending`, `AlreadyResolved`,
 `Conflict`, `Forbidden`, `NotFound`, `Closed`, `Unavailable` or `Refused`. A retry with the same request ID
-replays an admitted decision's native receipt. `Refused` asks for a new request ID; it is not durable, and after a
-host restart the same ID is evaluated afresh against current permission and expiry. Receipts never carry review content, because deciding does not imply reading. `EditorialReviewPermissionContributor`
+replays an admitted decision's native receipt. `Refused` asks for a new request ID; it is not durable, so once the
+runtime forgets the request (a restart, actor passivation or idempotency-cache eviction) the same ID is evaluated
+afresh against current permission and expiry. Receipts never carry review content, because deciding does not imply reading. `EditorialReviewPermissionContributor`
 contributes both permissions.
