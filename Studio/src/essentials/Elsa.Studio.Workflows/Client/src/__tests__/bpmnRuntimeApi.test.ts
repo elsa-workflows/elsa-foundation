@@ -20,6 +20,10 @@ function fixture(options: { subject?: string; tenantId?: string; key?: string; b
       "bpmn-work": "bpmn/executions/{id}/work", "bpmn-complete-human": "bpmn/executions/{id}/work/{invocation}/complete",
       "bpmn-cancel": "bpmn/executions/{id}/cancel", "bpmn-incidents": "bpmn/executions/{id}/incidents",
       "bpmn-retry-service": "bpmn/executions/{id}/retry-service", "bpmn-command": "bpmn/executions/{id}/commands/{request}"
+    },
+    [capabilityIds.bpmnClaims]: {
+      "bpmn-claim-human": "bpmn/executions/{id}/work/{invocation}/claim",
+      "bpmn-complete-claimed-human": "bpmn/executions/{id}/work/{invocation}/complete-claimed"
     }
   };
   const document = options.document ?? { capabilities: Object.entries(relations).map(([id, links]) => ({ id, contractVersion: "1", links: Object.entries(links).map(([rel, href]) => ({ rel, href })) })) };
@@ -131,6 +135,27 @@ describe("Direct BPMN scoped runtime client", () => {
     const f = fixture();
     await f.client.execute(f.client.prepare({ kind: "retry-service", executionId: "run", incidentId: "incident", invocationId: "invocation", failedAttemptId: "failed" }, "retry-1"));
     expect(f.postJson).toHaveBeenCalledWith("/shell-a/bpmn/executions/run/retry-service", { requestId: "retry-1", incidentId: "incident", invocationId: "invocation", failedAttemptId: "failed" }, { retryOnUnauthorized: false });
+  });
+
+  it("claims and completes through the separate claims capability without sending a claimant", async () => {
+    const f = fixture();
+    await f.client.execute(f.client.prepare({ kind: "claim-human", executionId: "run", invocationId: "work:/1", attemptId: "attempt" }, "claim-1"));
+    expect(f.postJson).toHaveBeenLastCalledWith("/shell-a/bpmn/executions/run/work/work%3A%2F1/claim", { requestId: "claim-1", attemptId: "attempt" }, { retryOnUnauthorized: false });
+    const operation = f.client.prepare({ kind: "complete-claimed-human", executionId: "run", invocationId: "work", attemptId: "attempt", claimId: "claim:a", outcomes: ["Done"] }, "done-1");
+    expect(Object.isFrozen(operation.outcomes)).toBe(true);
+    await f.client.execute(operation);
+    expect(f.postJson).toHaveBeenLastCalledWith("/shell-a/bpmn/executions/run/work/work/complete-claimed",
+      { requestId: "done-1", attemptId: "attempt", claimId: "claim:a", outcomes: ["Done"] }, { retryOnUnauthorized: false });
+    for (const [, body] of f.postJson.mock.calls) expect(JSON.stringify(body)).not.toMatch(/claimant|author/);
+  });
+
+  it("refuses claim commands on a host that advertises only unclaimed completion", async () => {
+    const f = fixture();
+    const document = { capabilities: f.session.capabilities.capabilities.filter(capability => capability.id !== capabilityIds.bpmnClaims) };
+    const g = fixture({ document });
+    await expect(g.client.execute(g.client.prepare({ kind: "claim-human", executionId: "run", invocationId: "work", attemptId: "attempt" }, "claim-1")))
+      .rejects.toMatchObject({ name: "ApiCapabilityUnavailableError", capabilityId: capabilityIds.bpmnClaims });
+    expect(g.postJson).not.toHaveBeenCalled();
   });
 
   it("reads admission separately from accepted-work capability and preserves admission-off", async () => {

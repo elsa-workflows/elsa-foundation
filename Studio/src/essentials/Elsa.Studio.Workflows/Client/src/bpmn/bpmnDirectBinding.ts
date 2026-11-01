@@ -71,9 +71,22 @@ export function directHumanMode(element: BpmnElement): DirectHumanMode {
     const keyTokens = raw.match(/"(?:[^"\\]|\\.)*"\s*:/g) ?? [];
     return keys.every(key => ["formatVersion", "kind", "claimRequired"].includes(key)) && keyTokens.length === keys.length
       && binding.formatVersion === 1 && binding.kind === "human"
-      && (binding.claimRequired === undefined || binding.claimRequired === false)
+      && (binding.claimRequired === undefined || typeof binding.claimRequired === "boolean")
       && element.elementType === "userTask" ? "human" : "unsupported";
   } catch { return "unsupported"; }
+}
+
+/** Whether a current direct human binding requires an exact claim before completion. */
+export function directHumanClaimRequired(element: BpmnElement): boolean {
+  if (directHumanMode(element) !== "human") return false;
+  return readBinding(element.properties?.[directBindingProperty])?.claimRequired === true;
+}
+
+/** An explicit author edit of a current human binding; it writes the complete closed binding JSON. */
+export function directHumanClaimPatch(element: BpmnElement, claimRequired: boolean): Partial<BpmnElement> {
+  if (directHumanMode(element) !== "human") return {};
+  return { elementType: "userTask", properties: { ...element.properties,
+    [directBindingProperty]: JSON.stringify({ formatVersion: 1, kind: "human", claimRequired }) } };
 }
 
 /** An explicit author edit. Native children and unrecognized meaning require correction before rebinding. */

@@ -21,3 +21,13 @@ Rejection codes: `already-claimed`, `claim-required`, `not-claimed`, `claim-not-
 - The T027 actual pre-claim API and Studio P1 captures pass unchanged on the new writer: both wait stores complete and both terminal stores replay with their original commands.
 
 Not yet proved: Studio claim UI (T032), actual claimed-state restart and old-binary reader refusal (T033), actual interruption through Studio (T034), ApiCompat/version magnitude (T036) and independent review.
+
+## Studio (T032) — component proof
+
+- **Client:** `elsa.api.bpmn-claims` v1 is a separate capability. `claim-human` and `complete-claimed-human` are retained, replayable operations like completion and retry. Their bodies carry only the request id, attempt and claim id, never a claimant.
+- **Run page:** claim-required work shows "Unclaimed", "Claimed by you" or "Claimed by <subject>". Unclaimed work offers only Claim work. Complete work is enabled only for the server-reported owner, and the request carries that exact claim id. Unclaimed work in either human profile keeps the original completion. A host without the claims capability gets a disabled Claim with an explanation.
+- **Authoring:** an owned human binding accepts boolean `claimRequired`; a string or unknown member stays unsupported and unchanged. The inspector offers "Require a claim before completion" only when the backend advertises `bpmn-authored-claim-publish`, a new relation on `elsa.api.bpmn-publishing`. A retained `true` on a backend without it is shown disabled with an explanation.
+- **Results:** the three affected files pass 89/89, including a lost claim response that is resumed with its original request after a reload. Workflow typecheck passes, and the repo's ESLint passes on all changed files. Interchange passes 196/196 with the new publishing relation.
+- **Full workflows suite:** at load averages 242–369 on 15 cores it showed 4 failures in unrelated files (activity browser, editor run canvas, library browse). Each passed when rerun on its own. This is not a low-load whole-suite pass; that run is repeated before final qualification.
+
+This is component proof only. Actual browser claiming, two-subject contention, restart and old-binary refusal are T033–T034.

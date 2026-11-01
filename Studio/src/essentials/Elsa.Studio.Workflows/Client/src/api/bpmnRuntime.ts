@@ -15,7 +15,13 @@ export interface BpmnExecution {
   protocol: { key: string; version: number }; executable: BpmnPin; materialIncarnationId: string;
   createdAt: string; updatedAt: string; result: Record<string, unknown> | null;
 }
-export interface BpmnHumanWork { elementId: string; bindingId: string; tokenId: string; iterationId: string | null; invocationId: string; attemptId: string }
+/** The one current owner of claim-required work; the backend captures the claimant from the signed-in caller. */
+export interface BpmnHumanClaim { claimId: string; claimantId: string; claimedAt: string }
+export interface BpmnHumanWork {
+  elementId: string; bindingId: string; tokenId: string; iterationId: string | null; invocationId: string; attemptId: string;
+  /** Present only for claim-required work; unclaimed profiles omit both fields. */
+  claimRequired?: boolean; claim?: BpmnHumanClaim | null;
+}
 export interface BpmnIncident {
   incidentId: string; elementId: string; bindingId: string; invocationId: string; failedAttemptId: string; workerExecutionId: string;
   faultCode: string; failedAt: string; attemptNumber: number; maxAttempts: number; status: "Open" | "Retried" | "Retired" | "Final"; retryAttemptId: string | null;
@@ -44,6 +50,8 @@ export type BpmnOperationInput =
   | { kind: "publish"; versionId: string }
   | { kind: "start"; sourceReferenceId: string }
   | { kind: "complete-human"; executionId: string; invocationId: string; attemptId: string; outcomes?: readonly string[] }
+  | { kind: "claim-human"; executionId: string; invocationId: string; attemptId: string }
+  | { kind: "complete-claimed-human"; executionId: string; invocationId: string; attemptId: string; claimId: string; outcomes?: readonly string[] }
   | { kind: "cancel"; executionId: string; reason?: string }
   | { kind: "retry-service"; executionId: string; incidentId: string; invocationId: string; failedAttemptId: string };
 export type BpmnOperation = BpmnOperationInput & { readonly requestId: string; readonly scope: string };
@@ -90,7 +98,7 @@ export function createBpmnRuntimeClient(session: StudioBackendSession) {
     assertActive(); required(requestId, "request identity");
     if (session.identity.status !== "authenticated" || !session.identity.subject) throw new Error("Sign in before preparing a BPMN command.");
     // Each operation contains only primitive identities and an optional outcome list. Never retain a mutable form object.
-    const snapshot = input.kind === "complete-human" && input.outcomes
+    const snapshot = (input.kind === "complete-human" || input.kind === "complete-claimed-human") && input.outcomes
       ? { ...input, outcomes: Object.freeze([...input.outcomes]) } : { ...input };
     return Object.freeze({ ...snapshot, requestId, scope }) as Readonly<T & { requestId: string; scope: string }>;
   };
@@ -110,6 +118,15 @@ export function createBpmnRuntimeClient(session: StudioBackendSession) {
         relation = "bpmn-complete-human";
         parameters = { id: required(operation.executionId, "execution identity"), invocation: required(operation.invocationId, "invocation identity") };
         body = { requestId, attemptId: required(operation.attemptId, "attempt identity"), ...(operation.outcomes ? { outcomes: [...operation.outcomes] } : {}) }; break;
+      case "claim-human":
+        capability = capabilityIds.bpmnClaims; relation = "bpmn-claim-human";
+        parameters = { id: required(operation.executionId, "execution identity"), invocation: required(operation.invocationId, "invocation identity") };
+        body = { requestId, attemptId: required(operation.attemptId, "attempt identity") }; break;
+      case "complete-claimed-human":
+        capability = capabilityIds.bpmnClaims; relation = "bpmn-complete-claimed-human";
+        parameters = { id: required(operation.executionId, "execution identity"), invocation: required(operation.invocationId, "invocation identity") };
+        body = { requestId, attemptId: required(operation.attemptId, "attempt identity"), claimId: required(operation.claimId, "claim identity"),
+          ...(operation.outcomes ? { outcomes: [...operation.outcomes] } : {}) }; break;
       case "cancel":
         relation = "bpmn-cancel"; parameters = { id: required(operation.executionId, "execution identity") };
         body = { requestId, ...(operation.reason === undefined ? {} : { reason: operation.reason }) }; break;

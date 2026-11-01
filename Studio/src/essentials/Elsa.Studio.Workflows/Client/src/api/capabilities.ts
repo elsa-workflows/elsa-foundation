@@ -13,6 +13,7 @@ export const capabilityIds = {
   bpmnCatalog: "elsa.api.bpmn-catalog",
   bpmnInspection: "elsa.api.bpmn-inspection",
   bpmnRuntime: "elsa.api.bpmn-runtime",
+  bpmnClaims: "elsa.api.bpmn-claims",
   bpmnPublishing: "elsa.api.bpmn-publishing"
 } as const;
 
@@ -29,6 +30,7 @@ const supportedContractVersions: Record<ApiCapabilityId, string> = {
   [capabilityIds.bpmnCatalog]: "1",
   [capabilityIds.bpmnInspection]: "1",
   [capabilityIds.bpmnRuntime]: "1",
+  [capabilityIds.bpmnClaims]: "1",
   [capabilityIds.bpmnPublishing]: "1"
 };
 

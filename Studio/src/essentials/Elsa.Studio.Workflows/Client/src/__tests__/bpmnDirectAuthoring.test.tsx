@@ -3,15 +3,15 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
-import { directBindingProperty, directHumanBinding, directHumanMode, directHumanPatch } from "../bpmn/bpmnDirectBinding";
+import { directBindingProperty, directHumanBinding, directHumanClaimPatch, directHumanClaimRequired, directHumanMode, directHumanPatch } from "../bpmn/bpmnDirectBinding";
 import { createBpmnShapeNode, updateBpmnElement, readBpmnElements } from "../bpmn/bpmnAdapter";
 import { bpmnStructureKind, type BpmnElement } from "../bpmn/bpmnTypes";
 import type { ActivityNode } from "../workflowTypes";
 
-function inspect(element: BpmnElement, readOnly = false, directHumanAvailable = true) {
+function inspect(element: BpmnElement, readOnly = false, directHumanAvailable = true, directHumanClaimsAvailable = false) {
   const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container); const change = vi.fn();
   flushSync(() => root.render(<BpmnElementInspector element={element} outboundFlows={[]} onChangeElement={change}
-    onChangeFlow={vi.fn()} onSetDefaultFlow={vi.fn()} targetLabelFor={flow => flow.targetRef} readOnly={readOnly} directHumanAvailable={directHumanAvailable} />));
+    onChangeFlow={vi.fn()} onSetDefaultFlow={vi.fn()} targetLabelFor={flow => flow.targetRef} readOnly={readOnly} directHumanAvailable={directHumanAvailable} directHumanClaimsAvailable={directHumanClaimsAvailable} />));
   return { container, change, dispose: () => { flushSync(() => root.unmount()); container.remove(); } };
 }
 
@@ -28,10 +28,38 @@ describe("Direct human BPMN authoring", () => {
     expect(directHumanMode({ ...element, ...patch })).toBe("human");
     expect(directHumanPatch({ ...element, ...patch }, "unbound")).toEqual({ elementType: "task", properties: { vendor: "keep" } });
   });
-  it.each(["not-json", '{"formatVersion":99,"kind":"human"}', '{"formatVersion":1,"kind":"human","claimRequired":true}', '{"formatVersion":1,"kind":"human","unknown":true}'])("keeps unsupported binding metadata unchanged: %s", raw => {
+  it.each(["not-json", '{"formatVersion":99,"kind":"human"}', '{"formatVersion":1,"kind":"human","claimRequired":"true"}', '{"formatVersion":1,"kind":"human","unknown":true}'])("keeps unsupported binding metadata unchanged: %s", raw => {
     const element: BpmnElement = { elementId: "review", elementType: "userTask", properties: { [directBindingProperty]: raw } };
     expect(directHumanMode(element)).toBe("unsupported"); expect(directHumanPatch(element, "human")).toEqual({});
     expect(element.properties![directBindingProperty]).toBe(raw);
+  });
+  it("toggles an exact claim requirement on a human binding and refuses other bindings", () => {
+    const element: BpmnElement = { elementId: "review", elementType: "userTask", properties: { vendor: "keep", [directBindingProperty]: directHumanBinding } };
+    expect(directHumanClaimRequired(element)).toBe(false);
+    const claimed = { ...element, ...directHumanClaimPatch(element, true) };
+    expect(claimed.properties).toEqual({ vendor: "keep", [directBindingProperty]: '{"formatVersion":1,"kind":"human","claimRequired":true}' });
+    expect(directHumanMode(claimed)).toBe("human"); expect(directHumanClaimRequired(claimed)).toBe(true);
+    expect({ ...claimed, ...directHumanClaimPatch(claimed, false) }.properties).toEqual(element.properties);
+    expect(directHumanClaimPatch({ elementId: "service", elementType: "task" }, true)).toEqual({});
+    expect(directHumanClaimPatch({ elementId: "review", elementType: "userTask", childNodeId: "native" }, true)).toEqual({});
+  });
+  it("offers the claim choice only when the backend can publish claimed work", () => {
+    const element: BpmnElement = { elementId: "review", elementType: "userTask", properties: { [directBindingProperty]: directHumanBinding } };
+    const absent = inspect(element);
+    try { expect(absent.container.textContent).not.toContain("Require a claim"); } finally { absent.dispose(); }
+    const view = inspect(element, false, true, true);
+    try {
+      const box = [...view.container.querySelectorAll<HTMLInputElement>("input[type='checkbox']")].find(input => input.parentElement?.textContent?.includes("Require a claim"))!;
+      expect(box.checked).toBe(false); flushSync(() => box.click());
+      expect(view.change).toHaveBeenCalledWith("review", { elementType: "userTask", properties: { [directBindingProperty]: '{"formatVersion":1,"kind":"human","claimRequired":true}' } });
+    } finally { view.dispose(); }
+    const retained = inspect({ ...element, properties: { [directBindingProperty]: '{"formatVersion":1,"kind":"human","claimRequired":true}' } });
+    try {
+      const box = [...retained.container.querySelectorAll<HTMLInputElement>("input[type='checkbox']")].find(input => input.parentElement?.textContent?.includes("Require a claim"))!;
+      expect(box.checked).toBe(true); expect(box.disabled).toBe(true);
+      expect(retained.container.textContent).toContain("cannot publish claim-required work");
+      flushSync(() => box.click()); expect(retained.change).not.toHaveBeenCalled();
+    } finally { retained.dispose(); }
   });
   it("never removes an existing native child binding", () => {
     const element: BpmnElement = { elementId: "review", elementType: "userTask", childNodeId: "native-child" };

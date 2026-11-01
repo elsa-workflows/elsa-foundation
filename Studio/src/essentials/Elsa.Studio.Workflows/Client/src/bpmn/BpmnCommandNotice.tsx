@@ -1,7 +1,7 @@
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { useBpmnCommand } from "./useBpmnCommand";
 
-export function BpmnCommandNotice({ command, label }: { command: ReturnType<typeof useBpmnCommand>; label: "start" | "completion" | "retry" }) {
+export function BpmnCommandNotice({ command, label }: { command: ReturnType<typeof useBpmnCommand>; label: "start" | "completion" | "claim" | "retry" }) {
   const receipt = command.record;
   return <div className="wf-bpmn-command">
     {command.error ? <p role="alert">{command.error}</p> : null}
@@ -12,7 +12,7 @@ export function BpmnCommandNotice({ command, label }: { command: ReturnType<type
       <StudioButton type="button" variant="default" disabled={command.busy || command.blocked} onClick={() => void command.replay()}>
         {command.confirmed ? `Replay last ${label}` : `Resume ${label}`}
       </StudioButton>
-      {(receipt.operation.kind === "complete-human" || receipt.operation.kind === "retry-service" || receipt.outcome?.executionId) && !command.confirmed
+      {(receipt.operation.kind !== "start" && receipt.operation.kind !== "publish" || receipt.outcome?.executionId) && !command.confirmed
         ? <StudioButton type="button" variant="default" disabled={command.busy || command.blocked} onClick={() => void command.check()}>Check outcome</StudioButton> : null}
     </> : null}
   </div>;

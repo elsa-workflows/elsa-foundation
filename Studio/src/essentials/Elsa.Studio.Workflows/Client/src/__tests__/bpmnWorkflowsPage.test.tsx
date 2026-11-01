@@ -18,12 +18,14 @@ const inspection = { execution, authority: { systemIdentity: "system", rootIniti
   process: { processId: "process", name: "Review order", elements: [{ elementId: "start", elementType: "startEvent" }, { elementId: "review", elementType: "userTask", name: "Review order", bindingRef: "human:review" }, { elementId: "end", elementType: "endEvent" }], sequenceFlows: [{ flowId: "a", sourceRef: "start", targetRef: "review" }, { flowId: "b", sourceRef: "review", targetRef: "end" }] },
   source: { sourceReferenceId: "source", sourceKind: "BpmnModel", sourceId: "authored-version", sourceVersion: "2.0.0", layout: [{ nodeId: "review", x: 240, y: 0 }], activityPresentation: [], createdAt: publication.createdAt, publishedAt: publication.publishedAt, retiredAt: null }, work: [work], attempts: [], incidents: [], settlements: [] };
 
-function fixture(view: "processes" | "runs" | "run" = "processes", runInspection: unknown = inspection) {
+function fixture(view: "processes" | "runs" | "run" = "processes", runInspection: unknown = inspection, withClaims = true) {
   window.history.replaceState({}, "", view === "run" ? "/workflows/bpmn/runs/run?backend=selected" : `/workflows/bpmn${view === "runs" ? "/runs" : ""}?backend=selected`);
   const capabilities = { capabilities: [
     { id: "elsa.api.bpmn-catalog", contractVersion: "1", links: [{ rel: "bpmn-publications", href: "bpmn/publications" }, { rel: "bpmn-executions", href: "bpmn/executions" }] },
     { id: "elsa.api.bpmn-runtime", contractVersion: "1", links: [{ rel: "bpmn-admission", href: "bpmn/admission" }, { rel: "bpmn-start", href: "bpmn/executions" }, { rel: "bpmn-complete-human", href: "bpmn/executions/{id}/work/{invocation}/complete", templated: true }, { rel: "bpmn-retry-service", href: "bpmn/executions/{id}/retry-service", templated: true }, { rel: "bpmn-command", href: "bpmn/executions/{id}/commands/{request}", templated: true }] },
-    { id: "elsa.api.bpmn-inspection", contractVersion: "1", links: [{ rel: "bpmn-inspection", href: "bpmn/executions/{id}/inspection", templated: true }] }
+    { id: "elsa.api.bpmn-inspection", contractVersion: "1", links: [{ rel: "bpmn-inspection", href: "bpmn/executions/{id}/inspection", templated: true }] },
+    ...(withClaims ? [{ id: "elsa.api.bpmn-claims", contractVersion: "1", links: [{ rel: "bpmn-claim-human", href: "bpmn/executions/{id}/work/{invocation}/claim", templated: true },
+      { rel: "bpmn-complete-claimed-human", href: "bpmn/executions/{id}/work/{invocation}/complete-claimed", templated: true }] }] : [])
   ] };
   const getJson = vi.fn(async (path: string): Promise<unknown> => {
     if (path.endsWith("/capabilities")) return capabilities;
@@ -158,6 +160,70 @@ it("refuses a write when browser storage cannot retain its request identity", as
     await vi.waitFor(() => expect(view.container.textContent).toContain("Storage unavailable"));
     expect(view.postJson).not.toHaveBeenCalled(); expect(view.container.textContent).not.toContain("identity is retained");
   } finally { fail.mockRestore(); view.dispose(); }
+});
+
+const claimInspection = (claim: { claimId: string; claimantId: string; claimedAt: string } | null) =>
+  ({ ...structuredClone(inspection), profile: "foundation-direct-claims-v1", work: [{ ...work, claimRequired: true, claim }] });
+
+it("offers only a claim for unclaimed claim-required work and never sends legacy completion", async () => {
+  const view = fixture("run", claimInspection(null));
+  try {
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Unclaimed. Claim this work before completing it."));
+    expect(view.button("Complete work")).toBeUndefined(); view.click("Claim work");
+    await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(1));
+    expect(view.postJson).toHaveBeenCalledWith("/bpmn/executions/run/work/invocation/claim", { requestId: expect.any(String), attemptId: "attempt" },
+      { retryOnUnauthorized: false, signal: expect.any(AbortSignal) });
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Last claim: accepted."));
+  } finally { view.dispose(); }
+});
+
+it("resumes an uncertain claim with its original request after reload instead of claiming again", async () => {
+  const view = fixture("run", claimInspection(null)); view.postJson.mockRejectedValueOnce(new TypeError("Claim response lost"));
+  try {
+    await vi.waitFor(() => expect(view.button("Claim work")).toBeTruthy()); view.click("Claim work");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Claim response lost"));
+    const first = view.postJson.mock.calls[0]; const normal = view.getJson.getMockImplementation()!;
+    view.getJson.mockImplementation(async path => path.endsWith("/inspection")
+      ? claimInspection({ claimId: "claim:a", claimantId: "author", claimedAt: "2026-11-01T10:02:00Z" }) : normal(path));
+    view.render("run", { ...view.session, key: "fresh" });
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Claimed by you."));
+    // The server already reports this caller as owner; the uncertain claim is still recovered by its own retained request.
+    expect(view.button("Complete work").disabled).toBe(false); view.click("Resume claim");
+    await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(2));
+    expect(view.postJson.mock.calls[1].slice(0, 2)).toEqual(first.slice(0, 2));
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Last claim: accepted"));
+  } finally { view.dispose(); }
+});
+
+it("lets only the current owner complete claimed work with its exact claim", async () => {
+  const view = fixture("run", claimInspection({ claimId: "claim:a", claimantId: "author", claimedAt: "2026-11-01T10:02:00Z" }));
+  try {
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Claimed by you."));
+    expect(view.button("Claim work")).toBeUndefined(); view.click("Complete work");
+    await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(1));
+    expect(view.postJson).toHaveBeenCalledWith("/bpmn/executions/run/work/invocation/complete-claimed",
+      { requestId: expect.any(String), attemptId: "attempt", claimId: "claim:a" }, { retryOnUnauthorized: false, signal: expect.any(AbortSignal) });
+  } finally { view.dispose(); }
+});
+
+it("shows another person's claim and refuses completion without sending it", async () => {
+  const view = fixture("run", claimInspection({ claimId: "claim:b", claimantId: "bob", claimedAt: "2026-11-01T10:02:00Z" }));
+  try {
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Claimed by bob."));
+    expect(view.button("Complete work").disabled).toBe(true);
+    expect(view.button("Complete work").title).toBe("Only the current owner can complete this work.");
+    view.click("Complete work"); expect(view.postJson).not.toHaveBeenCalled();
+  } finally { view.dispose(); }
+});
+
+it("does not offer claims when the backend advertises only unclaimed completion", async () => {
+  const view = fixture("run", claimInspection(null), false);
+  try {
+    await vi.waitFor(() => expect(view.button("Claim work")).toBeTruthy());
+    expect(view.button("Claim work").disabled).toBe(true);
+    expect(view.button("Claim work").title).toBe("This backend does not offer human work claims.");
+    view.click("Claim work"); expect(view.postJson).not.toHaveBeenCalled();
+  } finally { view.dispose(); }
 });
 
 it("does not offer legacy unclaimed completion for an unknown profile", async () => {

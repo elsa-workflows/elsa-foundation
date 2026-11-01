@@ -43,14 +43,24 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
     }, retry: false, refetchOnWindowFocus: false });
   const command = useBpmnCommand(client, { kind: "complete-human", executionId }, () => { void query.refetch(); });
   const retry = useBpmnCommand(client, { kind: "retry-service", executionId }, () => { void query.refetch(); });
+  const claim = useBpmnCommand(client, { kind: "claim-human", executionId }, () => { void query.refetch(); });
+  const claimed = useBpmnCommand(client, { kind: "complete-claimed-human", executionId }, () => { void query.refetch(); });
   const completionAvailable = evaluateBackendRequirements(session, [{ id: "elsa.api.bpmn-runtime", contractVersion: "1", relations: ["bpmn-complete-human"] }]).state === "available";
   const retryAvailable = evaluateBackendRequirements(session, [{ id: "elsa.api.bpmn-runtime", contractVersion: "1", relations: ["bpmn-retry-service"] }]).state === "available";
+  const claimsAvailable = evaluateBackendRequirements(session, [{ id: "elsa.api.bpmn-claims", contractVersion: "1",
+    relations: ["bpmn-claim-human", "bpmn-complete-claimed-human"] }]).state === "available";
   const scope = linkScope(session), context = session.context;
   if (query.isError) return <div role="alert"><p>{query.error.message}</p><StudioButton type="button" onClick={() => void query.refetch()}>Reload run</StudioButton></div>;
   if (!query.data) return <p role="status">Loading BPMN run…</p>;
   const inspection = query.data;
-  const canComplete = completionAvailable && session.identity.status === "authenticated" && inspection.profile === "foundation-direct-v1"
-    && inspection.execution.status === "Running" && !command.blocked && !command.busy && (!command.record || command.confirmed);
+  const ready = (value: ReturnType<typeof useBpmnCommand>) => !value.blocked && !value.busy && (!value.record || value.confirmed);
+  const humanProfile = inspection.profile === "foundation-direct-v1" || inspection.profile === "foundation-direct-claims-v1";
+  const canComplete = completionAvailable && session.identity.status === "authenticated" && humanProfile
+    && inspection.execution.status === "Running" && ready(command);
+  // Claim actions follow the server's exact current owner; the browser never supplies a claimant.
+  const claimable = claimsAvailable && !session.disposed && session.identity.status === "authenticated" && inspection.profile === "foundation-direct-claims-v1"
+    && inspection.execution.status === "Running" && !query.isFetching;
+  const owns = (work: BpmnInspection["work"][number]) => !!work.claim && !!session.identity.subject && work.claim.claimantId === session.identity.subject;
   const canRetry = (incident: BpmnIncident) => retryAvailable && !session.disposed && session.identity.status === "authenticated"
     && inspection.profile === "foundation-native-work-v1" && inspection.execution.status === "WaitingIncident" && !query.isFetching
     && !retry.blocked && !retry.busy && (!retry.record || retry.confirmed) && incident.status === "Open" && incident.retryAttemptId === null
@@ -63,10 +73,12 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
     <header className="wf-bpmn-run-heading">
       <div><h3>{processName(inspection)}</h3><p role="status">{bpmnRunState(inspection.execution, inspection)}</p>
         <p>Published version {inspection.source?.sourceVersion ?? "unavailable"} · Revision {inspection.execution.revision}</p></div>
-      <StudioButton type="button" disabled={query.isFetching || command.busy || retry.busy} onClick={() => void query.refetch()}>Refresh run</StudioButton>
+      <StudioButton type="button" disabled={query.isFetching || command.busy || retry.busy || claim.busy || claimed.busy} onClick={() => void query.refetch()}>Refresh run</StudioButton>
     </header>
     <BpmnCommandNotice command={command} label="completion" />
     <BpmnCommandNotice command={retry} label="retry" />
+    <BpmnCommandNotice command={claim} label="claim" />
+    <BpmnCommandNotice command={claimed} label="completion" />
     <div className="wf-bpmn-run-workbench">
       <BpmnRunCanvas key={executionId} inspection={inspection} selectedElement={selectedElement} onSelect={setSelectedElement} />
       <section className="wf-bpmn-current-work" aria-label="Current BPMN work">
@@ -75,9 +87,19 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
         {inspection.work.map(work => <article key={`${work.invocationId}:${work.attemptId}`} className="wf-bpmn-work-item">
           <h4>{elementName(inspection, work.elementId)}</h4>
           <p>{work.kind === "Human" ? "Human wait" : work.kind === "Timer" ? `Timer${work.dueAt ? ` · ${new Date(work.dueAt).toLocaleString()}` : ""}` : "Native work requested"}</p>
+          {work.kind === "Human" && work.claimRequired ? <p role="note">{!work.claim ? "Unclaimed. Claim this work before completing it."
+            : owns(work) ? "Claimed by you." : `Claimed by ${work.claim.claimantId}.`}</p> : null}
           <div className="wf-bpmn-actions"><StudioButton type="button" variant="default" onClick={() => setSelectedElement(work.elementId)}>Show on diagram</StudioButton>
-            {work.kind === "Human" ? <StudioButton type="button" variant="primary" disabled={!canComplete}
-              title={!completionAvailable ? "This backend does not offer human completion." : inspection.profile !== "foundation-direct-v1" ? "This process needs a compatible work action." : undefined}
+            {work.kind === "Human" && work.claimRequired ? (!work.claim
+              ? <StudioButton type="button" variant="primary" disabled={!claimable || !ready(claim)}
+                title={!claimsAvailable ? "This backend does not offer human work claims." : undefined}
+                onClick={() => { if (claimable && ready(claim)) void claim.begin({ kind: "claim-human", executionId, invocationId: work.invocationId, attemptId: work.attemptId }); }}>Claim work</StudioButton>
+              : <StudioButton type="button" variant="primary" disabled={!claimable || !ready(claimed) || !owns(work)}
+                title={!claimsAvailable ? "This backend does not offer human work claims." : !owns(work) ? "Only the current owner can complete this work." : undefined}
+                onClick={() => { if (claimable && ready(claimed) && owns(work) && work.claim) void claimed.begin({ kind: "complete-claimed-human", executionId,
+                  invocationId: work.invocationId, attemptId: work.attemptId, claimId: work.claim.claimId }); }}>Complete work</StudioButton>)
+            : work.kind === "Human" ? <StudioButton type="button" variant="primary" disabled={!canComplete}
+              title={!completionAvailable ? "This backend does not offer human completion." : !humanProfile ? "This process needs a compatible work action." : undefined}
               onClick={() => { if (canComplete) void command.begin({ kind: "complete-human", executionId, invocationId: work.invocationId, attemptId: work.attemptId }); }}>Complete work</StudioButton> : null}</div>
         </article>)}
         {inspection.incidents.length ? <><h3>Incidents</h3>{inspection.incidents.map(incident => <article key={incident.incidentId} className="wf-bpmn-work-item">
