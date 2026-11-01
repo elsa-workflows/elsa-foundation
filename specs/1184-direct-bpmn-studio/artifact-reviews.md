@@ -47,3 +47,7 @@ Author artifact review before implementation, not a full PR review. All39 ordere
 | SC006; reproducible delivery evidence/checkpoints | T002, T016–019, T026–027, T033–039 |
 
 No uncovered buildable requirement or constitutional contradiction found. Corrected T017 to name shared normalized traces explicitly; retained actual pre-writer capture before claims. Optional task git hooks are disabled by repository configuration. Specification moves to Approved; final API/version/host/browser checks and the independent full-PR loop remain future gates. No merge or runtime acceptance is implied by artifact review.
+
+## Capability dependency correction — 1 November 2026
+
+During T009 implementation, the existing capability declaration/registration was found in its implementation assembly. Adding that dependency would contradict the contract boundary in framework §§2.1/2.5/2.18. The amended plan/task lifts the existing declarations and thin registration into that domain's Core, with forwarding for old API binaries and focused compatibility/registration checks. The actual publisher needs this boundary to advertise its optional route. This is an implementation decision under standing authorization, not a constitutional exception, new capability framework or full PR review round. A new BPMN publishing project remains unnecessary.

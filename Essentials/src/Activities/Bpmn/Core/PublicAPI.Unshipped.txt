@@ -157,3 +157,10 @@ Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding
 Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BpmnNativeEventBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable) -> void
 Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BindingId.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.PublishFromSourceAsync(Elsa.Activities.Bpmn.Core.BpmnModelDefinition! definition, Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource! source, string! requestId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnPublishedModel!>
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.VersionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.Version.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.Layout.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.BpmnModelPublicationSource(string! versionId, string! version, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>? layout = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>? activityPresentation = null) -> void

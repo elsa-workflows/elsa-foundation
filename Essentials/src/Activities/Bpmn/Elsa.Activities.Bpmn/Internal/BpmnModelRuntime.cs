@@ -35,8 +35,19 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         }
     }
 
+    public async ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source,
+        string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        try { return await PublishCoreAsync(definition, requestId, caller, cancellationToken, source); }
+        catch (JsonException exception)
+        {
+            throw new BpmnModelValidationException($"BPMN publication '{requestId}', source version '{source.VersionId}' has invalid definition JSON.", exception);
+        }
+    }
+
     private async ValueTask<BpmnPublishedModel> PublishCoreAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, BpmnModelPublicationSource? source = null)
     {
         Scope(caller); InputId(requestId);
         if (!materials.SupportsModelMaterial || !sources.CanWriteRootReferences(materials))
@@ -65,18 +76,40 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         var hash = material.ComputeContentHash();
         var pin = new WorkflowExecutableIdentity(hash, "bpmn-model:" + hash, hash, "1.0.0", hash);
         material = new(1, pin, material.Protocol, material.Profile, material.Definition, material.InputContract, [], dependencies, []);
-        var sourceId = "bpmn-source:" + BpmnModelIdentity.Create(caller.TenantId ?? "", caller.ActorId, requestId);
+        var sourceId = "bpmn-source:" + (source is null
+            ? BpmnModelIdentity.Create(caller.TenantId ?? "", caller.ActorId, requestId)
+            : BpmnModelIdentity.Create("authored-v1", caller.TenantId ?? "", caller.ActorId, requestId));
+        var at = clock.GetUtcNow();
+        var reference = new WorkflowExecutableSourceReference(sourceId, hash, SourceKind, source?.VersionId ?? sourceId, source?.Version ?? "1",
+            pin.DefinitionId, pin.DefinitionVersionId, pin.ArtifactVersion, at, at, WorkflowExecutableReferenceScope.Published,
+            Layout: source?.Layout, TenantId: caller.TenantId, ActivityPresentation: source?.ActivityPresentation);
         if (await sources.FindAsync(sourceId, cancellationToken) is { } prior &&
-            (prior.ArtifactId != hash || prior.TenantId != caller.TenantId || prior.SourceKind != SourceKind || !prior.IsLive(clock.GetUtcNow())))
+            (prior.ArtifactId != hash || prior.TenantId != caller.TenantId || prior.SourceKind != SourceKind || !prior.IsLive(clock.GetUtcNow()) ||
+             source is not null && !SameAuthoredSource(prior)))
             throw new RuntimeCheckpointReplayConflictException("publish:" + requestId);
         await materials.SaveModelAsync(material, cancellationToken);
         var snapshot = await materials.FindMaterialAsync(hash, cancellationToken) ?? throw new BpmnModelValidationException("Published model material could not be read back.");
-        var at = clock.GetUtcNow();
-        var reference = new WorkflowExecutableSourceReference(sourceId, hash, SourceKind, sourceId, "1",
-            pin.DefinitionId, pin.DefinitionVersionId, pin.ArtifactVersion, at, at, WorkflowExecutableReferenceScope.Published, TenantId: caller.TenantId);
-        await leases.ExecuteFencedAsync([pin], "bpmn-publish:" + BpmnModelIdentity.Create(sourceId), async (grants, token) =>
-            _ = await sources.SaveWithRootWriteLeasesAsync(reference, pin, grants, token), cancellationToken);
+        at = clock.GetUtcNow();
+        reference = reference with { CreatedAt = at, PublishedAt = at };
+        try
+        {
+            await leases.ExecuteFencedAsync([pin], "bpmn-publish:" + BpmnModelIdentity.Create(sourceId), async (grants, token) =>
+                _ = await sources.SaveWithRootWriteLeasesAsync(reference, pin, grants, token), cancellationToken);
+        }
+        catch (InvalidOperationException) when (source is not null)
+        {
+            // The store arbitrates concurrent publications atomically. Map only a proved competing
+            // source winner to a replay conflict; unrelated persistence failures retain their cause.
+            if (await sources.FindAsync(sourceId, cancellationToken) is { } winner &&
+                (!winner.IsLive(clock.GetUtcNow()) || !SameAuthoredSource(winner)))
+                throw new RuntimeCheckpointReplayConflictException("publish:" + requestId);
+            throw;
+        }
         return new(pin, snapshot.IncarnationId, sourceId, material.Profile);
+
+        bool SameAuthoredSource(WorkflowExecutableSourceReference current) =>
+            WorkflowExecutableSourceReferenceComparer.SameIdentity(current,
+                reference with { CreatedAt = current.CreatedAt, PublishedAt = current.PublishedAt });
     }
 
     public async ValueTask<BpmnModelCommandOutcome> StartAsync(string sourceReferenceId, string requestId,

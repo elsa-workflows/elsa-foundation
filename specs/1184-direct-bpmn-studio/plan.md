@@ -66,7 +66,7 @@ Extensions/Etl/
 tools/bpmn/                     # owned-host collectors and receipts
 ```
 
-**Structure decision**: Existing Design-bearing interchange package gets a separately composed optional publishing feature. A new publishing project is unnecessary. Keep Design reads out of runtime. ETL supplies a contextual run-link contribution; Workflows does not parse ETL private state.
+**Structure decision**: Existing Design-bearing interchange package gets a separately composed optional publishing feature. A new publishing project is unnecessary. Keep Design reads out of runtime. Capability wiring exposed a real contract dependency: lift the existing API capability declarations and thin registration into `Essentials/src/Api/Capabilities/Core`, preserving old API callers through forwarding; do not add another capability mechanism or make BPMN depend on its implementation. ETL supplies a contextual run-link contribution; Workflows does not parse ETL private state.
 
 ## Delivery sequence
 

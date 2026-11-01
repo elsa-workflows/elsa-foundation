@@ -1,5 +1,7 @@
 # API Capabilities
 
+Static declaration models, wire views, conflict type and thin [registration](Core/ApiCapabilityRegistration.cs) live in `Elsa.Api.Capabilities.Core`. A domain that only advertises an API references that contract package. This module retains `AddApiCapability` and forwards moved types, preserving compiled callers and old assembly-qualified names. Catalog, authorization and HTTP implementation stay here; no second discovery mechanism is introduced.
+
 `Elsa.Api.Capabilities` provides the supported management-client bootstrap for an active Elsa shell.
 An authenticated `GET /capabilities` returns one caller-neutral document containing only the stable
 contracts explicitly declared by the shell's active domain API features.

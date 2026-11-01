@@ -55,6 +55,8 @@ Active domain API features call `AddApiCapability` during shell composition. Equ
 idempotent; incompatible declarations throw `ApiCapabilityConflictException` immediately. Static declarations
 are a feature-owned public-contract statement, not an independent provider extension point.
 
+Features that only declare a surface can reference `Elsa.Api.Capabilities.Core` and call `ApiCapabilityRegistration.Add` with the same declaration. The existing API extension delegates to that thin registration. Type forwarding preserves the original API assembly's public model/exception identities for compiled consumers.
+
 ## References
 
 - [Module README](README.md)

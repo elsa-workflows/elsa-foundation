@@ -24,7 +24,15 @@ Default markers are derived from the source element's DefaultFlowId. Import/edit
 
 The optional authored element property `elsa.direct.binding` round-trips as `elsa:directBinding` in the existing Elsa vendor namespace. Interchange retains the exact JSON object, including future schema versions, with a limit of16KiB UTF-8 and a maximum depth of32. Malformed values and conflicting attributes under both vendor namespace aliases are refused with element context. Other unrepresented extension content still reports degradation; documents without the property emit no new binding attribute.
 
-This is metadata retention, not executable-profile validation or a direct publication path. A publisher must validate the versioned binding's full schema, supported inventory and immutable dependencies before accepting execution. Native `childNodeId` and listener bindings keep their existing meaning. The remaining direct Studio journey is tracked in [spec1184](../../../../../specs/1184-direct-bpmn-studio/spec.md).
+Metadata retention alone does not validate an executable profile or publish a process. A publisher must validate the versioned binding's full schema, supported inventory and immutable dependencies before accepting execution. Native `childNodeId` and listener bindings keep their existing meaning. The remaining direct Studio journey is tracked in [spec1184](../../../../../specs/1184-direct-bpmn-studio/spec.md).
+
+## Optional authored direct publication
+
+`ActivitiesBpmnDirectPublishing` adds `POST interchange/bpmn/versions/{versionId}/publish-direct` with a `requestId` body. It reads an immutable saved version, checks normalized caller/tenant and both `bpmn:publish` and `workflows/publishing:manage` resource permissions, verifies the visible compatible root BpmnProcess catalog entry and projects its authoring structure into the existing direct runtime. The route chooses the source; body actor/tenant/source lookalikes are never trusted. Source-owned/deleted definitions and unsupported binding intent are refused.
+
+This first authoring profile supports unbound human userTasks with plain start/end and the existing parallel profile. Explicit human metadata uses formatVersion1/kind human, with claimRequired omitted or false. Claimed/service/collaboration profiles remain outside this authoring increment; existing runtime-only raw profiles stay available. The runtime's released graph/profile validator remains authoritative. Native children/listeners cannot be reinterpreted, and unknown authored fields or binding versions are refused before publication.
+
+Version identity, immutable presentation and layout/diagram are captured on the source reference; material hashing and existing raw publication/replay remain unchanged. Accepted work recovers from Runtime without Design. The optional capability is `elsa.api.bpmn-publishing`, relation `bpmn-authored-publish`; ordinary interchange alone maps no publication endpoint. Composing the publisher does not opt in to execution admission: hosts still explicitly configure `ActivitiesBpmnHosting.AdmitNewExecutions`.
 
 ## Verification
 

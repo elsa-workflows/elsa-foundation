@@ -219,6 +219,7 @@
   <Folder Name="/Essentials/src/Api/">
     <Project Path="Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <Project Path="Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+    <Project Path="Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Caching/">
     <Project Path="Essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />

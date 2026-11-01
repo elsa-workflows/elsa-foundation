@@ -31,7 +31,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
-        bool legacyCombinedStore = false, bool runtimeFlowchart = false)
+        bool legacyCombinedStore = false, bool runtimeFlowchart = false, bool authoredDirectPublication = false)
     {
         if (legacySnapshotDirectory is not null && runtimeSnapshotPath is not null)
             throw new ArgumentException("Select one actual legacy snapshot source.");
@@ -61,6 +61,12 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                 // Qualify the built-in single-node profile first. Clustered model placement remains a separate gate.
                 foreach (var name in new[] { "WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence" })
                     features.AsObject().Remove(name);
+            }
+            if (authoredDirectPublication)
+            {
+                if (!directBpmn || runtimeOnly)
+                    throw new ArgumentException("Authored direct publication requires the composed Design and direct BPMN host.");
+                features["ActivitiesBpmnDirectPublishing"] = new JsonObject();
             }
             if (runtimeOnly)
             {
@@ -164,12 +170,13 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         await LaunchAsync();
     }
 
-    internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false)
+    internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false, bool includeBpmnAuthoring = false)
     {
         var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
             "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics",
             "Elsa.Workflows.Design.Core", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore", "Elsa.Persistence.EntityFramework" }
             .Concat(includePublishing ? new[] { "Elsa.Workflows.Publishing.Core", "Elsa.Workflows.Publishing" } : [])
+            .Concat(includeBpmnAuthoring ? new[] { "Elsa.Activities.Bpmn.Interchange", "Elsa.Api.Capabilities", "Elsa.Api.Capabilities.Core" } : [])
             .Select(name => Path.Combine(Path.GetDirectoryName(AssemblyPath)!, name + ".dll"))
             .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,
                 sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) }).ToArray();

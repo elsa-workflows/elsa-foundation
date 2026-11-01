@@ -45,6 +45,9 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.api.capabilities.core": {
+        "type": "Project"
+      },
       "elsa.events.core": {
         "type": "Project",
         "dependencies": {
