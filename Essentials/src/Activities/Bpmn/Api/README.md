@@ -10,7 +10,9 @@ Enable `ActivitiesBpmnHostingApi` together with the explicitly configured `Activ
 | POST | `/bpmn/executions` | `bpmn:execute` |
 | GET | `/bpmn/publications` | `bpmn:read` |
 | GET | `/bpmn/executions` | `bpmn:read` |
+| GET | `/bpmn/admission` | `bpmn:read` |
 | GET | `/bpmn/executions/{id}` | `bpmn:read` |
+| GET | `/bpmn/executions/{id}/inspection` | `bpmn:read` |
 | GET | `/bpmn/executions/{id}/work` | `bpmn:read` |
 | POST | `/bpmn/executions/{id}/work/{invocation}/complete` | `bpmn:complete-human` |
 | POST | `/bpmn/executions/{id}/cancel` | `bpmn:cancel` |
@@ -25,3 +27,7 @@ Publication/run catalogs accept `limit` (default50/max500), optional `artifactId
 Work and incident queries use bounded pages. Retry requires the exact incident, invocation and failed attempt; authorization precedes lookup and replay disclosure. A matching request replays the retained result without starting another worker. Cancellation can finish semantics while native cancellation or parent consumption remains owed; inspection preserves that pending-settlement distinction. HTTP202 proves durable admission, not semantic consumption or source acknowledgement.
 
 New execution admission defaults off. Compose the built-in single-node mailbox and the qualified EF reader/checkpoint/material stores explicitly; replacing one participant does not inherit the original provider's qualification. [Declared model formats](../Core/README.md#declared-model-formats) cover human work, native services/ETL, held technical retry, duration boundaries and native signal catches. [Physical provider tests](../../../../../specs/1017-direct-bpmn-hosting/evidence/providers/model-storage/README.md) cover the common storage gate on four engines; actual host recovery and existing Studio compatibility are separately qualified on SQLite. [Final legacy/Studio evidence](../../../../../specs/1017-direct-bpmn-hosting/evidence/final-compatibility/README.md) does not complete #2907's direct-model Studio acceptance. Clustered model placement and broader bindings remain outside this profile. See [extension points](EXTENSION_POINTS.md) and the [process-host qualification](../../../../tests/Activities/Bpmn/Hosting/Tests/README.md).
+
+`elsa.api.bpmn-inspection` advertises the explicit persisted inspection relation. Its response contains the execution header/authority, frozen process/source/presentation, current work, retained native attempts/incidents and cancellation/parent-consumption proof. It contains no private adapter payload, authored input values, native completion values or invented human node history. The transport authorizes before loading the projection and reauthorizes its exact returned revision before disclosure. Requested native work is not labelled Running.
+
+`elsa.api.bpmn-runtime` advertises the supported command/read relations; `GET bpmn/admission` reports current new-execution admission separately. Admission-off does not remove accepted-work inspection/completion. An ordinary composition without a selected model reader resolves the API but explicitly refuses model execution discovery; it never returns an empty success. [Actual composed and Runtime-only proof](../../../../../specs/1184-direct-bpmn-studio/evidence/inspection/README.md) preserves the exact-source whole stores and the remaining Studio gates.
