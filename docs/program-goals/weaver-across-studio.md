@@ -61,11 +61,19 @@ owner-account workflow update is complete; ordinary writes and merges use the wo
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
 rather than live-provider evidence. M2–M5 remain open. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
-is the sole current implementation leaf; its [spec1176](../../specs/1176-weaver-turn-context/spec.md)
-retains all six acceptance areas and the module ownership boundary. Its implementation and
-package qualification are in [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514);
-review, required checks and resulting-main evidence remain live delivery gates. The current
+is verified Done through [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514),
+merged by the review App and qualified on resulting main `c0b47ceb1`. Its actual main CI,
+Studio and separate-package witnesses are recorded on the owning issue; existing skips and
+quarantined failures retain their original status. [Real effects #3440](https://github.com/elsa-workflows/elsa-foundation/issues/3440)
+is the sole current implementation leaf, under [spec1186](../../specs/1186-weaver-effects/spec.md).
+Its module-owned effects, acknowledged session autonomy and lifecycle follow-through retain
+all five acceptance criteria. Review, required checks and resulting-main evidence remain
+delivery gates for each subsequent leaf. The current
 inventory also includes workflow library folders, tags and saved views added on main during M2.
+The #3440 implementation base incorporates main `94be29ece` and its Sketchbook appearance changes;
+the reviewed Agent/Weaver/fixture inputs are unchanged, while fresh native/composed proof remains
+required. The spec, plan and 31-task breakdown are reviewed; their explicit native matrix requires
+thirteen lifecycle cases on each actual adapter before the new shared contract freezes.
 
 ## Delivery plan
 
