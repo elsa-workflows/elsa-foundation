@@ -43,3 +43,10 @@ All M0–M3 outcomes and specification tasks are complete. User guidance is in
 [Legacy CSS alias retirement #3513](https://github.com/elsa-workflows/elsa-foundation/issues/3513)
 is a separate pending-triage follow-up, not an active objective of this program.
 Releases and production deployment remain outside its authorization.
+
+The separately authorized availability follow-up [#3595](https://github.com/elsa-workflows/elsa-foundation/issues/3595)
+belongs to Elsa 4 Simplification (#2559); it does not reactivate this completed program.
+Its [specification](../../specs/1182-workflow-organization-controls/spec.md) adds the default-enabled
+`WorkflowsDesignApi.WorkflowOrganizationEnabled` setting. See the
+[API configuration and retention contract](../../Essentials/src/Workflows/Design/Api/README.md#optional-workflow-organization)
+for administration, shell configuration, capability refresh and saved-data behavior.
