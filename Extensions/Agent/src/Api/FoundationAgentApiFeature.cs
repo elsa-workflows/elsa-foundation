@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using CShells.AspNetCore.Features;
@@ -18,7 +19,7 @@ namespace Elsa.Agent.Api;
     name: "FoundationAgentApi",
     DisplayName = "Foundation Agent API",
     Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints.",
-    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature), "ApiCapabilities" }
+    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature), typeof(ApiCapabilitiesFeature) }
 )]
 public class FoundationAgentApiFeature : FoundationAgentAbstractionsFeature, IWebShellFeature
 {

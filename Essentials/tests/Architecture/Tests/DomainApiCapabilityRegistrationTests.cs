@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using CShells.Configuration;
 using CShells.Features;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Capabilities;
@@ -58,7 +59,8 @@ public sealed class DomainApiCapabilityRegistrationTests
         ApiCapabilityDeclaration expected)
     {
         var featureAttribute = Assert.Single(featureType.GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false).Cast<ShellFeatureAttribute>());
-        Assert.Contains("ApiCapabilities", featureAttribute.DependsOn.Select(dependency => dependency?.ToString()));
+        Assert.Contains("ApiCapabilities", featureAttribute.DependsOn.Select(dependency =>
+            dependency is Type dependencyType ? ShellBuilder.ResolveFeatureName(dependencyType) : dependency?.ToString()));
 
         var services = new ServiceCollection();
         ((IShellFeature)Activator.CreateInstance(featureType)!).ConfigureServices(services);
