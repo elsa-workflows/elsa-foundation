@@ -990,7 +990,9 @@ async function consumedIntentRemount() {
   const windowStartedAt = Date.now();
   await page.waitForTimeout(1000);
   const generationAfter = await hostRead("/__qualification/generation");
-  need(generationBefore.generation && generationAfter.generation !== generationBefore.generation,
+  need(typeof generationBefore.generation === "string" && generationBefore.generation.trim().length > 0
+    && typeof generationAfter.generation === "string" && generationAfter.generation.trim().length > 0
+    && generationAfter.generation !== generationBefore.generation,
     "The actual Studio serving generation did not change.");
   expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
   expect(requests.filter(request => new URL(request.url).pathname.endsWith("/messages"))).toHaveLength(1);
