@@ -73,21 +73,20 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    Its bounded profile establishes no production durability or live-model acceptance. Draft discovery
    #3541 merged through #3543; central MEAI enabler #3544/#3546 merged at `fd304319c`.
 4. M3 [#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) is the active implementation
-   unit for T016–T023. Provider research #3592 is complete; concrete providers and durable continuity
-   remain implementation obligations. Independent durable Connections prerequisite
-   [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578) implements T014–T015 under
-   existing owner #2854 is complete through PR #3591 and source/package/core/Studio qualification
-   on resulting main `5be59cebc`. M3 draft PR #3594 integrates that main and adds concrete model
-   access, protected turn/conversation journals, physical request reservations, explicit native
-   continuation, finite generation-fenced leases, authenticated caller-lowered execution bounds and
-   matching-operation/native-delivery replay, confirmed acceptance-acknowledgement recovery and
-   native checkpoint/outbox application/cancellation settlement and pre-admission tombstones. These are draft increments with separate source,
-   provider and bounded package receipts on the owning issue; whole-M3 delivery still requires
-   complete support/deployment compatibility qualification. Bounded retention, disabled new admission,
-   key/codec readers and independent-process packaged native recovery are implemented draft increments;
-   the latter uses file SQLite and a deterministic model in Balanced/Durable, not live inference or
-   power-loss proof. Streaming is being qualified through pinned SDK, actual socket and native tests.
-   Whole-M3 delivery remains open; M4-M7 have not begun.
+   unit for T016–T023. Concrete SDK integration, protected turn/conversation journals, bounded physical
+   requests, optional streaming, native application/cancellation, retention and retained readers are
+   implemented in [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594). The shared draft
+   Test Run application service executes the exact saved candidate through the same production worker.
+   Independent review and local source/shared/package gates passed; remote CI, Code Review merge and
+   resulting-main verification remain. The milestone and Program are still open.
+   Connections prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578) delivered
+   T014–T015 under owner #2854 through PR #3591 and resulting-main receipts on `5be59cebc`.
+   Package proof uses deterministic models and file SQLite in Balanced/Durable. Current binaries recover
+   earlier accepted work; an older runtime reading only workflow schema 1 correctly refuses a database
+   finalized at 2. Compatible-reader recovery preserves that acceptance without another model call.
+   The earlier unchanged-format binary pair has its own bidirectional receipt. Neither proves arbitrary
+   downgrade, backup restore, power loss, live inference or the complete M4–M7 support matrix.
+
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
