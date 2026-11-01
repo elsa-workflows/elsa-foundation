@@ -20,8 +20,10 @@ export interface LayoutPosition {
   y: number;
 }
 
-// Spacing chosen to match the canvas' native feel (sequence uses 280px steps).
-const COLUMN_STEP = 320;
+// Nodes are 246px wide (.wf-node). Flowchart columns leave a ~190px gap so the outcome
+// port pill (rendered 10px outside the node's right edge) and the label at the edge
+// midpoint both fit without overlapping for typical outcome names.
+const COLUMN_STEP = 440;
 const ROW_STEP = 140;
 
 export function computeAutoLayout(
