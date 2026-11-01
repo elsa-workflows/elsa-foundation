@@ -55,6 +55,8 @@ The actual host corrected the test twice. It showed the cancellation retiring a 
 - After a real restart with new admission off, claim work is claimed, completed and cancelled. Cancel-before-claim and claimed-completion-before-cancel both keep the first winner, and cancellation replays after a further restart while a conflicting reuse is refused.
 - The timer orders (claimed completion before and after a 4s boundary) run after admission is turned back on, because new timed executions must be started.
 
+Round 2 strengthened both tests: the race test now proves the sessions are distinct subjects, because the loser's claimed completion with the winner's claim is refused as `foreign-claim`. The late timer is shown by its own receipt, Rejected `execution-terminal`, which the test polls for, rather than by the absence of a change. Both passed two consecutive runs, 3/3 each.
+
 The whole BPMN hosting project passed 55 cases at `a96f774eb` (log `98a86ad2`); its one failure was the retry assertion corrected above.
 
 ## Candidate qualification (T036)

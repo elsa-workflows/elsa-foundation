@@ -13,7 +13,7 @@ namespace Elsa.Activities.Bpmn.Api.Endpoints;
 internal sealed record BpmnCatalogRequest(int Limit = 50, string? ContinuationToken = null, string? ArtifactId = null);
 
 // Resource filtering may empty one bounded provider page while later rows remain.
-internal sealed record BpmnCatalogPage<T>(IReadOnlyList<T> Items, string? NextContinuationToken);
+internal sealed record BpmnCatalogResponse<T>(IReadOnlyList<T> Items, string? NextContinuationToken);
 internal sealed record BpmnPublicationView(string SourceReferenceId, string SourceId, string? SourceVersion,
     WorkflowExecutableIdentity Executable, string MaterialIncarnationId, string Profile, string? DisplayName,
     DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt);
@@ -26,7 +26,7 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
     private const string ExecutionsPurpose = "bpmn-execution-catalog-v1";
     private static readonly RuntimeExecutionProtocol Protocol = new(BpmnModelProtocol.Key, BpmnModelProtocol.Version);
 
-    public async ValueTask<BpmnCatalogPage<BpmnPublicationView>> PublicationsAsync(BpmnCatalogRequest request, CancellationToken cancellationToken)
+    public async ValueTask<BpmnCatalogResponse<BpmnPublicationView>> PublicationsAsync(BpmnCatalogRequest request, CancellationToken cancellationToken)
     {
         var context = Context(request, PublicationsPurpose, cancellationToken);
         var query = new WorkflowExecutableSourceReferencePageQuery(WorkflowExecutableReferenceScope.Published, true,
@@ -49,7 +49,7 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         return new(items, Next(PublicationsPurpose, context.Cursor, page.NextContinuationToken));
     }
 
-    public async ValueTask<BpmnCatalogPage<BpmnExecutionView>> ExecutionsAsync(BpmnCatalogRequest request, CancellationToken cancellationToken)
+    public async ValueTask<BpmnCatalogResponse<BpmnExecutionView>> ExecutionsAsync(BpmnCatalogRequest request, CancellationToken cancellationToken)
     {
         var context = Context(request, ExecutionsPurpose, cancellationToken);
         var reader = executions ?? throw new RuntimeSchedulerWorkUnavailableException("bpmn.state-unavailable", "The selected host has no model state reader.");
@@ -101,18 +101,18 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
 
 [Get("bpmn/publications")]
 [RequirePermission(BpmnHostingApi.Read)]
-internal sealed class ListPublicationsEndpoint(BpmnCatalog catalog) : ApiEndpoint<BpmnCatalogRequest, BpmnCatalogPage<BpmnPublicationView>>
+internal sealed class ListPublicationsEndpoint(BpmnCatalog catalog) : ApiEndpoint<BpmnCatalogRequest, BpmnCatalogResponse<BpmnPublicationView>>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListBpmnPublications";
-    public override Task<BpmnCatalogPage<BpmnPublicationView>> HandleAsync(BpmnCatalogRequest request, CancellationToken cancellationToken) =>
+    public override Task<BpmnCatalogResponse<BpmnPublicationView>> HandleAsync(BpmnCatalogRequest request, CancellationToken cancellationToken) =>
         catalog.PublicationsAsync(request, cancellationToken).AsTask();
 }
 
 [Get("bpmn/executions")]
 [RequirePermission(BpmnHostingApi.Read)]
-internal sealed class ListExecutionsEndpoint(BpmnCatalog catalog) : ApiEndpoint<BpmnCatalogRequest, BpmnCatalogPage<BpmnExecutionView>>
+internal sealed class ListExecutionsEndpoint(BpmnCatalog catalog) : ApiEndpoint<BpmnCatalogRequest, BpmnCatalogResponse<BpmnExecutionView>>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListBpmnExecutions";
-    public override Task<BpmnCatalogPage<BpmnExecutionView>> HandleAsync(BpmnCatalogRequest request, CancellationToken cancellationToken) =>
+    public override Task<BpmnCatalogResponse<BpmnExecutionView>> HandleAsync(BpmnCatalogRequest request, CancellationToken cancellationToken) =>
         catalog.ExecutionsAsync(request, cancellationToken).AsTask();
 }

@@ -353,6 +353,6 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
 [JsonSerializable(typeof(RuntimeStorePage<BpmnHumanWork>))]
 [JsonSerializable(typeof(RuntimeStorePage<BpmnServiceIncident>))]
 [JsonSerializable(typeof(BpmnCatalogRequest))]
-[JsonSerializable(typeof(BpmnCatalogPage<BpmnPublicationView>))]
-[JsonSerializable(typeof(BpmnCatalogPage<BpmnExecutionView>))]
+[JsonSerializable(typeof(BpmnCatalogResponse<BpmnPublicationView>))]
+[JsonSerializable(typeof(BpmnCatalogResponse<BpmnExecutionView>))]
 internal partial class BpmnHostingJsonContext : JsonSerializerContext;

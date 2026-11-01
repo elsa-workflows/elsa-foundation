@@ -124,6 +124,11 @@ public sealed class BpmnHumanClaimUpgradeTests
             var claim = (await host.GetAsync(path + "/work"))["items"]![0]!["claim"]!;
             Assert.Equal(winner.Body["result"]!["claimId"]!.GetValue<string>(), claim["claimId"]!.GetValue<string>());
             Assert.Equal(2, (await host.GetAsync(path))["revision"]!.GetValue<long>());
+            // The two sessions are distinct subjects: the loser cannot complete with the winner's claim.
+            var loser = winner.StatusCode == outcomes[0].StatusCode ? operatorSession : admin;
+            using var foreign = await loser.PostAsJsonAsync(invocation + "/complete-claimed", new { requestId = "loser-" + round, attemptId, claimId = claim["claimId"]!.GetValue<string>() });
+            Assert.Equal(HttpStatusCode.Conflict, foreign.StatusCode);
+            Assert.Equal("foreign-claim", (await foreign.Content.ReadFromJsonAsync<JsonNode>())!["result"]!["code"]!.GetValue<string>());
             foreach (var response in results) response.Dispose();
         }
     }
@@ -158,15 +163,22 @@ public sealed class BpmnHumanClaimUpgradeTests
         // Claimed completion before the duration timer: the timer arrives late and changes nothing.
         await host.StopAsync(); await host.SetAdmissionAsync(true); await host.RestartAsync(); await host.LoginAsync();
         var beatsTimer = await StartAsync(host, timed, "beats-timer");
+        var beatsTimerWork = Assert.Single((await host.GetAsync(beatsTimer.Path + "/inspection"))["work"]!.AsArray(), item => item!["kind"]!.GetValue<string>() == "Timer")!;
         var beatsClaim = (await host.PostAsync(beatsTimer.Invocation + "/claim", new { requestId = "claim", beatsTimer.AttemptId }))["result"]!["claimId"]!.GetValue<string>();
         await host.PostAsync(beatsTimer.Invocation + "/complete-claimed", new { requestId = "complete", beatsTimer.AttemptId, claimId = beatsClaim });
         var completedBeforeTimer = await host.GetAsync(beatsTimer.Path);
         // The timer before claimed completion: the late completion finds the execution terminal.
         var losesToTimer = await StartAsync(host, timed, "loses-to-timer");
         var loserClaim = (await host.PostAsync(losesToTimer.Invocation + "/claim", new { requestId = "claim", losesToTimer.AttemptId }))["result"]!["claimId"]!.GetValue<string>();
-        await Task.Delay(TimeSpan.FromSeconds(6));
-        Assert.True(JsonNode.DeepEquals(completedBeforeTimer, await host.GetAsync(beatsTimer.Path)));
         var timedOut = await WaitTerminalAsync(host, losesToTimer.Path);
+        // Observe the late timer's own rejected receipt, rather than the absence of a change.
+        var beatsExecution = Uri.UnescapeDataString(beatsTimer.Path["/bpmn/executions/".Length..]);
+        var timerInput = "timer-elapsed:" + ModelIdentity("default", beatsExecution,
+            beatsTimerWork["invocationId"]!.GetValue<string>(), beatsTimerWork["attemptId"]!.GetValue<string>());
+        var lateTimer = await WaitCommandAsync(host, beatsTimer.Path, timerInput);
+        Assert.Equal("Rejected", lateTimer["result"]!["status"]!.GetValue<string>());
+        Assert.Equal("execution-terminal", lateTimer["result"]!["code"]!.GetValue<string>());
+        Assert.True(JsonNode.DeepEquals(completedBeforeTimer, await host.GetAsync(beatsTimer.Path)));
         Assert.Equal("Completed", timedOut["result"]!["status"]!.GetValue<string>());
         var lateComplete = await host.PostAsync(losesToTimer.Invocation + "/complete-claimed", new { requestId = "late-complete", losesToTimer.AttemptId, claimId = loserClaim }, HttpStatusCode.Conflict);
         Assert.Equal("execution-terminal", lateComplete["result"]!["code"]!.GetValue<string>());
@@ -201,6 +213,27 @@ public sealed class BpmnHumanClaimUpgradeTests
         var path = "/bpmn/executions/" + Uri.EscapeDataString(started["executionId"]!.GetValue<string>());
         var work = Assert.Single((await host.GetAsync(path + "/work"))["items"]!.AsArray())!;
         return (path, path + "/work/" + Uri.EscapeDataString(work["invocationId"]!.GetValue<string>()), work["attemptId"]!.GetValue<string>());
+    }
+
+    private static async Task<JsonNode> WaitCommandAsync(OwnedWorkbench host, string path, string inputId)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(60);
+        while (true)
+        {
+            if (await host.FindAsync(path + "/commands/" + Uri.EscapeDataString(inputId)) is { } command && command["pending"]?.GetValue<bool>() == false)
+                return command;
+            Assert.True(DateTimeOffset.UtcNow < deadline, "The late duration timer was not delivered.");
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+        }
+    }
+
+    /// <summary>Mirrors the adapter's model identity (length-prefixed UTF-16 parts, SHA-256) to name a timer input.</summary>
+    private static string ModelIdentity(params string[] parts)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+            foreach (var part in parts) { writer.Write(part.Length); foreach (var codeUnit in part) writer.Write((ushort)codeUnit); }
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(stream.ToArray()));
     }
 
     private static async Task<JsonNode> WaitTerminalAsync(OwnedWorkbench host, string path)
