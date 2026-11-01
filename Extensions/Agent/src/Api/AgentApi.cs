@@ -292,10 +292,17 @@ public static class AgentApi
             Client = bindings.Count == 1 ? bindings[0] : null,
             PromptMode = request.PromptMode,
             DeliveryFingerprint = fingerprint,
-            HasDisclosureProvenance = true
+            HasDisclosureProvenance = true,
+            // Evaluators and collectors above authorized this delivery under the revision read at authorization.
+            ExpectedPolicyRevision = session.PolicyRevision
         };
         AgentMessage message;
         try { message = await sessions.AddMessageAsync(sessionId, messageRequest, context.RequestAborted); }
+        catch (AgentSessionPolicyChangedException)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new(AgentSessionPolicyChangedException.Code, "The session policy changed while this prompt was being authorized. Review the current policy and send it again.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
+            return;
+        }
         catch (AgentContributionException)
         {
             await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.message.delivery_conflict", "Another prompt is pending, or this delivery identity conflicts with an accepted prompt.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);

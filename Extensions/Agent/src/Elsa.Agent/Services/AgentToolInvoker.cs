@@ -12,8 +12,12 @@ internal sealed class DefaultAgentToolInvoker(
     IAgentPolicyEvaluator policyEvaluator,
     IAgentAuditSink auditSink,
     InMemoryAgentProposalStore proposalStore,
-    TimeProvider clock) : IAgentToolInvoker
+    TimeProvider clock) : IAgentToolInvoker, IAgentSessionPolicyParticipant
 {
+    private readonly IAgentSessionPolicyOwner? _owner = sessions as IAgentSessionPolicyOwner;
+
+    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => AgentSessionPolicyParticipation.SameOwner(_owner, proposals);
+
     public async Task<AgentToolDispatch> DispatchAsync(AgentToolInvocation invocation, AgentPolicy policy, CancellationToken cancellationToken = default)
     {
         var tool = await registry.FindAsync(invocation.ToolName, cancellationToken);
@@ -44,144 +48,157 @@ internal sealed class DefaultAgentToolInvoker(
         if (descriptor.AgentScopes.Count > 0 && !descriptor.AgentScopes.Any(scopes.Contains))
             return await DeniedAsync("agent.tool.scope_denied", "The admitted module context does not support this tool scope.", 403);
 
-        string callKey;
-        string inputDigest;
+        // A mutation's approval basis is the claim's snapshot, read after acquisition and held until a
+        // proposal claim covers the work. The caller-supplied policy can only tighten it.
+        var preparationClaim = descriptor.Mutability == AgentToolMutability.Mutating ? _owner?.Acquire(session.Id, AgentSessionClaimKind.Preparation) : null;
+        var approvalBasis = preparationClaim?.State.Policy ?? session.Policy;
         try
         {
-            callKey = AgentInvocationIntegrity.Digest(new { invocation.SessionId, invocation.TurnId, invocation.ToolCallId });
-            inputDigest = AgentInvocationIntegrity.Digest(new { invocation.ToolName, descriptor.ContractVersion, invocation.Arguments, invocation.Context, invocation.Client });
-        }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException or ArgumentException)
-        {
-            return await DeniedAsync("agent.tool.arguments_invalid", "Tool inputs must be transportable JSON.", 400);
-        }
-        var callGate = descriptor.Mutability == AgentToolMutability.Mutating
-            ? proposalStore.Gates.GetOrAdd($"call:{callKey}", _ => new(1, 1)) : null;
-        if (callGate is not null)
-            await callGate.WaitAsync(cancellationToken);
-        try
-        {
-            if (proposalStore.CallProposals.TryGetValue(callKey, out var existingId) && proposalStore.CallInputs.TryGetValue(callKey, out var originalInput))
-            {
-                if (originalInput != inputDigest)
-                    return await DeniedAsync("agent.tool.duplicate_conflict", "A repeated tool call cannot change its original arguments or context.", 409);
-                var existing = await proposals.FindAsync(existingId, cancellationToken);
-                if (existing?.PreparedInvocation is not { } original)
-                    return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
-                    return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
-                if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
-                    return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(retained, original));
-                return AgentToolDispatch.Proposed(existing);
-            }
-
-            AgentResult<AgentToolPreparation> preparation;
+            string callKey;
+            string inputDigest;
             try
             {
-                preparation = await tool.PrepareAsync(invocation, cancellationToken);
+                callKey = AgentInvocationIntegrity.Digest(new { invocation.SessionId, invocation.TurnId, invocation.ToolCallId });
+                inputDigest = AgentInvocationIntegrity.Digest(new { invocation.ToolName, descriptor.ContractVersion, invocation.Arguments, invocation.Context, invocation.Client });
             }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception)
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException or ArgumentException)
             {
-                return await DeniedAsync("agent.tool.preparation_failed", "The installed module could not prepare this operation.", 400);
+                return await DeniedAsync("agent.tool.arguments_invalid", "Tool inputs must be transportable JSON.", 400);
             }
-            if (!preparation.Succeeded || preparation.Value is null)
-                return await DeniedAsync(preparation.Error?.Code ?? "agent.tool.preparation_failed", preparation.Error?.Message ?? "The module refused this operation.", preparation.Error?.StatusCode ?? 400);
-
-            var module = preparation.Value;
-            var isMutation = descriptor.Mutability == AgentToolMutability.Mutating;
-            if (!Enum.IsDefined(module.Risk))
-                return await DeniedAsync("agent.tool.preparation_invalid", "The module returned an unsupported risk classification.", 400);
-            if (!isMutation && (module.RequiresApproval || descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState))
-                return await DeniedAsync("agent.tool.reviewed_read_unavailable", "The tool requires review or a local read handler that is unavailable.", 409);
-            if (module.Target is { } target && (target.ModuleId != descriptor.ModuleId || string.IsNullOrWhiteSpace(target.ResourceType))
-                || isMutation && module.Target is null)
-                return await DeniedAsync("agent.tool.target_invalid", "The prepared target is not owned by the registered tool.", 400);
-            if (descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState)
-            {
-                var binding = module.Client;
-                var matchingSnapshot = binding is not null && invocation.Context.Any(x => x.ModuleId == descriptor.ModuleId
-                    && x.Origin == AgentContextOrigin.ClientSnapshot && x.Client == binding
-                    && AgentInvocationIntegrity.SameTarget(x.Target, module.Target));
-                if (binding is null || string.IsNullOrWhiteSpace(binding.ClientId) || string.IsNullOrWhiteSpace(binding.GenerationId)
-                    || invocation.Client is not null && binding != invocation.Client || !matchingSnapshot)
-                    return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
-            }
-            var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
-            if (!admission.Allowed)
-                return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
-
-            AgentPreparedToolInvocation prepared;
+            var callGate = descriptor.Mutability == AgentToolMutability.Mutating
+                ? proposalStore.Gates.GetOrAdd($"call:{callKey}", _ => new(1, 1)) : null;
+            if (callGate is not null)
+                await callGate.WaitAsync(cancellationToken);
             try
             {
-                if (module.Arguments.ValueKind != System.Text.Json.JsonValueKind.Object)
-                    throw new AgentContributionException("Prepared tool arguments must be a JSON object.");
-                var requiresApproval = isMutation && (module.RequiresApproval || session.Policy.RequiresApprovalForMutations
-                    || policy.RequiresApprovalForMutations || descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState);
-                prepared = new(AgentProviderPrimitives.NewId(), session.Id, invocation.TurnId, invocation.ToolCallId,
-                    descriptor.Name, descriptor.ContractVersion, descriptor.ModuleId, session.ActorId, session.TenantId,
-                    module.Target, AgentInvocationIntegrity.Freeze(module.Arguments), string.Empty,
-                    module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk, AgentInvocationIntegrity.Freeze(module.Preview),
-                    descriptor.ExecutionLocation, requiresApproval, module.Client, clock.GetUtcNow().AddMinutes(5))
-                { DisclosureSourceId = descriptor.DisclosureSourceId };
-                prepared = prepared with { ApprovalDigest = AgentInvocationIntegrity.PreparedDigest(prepared) };
-            }
-            catch (Exception ex) when (ex is AgentContributionException or System.Text.Json.JsonException or NotSupportedException)
-            {
-                return await DeniedAsync("agent.tool.preparation_invalid", "The module returned an invalid preparation contract.", 400);
-            }
+                if (proposalStore.CallProposals.TryGetValue(callKey, out var existingId) && proposalStore.CallInputs.TryGetValue(callKey, out var originalInput))
+                {
+                    if (originalInput != inputDigest)
+                        return await DeniedAsync("agent.tool.duplicate_conflict", "A repeated tool call cannot change its original arguments or context.", 409);
+                    var existing = await proposals.FindAsync(existingId, cancellationToken);
+                    if (existing?.PreparedInvocation is not { } original)
+                        return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
+                    if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
+                        return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
+                    if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
+                        return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(retained, original));
+                    return AgentToolDispatch.Proposed(existing);
+                }
 
-            if (!isMutation)
-            {
+                AgentResult<AgentToolPreparation> preparation;
                 try
                 {
-                    var result = await tool.ExecuteAsync(prepared, cancellationToken);
-                    if (!result.Succeeded || result.Value is null)
-                        return await DeniedAsync(result.Error?.Code ?? "agent.tool.failed", result.Error?.Message ?? "The module refused the read.", result.Error?.StatusCode ?? 400);
-                    if (result.Value.Receipt is not null || result.Value.ToolCallId != prepared.ToolCallId || result.Value.ToolName != prepared.ToolName)
-                        return await DeniedAsync("agent.tool.result_invalid", "The module returned a mismatched read result.", 500);
-                    var read = AgentResultProvenance.Stamp(result.Value with
-                    {
-                        Payload = result.Value.Payload is null ? null : AgentInvocationIntegrity.Freeze(result.Value.Payload)
-                    }, prepared);
-                    await AuditAsync(invocation, "executed", cancellationToken);
-                    return AgentToolDispatch.Executed(read);
+                    preparation = await tool.PrepareAsync(invocation, cancellationToken);
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception)
                 {
-                    return await DeniedAsync("agent.tool.invocation_failed", "The installed module failed while reading the resource.", 500);
+                    return await DeniedAsync("agent.tool.preparation_failed", "The installed module could not prepare this operation.", 400);
                 }
-            }
+                if (!preparation.Succeeded || preparation.Value is null)
+                    return await DeniedAsync(preparation.Error?.Code ?? "agent.tool.preparation_failed", preparation.Error?.Message ?? "The module refused this operation.", preparation.Error?.StatusCode ?? 400);
 
-            var now = clock.GetUtcNow();
-            var proposal = new AgentActionProposal(AgentProviderPrimitives.NewId(), session.Id, null, descriptor.Name,
-                "tool-invocation", descriptor.DisplayName, descriptor.Description, prepared.Risk, prepared.Target?.Revision,
-                [], [], [], null, descriptor.RequiredPermissions.ToArray(), prepared.Target?.ResourceType, prepared.Target?.ResourceId,
-                prepared.RequiresApproval, prepared.RequiresApproval ? AgentActionProposalStatus.AwaitingApproval : AgentActionProposalStatus.Approved,
-                prepared.RequiresApproval ? null : session.ActorId, prepared.RequiresApproval ? null : now, now, now)
-            { PreparedInvocation = prepared, ResultRendererId = descriptor.ResultRendererId };
-            var turnKey = AgentInvocationIntegrity.Digest(new { invocation.SessionId, invocation.TurnId });
-            if (proposalStore.TurnMutations.GetOrAdd(turnKey, callKey) != callKey)
-                return await DeniedAsync("agent.tool.turn_mutation_limit", "Complete the current change before requesting another change.", 409);
-            proposal = await proposals.AddAsync(proposal, cancellationToken);
-            proposalStore.CallInputs.TryAdd(callKey, inputDigest);
-            if (proposal.RequiresApproval && proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited)
-            {
-                await AuditAsync(invocation, "proposal-created", cancellationToken);
-                return AgentToolDispatch.Proposed(proposal);
+                var module = preparation.Value;
+                var isMutation = descriptor.Mutability == AgentToolMutability.Mutating;
+                if (!Enum.IsDefined(module.Risk))
+                    return await DeniedAsync("agent.tool.preparation_invalid", "The module returned an unsupported risk classification.", 400);
+                if (!isMutation && (module.RequiresApproval || descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState))
+                    return await DeniedAsync("agent.tool.reviewed_read_unavailable", "The tool requires review or a local read handler that is unavailable.", 409);
+                if (module.Target is { } target && (target.ModuleId != descriptor.ModuleId || string.IsNullOrWhiteSpace(target.ResourceType))
+                    || isMutation && module.Target is null)
+                    return await DeniedAsync("agent.tool.target_invalid", "The prepared target is not owned by the registered tool.", 400);
+                if (descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState)
+                {
+                    var binding = module.Client;
+                    var matchingSnapshot = binding is not null && invocation.Context.Any(x => x.ModuleId == descriptor.ModuleId
+                        && x.Origin == AgentContextOrigin.ClientSnapshot && x.Client == binding
+                        && AgentInvocationIntegrity.SameTarget(x.Target, module.Target));
+                    if (binding is null || string.IsNullOrWhiteSpace(binding.ClientId) || string.IsNullOrWhiteSpace(binding.GenerationId)
+                        || invocation.Client is not null && binding != invocation.Client || !matchingSnapshot)
+                        return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
+                }
+                var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
+                if (!admission.Allowed)
+                    return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
+
+                AgentPreparedToolInvocation prepared;
+                try
+                {
+                    if (module.Arguments.ValueKind != System.Text.Json.JsonValueKind.Object)
+                        throw new AgentContributionException("Prepared tool arguments must be a JSON object.");
+                    var requiresApproval = isMutation && (module.RequiresApproval || approvalBasis.RequiresApprovalForMutations
+                        || policy.RequiresApprovalForMutations || descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState);
+                    prepared = new(AgentProviderPrimitives.NewId(), session.Id, invocation.TurnId, invocation.ToolCallId,
+                        descriptor.Name, descriptor.ContractVersion, descriptor.ModuleId, session.ActorId, session.TenantId,
+                        module.Target, AgentInvocationIntegrity.Freeze(module.Arguments), string.Empty,
+                        module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk, AgentInvocationIntegrity.Freeze(module.Preview),
+                        descriptor.ExecutionLocation, requiresApproval, module.Client, clock.GetUtcNow().AddMinutes(5))
+                    { DisclosureSourceId = descriptor.DisclosureSourceId };
+                    prepared = prepared with { ApprovalDigest = AgentInvocationIntegrity.PreparedDigest(prepared) };
+                }
+                catch (Exception ex) when (ex is AgentContributionException or System.Text.Json.JsonException or NotSupportedException)
+                {
+                    return await DeniedAsync("agent.tool.preparation_invalid", "The module returned an invalid preparation contract.", 400);
+                }
+
+                if (!isMutation)
+                {
+                    try
+                    {
+                        var result = await tool.ExecuteAsync(prepared, cancellationToken);
+                        if (!result.Succeeded || result.Value is null)
+                            return await DeniedAsync(result.Error?.Code ?? "agent.tool.failed", result.Error?.Message ?? "The module refused the read.", result.Error?.StatusCode ?? 400);
+                        if (result.Value.Receipt is not null || result.Value.ToolCallId != prepared.ToolCallId || result.Value.ToolName != prepared.ToolName)
+                            return await DeniedAsync("agent.tool.result_invalid", "The module returned a mismatched read result.", 500);
+                        var read = AgentResultProvenance.Stamp(result.Value with
+                        {
+                            Payload = result.Value.Payload is null ? null : AgentInvocationIntegrity.Freeze(result.Value.Payload)
+                        }, prepared);
+                        await AuditAsync(invocation, "executed", cancellationToken);
+                        return AgentToolDispatch.Executed(read);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception)
+                    {
+                        return await DeniedAsync("agent.tool.invocation_failed", "The installed module failed while reading the resource.", 500);
+                    }
+                }
+
+                var now = clock.GetUtcNow();
+                var proposal = new AgentActionProposal(AgentProviderPrimitives.NewId(), session.Id, null, descriptor.Name,
+                    "tool-invocation", descriptor.DisplayName, descriptor.Description, prepared.Risk, prepared.Target?.Revision,
+                    [], [], [], null, descriptor.RequiredPermissions.ToArray(), prepared.Target?.ResourceType, prepared.Target?.ResourceId,
+                    prepared.RequiresApproval, prepared.RequiresApproval ? AgentActionProposalStatus.AwaitingApproval : AgentActionProposalStatus.Approved,
+                    prepared.RequiresApproval ? null : session.ActorId, prepared.RequiresApproval ? null : now, now, now)
+                { PreparedInvocation = prepared, ResultRendererId = descriptor.ResultRendererId, PolicyRevision = preparationClaim?.State.Revision };
+                var turnKey = AgentInvocationIntegrity.Digest(new { invocation.SessionId, invocation.TurnId });
+                if (proposalStore.TurnMutations.GetOrAdd(turnKey, callKey) != callKey)
+                    return await DeniedAsync("agent.tool.turn_mutation_limit", "Complete the current change before requesting another change.", 409);
+                proposal = await proposals.AddAsync(proposal, cancellationToken);
+                proposalStore.CallInputs.TryAdd(callKey, inputDigest);
+                if (proposal.RequiresApproval && proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited)
+                {
+                    await AuditAsync(invocation, "proposal-created", cancellationToken);
+                    return AgentToolDispatch.Proposed(proposal);
+                }
+                var execution = await proposals.ExecuteAsync(proposal.Id, session.ActorId, prepared.Target?.Revision, cancellationToken);
+                if (execution.Succeeded && execution.Value?.ToolResult is { } applied)
+                {
+                    await AuditAsync(invocation, applied.Succeeded ? "executed" : "uncertain", cancellationToken);
+                    return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(applied, prepared));
+                }
+                if (execution.Succeeded && execution.Value?.ClientInvocation is not null)
+                    return AgentToolDispatch.Proposed((await proposals.FindAsync(proposal.Id, cancellationToken))!);
+                return await DeniedAsync(execution.Error?.Code ?? "agent.tool.execution_incomplete", execution.Error?.Message ?? execution.Value?.Summary ?? "The operation has no applied receipt.", execution.Error?.StatusCode ?? 409);
             }
-            var execution = await proposals.ExecuteAsync(proposal.Id, session.ActorId, prepared.Target?.Revision, cancellationToken);
-            if (execution.Succeeded && execution.Value?.ToolResult is { } applied)
-            {
-                await AuditAsync(invocation, applied.Succeeded ? "executed" : "uncertain", cancellationToken);
-                return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(applied, prepared));
-            }
-            if (execution.Succeeded && execution.Value?.ClientInvocation is not null)
-                return AgentToolDispatch.Proposed((await proposals.FindAsync(proposal.Id, cancellationToken))!);
-            return await DeniedAsync(execution.Error?.Code ?? "agent.tool.execution_incomplete", execution.Error?.Message ?? execution.Value?.Summary ?? "The operation has no applied receipt.", execution.Error?.StatusCode ?? 409);
+            finally { callGate?.Release(); }
         }
-        finally { callGate?.Release(); }
+        finally
+        {
+            // Every exit: refusal, duplicate replay, cancellation and audit failure. A created proposal
+            // already holds its own claim, so this release leaves no idle gap.
+            if (preparationClaim is not null) _owner!.Release(preparationClaim);
+        }
 
         async Task<AgentToolDispatch> DeniedAsync(string code, string message, int status)
         {

@@ -28,32 +28,56 @@ internal sealed class InMemoryAgentProposalService(
     IAgentSessionService sessions,
     IAgentAuditSink auditSink,
     TimeProvider clock,
-    ILogger<InMemoryAgentProposalService>? logger = null) : IAgentProposalService
+    ILogger<InMemoryAgentProposalService>? logger = null) : IAgentProposalService, IAgentSessionPolicyParticipant
 {
+    private readonly IAgentSessionPolicyOwner? _owner = sessions as IAgentSessionPolicyOwner;
+
+    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => _owner;
+
     public async Task<AgentActionProposal> AddAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        lock (store.Mutation)
+        // The proposal claim exists before the store can expose the proposal, so a preparation claim can
+        // hand off to it without an idle gap. Direct callers are covered the same way.
+        var claim = _owner?.AcquireProposal(proposal.SessionId, proposal.PreparedInvocation?.ExpiresAt);
+        var inserted = false;
+        try
         {
-            if (proposal.PreparedInvocation is { } prepared)
+            if (claim is not null && proposal.PolicyRevision is { } stamped && stamped != claim.State.Revision)
+                throw new AgentSessionPolicyChangedException(proposal.SessionId, stamped, claim.State.Revision);
+            lock (store.Mutation)
             {
-                var call = AgentInvocationIntegrity.Digest(new { prepared.SessionId, prepared.TurnId, prepared.ToolCallId });
-                if (store.CallProposals.TryGetValue(call, out var existingId))
+                if (proposal.PreparedInvocation is { } prepared)
                 {
-                    var existing = store.Proposals[existingId];
-                    if (existing.PreparedInvocation?.ApprovalDigest != prepared.ApprovalDigest)
-                        throw new AgentContributionException("A duplicate tool call supplied conflicting prepared arguments or target.");
-                    return existing;
+                    var call = AgentInvocationIntegrity.Digest(new { prepared.SessionId, prepared.TurnId, prepared.ToolCallId });
+                    if (store.CallProposals.TryGetValue(call, out var existingId))
+                    {
+                        var existing = store.Proposals[existingId];
+                        if (existing.PreparedInvocation?.ApprovalDigest != prepared.ApprovalDigest)
+                            throw new AgentContributionException("A duplicate tool call supplied conflicting prepared arguments or target.");
+                        return existing;
+                    }
+                    if (store.InvocationProposals.ContainsKey(prepared.InvocationId))
+                        throw new AgentContributionException("A prepared invocation identity is already owned by another proposal.");
+                    if (!store.Proposals.TryAdd(proposal.Id, proposal))
+                        throw new AgentContributionException("A proposal identity is already registered.");
+                    store.InvocationProposals[prepared.InvocationId] = proposal.Id;
+                    store.CallProposals[call] = proposal.Id;
                 }
-                if (store.InvocationProposals.ContainsKey(prepared.InvocationId))
-                    throw new AgentContributionException("A prepared invocation identity is already owned by another proposal.");
-                if (!store.Proposals.TryAdd(proposal.Id, proposal))
+                else if (!store.Proposals.TryAdd(proposal.Id, proposal))
                     throw new AgentContributionException("A proposal identity is already registered.");
-                store.InvocationProposals[prepared.InvocationId] = proposal.Id;
-                store.CallProposals[call] = proposal.Id;
+                inserted = true;
             }
-            else if (!store.Proposals.TryAdd(proposal.Id, proposal))
-                throw new AgentContributionException("A proposal identity is already registered.");
+            if (claim is not null)
+            {
+                inserted = _owner!.BindProposal(claim, proposal.Id);
+                if (inserted && Settled(proposal)) _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
+            }
+        }
+        finally
+        {
+            // A duplicate or refused insertion releases only its own provisional claim.
+            if (claim is not null && !inserted) _owner!.Release(claim);
         }
         await AuditAsync(proposal, AgentAuditEventKind.ProposalCreated, null, "A prepared operation was proposed.", cancellationToken);
         return proposal;
@@ -84,7 +108,7 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", "This operation is not awaiting review.", 409);
             if (proposal.PreparedInvocation is { } prepared && prepared.ExpiresAt <= clock.GetUtcNow())
             {
-                store.Proposals[proposalId] = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
+                Transition(proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() });
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.expired", "The prepared operation has expired.", 409);
             }
             var now = clock.GetUtcNow();
@@ -119,9 +143,9 @@ internal sealed class InMemoryAgentProposalService(
             if (IsTerminal(proposal.Status))
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", "The operation is already closed.", 409);
             var denied = proposal with { Status = AgentActionProposalStatus.Denied, UpdatedAt = clock.GetUtcNow() };
-            store.Proposals[proposalId] = denied;
             if (proposal.PreparedInvocation is { } prepared)
                 store.Results[proposalId] = DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "denied", "The reviewed operation was denied before dispatch.");
+            Transition(denied);
             await AuditAsync(denied, AgentAuditEventKind.ProposalDenied, actorId, "The operation was denied before dispatch.", cancellationToken);
             return AgentResult<AgentActionProposal>.Success(denied);
         }
@@ -159,9 +183,12 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             if (proposal.PreparedInvocation is null)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.executor_unavailable", "This proposal has no concrete prepared executor.", 409);
-            if (proposal.PreparedInvocation.ExpiresAt <= clock.GetUtcNow())
+            // The owner marks the claim dispatched before Executing. An expired pre-dispatch claim is no
+            // longer busy, so policy may have moved; it can never authorize dispatch.
+            if (proposal.PreparedInvocation.ExpiresAt <= clock.GetUtcNow()
+                || _owner?.MarkProposalDispatched(proposal.SessionId, proposalId) == false)
             {
-                store.Proposals[proposalId] = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
+                Transition(proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() });
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.expired", "The prepared operation has expired.", 409);
             }
             var executing = proposal with { Status = AgentActionProposalStatus.Executing, UpdatedAt = clock.GetUtcNow() };
@@ -309,9 +336,29 @@ internal sealed class InMemoryAgentProposalService(
             store.Results[proposal.Id] = result;
         else if (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared)
             store.Results[proposal.Id] = DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", "The owning executor refused application before reporting an effect.");
-        store.Proposals[proposal.Id] = proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload };
+        Transition(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload });
         return outcome;
     }
+
+    /// <summary>Stores the proposal state, then releases its claim when the outcome no longer depends on policy.</summary>
+    private void Transition(AgentActionProposal proposal)
+    {
+        store.Proposals[proposal.Id] = proposal;
+        if (_owner is not null && Settled(proposal))
+            _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
+    }
+
+    /// <summary>
+    /// Executed (validated receipt), Denied, Expired, Failed (refused), Cancelled and server-scope Uncertain settle.
+    /// AwaitingClient retains its claim; client-scope Uncertain retains it until the originating continuation consumes it.
+    /// </summary>
+    private static bool Settled(AgentActionProposal proposal) => proposal.Status switch
+    {
+        AgentActionProposalStatus.Executed or AgentActionProposalStatus.Denied or AgentActionProposalStatus.Expired
+            or AgentActionProposalStatus.Failed or AgentActionProposalStatus.Cancelled => true,
+        AgentActionProposalStatus.Uncertain => proposal.PreparedInvocation?.ExecutionLocation != AgentExecutionLocation.ClientWorkingState,
+        _ => false
+    };
 
     private SemaphoreSlim Gate(string proposalId) => store.Gates.GetOrAdd(proposalId, _ => new(1, 1));
     private static bool RevisionMatches(AgentActionProposal proposal, string? expected) => string.Equals(proposal.PreparedInvocation?.Target?.Revision ?? proposal.BaseRevision, expected, StringComparison.Ordinal);

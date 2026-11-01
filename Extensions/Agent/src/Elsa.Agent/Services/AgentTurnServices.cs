@@ -79,9 +79,12 @@ internal sealed class DefaultAgentTurnOrchestrator(
     IAgentToolAuthorizer authorizer,
     IAgentContextCollector contextCollector,
     IAgentPolicyEvaluator policyEvaluator,
-    IOptions<AgentTurnOptions> options) : IAgentStreamingService
+    IOptions<AgentTurnOptions> options) : IAgentStreamingService, IAgentSessionPolicyParticipant
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly IAgentSessionPolicyOwner? _owner = sessions as IAgentSessionPolicyOwner;
+
+    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => AgentSessionPolicyParticipation.SameOwner(_owner, toolInvoker, proposals);
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -104,11 +107,23 @@ internal sealed class DefaultAgentTurnOrchestrator(
         }
 
         var turnId = boundary.Call("find-paused-turn", () => stateStore.Find(sessionId), cancellationToken)?.TurnId ?? NewId();
+        // The foreground claim precedes registration and every policy read for this turn or continuation.
+        // Its snapshot replaces the earlier lookup as the turn's approval authority.
+        var foreground = _owner?.Acquire(sessionId, AgentSessionClaimKind.Foreground);
+        if (foreground is not null)
+            session = session with { Policy = foreground.State.Policy, PolicyRevision = foreground.State.Revision };
+        // A continuation releases exactly the pause it observed once that pause is removed.
+        var observedPause = foreground is null ? null : _owner!.FindPause(sessionId);
         CancellationToken turnToken = default;
         AgentStreamEvent? leaseError = null;
         try { turnToken = turnRegistry.Register(sessionId, turnId); }
         catch (AgentContributionException expected) when (expected.InnerException is null)
-        { leaseError = Error("agent.turn.busy", "This session already has an active foreground turn.", 409); }
+        {
+            // Only the default registry's busy refusal is known to precede any write. Any other
+            // registration failure leaves the claim unresolved; the owner never infers that nothing was written.
+            if (foreground is not null && turnRegistry is AgentTurnRegistry) _owner!.Release(foreground);
+            leaseError = Error("agent.turn.busy", "This session already has an active foreground turn.", 409);
+        }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception cause) { throw boundary.Capture("register-turn", cause); }
         if (leaseError is not null)
@@ -128,6 +143,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         var disclosures = new AgentDisclosureHistory();
         var checkpoint = new DisclosureCheckpoint();
         var providerEntered = false;
+        string? pausedProposalId = null;
         var assistantJournaled = false;
         AgentError? disclosureStop = null;
         Task<T> TrackAsync<T>(Func<Task<T>> pending)
@@ -139,8 +155,9 @@ internal sealed class DefaultAgentTurnOrchestrator(
             var preparationCancelled = false;
             try
             {
-                prepared = await TrackAsync(async () => await PrepareAsync(session, token, (source, continuation) =>
+                prepared = await TrackAsync(async () => await PrepareAsync(session, token, (source, continuation, proposalId) =>
                 {
+                    pausedProposalId = proposalId;
                     // Remember lifecycle ownership before a replaceable authority can throw.
                     // A retained receipt pause stays intact; a new prompt must leave Pending.
                     preparationSource = source;
@@ -556,7 +573,14 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     }
                     finally
                     {
-                        try { stateStore.Remove(sessionId); }
+                        try
+                        {
+                            stateStore.Remove(sessionId);
+                            // The continuation consumed the paused proposal's outcome. A client-scope
+                            // uncertainty retained its claim until now; the observed pause follows it.
+                            if (foreground is not null && pausedProposalId is not null) _owner!.ReleaseProposal(sessionId, pausedProposalId);
+                            if (observedPause is not null) _owner!.Release(observedPause);
+                        }
                         catch (Exception cause) { RecordCleanupFailure("remove-turn-state", cause); }
                         try
                         {
@@ -571,8 +595,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
             }
             finally
             {
-                try { turnRegistry.Unregister(sessionId, turnId); }
+                // A verified pause is claimed before foreground is released, so there is no idle gap.
+                if (paused && foreground is not null) _owner!.EnsurePause(sessionId);
+                var unregistered = false;
+                try { turnRegistry.Unregister(sessionId, turnId); unregistered = true; }
                 catch (Exception cause) { RecordCleanupFailure("release-turn", cause); }
+                // Released only after actual Unregister; an unknown failure leaves it unresolved.
+                if (unregistered && foreground is not null) _owner!.Release(foreground);
                 if (cleanupFailures.Count > 0)
                 {
                     // Cleanup failures must neither replace the original causal failure nor
@@ -837,14 +866,14 @@ internal sealed class DefaultAgentTurnOrchestrator(
     }
 
     private async Task<PreparedTurn> PrepareAsync(AgentSession session, CancellationToken cancellationToken,
-        Action<AgentMessage, bool> rememberSource)
+        Action<AgentMessage, bool, string?> rememberSource)
     {
         var messages = await sessions.ListMessagesAsync(session.Id, cancellationToken);
         if (stateStore.Find(session.Id) is { } paused)
         {
             var source = messages.FirstOrDefault(x => x.Id == paused.SourceMessageId);
             if (source is null) return PreparedTurn.Fail(Error("agent.turn.source_missing", "The pending turn's source message is unavailable.", 409));
-            rememberSource(source, true);
+            rememberSource(source, true, paused.ProposalId);
             if (!source.HasDisclosureProvenance)
                 return Rejected(source, "agent.history.provenance_unavailable", "The retained turn predates complete disclosure provenance. Start a fresh session.", 409);
             if (!PauseHistoryMatches(paused))
@@ -884,7 +913,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         }
         var latest = messages.LastOrDefault(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending);
         if (latest is null) return PreparedTurn.Fail(Error("agent.message.no_pending", "There is no new prompt or retained receipt continuation to run.", 409));
-        rememberSource(latest, false);
+        rememberSource(latest, false, null);
         if (!latest.HasDisclosureProvenance)
             return Rejected(latest, "agent.history.provenance_unavailable", "The current message store does not preserve complete disclosure provenance. Start a fresh supported session.", 409);
         var priorError = await AuthorizeHistoryAsync(session, messages.Where(x => x.Id != latest.Id), cancellationToken);

@@ -23,6 +23,24 @@ public interface IAgentSessionService
     Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Experimental (#3440, not frozen): reads and conditionally changes a session's acknowledged autonomy policy.
+/// </summary>
+/// <remarks>
+/// The update is supported only when the installed session store owns the policy revision and the lifecycle
+/// services that admit work under that policy participate with the same owner. Otherwise every call returns
+/// <see cref="AgentSessionPolicyOutcome.Unsupported"/> and no shadow policy state is created. A change refuses an
+/// undefined mode, then a closed or expired session, then a stale expected revision, then a busy session; it then
+/// clamps the requested mode to the current ceiling, replaces only the autonomy mode and increments the revision
+/// only on a real change.
+/// </remarks>
+public interface IAgentSessionPolicyService
+{
+    Task<AgentSessionPolicyResult> GetAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default);
+
+    Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default);
+}
+
 public interface IAgentPolicyEvaluator
 {
     ValueTask<AgentPolicyDecision> EvaluateAvailabilityAsync(AgentPolicy policy, CancellationToken cancellationToken = default);

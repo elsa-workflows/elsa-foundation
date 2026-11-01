@@ -54,6 +54,8 @@ public static class AgentServiceCollectionExtensions
             "The context source timeout must be positive and within the supported finite timer range.");
         services.TryAddScoped<IAgentToolInvoker>(AgentRegistrationValidator.Create<DefaultAgentToolInvoker>);
         services.TryAddScoped<IAgentStreamingService>(AgentRegistrationValidator.Create<DefaultAgentTurnOrchestrator>);
+        // Experimental (#3440): scoped because participation is checked against the scoped lifecycle services.
+        services.TryAddScoped<IAgentSessionPolicyService>(AgentRegistrationValidator.Create<DefaultAgentSessionPolicyService>);
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();
 
         return services;
