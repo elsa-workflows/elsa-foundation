@@ -26,19 +26,19 @@ function fixture() {
     capabilities, disposed: false, identity: { status: "authenticated", subject: "author", tenantId: "tenant" } } as unknown as StudioBackendSession;
   vi.mocked(promoteDraft).mockResolvedValue({ id: "version", version: "1.0.0" }); vi.mocked(getDraft).mockResolvedValue(draft);
   const saveDraft = vi.fn().mockResolvedValue(draft), flushMetadata = vi.fn().mockResolvedValue(true), reload = vi.fn().mockResolvedValue(undefined);
-  const setPaused = vi.fn(), setBusy = vi.fn(), setError = vi.fn(), setStatus = vi.fn();
+  const setPaused = vi.fn(), setBusy = vi.fn(), setError = vi.fn(), setStatus = vi.fn(), openProcesses = vi.fn();
   const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container);
   let currentSession = session, currentDraft = draft;
   const render = (options: { busy?: boolean; readOnly?: boolean; session?: StudioBackendSession; draft?: WorkflowDraft } = {}) => {
     currentSession = options.session ?? currentSession; currentDraft = options.draft ?? currentDraft;
     flushSync(() => root.render(<DirectBpmnPublishAction key={currentSession.key} session={currentSession} definitionId="definition" draft={currentDraft}
       busy={options.busy ?? false} readOnly={options.readOnly ?? false} saveDraft={saveDraft} flushMetadata={flushMetadata}
-      setPaused={setPaused} setBusy={setBusy} setError={setError} setStatus={setStatus} reload={reload} />));
+      onOpenProcesses={openProcesses} setPaused={setPaused} setBusy={setBusy} setError={setError} setStatus={setStatus} reload={reload} />));
   };
   const click = () => flushSync(() => container.querySelector<HTMLButtonElement>("button")!.click());
   const dispose = () => { flushSync(() => root.unmount()); container.remove(); };
   render();
-  return { session, draft, postJson, saveDraft, flushMetadata, reload, setPaused, setBusy, setError, setStatus, container, render, click, dispose };
+  return { session, draft, postJson, saveDraft, flushMetadata, reload, setPaused, setBusy, setError, setStatus, openProcesses, container, render, click, dispose };
 }
 
 describe("Studio direct BPMN publication", () => {
@@ -51,6 +51,8 @@ describe("Studio direct BPMN publication", () => {
       expect(view.postJson).toHaveBeenCalledTimes(1);
       expect(view.postJson).toHaveBeenCalledWith("/interchange/bpmn/versions/version/publish-direct", { requestId: expect.any(String) }, { retryOnUnauthorized: false, signal: expect.any(AbortSignal) });
       expect(sessionStorage.length).toBe(0); expect(view.reload).toHaveBeenCalledTimes(1);
+      const open = [...view.container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "BPMN processes")!;
+      expect(open).toBeTruthy(); flushSync(() => open.click()); expect(view.openProcesses).toHaveBeenCalledTimes(1);
     } finally { view.dispose(); }
   });
 

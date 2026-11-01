@@ -36,8 +36,9 @@ function readReceipt(key: string, scope: string, definitionId: string): Publicat
 
 /** One ordinary save → promotion → direct publication. Retain identities before either durable command. */
 export function DirectBpmnPublishAction({ session, definitionId, draft, busy, readOnly, saveDraft, flushMetadata,
-  setPaused, setBusy, setStatus, setError, reload }: {
+  setPaused, setBusy, setStatus, setError, reload, onOpenProcesses }: {
   session: StudioBackendSession;
+  onOpenProcesses?(): void;
   definitionId: string;
   draft: WorkflowDraft;
   busy: boolean;
@@ -57,6 +58,7 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
     try { return readReceipt(storageKey, client.scope, definitionId); }
     catch { return null; }
   });
+  const [published, setPublished] = useState(false);
   const inFlight = useRef(false);
   const live = useRef({ draft, readOnly }); live.current = { draft, readOnly };
   const lifetime = useRef<AbortController | null>(null);
@@ -80,7 +82,7 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
     let pending = receipt;
     const snapshot = live.current.draft;
     let reloadSnapshot = false;
-    inFlight.current = true; setBusy(true); setPaused(true); setError("");
+    inFlight.current = true; setPublished(false); setBusy(true); setPaused(true); setError("");
     try {
       assertActive();
       if (!pending) {
@@ -115,7 +117,7 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
       assertActive(); setStatus("Publishing BPMN process…");
       await client.execute(client.prepare({ kind: "publish", versionId: pending.versionId! }, pending.publicationKey), signal);
       assertActive(); sessionStorage.removeItem(storageKey); setReceipt(null); pending = null;
-      setStatus("BPMN process published.");
+      setStatus("BPMN process published."); setPublished(true);
       try { await reload({ shouldLoadDraft: () => reloadSnapshot && live.current.draft.id === snapshot.id && getDraftSignature(live.current.draft) === getDraftSignature(snapshot) }); }
       catch { assertActive(); setError("BPMN publication succeeded, but the editor could not refresh. Reload to discover the published process."); }
     } catch (error) {
@@ -138,6 +140,7 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
       title={receipt ? "Continue the retained BPMN publication using the same operation identities" : "Save a version and publish this process to the BPMN runtime"}>
       {receipt ? "Resume BPMN publication" : "Publish BPMN"}
     </button>
+    {published && onOpenProcesses ? <button type="button" onClick={onOpenProcesses}>BPMN processes</button> : null}
     {storageError ? <span role="alert">{storageError}</span> : null}
   </span>;
 }

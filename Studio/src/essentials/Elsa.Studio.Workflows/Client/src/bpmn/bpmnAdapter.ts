@@ -21,6 +21,8 @@ import {
 export interface BpmnNodeData extends Record<string, unknown> {
   element: BpmnElement;
   label: string;
+  /** Direct model inspection supplies its own truthful work description. */
+  bindingLabel?: string;
   boundActivity?: {
     nodeId: string;
     activityVersionId: string;

@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: In progress — authored publication, durable discovery/inspection, actual Runtime-only accepted-work recovery, typed Studio client and direct-human editor/publication controls verified; process/run navigation and actual browser acceptance remain open.
+**Status**: In progress — authored publication, durable discovery/inspection, actual Runtime-only accepted-work recovery, typed Studio client, direct-human editor/publication and process/run navigation controls verified; actual browser acceptance remains open.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 

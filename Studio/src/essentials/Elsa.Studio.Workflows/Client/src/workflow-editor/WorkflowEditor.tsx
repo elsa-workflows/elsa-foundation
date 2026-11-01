@@ -148,6 +148,7 @@ import type { WorkflowAgentController } from "../workflowAgent";
 export function WorkflowEditor({
   context,
   backendSession,
+  onOpenBpmnProcesses,
   definitionId,
   documentAdapter,
   ai,
@@ -165,6 +166,7 @@ export function WorkflowEditor({
 }: {
   context: StudioEndpointContext;
   backendSession?: StudioBackendSession;
+  onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
   ai: StudioAgentRegistry;
@@ -1433,7 +1435,7 @@ export function WorkflowEditor({
         }}
         onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
         directBpmnPublication={directBpmnRoot && backendSession ? <DirectBpmnPublishAction
-          key={`${backendSession.key}:${definitionId}`} session={backendSession} definitionId={definitionId} draft={draft}
+          key={`${backendSession.key}:${definitionId}`} onOpenProcesses={onOpenBpmnProcesses} session={backendSession} definitionId={definitionId} draft={draft}
           busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} flushMetadata={flushDefinitionMeta}
           setPaused={setAutosavePaused} setBusy={value => setOperation(value ? "publishing" : "idle")}
           setStatus={setStatus} setError={setError} reload={reload} /> : undefined}

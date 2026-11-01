@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Own an isolated source-built Studio/Workbench pair over one actual legacy capture.
+"""Own an isolated source-built Studio/Workbench pair for a recovery journey.
 
+Original/layout restore an actual legacy capture; direct-human uses fresh isolated stores.
 The browser performs the authoring/publication/run steps. This controller only restores
 whole stores, starts its own children, records read-only observations and closes them.
 Write {"action":"restart"} or {"action":"finish"} to OUTPUT/command.json.
@@ -12,6 +13,7 @@ import gzip
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -21,6 +23,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+import urllib.parse
 
 _spec = importlib.util.spec_from_file_location("qualify_hosting", Path(__file__).with_name("qualify-hosting.py"))
 _qualification = importlib.util.module_from_spec(_spec)
@@ -37,7 +40,7 @@ def free_port():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--family", choices=("original", "layout"), required=True)
+    parser.add_argument("--family", choices=("original", "layout", "direct-human"), required=True)
     parser.add_argument("--workbench-assembly", type=Path, required=True)
     parser.add_argument("--studio-assembly", type=Path, required=True)
     parser.add_argument("--reader-assembly", type=Path, required=True)
@@ -54,10 +57,11 @@ def main():
     backend_root = root / "workbench"; backend_root.mkdir()
     studio_root = root / "studio"; studio_root.mkdir()
     baseline = REPO / "specs/1017-direct-bpmn-hosting/evidence/baseline"
+    direct_human = args.family == "direct-human"
     family = "studio" if args.family == "original" else "multi-instance-and-studio"
-    matrix = json.loads((baseline / "manifest.json").read_text())
+    matrix = None if direct_human else json.loads((baseline / "manifest.json").read_text())
     inputs = {}
-    for store in ("runtime", "design"):
+    for store in (() if direct_human else ("runtime", "design")):
         name = f"{family}/{store}.sqlite.gz"
         asset = next(asset for asset in matrix["assets"] if asset["path"] == name)
         if digest(baseline / name) != asset["sha256"]:
@@ -77,13 +81,20 @@ def main():
     studio_url = f"http://127.0.0.1:{free_port()}"
     shells = json.loads((backend_root / "shells.json").read_text())
     features = shells["CShells"]["Shells"]["default"]["Features"]
+    if direct_human:
+        # Same single-node composition as the actual authored-publication hosting test.
+        features["ActivitiesBpmnHosting"] = {"AdmitNewExecutions": True}
+        features["ActivitiesBpmnHostingApi"] = {}
+        features["ActivitiesBpmnDirectPublishing"] = {}
+        for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
+            features.pop(name, None)
     features["WorkflowsRuntimeEntityFrameworkCore"]["ConnectionString"] = "Data Source=runtime.db"
     for name in ("ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore"):
         if name in features:
             features[name]["ConnectionString"] = "Data Source=design.db"
     if "FoundationIdentityAspNetCoreIdentity" in features:
         features["FoundationIdentityAspNetCoreIdentity"]["AllowedReturnUrlOrigins"] = [studio_url]
-    clr_source_binding = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly),
+    clr_source_binding = {"readOnly": True, "sourceIds": []} if direct_human else json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly),
         "--read-clr-source-identities", str(backend_root / "design.db")], text=True))
     if clr_source_binding.get("readOnly") is not True:
         raise ValueError("The captured CLR source identity observer is not read-only.")
@@ -154,7 +165,7 @@ def main():
             time.sleep(.2)
         raise TimeoutError("An owned host did not become ready.")
 
-    def snapshot(label):
+    def snapshot(label, execution_ids=()):
         assets = {}
         # Keep the coupled stores at one owned-host cut and use the same SQLite
         # provider as Workbench. Python only reads the resulting closed evidence.
@@ -178,12 +189,29 @@ def main():
             compressed = output / f"{label}-{name}.sqlite.gz"
             with backup.open("rb") as raw, gzip.open(compressed, "wb") as target: shutil.copyfileobj(raw, target)
             assets[name].update(file=compressed.name, databaseSha256=digest(backup), gzipSha256=digest(compressed))
-        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(root / f"{label}-design.sqlite"),
-            "--source-revision", source, "--closed-snapshot", "--output", str(output / f"{label}-frozen-contract.json")], check=True, stdout=subprocess.DEVNULL)
+        if direct_human:
+            typed = []
+            for execution_id in execution_ids:
+                observed = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly), "--read-bpmn-direct", str(root / f"{label}-runtime.sqlite"), execution_id], text=True))
+                if observed.get("readOnly") is not True:
+                    raise ValueError("The BPMN snapshot observer must be read-only.")
+                typed.append(observed)
+            write_json(output / f"{label}-typed-read.json", {"readOnly": True, "models": typed})
+        else:
+            subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(root / f"{label}-design.sqlite"),
+                "--source-revision", source, "--closed-snapshot", "--output", str(output / f"{label}-frozen-contract.json")], check=True, stdout=subprocess.DEVNULL)
         return assets
 
     def observation(label):
         api = Api(backend_url); api.login("admin", "Password123!")
+        if direct_human:
+            executions = api.request("/bpmn/executions?limit=50")
+            if executions.get("nextContinuationToken") is not None:
+                raise ValueError("The isolated direct-human journey unexpectedly exceeds one model-state page.")
+            views = {item["executionId"]: api.request("/bpmn/executions/" + urllib.parse.quote(item["executionId"], safe="") + "/inspection") for item in executions["items"]}
+            write_json(output / f"{label}-bpmn-views.json", {"admission": api.request("/bpmn/admission"),
+                "publicationsFirstPage": api.request("/bpmn/publications?limit=50"), "executions": executions, "inspections": views})
+            return snapshot(label, views.keys())
         receipts = ["studio/receipt.json"]
         if args.family == "layout": receipts.append("studio/layout-receipt.json")
         views = {json.loads((baseline / name).read_text())["runId"]: api.view(json.loads((baseline / name).read_text())["runId"]) for name in receipts}
@@ -204,12 +232,18 @@ def main():
             if not command.exists(): time.sleep(.2); continue
             value = json.loads(command.read_text()); command.unlink()
             action = value["action"]
+            label = value.get("label", "restarted") if direct_human and action in ("restart", "checkpoint") else "finished" if direct_human else "restarted"
+            if direct_human and (not isinstance(label, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,50}", label) or label in stages):
+                raise ValueError("A direct-human checkpoint needs a new safe label; evidence is never overwritten.")
             if action == "restart":
                 stop(backend)
                 backend = start(args.workbench_assembly, backend_root, backend_url, "workbench")
                 ready(backend, backend_url + "/health/ready")
-                stages["restarted"] = observation("restarted")
-                write_json(output / "restarted.json", {"processId": backend.pid, "ready": True})
+                stages[label] = observation(label)
+                write_json(output / (label + ".json"), {"processId": backend.pid, "ready": True})
+            elif action == "checkpoint" and direct_human:
+                stages[label] = observation(label)
+                write_json(output / (label + ".json"), {"processId": backend.pid, "ready": True})
             elif action == "finish":
                 stages["finished"] = observation("finished")
                 write_json(output / "process.json", {"family": args.family, "sourceRevision": source, "baselineAssets": inputs,

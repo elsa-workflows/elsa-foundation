@@ -23,6 +23,10 @@ Run changed Studio components/package scripts, typecheck and affected builds. Ru
 3. Stop host, capture whole consistent stores, restart. Fresh browser discovers the same wait through normal navigation, no scripted ID.
 4. Complete exact work; restart/repeat the same operation. Verify one terminal result, retained replay and unchanged pin/Authority. Capture resulting P1 checkpoints before changing the claim writer.
 
+For an isolated current-source pair, build Workbench, Studio Web and `tools/bpmn/DeliveryRecoveryRead` in Release after building the Studio frontend. Run `tools/bpmn/run_owned_studio_upgrade.py --family direct-human` with their assembly paths and a new output directory. This mode starts fresh separate stores and selects direct hosting/publication; original/layout modes still restore their frozen captures. All business writes come from the browser. The controller only performs readiness/login/read observations, provider backups and control of its own children.
+
+In that output directory, `command.json` accepts `{"action":"checkpoint","label":"human-wait"}`, `{"action":"restart","label":"restarted-wait"}` and `{"action":"finish"}`. Use distinct labels for subsequent cuts/restarts. Each cut retains both whole stores and typed model/input observations; an existing label is refused. This harness capability is not proof that the journey passed.
+
 ## Actual ETL journey
 
 1. Use the pipeline selector and normal closed RunEtl service workflow publication, then bind/publish supported direct service process.
