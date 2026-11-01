@@ -635,6 +635,107 @@ public sealed class AgentProposalTests
         Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
     }
 
+    // ---- T020: serialized correlated expiry ----
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Expiry_before_dispatch_is_one_stable_correlated_outcome_with_zero_effect(bool approvedFirst)
+    {
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalMutationTool());
+        var proposal = await fixture.ProposeAsync();
+        if (approvedFirst) Assert.True((await fixture.ApproveAsync(proposal)).Succeeded);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(6));
+
+        // Every later approval or execution observes the same accepted lifecycle outcome, never a generic closed state.
+        var outcomes = new List<AgentError?>
+        {
+            (await fixture.ApproveAsync(proposal)).Error, (await fixture.ExecuteAsync(proposal)).Error,
+            (await fixture.ApproveAsync(proposal)).Error, (await fixture.ExecuteAsync(proposal)).Error
+        };
+
+        Assert.All(outcomes, error =>
+        {
+            Assert.Equal("agent.proposal.expired", error?.Code);
+            Assert.Equal(409, error?.StatusCode);
+        });
+        Assert.Equal(AgentActionProposalStatus.Expired, (await fixture.Proposals.FindAsync(proposal.Id))!.Status);
+        Assert.Null(await fixture.Proposals.FindResultAsync(proposal.Id));
+        Assert.Equal(0, fixture.Mutation!.DispatchCalls);
+        Assert.Equal("initial", fixture.Mutation.Value);
+        var expiry = Assert.Single(await fixture.Audit.ListAsync(fixture.Session.Id), x => x.Metadata.GetValueOrDefault("status") == nameof(AgentActionProposalStatus.Expired));
+        AssertCorrelated(expiry, fixture, proposal, ProposalFixture.Actor);
+        Assert.Equal(AgentAuditEventKind.ProposalFailed, expiry.Kind);
+        Assert.Equal("none", expiry.Metadata["dispatch"]);
+        Assert.Equal("none", expiry.Metadata["effect"]);
+        // The pre-dispatch proposal claim is released with the transition.
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
+    }
+
+    [Fact]
+    public async Task A_pending_client_deadline_is_uncertain_with_a_distinct_audit_and_is_never_replayed()
+    {
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalClientTool());
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        Assert.Equal("awaiting-client", (await fixture.ExecuteAsync(proposal)).Value?.Status);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(6));
+
+        var observed = await fixture.Proposals.FindResultAsync(proposal.Id);
+        var repeated = await fixture.Proposals.FindResultAsync(proposal.Id);
+        var retry = await fixture.ExecuteAsync(proposal);
+
+        AssertLifecycle(observed, proposal, "uncertain");
+        Assert.Same(observed, repeated);
+        Assert.Equal("uncertain", retry.Value?.Status);
+        Assert.False(retry.Value!.Executed);
+        Assert.Null(retry.Value.ClientInvocation);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await fixture.Proposals.FindAsync(proposal.Id))!.Status);
+        var events = await fixture.Audit.ListAsync(fixture.Session.Id);
+        Assert.DoesNotContain(events, x => x.Metadata.GetValueOrDefault("status") == nameof(AgentActionProposalStatus.Expired));
+        var deadline = Assert.Single(events, x => x.Metadata.GetValueOrDefault("deadline") == "pending-client");
+        AssertCorrelated(deadline, fixture, proposal, null);
+        Assert.Equal(nameof(AgentActionProposalStatus.Uncertain), deadline.Metadata["status"]);
+        Assert.Equal("client", deadline.Metadata["dispatch"]);
+        Assert.Equal("possible", deadline.Metadata["effect"]);
+        Assert.Equal(0, fixture.Client!.ExecuteCalls);
+        Assert.Equal(0, fixture.Client.CompleteCalls);
+    }
+
+    [Fact]
+    public async Task A_late_valid_receipt_after_the_pending_client_deadline_reconciles_only_under_existing_rules()
+    {
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalClientTool());
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        await fixture.ExecuteAsync(proposal);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(6));
+        AssertLifecycle(await fixture.Proposals.FindResultAsync(proposal.Id), proposal, "uncertain");
+
+        // The prepared lifetime has ended, so the receipt cannot be validated; it never becomes Executed or Expired.
+        var late = await fixture.AcknowledgeAsync(proposal);
+
+        Assert.True(late.Succeeded);
+        Assert.Equal("uncertain", late.Value?.Status);
+        Assert.False(late.Value!.Executed);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await fixture.Proposals.FindAsync(proposal.Id))!.Status);
+        Assert.Equal("uncertain", (await fixture.ExecuteAsync(proposal)).Value?.Status);
+        Assert.Equal(0, fixture.Client!.ExecuteCalls);
+        Assert.Equal(0, fixture.Client.CompleteCalls);
+        Assert.Single(await fixture.Audit.ListAsync(fixture.Session.Id), x => x.Metadata.GetValueOrDefault("deadline") == "pending-client");
+    }
+
+    private static void AssertCorrelated(AgentAuditEvent audit, ProposalFixture fixture, AgentActionProposal proposal, string? actorId)
+    {
+        var prepared = proposal.PreparedInvocation!;
+        Assert.Equal(fixture.Session.Id, audit.SessionId);
+        Assert.Equal(actorId, audit.ActorId);
+        Assert.Equal(proposal.Id, audit.Metadata["proposalId"]);
+        Assert.Equal(prepared.InvocationId, audit.Metadata["invocationId"]);
+        Assert.Equal(prepared.TurnId, audit.Metadata["turnId"]);
+        Assert.Equal(prepared.ToolCallId, audit.Metadata["toolCallId"]);
+    }
+
     /// <summary>Inserts an automatic proposal through the real invoker, then cancels before its inline application.</summary>
     internal static async Task<AgentActionProposal> OrphanAutomaticProposalAsync(ProposalFixture fixture, HookedAuditSink sink)
     {

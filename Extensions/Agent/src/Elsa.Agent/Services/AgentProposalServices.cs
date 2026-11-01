@@ -107,6 +107,14 @@ internal sealed class InMemoryAgentProposalService(
             var proposal = access.Proposal!;
             if (!RevisionMatches(proposal, expectedRevision))
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.revision_conflict", "Approval does not match the prepared revision.", 409);
+            // A pre-dispatch expiry is the accepted lifecycle outcome; repeated decisions observe it unchanged.
+            if (proposal.Status == AgentActionProposalStatus.Expired)
+                return Expired<AgentActionProposal>();
+            if (PastPreDispatchDeadline(proposal))
+            {
+                await ExpireBeforeDispatchAsync(proposal, actorId);
+                return Expired<AgentActionProposal>();
+            }
             // Only a recorded review decision is idempotent. An automatic approval is not one, so approving it
             // cannot report or relabel it as a human decision.
             if (proposal.RequiresApproval && proposal.ApprovedBy == actorId
@@ -114,11 +122,6 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentActionProposal>.Success(proposal);
             if (proposal.Status is not AgentActionProposalStatus.AwaitingApproval and not AgentActionProposalStatus.Edited)
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", "This operation is not awaiting review.", 409);
-            if (proposal.PreparedInvocation is { } prepared && prepared.ExpiresAt <= clock.GetUtcNow())
-            {
-                Transition(proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() });
-                return AgentResult<AgentActionProposal>.Failure("agent.proposal.expired", "The prepared operation has expired.", 409);
-            }
             var now = clock.GetUtcNow();
             var approved = proposal with { Status = AgentActionProposalStatus.Approved, ApprovedBy = actorId, ApprovedAt = now, UpdatedAt = now };
             store.Proposals[proposalId] = approved;
@@ -180,24 +183,30 @@ internal sealed class InMemoryAgentProposalService(
                     // first time. Recheck current authority without rerunning a custom executor.
                     var current = await preparedResolver.ResolveAsync(proposal, cancellationToken);
                     if (current.Error is not null)
-                        return StoreOutcome(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
-                            "The pending client operation no longer has its reviewed contract, authority or lifetime. Its effect is uncertain and the request will not be reissued.")));
+                        return await SettlePendingClientAsync(proposal, actorId, current.Error.Code == "agent.proposal.expired",
+                            "The pending client operation no longer has its reviewed contract, authority or lifetime. Its effect is uncertain and the request will not be reissued.");
                 }
                 return retained;
             }
+            if (proposal.Status == AgentActionProposalStatus.Expired)
+                return Expired<AgentProposalExecutionResult>();
             if (IsTerminal(proposal.Status))
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.closed", "The operation is already closed.", 409);
+            if (PastPreDispatchDeadline(proposal))
+            {
+                await ExpireBeforeDispatchAsync(proposal, actorId);
+                return Expired<AgentProposalExecutionResult>();
+            }
             if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             if (proposal.PreparedInvocation is null)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.executor_unavailable", "This proposal has no concrete prepared executor.", 409);
             // The owner marks the claim dispatched before Executing. An expired pre-dispatch claim is no
             // longer busy, so policy may have moved; it can never authorize dispatch.
-            if (proposal.PreparedInvocation.ExpiresAt <= clock.GetUtcNow()
-                || _owner?.MarkProposalDispatched(proposal.SessionId, proposalId) == false)
+            if (_owner?.MarkProposalDispatched(proposal.SessionId, proposalId) == false)
             {
-                Transition(proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() });
-                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.expired", "The prepared operation has expired.", 409);
+                await ExpireBeforeDispatchAsync(proposal, actorId);
+                return Expired<AgentProposalExecutionResult>();
             }
             var executing = proposal with { Status = AgentActionProposalStatus.Executing, UpdatedAt = clock.GetUtcNow() };
             store.Proposals[proposalId] = executing;
@@ -302,10 +311,10 @@ internal sealed class InMemoryAgentProposalService(
             if (store.Proposals.TryGetValue(proposalId, out var proposal) && proposal.Status == AgentActionProposalStatus.AwaitingClient
                 && proposal.PreparedInvocation!.ExpiresAt <= clock.GetUtcNow())
             {
-                var uncertain = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
-                    "The client request expired without an admitted receipt. Its effect is uncertain and will not be replayed."));
-                StoreOutcome(proposal, uncertain);
-                return uncertain.Value!.ToolResult;
+                // The deadline passed after client dispatch: a local effect is possible, so this is never Expired.
+                await SettlePendingClientAsync(proposal, null, true,
+                    "The client request expired without an admitted receipt. Its effect is uncertain and will not be replayed.");
+                return store.Results.GetValueOrDefault(proposalId);
             }
             return null;
         }
@@ -374,12 +383,63 @@ internal sealed class InMemoryAgentProposalService(
         _ => false
     };
 
+    private bool PastPreDispatchDeadline(AgentActionProposal proposal)
+        => proposal.PreparedInvocation is { } prepared && prepared.ExpiresAt <= clock.GetUtcNow()
+            && proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited or AgentActionProposalStatus.Approved;
+
+    private static AgentResult<T> Expired<T>() => AgentResult<T>.Failure("agent.proposal.expired", "The prepared operation has expired.", 409);
+
+    /// <summary>
+    /// Under the proposal gate: records the one pre-dispatch expiry (zero effect), releases the proposal claim
+    /// and emits its single correlated audit event. Later attempts observe the retained Expired status.
+    /// </summary>
+    private async Task ExpireBeforeDispatchAsync(AgentActionProposal proposal, string actorId)
+    {
+        var expired = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
+        Transition(expired);
+        await AuditAsync(expired, AgentAuditEventKind.ProposalFailed, actorId, "The prepared operation expired before dispatch; no effect occurred.",
+            CancellationToken.None, PreDispatchExpiry);
+    }
+
+    /// <summary>
+    /// Under the proposal gate: a dispatched client request whose lifetime or contract ended without an admitted
+    /// receipt becomes Uncertain (possible effect). It is never Expired and is never reissued.
+    /// </summary>
+    private async Task<AgentResult<AgentProposalExecutionResult>> SettlePendingClientAsync(AgentActionProposal proposal, string? actorId, bool deadline, string summary)
+    {
+        var outcome = StoreOutcome(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal, summary)));
+        await AuditAsync(store.Proposals[proposal.Id], AgentAuditEventKind.ProposalFailed, actorId, deadline
+                ? "The pending client request reached its deadline without an admitted receipt; its effect is uncertain."
+                : "The pending client request lost its reviewed contract or authority; its effect is uncertain.",
+            CancellationToken.None, deadline ? PendingClientDeadline : PendingClientWithdrawn);
+        return outcome;
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> PreDispatchExpiry = new Dictionary<string, string> { ["dispatch"] = "none", ["effect"] = "none" };
+    private static readonly IReadOnlyDictionary<string, string> PendingClientDeadline = new Dictionary<string, string>
+        { ["dispatch"] = "client", ["effect"] = "possible", ["deadline"] = "pending-client" };
+    private static readonly IReadOnlyDictionary<string, string> PendingClientWithdrawn = new Dictionary<string, string> { ["dispatch"] = "client", ["effect"] = "possible" };
+
     private SemaphoreSlim Gate(string proposalId) => store.Gates.GetOrAdd(proposalId, _ => new(1, 1));
     private static bool RevisionMatches(AgentActionProposal proposal, string? expected) => string.Equals(proposal.PreparedInvocation?.Target?.Revision ?? proposal.BaseRevision, expected, StringComparison.Ordinal);
     private static bool IsTerminal(AgentActionProposalStatus status) => status is AgentActionProposalStatus.Executed or AgentActionProposalStatus.Failed
         or AgentActionProposalStatus.Denied or AgentActionProposalStatus.Cancelled or AgentActionProposalStatus.Expired or AgentActionProposalStatus.Uncertain;
-    private Task AuditAsync(AgentActionProposal proposal, AgentAuditEventKind kind, string? actorId, string summary, CancellationToken cancellationToken)
-        => auditSink.EmitAsync(new(AgentProviderPrimitives.NewId(), kind, proposal.SessionId, actorId, summary, clock.GetUtcNow(),
-            new Dictionary<string, string> { ["proposalId"] = proposal.Id, ["invocationId"] = proposal.PreparedInvocation?.InvocationId ?? string.Empty,
-                ["status"] = proposal.Status.ToString() }), cancellationToken);
+    /// <summary>Every proposal record correlates the session, proposal, prepared invocation, turn and tool call.</summary>
+    private Task AuditAsync(AgentActionProposal proposal, AgentAuditEventKind kind, string? actorId, string summary, CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? outcome = null)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["proposalId"] = proposal.Id, ["invocationId"] = proposal.PreparedInvocation?.InvocationId ?? string.Empty,
+            ["status"] = proposal.Status.ToString()
+        };
+        if (proposal.PreparedInvocation is { } prepared)
+        {
+            metadata["turnId"] = prepared.TurnId;
+            metadata["toolCallId"] = prepared.ToolCallId;
+        }
+        foreach (var (key, value) in outcome ?? new Dictionary<string, string>())
+            metadata[key] = value;
+        return auditSink.EmitAsync(new(AgentProviderPrimitives.NewId(), kind, proposal.SessionId, actorId, summary, clock.GetUtcNow(), metadata), cancellationToken);
+    }
 }
