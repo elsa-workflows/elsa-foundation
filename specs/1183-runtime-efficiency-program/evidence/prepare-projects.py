@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys
 root = Path(__file__).resolve().parent
-known = {"bpmn-qualification", "diagnostics-attribution", "etl-qualification", "native-qualification", "retained-boundaries", "timer-qualification"}
+known = {"bpmn-qualification", "cluster-control", "diagnostics-attribution", "etl-qualification", "native-qualification", "retained-boundaries", "timer-qualification"}
 requested = sys.argv[1:]
 if not requested or any(name not in known for name in requested):
     raise SystemExit("Pass one or more qualification directory names; see evidence/README.md.")
