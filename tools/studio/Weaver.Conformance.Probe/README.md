@@ -1,6 +1,6 @@
 # Independent Weaver conformance witness
 
-The complete package witness at `76ec58d0061135cfa028e1bc47ec7639fd139e7f` qualifies the bounded M1 contribution contract: all 38 cases completed across 135 stages, with 16 positives and 22 recognized Failed controls. Original and restored resource/workflow journeys run through both actual Copilot and Anthropic adapters. See the [owning #3438 receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830), [curated evidence](../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json), and [artifact identities](../../../specs/1174-weaver-package-witness/quickstart.md#qualified-code-baseline).
+The complete package witness at `76ec58d0061135cfa028e1bc47ec7639fd139e7f` qualifies the bounded M1 contribution contract: all 38 cases completed (that historical run had 135 stages; no stage count is a requirement), with 16 positives and 22 recognized Failed controls. Original and restored resource/workflow journeys run through both actual Copilot and Anthropic adapters. See the [owning #3438 receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830), [curated evidence](../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json), and [artifact identities](../../../specs/1174-weaver-package-witness/quickstart.md#qualified-code-baseline).
 
 The qualified code baseline has 80 product packages and a retained SDK tgz, external module authors, and two package-only consumers. All 155 backend and 10,108 Studio common baseline files remain identical through native add/remove/incompatible/restore transitions. Consumer product-source references and frontend invocations are zero. Both owned hosts exit 0 with empty runtime caches. This is deterministic provider-protocol evidence; live-provider success is unclaimed.
 
@@ -89,4 +89,25 @@ failed case keeps its precise cause, and success needs all twenty-six passed. It
 ```sh
 python3 tools/studio/Weaver.Conformance.Probe/qualify_autonomy.py --scope matrix \
   --output /absolute/new-owned-autonomy-matrix --version 4.0.0-weaver3440.local2
+```
+
+### Complete package witness with the autonomy inventory (#3440 T025)
+
+`qualify.py` is the only complete witness. In one fresh run and one owned host pair it runs the
+unchanged original sequence (38 cases, then the four current-authority cases), then a preflight that
+releases the original cancel's held pre-call gate, requires the one-shot CAS control to be consumed and
+re-observes that the restored original package composes all three resource tools with an available
+provider, then the same twenty-six case runners as `--scope matrix`. The run declares
+`evidence.witness_manifest()` (38 + 4 + 26 = 68 cases plus the fourteen manifest-named matrix browser
+stages); `validate_complete_witness` refuses a missing, duplicated or extra case, a wrong adapter, a
+wrong-cause outcome, absent or changed owner/correlation evidence, a failed current-authority record,
+an absent or repeated matrix stage, or any failed stage, on top of every original consumer
+no-source/no-frontend/byte-equality and owned-host cleanup check. No total stage count (the original
+run's 135) is required. A failed matrix case keeps its precise cause, the rest still run once, and
+the run fails. Only that passing run sets `independentPackageWitness`. `export_evidence.py` records
+`witnessCompleteness` and refuses a report that claims the witness without the complete inventory.
+
+```sh
+python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
+  --output /absolute/new-owned-complete-witness --version 4.0.0-weaver3440.local3
 ```

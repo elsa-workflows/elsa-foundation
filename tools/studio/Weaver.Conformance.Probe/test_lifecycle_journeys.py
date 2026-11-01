@@ -8,12 +8,12 @@ import unittest
 from unittest.mock import Mock, patch
 
 from autonomy_journeys import (EXPECTED_CASES, EVIDENCE_CATEGORY, LIFECYCLE_CASES, MATRIX_QUALIFICATION, MODE_CASES,
-                               ModeCaseFailure, qualify_autonomy_matrix, require_lifecycle_matrix)
+                               ModeCaseFailure, qualify_autonomy_matrix, qualify_witness_autonomy, require_lifecycle_matrix)
 from case_records import retained
 from journey_runtime import BASE_GRANTS
 from lifecycle_journeys import (BROWSER_CASES, CORRELATION_KEYS, EXPECTED_OUTCOMES, VERIFIERS, LifecycleCaseFailure,
                                 require_lifecycle_record, verify_browser_case)
-from test_autonomy_journeys import AutonomyEvidenceTests
+from test_autonomy_journeys import AutonomyEvidenceTests, complete_autonomy_rows
 
 WITNESS = json.loads((Path(__file__).parent / "witness.json").read_text())
 SESSION, COMMAND, TURN, PROPOSAL, INVOCATION = "session-1", "command-1", "turn-1", "proposal-1", "invocation-1"
@@ -522,6 +522,62 @@ class LifecycleManifestTests(unittest.TestCase):
         self.assertEqual(("passed", 26), (section["status"], len(section["cases"])))
         self.assertFalse(section["independentPackageWitness"])
         with self.assertRaises(RuntimeError): qualify_autonomy_matrix(runtime)  # never replaces a retained matrix
+
+    def witness_runtime(self):
+        # Each synthetic witness is a fresh run; never reuse a retained section file.
+        (self.root / "autonomy-lifecycle-qualification.json").unlink(missing_ok=True)
+        runtime = self.runtime()
+        runtime.run.report.update(status="running", witnessManifest={"declared": True},
+                                  contextDisclosureQualification={"status": "passed"})
+        return runtime
+
+    def run_witness(self, runtime, execute):
+        with patch("autonomy_journeys.execute_mode_case", side_effect=execute), patch("lifecycle_journeys.execute_lifecycle_case", side_effect=execute):
+            return qualify_witness_autonomy(runtime)
+
+    def test_witness_matrix_reuses_the_runners_and_requires_the_complete_inventory(self):
+        rows = {row["id"]: row for row in complete_autonomy_rows(self.ref)}
+        calls = []
+        def execute(_runtime, provider, key):
+            calls.append(provider + "-" + key); return copy.deepcopy(rows[provider + "-" + key])
+        runtime = self.witness_runtime()
+        section = self.run_witness(runtime, execute)
+        self.assertEqual(("passed", "complete-package-witness-matrix", 26), (section["status"], section["scope"], len(section["cases"])))
+        self.assertEqual(sorted(EXPECTED_CASES), sorted(calls)); self.assertEqual(len(calls), len(set(calls)))
+        self.assertFalse(runtime.run.report["independentPackageWitness"]); self.assertFalse(section["independentPackageWitness"])
+
+    def test_witness_matrix_never_runs_outside_a_running_complete_witness(self):
+        for name, change in (("no-manifest", lambda r: r.pop("witnessManifest")), ("not-running", lambda r: r.update(status="verifying")),
+                             ("authority-failed", lambda r: r.update(contextDisclosureQualification={"status": "failed"})),
+                             ("diagnostic-present", lambda r: r.update({MATRIX_QUALIFICATION: {}}))):
+            with self.subTest(name=name):
+                runtime = self.witness_runtime(); change(runtime.run.report)
+                execute = Mock()
+                with self.assertRaises(RuntimeError): self.run_witness(runtime, execute)
+                execute.assert_not_called()
+
+    def test_witness_matrix_fails_on_wrong_cause_missing_evidence_or_case_failure_after_running_all(self):
+        def failing(kind):
+            rows = {row["id"]: row for row in complete_autonomy_rows(self.ref)}
+            target = "anthropic-stale-target-continuation"
+            if kind == "wrong-cause": rows[target]["outcome"]["execute"] = "agent.proposal.approval_required"
+            elif kind == "missing-evidence": rows[target]["evidence"] = []
+            elif kind == "changed-evidence": rows[target]["evidence"] = [{**self.ref, "sha256": "0" * 64}]
+            elif kind == "wrong-mode-outcome": rows["copilot-reviewed-size-control"]["outcomeAtDecision"] = "automatic"
+            calls = []
+            def execute(_runtime, provider, key):
+                calls.append(provider + "-" + key)
+                if kind == "case-failure" and provider + "-" + key == target:
+                    raise LifecycleCaseFailure("stale", "lifecycle.refusal_cause", self.ref)
+                return copy.deepcopy(rows[provider + "-" + key])
+            return execute, calls
+        for kind in ("wrong-cause", "missing-evidence", "changed-evidence", "wrong-mode-outcome", "case-failure"):
+            with self.subTest(kind=kind):
+                execute, calls = failing(kind)
+                runtime = self.witness_runtime()
+                with self.assertRaises(RuntimeError): self.run_witness(runtime, execute)
+                self.assertEqual(26, len(calls))
+                self.assertFalse(runtime.run.report["independentPackageWitness"])
 
 
 if __name__ == "__main__":

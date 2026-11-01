@@ -5,7 +5,8 @@
 matrix: all thirteen lifecycle cases once on each actual adapter, continuing after a failed
 case, and succeeds only with all twenty-six passed. Neither scope executes or qualifies the
 original38+4 package witness or sets qualified/independentPackageWitness. An outer owner
-bounds production/startup/cleanup time.
+bounds production/startup/cleanup time. The complete witness (qualify.py) reuses the same
+case runners after the original journeys in one host pair; this tool stays diagnostic.
 """
 from __future__ import annotations
 

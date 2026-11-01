@@ -38,6 +38,8 @@ LIFECYCLE_CASES = (*MODE_CASES, "denied-result-continuation", "duplicate-effect-
     "authority-refusal-continuation", "visibility-review-control", "workflow-review-control", "busy-policy-lifecycle")
 EXPECTED_CASES = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key in LIFECYCLE_CASES)
 MODE_CASE_IDS = frozenset(f"{provider}-{key}" for provider in PROVIDERS for key in MODE_CASES)
+# The acknowledged requested mode alone decides the native outcome at the size decision.
+MODE_OUTCOMES = {key: "review" if requested == "manual" else "automatic" for key, (_, requested) in MODE_CASES.items()}
 EVIDENCE_CATEGORY = "deterministic-provider-protocol"
 MODE_QUALIFICATION = "autonomyModeQualification"
 MATRIX_QUALIFICATION = "autonomyLifecycleQualification"
@@ -54,21 +56,89 @@ class ModeCaseFailure(RuntimeError):
         self.cause, self.observation = cause, observation
 
 
-def require_complete_autonomy(section):
-    """Mandatory final gate; the eight mode observations alone can never satisfy it."""
-    check(isinstance(section, dict) and section.get("evidenceCategory") == EVIDENCE_CATEGORY
-          and section.get("liveProvider") is False and section.get("status") == "passed",
-          "Final autonomy qualification needs explicit complete native evidence")
+def autonomy_stages():
+    """Browser stages the matrix runs, derived from the manifest; the witness never pins a total stage count."""
+    from lifecycle_journeys import BROWSER_CASES
+    # Names match execute_mode_case ("autonomy-") and execute_lifecycle_case's browser cases ("lifecycle-").
+    return frozenset([f"autonomy-{provider}-{key}" for provider in PROVIDERS for key in MODE_CASES]
+                     + [f"lifecycle-{provider}-{key}" for provider in PROVIDERS for key in BROWSER_CASES])
+
+
+def autonomy_manifest_gaps(section, source=None):
+    """Structural reader of the mandatory inventory: every reason a section cannot complete a witness.
+
+    Exact identities (missing, duplicate, extra), actual adapter, passed status, driver-owned
+    expected cause/outcome, owner/native evidence presence and correlation identities. Retained
+    file integrity is checked separately by require_lifecycle_matrix.
+    """
+    from lifecycle_journeys import CORRELATION_KEYS, EXPECTED_OUTCOMES
+    if not isinstance(section, dict):
+        return ["The mandatory autonomy lifecycle section is absent"]
+    gaps = []
+    if section.get("status") != "passed":
+        gaps.append("Autonomy section status is " + repr(section.get("status")))
+    if section.get("evidenceCategory") != EVIDENCE_CATEGORY or section.get("liveProvider") is not False:
+        gaps.append("Unsupported autonomy provider evidence claim")
+    if section.get("qualified") is not False or section.get("independentPackageWitness") is not False:
+        gaps.append("A matrix section cannot promote itself")
+    if source is not None and section.get("source") != source:
+        gaps.append("Autonomy section source differs from the witness source")
+    if section.get("expectedCaseIds") != sorted(EXPECTED_CASES):
+        gaps.append("Autonomy section did not declare the current mandatory inventory")
     records = section.get("cases")
-    check(isinstance(records, list) and len(records) == len(EXPECTED_CASES)
-          and {row.get("id") for row in records} == EXPECTED_CASES,
-          "All thirteen lifecycle cases per actual adapter are mandatory exactly once")
-    check(all(row.get("status") == "passed" and row.get("nativeEvidenceVerified") is True
-              and row.get("provider") in PROVIDERS and row.get("caseKey") in LIFECYCLE_CASES
-              and row["id"] == row["provider"] + "-" + row["caseKey"]
-              and not row.get("modeMismatch") and row.get("evidence") for row in records),
-          "Incomplete, failed, wrong-adapter or diagnostic-only cases cannot qualify")
-    return records
+    if not isinstance(records, list) or not all(isinstance(row, dict) for row in records):
+        return gaps + ["Autonomy section has no case records"]
+    identities = [row.get("id") for row in records]
+    gaps += ["Missing autonomy case: " + name for name in sorted(EXPECTED_CASES - set(identities))]
+    gaps += ["Duplicated autonomy case: " + str(name) for name in sorted({str(name) for name in identities if identities.count(name) > 1})]
+    gaps += ["Unexpected autonomy case: " + str(name) for name in sorted({str(name) for name in identities} - EXPECTED_CASES)]
+    for row in records:
+        name, key, provider = row.get("id"), row.get("caseKey"), row.get("provider")
+        if key not in LIFECYCLE_CASES or provider not in PROVIDERS or name != f"{provider}-{key}":
+            gaps.append(f"{name}: wrong adapter or case identity"); continue
+        if row.get("status") != "passed" or row.get("cause") is not None:
+            gaps.append(f"{name}: {row.get('status')} ({row.get('cause')})"); continue
+        if row.get("nativeEvidenceVerified") is not True or row.get("modeMismatch") is not False or row.get("qualified") is not False:
+            gaps.append(f"{name}: unverified, mismatched or self-promoted"); continue
+        if source is not None and row.get("source") != source:
+            gaps.append(f"{name}: case source differs")
+        if not (isinstance(row.get("evidence"), list) and row["evidence"]) or not all(
+                isinstance(row.get(owner), dict) for owner in ("ownerBefore", "ownerAfter")):
+            gaps.append(f"{name}: missing owner/native evidence")
+        correlation = row.get("correlation") if isinstance(row.get("correlation"), dict) else {}
+        if key in MODE_CASES:
+            initial, requested = MODE_CASES[key]
+            transition = initial != requested
+            policy = row.get("policy") if isinstance(row.get("policy"), dict) else {}
+            updates = policy.get("updateRequests")
+            if ((row.get("initialMode"), row.get("requestedMode")) != (initial, requested)
+                    or row.get("outcomeAtDecision") != MODE_OUTCOMES[key] or policy.get("acknowledged") is not transition
+                    or type(updates) is not int or updates != int(transition)):
+                gaps.append(f"{name}: wrong-cause mode outcome")
+            if not row.get("sessionId") or correlation.get("kind") != "completed-native-result":
+                gaps.append(f"{name}: missing native correlation")
+        else:
+            if row.get("adapter") != provider:
+                gaps.append(f"{name}: wrong actual adapter")
+            if not same(row.get("outcome"), EXPECTED_OUTCOMES[key]):
+                gaps.append(f"{name}: wrong-cause lifecycle outcome")
+            if (correlation.get("adapter") != provider or not isinstance(correlation.get("providerTrace"), dict)
+                    or not all(isinstance(correlation.get(item), str) and correlation[item] for item in CORRELATION_KEYS[key])):
+                gaps.append(f"{name}: missing native correlation")
+    return gaps
+
+
+def require_complete_autonomy(section, owned_root=None, *, source=None):
+    """Mandatory final gate; the eight mode observations alone can never satisfy it.
+
+    With owned_root, every owner/correlation/evidence reference must also be a retained
+    unchanged file of that run (the complete package witness always passes it).
+    """
+    gaps = autonomy_manifest_gaps(section, source)
+    check(not gaps, "All thirteen lifecycle cases per actual adapter are mandatory exactly once: " + "; ".join(gaps[:20]))
+    if owned_root is not None:
+        require_lifecycle_matrix(section, owned_root)
+    return section["cases"]
 
 
 def require_mode_qualification(records):
@@ -722,13 +792,32 @@ def qualify_autonomy_matrix(runtime):
     Each case runs once. A failed case keeps its precise cause and the remaining cases still run,
     so one native attempt shows every outcome. Success requires all twenty-six passed.
     """
+    return _run_lifecycle_matrix(runtime, "per-adapter-lifecycle-matrix")
+
+
+def qualify_witness_autonomy(runtime):
+    """T025: the same 26 case runners appended to the one complete package witness host pair.
+
+    The section itself never promotes; only journeys.qualify_distributions may set the report's
+    independentPackageWitness, after this and every original/current-authority gate pass.
+    """
+    run = runtime.run
+    check(run.report.get("status") == "running" and isinstance(run.report.get("witnessManifest"), dict)
+          and run.report.get("contextDisclosureQualification", {}).get("status") == "passed",
+          "The witness matrix runs only inside a running complete witness after current-authority qualification")
+    section = _run_lifecycle_matrix(runtime, "complete-package-witness-matrix")
+    require_complete_autonomy(section, run.root, source=run.source)
+    return section
+
+
+def _run_lifecycle_matrix(runtime, scope):
     from lifecycle_journeys import LifecycleCaseFailure, execute_lifecycle_case
     run = runtime.run
     check(MATRIX_QUALIFICATION not in run.report and MODE_QUALIFICATION not in run.report
           and run.report.get("independentPackageWitness") is False, "Use a fresh lifecycle matrix, never replace a qualified or partial observation")
     section_path = run.root / "autonomy-lifecycle-qualification.json"
     check(not section_path.exists(), "Never overwrite a retained lifecycle matrix")
-    section = {"status": "running", "scope": "per-adapter-lifecycle-matrix", "source": run.source,
+    section = {"status": "running", "scope": scope, "source": run.source,
                "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "qualified": False, "independentPackageWitness": False,
                "expectedCaseIds": sorted(EXPECTED_CASES), "cases": []}
     run.report[MATRIX_QUALIFICATION] = section

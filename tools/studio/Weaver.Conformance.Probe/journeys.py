@@ -2,6 +2,9 @@
 
 This driver owns the expected causes. Expected negative children remain failed;
 only the complete evidence set can establish the independent package witness.
+The complete set is evidence.witness_manifest(): the original 38 cases, the four
+current-authority cases and the #3440 inventory (13 cases on each actual adapter),
+all in one fresh run and host pair. No total stage count is required.
 """
 from __future__ import annotations
 
@@ -18,8 +21,9 @@ from authors import build_authors, build_incompatible_studio
 from case_records import CaseRecords, retained
 from consumers import (configure_runtime, freeze_consumer_baseline, capture_consumer_after,
                        select_native_archives, stage_native_archives, prepare_consumers)
+from autonomy_journeys import qualify_witness_autonomy
 from disclosure_journeys import qualify_context_disclosure
-from evidence import CONTROL_IDS, REQUIRED_CASES, validate_report
+from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
 from native_lifecycle import (add_resource_archives, remove_resource_archives, restore_resource_archives,
@@ -558,6 +562,22 @@ def _restore(runtime, records, deltas):
     runtime.record(records, "module-restore", bref, aref, [*evidence, aread], {"originalArchive": True, "membership": True, "servingGeneration": True, "contributions": True})
 
 
+def _autonomy_preflight(runtime):
+    """Separate the appended matrix from the original one-shot controls without resetting any owner.
+
+    The original cancel left its held, nonmatching pre-call gate and the CAS control must already
+    be consumed. Re-observe that the restored original package still composes all three resource
+    tools (including the size operation) and the provider is available. Nothing is retried.
+    """
+    check(not runtime.cas_control.exists(), "The original CAS rendezvous must be consumed before the autonomy matrix")
+    atomic_json(runtime.gate_file, {"commandId": "not-an-active-command", "epoch": str(uuid.uuid4()), "state": "release"})
+    runtime.sign_in()
+    evidence = _active_resource(runtime, "autonomy-preflight")
+    bootstrap = runtime.transport("autonomy-preflight-agent").bootstrap().require_status(200)
+    check(bootstrap.json()["data"]["providerStatus"] == "available", "The restored package left the actual provider unavailable before the autonomy matrix")
+    return {"gateReleased": True, "evidence": [*evidence, bootstrap.receipt]}
+
+
 def _positives(runtime, records, *, restored=False):
     prefix = "restored-" if restored else ""
     for provider in ("copilot", "anthropic"):
@@ -584,7 +604,9 @@ def qualify_distributions(run):
     check(run.report["status"] == "distributions-prepared", "Prepare all real distributions before native qualification")
     check(not run.report["cases"], "A final qualification needs fresh case outputs, not resumed partial status")
     run.assert_immutable_inputs()
-    run.report.update(status="running", independentPackageWitness=False, expectedControls=copy.deepcopy(EXPECTED_CONTROLS))
+    # The run declares the complete inventory it must satisfy; no total stage count is part of it.
+    run.report.update(status="running", independentPackageWitness=False, expectedControls=copy.deepcopy(EXPECTED_CONTROLS),
+                      witnessManifest=witness_manifest())
     run.save()
     admin = {"username": "weaver-" + secrets.token_hex(10), "password": secrets.token_urlsafe(40) + "!aA1"}
     backend, studio = owned_origin(), owned_origin()
@@ -628,15 +650,24 @@ def qualify_distributions(run):
         _restore(runtime, records, deltas)
         _positives(runtime, records, restored=True)
         qualify_context_disclosure(runtime)
+        # The #3440 inventory is appended after the unchanged original sequence, in the same
+        # host pair, so the original38+4 keep their proven preconditions and order.
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification")})
+        run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
+        run.save()
+        qualify_witness_autonomy(runtime)
+        check(same(original, {key: run.report[key] for key in original}),
+              "The appended autonomy matrix changed the original or current-authority records")
         capture_consumer_after(run)
         check({case["id"] for case in run.report["cases"]} == set(REQUIRED_CASES) and len(run.report["cases"]) == len(REQUIRED_CASES),
               "Every one of the 38 actual required cases must be completed exactly once")
         run.assert_immutable_inputs()
         run.report["status"] = "verifying"
         run.save()
-        validate_report(run.report, run.root, EXPECTED_CONTROLS)
+        validate_complete_witness(run.report, run.root, EXPECTED_CONTROLS)
     # Process cleanup/cache evidence must also pass before the aggregate becomes accepted.
     run.assert_immutable_inputs()
-    validate_report(run.report, run.root, EXPECTED_CONTROLS)
+    validate_complete_witness(run.report, run.root, EXPECTED_CONTROLS)
     run.report.update(status="passed", independentPackageWitness=True)
     run.save()
+    return run.report

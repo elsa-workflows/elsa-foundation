@@ -10,7 +10,15 @@ from unittest.mock import Mock, patch
 
 from agent_transport import Response, AgentTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
-from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove, _incompatible, _restore
+from contextlib import nullcontext
+from unittest.mock import DEFAULT
+from evidence import REQUIRED_CASES
+from journeys import (_unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove, _incompatible, _restore,
+                      _autonomy_preflight)
+
+ORIGINAL_SEQUENCE = ("_bootstrap", "freeze_consumer_baseline", "_module_missing", "_install", "_positives", "_active_resource",
+                     "_context_controls", "_resource_absence", "_authority_controls", "_stale", "_deny", "_cancel", "_redaction",
+                     "_concurrent_cas", "_remove", "_incompatible", "_restore", "qualify_context_disclosure")
 
 
 class JourneyBoundariesTests(unittest.TestCase):
@@ -231,6 +239,95 @@ class JourneyBoundariesTests(unittest.TestCase):
         with patch("journeys.server") as launch, patch("journeys.build_authors") as authors:
             with self.assertRaises(RuntimeError): qualify_distributions(run)
             authors.assert_not_called(); launch.assert_not_called()
+
+
+
+class CompleteWitnessOrchestrationTests(unittest.TestCase):
+    """Order/isolation of the appended #3440 inventory; synthetic coordinator only, no host is started."""
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        (self.root / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"AcmeCopilotProtocolFixture": {}}}}}}))
+        self.run = SimpleNamespace(report={"status": "distributions-prepared", "cases": []}, source="a" * 40, root=self.root,
+                                   profiles={"backend": {"published": self.root}}, assert_immutable_inputs=Mock(), save=Mock())
+
+    def qualify(self, **overrides):
+        names = (*ORIGINAL_SEQUENCE, "owned_origin", "configure_runtime", "_seed_principals", "JourneyRuntime", "private_json", "CaseRecords",
+                 "server", "_autonomy_preflight", "qualify_witness_autonomy", "capture_consumer_after", "validate_complete_witness")
+        order = []
+        def recorder(name):
+            def call(*args, **kwargs):
+                order.append(name)
+                if name == "qualify_context_disclosure":
+                    self.run.report["cases"] = [{"id": case} for case in sorted(REQUIRED_CASES)]
+                    self.run.report["contextDisclosureQualification"] = {"status": "passed"}
+                if name in overrides: return overrides[name](*args, **kwargs)
+                if name == "server": return nullcontext()
+                if name == "JourneyRuntime":
+                    return SimpleNamespace(gate_file=self.root / "gate.json", root=self.root, select_provider=Mock(), browser=Mock(),
+                                           native=SimpleNamespace(feature=Mock()), studio=object(), witness={"studioFeature": "resource"})
+                if name == "_install": return {}
+                if name == "_autonomy_preflight": return {"gateReleased": True, "evidence": []}
+                return DEFAULT
+            return call
+        with patch.multiple("journeys", **{name: Mock(side_effect=recorder(name)) for name in names}):
+            try:
+                qualify_distributions(self.run)
+            finally:
+                self.order = order
+        return order
+
+    def test_inventory_runs_once_after_the_unchanged_original_sequence_and_before_cleanup_capture(self):
+        order = self.qualify()
+        sequence = [name for name in order if name in ORIGINAL_SEQUENCE]
+        self.assertEqual("qualify_context_disclosure", sequence[-1])
+        tail = order[order.index("qualify_context_disclosure") + 1:]
+        self.assertEqual(["_autonomy_preflight", "qualify_witness_autonomy", "capture_consumer_after",
+                          "validate_complete_witness", "validate_complete_witness"], tail)
+        self.assertEqual(1, order.count("qualify_witness_autonomy"))
+        self.assertEqual(("passed", True), (self.run.report["status"], self.run.report["independentPackageWitness"]))
+        self.assertEqual(68, self.run.report["witnessManifest"]["expectedCaseCount"])
+        self.assertNotIn("stageCount", json.dumps(self.run.report["witnessManifest"]))
+
+    def test_failed_matrix_changed_original_records_or_failed_gate_never_promote(self):
+        def failed(_runtime): raise RuntimeError("anthropic-cancel-before-effect: lifecycle.gate")
+        def relabels(_runtime): self.run.report["cases"][0]["status"] = "relabelled"
+        def rejects(*_args): raise ValueError("Incomplete complete witness")
+        for name, override in (("qualify_witness_autonomy", failed), ("qualify_witness_autonomy", relabels), ("validate_complete_witness", rejects)):
+            with self.subTest(override=override.__name__):
+                self.setUp()
+                with self.assertRaises((RuntimeError, ValueError)): self.qualify(**{name: override})
+                self.assertFalse(self.run.report["independentPackageWitness"]); self.assertNotEqual("passed", self.run.report["status"])
+                if name == "qualify_witness_autonomy": self.assertNotIn("capture_consumer_after", self.order)
+
+    def preflight_runtime(self):
+        bootstrap = Mock(); bootstrap.require_status.return_value = bootstrap; bootstrap.receipt = {"synthetic": "bootstrap"}
+        bootstrap.json.return_value = {"data": {"providerStatus": "available"}}
+        return SimpleNamespace(cas_control=self.root / "cas.json", gate_file=self.root / "gate.json", sign_in=Mock(),
+                               transport=Mock(return_value=SimpleNamespace(bootstrap=Mock(return_value=bootstrap)))), bootstrap
+
+    def test_preflight_releases_the_held_gate_and_reobserves_the_restored_size_contribution(self):
+        runtime, _ = self.preflight_runtime()
+        runtime.gate_file.write_text(json.dumps({"commandId": "original-cancel", "state": "hold"}))
+        with patch("journeys._active_resource", return_value=[{"synthetic": "generation"}]) as active:
+            value = _autonomy_preflight(runtime)
+        active.assert_called_once_with(runtime, "autonomy-preflight")
+        self.assertEqual({"gateReleased": True, "evidence": [{"synthetic": "generation"}, {"synthetic": "bootstrap"}]}, value)
+        gate = json.loads(runtime.gate_file.read_text())
+        self.assertEqual(("not-an-active-command", "release"), (gate["commandId"], gate["state"]))
+
+    def test_preflight_refuses_an_armed_cas_rendezvous_or_unavailable_provider(self):
+        runtime, _ = self.preflight_runtime()
+        runtime.cas_control.write_text("{}")
+        with patch("journeys._active_resource") as active, self.assertRaisesRegex(RuntimeError, "CAS"):
+            _autonomy_preflight(runtime)
+        active.assert_not_called(); self.assertFalse(runtime.gate_file.exists())
+        runtime.cas_control.unlink()
+        runtime, bootstrap = self.preflight_runtime()
+        bootstrap.json.return_value = {"data": {"providerStatus": "unavailable"}}
+        with patch("journeys._active_resource", return_value=[]), self.assertRaisesRegex(RuntimeError, "provider"):
+            _autonomy_preflight(runtime)
 
 
 if __name__ == "__main__": unittest.main()

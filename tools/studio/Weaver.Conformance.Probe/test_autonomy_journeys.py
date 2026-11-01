@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from autonomy_journeys import (MODE_CASES, EXPECTED_CASES, MODE_CASE_IDS, EVIDENCE_CATEGORY, MODE_QUALIFICATION,
-    ModeCaseFailure, require_complete_autonomy, require_mode_qualification, verify_mode_observation,
+from autonomy_journeys import (MODE_CASES, MODE_OUTCOMES, EXPECTED_CASES, MODE_CASE_IDS, EVIDENCE_CATEGORY, MODE_QUALIFICATION,
+    ModeCaseFailure, autonomy_manifest_gaps, autonomy_stages, require_complete_autonomy, require_mode_qualification, verify_mode_observation,
     require_size_owner_journey, qualify_autonomy_modes, execute_mode_case, _frames)
 from case_records import retained
 
@@ -836,12 +836,37 @@ console.log(JSON.stringify(observations));
                         with self.assertRaises(RuntimeError): _frames(Path(directory), "session-1", "http://127.0.0.1:52001")
 
 
+def complete_autonomy_rows(ref, source="frozen"):
+    """Synthetic shapes of the actual passed records (mode and lifecycle) for every inventory case."""
+    from lifecycle_journeys import CORRELATION_KEYS, EXPECTED_OUTCOMES
+    rows = []
+    for identity in sorted(EXPECTED_CASES):
+        provider, key = identity.split("-", 1)
+        row = {"id": identity, "provider": provider, "caseKey": key, "status": "passed", "cause": None, "modeMismatch": False,
+               "nativeEvidenceVerified": True, "qualified": False, "source": source, "ownerBefore": ref, "ownerAfter": ref, "evidence": [ref]}
+        if key in MODE_CASES:
+            initial, requested = MODE_CASES[key]
+            transition = initial != requested
+            row.update(sessionId="session", initialMode=initial, requestedMode=requested, outcomeAtDecision=MODE_OUTCOMES[key],
+                       correlation={"kind": "completed-native-result", "completeProviderJourney": True},
+                       policy={"acknowledged": transition, "updateRequests": int(transition)})
+        else:
+            row.update(adapter=provider, outcome=copy.deepcopy(EXPECTED_OUTCOMES[key]),
+                       correlation={"adapter": provider, "providerTrace": ref, **{name: "id" for name in CORRELATION_KEYS[key]}})
+        rows.append(row)
+    return rows
+
+
+def complete_autonomy_section(ref, source="frozen"):
+    return {"status": "passed", "scope": "complete-package-witness-matrix", "source": source, "evidenceCategory": EVIDENCE_CATEGORY,
+            "liveProvider": False, "qualified": False, "independentPackageWitness": False,
+            "expectedCaseIds": sorted(EXPECTED_CASES), "cases": complete_autonomy_rows(ref, source)}
+
+
 class AutonomyManifestTests(unittest.TestCase):
     @staticmethod
     def final_section():
-        return {"status": "passed", "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False,
-                "cases": [{"id": identity, "provider": identity.split("-", 1)[0], "caseKey": identity.split("-", 1)[1], "status": "passed", "nativeEvidenceVerified": True,
-                           "modeMismatch": False, "evidence": [{"synthetic": True}]} for identity in sorted(EXPECTED_CASES)]}
+        return complete_autonomy_section({"synthetic": True})
 
     def test_exact_final_manifest_is_twenty_six_and_mode_eight_is_incomplete(self):
         self.assertEqual(26, len(EXPECTED_CASES)); self.assertEqual(8, len(MODE_CASE_IDS))
@@ -862,6 +887,55 @@ class AutonomyManifestTests(unittest.TestCase):
                 elif mutation == "live": section["liveProvider"] = True
                 else: section["cases"][0]["evidence"] = []
                 with self.assertRaises(RuntimeError): require_complete_autonomy(section)
+
+    def test_final_gate_refuses_wrong_cause_missing_owner_correlation_and_promotion(self):
+        def lifecycle(section, key="stale-target-continuation"):
+            return next(row for row in section["cases"] if row["caseKey"] == key)
+        def mode(section, key="reviewed-size-control"):
+            return next(row for row in section["cases"] if row["caseKey"] == key)
+        mutations = {
+            "lifecycle-wrong-cause": lambda s: lifecycle(s)["outcome"].update(execute="agent.proposal.approval_required"),
+            "lifecycle-wrong-adapter": lambda s: lifecycle(s).update(adapter="anthropic" if lifecycle(s)["provider"] == "copilot" else "copilot"),
+            "lifecycle-no-correlation": lambda s: lifecycle(s)["correlation"].pop("invocationId"),
+            "lifecycle-no-trace": lambda s: lifecycle(s)["correlation"].pop("providerTrace"),
+            "mode-wrong-outcome": lambda s: mode(s).update(outcomeAtDecision="automatic"),
+            "mode-wrong-requested": lambda s: mode(s).update(requestedMode="full-auto"),
+            "mode-unacknowledged": lambda s: mode(s, "manual-to-automatic")["policy"].update(acknowledged=False),
+            "mode-boolean-update-count": lambda s: mode(s, "manual-to-automatic")["policy"].update(updateRequests=True),
+            "mode-no-correlation": lambda s: mode(s).pop("correlation"),
+            "no-owner": lambda s: mode(s).pop("ownerAfter"),
+            "failed-with-cause": lambda s: lifecycle(s).update(status="failed", cause="lifecycle.refusal_cause"),
+            "passed-with-cause": lambda s: lifecycle(s).update(cause="lifecycle.refusal_cause"),
+            "self-promoted-row": lambda s: lifecycle(s).update(qualified=True),
+            "self-promoted-section": lambda s: s.update(independentPackageWitness=True),
+            "foreign-source": lambda s: lifecycle(s).update(source="other"),
+            "undeclared-inventory": lambda s: s.update(expectedCaseIds=sorted(MODE_CASE_IDS)),
+            "extra": lambda s: s["cases"].append(dict(copy.deepcopy(s["cases"][0]), id="copilot-invented-case", caseKey="invented-case")),
+            "running": lambda s: s.update(status="running"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name):
+                section = self.final_section(); mutate(section)
+                self.assertTrue(autonomy_manifest_gaps(section, "frozen"))
+                with self.assertRaises(RuntimeError): require_complete_autonomy(section, source="frozen")
+        self.assertEqual([], autonomy_manifest_gaps(self.final_section(), "frozen"))
+
+    def test_gaps_name_each_missing_and_duplicated_case_on_its_actual_adapter(self):
+        section = self.final_section()
+        section["cases"] = [row for row in section["cases"] if row["id"] != "anthropic-busy-policy-lifecycle"]
+        section["cases"].append(copy.deepcopy(section["cases"][0]))
+        gaps = autonomy_manifest_gaps(section, "frozen")
+        self.assertIn("Missing autonomy case: anthropic-busy-policy-lifecycle", gaps)
+        self.assertIn("Duplicated autonomy case: " + section["cases"][0]["id"], gaps)
+
+    def test_matrix_stages_are_derived_from_the_manifest(self):
+        stages = autonomy_stages()
+        self.assertEqual(14, len(stages))
+        self.assertEqual({"autonomy-" + p + "-" + k for p in ("copilot", "anthropic") for k in MODE_CASES},
+                         {name for name in stages if name.startswith("autonomy-")})
+        self.assertEqual({"lifecycle-" + p + "-" + k for p in ("copilot", "anthropic")
+                          for k in ("interrupted-after-effect", "visibility-review-control", "workflow-review-control")},
+                         {name for name in stages if name.startswith("lifecycle-")})
 
     @staticmethod
     def mode_records():
