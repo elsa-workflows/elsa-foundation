@@ -28,6 +28,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
 {
     internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
 
+    private const int MaxFenceRenewalAttempts = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -270,7 +271,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             {
                 try
                 {
-                    var updated = await CommitNewAsync(cancellationToken, pinned);
+                    var updated = await CommitFencedAsync(cancellationToken, pinned);
                     EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
                     return updated;
                 }
@@ -282,7 +283,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
             RuntimeCheckpointCommitStoreResult? result = null;
             async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
-                result = await CommitNewAsync(leaseCancellationToken);
+                result = await CommitFencedAsync(leaseCancellationToken);
 
             // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
             // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
@@ -296,9 +297,30 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return completed;
         }
 
-        var immediate = await CommitNewAsync(cancellationToken);
+        var immediate = await CommitFencedAsync(cancellationToken);
         EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
         return immediate;
+
+        // The drain's own lease heartbeat bumps the fence row's revision without changing the lease, so a checkpoint
+        // staged just before it would fail on a benign same-owner renewal. Retry only a conflict confined to that row,
+        // and only on a context with nothing else pending (rollback clears the tracker). Each attempt re-reads and
+        // revalidates the fence, so a real ownership transition still fails as stale.
+        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitFencedAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
+        {
+            var retryable = commit.ExpectedFence is not null && !context.ChangeTracker.HasChanges() &&
+                context.Database.CurrentTransaction is null && context.Database.GetEnlistedTransaction() is null && Transaction.Current is null;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await CommitNewAsync(writeCancellationToken, requiredExistingRoot);
+                }
+                catch (DbUpdateConcurrencyException exception) when (retryable && attempt < MaxFenceRenewalAttempts &&
+                    exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity))
+                {
+                }
+            }
+        }
 
         async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
