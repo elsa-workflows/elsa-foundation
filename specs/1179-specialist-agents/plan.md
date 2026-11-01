@@ -91,7 +91,8 @@ publication (`SourceOwnedActivityVersionPublisher` → `ExecutableNodeCompiler.C
 root node and never calls a provider compiler. It must be extended so that provider-backed source content is
 compiled through the registered `IActivityTemplateProviderCompiler`, with the same preflight as Studio publication:
 schema, model capability, runtime and storage. That extension is generic Essentials publishing work, not a specialist
-fork. It generalizes `ActivityTemplateCompiler` beyond drafts and reports a compile or preflight failure for that one
+fork. It generalizes `ActivityTemplateCompiler` and the Studio preflight beyond drafts: the review-policy subject,
+schema validation, and the candidate evaluation extracted from `ActivityDefinitionPublisher`. It reports a compile or preflight failure for that one
 version without aborting the pass. Today one invalid reconciliation entry aborts the whole pass, so per-definition
 isolation is split: the configuration source validates the manifest and version before contribution, and the
 publication bridge isolates compile and preflight failures. Versions are operator-declared; reconciliation keeps rejecting same-version content changes.

@@ -105,8 +105,11 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
   - a configuration source in `Extensions/Agent/src/Specialists/Configuration/` that reads operator-versioned manifests, validates each definition (schema, connection name only, version bump on content change), leaves out invalid ones with per-definition diagnostics, and contributes the rest through `ActivityVersionsReconciling` as source-owned content;
   - proof in `Extensions/Agent/tests/Specialists/Tests/Configuration/`: restart idempotency, read-only Studio presentation with copy and fork (with T036), and native and BPMN use.
 - [ ] T062 [US7] Extend source-owned publication so that provider-backed source content is compiled like Studio content. This is generic Essentials work, with no specialist-specific branch:
-  - generalize the request of `ActivityTemplateCompiler` (`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/ActivityTemplateCompiler.cs`) beyond `ActivityDefinitionDraft`, so that a source-owned candidate (provider key, schema and payload) is compiled through the registered `IActivityTemplateProviderCompiler`;
-  - reuse the preflight behind `ActivityDefinitionPublisher.PreflightAsync` and `ActivityPublicationReviewPolicy` from `Essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs`;
+  - generalize the request of `ActivityTemplateCompiler` (`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/ActivityTemplateCompiler.cs`) beyond `ActivityDefinitionDraft`, so that a source-owned candidate is compiled through the registered `IActivityTemplateProviderCompiler`. The candidate carries the provider key, schema and payload, plus the contract built from the version's inputs, outputs and outcomes, as `ToContract` does;
+  - generalize the preflight beyond drafts in the same way:
+    - `ActivityPublicationReviewPolicy.ReadinessDiagnostics` takes a subject built from the source-owned version;
+    - schema validation of source content goes through `IActivityDraftValidator` or a named equivalent;
+    - the candidate evaluation is extracted from `ActivityDefinitionPublisher.EvaluateCandidateAsync` into a seam that `Essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs` calls;
   - keep `ExecutableNodeCompiler.CompileSourceOwnedRoot` for CLR and JSON sources that have no provider;
   - report a compile or preflight failure of one source-owned version as a diagnostic for that version and skip it, so the reconciliation pass continues;
   - prove one failing and one valid source-owned version in a single pass in `Essentials/tests/Workflows/Publishing/`.
