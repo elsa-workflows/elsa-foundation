@@ -469,9 +469,13 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   };
 
   const changeFolder = (nextFolder: WorkflowFolderSelection) => {
+    if (!isCurrentGeneration()) return;
     navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder, includeDescendants: typeof nextFolder === "object" ? browseLocation.includeDescendants : false }, "push", true);
   };
-  const changeLibraryLocation = useCallback((next: WorkflowDefinitionBrowseLocation) => navigateBrowseLocation(next, "push", true), [navigateBrowseLocation]);
+  const changeLibraryLocation = useCallback((next: WorkflowDefinitionBrowseLocation) => {
+    if (renderGeneration !== workGenerationRef.current) return;
+    navigateBrowseLocation(next, "push", true);
+  }, [navigateBrowseLocation, renderGeneration]);
   const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); setStatus("Workflow organization updated"); } };
   const closeOrganization = () => {
     if (!isCurrentGeneration()) return;

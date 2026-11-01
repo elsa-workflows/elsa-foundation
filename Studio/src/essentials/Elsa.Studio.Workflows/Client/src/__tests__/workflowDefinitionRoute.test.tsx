@@ -1,6 +1,7 @@
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
+import { setDialogs } from "../workflow-editor/dialogs";
 import {
   button,
   click,
@@ -27,6 +28,67 @@ async function openSecondPageEditor(fetchMock: typeof fetch) {
 }
 
 describe("workflow definition route browse session", () => {
+  it("keeps the current backend's search after a retired saved-view deletion completes", async () => {
+    let finishDelete: ((value: Response) => void) | undefined;
+    onTestFinished(() => finishDelete?.(new Response(null, { status: 204 })));
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("views/previous-view") && init?.method === "DELETE") return new Promise<Response>(resolve => { finishDelete = resolve; });
+      if (url.pathname.endsWith("/views")) return response({ items: url.host === "server.example" ? [{ id: "previous-view", name: "Previous view", shared: false, ownerId: "owner", query: { searchTerm: "original" }, columns: [], revision: "v1", canEdit: true, canDelete: true }] : [] });
+      if (url.pathname.endsWith("definition-pages")) {
+        requests.push(url);
+        return response({ items: [definition({ name: url.host === "server.example" ? "Previous backend workflow" : "Current backend workflow" })] });
+      }
+      return response({ items: [] });
+    });
+    const capabilities = pagedDefinitionCapabilities({ queryOptions: true });
+    capabilities.capabilities[0].links.push({ rel: "workflow-views", href: "design/workflows/views" }, { rel: "workflow-view", href: "design/workflows/views/{viewId}", templated: true });
+    const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions?search=original&view=previous-view", fetchMock, capabilities);
+    await waitForCondition(() => expect(button(container, "Save view")).not.toBeNull());
+    await click(button(container, "Save view"));
+    await waitForCondition(() => expect(button(container, "Delete saved view")).not.toBeNull());
+    await click(button(container, "Delete saved view"));
+    await waitForCondition(() => expect(finishDelete).toBeTypeOf("function"));
+    updateEndpoint("https://current.example/");
+    await click(button(container, "Refresh"));
+    await waitForText(container, "Current backend workflow");
+    await fill(container.querySelector<HTMLInputElement>('input[aria-label="Search all workflows"]'), "current search");
+    await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("searchTerm")).toBe("current search"));
+    finishDelete?.(new Response(null, { status: 204 }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(new URLSearchParams(window.location.search).get("search")).toBe("current search");
+  }, 20_000);
+
+  it("keeps the current folder scope after a retired folder deletion completes", async () => {
+    let finishDelete: ((value: Response) => void) | undefined;
+    onTestFinished(() => finishDelete?.(new Response(null, { status: 204 })));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("folders/same-folder") && init?.method === "DELETE") return new Promise<Response>(resolve => { finishDelete = resolve; });
+      if (url.pathname.endsWith("folders/same-folder")) return response({ folder: { id: "same-folder", name: "Selected folder", parentId: null, revision: "r1" }, ancestors: [] });
+      if (url.pathname.endsWith("definition-pages")) return response({ items: [definition({ name: url.host === "server.example" ? "Previous backend workflow" : "Current backend workflow" })] });
+      return response({ items: [] });
+    });
+    const capabilities = pagedDefinitionCapabilities({ folders: true });
+    capabilities.capabilities[0].links.push({ rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true });
+    const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions?folderId=same-folder", fetchMock, capabilities);
+    setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined });
+    await waitForCondition(() => expect(button(container, "Delete")).not.toBeNull());
+    await click(button(container, "Delete"));
+    await waitForCondition(() => expect(finishDelete).toBeTypeOf("function"));
+    updateEndpoint("https://current.example/");
+    await click(button(container, "Refresh"));
+    await waitForText(container, "Current backend workflow");
+    await click(container.querySelector('[role="treeitem"][data-tree-key="unfiled"]'));
+    expect(new URLSearchParams(window.location.search).get("unfiled")).toBe("true");
+    finishDelete?.(new Response(null, { status: 204 }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(new URLSearchParams(window.location.search).get("unfiled")).toBe("true");
+  }, 20_000);
+
   it("does not open a retired backend's created definition in the current backend", async () => {
     let finishCreate: ((value: Response) => void) | undefined;
     const created = () => response({ definition: definition({ id: "old-created", name: "Created on previous backend" }), draft: null, versions: [] });
