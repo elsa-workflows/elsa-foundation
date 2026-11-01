@@ -80,7 +80,7 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    on resulting main `5be59cebc`. M3 draft PR #3594 integrates that main and adds concrete model
    access, protected turn/conversation journals, physical request reservations, explicit native
    continuation, finite generation-fenced leases, authenticated caller-lowered execution bounds and
-   matching-operation/native-delivery replay. These are draft increments with separate source,
+   matching-operation/native-delivery replay and confirmed acceptance-acknowledgement recovery. These are draft increments with separate source,
    provider and bounded package receipts on the owning issue; whole-M3 delivery still requires
    native cancellation/applied settlement, retention/compatibility,
    streaming and complete support qualification.

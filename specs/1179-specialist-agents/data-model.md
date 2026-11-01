@@ -216,4 +216,14 @@ conversation history. Original source/result provenance remains immutable; purpo
 remain exact-original-only. Native typed retry/reschedule snapshots keep pinned values/fingerprints
 but are owned by the successor invocation. Actual RetryFaultedActivity/1 after a facade receipt-read
 failure qualifies a new native parent/child and one total model call; model-child acceptance-response
-loss remains a separate failed settlement probe, not the same supported path. T021–T023 remain open.
+loss was a separate failed settlement probe. The acknowledgement-confirmation increment below qualifies
+authoritatively confirmed acceptance, without claiming the same support for unavailable confirmation.
+T021–T023 remain open.
+
+After an acceptance attempt fails, the worker may revalidate current native provenance and read the
+exact authenticated immutable receipt for that parent/child. Confirmed acceptance can complete without
+another inference or write; no attempted/unreadable write implies success. Real actor cancellation
+after journal acceptance retains the accepted history while preventing native completion. Before-commit
+failure remains unknown, unavailable receipt confirmation produces no native success, and changed
+native binding refuses cached completion. This does not implement durable cancellation/applied source
+settlement or tombstone/retention policy.

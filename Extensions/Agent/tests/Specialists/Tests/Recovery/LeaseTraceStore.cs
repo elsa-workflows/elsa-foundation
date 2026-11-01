@@ -10,6 +10,9 @@ internal sealed class LeaseTrace
 {
     internal bool RejectRenewal { get; init; }
     internal bool LoseAcceptanceResponse { get; init; }
+    internal bool FailBeforeAcceptance { get; init; }
+    internal Func<ValueTask>? AfterAccepted { get; set; }
+    internal bool AlwaysLoseAcceptedReceiptRead { get; set; }
     internal bool LoseAcceptedReceiptRead { get; init; }
     internal int AcceptedReceiptReadsLost;
     internal int AcceptedResponsesLost;
@@ -42,7 +45,7 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
     public async ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
     {
         var document = await inner.ReadAsync(handle, identity, cancellationToken);
-        if (document?.Status == SpecialistTurnStatus.Accepted && trace.LoseAcceptedReceiptRead && Interlocked.Increment(ref trace.AcceptedReceiptReadsLost) == 1)
+        if (document?.Status == SpecialistTurnStatus.Accepted && (trace.AlwaysLoseAcceptedReceiptRead || trace.LoseAcceptedReceiptRead && Interlocked.Increment(ref trace.AcceptedReceiptReadsLost) == 1))
             throw new IOException("The accepted receipt could not be read by the native facade.");
         if (document?.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching) trace.ClaimedRead.TrySetResult(document);
         return document;
@@ -69,7 +72,9 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
     public ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, IReadOnlyList<string> requestIds, SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken) => inner.CompleteModelResponseAsync(handle, identity, lease, requestIds, observation, now, cancellationToken);
     public async ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        if (trace.FailBeforeAcceptance) throw new IOException("The acceptance request failed before committing.");
         var accepted = await inner.AcceptAsync(handle, identity, lease, protectedResult, now, cancellationToken);
+        if (accepted && trace.AfterAccepted is { } callback) await callback();
         if (accepted && trace.LoseAcceptanceResponse && Interlocked.Increment(ref trace.AcceptedResponsesLost) == 1) throw new IOException("The committed acceptance response was lost.");
         return accepted;
     }

@@ -108,7 +108,15 @@ invocation while preserving their values, policy fingerprints and materializatio
 specialist and kernel ownership checks remain unchanged. This is native delivery proof with a seeded
 structural wrapper, not M4 authoring qualification.
 
-A distinct acceptance-response-loss probe faults the model child and retains its blocking incident;
-intervention on only the facade incident does not override it. That failed probe is retained as open
-native settlement/reconciliation work under M3, separately from the qualified facade-read retry path.
+The earlier acceptance-response-loss probe faulted the model child and retained its blocking incident;
+intervention on only the facade incident did not override it. The acknowledgement-confirmation increment
+now rechecks current native provenance and authenticates the exact immutable receipt after an acceptance
+attempt fails. Only a confirmed accepted result can complete without another model call. Failure before
+commit remains unknown, and an unavailable receipt confirms no success. Cancellation through the real
+native actor after journal acceptance preserves history but prevents process application. A changed
+committed binding also refuses cached completion. These cases retain the original failure when
+confirmation is unavailable; they do not retry an uncertain write.
+
 Cancellation/applied dispositions, pre-admission tombstones and retention are still required by T021–T023.
+A committed but unreadable receipt can still leave native work faulted; this remains distinct from
+confirmed recovery and from the qualified facade-read operator retry path.

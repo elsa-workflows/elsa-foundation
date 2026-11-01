@@ -36,6 +36,106 @@ public sealed class SpecialistNativeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task Acceptance_confirmation_refuses_changed_committed_native_binding(bool durable)
+    {
+        using var files = new JournalFiles();
+        var factory = new FixtureFactory("{\"Article\":\"accepted before binding changed\"}");
+        var trace = new LeaseTrace { LoseAcceptanceResponse = true };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        trace.AfterAccepted = async () =>
+        {
+            var store = provider.GetRequiredService<IActivityExecutionStateStore>();
+            var parent = (await store.ListAllAsync("run")).Single(state => state.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+            var identity = parent.ContractIdentity!;
+            await store.SaveAsync(parent with { ContractIdentity = new(identity.ActivityTypeKey, identity.ContractVersion, "changed-contract-fingerprint") });
+        };
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var child = states.Single(state => state.Execution.ExecutableNodeId == SpecialistNativeBinding.ChildNode(executable.RootActivity).ExecutableNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, child.Status);
+        Assert.Null(child.Completion);
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(SpecialistTurnStatus.Accepted, (await NativeTurnAsync(provider, executable)).Document.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Native_cancellation_after_journal_acceptance_prevents_acknowledgement_recovery_from_applying_the_result(bool durable)
+    {
+        using var files = new JournalFiles();
+        var factory = new FixtureFactory("{\"Article\":\"accepted before cancel\"}");
+        var trace = new LeaseTrace { LoseAcceptanceResponse = true };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        trace.AfterAccepted = async () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var command = new WorkflowExecutionCommand("cancel-after-accept", "run", WorkflowExecutionCommandKind.Cancel, now, null, new Dictionary<string, string>());
+            await actor.EnqueueAsync(new("cancel-after-accept-envelope", "run", command, "cancel-after-accept", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
+            await DrainAsync(actor, "cancel-after-accept");
+        };
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim).WaitAsync(TimeSpan.FromSeconds(20));
+        await DrainAsync(actor, "after-cancelled-worker");
+        var (document, request) = await NativeTurnAsync(provider, executable);
+        Assert.Equal(SpecialistTurnStatus.Accepted, document.Status);
+        Assert.NotNull(document.ProtectedResult);
+        Assert.Equal(1, (await provider.GetRequiredService<ISpecialistTurnStore>().ReadConversationAsync(document.Handle, request.Identity, default))!.Revision);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(1, factory.Calls);
+        Assert.All(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run"), state => Assert.Null(state.Completion));
+    }
+
+    [Theory]
+    [InlineData(false, "committed")]
+    [InlineData(true, "committed")]
+    [InlineData(false, "before-commit")]
+    [InlineData(true, "before-commit")]
+    [InlineData(false, "read-unavailable")]
+    [InlineData(true, "read-unavailable")]
+    public async Task A_lost_acceptance_acknowledgement_requires_an_authoritative_receipt_before_native_completion(bool durable, string mode)
+    {
+        using var files = new JournalFiles();
+        var factory = new FixtureFactory("{\"Article\":\"accepted once\"}");
+        var trace = new LeaseTrace { LoseAcceptanceResponse = mode != "before-commit", FailBeforeAcceptance = mode == "before-commit", AlwaysLoseAcceptedReceiptRead = mode == "read-unavailable" };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        trace.AlwaysLoseAcceptedReceiptRead = false; // Inspection after the deliberately unconfirmed native decision.
+        var (document, request) = await NativeTurnAsync(provider, executable);
+        var completed = mode == "committed";
+        var accepted = mode != "before-commit";
+        Assert.Equal(accepted ? SpecialistTurnStatus.Accepted : SpecialistTurnStatus.OutcomeUnknown, document.Status);
+        Assert.Equal(completed ? WorkflowExecutionStatus.Completed : WorkflowExecutionStatus.Faulted,
+            (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(1, factory.Opens);
+        Assert.Single(document.ModelRequests!);
+        Assert.Equal(3, document.ResponseObservation!.OutputTokens);
+        var conversation = (await provider.GetRequiredService<ISpecialistTurnStore>().ReadConversationAsync(document.Handle, request.Identity, default))!;
+        Assert.Equal(accepted ? 1 : 0, conversation.Revision);
+        Assert.Equal(!accepted, conversation.OutcomeUnknown);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        if (completed)
+        {
+            Assert.NotNull(document.ProtectedResult);
+            Assert.Equal("accepted once", states.Single(x => x.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId).Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString());
+        }
+        else Assert.All(states, state => Assert.Null(state.Completion));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task A_real_native_operator_retry_replays_committed_acceptance_into_a_new_parent_and_child(bool durable)
     {
         using var files = new JournalFiles();

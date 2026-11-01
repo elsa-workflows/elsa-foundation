@@ -80,3 +80,9 @@ recovery; it is not independent-process or live-model qualification.
 See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with
 `bash tools/ef/generate-module-migrations.sh 'Specialists.*DbContext'`; temporarily remove the generated
 migration API entries while their types are absent, then restore the API baseline and build normally.
+
+A runtime acceptance attempt whose acknowledgement is lost can be reconciled through an authoritative
+protected receipt read after rechecking native provenance. This is confirmation of an immutable
+committed result, not a retry of an uncertain write. Before-commit failure or unavailable confirmation
+cannot report native success. Native cancellation after acceptance preserves the journal winner while
+preventing process application.

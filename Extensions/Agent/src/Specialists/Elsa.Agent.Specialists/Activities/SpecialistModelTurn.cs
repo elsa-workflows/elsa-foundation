@@ -25,6 +25,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
         }
         var dispatched = false;
         var ownsClaim = false;
+        var acceptanceStarted = false;
         SpecialistTurnLeaseLifetime? renewal = null;
         try
         {
@@ -59,6 +60,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
                 var result = await runner.RunAsync(request, active.Token, budgets.Create(document, request));
                 renewal.ThrowIfLost();
                 _ = await binding.ParentAsync(context, active.Token);
+                acceptanceStarted = true;
                 if (!await journal.AcceptAsync(document, result, time.GetUtcNow(), active.Token))
                     throw SpecialistModelRunner.Failure("specialist.turn.fence", "The specialist result cannot be accepted under this worker lease.");
                 return ActivityTransition.Complete(handle);
@@ -66,6 +68,19 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
         }
         catch (Exception exception)
         {
+            if (acceptanceStarted && !context.CancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    // An acceptance acknowledgement may be lost after its durable commit. Confirm
+                    // both current native authority and the exact protected receipt; never infer
+                    // success from an attempted write or issue another model request.
+                    _ = await binding.ParentAsync(context, context.CancellationToken);
+                    _ = await journal.ResultAsync(handle, identity, context.InvocationId, context.CancellationToken);
+                    return ActivityTransition.Complete(handle);
+                }
+                catch { /* Unconfirmed acceptance keeps the original fault/uncertainty below. */ }
+            }
             var cause = renewal?.IsLost == true ? renewal.Failure() : exception;
             var code = cause is SpecialistTurnException specialist ? specialist.Code : "specialist.turn.interrupted";
             var unknown = code == "specialist.turn.outcome-unknown" || dispatched && (cause is not SpecialistTurnException || renewal?.IsLost == true ||
