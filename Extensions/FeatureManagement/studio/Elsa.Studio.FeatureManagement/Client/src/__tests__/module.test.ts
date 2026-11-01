@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { AnonymousAuthProvider, AuthProvider, studioBackendCapabilitiesChangedEvent, studioNavigationRequestedEvent, type AuthProviderManager } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, defaultStudioHostId, studioBackendCapabilitiesChangedEvent, studioNavigationRequestedEvent, type AuthProviderManager } from "@elsa-workflows/studio-sdk";
 import {
   applyFeatureToggle,
   buildDependentsIndex,
@@ -1141,6 +1141,22 @@ describe("feature impact review", () => {
     expect(container.textContent).toContain("Unsaved changes");
     expect(container.textContent).toContain("0 enabled of 1 available");
     expect(postCount).toBe(0);
+    await unmount();
+  });
+
+  it("opens on the Server host when no target or pending apply picks one", async () => {
+    const api = stubApi({
+      hostGetJson: async () => ({ revision: "studio-rev-1", features: [feature("StudioFeature", true, {})] }),
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("ServerFeature", true, {})] })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    expect(defaultStudioHostId).toBe("server");
+    const selectedHosts = Array.from(container.querySelectorAll("[aria-label='Hosts'] [role='tab']")).filter(tab => tab.getAttribute("aria-selected") === "true");
+    expect(selectedHosts.map(tab => tab.textContent)).toEqual([expect.stringContaining("Server")]);
+    expect(container.querySelector("[aria-label='Disable ServerFeature']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Disable StudioFeature']")).toBeNull();
     await unmount();
   });
 

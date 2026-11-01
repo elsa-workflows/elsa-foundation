@@ -1,12 +1,12 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioEndpointContext, StudioHostId } from "@elsa-workflows/studio-sdk";
+import { defaultStudioHostId, resolveBackendPath } from "@elsa-workflows/studio-sdk";
 import { AnonymousConsoleHttpClient } from "./anonymousConsoleClient";
 import "./styles.css";
 
-type ConsoleHostId = "server" | "studio";
+type ConsoleHostId = StudioHostId;
 
 interface ConsoleTarget {
   id: ConsoleHostId;
@@ -108,7 +108,6 @@ const consoleTargetDefinitions: Record<ConsoleHostId, Pick<ConsoleTarget, "id" |
   server: { id: "server", label: "Server", endpointPrefix: "/_elsa/server/diagnostics/console-logs" },
   studio: { id: "studio", label: "Studio", endpointPrefix: "/_elsa/studio/diagnostics/console-logs" }
 };
-const defaultConsoleHostId: ConsoleHostId = "server";
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
 const consoleStreamServerTimeoutInMilliseconds = 120_000;
@@ -193,7 +192,7 @@ export function ConsoleStreamPage() {
 }
 
 function ConsoleStreamView({ page = false }: { page?: boolean }) {
-  const [hostId, setHostId] = useState<ConsoleHostId>(defaultConsoleHostId);
+  const [hostId, setHostId] = useState<ConsoleHostId>(defaultStudioHostId);
   const [sources, setSources] = useState<ConsoleLogSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [sourcesState, setSourcesState] = useState<"loading" | "ready" | "failed">("loading");

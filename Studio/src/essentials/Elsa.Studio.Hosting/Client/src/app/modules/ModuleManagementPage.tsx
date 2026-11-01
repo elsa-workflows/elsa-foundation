@@ -1,7 +1,7 @@
 import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi } from "../../sdk";
+import { defaultStudioHostId, type ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, SkeletonRows, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   deleteDropFolderPackage,
@@ -58,7 +58,7 @@ const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
 
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
-  const [activeHostId, setActiveHostId] = useState<HostId>("server");
+  const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
   // Query cache, not here.
   const [viewByHost, setViewByHost] = useState<Record<HostId, HostViewState>>(() => ({
