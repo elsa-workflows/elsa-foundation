@@ -1,7 +1,7 @@
 # Runtime Efficiency continuation evidence
 
 Program [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531), draft integration [#3601](https://github.com/elsa-workflows/elsa-foundation/pull/3601).
-This is an in-progress receipt. It does not establish completion of M0–M5, current-main throughput, or independent-host capacity.
+This is an in-progress receipt. It does not establish completion of M0–M5, current-main throughput, or clustered placement/failover. Independent-host capacity below covers independent starts sharing one PostgreSQL server only.
 The [baseline assessment](native-runtime-performance-2026-10-31.md) and [first implementation receipt](native-runtime-performance-implementation-2026-10-31.md) retain their original cohorts and exclusions.
 
 ## Hydration and preparation
@@ -566,3 +566,73 @@ performance investigation; these rates alone do not establish the cause of the p
 
 Original unreadable-config and reused-port-probe failures are retained. The four-sample comparison uses a fresh
 complete recovery series with separate verified ports; it does not select the surviving fastest partial sample.
+
+### Independent-host native PostgreSQL capacity
+
+Thirteen finite waves ran the frozen native Probe (`6d77c4402` driver, production libraries `63e4c1fc4`) on one to four
+separate D2s_v6 workers (two vCPU / 8 GiB) that share a single PostgreSQL 16 server on the D8ds_v5 runner's OS volume.
+Each node runs four closed-loop callers with a 15-second warmup and a 30-second target window starting at a fixed,
+NTP-synchronized UTC instant; every wave uses a fresh pre-initialized database. Each node owns its own published
+artifact, so this measures **aggregate independent-start capacity** on a shared database. It is not actor-cluster
+placement, ownership transfer or failover.
+
+All **13 waves / 25 node samples** pass: exit zero, completed = states = total runs = distinct run IDs, zero queued
+items, incidents and undelivered outbox. Every node's production DLL hashes are identical. All measured windows end at
+least 19.2 seconds before the fixed validation release; multi-node windows overlap for at least 30.0 seconds with
+start skew below one millisecond. The database-host monitor completed with 1,740 one-second samples, zero errors, no
+gap above 1.04 seconds inside the cohort and no ungranted lock observed.
+
+| Shape (Balanced unless noted) | 1 node | 2 nodes | 4 nodes | 4-node p95 (worst node) |
+| --- | --- | --- | --- | --- |
+| One WriteLine | 49.1 /s | 90.3 /s (1.84×) | 147.7 /s (3.01×) | 180 ms |
+| Ten WriteLines | 28.3 /s | 56.5 /s (2.00×) | 88.9 /s (3.14×) | 357 ms |
+| Ten WriteLines, Durable | 8.7 /s | 15.0 /s (1.71×) | 20.1 /s (2.30×) | 1,829 ms |
+
+Per-node rates fall as nodes are added while each worker uses about 0.6–1.2 of its two cores, so the workers are not
+CPU-bound. On the database host, WAL sync time accumulates 750–975 ms per wall-clock second in every wave, OS-disk
+`%util` is 73–93% and mean write await rises with node count (Durable: 5.8 → 10.8 → 30.6 ms), while host CPU stays at
+or below 61%. That pattern is consistent with commit-flush latency on the shared database volume limiting scale-out,
+especially for Durable; it is not a proven bottleneck attribution. `xact_commit` includes read-only autocommit
+statements and is not the EF command budget.
+
+Context pooling on one node, four alternating samples: pooling off **30.35 / 32.08 /s**, on **31.88 / 32.00 /s**, with
+p95 157–166 ms throughout. The difference is within sample-order drift; no pooling gain is claimed or recommended.
+
+Limits: one ramp per shape, no error bars, one database placement (OS volume), shared-database rather than clustered
+ownership and no failure injection. Raw ledgers, per-node results, measured receipts, configurations, controller and
+plan plus the database-host monitor are committed with verified custody; see the
+[evidence README](evidence/runtime-efficiency-program-2026-11-01/README.md#independent-host-native-postgresql-capacity).
+
+### Actual timer drain by dispatch degree (#1307)
+
+The frozen [timer driver](../../specs/1183-runtime-efficiency-program/evidence/timer-qualification/README.md) ran on one
+D2s_v6 worker against the same PostgreSQL server, and against SQLite on the worker's OS volume, with no other owned
+workload active. Each run publishes once, completes one warm timer, suspends 100 fresh `Sequence(Delay, ten ReplaySafe
+leaves)` executions, makes every timer due and times one real sweep through the ordinary timer pump, bookmark
+dispatcher and mailbox. Each case gets a fresh process and database, and degrees run in alternating order.
+
+All **22 runs** pass: 100 completed executions with exactly twelve activity rows and ten body calls each, zero
+timers, bookmarks, queue items, incidents and undelivered outbox, and unchanged workflow/activity bytes after a second
+empty sweep. Runtime DLL hashes match the `63e4c1fc4` capacity cohort.
+
+| Provider / mode | Degree 1 | Degree 2 | Degree 4 | Degree 8 |
+| --- | --- | --- | --- | --- |
+| PostgreSQL Balanced (3 each) | 6.0–6.1 /s | 10.3–11.1 /s | 15.3–16.4 /s | 20.7–23.0 /s |
+| PostgreSQL Durable (2 each) | 2.3–2.4 /s | — | 7.0–7.5 /s | 10.1–11.0 /s |
+| SQLite Balanced (2 each) | 1.6 /s | — | 2.4–2.5 /s | — |
+
+On PostgreSQL, degree 8 drains the backlog 3.5–3.8× (Balanced) and 4.4× (Durable) faster than the default degree 1.
+At degree 8 the process averages about 1.7 of the worker's two cores during the sweep, so the worker CPU is the next
+limit on this shape. SQLite gains about 1.5× at degree 4. Allocation per resume does not change with degree
+(about 11.8 MB Balanced, 24.3 MB Durable). This measures draining an existing due backlog on one node, not deadline
+accuracy, clustered timer ownership or behaviour under concurrent foreground load. The production default stays at
+one; changing it is an owner decision these samples inform but do not make.
+
+### Fixture cleanup
+
+After custody was verified, the share server, guest firewall chain, PostgreSQL container and data, privacy helper,
+temporary-disk directories and every protected file in the task base were removed from the existing runner. The added
+NSG rule was deleted and the remaining rules match the recorded original. The task resource group (four workers,
+disks, NICs and evidence storage) was deleted, the existing runner was restored to deallocated, and the local task
+SSH key and transfer token were deleted. No task-tagged resource or running VM remains. See `fixture-cleanup.json`.
+Independent-host failure injection, real remote Cancel and the root-GC race were **not run**; they need a new fixture.

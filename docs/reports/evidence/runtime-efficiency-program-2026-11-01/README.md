@@ -75,3 +75,35 @@ build and baseline validator compatibility source/byte receipts. SHA-256:
 All hashes and absence of protected task credentials are verified locally. `diagnostics-attribution-summary.json`
 compares the exact foreground SQL multisets and groups the asynchronous observation. No parameters are captured;
 untraced background commands cannot be claimed as an exact per-request cost or measured socket round trips.
+
+## Independent-host native PostgreSQL capacity
+
+Five archives hold the 13-wave cohort: each worker's ledger, per-case configuration, result, run log, measured-window
+receipt and validation marker, plus its driver log, controller and plan; and the database host's monitor
+(PostgreSQL WAL/database/lock samples, iostat, untimestamped docker stats, storage placement, status). Every archive
+was packaged on its host after checking that no protected connection, password or transfer token occurs in any
+selected file, uploaded once to the private task container, downloaded and verified file-by-file against its manifest.
+`capacity-custody.json` records the result.
+
+| Archive | Host | Files | Bytes | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `runner-capacity-monitor-r1-final.tar.xz` | runner | 8 | 145,364 | `c40aec024b5c6b5751a848c4682d132f1afc47869bacc8dd34761a3d73da388d` |
+| `w1-capacity-13waves-r1-final.tar.xz` | w1 | 70 | 53,164 | `300f24d1c2698758e65a87d6ef16d9b46835c647699902e6ad16bcc906d39968` |
+| `w2-capacity-13waves-r1-final.tar.xz` | w2 | 35 | 28,172 | `a59acf4ac1c98ba2297c215ab567c49bf57c7998fc742f3916e5c4a3ab748188` |
+| `w3-capacity-13waves-r1-final.tar.xz` | w3 | 20 | 18,084 | `d53ab1aaac22600fc66e1abebf6e2094d01cb547eb486ac310faf908e0ad0e3a` |
+| `w4-capacity-13waves-r1-final.tar.xz` | w4 | 20 | 18,156 | `1b392e8b4bf6cedf914b160b7a07731ecbf978f168db00cfb96a96e9a94af96d` |
+
+`analyze-capacity.py` checks result hashes, correctness, participants, distinct IDs, binary identity, window overlap
+and that every measured window ends before its validation release, writing `capacity-summary.json` (issues: none).
+`analyze-capacity-server.py` aligns database-host WAL, transaction and iostat samples to each wave's common measured
+interval. Both take a root containing `m5-capacity-final-<host>-evidence/` directories extracted from these archives.
+
+## Actual timer drain by degree
+
+`w2-timer-pg-r1-final.tar.xz` (74 files, 12,340 bytes, SHA-256
+`6a63d0e1e59ff543321e3aab85f9e07a4497afd700514c26dea79a1aa4ba7205`) holds the 22-run ledger, every case configuration,
+log and result, the controller, case list and driver log, plus the passing four-timer PostgreSQL smoke. SQLite database
+files are excluded. `timer-custody.json` records the verified transfer; `analyze-timer.py` (run on the extracted
+archive root) re-checks every result hash and correctness field and writes `timer-summary.json` (issues: none).
+
+`fixture-cleanup.json` records the removal of every task fixture and the restored runner state.
