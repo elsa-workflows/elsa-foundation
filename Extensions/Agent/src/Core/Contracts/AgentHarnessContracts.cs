@@ -34,6 +34,8 @@ public sealed record AgentHarnessTurnRequest(
     public AgentClientBinding? Client { get; init; }
     public IReadOnlyList<AgentToolResult> PendingToolResults { get; init; } = [];
     public bool IsReceiptContinuation { get; init; }
+    /// <summary>Server-owned dispatch boundary for recording and admitting results before the harness sends them to its provider.</summary>
+    public IAgentToolInvoker? ToolInvoker { get; init; }
 }
 
 /// <summary>

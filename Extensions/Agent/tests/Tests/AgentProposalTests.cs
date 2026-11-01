@@ -523,6 +523,7 @@ internal sealed class ProposalFixture : IDisposable
         services.AddLogging();
         new EventsFeature().ConfigureServices(services);
         services.AddFoundationAgentAbstractions();
+        AgentTestServices.AddToolResultSource(services);
         services.AddScoped<IAgentTool>(_ => tool);
         services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => Authority));
         services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock));
@@ -638,7 +639,8 @@ internal sealed class ProposalMutationTool : IAgentTool
     public TaskCompletionSource? Started { get; init; }
     public TaskCompletionSource? Release { get; init; }
     public AgentToolDescriptor Descriptor => new("test_mutate", "Update resource", "Updates one owned test resource.", AgentToolMutability.Mutating,
-        CurrentRisk, "{}", [], []) { ModuleId = "test.module", ResultType = "test.change", ResultSchemaVersion = "1" };
+        CurrentRisk, "{}", [], []) { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId,
+        ResultType = "test.change", ResultSchemaVersion = "1" };
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         PrepareCalls++;
@@ -672,7 +674,8 @@ internal sealed class ProposalClientTool : IAgentTool, IAgentClientTool
     public int CompleteCalls { get; private set; }
     public bool UseSnapshotBinding { get; set; }
     public AgentToolDescriptor Descriptor { get; set; } = new("test_client_change", "Change local resource", "Changes an originating local resource.", AgentToolMutability.Mutating,
-        AgentRisk.ReviewRequired, "{}", [], []) { ModuleId = "test.module", ExecutionLocation = AgentExecutionLocation.ClientWorkingState };
+        AgentRisk.ReviewRequired, "{}", [], []) { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId,
+        ExecutionLocation = AgentExecutionLocation.ClientWorkingState, ResultType = "test.client-change", ResultSchemaVersion = "1" };
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         => Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(new("test.module", "test.editor", "editor-1", "revision-1"),
             JsonSerializer.SerializeToElement(invocation.Arguments), AgentRisk.ReviewRequired,

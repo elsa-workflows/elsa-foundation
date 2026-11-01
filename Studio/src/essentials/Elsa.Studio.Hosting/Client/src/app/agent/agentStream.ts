@@ -1,5 +1,6 @@
 import { resolveBackendPath, withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
 import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent } from "./agentTypes";
+import { mapAdmittedContextAttachment } from "./agentClient";
 
 export interface AgentStreamSubscription {
   close(): void;
@@ -198,6 +199,15 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
   }
 
   switch (type) {
+    case "context-admitted": {
+      const attachments = readField(payload, "attachments");
+      const diagnostics = readField(payload, "diagnostics");
+      return {
+        type: "context-admitted",
+        attachments: Array.isArray(attachments) ? attachments.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(mapAdmittedContextAttachment) : [],
+        diagnostics: Array.isArray(diagnostics) ? diagnostics.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map(item => ({ contributorId: readString(item, "contributorId") ?? "agent", code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", required: readBoolean(item, "required") ?? false })) : []
+      };
+    }
     case "message-started":
     case "started":
     case "conversation.started": {
@@ -295,7 +305,8 @@ const agentStreamEventNames = [
   "tool-call-completed",
   "plan-updated",
   "progress",
-  "turn-cancelled"
+  "turn-cancelled",
+  "context-admitted"
 ];
 
 const agentResultKindNames = [

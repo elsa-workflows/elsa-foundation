@@ -154,6 +154,8 @@ public sealed class AgentMessageRequest
     public string? RequestId { get; init; }
     public AgentPromptSource? Source { get; init; }
     public string? PromptMode { get; init; }
+    /// <summary>Current surface for this prompt. It is an untrusted admission hint, never an invocation target or authority.</summary>
+    public AgentSurfaceRequest? ActiveSurface { get; init; }
 }
 
 public sealed class AgentContextAttachmentRequest

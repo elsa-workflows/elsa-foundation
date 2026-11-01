@@ -2,18 +2,26 @@ using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Workflows.Services;
+using Elsa.Workflows.Design.Core.Contracts;
 
 namespace Elsa.Agent.Workflows.Tools;
 
 /// <summary>Reads the admitted, value-free graph snapshot without claiming a durable resource read.</summary>
-public sealed class WorkflowReadGraphTool : IAgentTool
+public sealed class WorkflowReadGraphTool(IEnumerable<IWorkflowDefinitionAuthorizer>? resourceAuthorizers = null) : IAgentTool, IAgentToolAuthorization
 {
     public const string ToolName = "workflow_read_graph";
     public AgentToolDescriptor Descriptor { get; } = new(ToolName, "Read open workflow graph",
         "Returns admitted activity identities, connections, positions and working-state revision. Activity property values are excluded.",
         AgentToolMutability.ReadOnly, AgentRisk.ReadOnly, """{"type":"object","properties":{},"additionalProperties":false}""",
         ["workflows/design:read"], ["/workflows"])
-    { ModuleId = WorkflowAgentSnapshot.ModuleId, ResultType = "workflows.graph", ResultSchemaVersion = "1" };
+    {
+        ModuleId = WorkflowAgentSnapshot.ModuleId, ResultType = "workflows.graph", ResultSchemaVersion = "1",
+        DisclosureSourceId = "workflows.context"
+    };
+
+    public ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target,
+        CancellationToken cancellationToken = default)
+        => WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, actorId, tenantId, target, false, cancellationToken);
 
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {

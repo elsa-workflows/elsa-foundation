@@ -133,14 +133,14 @@ public sealed class GitHubCopilotAgentProvider(
             request.ActorId,
             request.Context,
             request.Policy,
-            toolInvoker,
+            request.ToolInvoker ?? toolInvoker,
             proposal => output.Writer.TryWrite(new AgentStreamEvent(NewId(), AgentStreamEventKind.ProposalCreated, null, proposal.Id, null, DateTimeOffset.UtcNow, AgentResultKind.Proposal, proposal)))
         {
             TenantId = request.TenantId, TurnId = request.TurnId, Client = request.Client, AllowMutations = !request.IsReceiptContinuation
         };
         var aiFunctions = request.Tools.Where(_ => !request.IsReceiptContinuation)
             .Select(tool => AgentToolAIFunctions.Create(tool, toolContext with
-            { Invoker = new ObservingToolInvoker(toolInvoker, tool.Descriptor, output.Writer) })).ToArray();
+            { Invoker = new ObservingToolInvoker(request.ToolInvoker ?? toolInvoker, tool.Descriptor, output.Writer) })).ToArray();
         var customToolNames = aiFunctions.Select(tool => tool.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         await using var client = clientFactory.Create(BuildClientRequest(readiness));
