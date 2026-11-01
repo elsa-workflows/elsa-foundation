@@ -44,6 +44,7 @@ try{
  await binding(page,'Source HTTP binding','http-source');await page.getByLabel('Records JSON Pointer',{exact:true}).fill('/items');await page.getByLabel('Continuation query parameter',{exact:true}).fill('pageToken');
  await page.getByLabel('Accepted records destination kind',{exact:true}).selectOption('jsonl');await binding(page,'Accepted records binding','output');
  await page.getByLabel('Rejected records destination kind',{exact:true}).selectOption('jsonl');await binding(page,'Rejected records binding','errors');
+ await page.getByLabel('Use a CSV lookup',{exact:true}).check();await binding(page,'Lookup CSV binding','lookup');
  await page.getByLabel('Maximum delivery attempts',{exact:true}).fill('3');await publishEtl(page);
  await page.getByRole('button',{name:/^View version 1\b/}).click();const selection=(await page.getByRole('region',{name:'Published ETL artifact'}).locator('code').first().innerText()).trim();
  write('pipeline-selection.json',{selection});await shot(page,'ui-etl-published-v1');mark('Published the two-shard HTTP to JSONL pipeline through Studio');

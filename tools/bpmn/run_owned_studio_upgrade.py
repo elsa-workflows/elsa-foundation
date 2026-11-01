@@ -247,7 +247,8 @@ def main():
         if direct_etl:
             fixture_script = REPO / "e2e-tests/etl/EtlHttpFixture.mjs"
             ready_path = root / "etl-http-ready.json"
-            fixture = start(fixture_script, root, "", "etl-http", ["node", str(fixture_script), "--ready-file", str(ready_path), "--hold-source-failure"])
+            fixture = start(fixture_script, root, "", "etl-http", ["node", str(fixture_script), "--ready-file", str(ready_path),
+                "--lookup-snapshot-root", str(root / "etl" / "snapshots"), "--effect-root", str(root / "etl" / "main-output")])
             deadline = time.monotonic() + 15
             while not ready_path.exists():
                 if fixture.poll() is not None: raise RuntimeError("The owned ETL dependency exited before readiness.")
@@ -256,6 +257,7 @@ def main():
             etl_url = "http://127.0.0.1:" + str(json.loads(ready_path.read_text())["port"])
             etl_root = root / "etl"
             for name in ("main-output", "error-output", "snapshots"): (etl_root / name).mkdir(parents=True)
+            lookup = etl_root / "lookup.csv"; lookup.write_text("id\n1\n2\n3\n4\n")
             features["EtlDesign"] = {}
             features["EtlDesignEntityFrameworkCore"] = {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-design.db;Pooling=False"}
             features["EtlDesignApi"] = {"CursorSigningKey": "owned-direct-etl-design-cursor-key-for-isolated-e2e"}
@@ -266,7 +268,8 @@ def main():
             features["EtlRuntime"] = {"SnapshotRoot": str(etl_root / "snapshots"), "FileBindings": [
                 {"TenantId": "default", "PersistencePartition": "default", "Alias": alias, "Role": role, "Revision": alias + "-v1", "Path": str(etl_root / folder), "IsCurrent": True, "AtomicPublication": True}
                 for alias, role, folder in (("output", "MainOutput", "main-output"), ("errors", "ErrorOutput", "error-output"))
-            ], "HttpBindings": [{"TenantId": "default", "PersistencePartition": "default", "Alias": "http-source", "Role": "Source", "Revision": "http-source-v1",
+            ] + [{"TenantId": "default", "PersistencePartition": "default", "Alias": "lookup", "Role": "Lookup", "Revision": "lookup-v1", "Path": str(lookup),
+                "IsCurrent": True, "ImmutableInput": True, "ExpectedSha256": digest(lookup)}], "HttpBindings": [{"TenantId": "default", "PersistencePartition": "default", "Alias": "http-source", "Role": "Source", "Revision": "http-source-v1",
                 "Endpoint": etl_url + "/source/shard-a/page", "AllowedPaths": ["/source/shard-a/page", "/source/shard-b/page"], "AllowHttp": True,
                 "Shards": [{"Id": shard, "SeedUri": etl_url + "/source/" + shard + "/page"} for shard in ("shard-a", "shard-b")]}]}
             write_json(backend_root / "shells.json", shells)
