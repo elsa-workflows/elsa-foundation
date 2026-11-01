@@ -27,13 +27,14 @@ public sealed class FoundationSelectionCatalogTests
         "WorkflowsRuntimeResumption",
         "WorkflowsRuntimeTriggers"
     ];
-    private static readonly string[] s_diagnosticsMembers =
+    private static readonly string[] s_previousDiagnosticsMembers =
     [
         "DiagnosticsOpenTelemetry",
         "DiagnosticsOpenTelemetryEntityFrameworkCore",
         "DiagnosticsStructuredLogs",
         "DiagnosticsStructuredLogsEntityFrameworkCore"
     ];
+    private static readonly string[] s_diagnosticsMembers = ["ApiCapabilities", .. s_previousDiagnosticsMembers];
     private static readonly string[] s_workerMembers =
     [
         "ActivitiesControlFlow",
@@ -66,7 +67,8 @@ public sealed class FoundationSelectionCatalogTests
     private const string OriginalCatalogDigest = "0a62934830eccd0e27e829ac7e17e6c2e44e85babd959a2aace53b15569f0149";
     private const string PreviousCatalogDigest = "42afc8ccd1f18c972d882f1e214c961d5aad0788a6f0974e8964bb6e012bda15";
     private const string WorkerProfileDigest = "e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1";
-    private const string CurrentCatalogDigest = "6563d77f116b7aefb2a67425f28b72cab736297d4e46df964bf9fb507cf91c3c";
+    private const string VersionThreeCatalogDigest = "6563d77f116b7aefb2a67425f28b72cab736297d4e46df964bf9fb507cf91c3c";
+    private const string CurrentCatalogDigest = "a4f4545f3d90da5deb27a0b7a6634ac4c8ad555e275239977193a4576135ecf0";
 
     [Fact]
     public void Bundled_profile_plans_to_the_exact_reviewed_set_with_profile_provenance()
@@ -104,7 +106,7 @@ public sealed class FoundationSelectionCatalogTests
         var authored = Authored(catalog, profile, profile.Members);
         var plan = SelectionPlanner.Plan(catalog, authored);
 
-        Assert.Equal("3", catalog.Version);
+        Assert.Equal("4", catalog.Version);
         Assert.Equal(CurrentCatalogDigest, catalog.Digest);
         Assert.Equal("1", profile.Version);
         Assert.Equal(WorkerProfileDigest, profile.Digest);
@@ -145,11 +147,11 @@ public sealed class FoundationSelectionCatalogTests
         Assert.DoesNotContain("signingKey", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("migrationAuthorization", json, StringComparison.OrdinalIgnoreCase);
         var group = Assert.Single(catalog.Groups, x => x.Id == "diagnostics-ef");
-        Assert.Equal("3", catalog.Version);
+        Assert.Equal("4", catalog.Version);
         Assert.Equal("diagnostics-ef", group.Id);
-        Assert.Equal("1", group.Version);
+        Assert.Equal("2", group.Version);
         Assert.Equal(s_diagnosticsMembers, group.Members.ToArray());
-        Assert.Equal(2, group.DependencyExplanations.Length);
+        Assert.Equal(4, group.DependencyExplanations.Length);
         Assert.All(group.DependencyExplanations, edge => Assert.Equal("required", edge.Mode));
         Assert.Contains(group.DependencyExplanations, edge =>
             edge.FeatureId == "DiagnosticsOpenTelemetryEntityFrameworkCore" &&
@@ -175,8 +177,8 @@ public sealed class FoundationSelectionCatalogTests
         Assert.Equal("84765f93718964b00ee47f4dae07dbf2572f60d53741fd7ba68426bc696928ea", originalProfile.Digest);
         Assert.Equal(s_expectedMembers, originalProfile.Members.ToArray());
 
-        Assert.Equal("3", FoundationSelectionCatalog.LoadFor(originalPin with { Digest = new string('0', 64) }).Version);
-        Assert.Equal("3", FoundationSelectionCatalog.LoadFor(originalPin with { Version = "unknown" }).Version);
+        Assert.Equal("4", FoundationSelectionCatalog.LoadFor(originalPin with { Digest = new string('0', 64) }).Version);
+        Assert.Equal("4", FoundationSelectionCatalog.LoadFor(originalPin with { Version = "unknown" }).Version);
     }
 
     [Fact]
@@ -195,7 +197,7 @@ public sealed class FoundationSelectionCatalogTests
         var group = Assert.Single(previous.Groups, x => x.Id == "diagnostics-ef");
         Assert.Equal("77c5f3cfed1ba29da2ec3d54bd1479b46799d9178c4ee5b93f2a3afda6d2cdae", group.Digest);
         Assert.Equal(group.Digest, SelectionDigest.ComputeDefinitionDigest(group));
-        Assert.Equal(s_diagnosticsMembers, group.Members.ToArray());
+        Assert.Equal(s_previousDiagnosticsMembers, group.Members.ToArray());
 
         var current = FoundationSelectionCatalog.Load();
         var mismatchedDigestPin = previousPin with { Digest = new string('0', 64) };
@@ -213,6 +215,38 @@ public sealed class FoundationSelectionCatalogTests
             Accepted = new AcceptedSelection(unknownVersionPin.Digest, workerProfile.Members, [])
         };
         Assert.Contains(SelectionPlanner.Plan(current, authored).Findings, finding => finding.Code == "catalog-pin-unresolved");
+    }
+
+    [Fact]
+    public void Version_three_snapshot_preserves_its_published_diagnostics_definition()
+    {
+        var previous = FoundationSelectionCatalog.LoadFor(new CatalogPin("elsa-foundation", "3", VersionThreeCatalogDigest));
+        Assert.Equal("3", previous.Version);
+        Assert.Equal(VersionThreeCatalogDigest, previous.Digest);
+        Assert.Equal(previous.Digest, SelectionDigest.ComputeCatalogDigest(previous));
+        var group = Assert.Single(previous.Groups, definition => definition.Id == "diagnostics-ef");
+        Assert.Equal("1", group.Version);
+        Assert.Equal(s_previousDiagnosticsMembers, group.Members.ToArray());
+        Assert.Equal("77c5f3cfed1ba29da2ec3d54bd1479b46799d9178c4ee5b93f2a3afda6d2cdae", group.Digest);
+    }
+
+    [Fact]
+    public void Current_diagnostics_group_requires_explicit_capability_aggregation()
+    {
+        var catalog = FoundationSelectionCatalog.Load();
+        var group = Assert.Single(catalog.Groups, definition => definition.Id == "diagnostics-ef");
+        var authored = new AuthoredComposition("1", new CatalogPin(catalog.Id, catalog.Version, catalog.Digest),
+            null, [new DefinitionReference("foundation", "group", group.Id, group.Version, group.Digest)],
+            [], ["ApiCapabilities"],
+            new AcceptedSelection(catalog.Digest, [.. group.Members.Where(id => id != "ApiCapabilities")], []),
+            null, null);
+
+        var plan = SelectionPlanner.Plan(catalog, authored);
+
+        Assert.DoesNotContain("ApiCapabilities", plan.SelectedFeatureIds);
+        foreach (var feature in new[] { "DiagnosticsOpenTelemetry", "DiagnosticsStructuredLogs" })
+            Assert.Contains(plan.Findings, finding => finding.Code == "required-dependency-missing" &&
+                finding.FeatureId == feature && finding.DependencyId == "ApiCapabilities");
     }
 
     [Fact]
