@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Acme.Home.Weaver;
+using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Studio.Preferences.Core.Models;
 
