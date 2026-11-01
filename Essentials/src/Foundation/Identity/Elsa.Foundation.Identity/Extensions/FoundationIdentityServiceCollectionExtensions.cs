@@ -34,6 +34,7 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
         EnsureReplacement<IPermissionEvaluator, ClaimsPermissionEvaluator>(services, ServiceLifetime.Scoped);
         EnsureReplacement<IPermissionAuthorizationService, PermissionAuthorizationService>(services, ServiceLifetime.Scoped);
+        EnsureReplacement<ICurrentSubjectPermissionAuthorizer, UnsupportedCurrentSubjectPermissionAuthorizer>(services, ServiceLifetime.Scoped);
         // The public handler retains obsolete source-compatible constructors. Use an explicit
         // factory so the DI container cannot select an obsolete constructor by accident. A
         // separate marker keeps repeated Foundation registration idempotent because the DI
@@ -69,6 +70,14 @@ public static class FoundationIdentityServiceCollectionExtensions
     public static IServiceCollection ReplacePermissionAuthorizationService<TService>(this IServiceCollection services)
         where TService : class, IPermissionAuthorizationService =>
         Replace<IPermissionAuthorizationService, TService>(services, ServiceLifetime.Scoped);
+
+    /// <summary>
+    /// Replaces the fail-closed current-subject authorizer with an identity provider that owns the
+    /// subject's current users, memberships and roles.
+    /// </summary>
+    public static IServiceCollection ReplaceCurrentSubjectPermissionAuthorizer<TAuthorizer>(this IServiceCollection services)
+        where TAuthorizer : class, ICurrentSubjectPermissionAuthorizer =>
+        Replace<ICurrentSubjectPermissionAuthorizer, TAuthorizer>(services, ServiceLifetime.Scoped);
 
     /// <summary>
     /// Registers the default for a replacement contract while preserving one explicit host

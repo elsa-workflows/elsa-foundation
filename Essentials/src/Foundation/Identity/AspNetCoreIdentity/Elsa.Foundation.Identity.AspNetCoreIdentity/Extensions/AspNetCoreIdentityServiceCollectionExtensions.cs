@@ -55,6 +55,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
         services.TryAddScoped<IUserManager, AspNetCoreIdentityUserManager>();
         services.TryAddScoped<IRoleManager, AspNetCoreIdentityRoleManager>();
         services.TryAddScoped<IPrincipalFactory, AspNetCoreIdentityPrincipalFactory>();
+        services.ReplaceCurrentSubjectPermissionAuthorizer<AspNetCoreIdentityCurrentSubjectPermissionAuthorizer>();
         services.TryAddScoped<IAuthSessionService, DefaultAuthSessionService>();
         services.TryAddScoped<IIdentitySignInService, AspNetCoreIdentitySignInService>();
         services.TryAddScoped<IdentitySeedCoordinator>();
