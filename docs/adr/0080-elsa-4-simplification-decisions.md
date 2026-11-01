@@ -42,6 +42,14 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner continuation, 1 November 2026:** the already active [Runtime Efficiency #2531](../program-goals/runtime-efficiency.md)
+collects the remaining improvements from the native performance assessment and PR #3545, and is authorized for
+end-to-end delivery by the [owner instruction recorded on the program](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6554699791).
+Reuse this program and its matching leaves, reconcile older outstanding acceptance and deliver the M0–M5
+continuation. It runs beside the active programs, with one implementation leaf at a time; model/hosting feature
+delivery stays with Unified Execution #2892. Bounded owner-requested performance qualification is included;
+wall-clock CI gates, the low-priority proposed commit journal, releases and production deployments are not added.
+
 Two programs stay active: **Elsa 4 Simplification** (this ADR) and **Runtime Efficiency**, which merges the
 Runtime Database Access and Runtime Throughput goals. Every other program, including all delivery programs, is
 parked for six weeks from this ADR's date and reviewed at the end of that window. Goals whose remaining work

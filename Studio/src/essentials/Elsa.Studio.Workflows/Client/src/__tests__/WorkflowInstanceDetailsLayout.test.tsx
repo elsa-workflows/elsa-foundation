@@ -111,7 +111,11 @@ describe("Run detail page layout", () => {
     ));
 
     await vi.waitFor(() => expect(container.textContent).toContain("Run workbench"));
-    expect(container.querySelector(".wf-page--run-workbench")).toBeTruthy();
+    const page = container.querySelector(".wf-page--run-workbench");
+    expect(page).toBeTruthy();
+    expect(page?.querySelector(":scope > .studio-page-header")).toBeTruthy();
+    expect(page?.querySelector(".wf-status-line")).toBeNull();
+    expect(page?.querySelector(".studio-result-state[data-tone='danger']")).toBeNull();
     expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline");
 
     flushSync(() => root.render(
