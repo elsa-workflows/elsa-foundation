@@ -23,6 +23,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets/*.jpg" LogicalName="Elsa.LoginArtwork.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="Assets/*.png" LogicalName="Elsa.LoginArtwork.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets/elsa-logo.png" LogicalName="Elsa.LoginArtwork.elsa-logo.png" />
   </ItemGroup>
 </Project>
