@@ -60,7 +60,7 @@ async function settleStart(page){
  await expect(async()=>{
   if(await page.getByRole('button',{name:'Open run',exact:true}).isVisible())return;
   const check=page.getByRole('button',{name:'Check outcome',exact:true});
-  if(await check.isEnabled())await check.click({timeout:1000});
+  if(await check.isVisible() && await check.isEnabled({timeout:500}))await check.click({timeout:500});
   await expect(page.getByRole('button',{name:'Open run',exact:true})).toBeVisible({timeout:500});
  }).toPass({timeout:30000,intervals:[200,500]});
 }
@@ -68,7 +68,7 @@ async function settleCompleted(page){
  await expect(async()=>{
   if((await page.locator('.wf-bpmn-run-heading').innerText()).includes('Completed'))return;
   const check=page.getByRole('button',{name:'Check outcome',exact:true});
-  if(await check.isEnabled())await check.click({timeout:1000});
+  if(await check.isVisible() && await check.isEnabled({timeout:500}))await check.click({timeout:500});
   await expect(page.locator('.wf-bpmn-run-heading')).toContainText('Completed',{timeout:500});
  }).toPass({timeout:30000,intervals:[200,500]});
 }
