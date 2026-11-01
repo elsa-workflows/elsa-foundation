@@ -2,7 +2,7 @@
 
 The registered BPMN interchange module converts XML/BPMNDI through released `Bpmn.Interchange` **0.5.0**, then binds representable work to Foundation's existing `elsa.bpmn.structure` **1.0.0** authored envelope. Foundation retains `childNodeId`, `listenerNodeId`, exact catalog references, variables, default-flow markers and designer data. The runtime package carries the [host adapter](../Elsa.Activities.Bpmn/README.md); XML fidelity and host execution readiness are distinct results.
 
-`IBpmnDocumentImporter` analyzes/imports and `IBpmnDocumentExporter` exports. `ActivitiesBpmnInterchangeFeature` registers both interfaces and `IBpmnHostWorkBinder`. The normal Workbench enables this module. APIs and Studio use the registered services; direct port-only conversions do not establish published or browser compatibility.
+`IBpmnDocumentImporter` analyzes/imports and `IBpmnDocumentExporter` exports. `ActivitiesBpmnInterchangeFeature` registers both interfaces and `IBpmnHostWorkBinder`. It specializes the [Design feature](../Design/README.md), so standalone interchange also installs authored structure/lowering and model pin contributions without a concrete runtime dependency. The normal Workbench enables this module. APIs and Studio use the registered services; direct port-only conversions do not establish published or browser compatibility.
 
 ## Host bindings and readiness
 

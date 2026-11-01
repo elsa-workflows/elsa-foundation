@@ -1,10 +1,10 @@
 using System.Text.Json;
-using Elsa.Activities.Bpmn.Activities;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Internal;
 
@@ -40,7 +40,7 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
                     .Select(name => name!)
                     .Distinct(StringComparer.Ordinal)
                     .ToArray();
-                return new ActivityChildOutcomeProjection(group.Key, typeof(BpmnDecision).FullName!, names, nameof(BpmnDecision.Outcome));
+                return new ActivityChildOutcomeProjection(group.Key, BpmnActivityIdentities.DecisionType, names, BpmnActivityIdentities.DecisionOutcomeInput);
             }).ToArray();
         return [new ActivityChildProjection(BpmnProcessActivity.ActivitiesSlotName, structure.Activities)
         {

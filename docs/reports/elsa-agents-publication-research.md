@@ -44,6 +44,24 @@ the specialist/native package exit from the observed BPMN closure; M1 explicitly
 before production contract freeze, and M4 owns its implementation and package-consumer qualification.
 This is a research handoff, not a production boundary exception or a completed product criterion.
 
+## M4 package-boundary follow-up
+
+The original M0 `ObservedUnresolved` receipt above remains historical evidence for that source.
+At candidate `6a39aba213aca9fa6b79ddc2edbf8356b5dbec07`, the new
+[conformance profile](../../tools/agents/conformance/README.md#bpmn-package-boundary-profile)
+returned `PassedBpmnBoundaryProfile`: 50 committed product packages, 70 stages, independent authoring,
+runtime-only and combined CShells processes using one separately published specialist placement.
+The authoring process loaded no concrete BPMN runtime/interpreter; the runtime package graph and loaded
+assemblies contained zero Design/Publishing assemblies. Only immutable placement and compiled graph JSON
+crossed into the runtime; no authoring host/store was available to it. Combined execution retained one
+authoring handler and publication pin contributor.
+
+Receipt SHA-256: `19727b4fe8be7a75789d733be7b391fba8892d62b0e3f0749c949565d4ac79c6`.
+[PR #3615](https://github.com/elsa-workflows/elsa-foundation/pull/3615) owns review and final-head evidence.
+The initial package run remains failed (fixture omitted its required CLR consumer); it was corrected
+before this fresh archive/version run. This finite package proof does not complete M4's editorial loop,
+human review, Studio journey or Program acceptance.
+
 ## Architecture recommendations
 
 Adopt the generic reusable activity lifecycle for specialist authoring, publication, exact version

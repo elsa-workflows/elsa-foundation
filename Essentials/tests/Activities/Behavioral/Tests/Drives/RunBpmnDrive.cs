@@ -44,6 +44,7 @@ public sealed class RunBpmnDrive : IActivityDrive
                 new EventsFeature().ConfigureServices(services);
                 new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
                 new ActivitiesBpmnHostingFeature { AdmitNewExecutions = true }.ConfigureServices(services);
+                new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
                 services.AddRuntimeEntityFrameworkCore(new()
                 {
                     Provider = "Sqlite", ConnectionString = $"Data Source={path};Pooling=False",

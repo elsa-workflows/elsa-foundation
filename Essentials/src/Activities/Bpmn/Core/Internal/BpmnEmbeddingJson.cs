@@ -9,6 +9,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>Lossless text inside the new adapter's opaque activity state and invocation documents.</summary>
 internal static class BpmnEmbeddingJson
 {
+    internal const string PinKey = "bpmn.model.v1";
     private static readonly JsonSerializerOptions Options = CreateOptions();
     internal static JsonElement Write<T>(T value) => JsonSerializer.SerializeToElement(value, Options);
     internal static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
