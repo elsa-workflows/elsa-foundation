@@ -76,8 +76,9 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    unit for T016–T023. Provider research #3592 is complete; concrete providers and durable continuity
    remain implementation obligations. Independent durable Connections prerequisite
    [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578) implements T014–T015 under
-   existing owner #2854 and occupies the review lane in PR #3591. M3 is initially stacked on that
-   reviewed source; its merge and durable profile require Connections delivery first.
+   existing owner #2854 is complete through PR #3591 and source/package/core/Studio qualification
+   on resulting main `5be59cebc`. M3 draft PR #3594 integrates that main and adds concrete model
+   access before its remaining durable journal/continuity/settlement work.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
@@ -100,7 +101,7 @@ The design is approved to implement; neither the packet nor the illustrative wir
 implemented product acceptance. Public signatures remain proposed until their first implementing slice.
 [M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) merged through
 [PR #3543](https://github.com/elsa-workflows/elsa-foundation/pull/3543). Native specialist kernel #3548
-is complete; #3523 is the sole active implementation unit and #3578 remains in review.
+is complete; #3523 is the sole active implementation unit and #3578 is complete.
 
 ## Completion
 

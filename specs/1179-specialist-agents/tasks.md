@@ -50,10 +50,11 @@ also requires M3/M5/M7 evidence.
 **Independent test**: Restart between turns/acceptance/delivery, force scope/revision/fence/uncertainty
 and cancellation races, and verify journal and process independently.
 
-T014–T015 are locally implemented/qualified by prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
-under existing Connections owner #2854. Their checks record source/package qualification; required
-CI, review/merge and resulting-main qualification remain open. They do not establish M3 specialist
-execution or later product acceptance.
+T014–T015 are complete through prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
+under existing Connections owner #2854, independently reviewed PR #3591 and source/package/core/Studio
+qualification on resulting main `5be59cebc`. They do not establish M3 specialist execution or later product
+acceptance. Initial provider access is implemented in M3 draft PR #3594; T016–T023 remain open until the
+whole execution, streaming, durability, continuity and recovery unit is qualified.
 
 - [x] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.
 - [x] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
