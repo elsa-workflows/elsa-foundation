@@ -56,20 +56,24 @@ migrations. The host composes `AddEfSchemaReadability` once on its root containe
 `RuntimePostCommitOutbox` schema2 readiness before work. Without normal host readability the EF gate
 retains schema1 and refuses required-source data; this is a refusal, not permission to force a version.
 
-Each Balanced/Durable case uses a fresh file-backed SQLite database and four distinct processes:
+Each Balanced/Durable case uses a fresh file-backed SQLite database and five distinct processes:
 
 1. Start the native facade and commit its protected turn/background-child responsibility, without a model contribution.
 2. Claim the actual durable work, run the independent deterministic MAF model once, then exit197 after journal acceptance and before native receipt recording.
-3. Reclaim the same work after real native visibility expiry with a newer fence. New admission is disabled and no model provider is registered. Accepted replay records the receipt; bounded normal resumption sweeps drive remaining scheduler/outbox responsibility.
-4. Reopen independently and verify typed facade/workflow completion, one accepted turn/application, its physically Delivered matching source and one dispatch counter file across the processes.
+3. Reclaim the same work after real native visibility expiry with a newer fence. New admission is disabled and no model provider is registered. Accepted replay records the receipt; normal bounded resumption drives native completion. Exit198 after the real application handler commits its journal metadata, before the processor acknowledges the physical source.
+4. Reopen with no model provider, wait for actual source claim visibility to expire, and retry through the normal resumption service. The application remains singular and its new physical claim is acknowledged.
+5. Reopen independently and verify typed facade/workflow completion, the accepted conversation/revision/reference, one accepted turn/application, its physically Delivered matching source and one dispatch counter file across the processes.
 
-The causal crash uses the public activation lease boundary and preserves the actual pinned leaf type.
-It reads the accepted journal and still-Claimed work before exiting. Persistence stores, native fences
+The first causal crash uses the public activation lease boundary and preserves the actual pinned leaf type.
+It reads the accepted journal and still-Claimed work before exiting. The second uses a public dispatcher
+replacement that delegates the real handler and all source requirements, then checks actual applied
+metadata and the current Delivering source before exiting. Persistence stores, native fences
 and settlement sources are never replaced or fabricated. Synthetic durable keys and an independent
 GUID file per model dispatch cross the process boundary; no credentials or business payloads enter
 counter files. The expected nonzero worker exits are labelled `ExpectedCrash` in the receipt.
 
 `PassedDurableRecoveryProfile` requires every named check and package/archive/DLL closure check to pass.
-The profile proves this SQLite process-loss boundary in both persistence modes. It does not establish
+The profile proves these two SQLite process-loss boundaries in both persistence modes, including one
+continuity-enabled accepted turn. It does not execute a second model turn from that conversation. It does not establish
 power-loss durability, older module binary migration/rollback, the full provider/host matrix, streaming,
 BPMN/Studio authoring or live-model acceptance. Failed run receipts remain failed and separate.

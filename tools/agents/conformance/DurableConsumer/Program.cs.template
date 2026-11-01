@@ -200,6 +200,12 @@ else
         Check(parent!.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString() == "draft about moss gardens", "exact validated typed business result retained");
         var accepted = (await turns.ReadAsync(handoff.Handle, handoff.Identity, default))!;
         Check(accepted.Status == SpecialistTurnStatus.Accepted && accepted.Applications?.Count == 1, "one accepted journal turn and one process application");
+        Check(accepted.Conversation is not null, "continuity-enabled accepted turn retained its conversation admission");
+        var conversation = await turns.ReadConversationAsync(accepted.Conversation!.ConversationId, handoff.Identity, default);
+        var reference = parent.Completion!.Result.InlineValue!.Value.GetProperty("Conversation");
+        Check(conversation?.Revision == 1 && conversation.AcceptedTurn?.Handle == handoff.Handle &&
+            reference.GetProperty("conversationId").GetString() == conversation.Id && reference.GetProperty("revision").GetInt64() == 1,
+            "protected accepted session and public native conversation reference survived process boundaries without history rewind");
         var application = accepted.Applications!.Single();
         var physical = await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(application.SourceId);
         Check(physical?.Status == RuntimePostCommitOutboxStatus.Delivered && RuntimeCheckpointCommitFingerprint.ComputeIntent(physical.Intent) == application.SourceFingerprint, "physical application source is delivered and matches retained fingerprint");

@@ -185,7 +185,7 @@ def main():
             if name == "Model":
                 run("Model-pack", ["dotnet", "pack", str(project), "-c", "Release", "--no-restore", "-o", str(feed)], directory)
             elif name == "Author":
-                run("Author-execute", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox")], directory)
+                run("Author-execute", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), *( ["continuity"] if args.profile == "durable-recovery" else [])], directory)
             elif name == "Consumer":
                 for mode in ["native", "invalid-result"]:
                     run("Consumer-" + mode, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), mode], directory)
