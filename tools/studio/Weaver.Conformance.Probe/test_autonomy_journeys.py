@@ -31,7 +31,8 @@ class AutonomyEvidenceTests(unittest.TestCase):
         return {"requestId": identity, "url": url, "status": 200 if method == "GET" else 204,
                 "requestObservation": {"source": "Network.requestWillBeSent", "requestId": identity, "method": method,
                     "url": url, "resourceType": resource_type, "initiatorType": "preflight" if method == "OPTIONS" else "script"},
-                "responseObservation": {"source": "Network.responseReceived", "requestId": identity, "url": url, "resourceType": resource_type},
+                "responseObservation": {"source": "Network.responseReceived", "requestId": identity, "url": url,
+                    "resourceType": "Preflight" if method == "OPTIONS" else resource_type},
                 "requestObservationCount": 1, "responseObservationCount": 1, "requestIdentityMatchesResponse": True,
                 "contentType": "text/event-stream" if method == "GET" else "", "termination": "loadingFinished", "captureError": None,
                 "captureValidationError": None, "streamResourceContentError": None, "responseBodyError": None,
@@ -44,9 +45,9 @@ class AutonomyEvidenceTests(unittest.TestCase):
         path = fixture[0] / "agent-streams.json"
         original = json.loads(path.read_text())[0]["rawBody"]
         split = original.index('data: {"id": "event-size-started"')
-        rows = [self.stream("", "native-preflight-1", method="OPTIONS", resource_type="Preflight"),
+        rows = [self.stream("", "native-preflight-1", method="OPTIONS", resource_type="Other"),
                 self.stream(original[:split], "native-get-1"),
-                self.stream("", "native-preflight-2", method="OPTIONS", resource_type="Preflight"),
+                self.stream("", "native-preflight-2", method="OPTIONS", resource_type="Other"),
                 self.stream(original[split:], "native-get-2")]
         path.write_text(json.dumps(rows))
         return fixture
@@ -192,8 +193,25 @@ class AutonomyEvidenceTests(unittest.TestCase):
                     record = self.verify(self.with_preflights(self.fixture(provider, key)), provider)
                     self.assertEqual("failed" if "-to-" in key else "passed", record["status"])
 
+    def test_captured_other_preflight_and_legacy_preflight_require_the_observed_initiator(self):
+        for resource_type in ("Other", "Preflight"):
+            fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+            rows = json.loads(path.read_text())
+            rows[0]["requestObservation"]["resourceType"] = resource_type
+            self.assertEqual("OPTIONS", rows[0]["requestObservation"]["method"])
+            self.assertEqual("preflight", rows[0]["requestObservation"]["initiatorType"])
+            self.assertEqual("Preflight", rows[0]["responseObservation"]["resourceType"])
+            path.write_text(json.dumps(rows)); self.verify(fixture)
+            for initiator in (None, "script", "other"):
+                with self.subTest(resource_type=resource_type, initiator=initiator):
+                    fixture = self.with_preflights(self.fixture()); path = fixture[0] / "agent-streams.json"
+                    rows = json.loads(path.read_text())
+                    rows[0]["requestObservation"].update(resourceType=resource_type, initiatorType=initiator)
+                    path.write_text(json.dumps(rows))
+                    with self.assertRaises(RuntimeError): self.verify(fixture)
+
     def test_only_finished_empty_same_identity_options_preflight_can_be_ignored(self):
-        for mutation in ("get", "missing-method", "wrong-request-type", "wrong-response-type", "missing-request", "missing-response",
+        for mutation in ("get", "missing-method", "wrong-request-type", "script-request-type", "wrong-response-type", "missing-request", "missing-response",
                          "request-id", "response-id", "request-url", "response-url", "foreign", "wrong-session", "unmatched", "repeated-request",
                          "repeated-response", "boolean-count", "wrong-source", "nonempty", "unobserved-body", "missing-data-count", "failed-data-metadata",
                          "capture-error", "validation-error", "network-error", "canceled", "open", "failed", "http401", "http200"):
@@ -203,6 +221,7 @@ class AutonomyEvidenceTests(unittest.TestCase):
                 if mutation == "get": row["requestObservation"].update(method="GET", resourceType="Fetch"); row["responseObservation"]["resourceType"] = "Fetch"
                 elif mutation == "missing-method": row["requestObservation"].pop("method")
                 elif mutation == "wrong-request-type": row["requestObservation"]["resourceType"] = "Fetch"
+                elif mutation == "script-request-type": row["requestObservation"]["resourceType"] = "Script"
                 elif mutation == "wrong-response-type": row["responseObservation"]["resourceType"] = "Fetch"
                 elif mutation == "missing-request": row.pop("requestObservation")
                 elif mutation == "missing-response": row.pop("responseObservation")

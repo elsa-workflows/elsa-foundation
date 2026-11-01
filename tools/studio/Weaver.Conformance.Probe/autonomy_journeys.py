@@ -110,7 +110,8 @@ def _frames(output, session, backend_origin):
               "Native stream/preflight needs its actual matching CDP request/response identity and exact owned URL")
         request_ids.add(stream["requestId"])
         if request.get("method") == "OPTIONS":
-            check(request.get("resourceType") == response.get("resourceType") == "Preflight"
+            check(request.get("resourceType") in ("Other", "Preflight") and request.get("initiatorType") == "preflight"
+                  and response.get("resourceType") == "Preflight"
                   and stream.get("status") == 204 and stream.get("termination") == "loadingFinished"
                   and isinstance(stream.get("contentType"), str) and stream["contentType"].split(";", 1)[0].strip() != "text/event-stream"
                   and stream.get("rawBody") == "" and stream.get("captureMethod") == "not-sse"
