@@ -287,7 +287,14 @@ public sealed class CrashAfterApplicationDispatcher(IRuntimePostCommitIntentDisp
         var physical = await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(source.SourceOutboxItemId, cancellationToken);
         if (turn?.Applications?.Count != 1 || turn.Applications.Single().SourceId != source.SourceOutboxItemId ||
             physical?.Status != RuntimePostCommitOutboxStatus.Delivering || physical.DeliveryFencingToken != source.Claim.FencingToken)
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "ack-precondition-refused.json"), JsonSerializer.Serialize(new
+            {
+                actualApplicationCount = turn?.Applications?.Count ?? 0, physicalStatus = physical?.Status.ToString(),
+                physicalFence = physical?.DeliveryFencingToken, presentedFence = source.Claim.FencingToken
+            }), cancellationToken);
             throw new InvalidOperationException("The acknowledgement crash requires actual applied journal metadata and the current unacknowledged physical source.");
+        }
         await File.WriteAllTextAsync(Path.Combine(directory, "ack-crash.json"), JsonSerializer.Serialize(new
         {
             phase = "application-written-before-source-ack", processId = Environment.ProcessId,

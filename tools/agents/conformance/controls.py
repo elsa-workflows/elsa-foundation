@@ -106,8 +106,12 @@ def main():
                     sources = list(database.execute("SELECT Status, ContentJson FROM elsa_runtime_post_commit_outbox WHERE IntentKind = ?", ("elsa.specialist.applied/1",)))
                     if workflow != 3 or not sources or any(status == 2 for status, _ in sources):
                         raise RuntimeError(name + ": wrong native/source failure boundary")
-                    if not any("acknowledgement crash requires actual applied" in decoded(json.loads(payload).get("lastFailureMessage") or "") for _, payload in sources):
-                        raise RuntimeError(name + ": missing exact application-proof failure")
+                    # Required-source retry summaries intentionally redact exception messages.
+                    # The fixture records its precise precondition independently of that summary.
+                    diagnostic = json.loads((data / "ack-precondition-refused.json").read_text())
+                    if diagnostic["actualApplicationCount"] != 0 or diagnostic["physicalStatus"] != "Delivering" or diagnostic["physicalFence"] != diagnostic["presentedFence"]:
+                        raise RuntimeError(name + ": wrong application-proof diagnostic")
+                    observations["applicationProofRefusal"] = diagnostic
                     observations["nativeCompletedWithoutApplication"] = True
             database.close()
             report["controls"].append({"name": name, "consumerSourceSha256": hashlib.sha256(mutated.encode()).hexdigest(),
