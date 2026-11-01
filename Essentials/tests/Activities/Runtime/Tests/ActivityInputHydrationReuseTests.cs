@@ -59,6 +59,25 @@ public sealed class ActivityInputHydrationReuseTests(ITestOutputHelper output)
         Assert.Contains(absent ? "does not accept absence" : "does not accept null", exception.Message);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Reused_CLR_nullability_rejects_null_and_absence_even_when_the_contract_allows_them(bool valueType, bool absent)
+    {
+        var hydrator = new ActivityInputHydrator();
+        var type = valueType ? new ValueTypeDescriptor("Int32") : StringType;
+        var contract = Contract(type, required: false, nullable: true);
+        IActivity NewActivity() => valueType ? new NonNullableNumberActivity() : new NonNullableReferenceActivity();
+        hydrator.Hydrate(NewActivity(), contract, Snapshot(contract, type, valueType ? 42 : "present"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            hydrator.Hydrate(NewActivity(), contract, Snapshot(contract, type, null, absent)));
+
+        Assert.Contains(absent ? "does not accept absence" : "does not accept null", exception.Message);
+    }
+
     [Fact]
     public async Task Concurrent_hydration_keeps_each_activations_values()
     {
@@ -113,7 +132,8 @@ public sealed class ActivityInputHydrationReuseTests(ITestOutputHelper output)
     {
         var activity = NewPluginActivity(typeof(string));
         var contract = Contract(StringType);
-        hydrator.Hydrate(activity, contract, Snapshot(contract, StringType, "collectible"));
+        // Force the lazy CLR-nullability plan to initialize before testing module release.
+        hydrator.Hydrate(activity, contract, Snapshot(contract, StringType, null));
         return new WeakReference(activity.GetType().Assembly);
     }
 
@@ -170,6 +190,18 @@ public sealed class ActivityInputHydrationReuseTests(ITestOutputHelper output)
         public string? Unannotated1 { get; set; }
         public string? Unannotated2 { get; set; }
         public string? Unannotated3 { get; set; }
+    }
+
+    private sealed class NonNullableReferenceActivity : StructuralActivity
+    {
+        [ActivityInput(Key = "message")]
+        public string Message { get; set; } = "";
+    }
+
+    private sealed class NonNullableNumberActivity : StructuralActivity
+    {
+        [ActivityInput(Key = "message")]
+        public int Message { get; set; }
     }
 }
 
