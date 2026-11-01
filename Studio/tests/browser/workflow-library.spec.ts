@@ -234,3 +234,26 @@ for (const change of ["count-shrinks", "count-grows"] as const) {
     }
   });
 }
+
+test("Enter in tag search searches without saving pending organization changes", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
+  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
+  await dialog.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  const search = dialog.getByRole("searchbox", { name: "Find workflow tags", exact: true });
+  await search.fill("Owning team");
+  await search.press("Enter");
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as Window & {
+    workflowLibraryRequests: { method: string; url: string }[];
+  }).workflowLibraryRequests.some(request => request.method === "GET" && new URL(request.url, location.origin).searchParams.get("search") === "Owning team"))).toBe(true);
+  const writes = await page.evaluate(() => (window as unknown as Window & {
+    workflowLibraryRequests: { method: string; url: string }[];
+  }).workflowLibraryRequests.filter(request => request.method === "PUT"));
+  expect(writes).toEqual([]);
+  await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).toBeChecked();
+  await expect(dialog.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
+  await expect(dialog).toBeHidden();
+});
