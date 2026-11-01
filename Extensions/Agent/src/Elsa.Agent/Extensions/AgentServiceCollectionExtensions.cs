@@ -43,6 +43,8 @@ public static class AgentServiceCollectionExtensions
         services.TryAddSingleton<InMemoryAgentAuditStore>();
         services.TryAddSingleton<IAgentAuditSink>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
         services.TryAddSingleton<IAgentAuditReader>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
+        // Experimental (#3440): the session owner associates ownership with the same store; the store has no dependencies.
+        services.TryAddSingleton<IAgentAuditOwnership>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
         services.TryAddSingleton<IAgentFeedbackService, InMemoryAgentFeedbackService>();
         // Scoped so tools may depend on per-request services without being captured by a singleton.
         services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();

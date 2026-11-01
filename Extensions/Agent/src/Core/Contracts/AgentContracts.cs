@@ -132,7 +132,35 @@ public interface IAgentAuditSink
 
 public interface IAgentAuditReader
 {
+    /// <summary>A trusted, unscoped read for in-process callers. It is not an authorization boundary.</summary>
     Task<IReadOnlyCollection<AgentAuditEvent>> ListAsync(string? sessionId = null, int? take = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Experimental (#3440, not frozen): the records of sessions associated with the query's actor and tenant,
+    /// optionally narrowed to one session, newest first (ties: latest append first), at most
+    /// <see cref="AgentAuditOwnerQuery.Take"/>. Ownership filtering and ordering happen in the reader before the
+    /// limit. A record whose session has no ownership association, or no session, is never returned.
+    /// </summary>
+    /// <remarks>
+    /// The default refuses with <see cref="AgentAuditQueryOutcome.Unsupported"/>, so a replacement that predates
+    /// this query never silently falls back to a global read. Implementations throw
+    /// <see cref="ArgumentException"/> for a blank actor or tenant and a limit outside 1..<see cref="AgentAuditOwnerQuery.MaxTake"/>.
+    /// </remarks>
+    Task<AgentAuditQueryResult> ListOwnedAsync(AgentAuditOwnerQuery query, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentAuditQueryResult.Unsupported);
+}
+
+/// <summary>
+/// Experimental (#3440, not frozen): the session owner's authoritative actor/tenant association for a session's
+/// audit records. The session owner associates a session before it emits any record for it.
+/// </summary>
+public interface IAgentAuditOwnership
+{
+    /// <summary>
+    /// Associates a session with its owner. The first association wins: repeating it returns true, and a
+    /// conflicting actor or tenant returns false without changing it.
+    /// </summary>
+    Task<bool> AssociateAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

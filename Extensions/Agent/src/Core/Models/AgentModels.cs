@@ -361,6 +361,29 @@ public sealed record AgentAuditEvent(
     DateTimeOffset CreatedAt,
     IReadOnlyDictionary<string, string> Metadata);
 
+/// <summary>Experimental (#3440, not frozen): an owner-bounded audit query; <see cref="Take"/> must be within 1..<see cref="MaxTake"/>.</summary>
+public sealed record AgentAuditOwnerQuery(string ActorId, string TenantId, string? SessionId, int Take)
+{
+    public const int MaxTake = 1000;
+}
+
+/// <summary>Experimental (#3440, not frozen).</summary>
+public enum AgentAuditQueryOutcome
+{
+    /// <summary>The events are the eligible records, already filtered, ordered and limited by the owning reader.</summary>
+    Succeeded,
+    /// <summary>The installed reader does not support owner-bounded queries. No records are returned.</summary>
+    Unsupported
+}
+
+/// <summary>Experimental (#3440, not frozen).</summary>
+public sealed record AgentAuditQueryResult(AgentAuditQueryOutcome Outcome, IReadOnlyList<AgentAuditEvent> Events)
+{
+    public static AgentAuditQueryResult Unsupported { get; } = new(AgentAuditQueryOutcome.Unsupported, []);
+
+    public bool Succeeded => Outcome == AgentAuditQueryOutcome.Succeeded;
+}
+
 public sealed record AgentFeedback(
     string Id,
     string SessionId,

@@ -12,7 +12,11 @@ namespace Elsa.Agent.Services;
 /// Process-lifetime session rows. Each row's monitor orders message insertion, the session's policy and
 /// policy revision, and the claims of work admitted under that policy (#3440, experimental).
 /// </summary>
-internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null)
+/// <remarks>
+/// When an audit ownership association is installed, each new session is associated with its actor and tenant
+/// before the row exists or any record for it is emitted. The association has no dependency on this service.
+/// </remarks>
+internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null)
     : IAgentSessionService, IAgentSessionPolicyOwner, IAgentSessionPolicyParticipant
 {
     private const long InitialPolicyRevision = 1;
@@ -42,6 +46,10 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             request.Metadata)
         { PolicyRevision = InitialPolicyRevision };
 
+        // A blank owner cannot be associated; such a session stays ineligible for owner-scoped audit queries.
+        if (auditOwnership is not null && !string.IsNullOrWhiteSpace(session.ActorId) && !string.IsNullOrWhiteSpace(session.TenantId)
+            && !await auditOwnership.AssociateAsync(session.Id, session.ActorId, session.TenantId, cancellationToken))
+            throw new AgentContributionException("The new session identity is already associated with another audit owner.");
         _rows[session.Id] = new SessionRow(session);
         _contexts[session.Id] = [];
 
@@ -407,9 +415,14 @@ internal sealed class InMemoryAgentFeedbackService(IAgentAuditSink auditSink) : 
     }
 }
 
-internal sealed class InMemoryAgentAuditStore : IAgentAuditSink, IAgentAuditReader
+/// <summary>
+/// Process-local audit records and their session ownership association. One monitor orders append,
+/// association and query, so an owner query observes a consistent snapshot of both.
+/// </summary>
+internal sealed class InMemoryAgentAuditStore : IAgentAuditSink, IAgentAuditReader, IAgentAuditOwnership
 {
     private readonly List<AgentAuditEvent> _events = [];
+    private readonly Dictionary<string, (string ActorId, string TenantId)> _owners = new(StringComparer.Ordinal);
 
     public Task EmitAsync(AgentAuditEvent auditEvent, CancellationToken cancellationToken = default)
     {
@@ -431,6 +444,49 @@ internal sealed class InMemoryAgentAuditStore : IAgentAuditSink, IAgentAuditRead
                 query = query.Take(take.Value);
 
             return Task.FromResult<IReadOnlyCollection<AgentAuditEvent>>(query.ToList());
+        }
+    }
+
+    public Task<AgentAuditQueryResult> ListOwnedAsync(AgentAuditOwnerQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentException.ThrowIfNullOrWhiteSpace(query.ActorId, nameof(query));
+        ArgumentException.ThrowIfNullOrWhiteSpace(query.TenantId, nameof(query));
+        ArgumentOutOfRangeException.ThrowIfLessThan(query.Take, 1, nameof(query));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(query.Take, AgentAuditOwnerQuery.MaxTake, nameof(query));
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_events)
+        {
+            // Ownership and the session filter apply before ordering and the limit; ties keep the latest append first.
+            var events = _events
+                .Select((item, sequence) => (Item: item, Sequence: sequence))
+                .Where(x => x.Item.SessionId is { } sessionId
+                    && (query.SessionId is null || string.Equals(sessionId, query.SessionId, StringComparison.Ordinal))
+                    && _owners.TryGetValue(sessionId, out var owner)
+                    && string.Equals(owner.ActorId, query.ActorId, StringComparison.Ordinal)
+                    && string.Equals(owner.TenantId, query.TenantId, StringComparison.Ordinal))
+                .OrderByDescending(x => x.Item.CreatedAt)
+                .ThenByDescending(x => x.Sequence)
+                .Take(query.Take)
+                .Select(x => x.Item)
+                .ToList();
+            return Task.FromResult(new AgentAuditQueryResult(AgentAuditQueryOutcome.Succeeded, events.AsReadOnly()));
+        }
+    }
+
+    public Task<bool> AssociateAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_events)
+        {
+            if (_owners.TryGetValue(sessionId, out var owner))
+                return Task.FromResult(string.Equals(owner.ActorId, actorId, StringComparison.Ordinal)
+                    && string.Equals(owner.TenantId, tenantId, StringComparison.Ordinal));
+            _owners[sessionId] = (actorId, tenantId);
+            return Task.FromResult(true);
         }
     }
 }
