@@ -34,6 +34,7 @@ internal sealed class AnthropicSpecialistModelProvider(IConnectionResolver resol
 {
     public override string ProviderKey => "anthropic";
     protected override string ConnectionTypeName => "specialist-anthropic";
+    protected override bool SupportsPhysicalRequestReservations => true;
     protected override string ProtocolProfile => "anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0";
     protected override IChatClient CreateClient(Uri endpoint, string modelId, SensitiveValue apiKey, HttpClient http) =>
         new TerminalClient(new AnthropicClient(new global::Anthropic.Core.ClientOptions

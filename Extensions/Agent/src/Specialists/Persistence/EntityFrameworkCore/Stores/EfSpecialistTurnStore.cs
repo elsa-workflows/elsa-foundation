@@ -141,6 +141,27 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             document => document with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult }, cancellationToken) is not null;
     }
 
+    public async ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, string fence,
+        SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        Fence(fence);
+        // The conditional write can lose to another reservation without an inference effect.
+        // Re-read safely; the finite admission conditions are checked on every attempt.
+        for (var attempt = 0; attempt < 32; attempt++)
+        {
+            var changed = await ChangeAsync(handle, identity, now, requireDeadline: true,
+                document => document.Status == SpecialistTurnStatus.Dispatching && document.Fence == fence &&
+                    (document.ModelRequests?.Count ?? 0) < document.MaximumModelCalls &&
+                    !(document.ModelRequests ?? []).Any(x => x.Id == reservation.Id),
+                document => document with { ModelRequests = [.. document.ModelRequests ?? [], reservation] }, cancellationToken);
+            if (changed is not null) return reservation;
+            var current = await ReadAsync(handle, identity, cancellationToken);
+            if (current is null || current.Status != SpecialistTurnStatus.Dispatching || current.Fence != fence || current.Deadline <= now ||
+                (current.ModelRequests?.Count ?? 0) >= current.MaximumModelCalls || (current.ModelRequests ?? []).Any(x => x.Id == reservation.Id)) return null;
+        }
+        return null;
+    }
+
     public async ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, string fence, string code, bool outcomeUnknown, CancellationToken cancellationToken)
     {
         Fence(fence);

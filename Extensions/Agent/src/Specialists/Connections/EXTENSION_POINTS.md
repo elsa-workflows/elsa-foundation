@@ -6,6 +6,13 @@ SDK package derives it to reuse scope, revision, allowed-host, schema and reques
 The concrete SDK client is transient and owned by the returned lease. Do not serialize credentials,
 SDK sessions or clients into published descriptors or native execution state.
 
+The shared HTTP guard invokes the supplied Core physical dispatch authority before authorization
+and send, retaining a conservative reservation if later authorization/transport fails. An unconfirmed
+reservation never permits a request. `SupportsPhysicalRequestReservations` defaults to false; a
+derived owner opts in only after qualifying both its SDK and primary handler. The sealed built-in
+Anthropic/Azure OpenAI owners opt in for their documented transport profiles. A custom handler that
+resends below this guard needs its own reservation mechanism and qualification.
+
 `SpecialistModelConnectionTypeProvider` is the immutable singleton contribution to the existing
 Connections type registry. Keep it separate from the scoped model owner and resolver.
 

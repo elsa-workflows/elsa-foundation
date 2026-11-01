@@ -25,7 +25,7 @@ public sealed class SpecialistJournalProviderTests
         var now = DateTimeOffset.UtcNow;
         var identity = new SpecialistInvocationIdentity("tenant", "tenant", "workflow", "attempt", "operation", "artifact", "hash", "version", "template");
         var candidate = new SpecialistTurnDocument(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(identity), new string('b', 64), identity,
-            "opaque-protected-request", now.AddMinutes(5));
+            "opaque-protected-request", now.AddMinutes(5)) { MaximumModelCalls = 2 };
         await using (var first = Host())
         {
             await using (var scope = first.CreateAsyncScope())
@@ -54,6 +54,14 @@ public sealed class SpecialistJournalProviderTests
             Assert.False(await store.DispatchAsync(handle, identity, "stale-fence", now, CancellationToken.None));
             Assert.False(await store.AcceptAsync(handle, identity, winner.Fence!, "premature", now, CancellationToken.None));
             Assert.True(await store.DispatchAsync(handle, identity, winner.Fence!, now, CancellationToken.None));
+            var reservations = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
+            {
+                await using var scope = first.CreateAsyncScope();
+                var id = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(BitConverter.GetBytes(index))).ToLowerInvariant();
+                return await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().ReserveModelRequestAsync(handle, identity, winner.Fence!,
+                    new(id, 64, now, new("fixture", "model", "incarnation", 1, "fixture/1", "fixture/1")), now, CancellationToken.None);
+            }));
+            Assert.Equal(2, reservations.Count(value => value is not null));
             Assert.False(await store.AcceptAsync(handle, identity, "stale-fence", "wrong-owner", now, CancellationToken.None));
             Assert.False(await store.AcceptAsync(handle, identity, winner.Fence!, "expired", candidate.Deadline, CancellationToken.None));
             Assert.True(await store.AcceptAsync(handle, identity, winner.Fence!, "opaque-protected-result-and-session", now, CancellationToken.None));
@@ -66,8 +74,11 @@ public sealed class SpecialistJournalProviderTests
         Assert.NotNull(accepted);
         Assert.Equal(SpecialistTurnStatus.Accepted, accepted.Status);
         Assert.Equal("opaque-protected-result-and-session", accepted.ProtectedResult);
+        Assert.Equal(2, accepted.ModelRequests!.Count);
         Assert.Equal(candidate.Deadline, accepted.Deadline);
-        Assert.Equal(accepted, await recovered.StageAsync(candidate with { Handle = new string('c', 64), Deadline = now.AddHours(1) }, CancellationToken.None));
+        var replay = await recovered.StageAsync(candidate with { Handle = new string('c', 64), Deadline = now.AddHours(1) }, CancellationToken.None);
+        Assert.Equal(accepted.ProtectedResult, replay.ProtectedResult);
+        Assert.Equal(accepted.ModelRequests, replay.ModelRequests);
         await Assert.ThrowsAsync<SpecialistJournalException>(async () => await recovered.StageAsync(candidate with { RequestHash = new string('d', 64) }, CancellationToken.None));
         Assert.Null(await recovered.ReadAsync(candidate.Handle, identity with { ActivityExecutionId = "foreign-attempt" }, CancellationToken.None));
         Assert.Null(await recovered.ClaimAsync(candidate.Handle, identity, "replacement", "replacement", now, CancellationToken.None));

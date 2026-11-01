@@ -11,6 +11,10 @@ using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Agent.Specialists.Services;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent.Specialists.Core.Contracts;
+using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
+using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.EntityFrameworkCore;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Agents.AI;
@@ -30,6 +34,75 @@ namespace Elsa.Agent.Specialists.Tests.Providers;
 
 public sealed class SpecialistProviderSocketTests
 {
+    [Theory]
+    [InlineData("anthropic", "success")]
+    [InlineData("azure-openai", "success")]
+    [InlineData("anthropic", "loss")]
+    [InlineData("azure-openai", "loss")]
+    [InlineData("anthropic", "exhausted")]
+    [InlineData("azure-openai", "exhausted")]
+    public async Task Every_actual_SDK_send_requires_a_durable_reservation_and_unknown_usage_keeps_it(string vendor, string mode)
+    {
+        using var certificate = Certificate();
+        await using var server = await Server.StartAsync(certificate, context => mode == "loss" ? Abort(context) : Success(context, vendor, "success"));
+        var connection = new Resolved(vendor);
+        connection.Values["endpoint"] = server.Address;
+        connection.Hosts = Elsa.Connections.Core.Models.AllowedHostsPolicy.Fixed("127.0.0.1");
+        SpecialistConnectionModelProvider provider = vendor == "anthropic"
+            ? new AnthropicSpecialistModelProvider(new Resolver(connection), new Access())
+            : new AzureOpenAISpecialistModelProvider(new Resolver(connection), new Access());
+        provider.ConfigureTransport = handler => Trust(handler, certificate);
+        var descriptor = Request(Model(vendor), await provider.GetCapabilitiesAsync(Model(vendor))).Descriptor;
+        descriptor = descriptor with { Limits = descriptor.Limits with { MaximumModelCalls = 1 } };
+        var contract = new ActivityContract("specialist", "1", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],
+            new(new("System.Text.Json.JsonElement"), true, ActivityValuePolicy.Default, []), ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.FacadeCapability));
+        var request = new SpecialistTurnRequest(Identity(), descriptor, contract, SpecialistConnectionProviderTests.Json("{}"), "bindings");
+        var directory = Path.Combine(Path.GetTempPath(), "elsa-specialist-send-budget-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var connectionString = "Data Source=" + Path.Combine(directory, "journal.db") + ";Pooling=False";
+            var now = DateTimeOffset.UtcNow;
+            var document = new SpecialistTurnDocument(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity()), new string('b', 64), Identity(), "opaque-fixture-request", now.AddMinutes(5));
+            await using (var context = Context())
+            {
+                await context.Database.EnsureCreatedAsync();
+                ISpecialistTurnStore store = new EfSpecialistTurnStore(context, new Access());
+                await store.StageAsync(document, CancellationToken.None);
+                var claim = (await store.ClaimAsync(document.Handle, Identity(), "child", "fence", now, CancellationToken.None))!;
+                Assert.True(await store.DispatchAsync(document.Handle, Identity(), "fence", now, CancellationToken.None));
+                var authority = new SpecialistTurnBudgetAllocator(store, TimeProvider.System).Create(claim, request);
+                authority.BindOutputLimit(64);
+                if (mode == "exhausted")
+                    await authority.BeforeSendAsync(new(vendor, descriptor.Model.ModelId, connection.IncarnationId!, connection.Version, descriptor.CapabilitiesFingerprint, "fixture-reservation/1"), CancellationToken.None);
+                await using var lease = await provider.OpenAsync(new(descriptor, Identity()) { DispatchAuthority = authority });
+                Assert.True(lease.EnforcesDispatchAuthority);
+                var options = lease.Options.Clone();
+                options.ModelId = descriptor.Model.ModelId;
+                options.MaxOutputTokens = 64;
+                options.ResponseFormat = ChatResponseFormat.ForJsonSchema(descriptor.ResultSchema, "specialist_result");
+                var first = await Record.ExceptionAsync(async () => await lease.Client.GetResponseAsync([new(ChatRole.User, "fixture")], options));
+                if (mode == "success") Assert.Null(first);
+                else Assert.NotNull(first);
+                await Assert.ThrowsAnyAsync<Exception>(async () => await lease.Client.GetResponseAsync([new(ChatRole.User, "must not send")], options));
+                Assert.Equal(mode == "exhausted" ? 0 : 1, server.Requests.Count);
+            }
+            await using var restarted = Context();
+            var recovered = await new EfSpecialistTurnStore(restarted, new Access()).ReadAsync(document.Handle, Identity(), CancellationToken.None);
+            var reservation = Assert.Single(recovered!.ModelRequests!);
+            Assert.Equal(64, reservation.MaximumOutputTokens);
+            Assert.Equal(1, recovered.MaximumModelCalls);
+            Assert.Equal(SpecialistTurnStatus.Dispatching, recovered.Status);
+            Assert.Null(recovered.ProtectedResult);
+            if (mode != "exhausted") Assert.Equal(connection.IncarnationId, reservation.Observation.ConnectionIncarnation);
+
+            SpecialistsSqliteDbContext Context() => new(new DbContextOptionsBuilder<SpecialistsSqliteDbContext>().UseSqlite(connectionString).Options);
+        }
+        finally { Directory.Delete(directory, true); }
+
+        static Task Abort(HttpContext context) { context.Abort(); return Task.CompletedTask; }
+    }
+
     [Theory]
     [InlineData("anthropic", "success", null)]
     [InlineData("azure-openai", "success", null)]

@@ -7,7 +7,7 @@ internal static class SpecialistTurnDocumentRules
     internal static void Prepared(SpecialistTurnDocument document)
     {
         Validate(document);
-        if (document.Status != SpecialistTurnStatus.Prepared)
+        if (document.Status != SpecialistTurnStatus.Prepared || document.ModelRequests is { Count: > 0 })
             throw new InvalidDataException("Only a prepared specialist operation can be staged.");
     }
 
@@ -27,6 +27,24 @@ internal static class SpecialistTurnDocumentRules
             document.Status is not (SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown) && document.FailureCode is not null)
             throw new InvalidDataException("The specialist journal lifecycle record is invalid.");
         if (document.Fence is { } fence) Fence(fence);
+        if (document.MaximumModelCalls is < 1 or > 32 || document.ModelRequests is { } requests &&
+            (requests.Count > document.MaximumModelCalls || requests.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != requests.Count))
+            throw new InvalidDataException("The specialist journal request budget is invalid.");
+        foreach (var reservation in document.ModelRequests ?? []) Reservation(reservation, document.Deadline);
+    }
+
+    internal static SpecialistTurnDocument Copy(SpecialistTurnDocument document) => document with { ModelRequests = document.ModelRequests?.ToArray() };
+
+    internal static void Reservation(SpecialistModelRequestReservation reservation, DateTimeOffset deadline)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+        Token(reservation.Id);
+        if (reservation.MaximumOutputTokens is < 1 or > 1_000_000 || reservation.ReservedAt >= deadline ||
+            reservation.Observation is not { ConnectionVersion: > 0 } observation ||
+            string.IsNullOrWhiteSpace(observation.ProviderKey) || string.IsNullOrWhiteSpace(observation.ConfiguredModelId) ||
+            string.IsNullOrWhiteSpace(observation.ConnectionIncarnation) || string.IsNullOrWhiteSpace(observation.CapabilitiesFingerprint) ||
+            string.IsNullOrWhiteSpace(observation.ProtocolProfile))
+            throw new InvalidDataException("The specialist physical request reservation is invalid.");
     }
 
     internal static void Token(string value)

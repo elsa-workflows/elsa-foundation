@@ -14,3 +14,4 @@ Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.Special
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.Descriptor.get -> Elsa.Connections.Core.Models.ConnectionTypeDescriptor!
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.ResolveHosts(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! settings) -> Elsa.Connections.Core.Models.AllowedHostsPolicy!
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.TestAsync(Elsa.Connections.Core.Contracts.IResolvedConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Connections.Core.Models.ConnectionTestResult!>!
+virtual Elsa.Agent.Specialists.Connections.SpecialistConnectionModelProvider.SupportsPhysicalRequestReservations.get -> bool

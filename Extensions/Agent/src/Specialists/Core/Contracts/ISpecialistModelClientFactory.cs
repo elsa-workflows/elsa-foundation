@@ -20,7 +20,12 @@ public interface ISpecialistModelClientFactory
 }
 
 /// <summary>Exact immutable model request plus native provenance for point-of-use authorization.</summary>
-public sealed record SpecialistModelOpenRequest(SpecialistRuntimeDescriptor Descriptor, SpecialistInvocationIdentity Invocation);
+public sealed record SpecialistModelOpenRequest(SpecialistRuntimeDescriptor Descriptor, SpecialistInvocationIdentity Invocation)
+{
+    /// <summary>Runtime-owned per-physical-send admission. It is never part of a serialized descriptor.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ISpecialistModelDispatchAuthority? DispatchAuthority { get; init; }
+}
 
 /// <summary>A transient owned client and options. It is never serialized into workflow or journal state.</summary>
 public sealed class SpecialistModelClientLease(
@@ -36,6 +41,8 @@ public sealed class SpecialistModelClientLease(
     public ChatOptions Options { get; } = options ?? throw new ArgumentNullException(nameof(options));
     public string CapabilitiesFingerprint { get; } = capabilitiesFingerprint;
     public int ConnectionVersion { get; } = connectionVersion;
+    /// <summary>True only when this lease invokes the supplied authority before every physical model request.</summary>
+    public bool EnforcesDispatchAuthority { get; init; }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

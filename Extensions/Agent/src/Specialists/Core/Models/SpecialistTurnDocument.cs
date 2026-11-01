@@ -18,6 +18,11 @@ public sealed record SpecialistTurnDocument(string Handle, string Key, string Re
     string ProtectedRequest, DateTimeOffset Deadline, SpecialistTurnStatus Status = SpecialistTurnStatus.Prepared,
     string? ChildInvocationId = null, string? Fence = null, string? ProtectedResult = null, string? FailureCode = null)
 {
+    /// <summary>The published/request-lowered finite model request limit, authenticated by the runtime.</summary>
+    public int MaximumModelCalls { get; init; } = 1;
+    /// <summary>Retained reservations, including requests with unknown outcomes or usage.</summary>
+    public IReadOnlyList<SpecialistModelRequestReservation>? ModelRequests { get; init; }
+
     /// <summary>
     /// Identifies one operation in its native workflow and ordinary tenant/partition scope.
     /// Attempts and dispatch ownership remain separate conditional journal state.

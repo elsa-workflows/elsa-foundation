@@ -244,3 +244,54 @@ Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException
 Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException.Code.get -> string!
 Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException.Handle.get -> string?
 Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException.SpecialistJournalException(string! code, string? handle, string! message, System.Exception! innerException) -> void
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelDispatchAuthority
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelDispatchAuthority.BeforeSendAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation! observation, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.ReserveModelRequestAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! fence, Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation! reservation, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation?>
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.EnforcesDispatchAuthority.get -> bool
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.EnforcesDispatchAuthority.init -> void
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.DispatchAuthority.get -> Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelDispatchAuthority?
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.DispatchAuthority.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.CapabilitiesFingerprint.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.CapabilitiesFingerprint.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ConfiguredModelId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ConfiguredModelId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ConnectionIncarnation.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ConnectionIncarnation.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ConnectionVersion.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ConnectionVersion.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.Deconstruct(out string! ProviderKey, out string! ConfiguredModelId, out string! ConnectionIncarnation, out int ConnectionVersion, out string! CapabilitiesFingerprint, out string! ProtocolProfile) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ProtocolProfile.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ProtocolProfile.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ProviderKey.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ProviderKey.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.SpecialistModelDispatchObservation(string! ProviderKey, string! ConfiguredModelId, string! ConnectionIncarnation, int ConnectionVersion, string! CapabilitiesFingerprint, string! ProtocolProfile) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Deconstruct(out string! Id, out int MaximumOutputTokens, out System.DateTimeOffset ReservedAt, out Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation! Observation) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Id.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Id.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.MaximumOutputTokens.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.MaximumOutputTokens.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Observation.get -> Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Observation.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.ReservedAt.get -> System.DateTimeOffset
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.ReservedAt.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.SpecialistModelRequestReservation(string! Id, int MaximumOutputTokens, System.DateTimeOffset ReservedAt, Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation! Observation) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.MaximumModelCalls.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.MaximumModelCalls.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ModelRequests.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation!>?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ModelRequests.init -> void
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelDispatchObservation? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelRequestReservation? right) -> bool

@@ -28,6 +28,13 @@ SDK objects never enter the descriptor or journal material. The lease's capabili
 match publication and its connection version must be positive. The runtime owns model selection,
 response schema, maximum output tokens and tool admission; it clones the supplied options.
 
+Native turns supply `SpecialistModelOpenRequest.DispatchAuthority`, a per-invocation callback rather
+than a DI contribution or serialized descriptor field. A qualified client calls `BeforeSendAsync`
+below its SDK before every physical model request, and sets the lease's `EnforcesDispatchAuthority`
+only when that mechanism is actually installed. Native execution refuses an unknown accounting
+capability before requesting a response. Protocol fixtures may open standalone leases without this
+authority; that establishes no native budget qualification. No callback grants access to a connection.
+
 The [connection-backed contributors](../Connections/README.md) add separate Anthropic and Azure OpenAI
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.
@@ -51,6 +58,14 @@ Claim, dispatch and acceptance compare the exact native identity, lifecycle stat
 claim and acceptance require an unexpired deadline. Acceptance stores the protected result/session pair
 atomically and is immutable. Uncertain dispatch is terminal `OutcomeUnknown`, never an implicit retry.
 The runtime authenticates the opaque protected material before using it.
+
+`ReserveModelRequestAsync` conditionally appends one unique physical-send reservation while the turn
+is dispatching under its live fence/deadline and finite `MaximumModelCalls`. Reusing a reservation ID
+does not grant another send. Output ceilings and configured resource observations remain in the
+reservation even after unknown usage/outcome. The runtime authenticates the request maximum against
+the protected staged descriptor. Returned collection values cannot mutate retained in-memory state.
+This initial reservation slice does not claim hard input/total-token accounting or known-usage
+reconciliation; accepted response usage and the conservative reservation remain distinct evidence.
 
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
 credential durability or end-to-end recovery qualification. This initial conditional turn boundary

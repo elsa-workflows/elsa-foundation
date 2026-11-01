@@ -36,6 +36,7 @@ internal sealed class AzureOpenAISpecialistModelProvider(IConnectionResolver res
 {
     public override string ProviderKey => "azure-openai";
     protected override string ConnectionTypeName => "specialist-azure-openai";
+    protected override bool SupportsPhysicalRequestReservations => true;
     protected override string ProtocolProfile => "azure-openai/2.1.0;api/2024-10-21;openai/2.14.0;meai/10.10.1;http1.1;api-key;retries0;redirects0";
     protected override IChatClient CreateClient(Uri endpoint, string modelId, SensitiveValue apiKey, HttpClient http) =>
         new AzureOpenAIClient(endpoint, new ApiKeyCredential(apiKey.Reveal()), new AzureOpenAIClientOptions(AzureOpenAIClientOptions.ServiceVersion.V2024_10_21)

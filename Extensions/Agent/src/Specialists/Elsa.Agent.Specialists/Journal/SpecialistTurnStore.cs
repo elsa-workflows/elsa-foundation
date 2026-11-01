@@ -37,12 +37,12 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
                 var existing = rows[handle];
                 if (existing.Identity != candidate.Identity || existing.RequestHash != candidate.RequestHash)
                     throw new SpecialistJournalException("specialist.journal.conflict", existing.Handle, "A different specialist request already owns this native operation.", new InvalidOperationException("The native operation fingerprint changed."));
-                return ValueTask.FromResult(existing);
+                return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(existing));
             }
             if (rows.Count >= 10_000) throw new SpecialistJournalException("specialist.journal.capacity", null, "The process-local specialist journal is full.", new InvalidOperationException("The development journal capacity was reached."));
-            rows.Add(candidate.Handle, candidate);
+            rows.Add(candidate.Handle, SpecialistTurnDocumentRules.Copy(candidate));
             keys.Add(candidate.Key, candidate.Handle);
-            return ValueTask.FromResult(candidate);
+            return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(candidate));
         }
     }
 
@@ -101,10 +101,25 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, string fence,
+        SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            var row = Find(handle, identity);
+            if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || row.Deadline <= now ||
+                (row.ModelRequests?.Count ?? 0) >= row.MaximumModelCalls || (row.ModelRequests ?? []).Any(x => x.Id == reservation.Id))
+                return ValueTask.FromResult<SpecialistModelRequestReservation?>(null);
+            Save(row with { ModelRequests = [.. row.ModelRequests ?? [], reservation] });
+            return ValueTask.FromResult<SpecialistModelRequestReservation?>(reservation);
+        }
+    }
+
     private void Save(SpecialistTurnDocument document)
     {
         ValidateRecord(document, prepared: false);
-        rows[document.Handle] = document;
+        rows[document.Handle] = SpecialistTurnDocumentRules.Copy(document);
     }
 
     private static void ValidateRecord(SpecialistTurnDocument document, bool prepared)
@@ -124,7 +139,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
     private SpecialistTurnDocument? Find(string handle, SpecialistInvocationIdentity identity)
     {
         EnsureScope(identity);
-        return rows.TryGetValue(handle, out var row) && row.Identity == identity ? row : null;
+        return rows.TryGetValue(handle, out var row) && row.Identity == identity ? SpecialistTurnDocumentRules.Copy(row) : null;
     }
 
     private void EnsureScope(SpecialistInvocationIdentity identity)

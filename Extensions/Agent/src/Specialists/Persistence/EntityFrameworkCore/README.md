@@ -29,6 +29,12 @@ Identical stage replay preserves the original deadline and ciphertext. The store
 schema, version, lifecycle, fence and deadline in conditional database writes. It never replaces
 an accepted result, and it refuses unsupported record schemas without mutation.
 
+Physical model requests append unique reservations under the same conditional version/state/fence
+and deadline checks. Concurrent reservations cannot exceed the staged finite request maximum.
+Retained output ceilings and configured resource observations survive response loss and host restart;
+missing usage does not release a reservation. Native runtime checks authenticate the staged request
+maximum before creating its transport authority. This is not a hard input/total-token accounting claim.
+
 Business input, accepted output and the conversation candidate are protected by the runtime using
 the selected Secrets protector/key ring. Retain the required keys across host restarts. Store
 capabilities describe configuration: file-backed SQLite and the three other supported relational

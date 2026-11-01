@@ -25,6 +25,10 @@ public interface ISpecialistTurnStore
     /// <summary>Persists dispatch responsibility under the live claim before inference can begin.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, string fence, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>Reserves one physical model request before sending, under the live dispatch fence and finite limit.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
+    ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, string fence,
+        SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Atomically accepts the protected result/session pair only for its live dispatch fence.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, string fence, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken);

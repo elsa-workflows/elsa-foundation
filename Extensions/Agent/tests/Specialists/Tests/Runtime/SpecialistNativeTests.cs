@@ -25,6 +25,24 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistNativeTests
 {
+    [Fact]
+    public async Task A_provider_with_unknown_physical_accounting_is_refused_before_any_external_response_call()
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not run\"}", enforcesAccounting: false);
+        await using var provider = await ServicesAsync(factory);
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider));
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        Assert.NotNull(claim);
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        Assert.Equal(1, factory.Opens);
+        Assert.Equal(0, factory.Calls);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        Assert.Contains(states, state => state.Fault?.Code == "specialist.budget.provider");
+        Assert.All(states, state => Assert.Null(state.Completion));
+    }
+
     [Theory]
     [InlineData("{\"Article\":null}", WorkflowExecutionStatus.Completed)]
     [InlineData("{}", WorkflowExecutionStatus.Faulted)]
@@ -361,7 +379,7 @@ public sealed class SpecialistNativeTests
     }
 
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
-    private sealed class FixtureFactory(string response) : ISpecialistModelClientFactory
+    private sealed class FixtureFactory(string response, bool enforcesAccounting = true) : ISpecialistModelClientFactory
     {
         private string Response { get; } = response;
         public string ProviderKey => "fixture";
@@ -375,18 +393,21 @@ public sealed class SpecialistNativeTests
         public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
         {
             Opens++;
-            return ValueTask.FromResult(new SpecialistModelClientLease(new Client(this), new ChatOptions(), "fixture/1", 1));
+            return ValueTask.FromResult(new SpecialistModelClientLease(new Client(this, request), new ChatOptions { MaxOutputTokens = 4096 }, "fixture/1", 1)
+                { EnforcesDispatchAuthority = enforcesAccounting && request.DispatchAuthority is not null });
         }
-        private sealed class Client(FixtureFactory owner) : IChatClient
+        private sealed class Client(FixtureFactory owner, SpecialistModelOpenRequest request) : IChatClient
         {
-            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
             {
+                if (request.DispatchAuthority is { } authority)
+                    await authority.BeforeSendAsync(new("fixture", request.Descriptor.Model.ModelId, "fixture-incarnation", 1, "fixture/1", "external-deterministic-one-response/1"), cancellationToken);
                 owner.Calls++;
                 owner.LastUser = messages.Last(x => x.Role == ChatRole.User).Text;
                 owner.Instructions = options?.Instructions;
                 owner.ModelId = options?.ModelId;
                 owner.Schema = (options?.ResponseFormat as ChatResponseFormatJson)?.Schema;
-                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, owner.Response)) { Usage = new UsageDetails { InputTokenCount = 5, OutputTokenCount = 3 } });
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, owner.Response)) { Usage = new UsageDetails { InputTokenCount = 5, OutputTokenCount = 3 } };
             }
             public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
             public object? GetService(Type serviceType, object? serviceKey = null) => null;

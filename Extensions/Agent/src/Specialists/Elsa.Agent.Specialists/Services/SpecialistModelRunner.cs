@@ -39,7 +39,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         return resultSchema;
     }
 
-    public async ValueTask<SpecialistTurnResult> RunAsync(SpecialistTurnRequest request, CancellationToken cancellationToken)
+    public async ValueTask<SpecialistTurnResult> RunAsync(SpecialistTurnRequest request, CancellationToken cancellationToken, SpecialistTurnBudgetAuthority? authority = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var resultSchema = ValidateRequest(request);
@@ -54,9 +54,11 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         var owners = factories.Where(x => x.ProviderKey == descriptor.Model.ProviderKey).ToArray();
         if (owners.Length != 1)
             throw Failure("specialist.model.provider", "The selected model provider must have exactly one registered owner.");
-        await using var lease = await owners[0].OpenAsync(new(descriptor, request.Identity), cancellationToken);
+        await using var lease = await owners[0].OpenAsync(new(descriptor, request.Identity) { DispatchAuthority = authority }, cancellationToken);
         if (lease.ConnectionVersion < 1 || lease.CapabilitiesFingerprint != descriptor.CapabilitiesFingerprint)
             throw Failure("specialist.model.changed", "The model connection or capabilities no longer satisfy the published specialist.");
+        if (authority is not null && !lease.EnforcesDispatchAuthority)
+            throw Failure("specialist.budget.provider", "This model lease cannot enforce physical request reservations.");
         // Every invocation gets a new SDK session. Only an explicitly admitted protected snapshot
         // restores earlier accepted messages; MAF session serialization is never persisted.
         var options = lease.Options.Clone();
@@ -64,6 +66,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         options.ResponseFormat = ChatResponseFormat.ForJsonSchema(descriptor.ResultSchema, "specialist_result");
         options.MaxOutputTokens = descriptor.Limits.MaximumOutputTokens is { } published
             ? Math.Min(published, options.MaxOutputTokens ?? published) : options.MaxOutputTokens;
+        authority?.BindOutputLimit(options.MaxOutputTokens);
         options.Tools = null;
         options.ToolMode = ChatToolMode.None;
         options.Instructions = null;
@@ -101,8 +104,10 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             throw Failure("specialist.result.invalid", "The model result does not satisfy its published business contract.");
         // No candidate history escapes on refusal, invalid JSON/schema or cancellation. The journal
         // must accept this snapshot and business result in one transaction before either is reusable.
+        if (authority is not null && authority.Reservations < 1)
+            throw Failure("specialist.budget.protocol", "The model provider returned a result without its required physical reservation.");
         var acceptedSession = descriptor.AllowContinuity ? sessions.Capture(history.GetMessages(session), request.Identity, request.SessionTarget!) : null;
-        return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, bounded.Calls, lease.ConnectionVersion, acceptedSession);
+        return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, authority?.Reservations ?? bounded.Calls, lease.ConnectionVersion, acceptedSession);
     }
 
     internal static SpecialistTurnException Failure(string code, string message, Exception? innerException = null) => new(code, message, innerException);

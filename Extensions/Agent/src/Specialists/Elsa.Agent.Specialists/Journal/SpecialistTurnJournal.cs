@@ -22,7 +22,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         var key = SpecialistTurnDocument.CalculateOperationKey(request.Identity);
         var candidate = new SpecialistTurnDocument(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(), key, hash, request.Identity,
             protector.Protect(JsonSerializer.Serialize(new RequestEnvelope(RequestPurpose, request.Identity, hash, request), SpecialistJson.Options)),
-            now.AddMilliseconds(request.Descriptor.Limits.TimeoutMilliseconds));
+            now.AddMilliseconds(request.Descriptor.Limits.TimeoutMilliseconds)) { MaximumModelCalls = request.Descriptor.Limits.MaximumModelCalls };
         return (await store.StageAsync(candidate, cancellationToken)).Handle;
     }
 
@@ -34,7 +34,8 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         try { envelope = JsonSerializer.Deserialize<RequestEnvelope>(protector.Unprotect(document.ProtectedRequest), SpecialistJson.Options); }
         catch (Exception exception) { throw Failure("specialist.journal.protection", "The staged specialist request cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != RequestPurpose || envelope.Identity != identity || envelope.Request.Identity != identity || envelope.Hash != document.RequestHash ||
-            Hash(JsonSerializer.Serialize(envelope.Request, SpecialistJson.Options)) != document.RequestHash)
+            Hash(JsonSerializer.Serialize(envelope.Request, SpecialistJson.Options)) != document.RequestHash ||
+            document.MaximumModelCalls != envelope.Request.Descriptor.Limits.MaximumModelCalls)
             throw Failure("specialist.journal.protection", "The staged specialist request does not match this native invocation.");
         return (document, envelope.Request);
     }

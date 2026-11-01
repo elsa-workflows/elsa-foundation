@@ -29,6 +29,58 @@ public sealed class SpecialistEfJournalTests
     private static SpecialistInvocationIdentity Identity => new("tenant", "tenant", "workflow", "activity", "operation", "artifact", "hash", "version", "template");
     private static SpecialistTurnDocument Document => new(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));
 
+    [Fact]
+    public async Task Concurrent_database_reservations_are_finite_fenced_and_retained_when_the_outcome_is_unknown()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var seed = database.Context())
+        {
+            var store = Store(seed);
+            await store.StageAsync(Document with { MaximumModelCalls = 2 }, CancellationToken.None);
+            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(0), Now, CancellationToken.None));
+            Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
+            Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
+            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "wrong-fence", Reservation(0), Now, CancellationToken.None));
+            Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(0), Document.Deadline, CancellationToken.None));
+        }
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
+        {
+            await using var context = database.Context();
+            return await Store(context).ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(index), Now, CancellationToken.None);
+        }));
+        Assert.Equal(2, attempts.Count(value => value is not null));
+        await using (var context = database.Context())
+            await Store(context).FailAsync(Document.Handle, Identity, "fence", "response-lost", true, CancellationToken.None);
+        await using var restarted = database.Context();
+        var restored = await Store(restarted).ReadAsync(Document.Handle, Identity, CancellationToken.None);
+        Assert.Equal(SpecialistTurnStatus.OutcomeUnknown, restored!.Status);
+        Assert.Equal(2, restored.ModelRequests!.Count);
+        Assert.Equal(128, restored.ModelRequests.Sum(value => value.MaximumOutputTokens));
+        Assert.Null(await Store(restarted).ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(9), Now, CancellationToken.None));
+        Assert.Null(await Store(restarted).ClaimAsync(Document.Handle, Identity, "replacement", "new-fence", Now, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Development_reservation_collections_cannot_be_mutated_through_staged_or_returned_values()
+    {
+        var store = new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var mutable = new List<SpecialistModelRequestReservation>();
+        await store.StageAsync(Document with { MaximumModelCalls = 2, ModelRequests = mutable }, CancellationToken.None);
+        mutable.Add(Reservation(0));
+        Assert.Empty((await store.ReadAsync(Document.Handle, Identity, CancellationToken.None))!.ModelRequests!);
+        Assert.NotNull(await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
+        Assert.True(await store.DispatchAsync(Document.Handle, Identity, "fence", Now, CancellationToken.None));
+        Assert.NotNull(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(1), Now, CancellationToken.None));
+        var exposed = (await store.ReadAsync(Document.Handle, Identity, CancellationToken.None))!.ModelRequests!;
+        ((IList<SpecialistModelRequestReservation>)exposed)[0] = Reservation(2);
+        Assert.Equal(Reservation(1), Assert.Single((await store.ReadAsync(Document.Handle, Identity, CancellationToken.None))!.ModelRequests!));
+        Assert.Null(await store.ReserveModelRequestAsync(Document.Handle, Identity, "fence", Reservation(1), Now, CancellationToken.None));
+    }
+
+    private static SpecialistModelRequestReservation Reservation(int index) => new(
+        Convert.ToHexString(SHA256.HashData(BitConverter.GetBytes(index))).ToLowerInvariant(), 64, Now,
+        new("fixture", "model", "incarnation", 1, "fixture/1", "fixture-accounted/1"));
+
     [Theory]
     [InlineData(SpecialistTurnStatus.Prepared)]
     [InlineData(SpecialistTurnStatus.Dispatching)]

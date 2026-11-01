@@ -9,7 +9,7 @@ namespace Elsa.Agent.Specialists.Activities;
 
 [BackgroundExecutionSafe]
 [Activity(IsDiscoverable = false)]
-internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, SpecialistTurnJournal journal, SpecialistModelRunner runner, TimeProvider time) : IActivity, IActivityResult<string>
+internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, SpecialistTurnJournal journal, SpecialistModelRunner runner, TimeProvider time, SpecialistTurnBudgetAllocator budgets) : IActivity, IActivityResult<string>
 {
     public async ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context)
     {
@@ -27,7 +27,9 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
         var dispatched = false;
         try
         {
-            using var deadline = new CancellationTokenSource(document.Deadline - time.GetUtcNow(), time);
+            var remaining = document.Deadline - time.GetUtcNow();
+            if (remaining <= TimeSpan.Zero) throw SpecialistModelRunner.Failure("specialist.turn.deadline", "The specialist deadline expired before dispatch.");
+            using var deadline = new CancellationTokenSource(remaining, time);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, deadline.Token);
             linked.Token.ThrowIfCancellationRequested();
             if (!await journal.DispatchAsync(document, time.GetUtcNow(), linked.Token))
@@ -35,7 +37,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             dispatched = true;
             // The initial fresh journal's handle is its conversation identity. Durable continuation
             // replaces this target only after conversation admission; the model cannot choose it.
-            var result = await runner.RunAsync(request with { SessionTarget = new(document.Handle, 1) }, linked.Token);
+            var result = await runner.RunAsync(request with { SessionTarget = new(document.Handle, 1) }, linked.Token, budgets.Create(document, request));
             _ = await binding.ParentAsync(context, linked.Token);
             if (!await journal.AcceptAsync(document, result, time.GetUtcNow(), linked.Token))
                 throw SpecialistModelRunner.Failure("specialist.turn.fence", "The specialist result cannot be accepted under this worker fence.");

@@ -25,6 +25,8 @@ public abstract class SpecialistConnectionModelProvider(
     protected abstract string ConnectionTypeName { get; }
     /// <summary>SDK, API and schema-profile identity. Change whenever effective support changes.</summary>
     protected abstract string ProtocolProfile { get; }
+    /// <summary>Explicit opt-in after qualifying SDK and primary-handler physical request behavior.</summary>
+    protected virtual bool SupportsPhysicalRequestReservations => false;
     /// <summary>Creates an owned SDK client with retries disabled and no ambient credential fallback.</summary>
     protected abstract IChatClient CreateClient(Uri endpoint, string modelId, SensitiveValue apiKey, HttpClient http);
 
@@ -75,7 +77,12 @@ public abstract class SpecialistConnectionModelProvider(
         CheckCredential(key);
         var version = connection.Version;
         var http = new HttpClient(new ModelRequestGuard(profile.Endpoint, connection.Hosts,
-            ct => ValidateDispatchAsync(model, request.Invocation, profile.IncarnationId, version, profile.Capabilities.Fingerprint, key, ct), CreatePrimaryHandler()), disposeHandler: true)
+            async ct =>
+            {
+                if (request.DispatchAuthority is { } authority)
+                    await authority.BeforeSendAsync(new(ProviderKey, model.ModelId, profile.IncarnationId, version, profile.Capabilities.Fingerprint, ProtocolProfile), ct);
+                await ValidateDispatchAsync(model, request.Invocation, profile.IncarnationId, version, profile.Capabilities.Fingerprint, key, ct);
+            }, CreatePrimaryHandler()), disposeHandler: true)
         {
             Timeout = Timeout.InfiniteTimeSpan,
             DefaultRequestVersion = HttpVersion.Version11,
@@ -87,7 +94,8 @@ public abstract class SpecialistConnectionModelProvider(
             {
                 Temperature = settings,
                 MaxOutputTokens = profile.Capabilities.MaximumOutputTokens
-            }, profile.Capabilities.Fingerprint, version, new OwnedHttpClient(http));
+            }, profile.Capabilities.Fingerprint, version, new OwnedHttpClient(http))
+            { EnforcesDispatchAuthority = SupportsPhysicalRequestReservations && request.DispatchAuthority is not null };
         }
         catch { http.Dispose(); throw; }
     }
