@@ -26,20 +26,27 @@ internal sealed class SpecialistActivityProvider(
 {
     private static readonly ActivityOutcomeContract Done = new("done", "Done", true);
     public string ProviderKey => SpecialistRuntimeIds.ProviderKey;
-    public string CompilerFingerprint => "elsa.specialist/compiler/1.0.0";
-    public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema };
+    public string CompilerFingerprint => "elsa.specialist/compiler/2.0.0";
+    public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema, SpecialistRuntimeIds.ContinuityManifestSchema };
     public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new("Specialist",
-        [new(SpecialistRuntimeIds.ManifestSchema, true, new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema })], new([Done]));
+        [new(SpecialistRuntimeIds.ManifestSchema, true, new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema }),
+            new(SpecialistRuntimeIds.ContinuityManifestSchema, true, new HashSet<string>(StringComparer.Ordinal) { SpecialistRuntimeIds.ManifestSchema, SpecialistRuntimeIds.ContinuityManifestSchema })], new([Done]));
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new List<ActivityDiagnostic>();
-        _ = Read(request.Manifest, Subject(), diagnostics);
+        var manifest = Read(request.Manifest, Subject(), diagnostics);
         var current = request.Contract.Outcomes.FirstOrDefault(x => x.ReferenceKey == Done.ReferenceKey);
-        return ValueTask.FromResult(new ActivityContractProposal(IsDone(current) ? [] :
-            [new("outcome:done", current is null ? ActivityContractProposalOperation.Add : ActivityContractProposalOperation.Replace,
-                ActivityContractMemberKind.Outcome, Done.ReferenceKey, Outcome: Done)], diagnostics));
+        var changes = new List<ActivityContractProposalChange>();
+        if (!IsDone(current)) changes.Add(new("outcome:done", current is null ? ActivityContractProposalOperation.Add : ActivityContractProposalOperation.Replace,
+            ActivityContractMemberKind.Outcome, Done.ReferenceKey, Outcome: Done));
+        if (manifest is not null && request.Manifest.SchemaVersion == SpecialistRuntimeIds.ContinuityManifestSchema)
+        {
+            changes.AddRange(SpecialistControlContract.Propose(request.Contract, manifest.AllowContinuity));
+            diagnostics.AddRange(SpecialistControlContract.Validate(request.Contract, manifest.AllowContinuity, proposing: true).Select(x => Problem(x.Code, x.Message, Subject(), x.Path)));
+        }
+        return ValueTask.FromResult(new ActivityContractProposal(changes, diagnostics));
     }
 
     public async ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, DesignContract contract, CancellationToken cancellationToken = default) =>
@@ -52,21 +59,22 @@ internal sealed class SpecialistActivityProvider(
             return new(null, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], new(0, 0, 0, 0, 0, 0, 0), request.ProviderFingerprint, [], prepared.Diagnostics);
 
         var payload = JsonSerializer.SerializeToElement(prepared.Descriptor, SpecialistJson.Options);
+        var descriptorSchema = prepared.Descriptor.InvocationControlsProfile is null ? SpecialistRuntimeIds.DescriptorSchema : SpecialistRuntimeIds.ContinuityDescriptorSchema;
         var workerPayload = JsonSerializer.SerializeToElement(new { role = "model-turn" });
         var workerContract = new RuntimeContract(SpecialistRuntimeIds.TurnCapability, "1", SpecialistRuntimeIds.ConsumerKey, workerPayload, [],
             new(new("String"), true, ActivityValuePolicy.Default, [new("Result", "$", new("String"), true, ActivityValuePolicy.Default)]),
             ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.TurnCapability), SideEffectProfile.External, supportsBackgroundExecution: true);
         var worker = new ExecutableNode("model-turn", "model-turn", SpecialistRuntimeIds.TurnCapability, "1",
-            new RuntimeActivityDescriptor(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.DescriptorSchema, workerPayload),
+            new RuntimeActivityDescriptor(SpecialistRuntimeIds.ConsumerKey, descriptorSchema, workerPayload),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), ActivityExecutionPlacement.Background,
             activityContract: workerContract);
         var contract = BuildRuntimeContract(request, payload);
         var root = new ExecutableNode("specialist", "specialist", request.ActivityTypeKey, request.CandidateVersion,
-            new RuntimeActivityDescriptor(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.DescriptorSchema, payload),
+            new RuntimeActivityDescriptor(SpecialistRuntimeIds.ConsumerKey, descriptorSchema, payload),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),
             [new ExecutableChildSlot("model-turn", [worker])], activityContract: contract);
         return new(root, new Dictionary<string, WorkflowExecutableResumeTarget>(), [],
-            [new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.DescriptorSchema)],
+            [new(SpecialistRuntimeIds.ConsumerKey, descriptorSchema)],
             request.Contract.Inputs.Select(x => x.StorageDriverKey).Concat(request.Contract.Outputs.Select(x => x.StorageDriverKey))
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(x => new RuntimeStorageDriverRequirement(x)).ToArray(),
             new(2, 2, 0, 1, Encoding.UTF8.GetByteCount(payload.GetRawText()) + Encoding.UTF8.GetByteCount(workerPayload.GetRawText()), 0, request.Contract.Inputs.Count + request.Contract.Outputs.Count),
@@ -86,9 +94,9 @@ internal sealed class SpecialistActivityProvider(
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new List<ActivityDiagnostic>();
         var manifest = Read(request.Source, Subject(), diagnostics);
-        if (request.TargetSchemaVersion != SpecialistRuntimeIds.ManifestSchema)
+        if (!SupportedManifestSchemas.Contains(request.TargetSchemaVersion) || request.Source.SchemaVersion == SpecialistRuntimeIds.ContinuityManifestSchema && request.TargetSchemaVersion == SpecialistRuntimeIds.ManifestSchema)
             diagnostics.Add(Problem("specialist.manifest.migration", "This specialist manifest migration is unsupported.", Subject()));
-        return ValueTask.FromResult(new ActivityManifestMigration(manifest is not null && diagnostics.Count == 0 ? request.Source with { Payload = request.Source.Payload.Clone() } : null, diagnostics));
+        return ValueTask.FromResult(new ActivityManifestMigration(manifest is not null && diagnostics.Count == 0 ? request.Source with { SchemaVersion = request.TargetSchemaVersion, Payload = request.Source.Payload.Clone() } : null, diagnostics));
     }
 
     private async ValueTask<Preparation> PrepareAsync(ActivityProviderManifest source, DesignContract contract, ActivityDiagnosticSubject subject, CancellationToken cancellationToken)
@@ -97,14 +105,20 @@ internal sealed class SpecialistActivityProvider(
         var diagnostics = new List<ActivityDiagnostic>();
         var manifest = Read(source, subject, diagnostics);
         if (manifest is null) return new(null, diagnostics);
+        var controls = source.SchemaVersion == SpecialistRuntimeIds.ContinuityManifestSchema && manifest.AllowContinuity;
+        if (source.SchemaVersion == SpecialistRuntimeIds.ContinuityManifestSchema)
+            diagnostics.AddRange(SpecialistControlContract.Validate(contract, controls).Select(x => Problem(x.Code, x.Message, subject, x.Path)));
+        if (diagnostics.Count != 0) return new(null, diagnostics);
+        var businessContract = controls ? contract with { Inputs = contract.Inputs.Where(x => !SpecialistControlContract.IsInput(x)).ToArray(),
+            Outputs = contract.Outputs.Where(x => !SpecialistControlContract.IsOutput(x)).ToArray() } : contract;
         if (contract.Outcomes.Count != 1 || !IsDone(contract.Outcomes[0]))
             diagnostics.Add(Problem("specialist.contract.outcome", "A specialist exposes the single Done outcome.", subject));
         if (contract.Outputs.Any(x => x.Name == "$" || x.ReferenceKey == "$result"))
             diagnostics.Add(Problem("specialist.contract.reserved", "A specialist output cannot use the reserved whole-result selector.", subject));
-        var schema = schemas.Compile(contract, manifest);
+        var schema = schemas.Compile(businessContract, manifest);
         diagnostics.AddRange(schema.Problems.Select(x => Problem(x.Code, x.Message, subject, x.Path)));
         if (schema.Inputs is not null)
-            foreach (var input in contract.Inputs.Where(x => x.Default is not null))
+            foreach (var input in businessContract.Inputs.Where(x => x.Default is not null))
             {
                 var defaultValue = input.Default!;
                 var memberSchema = validator.Prepare(schema.Inputs.Schema.GetProperty("properties").GetProperty(input.Name));
@@ -142,12 +156,13 @@ internal sealed class SpecialistActivityProvider(
             diagnostics.Add(Problem("specialist.model.settings", "Model settings do not satisfy the selected provider's current schema.", subject, "/settings"));
         if (diagnostics.Count != 0) return new(null, diagnostics);
         return new(new(manifest.Instructions, manifest.Model, manifest.Settings.Clone(), schema.Inputs!.Schema.Clone(), schema.Result!.Schema.Clone(),
-            capabilities.Fingerprint, SpecialistRuntimeIds.SchemaProfile, manifest.Limits, manifest.AllowContinuity), diagnostics);
+            capabilities.Fingerprint, SpecialistRuntimeIds.SchemaProfile, manifest.Limits, manifest.AllowContinuity)
+            { InvocationControlsProfile = controls ? SpecialistInvocationControls.Profile : null }, diagnostics);
     }
 
     private static SpecialistManifest? Read(ActivityProviderManifest source, ActivityDiagnosticSubject subject, List<ActivityDiagnostic> diagnostics)
     {
-        if (source.ProviderKey != SpecialistRuntimeIds.ProviderKey || source.SchemaVersion != SpecialistRuntimeIds.ManifestSchema)
+        if (source.ProviderKey != SpecialistRuntimeIds.ProviderKey || source.SchemaVersion is not (SpecialistRuntimeIds.ManifestSchema or SpecialistRuntimeIds.ContinuityManifestSchema))
         {
             diagnostics.Add(Problem("specialist.manifest.schema", "The specialist provider or manifest schema is unsupported.", subject));
             return null;
@@ -178,7 +193,8 @@ internal sealed class SpecialistActivityProvider(
         var resultPolicy = ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result };
         return new(request.ActivityTypeKey, request.CandidateVersion, SpecialistRuntimeIds.ConsumerKey, payload,
             request.Contract.Inputs.Select(x => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(x.ReferenceKey, x.Name,
-                new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired, !x.IsRequired || x.IsNullable, x.Default is not null, x.Default?.Value, ActivityValuePolicy.Default)),
+                new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired, !x.IsRequired || x.IsNullable,
+                x.Default is not null, x.Default?.Value, ActivityValuePolicy.Default)),
             new(new("System.Text.Json.JsonElement"), true, resultPolicy,
                 request.Contract.Outputs.Select(x => new ActivityResultProjectionContract(x.ReferenceKey, x.Name, new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired && !x.IsNullable, resultPolicy, x.SourceRepresentation)),
                 ValueRepresentation.StructuredValue), ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.FacadeCapability));
@@ -195,10 +211,15 @@ internal sealed class SpecialistActivityProvider(
             if (state is { HeadVersionId: null } && state.DefinitionId == request.DefinitionId) return [];
             var previous = state?.HeadVersionId is { } head ? await publications!.FindAsync(head, cancellationToken) : null;
             if (previous is not null && previous.DefinitionId == request.DefinitionId && previous.DefinitionVersionId == state!.HeadVersionId &&
-                previous.Provider is { } source && source.ProviderKey == ProviderKey && source.SchemaVersion == SpecialistRuntimeIds.ManifestSchema)
+                previous.Provider is { } source && source.ProviderKey == ProviderKey && SupportedManifestSchemas.Contains(source.SchemaVersion))
             {
                 var before = Read(previous.Provider, Subject(), []);
                 var after = Read(request.Provider, Subject(), []);
+                if (before is not null && after is not null &&
+                    (source.SchemaVersion == SpecialistRuntimeIds.ContinuityManifestSchema && before.AllowContinuity) !=
+                    (request.Provider.SchemaVersion == SpecialistRuntimeIds.ContinuityManifestSchema && after.AllowContinuity))
+                    return [new("specialist-invocation-controls", ActivityVersionChangeArea.Contract, "SpecialistInvocationContractChanged", new(), null, null,
+                        ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, "The specialist's native invocation controls or whole-result metadata changed.")];
                 if (before is not null && after is not null &&
                     JsonElement.DeepEquals(JsonSerializer.SerializeToElement(before.InputConstraints), JsonSerializer.SerializeToElement(after.InputConstraints)) &&
                     JsonElement.DeepEquals(JsonSerializer.SerializeToElement(before.ResultConstraints), JsonSerializer.SerializeToElement(after.ResultConstraints))) return [];

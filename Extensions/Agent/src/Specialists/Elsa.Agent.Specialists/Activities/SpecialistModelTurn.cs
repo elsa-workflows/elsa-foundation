@@ -23,7 +23,12 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             _ = await journal.ResultAsync(handle, identity, context.InvocationId, context.CancellationToken);
             return ActivityTransition.Complete(handle);
         }
-        document = await journal.ClaimAsync(handle, identity, context.InvocationId, time.GetUtcNow(), context.CancellationToken);
+        try { document = await journal.ClaimAsync(handle, identity, context.InvocationId, time.GetUtcNow(), context.CancellationToken); }
+        catch (SpecialistTurnException exception)
+        {
+            // No journal fence was obtained. Do not settle another worker's operation or start a provider.
+            return ActivityTransition.Fault<string>(new ActivityFault(exception.Code, "The specialist operation or conversation revision could not be admitted."));
+        }
         var dispatched = false;
         try
         {

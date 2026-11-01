@@ -88,3 +88,9 @@ write; acceptance commits the protected result/session and advances the conversa
 same transaction. Known failure releases the base revision without adding history. OutcomeUnknown
 retains the active operation and blocks continuation. Old accepted operation replay never rewinds the
 conversation. A custom backend must preserve all of these paired conditional transitions.
+
+`SpecialistRuntimeIds` retains manifest/descriptor1 and adds explicit continuity schema2 identities.
+The descriptor's optional `InvocationControlsProfile` is omitted while null, preserving the old
+serialized descriptor shape. The runtime validates the exact profile/schema pair and retains both
+readers. Native public controls are defined by the provider's reviewed contract, not by model settings
+or a connection credential. See [the authoring contract](../Design/EXTENSION_POINTS.md#explicit-continuation-contracts).

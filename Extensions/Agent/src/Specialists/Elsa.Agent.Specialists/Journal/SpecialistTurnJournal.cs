@@ -62,8 +62,12 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
     public async ValueTask<SpecialistTurnDocument> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         EnsureScope(identity);
-        return await store.ClaimAsync(handle, identity, childInvocationId, Guid.NewGuid().ToString("N"), now, cancellationToken)
-            ?? throw Failure("specialist.turn.claim", "The specialist turn is already owned, terminal, expired or unavailable; dispatch was refused.");
+        var claimed = await store.ClaimAsync(handle, identity, childInvocationId, Guid.NewGuid().ToString("N"), now, cancellationToken);
+        if (claimed is not null) return claimed;
+        var current = await store.ReadAsync(handle, identity, cancellationToken);
+        if (current is { Status: SpecialistTurnStatus.Prepared, Conversation: not null } && current.Deadline > now)
+            throw Failure("specialist.conversation.conflict", "The requested conversation revision is unavailable for this native owner and specialist version.");
+        throw Failure("specialist.turn.claim", "The specialist turn is already owned, terminal, expired or unavailable; dispatch was refused.");
     }
 
     public ValueTask<bool> DispatchAsync(SpecialistTurnDocument document, DateTimeOffset now, CancellationToken cancellationToken)

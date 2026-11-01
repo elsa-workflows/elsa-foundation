@@ -47,25 +47,28 @@ namespace Elsa.Agent.Specialists.Tests.Publication;
 
 public sealed class SpecialistPublicationTests
 {
-    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, bool allowContinuity = false)
+    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, bool allowContinuity = false, bool invocationControls = false, string originKey = "workflow-v1", RuntimeInputBinding? optionsBinding = null)
     {
-        await using var fixture = await Fixture.CreateAsync(outputName, outputType, outputNullable, optionalBrief, allowContinuity);
+        await using var fixture = await Fixture.CreateAsync(outputName, outputType, outputNullable, optionalBrief, allowContinuity, invocationControls);
         Assert.Equal(ActivityPublicationReceiptStatus.Applied, (await fixture.PublishAsync()).Status);
         var publication = (await fixture.Publications.FindAsync("copywriter-v1"))!;
         var template = (await fixture.Templates.FindAsync(publication.TemplateId))!;
         var source = (await fixture.Sources.FindAsync(publication.SourceReferenceId))!;
         var types = fixture.Services.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
+        types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
         var placer = new ActivityTemplatePlacer(fixture.Publications, fixture.Templates, fixture.Sources, new Sha256ActivityPlacementHasher(),
             new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers));
         var placement = await placer.PlaceAsync(new(publication, template, source,
-            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-v1")]), publication.ActivityTypeKey,
+            new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, originKey)]), publication.ActivityTypeKey,
             new Dictionary<string, RuntimeInputBinding>
             {
                 ["brief-key"] = briefBinding ?? new("brief-key", new("String"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
                     literal: optionalBrief ? ValueEnvelope.Absent(new("String"), ValueProtectionPolicy.InstanceInline) :
                         ValueEnvelope.Inline(new("String"), Json("\"moss gardens\""), ValueProtectionPolicy.InstanceInline))
-            }, outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>()));
+            }.Concat(!invocationControls || !allowContinuity ? [] : new Dictionary<string, RuntimeInputBinding> { ["$specialist.options"] = optionsBinding ??
+                new("$specialist.options", new("System.Text.Json.JsonElement"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Absent(new("System.Text.Json.JsonElement"), ValueProtectionPolicy.InstanceInline)) }).ToDictionary(x => x.Key, x => x.Value), outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>()));
         return (placement, template.StorageDriverRequirements);
     }
 
@@ -122,6 +125,18 @@ public sealed class SpecialistPublicationTests
     }
 
     [Fact]
+    public async Task Removing_native_conversation_metadata_requires_a_major_publication_version()
+    {
+        await using var fixture = await Fixture.CreateAsync(allowContinuity: true, invocationControls: true);
+        Assert.Equal(ActivityPublicationReceiptStatus.Applied, (await fixture.PublishAsync()).Status);
+        await fixture.CreateDraftAsync("second", fixture.Manifest with { AllowContinuity = false }, "copywriter-v1");
+        var review = await fixture.Publisher.PreflightAsync(new("second", 1, "copywriter-v1"));
+        Assert.True(review.IsPublishable, JsonSerializer.Serialize(review.Diagnostics));
+        Assert.Equal("2.0.0", review.MinimumVersion);
+        Assert.Contains(review.ImpactFirstChanges, x => x.Kind == "SpecialistInvocationContractChanged" && x.RequiredBump == ActivityVersionBump.Major);
+    }
+
+    [Fact]
     public async Task Prompt_changes_affect_behavior_hash_without_rewriting_the_published_artifact_or_forcing_a_schema_major()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -175,7 +190,7 @@ public sealed class SpecialistPublicationTests
         await using var fixture = await Fixture.CreateAsync();
         var review = await fixture.Publisher.PreflightAsync(new("draft", 1, null) { Version = "1.0.0" });
         Assert.True(review.IsPublishable, JsonSerializer.Serialize(review.Diagnostics));
-        await fixture.Stores.ExecuteAsync(new ReplaceActivityDraftRequest("draft", 1, fixture.State(fixture.Manifest with { Instructions = "Changed after review." }), []));
+        await fixture.Stores.ExecuteAsync(new ReplaceActivityDraftRequest("draft", 1, await fixture.StateAsync(fixture.Manifest with { Instructions = "Changed after review." }), []));
         var stale = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => fixture.Publisher.PublishReviewedAsync(new("draft", 1, null, "1.0.0", review.ReviewToken, "stale-publish", "copywriter-v1")));
         Assert.Equal("activity.draft.stale-revision", stale.ErrorCode);
         Assert.False(await fixture.Design.ActivityDefinitionVersionPublications.AnyAsync());
@@ -199,7 +214,7 @@ public sealed class SpecialistPublicationTests
     private sealed class Fixture(string directory, ActivitiesDesignSqliteDbContext design, RuntimeSqliteDbContext runtime,
         PublishingSnapshotReviewSqliteDbContext publishing, ServiceProvider root, AsyncServiceScope scope,
         EfActivityDesignStores stores, EfExecutableActivityTemplateStore templates, EfWorkflowExecutableSourceReferenceStore sources,
-        EfActivityPublicationReceiptStore receipts, EfActivityPublicationCommand commit, Access access, MetadataModel model, string outputName, string outputType, bool outputNullable, bool optionalBrief, bool allowContinuity) : IAsyncDisposable
+        EfActivityPublicationReceiptStore receipts, EfActivityPublicationCommand commit, Access access, MetadataModel model, string outputName, string outputType, bool outputNullable, bool optionalBrief, bool allowContinuity, bool invocationControls) : IAsyncDisposable
     {
         public ActivitiesDesignSqliteDbContext Design => design;
         public RuntimeSqliteDbContext Runtime => runtime;
@@ -222,9 +237,20 @@ public sealed class SpecialistPublicationTests
             new ActivityVersionDiffer(), Compiler, access, commit, Services.GetRequiredService<IDistributedLockProvider>(), new Ids(), TimeProvider.System, receipts,
             runtimeInstalled ? Services.GetServices<IActivityActivationStrategy>() : [], storageInstalled ? Drivers : new RuntimeDurableValueStorageDriverRegistry([]));
 
-        public ActivityDefinitionDraftState State(SpecialistManifest manifest) => new(new("1", [new("brief-key", "Brief", new("String"), !optionalBrief, false, null, "elsa.json")],
-            [new("article-key", outputName, new(outputType), true, outputNullable, "elsa.json")], [new("done", "Done", true)]),
-            new(SpecialistRuntimeIds.ProviderKey, "1", JsonSerializer.SerializeToElement(manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web))), new Dictionary<string, string>());
+        public async ValueTask<ActivityDefinitionDraftState> StateAsync(SpecialistManifest manifest)
+        {
+            var contract = new Elsa.Activities.Design.Core.Models.ActivityContract("1", [new("brief-key", "Brief", new("String"), !optionalBrief, false, null, "elsa.json")],
+                [new("article-key", outputName, new(outputType), true, outputNullable, "elsa.json")], [new("done", "Done", true)]);
+            var source = new ActivityProviderManifest(SpecialistRuntimeIds.ProviderKey, invocationControls ? "2" : "1", JsonSerializer.SerializeToElement(manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            if (invocationControls)
+            {
+                var proposal = await Services.GetRequiredService<IActivityProvider>().ProposeContractAsync(new(source, contract));
+                Assert.Empty(proposal.Diagnostics);
+                contract = contract with { Inputs = [.. contract.Inputs, .. proposal.Changes.Where(x => x.Input is not null).Select(x => x.Input!)],
+                    Outputs = [.. contract.Outputs, .. proposal.Changes.Where(x => x.Output is not null).Select(x => x.Output!)] };
+            }
+            return new(contract, source, new Dictionary<string, string>());
+        }
 
         public async Task<ActivityPublicationReceipt> PublishAsync()
         {
@@ -235,11 +261,11 @@ public sealed class SpecialistPublicationTests
             return await publisher.PublishReviewedAsync(LastPublish);
         }
 
-        public Task CreateDraftAsync(string id, SpecialistManifest manifest, string head) => stores.ExecuteAsync(new CreateActivityDraftRequest(
-            new() { Id = id, DefinitionId = "copywriter", Revision = 1, State = State(manifest), CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow },
+        public async Task CreateDraftAsync(string id, SpecialistManifest manifest, string head) => await stores.ExecuteAsync(new CreateActivityDraftRequest(
+            new() { Id = id, DefinitionId = "copywriter", Revision = 1, State = await StateAsync(manifest), CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow },
             new() { Id = id + "-layout", DraftId = id, Revision = 1, CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow }, head));
 
-        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false)
+        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false, bool invocationControls = false)
         {
             var directory = Path.Combine(Path.GetTempPath(), "elsa-specialist-publication-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -273,12 +299,12 @@ public sealed class SpecialistPublicationTests
             services.AddSingleton<IActivityDefinitionVersionPublicationStore>(stores);
             var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = root.CreateAsyncScope();
-            var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief, allowContinuity);
+            var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief, allowContinuity, invocationControls);
             var now = DateTimeOffset.UtcNow;
             await stores.ExecuteAsync(new CreateActivityDefinitionRequest(
                 new() { Id = "copywriter", ActivityTypeKey = "acme.copywriter", Category = "Specialists", DisplayName = "Copywriter", CreatedAt = now, LastModifiedAt = now },
                 new() { Id = "authoring", DefinitionId = "copywriter", ContentAuthority = new(ActivityContentAuthorityKind.Design, WellKnownActivityContentAuthorities.Design), CreatedAt = now, LastModifiedAt = now },
-                new() { Id = "draft", DefinitionId = "copywriter", Revision = 1, State = fixture.State(fixture.Manifest), CreatedAt = now, LastModifiedAt = now },
+                new() { Id = "draft", DefinitionId = "copywriter", Revision = 1, State = await fixture.StateAsync(fixture.Manifest), CreatedAt = now, LastModifiedAt = now },
                 new() { Id = "layout", DraftId = "draft", Revision = 1, CreatedAt = now, LastModifiedAt = now }));
             return fixture;
         }
@@ -303,7 +329,7 @@ public sealed class SpecialistPublicationTests
     private sealed class Ids : IIdentityGenerator { public string Generate() => Guid.NewGuid().ToString("N"); }
     private sealed class Capabilities : IActivityContractCapabilityCatalog
     {
-        public IReadOnlyCollection<ActivityContractTypeCapability> Types => new[] { "String", "Guid" }.Select(alias =>
+        public IReadOnlyCollection<ActivityContractTypeCapability> Types => new[] { "String", "Guid", "System.Text.Json.JsonElement" }.Select(alias =>
             new ActivityContractTypeCapability(alias, alias, "Primitives", "text", new HashSet<CollectionKind> { CollectionKind.Single }, true, true, new HashSet<string> { "elsa.json" })).ToArray();
     }
     private sealed class MetadataModel : ISpecialistModelCapabilitiesSource

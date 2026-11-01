@@ -17,6 +17,80 @@ namespace Elsa.Agent.Specialists.Tests.Publication;
 public sealed class SpecialistProviderTests
 {
     [Fact]
+    public async Task Explicit_continuity_proposals_compile_as_schema_two_without_model_business_controls()
+    {
+        await using var services = Services(new MetadataFactory());
+        var provider = services.GetRequiredService<IActivityProvider>();
+        var request = Request(Manifest() with { AllowContinuity = true });
+        var legacy = await provider.ProposeContractAsync(new(request.Provider, request.Contract));
+        Assert.Empty(legacy.Changes);
+        var old = (await services.GetRequiredService<IActivityTemplateProviderCompiler>().CompileAsync(request)).ExecutableRoot!;
+        Assert.Equal("1", old.DescriptorSchemaVersion);
+        Assert.False(old.DescriptorPayload.TryGetProperty("invocationControlsProfile", out _));
+        request = request with { Provider = request.Provider with { SchemaVersion = SpecialistRuntimeIds.ContinuityManifestSchema } };
+        var proposed = await provider.ProposeContractAsync(new(request.Provider, request.Contract));
+        Assert.Empty(proposed.Diagnostics);
+        Assert.Equal(2, proposed.Changes.Count);
+        Assert.Contains((await provider.ValidateAsync(request.Provider, request.Contract)), x => x.Code == "specialist.controls.required");
+        request = request with { Contract = request.Contract with { Inputs = [.. request.Contract.Inputs, Assert.Single(proposed.Changes, x => x.Input is not null).Input!],
+            Outputs = [.. request.Contract.Outputs, Assert.Single(proposed.Changes, x => x.Output is not null).Output!] } };
+        Assert.Empty((await provider.ProposeContractAsync(new(request.Provider, request.Contract))).Changes);
+        var compiled = await services.GetRequiredService<IActivityTemplateProviderCompiler>().CompileAsync(request);
+        Assert.Empty(compiled.Diagnostics);
+        var root = compiled.ExecutableRoot!;
+        Assert.Equal("2", root.DescriptorSchemaVersion);
+        Assert.Equal("2", Assert.Single(compiled.RuntimeRequirements).SchemaVersion);
+        Assert.False(root.ActivityContract!.Inputs[SpecialistInvocationControls.InputKey].IsRequired);
+        // The native profile represents optional absence through IsNullable; control parsing still refuses explicit null.
+        Assert.True(root.ActivityContract.Inputs[SpecialistInvocationControls.InputKey].IsNullable);
+        Assert.Equal("Brief", Assert.Single(root.DescriptorPayload.GetProperty("inputSchema").GetProperty("properties").EnumerateObject()).Name);
+        Assert.Equal("Article", Assert.Single(root.DescriptorPayload.GetProperty("resultSchema").GetProperty("properties").EnumerateObject()).Name);
+        Assert.NotNull((await provider.MigrateAsync(new(Request().Provider, SpecialistRuntimeIds.ContinuityManifestSchema))).Manifest);
+        Assert.Null((await provider.MigrateAsync(new(request.Provider, SpecialistRuntimeIds.ManifestSchema))).Manifest);
+    }
+
+    [Theory]
+    [InlineData("input-name")]
+    [InlineData("input-key")]
+    [InlineData("output-name")]
+    [InlineData("output-root")]
+    [InlineData("output-key")]
+    public async Task Continuity_does_not_reinterpret_business_member_collisions(string collision)
+    {
+        await using var services = Services(new MetadataFactory());
+        var provider = services.GetRequiredService<IActivityProvider>();
+        var request = Request(Manifest() with { AllowContinuity = true });
+        var contract = request.Contract;
+        if (collision.StartsWith("input", StringComparison.Ordinal)) contract = contract with { Inputs = [contract.Inputs[0] with
+            { Name = collision == "input-name" ? "agentOptions" : "Brief", ReferenceKey = collision == "input-key" ? "$SPECIALIST.options" : "brief-key" }] };
+        else contract = contract with { Outputs = [contract.Outputs[0] with { Name = collision switch { "output-name" => "conversation", "output-root" => "Conversation.id", _ => "Article" },
+            ReferenceKey = collision == "output-key" ? "$specialist.conversation" : "article-key" }] };
+        Assert.Empty((await provider.ProposeContractAsync(new(request.Provider, contract))).Diagnostics);
+        var manifest = request.Provider with { SchemaVersion = SpecialistRuntimeIds.ContinuityManifestSchema };
+        Assert.Contains((await provider.ProposeContractAsync(new(manifest, contract))).Diagnostics, x => x.Code == "specialist.controls.collision");
+        Assert.Contains(await provider.ValidateAsync(manifest, contract), x => x.Code == "specialist.controls.collision");
+    }
+
+    [Fact]
+    public async Task Disabling_continuity_proposes_removal_of_its_exact_owned_members()
+    {
+        await using var services = Services(new MetadataFactory());
+        var provider = services.GetRequiredService<IActivityProvider>();
+        var request = Request(Manifest() with { AllowContinuity = true });
+        request = request with { Provider = request.Provider with { SchemaVersion = SpecialistRuntimeIds.ContinuityManifestSchema } };
+        var additions = await provider.ProposeContractAsync(new(request.Provider, request.Contract));
+        var contract = request.Contract with { Inputs = [.. request.Contract.Inputs, additions.Changes.Single(x => x.Input is not null).Input!],
+            Outputs = [.. request.Contract.Outputs, additions.Changes.Single(x => x.Output is not null).Output!] };
+        var disabled = request.Provider with { Payload = JsonSerializer.SerializeToElement(Manifest() with { AllowContinuity = false }, new JsonSerializerOptions(JsonSerializerDefaults.Web)) };
+        var removal = await provider.ProposeContractAsync(new(disabled, contract));
+        Assert.Empty(removal.Diagnostics);
+        Assert.Equal(2, removal.Changes.Count);
+        Assert.All(removal.Changes, change => Assert.Equal(ActivityContractProposalOperation.Remove, change.Operation));
+        Assert.Contains(await provider.ValidateAsync(disabled, contract), x => x.Code == "specialist.controls.collision");
+        Assert.Empty(await provider.ValidateAsync(disabled, request.Contract));
+    }
+
+    [Fact]
     public async Task Actual_result_schema_is_admitted_before_publication_even_when_json_support_is_declared()
     {
         var factory = new MetadataFactory { SupportsSchema = false };

@@ -37,13 +37,17 @@ to a single physical request; otherwise output accounting retains every reserved
 protected receipt carries these observations separately from the public business JSON. Input/total-token
 hard limits are not claimed. SDK retries and primary redirects remain independently disabled.
 
-Current native invocation controls remain fresh-only, with a new MAF session for every turn and no tool or streaming
-admission. A definition's continuity capability does not implicitly reuse history. The private
+Legacy manifest1/descriptor1 keeps fresh-only public invocation. Manifest2 with explicit continuity
+publishes optional AgentOptions and safe Conversation metadata; see the
+[authoring contract](../Design/EXTENSION_POINTS.md#explicit-continuation-contracts). A new MAF session
+still restores only the admitted accepted prefix. No tool or streaming admission is supplied by these
+controls. A definition's continuity capability does not implicitly reuse history. The private
 `elsa.specialist.text-history/1` codec now produces protected candidates for continuity-enabled turns;
 the journal accepts that candidate and business result together. Restoration requires a trusted
 admitted conversation/revision reference, selected ordinary owner scope and exact specialist version.
 The journal now admits a workflow-owned revision before dispatch and restores only its previous
-accepted receipt. Native public continuation controls remain pending.
+accepted receipt. Explicit continuation checks the workflow-owned conversation and expected base
+revision before opening a client; unavailable admission becomes a native conversation conflict.
 It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
 and uses the existing Secrets key ring with retained configured decryption keys. Histories are bounded to64
 messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.

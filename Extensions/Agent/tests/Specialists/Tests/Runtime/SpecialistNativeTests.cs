@@ -25,6 +25,138 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistNativeTests
 {
+    [Fact]
+    public async Task Continuation_profile_cannot_be_reinterpreted_as_a_legacy_descriptor()
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not run\"}");
+        await using var provider = await ServicesAsync(factory);
+        var placed = await SpecialistPublicationTests.PublishAndPlaceAsync("Article", "String", allowContinuity: true, invocationControls: true);
+        var root = placed.Placement.Root;
+        var wrongSchema = new ExecutableNode(root.ExecutableNodeId, root.AuthoredActivityId, root.ActivityType, root.ActivityTypeVersion,
+            new RuntimeActivityDescriptor(root.DescriptorType, "1", root.DescriptorPayload), root.InputBindings, root.Metadata, root.ChildSlots, root.Structure, root.ActivityContract);
+        var executable = new WorkflowExecutable(new("editorial", "workflow", "workflow-v1", "1.0.0", "artifact-hash"), wrongSchema,
+            placed.Placement.ResumeTargets, DateTimeOffset.UtcNow, new Dictionary<string, string>(), inputContract: null, dependencies: null,
+            placed.Placement.RuntimeRequirements, placed.Storage, IncidentStrategyBuiltIns.FaultReference);
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var (actor, _) = await StartAsync(provider, executable);
+        await DrainAsync(actor);
+        Assert.Equal(0, factory.Opens);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+    }
+
+    [Fact]
+    public async Task Unknown_conversation_is_a_native_conflict_before_client_open()
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not run\"}");
+        await using var provider = await ServicesAsync(factory);
+        var binding = new RuntimeInputBinding(SpecialistInvocationControls.InputKey, new(SpecialistInvocationControls.JsonType), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(new(SpecialistInvocationControls.JsonType),
+                JsonSerializer.SerializeToElement(new { conversationId = new string('a', 64), revision = 1 }), ValueProtectionPolicy.InstanceInline));
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider, allowContinuity: true, invocationControls: true, optionsBinding: binding));
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        Assert.NotNull(claim);
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        Assert.Equal(0, factory.Opens);
+        Assert.Equal(0, factory.Calls);
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        Assert.Contains(states, x => x.Fault?.Code == "specialist.conversation.conflict");
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("\"conversation\"")]
+    [InlineData("{\"owner\":\"caller\"}")]
+    [InlineData("{\"revision\":1}")]
+    [InlineData("{\"conversationId\":\"invalid\",\"revision\":1}")]
+    [InlineData("{\"conversationId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"revision\":0}")]
+    [InlineData("{\"conversationId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"revision\":\"1\"}")]
+    [InlineData("{\"conversationId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"revision\":1,\"tenantId\":\"foreign\"}")]
+    [InlineData("{\"conversationId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"revision\":1,\"revision\":2}")]
+    public async Task Invalid_native_conversation_options_open_no_client_or_background_turn(string optionsJson)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not run\"}");
+        await using var provider = await ServicesAsync(factory);
+        var binding = new RuntimeInputBinding(SpecialistInvocationControls.InputKey, new(SpecialistInvocationControls.JsonType), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(new(SpecialistInvocationControls.JsonType), Json(optionsJson), ValueProtectionPolicy.InstanceInline));
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider, allowContinuity: true, invocationControls: true, optionsBinding: binding));
+        await DrainAsync(actor);
+        Assert.Equal(0, factory.Opens);
+        Assert.Equal(0, factory.Calls);
+        Assert.Null(await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)));
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Published_conversation_output_continues_through_a_native_variable_capture(bool durable)
+    {
+        using var files = new JournalFiles();
+        var factory = new FixtureFactory("{\"Article\":\"accepted\"}");
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null);
+        var captures = new Dictionary<string, RuntimeOutputCapture>
+        {
+            [SpecialistInvocationControls.OutputKey] = new(SpecialistInvocationControls.OutputKey, "variable:Conversation", new(SpecialistInvocationControls.JsonType, "elsa.json", null),
+                DurableValueLifecycle.Instance, DurableValueStorage.Custom, true, new Dictionary<string, string> { [RuntimeMetadataKeys.TargetVariableReferenceKey] = "conversation-variable" })
+        };
+        var first = await SpecialistPublicationTests.PublishAndPlaceAsync("Article", "String", allowContinuity: true, invocationControls: true, originKey: "first", outputCaptures: captures);
+        var options = new RuntimeInputBinding(SpecialistInvocationControls.InputKey, new(SpecialistInvocationControls.JsonType), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.VariableRead, variable: new("conversation-variable", "workflow"));
+        var second = await SpecialistPublicationTests.PublishAndPlaceAsync("Article", "String", allowContinuity: true, invocationControls: true, originKey: "second", optionsBinding: options);
+        Assert.Equal(first.Placement.Root.DescriptorPayload.GetProperty("templateHash").GetString(), second.Placement.Root.DescriptorPayload.GetProperty("templateHash").GetString());
+        var children = new[] { first.Placement.Root, second.Placement.Root };
+        var sequenceAlias = typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!;
+        var sequencePayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(sequenceAlias));
+        var sequenceDescriptor = typeof(ClrActivityDescriptor).FullName!;
+        var sequenceContract = new ActivityContract(sequenceAlias, "1.0.0", sequenceDescriptor, sequencePayload, [],
+            new(new(typeof(ActivityUnit).FullName!), true, ActivityValuePolicy.Default, []), ["Done", "Break"], new(sequenceDescriptor, sequenceAlias), SideEffectProfile.ReplaySafe);
+        var sequence = new ExecutableNode("sequence", "sequence", sequenceAlias, "1.0.0", new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1", sequencePayload),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), [new ExecutableChildSlot(Elsa.Activities.Sequence.Activities.Sequence.ActivitiesSlotName, children)],
+            new ExecutableActivityStructure(Elsa.Activities.Sequence.Activities.Sequence.StructureKind, Elsa.Activities.Sequence.Activities.Sequence.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = children.Select(x => x.ExecutableNodeId).ToArray() })), sequenceContract);
+        var executable = new WorkflowExecutable(new("editorial", "workflow", "workflow-v1", "1.0.0", "artifact-hash"), sequence,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), inputContract: null, dependencies: null,
+            first.Placement.RuntimeRequirements.Concat(second.Placement.RuntimeRequirements).Distinct().ToArray(), first.Storage, IncidentStrategyBuiltIns.FaultReference,
+            workflowVariables: [new("conversation-variable", "Conversation", new(SpecialistInvocationControls.JsonType), ValueProtectionPolicy.InstanceInline)]);
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var (actor, _) = await StartAsync(provider, executable);
+        await DrainAsync(actor);
+        for (var index = 0; index < 2; index++)
+        {
+            BackgroundActivityWorkClaim? claim = null;
+            for (var step = 0; step < 16 && claim is null; step++)
+            {
+                claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+                if (claim is null) await DrainAsync(actor, $"turn-{index}-step-{step}");
+            }
+            Assert.True(claim is not null, JsonSerializer.Serialize(new {
+                States = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.SubStatus, x.Fault }),
+                Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run"),
+                Work = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync("run") }));
+            await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+            await DrainAsync(actor, "worker-" + index);
+        }
+        for (var step = 0; step < 16 && (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status == WorkflowExecutionStatus.Running; step++)
+            await DrainAsync(actor, "complete-" + step);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(2, factory.Calls);
+        Assert.Equal(new[] { 1, 3 }, factory.Requests.Select(x => x.Count));
+        Assert.All(factory.Requests.SelectMany(x => x), message => Assert.DoesNotContain("AgentOptions", message.Text, StringComparison.Ordinal));
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var firstResult = states.Single(x => x.Execution.ExecutableNodeId == children[0].ExecutableNodeId).Completion!.Result.InlineValue!.Value;
+        var secondResult = states.Single(x => x.Execution.ExecutableNodeId == children[1].ExecutableNodeId).Completion!.Result.InlineValue!.Value;
+        var firstConversation = firstResult.GetProperty("Conversation");
+        var secondConversation = secondResult.GetProperty("Conversation");
+        Assert.Equal(firstConversation.GetProperty("conversationId").GetString(), secondConversation.GetProperty("conversationId").GetString());
+        Assert.Equal(1, firstConversation.GetProperty("revision").GetInt64());
+        Assert.Equal(2, secondConversation.GetProperty("revision").GetInt64());
+        Assert.Equal(new[] { "conversationId", "revision" }, secondConversation.EnumerateObject().Select(x => x.Name));
+        Assert.All(factory.Requests.SelectMany(x => x), message => Assert.DoesNotContain(firstConversation.GetProperty("conversationId").GetString()!, message.Text, StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("known")]
     [InlineData("missing")]
@@ -355,6 +487,8 @@ public sealed class SpecialistNativeTests
         services.AddWorkflowRuntime();
         services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry>(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
         new ActivitiesRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+        new Elsa.Activities.Primitives.ActivitiesPrimitivesFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
         new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
         new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
@@ -372,6 +506,8 @@ public sealed class SpecialistNativeTests
         var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
         types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
+        types.RegisterType(typeof(Elsa.Activities.Sequence.Activities.Sequence), typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!);
+        types.RegisterType(typeof(ActivityUnit), typeof(ActivityUnit).FullName!);
         await new SpecialistTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
         return provider;
     }
@@ -384,10 +520,10 @@ public sealed class SpecialistNativeTests
         public void Dispose() => Directory.Delete(directory, true);
     }
 
-    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null, bool allowContinuity = false)
+    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null, bool allowContinuity = false, bool invocationControls = false, RuntimeInputBinding? optionsBinding = null)
     {
         // The authoring fixture is disposed, including its three SQLite stores, before execution starts.
-        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures, allowContinuity);
+        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures, allowContinuity, invocationControls, optionsBinding: optionsBinding);
         var root = published.Placement.Root;
         if (resultPolicyMode is not null)
         {
@@ -425,11 +561,11 @@ public sealed class SpecialistNativeTests
         return (actor, envelope);
     }
 
-    private static async ValueTask DrainAsync(IWorkflowExecutionActor actor)
+    private static async ValueTask DrainAsync(IWorkflowExecutionActor actor, string suffix = "")
     {
         var now = DateTimeOffset.UtcNow;
-        var command = new WorkflowExecutionCommand("drain", "run", WorkflowExecutionCommandKind.RunSchedulerWork, now, null, new Dictionary<string, string>());
-        await actor.EnqueueAsync(new("drain-envelope", "run", command, "drain", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
+        var command = new WorkflowExecutionCommand("drain" + suffix, "run", WorkflowExecutionCommandKind.RunSchedulerWork, now, null, new Dictionary<string, string>());
+        await actor.EnqueueAsync(new("drain-envelope" + suffix, "run", command, "drain" + suffix, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
     }
 
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
@@ -445,6 +581,7 @@ public sealed class SpecialistNativeTests
         public string? LastUser { get; private set; }
         public string? ModelId { get; private set; }
         public JsonElement? Schema { get; private set; }
+        public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
         public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
         {
             Opens++;
@@ -458,6 +595,7 @@ public sealed class SpecialistNativeTests
                 if (request.DispatchAuthority is { } authority)
                     await authority.BeforeSendAsync(new("fixture", request.Descriptor.Model.ModelId, "fixture-incarnation", 1, "fixture/1", "external-deterministic-one-response/1"), cancellationToken);
                 owner.Calls++;
+                owner.Requests.Add(messages.ToArray());
                 owner.LastUser = messages.Last(x => x.Role == ChatRole.User).Text;
                 owner.Instructions = options?.Instructions;
                 owner.ModelId = options?.ModelId;

@@ -77,7 +77,7 @@ public class SpecialistsInMemoryJournalFeature : IShellFeature
 internal sealed class SpecialistActivationStrategy(SpecialistNativeBinding binding, SpecialistTurnJournal journal, SpecialistModelRunner runner, TimeProvider time, SpecialistTurnBudgetAllocator budgets) : IActivityActivationStrategy
 {
     public string ConsumerKey => SpecialistRuntimeIds.ConsumerKey;
-    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema];
+    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema, SpecialistRuntimeIds.ContinuityDescriptorSchema];
     public bool RequiresInputHydration => false;
     public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationStrategyRequest request, CancellationToken cancellationToken = default)
     {
@@ -97,7 +97,7 @@ internal sealed class SpecialistActivationStrategy(SpecialistNativeBinding bindi
 internal sealed class SpecialistConsumerCapability : IRuntimeActivityConsumerCapability
 {
     public string ConsumerKey => SpecialistRuntimeIds.ConsumerKey;
-    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema];
+    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema, SpecialistRuntimeIds.ContinuityDescriptorSchema];
 }
 
 internal sealed class SpecialistTypesStartupTask(IWellKnownTypeRegistry types) : IStartupTask

@@ -52,7 +52,8 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
         SpecialistRuntimeDescriptor? descriptor;
         try { descriptor = node.DescriptorPayload.Deserialize<SpecialistRuntimeDescriptor>(SpecialistJson.Options); }
         catch (JsonException exception) { throw Failure(exception); }
-        if (descriptor is null || node.DescriptorType != SpecialistRuntimeIds.ConsumerKey || node.DescriptorSchemaVersion != SpecialistRuntimeIds.DescriptorSchema ||
+        if (descriptor is null || node.DescriptorType != SpecialistRuntimeIds.ConsumerKey || node.DescriptorSchemaVersion is not (SpecialistRuntimeIds.DescriptorSchema or SpecialistRuntimeIds.ContinuityDescriptorSchema) ||
+            (node.DescriptorSchemaVersion == SpecialistRuntimeIds.ContinuityDescriptorSchema) != SpecialistNativeControls.Enabled(descriptor) ||
             node.ActivityContract?.Activation.Capability != SpecialistRuntimeIds.FacadeCapability ||
             node.ActivityContract.DescriptorKind != SpecialistRuntimeIds.ConsumerKey ||
             !JsonElement.DeepEquals(node.ActivityContract.DescriptorPayload, node.DescriptorPayload) ||

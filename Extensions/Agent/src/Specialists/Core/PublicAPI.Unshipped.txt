@@ -398,3 +398,7 @@ static Elsa.Agent.Specialists.Core.Models.SpecialistConversationDocument.operato
 static Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.FromInvocation(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity) -> Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner!
 static Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? left, Elsa.Agent.Specialists.Core.Models.SpecialistConversationOwner? right) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.InvocationControlsProfile.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.InvocationControlsProfile.init -> void
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.ContinuityDescriptorSchema = "2" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.ContinuityManifestSchema = "2" -> string!

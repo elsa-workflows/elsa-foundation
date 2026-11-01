@@ -32,6 +32,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
     public PreparedSpecialistSchema ValidateRequest(SpecialistTurnRequest request)
     {
         var descriptor = request.Descriptor;
+        SpecialistNativeControls.ValidateContract(descriptor, request.Contract);
         if ((request.PreparedSession is not null || request.Continuation is not null) && !descriptor.AllowContinuity)
             throw Failure("specialist.session.disallowed", "This published specialist does not allow conversation continuity.");
         if (request.Continuation is { } continuation && (!SpecialistTurnDocumentRules.IsToken(continuation.ConversationId) || continuation.ExpectedRevision is < 1 or long.MaxValue))
@@ -45,7 +46,8 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         var inputSchema = schemas.Prepare(descriptor.InputSchema).Schema;
         var resultSchema = schemas.Prepare(descriptor.ResultSchema).Schema;
         if (inputSchema is null || resultSchema is null || inputSchema.Validate(request.Inputs).Count != 0 ||
-            SpecialistWireTypes.Validate(request.Inputs, request.Contract.Inputs.Values.Select(x => new SpecialistJsonMember(x.Name, x.Type.Alias, x.Type.CollectionKind, x.IsRequired, x.IsNullable))).Count != 0)
+            SpecialistWireTypes.Validate(request.Inputs, request.Contract.Inputs.Values.Where(x => !SpecialistNativeControls.Enabled(descriptor) || x.Key != SpecialistInvocationControls.InputKey)
+                .Select(x => new SpecialistJsonMember(x.Name, x.Type.Alias, x.Type.CollectionKind, x.IsRequired, x.IsNullable))).Count != 0)
             throw Failure("specialist.input.invalid", "The specialist input does not satisfy its published business contract.");
         return resultSchema;
     }
@@ -109,7 +111,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             throw Failure("specialist.result.json", "The model result is not valid bounded JSON.", exception);
         }
         if (resultSchema.Validate(result).Count != 0 || SpecialistWireTypes.Validate(result,
-                request.Contract.Result.Projections.Values.Select(x => new SpecialistJsonMember(x.Path, x.Type.Alias, x.Type.CollectionKind, x.IsRequired,
+                request.Contract.Result.Projections.Values.Where(x => !SpecialistNativeControls.Enabled(descriptor) || x.Key != SpecialistInvocationControls.OutputKey).Select(x => new SpecialistJsonMember(x.Path, x.Type.Alias, x.Type.CollectionKind, x.IsRequired,
                     // The schema owns nullability; the runtime projection contract has no nullable flag.
                     true))).Count != 0)
             throw Failure("specialist.result.invalid", "The model result does not satisfy its published business contract.");

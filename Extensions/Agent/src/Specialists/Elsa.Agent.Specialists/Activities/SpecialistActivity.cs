@@ -29,10 +29,15 @@ internal sealed class SpecialistActivity(SpecialistNativeBinding binding, Specia
             context.ActivityExecutionState.InputSnapshot!.Values.Values.Any(x => x.Policy.RequiresEncryption || x.Presence == ValuePresence.Withheld))
             throw SpecialistModelRunner.Failure("specialist.value.encryption", "This specialist profile cannot dispatch withheld or encryption-required business inputs.");
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var descriptor = SpecialistNativeBinding.Descriptor(node);
+        var continuation = SpecialistNativeControls.Read(descriptor, contract, effectiveInputs);
         foreach (var input in contract.Inputs.Values.OrderBy(x => x.Key, StringComparer.Ordinal))
+        {
+            if (SpecialistNativeControls.Enabled(descriptor) && input.Key == Elsa.Agent.Specialists.Core.Models.SpecialistInvocationControls.InputKey) continue;
             if (effectiveInputs.TryGetValue(input.Key, out var value)) values.Add(input.Name, value);
-        var request = new SpecialistTurnRequest(identity, SpecialistNativeBinding.Descriptor(node), contract,
-            JsonSerializer.SerializeToElement(values), context.ActivityExecutionState.InputSnapshot.BindingFingerprint);
+        }
+        var request = new SpecialistTurnRequest(identity, descriptor, contract,
+            JsonSerializer.SerializeToElement(values), context.ActivityExecutionState.InputSnapshot.BindingFingerprint) { Continuation = continuation };
         _ = runner.ValidateRequest(request);
         if (context.ActivityExecutionState.PrivateState is not null)
         {
@@ -57,7 +62,8 @@ internal sealed class SpecialistActivity(SpecialistNativeBinding binding, Specia
         var identity = await binding.IdentifyAsync(context, context.CancellationToken);
         var handle = SpecialistNativeBinding.Handle(context.ActivityExecutionState);
         await binding.VerifyChildCompletionAsync(context, child.CompletedChildActivityExecutionId, child.CompletedChildExecutableNodeId, handle, context.CancellationToken);
-        acceptedResult = (await journal.ResultAsync(handle, identity, child.CompletedChildActivityExecutionId, context.CancellationToken)).Result;
+        acceptedResult = SpecialistNativeControls.Complete(SpecialistNativeBinding.Descriptor(context.ExecutableNode),
+            await journal.ResultAsync(handle, identity, child.CompletedChildActivityExecutionId, context.CancellationToken));
         return RuntimeStructuralContinuation.Complete();
     }
 

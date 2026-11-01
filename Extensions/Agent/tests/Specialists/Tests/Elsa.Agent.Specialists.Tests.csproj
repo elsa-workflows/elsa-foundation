@@ -4,6 +4,8 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../../src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
     <ProjectReference Include="../../../src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />

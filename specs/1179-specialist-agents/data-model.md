@@ -188,7 +188,10 @@ the protected session remains in that receipt rather than a second history copy.
 release the revision; unknown outcomes retain the active reference and block continuation. Replaying
 an older accepted turn returns its original receipt without changing current conversation state.
 
-The runtime worker restores only this admitted accepted reference. Public native controls, stable
-operation versus new-attempt delivery, finite lease recovery, cancellation/applied settlement and
-retention are still required before T018–T023 or M3 can close. This note records the implemented
+The runtime worker restores only this admitted accepted reference. The following draft increment adds
+explicit manifest2/descriptor2 continuation controls, retaining fresh-only schema1 readers and business
+schemas. The safe Conversation value can flow through native output capture/variable bindings; its
+revision is used as the expected base revision. Normal published graph/direct-reference authoring
+remains M4 qualification. Stable operation versus new-attempt delivery, finite lease recovery,
+cancellation/applied settlement and retention remain required before M3 can close. This note records the implemented
 boundary; the proposed broader logical model above remains the Program target.
