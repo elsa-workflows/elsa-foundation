@@ -33,7 +33,7 @@ interface FeedDraft {
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
-  const [activeHostId, setActiveHostId] = useState<HostId>("studio");
+  const [activeHostId, setActiveHostId] = useState<HostId>("server");
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeQuery = byHost(activeHost.id);
   // Present only when the host's registry read resolved to a ready result; an unavailable Server backend surfaces its
