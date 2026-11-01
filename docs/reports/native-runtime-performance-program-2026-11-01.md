@@ -415,3 +415,5 @@ the next found an undefined operator storage-path variable before host launch; t
 stopped when its unprivileged collector could not read the root-created host log. The fourth fixes log ownership
 and passes. These are fixture failures, not passing workload samples. No failed attempt is replaced in the ledger.
 The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open.
+
+Additional affected-model qualification at production source `63e4c1fc4`: the whole ETL suite passes **1,009 tests** and the real-host BPMN suite passes **46**, both with zero failed/skipped cases. Discovery reconciles every case. These are correctness/hosting results on the shared macOS machine, not model throughput or independent-host evidence. Custody: `m5-model-*` in the program evidence root.
