@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
 using System.Reflection;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
@@ -29,6 +30,7 @@ internal static class ModuleContextCatalog
         typeof(ActivitiesDesignDbContext).Assembly,
         typeof(ClusterMembershipDbContext).Assembly,
         typeof(ConnectionsDbContext).Assembly,
+        typeof(SpecialistsDbContext).Assembly,
         typeof(DataProtectionKeysDbContext).Assembly,
         typeof(OpenTelemetryDbContext).Assembly,
         typeof(StructuredLogsDbContext).Assembly,
@@ -75,7 +77,7 @@ internal static class ModuleContextCatalog
     public static readonly string[] OrdinalModules =
     [
         "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
+        "PublishingSnapshotReview", "Secrets", "Specialists", "WorkflowsDesign"
     ];
 
     public static bool DeclaresOrdinal(Type context) =>

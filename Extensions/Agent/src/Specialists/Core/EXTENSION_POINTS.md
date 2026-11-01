@@ -32,9 +32,26 @@ The [connection-backed contributors](../Connections/README.md) add separate Anth
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.
 
-## Internal storage
+## Turn journal replacement
 
-The initial journal store is internal to the runtime and explicitly process-local. It is not an
-external durable-persistence contract or an alternative to existing Connections/Secrets ownership.
-The first durable provider must establish its real conditional-write boundary before that seam is
-exposed to package authors.
+[`ISpecialistTurnStore`](Contracts/ISpecialistTurnStore.cs) is a replacement contract: select one backend
+per shell. The explicitly enabled in-memory feature is for development; the
+[EF contribution](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) owns relational writes.
+Neither feature changes Connections or Secrets ownership.
+Custom packages select their scoped backend through
+`SpecialistTurnStoreRegistration.ReplaceSpecialistTurnStore(factory)`; it replaces only the tracked
+development default and rejects a second explicit or unowned selection. Runtime startup also rejects
+missing or duplicate raw registrations. `TryAddSpecialistTurnStore<TStore>` registers a default with
+an explicit lifetime only when no journal is selected. Contribution enumeration is not supported.
+
+Providers isolate the ordinary tenant/partition scope before accessing a record, derive the native
+operation index with `SpecialistTurnDocument.CalculateOperationKey`, and refuse conflicting request
+fingerprints. An identical stage replays the original handle, ciphertext and absolute deadline.
+Claim, dispatch and acceptance compare the exact native identity, lifecycle state and fence in storage;
+claim and acceptance require an unexpired deadline. Acceptance stores the protected result/session pair
+atomically and is immutable. Uncertain dispatch is terminal `OutcomeUnknown`, never an implicit retry.
+The runtime authenticates the opaque protected material before using it.
+
+`SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
+credential durability or end-to-end recovery qualification. This initial conditional turn boundary
+does not yet provide conversation admission, delivery rebinding, reservations or retention controls.

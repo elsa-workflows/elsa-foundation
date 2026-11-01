@@ -92,6 +92,7 @@ not automatic constitution violations.
 | Agent foundation (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
 | Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
 | Connection-backed specialist model contributors | [`Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md) |
+| Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Anthropic specialist connections | [`Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Anthropic/EXTENSION_POINTS.md) |
 | Azure OpenAI specialist connections | [`Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/AzureOpenAI/EXTENSION_POINTS.md) |
 | Specialist authoring and immutable compilation | [`Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md) |

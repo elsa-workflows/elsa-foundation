@@ -175,3 +175,68 @@ Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.GetCapabilitiesAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities!>
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.ProviderKey.get -> string!
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.SupportsResultSchemaAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Text.Json.JsonElement schema, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.AcceptAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! fence, string! protectedResult, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.ClaimAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! childInvocationId, string! fence, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument?>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.DispatchAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! fence, System.DateTimeOffset now, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.FailAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! fence, string! code, bool outcomeUnknown, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.GetCapabilitiesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities!>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.ReadAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument?>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.StageAsync(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument! candidate, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument!>
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities!
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.Deconstruct(out string! Provider, out bool IsDurable) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.IsDurable.get -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.IsDurable.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.Provider.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.Provider.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.SpecialistJournalCapabilities(string! Provider, bool IsDurable) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ChildInvocationId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ChildInvocationId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deadline.get -> System.DateTimeOffset
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deadline.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deconstruct(out string! Handle, out string! Key, out string! RequestHash, out Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, out string! ProtectedRequest, out System.DateTimeOffset Deadline, out Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus Status, out string? ChildInvocationId, out string? Fence, out string? ProtectedResult, out string? FailureCode) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.FailureCode.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.FailureCode.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Fence.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Fence.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Handle.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Handle.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Identity.get -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Identity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Key.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Key.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ProtectedRequest.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ProtectedRequest.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ProtectedResult.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ProtectedResult.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.RequestHash.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.RequestHash.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.SpecialistTurnDocument(string! Handle, string! Key, string! RequestHash, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, string! ProtectedRequest, System.DateTimeOffset Deadline, Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus Status = Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Prepared, string? ChildInvocationId = null, string? Fence = null, string? ProtectedResult = null, string? FailureCode = null) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Status.get -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Status.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Accepted = 3 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Claimed = 1 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Dispatching = 2 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Failed = 4 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.OutcomeUnknown = 5 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus.Prepared = 0 -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnStatus
+override Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities? left, Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities? left, Elsa.Agent.Specialists.Core.Models.SpecialistJournalCapabilities? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.CalculateOperationKey(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity) -> string!
+Elsa.Agent.Specialists.Core.DependencyInjection.SpecialistTurnStoreRegistration
+static Elsa.Agent.Specialists.Core.DependencyInjection.SpecialistTurnStoreRegistration.ReplaceSpecialistTurnStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Agent.Specialists.Core.DependencyInjection.SpecialistTurnStoreRegistration.TryAddSpecialistTurnStore<TStore>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

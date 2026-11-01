@@ -2,6 +2,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Journal;
+using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Services;
 
 namespace Elsa.Agent.Specialists.Activities;

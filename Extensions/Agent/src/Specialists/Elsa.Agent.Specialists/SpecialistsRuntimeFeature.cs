@@ -1,3 +1,5 @@
+using Elsa.Agent.Specialists.Core.DependencyInjection;
+using Elsa.Agent.Specialists.Core.Contracts;
 using CShells.Features;
 using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Activities.Runtime.Contracts;
@@ -36,6 +38,18 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, SpecialistTypesStartupTask>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(new SpecialistJournalRegistrationStartupTask(services)));
+    }
+}
+
+internal sealed class SpecialistJournalRegistrationStartupTask(IServiceCollection services) : IStartupTask
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (services.Count(descriptor => descriptor.ServiceType == typeof(ISpecialistTurnStore)) != 1)
+            throw new InvalidOperationException("SpecialistsRuntime requires exactly one ISpecialistTurnStore backend per shell.");
+        return Task.CompletedTask;
     }
 }
 
@@ -52,7 +66,7 @@ public class SpecialistsInMemoryJournalFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.AddSingleton<ISpecialistTurnStore, InMemorySpecialistTurnStore>();
+        services.TryAddSpecialistTurnStore<InMemorySpecialistTurnStore>(ServiceLifetime.Singleton);
     }
 }
 

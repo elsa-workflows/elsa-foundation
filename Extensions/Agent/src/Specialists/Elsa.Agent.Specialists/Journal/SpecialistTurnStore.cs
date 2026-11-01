@@ -1,25 +1,16 @@
 using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent.Specialists.Core.Contracts;
 
 namespace Elsa.Agent.Specialists.Journal;
 
-internal enum SpecialistTurnStatus { Prepared, Claimed, Dispatching, Accepted, Failed, OutcomeUnknown }
-internal sealed record SpecialistTurnDocument(string Handle, string Key, string RequestHash, SpecialistInvocationIdentity Identity,
-    string ProtectedRequest, DateTimeOffset Deadline, SpecialistTurnStatus Status = SpecialistTurnStatus.Prepared,
-    string? ChildInvocationId = null, string? Fence = null, string? ProtectedResult = null, string? FailureCode = null);
-
-// The first profile is explicitly process-local. The durable provider must implement these conditional transitions atomically.
-internal interface ISpecialistTurnStore
-{
-    ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken);
-    ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken);
-    ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken);
-    ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, string fence, DateTimeOffset now, CancellationToken cancellationToken);
-    ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, string fence, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken);
-    ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, string fence, string code, bool outcomeUnknown, CancellationToken cancellationToken);
-}
-
 internal sealed class InMemorySpecialistTurnStore : ISpecialistTurnStore
 {
+    public ValueTask<SpecialistJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(new SpecialistJournalCapabilities("in-memory", false));
+    }
+
     private readonly Lock gate = new();
     private readonly Dictionary<string, SpecialistTurnDocument> rows = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> keys = new(StringComparer.Ordinal);
@@ -27,6 +18,8 @@ internal sealed class InMemorySpecialistTurnStore : ISpecialistTurnStore
     public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (candidate.Key != SpecialistTurnDocument.CalculateOperationKey(candidate.Identity))
+            throw new InvalidDataException("The specialist operation key does not match its native scope and operation.");
         lock (gate)
         {
             if (keys.TryGetValue(candidate.Key, out var handle))

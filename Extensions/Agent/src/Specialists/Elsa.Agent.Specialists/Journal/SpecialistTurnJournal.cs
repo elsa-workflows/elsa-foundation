@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Contracts;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +19,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         EnsureScope(request.Identity);
         var serialized = JsonSerializer.Serialize(request, SpecialistJson.Options);
         var hash = Hash(serialized);
-        var key = Hash(JsonSerializer.Serialize(new { request.Identity.TenantId, request.Identity.PersistencePartition, request.Identity.WorkflowExecutionId, request.Identity.OperationKey }));
+        var key = SpecialistTurnDocument.CalculateOperationKey(request.Identity);
         var candidate = new SpecialistTurnDocument(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(), key, hash, request.Identity,
             protector.Protect(JsonSerializer.Serialize(new RequestEnvelope(RequestPurpose, request.Identity, hash, request), SpecialistJson.Options)),
             now.AddMilliseconds(request.Descriptor.Limits.TimeoutMilliseconds));

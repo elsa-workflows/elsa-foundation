@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Contracts;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;

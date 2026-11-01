@@ -45,6 +45,12 @@ the authenticated envelope. Repeated operations retain their deadline; altered a
 stale fences and late acceptance are refused. Missing state after restart is a fault, never permission
 for a fresh model request. This profile establishes no durable recovery or distributed ownership.
 
+The [EF journal](../Persistence/EntityFrameworkCore/README.md) now implements the same conditional
+turn lifecycle over relational storage and supports consumer-owned contexts. A selected database
+survives development-feature registration order; conflicting explicit selections and missing/duplicate
+startup registrations are refused. This initial storage increment does not establish durable
+conversation admission or native delivery recovery.
+
 The [model provider port](../Core/EXTENSION_POINTS.md) owns actual credential resolution/current
 authorization and physical SDK/HTTP retry guarantees. Durable sessions, journal/cancellation/process
 settlement, provider adapters, tools, teams and the final support matrix remain Program #3519 work.

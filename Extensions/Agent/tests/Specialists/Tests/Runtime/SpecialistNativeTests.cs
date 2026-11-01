@@ -189,13 +189,16 @@ public sealed class SpecialistNativeTests
     }
 
     [Theory]
-    [InlineData("Article", false)]
-    [InlineData("Article", true)]
-    [InlineData("Article.body", false)]
-    public async Task Native_actor_runs_the_published_shape_on_a_background_worker_and_commits_its_typed_result(string outputName, bool allowContinuity)
+    [InlineData("Article", false, false)]
+    [InlineData("Article", true, false)]
+    [InlineData("Article.body", false, false)]
+    [InlineData("Article", true, true)]
+    [InlineData("Article.body", false, true)]
+    public async Task Native_actor_runs_the_published_shape_on_a_background_worker_and_commits_its_typed_result(string outputName, bool allowContinuity, bool durableJournal)
     {
+        using var files = new JournalFiles();
         var factory = new FixtureFactory(JsonSerializer.Serialize(new Dictionary<string, string> { [outputName] = "draft about moss gardens" }));
-        await using var provider = await ServicesAsync(factory);
+        await using var provider = await ServicesAsync(factory, durableJournal ? files.ConnectionString : null);
         var executable = await ExecutableAsync(provider, outputName, allowContinuity: allowContinuity);
         var (actor, start) = await StartAsync(provider, executable);
         Assert.Equal(0, factory.Calls);
@@ -273,7 +276,7 @@ public sealed class SpecialistNativeTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
     }
 
-    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory)
+    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -285,15 +288,28 @@ public sealed class SpecialistNativeTests
         new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
         new SpecialistsRuntimeFeature().ConfigureServices(services);
         new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
+        if (journalConnection is not null)
+            Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.DependencyInjection.SpecialistsEntityFrameworkCoreRegistration.AddSpecialistsEntityFrameworkCore(services,
+                new() { Provider = "Sqlite", ConnectionString = journalConnection });
         services.AddSingleton<ISpecialistModelClientFactory>(factory);
         services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
         services.AddPersistenceModes();
         var provider = services.BuildServiceProvider();
+        if (journalConnection is not null)
+            await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(provider.GetRequiredService<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsDbContext>().Database);
         var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
         types.RegisterType(typeof(string), "String");
         types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
         await new SpecialistTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
         return provider;
+    }
+
+    private sealed class JournalFiles : IDisposable
+    {
+        private readonly string directory = Path.Combine(Path.GetTempPath(), "elsa-specialist-native-journal-" + Guid.NewGuid().ToString("N"));
+        public JournalFiles() => Directory.CreateDirectory(directory);
+        public string ConnectionString => "Data Source=" + Path.Combine(directory, "journal.db") + ";Pooling=False";
+        public void Dispose() => Directory.Delete(directory, true);
     }
 
     private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null, bool allowContinuity = false)
