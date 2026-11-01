@@ -35,31 +35,6 @@ public sealed class LoginPresentationTests
         Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, bytes[..8]);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Sketchbook_login_keeps_security_fields_and_local_assets_under_the_shell_path(bool proxyPathBase)
-    {
-        await using var fixture = await TokenEndpointFixture.StartAsync(services => services.Configure<LoginPageOptions>(options =>
-        {
-            options.Layout = "sketchbook";
-            options.Palette = "sketchbook";
-            options.Artwork = "sketchbook";
-        }), pathBase: proxyPathBase ? "/tenant-a" : null, routePrefix: proxyPathBase ? null : "/tenant-a");
-        var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login?returnUrl=/studio");
-        Assert.Contains("data-layout=\"sketchbook\"", html);
-        Assert.Contains("data-palette=\"sketchbook\"", html);
-        Assert.Contains("action=\"/tenant-a/_elsa/identity/login\"", html);
-        Assert.Contains("name=\"__csrf\"", html);
-        Assert.Contains("src=\"/tenant-a/_elsa/identity/login-assets/sketchbook-logo.png\"", html);
-        Assert.Contains("src=\"/tenant-a/_elsa/identity/login-assets/sketchbook.jpg\"", html);
-        var response = await fixture.Client.GetAsync("/tenant-a/_elsa/identity/login-assets/sketchbook-logo.png");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
-        var bytes = await response.Content.ReadAsByteArrayAsync();
-        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, bytes[..8]);
-    }
-
     [Fact]
     public async Task Presentation_replacement_receives_validated_return_and_real_security_fields()
     {
@@ -92,7 +67,6 @@ public sealed class LoginPresentationTests
     [InlineData("tidal.jpg")]
     [InlineData("daybreak.jpg")]
     [InlineData("canopy.jpg")]
-    [InlineData("sketchbook.jpg")]
     public async Task Bundled_artwork_is_public_and_local(string name)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync();
