@@ -4,7 +4,7 @@ export { AnonymousAuthProvider, AuthProvider } from "./AuthProvider";
 export { useAuthSession } from "./useAuthSession";
 export { usePermissions } from "./usePermissions";
 export { useAuthCapabilities } from "./useAuthCapabilities";
-export { useAuthContext } from "./AuthContext";
+export { useAuthContext, useOptionalAuthContext } from "./AuthContext";
 export { authSessionEndedEvent, authSessionStartedEvent } from "./types";
 export { AuthGuard } from "./guards/AuthGuard";
 export { RequireAuth } from "./guards/RequireAuth";

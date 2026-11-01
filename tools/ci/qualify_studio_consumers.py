@@ -137,7 +137,7 @@ class Qualification:
         self.all.mkdir()
         inventory = json.loads((REPO / "tools/ci/studio-package-identities.json").read_text())
         ids = {x["id"] for x in inventory["packable_projects"]}
-        for folder, selected in [(studio, ids), (modules, {"Elsa.Modularity.Core", "Elsa.Modularity.Nuplane"})]:
+        for folder, selected in [(studio, ids), (modules, {"Elsa.Modularity.Core", "Elsa.Modularity.Nuplane", "Elsa.Studio.Preferences.Core"})]:
             for path in folder.rglob("*.nupkg"):
                 name, version = identity(path)
                 if name not in selected:
@@ -151,7 +151,7 @@ class Qualification:
                     doc = ET.fromstring(archive.read(next(n for n in archive.namelist() if n.endswith(".nuspec"))))
                     repository = next((dict(n.attrib) for n in doc.iter() if n.tag.rsplit("}", 1)[-1] == "repository"), {})
                 self.packages[name] = {"path": str(destination), "version": version, "archiveSha256": sha(path), "repository": repository}
-        check(set(self.packages) == ids | {"Elsa.Modularity.Core", "Elsa.Modularity.Nuplane"}, "Missing genuine candidates")
+        check(set(self.packages) == ids | {"Elsa.Modularity.Core", "Elsa.Modularity.Nuplane", "Elsa.Studio.Preferences.Core"}, "Missing genuine candidates")
         versions = {v["version"] for v in self.packages.values()}
         check(len(versions) == 1, "Candidate versions differ")
         self.version = versions.pop()
@@ -214,7 +214,7 @@ class Qualification:
                  ("hosting-restored", [], None)]
         for label, flags, error in cases:
             child = self.root / label
-            code = self.run(label, [sys.executable, str(hosting), "--packages", str(self.studio), "--output", str(child), *flags], expected=None)
+            code = self.run(label, [sys.executable, str(hosting), "--packages", str(self.studio), "--support-packages", str(self.all), "--output", str(child), *flags], expected=None)
             data = self.record(label, code, child)
             result_gate(code, data, sha(hosting), "standard-runtime" if error else "complete", error)
             check(data["browserDriverSha256"] == sha(hosting.with_name("browser.mjs")), "Hosting browser driver differs")
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="New owned qualification directory")
     parser.add_argument("--packages", type=Path, help="Actual22Studio candidate archives; otherwise produce a committed snapshot")
-    parser.add_argument("--modularity-packages", type=Path, help="Matching actual Modularity.Core/Nuplane archives")
+    parser.add_argument("--modularity-packages", type=Path, help="Matching actual Modularity.Core/Nuplane and Preferences.Core archives")
     parser.add_argument("--reference-web", type=Path, help="Matching actual published reference distribution")
     parser.add_argument("--expected-producer-commit", help="CI producer/tool commit required by all supplied archive metadata")
     parser.add_argument("--version", default="4.0.0-studio-ci-qualification", help="Local snapshot candidate version")

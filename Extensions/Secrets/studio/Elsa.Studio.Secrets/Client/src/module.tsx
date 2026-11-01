@@ -16,6 +16,7 @@ export function register(api: ElsaStudioModuleApi) {
     defaultEnabled: true,
     order: 45,
     nav: {
+      requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
       title: "Secrets",
       path: "/security/secrets",
       iconColor: "#64748b",
@@ -24,7 +25,7 @@ export function register(api: ElsaStudioModuleApi) {
     },
     routes: [
       {
-        id: "secrets",
+        id: "secrets", requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
         path: "/security/secrets",
         label: "Secrets",
         component: () => <SecretsPage context={api.backend} dialogs={api.dialogs} />
@@ -39,7 +40,7 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.expressionEditors.add({
-    id: "elsa.secret-reference-editor",
+    id: "elsa.secret-reference-editor", requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
     order: 100,
     supports: context => context.syntax === "Secret",
     surfaces: {

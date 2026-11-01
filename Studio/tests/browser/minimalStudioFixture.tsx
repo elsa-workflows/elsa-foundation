@@ -30,7 +30,7 @@ const navigation = getStudioNavigation([
 
 registerLogs({
   navigation: { add() {} }, routes: { add() {} }, panels: { add() {} },
-  backend: { baseUrl: window.location.origin, http: { getJson: async (path: string) => {
+  backend: { baseUrl: window.location.origin, http: { requestResponse: (path: string, init?: RequestInit) => fetch(path, init), getJson: async (path: string) => {
     const response = await fetch(path);
     if (!response.ok) throw new Error(`Structured log request failed (${response.status}).`);
     return response.json();
@@ -57,7 +57,7 @@ function Runs() {
 }
 
 function Fixture() {
-  const [view, setView] = useState(new URLSearchParams(location.search).get("view") ?? "appearance");
+  const [view, setView] = useState(new URLSearchParams(location.search).get("screen") ?? new URLSearchParams(location.search).get("view") ?? "appearance");
   const path = view === "appearance" ? "/settings/appearance" : view === "runs" || view === "inspection" ? "/workflows/instances" : view === "templates" ? "/workflows/templates" : view === "logs" ? "/diagnostics/structured-logs" : "/workflows/definitions";
   return <ThemeProvider><ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : view === "runs" || view === "inspection" ? "Runs" : "Workflows"}
     backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />} accountAction={<AuthContext.Provider value={{ session: { status: "authenticated", displayName: "Administrator", roles: [], permissions: [] }, capabilities: null, login: async () => undefined, logout: async () => undefined, refresh: async () => ({ status: "authenticated", roles: [], permissions: [] }) }}><UserMenu /></AuthContext.Provider>} onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : next.includes("instances") ? "runs" : next.includes("templates") ? "templates" : next.includes("diagnostics") ? "logs" : "list")}>

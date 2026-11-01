@@ -5,6 +5,10 @@ import {
   createDashboardWidgetRegistry,
   registerActivityIcons,
   studioSlots,
+  evaluateBackendRequirements,
+  type AuthSession,
+  type StudioBackendAwareContribution,
+  type StudioBackendSession,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
   type StudioContributionRegistry,
@@ -20,7 +24,12 @@ import {
 } from "../sdk";
 import { dialogController } from "./dialogs";
 
+type RegistryItem<T> = T extends StudioContributionRegistry<infer Item> ? Item : never;
+
 export interface CreateStudioRegistryOptions {
+  backendContext?: StudioEndpointContext;
+  backendSession?: StudioBackendSession;
+  hostSession?: AuthSession;
   backendBaseUrl?: string;
   hostHttp?: StudioEndpointContext["http"];
   backendHttp?: StudioEndpointContext["http"];
@@ -36,37 +45,40 @@ export function createStudioRegistry(
     : backendBaseUrlOrOptions ?? {};
   const hostContext = options.hostHttp ? { ...host, http: options.hostHttp } : host;
   const backend = createBackendContext(hostContext, options);
-  const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation });
-  const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
+  const hostPolicy = ({contribution}:{contribution:unknown}) => evaluateBackendRequirements(options.backendSession,(contribution as StudioBackendAwareContribution)?.requiresBackend);
+  const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation,hostPolicy });
+  const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes,hostPolicy });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
-  const dashboardWidgets = createDashboardWidgetRegistry();
+  const dashboardWidgets = createDashboardWidgetRegistry({hostPolicy});
   // One dispatcher/availability instance serves both names during producer migration.
-  const agent = createAgentRegistry();
+  const agent = createAgentRegistry({hostPolicy});
   const ai = { dispatchPrompt: agent.dispatchPrompt, onPrompt: agent.onPrompt, publishPromptResult: agent.publishPromptResult, onPromptResult: agent.onPromptResult };
 
   return {
     host: hostContext,
     backend,
+    backendSession: options.backendSession,
+    hostSession: options.hostSession,
     runtime: options.runtime ?? {},
     featureAreas,
     navigation,
     routes,
     dashboardWidgets,
     homeWidgets: dashboardWidgets,
-    diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets }),
-    panels: createContributionRegistry({ slot: studioSlots.panels }),
-    toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
-    activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
-    propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
-    expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
-    workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
-    workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
-    settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
+    diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets,hostPolicy }),
+    panels: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["panels"]>>>({ slot: studioSlots.panels,hostPolicy }),
+    toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions,hostPolicy }),
+    activityEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["activityEditors"]>>>({ slot: studioSlots.activityEditors,hostPolicy }),
+    propertyEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["propertyEditors"]>>>({ slot: studioSlots.propertyEditors,hostPolicy }),
+    expressionEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["expressionEditors"]>>>({ slot: studioSlots.expressionEditors,hostPolicy }),
+    workflowRunInputEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunInputEditors"]>>>({ slot: studioSlots.workflowRunInputEditors,hostPolicy }),
+    workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
+    settingEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["settingEditors"]>>>({ slot: studioSlots.settingEditors,hostPolicy }),
     agent,
     workflowDesigner: {
-      nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
-      toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
-      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels }),
+      nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers,hostPolicy }),
+      toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems,hostPolicy }),
+      panels: createContributionRegistry<RegistryItem<ElsaStudioModuleApi["workflowDesigner"]["panels"]>>({ slot: studioSlots.workflowDesignerPanels,hostPolicy }),
       registerActivityIcons
     },
     ai,
@@ -76,6 +88,7 @@ export function createStudioRegistry(
 }
 
 function createBackendContext(host: ElsaStudioHostContext, options: CreateStudioRegistryOptions) {
+  if (options.backendContext) return options.backendContext;
   const backend = createEndpointContext(options.backendBaseUrl ?? host.baseUrl);
   return {
     ...backend,
@@ -154,12 +167,14 @@ function copyPlacementMetadata(nav: {
   requiresFeature?: StudioFeatureAreaNavContribution["requiresFeature"];
   requiresRole?: StudioFeatureAreaNavContribution["requiresRole"];
   requiresPermission?: StudioFeatureAreaNavContribution["requiresPermission"];
+  requiresBackend?: StudioBackendAwareContribution["requiresBackend"];
 }) {
   return {
     ...(nav.placement ? { placement: nav.placement } : {}),
     ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
     ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),
-    ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {})
+    ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {}),
+    ...(nav.requiresBackend ? {requiresBackend:nav.requiresBackend} : {})
   };
 }
 

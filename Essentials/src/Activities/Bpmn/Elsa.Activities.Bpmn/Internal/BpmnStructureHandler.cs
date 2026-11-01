@@ -10,7 +10,11 @@ namespace Elsa.Activities.Bpmn.Internal;
 
 internal sealed class BpmnStructureHandler : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        // Nested authored nodes carry the same string enums as the workflow API (intrinsics and conversions).
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Kind => BpmnProcessActivity.StructureKind;
 

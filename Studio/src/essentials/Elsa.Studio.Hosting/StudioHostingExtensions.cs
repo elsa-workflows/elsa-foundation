@@ -61,6 +61,8 @@ public static class StudioHostingExtensions
         builder.Services.AddAuthorization();
         builder.Services.AddStudioBridgeAuth(builder.Configuration, settings);
         builder.Services.AddStudioBackendManagementBridge(builder.Configuration);
+        StudioBackendProfiles.Add(builder.Services);
+        _ = StudioBackendProfiles.ReadConfiguration(builder.Configuration);
         CShellsBuilder? shellBuilder = null;
         builder.Services.AddCShellsAspNetCore(shells =>
         {
@@ -110,6 +112,7 @@ public static class StudioHostingExtensions
         endpoints.MapGet("/studio-runtime.js", () => Results.Content(StudioRuntimeScript.Render(configuration, settings.AuthEnabled), "application/javascript"));
         endpoints.MapActiveShellStudioApi();
         endpoints.MapStudioBackendManagementBridge();
+        StudioBackendProfiles.Map(endpoints);
         endpoints.MapFallback("/_elsa/{**path}", () => Results.NotFound());
         endpoints.MapStudioFallback(settings.IndexFile);
         return endpoints;

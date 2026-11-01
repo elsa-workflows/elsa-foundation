@@ -9,8 +9,17 @@
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/src/Specialists/">
+    <Project Path="Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/tests/">
     <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/tests/Specialists/">
+    <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/" />
   <Folder Name="/Extensions/Etl/src/">
@@ -228,6 +237,9 @@
     <Project Path="Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
     <Project Path="Essentials/src/Connections/Design/Elsa.Connections.Design.csproj" />
     <Project Path="Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Connections/Persistence/">
+    <Project Path="Essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Diagnostics/">
     <Project Path="Essentials/src/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
@@ -529,6 +541,11 @@
   </Folder>
   <Folder Name="/Essentials/tests/Connections/">
     <Project Path="Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Connections/Persistence/EntityFrameworkCore/">
+    <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+    <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Elsa.Connections.Persistence.EntityFrameworkCore.RestartProbe.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Cli/Fixtures/">
     <Project Path="Essentials/tests/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj" />

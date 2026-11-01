@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -486,7 +487,7 @@ function writePlanLocation(planId: string, mode: "push" | "replace") {
   parameters.delete("rootId");
   parameters.delete("fromVersion");
   parameters.delete("toVersion");
-  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", `/workflows/activity-definitions/upgrades?${parameters}`);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", qualifyStudioBackendPath(`/workflows/activity-definitions/upgrades?${parameters}`));
 }
 
 function readSession(): PersistedUpgradeSession | null {

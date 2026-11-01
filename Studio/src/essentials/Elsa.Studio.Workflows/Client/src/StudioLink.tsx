@@ -1,9 +1,10 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { type AnchorHTMLAttributes, type MouseEvent } from "react";
 import { requestStudioNavigation } from "@elsa-workflows/studio-sdk";
 import { pathBeforeStudioSegment } from "./studioHostPath";
 
 export function defaultStudioPathNavigation(path: string) {
-  window.history.pushState({}, "", path);
+  window.history.pushState({}, "", qualifyStudioBackendPath(path));
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
@@ -89,12 +90,13 @@ export function StudioLink({
   href: string;
   navigateToStudioPath?(path: string): void;
 } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
+  const targetHref = isStudioInAppHref(href) ? qualifyStudioBackendPath(href) : href;
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
-    if (event.defaultPrevented || !shouldInterceptStudioLinkClick(event, href)) return;
+    if (event.defaultPrevented || !shouldInterceptStudioLinkClick(event, targetHref)) return;
     event.preventDefault();
-    if (!requestStudioNavigation(window.location.pathname, href)) return;
-    navigateToStudioPath(href);
+    if (!requestStudioNavigation(window.location.pathname, targetHref)) return;
+    navigateToStudioPath(targetHref);
   };
-  return <a {...rest} href={href} onClick={handleClick}>{children}</a>;
+  return <a {...rest} href={targetHref} onClick={handleClick}>{children}</a>;
 }

@@ -189,6 +189,18 @@
       "medianMinutes": 0.02
     },
     {
+      "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj",
+      "tier": "pr",
+      "trait": "child-process",
+      "medianMinutes": 0.1
+    },
+    {
       "project": "Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
@@ -594,6 +606,11 @@
       "medianMinutes": 0.25
     },
     {
+      "project": "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.02
+    },
+    {
       "project": "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
@@ -786,6 +803,7 @@
           "Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
           "Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj",
           "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+          "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/Microsoft365/Tests/Elsa.Integrations.Connectors.Microsoft365.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj",
           "Extensions/Integrations/tests/Connectors/Slack/Tests/Elsa.Integrations.Connectors.Slack.Tests.csproj",
@@ -797,7 +815,8 @@
           "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
           "Essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
           "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
-          "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj"
+          "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
+          "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj"
         ]
       },
       {
@@ -872,7 +891,8 @@
           "rules",
           "runtime-distributed",
           "transaction-topology",
-          "workbench-openiddict"
+          "workbench-openiddict",
+          "connections"
         ]
       },
       {
@@ -1030,6 +1050,11 @@
       "suite": "rules",
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "connections",
+      "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
     }
   ],
   "secretsCompositionSuite": {

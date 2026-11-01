@@ -84,6 +84,29 @@ test("moving from Organization contains Tab and Shift+Tab in the active move dia
   await expect(last).toBeFocused();
 });
 
+for (const theme of ["light", "dark"] as const) {
+  for (const width of [390, 1280]) {
+    test(`row actions stay available while browsing overflow columns (${theme}, ${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 780 });
+      await page.goto(`/?mode=workflow-library&theme=${theme}`);
+      await expect(page.getByRole("button", { name: "Manage tags", exact: true })).toBeVisible();
+      const table = page.getByRole("region", { name: "Workflow definitions table" });
+      await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+      await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+      await page.getByRole("button", { name: "Actions for Collect overdue payment", exact: true }).click();
+      const organization = page.getByRole("menuitem", { name: "Organization", exact: true });
+      await expect(organization).toBeVisible();
+
+      await table.hover();
+      await page.mouse.wheel(-2000, 0);
+      await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBe(0);
+      await expect(organization).toBeVisible();
+      await organization.click();
+      await expect(page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true })).toBeVisible();
+    });
+  }
+}
+
 test("Escape cancels the nested move and restores Organization keyboard focus", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
@@ -211,3 +234,26 @@ for (const change of ["count-shrinks", "count-grows"] as const) {
     }
   });
 }
+
+test("Enter in tag search searches without saving pending organization changes", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
+  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
+  await dialog.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  const search = dialog.getByRole("searchbox", { name: "Find workflow tags", exact: true });
+  await search.fill("Owning team");
+  await search.press("Enter");
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as Window & {
+    workflowLibraryRequests: { method: string; url: string }[];
+  }).workflowLibraryRequests.some(request => request.method === "GET" && new URL(request.url, location.origin).searchParams.get("search") === "Owning team"))).toBe(true);
+  const writes = await page.evaluate(() => (window as unknown as Window & {
+    workflowLibraryRequests: { method: string; url: string }[];
+  }).workflowLibraryRequests.filter(request => request.method === "PUT"));
+  expect(writes).toEqual([]);
+  await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).toBeChecked();
+  await expect(dialog.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
+  await expect(dialog).toBeHidden();
+});

@@ -1,0 +1,66 @@
+using System.Text.Json;
+using Elsa.Agent.Specialists.Core.Contracts;
+using Elsa.Agent.Specialists.Core.Models;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Specialist.ModelFixture;
+
+public sealed class ModelObservations
+{
+    public int Opens { get; internal set; }
+    public int Calls { get; internal set; }
+    public int Disposals { get; internal set; }
+    public string? Instructions { get; internal set; }
+    public string? ModelId { get; internal set; }
+    public string? UserJson { get; internal set; }
+    public JsonElement? Schema { get; internal set; }
+    public bool InvalidResult { get; set; }
+}
+
+public static class ModelRegistration
+{
+    public static void AddFixtureModel(this IServiceCollection services)
+    {
+        services.AddSingleton<ModelObservations>();
+        services.AddScoped<FixtureModel>();
+        services.AddScoped<ISpecialistModelClientFactory>(sp => sp.GetRequiredService<FixtureModel>());
+        services.AddScoped<ISpecialistModelCapabilitiesSource>(sp => sp.GetRequiredService<FixtureModel>());
+    }
+}
+
+internal sealed class FixtureModel(ModelObservations observations) : ISpecialistModelClientFactory, ISpecialistModelCapabilitiesSource
+{
+    public string ProviderKey => "fixture";
+    public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(new SpecialistModelCapabilities("fixture/1", JsonSerializer.SerializeToElement(new { type = "object", additionalProperties = false }), true, 4096));
+    public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (request.Invocation.PersistencePartition != "default" || request.Invocation.TenantId is not null ||
+            request.Invocation.DefinitionVersionId != "copywriter-v1" || request.Descriptor.Model.ProviderKey != ProviderKey ||
+            request.Descriptor.Model.ConnectionName != "test-connection" || request.Descriptor.Model.ModelId != "fixture-model")
+            throw new InvalidOperationException("The deterministic fixture does not own the selected test invocation/model.");
+        observations.Opens++;
+        return ValueTask.FromResult(new SpecialistModelClientLease(new Client(observations), new ChatOptions(), "fixture/1", 1));
+    }
+    private sealed class Client(ModelObservations observations) : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            observations.Calls++;
+            observations.Instructions = options?.Instructions;
+            observations.ModelId = options?.ModelId;
+            observations.Schema = (options?.ResponseFormat as ChatResponseFormatJson)?.Schema;
+            observations.UserJson = messages.Last(x => x.Role == ChatRole.User).Text;
+            var brief = JsonDocument.Parse(observations.UserJson).RootElement.GetProperty("Brief").GetString();
+            var body = observations.InvalidResult ? "{\"wrong\":true}" : JsonSerializer.Serialize(new { Article = "draft about " + brief });
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, body))
+                { Usage = new UsageDetails { InputTokenCount = 5, OutputTokenCount = 3 } });
+        }
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public void Dispose() => observations.Disposals++;
+    }
+}

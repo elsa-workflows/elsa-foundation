@@ -24,6 +24,13 @@ remain in the [feature specification](../../../../specs/220-domain-owned-apis/sp
 The `ApiCapabilitiesCollecting` inline contribution event is available for framework modules that already use
 the event contribution pattern. Handlers append the same declaration type and obey the same duplicate rules.
 
+## Known implementations
+
+- **Cross-domain:** `StructuredLogsApiCapabilitySource` in Diagnostics Structured Logs contributes the
+  `elsa.api.structured-logs` contract with the host-configured recent, sources and stream paths. Registered by
+  `StructuredLogsFeature` through `AddApiCapabilitySource`; it keeps configuration-owned routes out of static links.
+  See the [Structured Logs contribution note](../../Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/README.md#cross-domain-contributions).
+
 ## Replaceable service
 
 ### `IApiCapabilityCatalog`

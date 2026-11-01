@@ -5,6 +5,7 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly baseUrl: string;
     readonly headers?: HeadersInit;
     readonly http: {
+      requestResponse?(url: string, init?: RequestInit & {timeoutMs?: number}): Promise<Response>;
       getJson<T>(url: string, init?: RequestInit): Promise<T>;
     };
     /**

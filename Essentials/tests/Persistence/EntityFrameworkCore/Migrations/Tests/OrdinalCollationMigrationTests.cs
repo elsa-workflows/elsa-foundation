@@ -23,7 +23,7 @@ public sealed class OrdinalCollationMigrationTests
     /// <summary>The modules #1837 put in scope, by the prefix their context names share.</summary>
     private static readonly string[] CollatingModules =
     [
-        "ActivitiesDesign", "ClusterMembership", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
     ];
 
@@ -47,6 +47,11 @@ public sealed class OrdinalCollationMigrationTests
         // share one current incarnation.
         ("ClusterMembership", "elsa_cluster_members", "HostId"),
         ("ClusterMembership", "elsa_cluster_members", "CurrentHostId"),
+        ("Connections", "elsa_connections", "TenantLookupKey"),
+        ("Connections", "elsa_connections", "NormalizedName"),
+        ("Connections", "elsa_connection_secret_references", "TenantLookupKey"),
+        ("Connections", "elsa_connection_secret_references", "NormalizedName"),
+        ("Connections", "elsa_connection_secret_references", "SecretLookupHash"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "TenantKey"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "HandleHash"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentHash"),

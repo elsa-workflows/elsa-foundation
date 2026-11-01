@@ -90,6 +90,9 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Agent foundation (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
+| Specialist authoring and immutable compilation | [`Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md) |
+| Specialist native execution | [`Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
@@ -116,6 +119,7 @@ not automatic constitution violations.
 |---|---|
 | Connections core (provider-neutral contracts — repository, manager, resolver, credential sources, auth schemes, `SensitiveValue`) | [`Essentials/src/Connections/Core/EXTENSION_POINTS.md`](Essentials/src/Connections/Core/EXTENSION_POINTS.md) |
 | Connections (default services, http type, built-in schemes, named credentials) | [`Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md`](Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md) |
+| Connections EF persistence (scoped metadata, version checks, secret references and consumer-owned contexts) | [`Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Connections API (CRUD, picker, OAuth callback) | [`Essentials/src/Connections/Api/EXTENSION_POINTS.md`](Essentials/src/Connections/Api/EXTENSION_POINTS.md) |
 | Connections Design (publish gate) | [`Essentials/src/Connections/Design/EXTENSION_POINTS.md`](Essentials/src/Connections/Design/EXTENSION_POINTS.md) |
 | Connections Workflows (http applicator + secret mask) | [`Essentials/src/Connections/Workflows/EXTENSION_POINTS.md`](Essentials/src/Connections/Workflows/EXTENSION_POINTS.md) |
@@ -213,3 +217,9 @@ not automatic constitution violations.
 - §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section); layer badge convention; Known implementations with intra/cross-domain tags; mandatory maintenance obligation.
 - §2.22.2 — this repo-wide extension-points index (pure links, no inline entries).
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).
+
+
+## Studio backend connections
+
+- [Hosting backend connection composition and SDK seams](Studio/src/essentials/Elsa.Studio.Hosting/README.md#backend-connections)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)

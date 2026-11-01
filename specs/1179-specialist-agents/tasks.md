@@ -3,8 +3,10 @@
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [contracts](contracts/) and [qualification guide](quickstart.md).
 
-**Status**: Implementation backlog. These boxes do not assert work already landed. M1 design delivery
-is tracked by #3538; the product spec remains nonterminal until the implementation completes.
+**Status**: Implementation in progress. Checked boxes record completed implementation and local
+qualification; they do not assert merge or product acceptance. M2 source/package work is in
+[PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with exact-head CI, dependency
+merge and resulting-main qualification tracked there. The product spec remains nonterminal.
 
 **Cadence**: ADR 0080 D1 risk-based behavior tests; no invented TDD rule or coverage quota. Tests
 accompany their owning implementation slice and complete before its review/merge. Use meaningful
@@ -13,14 +15,16 @@ proof covers plain registration; add a feature-specific test only where wiring h
 
 ## Phase 1 — Setup and shared contract foundations (M2)
 
-- [ ] T001 Establish actual specialist Core/Design/runtime project envelopes and stable provider/descriptor/feature identities in `Extensions/Agent/src/Specialists/`, with `.slnx`, central package/API/lock/catalog registration as each real feature appears.
-- [ ] T002 Define justified immutable manifest/runtime/request/receipt/capability/authority shapes in `Extensions/Agent/src/Specialists/Core/Models/` and genuine store/execution extension ports in `Extensions/Agent/src/Specialists/Core/Contracts/`; verify independent package-author needs before making types public.
-- [ ] T003 Implement shared bounded JsonSchema.Net validation without a Design dependency in `Extensions/Agent/src/Specialists/JsonSchema/`, plus typed contract-to-schema compilation in `Extensions/Agent/src/Specialists/Design/Services/SpecialistSchemaCompiler.cs`; test malformed/remote references, required/null/unknown members and compatible field constraints.
-- [ ] T004 Qualify the normal central MEAI 10.10.1/MAF1.27.0 graph in `Directory.Packages.props` and owned `packages.lock.json` files, including existing `Extensions/Agent/tests/` suites, actual CShells/shared-assembly/package closure and reviewed public/nuspec changes.
+- [x] T001 Establish actual specialist Core/Design/runtime project envelopes and stable provider/descriptor/feature identities in `Extensions/Agent/src/Specialists/`, with `.slnx`, central package/API/lock/catalog registration as each real feature appears.
+- [x] T002 Define justified immutable manifest/runtime/request/receipt/capability/authority shapes in `Extensions/Agent/src/Specialists/Core/Models/` and genuine store/execution extension ports in `Extensions/Agent/src/Specialists/Core/Contracts/`; verify independent package-author needs before making types public.
+- [x] T003 Implement shared bounded JsonSchema.Net validation without a Design dependency in `Extensions/Agent/src/Specialists/JsonSchema/`, plus typed contract-to-schema compilation in `Extensions/Agent/src/Specialists/Design/Services/SpecialistSchemaCompiler.cs`; test malformed/remote references, required/null/unknown members and compatible field constraints.
+- [x] T004 Qualify the normal central MEAI 10.10.1/MAF 1.27.0 graph in `Directory.Packages.props` and owned `packages.lock.json` files, including existing `Extensions/Agent/tests/` suites, actual CShells/shared-assembly/package closure and reviewed public/nuspec changes.
 
 The central dependency enabler [#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544)
-promotes the normal MEAI pin/locks and current Agent compatibility. T004 stays open until the later
-actual production specialist MAF runtime/package closure is qualified.
+promotes the normal MEAI pin/locks and current Agent compatibility. T004's bounded production
+runtime/package closure is now qualified through actual CShells activation and independent model,
+authoring and runtime consumers. Dependency/PR CI and merge remain gates; this establishes no live
+provider, durable journal or complete support-matrix acceptance.
 
 ## Phase 2 — Author, publish and execute the first fresh specialist (US1; M2)
 
@@ -29,15 +33,15 @@ actual production specialist MAF runtime/package closure is qualified.
 model package; disclose disposable state until M3 durability/provider delivery. Final product A1–A3
 also requires M3/M5/M7 evidence.
 
-- [ ] T005 [US1] Implement provider/schema authoring capabilities, contract proposals and validation in `Extensions/Agent/src/Specialists/Design/Services/SpecialistActivityProvider.cs`, using generic activity storage/authority and one public I/O contract.
-- [ ] T006 [US1] Compile exact schemas, descriptor, public result projections, optional controls and final facade/background child into immutable material in `Extensions/Agent/src/Specialists/Design/Services/SpecialistActivityCompiler.cs`; test prompt-only/schema/model hashing, invalid control collisions and compatibility floor.
+- [x] T005 [US1] Implement provider/schema authoring capabilities, contract proposals and validation in `Extensions/Agent/src/Specialists/Design/Services/SpecialistActivityProvider.cs`, using generic activity storage/authority and one public I/O contract.
+- [x] T006 [US1] Compile exact schemas, descriptor, public result projections and final facade/background child into immutable fresh-invocation material in `Extensions/Agent/src/Specialists/Design/Services/SpecialistActivityProvider.cs`; test prompt-only/schema/model hashing and compatibility floor. Explicit continuation controls and their collision checks are delivered with T020.
 - [x] T007 [US1] Add snapshot-bound active-draft provider membership in `Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Stores/EfActivityDesignStores.cs`; preserve exact owner scope, pre-count/page filtering and existing projection retention.
 - [x] T008 [US1] Prove unpublished/multiple/mixed-provider drafts, discard/publish transitions, same-ID global/tenant isolation, stale cursors and all four SQL translations in `Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/Tests/`.
-- [ ] T009 [US1] Implement the native facade/typed completion checkpoint participant and fixed background-safe MAF leaf in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Activities/`, with actual aliases, Background placement and opaque encrypted-journal request/receipt references; explicitly refuse unsupported native encryption/secret-input policies.
-- [ ] T010 [US1] Implement real disposable journal behavior and the admitted MAF client path in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/`, enforcing fresh dispatch counts/deadline from the start; preserve final schemas and forbid production durability claims from memory stores.
-- [ ] T011 [US1] Prove actual reviewed publication, preflight capability refusal, invalid output, exact result projection and old-artifact isolation with a separately packaged deterministic client/consumer in `tools/agents/conformance/` and `Extensions/Agent/tests/Specialists/Publishing/`.
-- [ ] T012 [US1] Integrate normal create/save/review/publish/recommendation/lifecycle permissions and diagnostics through `Extensions/Agent/src/Specialists/Design/` and existing Activity Design/Publishing APIs; no duplicate CRUD/catalog.
-- [ ] T013 [US1] Update provider/runtime extension catalogs and module-author configuration in `Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`, `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md` and root `EXTENSION_POINTS.md`.
+- [x] T009 [US1] Implement the native facade/typed completion checkpoint participant and fixed background-safe MAF leaf in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Activities/`, with actual aliases, Background placement and opaque encrypted-journal request/receipt references; explicitly refuse unsupported native encryption/secret-input policies.
+- [x] T010 [US1] Implement real disposable journal behavior and the admitted MAF client path in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/`, enforcing fresh dispatch counts/deadline from the start; preserve final schemas and forbid production durability claims from memory stores.
+- [x] T011 [US1] Prove actual reviewed publication, preflight capability refusal, invalid output, exact result projection and old-artifact isolation with a separately packaged deterministic client/consumer in `tools/agents/conformance/` and `Extensions/Agent/tests/Specialists/Tests/Publication/`.
+- [x] T012 [US1] Integrate normal create/save/review/publish/recommendation/lifecycle permissions and diagnostics through `Extensions/Agent/src/Specialists/Design/` and existing Activity Design/Publishing APIs; no duplicate CRUD/catalog.
+- [x] T013 [US1] Update provider/runtime extension catalogs and module-author configuration in `Extensions/Agent/src/Specialists/Design/EXTENSION_POINTS.md`, `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md` and root `EXTENSION_POINTS.md`.
 
 ## Phase 3 — Durable model access, continuity and recovery (US3; M3)
 
@@ -45,13 +49,18 @@ also requires M3/M5/M7 evidence.
 **Independent test**: Restart between turns/acceptance/delivery, force scope/revision/fence/uncertainty
 and cancellation races, and verify journal and process independently.
 
-- [ ] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.
-- [ ] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
+T014–T015 are locally implemented/qualified by prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
+under existing Connections owner #2854. Their checks record source/package qualification; required
+CI, review/merge and resulting-main qualification remain open. They do not establish M3 specialist
+execution or later product acceptance.
+
+- [x] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.
+- [x] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
 - [ ] T016 [US3] Implement concrete model connection/client/capability contributors in `Extensions/Agent/src/Specialists/Anthropic/` and `Extensions/Agent/src/Specialists/AzureOpenAI/`, with point-of-use auth, allowed hosts, provider setting/schema support and no Weaver harness activation.
 - [ ] T017 [US3] Test actual provider SDK request/options/response loss/disabled opaque retries and capability drift using protocol servers in `Extensions/Agent/tests/Specialists/Providers/`; count physical requests rather than only outer agent runs.
 - [ ] T018 [US3] Implement conversation/turn/evaluation EF records, CQS/CAS/unexpired fencing and four provider migrations in `Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/`; preserve the model in `data-model.md`.
 - [ ] T019 [US3] Implement exact operation/fingerprint admission, atomic accepted session/result/usage and old-operation replay in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistTurnCoordinator.cs`, with persisted single-specialist call/tool/time/token reservations and deadline/unknown-usage settlement in `SpecialistTurnBudgetAllocator.cs` before real provider dispatch.
-- [ ] T020 [US3] Implement versioned minimal session codec, scoped protection envelope, key retention/rotation and fresh/explicit-continuation policy in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistSessionCodec.cs`; exclude private reasoning/credentials.
+- [ ] T020 [US3] Implement versioned minimal session codec, scoped protection envelope, key retention/rotation and fresh/explicit-continuation policy in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistSessionCodec.cs`; add optional invocation controls with collision checks, and exclude private reasoning/credentials.
 - [ ] T021 [US3] Implement exact-operation cancel/applied intents, pre-admission tombstones and durable idempotent settlement through existing native checkpoint/outbox seams in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistCheckpointEnricher.cs` and `SpecialistSettlementHandler.cs`.
 - [ ] T022 [US3] Prove sensitive/redacted native flow and explicit encryption-required/secret-input refusal, journal winners, delayed cancellation, lease loss, uncertainty and crash/ack boundaries in `Extensions/Agent/tests/Specialists/Recovery/`; include pre-dispatch budget exhaustion/deadline, unknown usage/restart and SDK physical-request controls, with no accepted model replay/cancelled parent continuation.
 - [ ] T023 [US3] Deliver retention/purge/disabled-new-admission and old codec/key reader compatibility in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistRetentionPruner.cs` and `Extensions/Agent/tests/Specialists/Compatibility/`; retain necessary pins/tombstones.

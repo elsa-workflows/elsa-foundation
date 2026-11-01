@@ -64,12 +64,17 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
 
 ## Active objectives
 
-1. [Establish the Program #3528](https://github.com/elsa-workflows/elsa-foundation/issues/3528): hierarchy,
-   complete delivery charter, owner amendment and repository records. This closes setup only.
-2. [Research spike #3529](https://github.com/elsa-workflows/elsa-foundation/issues/3529): pin .NET Agent
-   Framework and prove dynamic structured output, tools, streaming, cancellation, explicit session
-   persistence and integration seams. Reconcile #2913 before proposing collaboration mechanics.
-3. After those gates, elaborate M1's reviewed product/architecture packet and the next implementation leaf.
+1. M0 establishment and research are complete on the recorded main `45b5347` receipts.
+2. M1 design is complete through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540)
+   and resulting-main core/Studio qualification on `e26c11bd9`.
+3. M2 publication/runtime kernel [#3548](https://github.com/elsa-workflows/elsa-foundation/issues/3548)
+   is finishing qualification in [PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573).
+   Its bounded source and independent package proof passed, with no production durability or live-model
+   claim. Draft discovery #3541 merged through #3543; central MEAI enabler #3544/#3546 merged at
+   `fd304319c`. The kernel is rebased onto that main; its fresh exact-head qualification and CI,
+   resulting-main qualification and product M2–M7 acceptance remain open. Independent durable
+   Connections prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
+   implements T014–T015 under its existing owner #2854 while M2 occupies the review lane.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
@@ -90,8 +95,9 @@ normal MEAI 10.10.1 graph while the remaining specialist runtime/package work st
 packet and ordered M2–M7 tasks through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540).
 The design is approved to implement; neither the packet nor the illustrative wireframe establishes
 implemented product acceptance. Public signatures remain proposed until their first implementing slice.
-[M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) is the next
-bounded implementation leaf, alongside the existing review/qualification lane.
+[M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) merged through
+[PR #3543](https://github.com/elsa-workflows/elsa-foundation/pull/3543). Native specialist kernel #3548
+continues in the review/qualification lane; #3578 is the sole active implementation leaf.
 
 ## Completion
 

@@ -19,6 +19,39 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     private static readonly ValueTypeDescriptor StringType = new("String");
     private readonly RuntimeInputBindingResolver _resolver = new();
 
+    [Theory]
+    [InlineData("customer.id", "{\"customer.id\":\"literal\",\"customer\":{\"id\":\"nested\"}}", "literal")]
+    [InlineData("customer.id", "{\"customer\":{\"id\":\"nested\"}}", "nested")]
+    [InlineData("$", "\"whole-result\"", "whole-result")]
+    public void Direct_result_reads_preserve_the_completion_projection_path(string path, string json, string expected)
+    {
+        var producer = CompletedProducer(ValueEnvelope.Inline(StringType, JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding("customer-id", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.ActivityResult,
+            activityResult: new("producer", "customer-id", "scope:root"));
+        var resolved = _resolver.Resolve(binding, NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable(projectionPath: path)));
+        Assert.Equal(expected, resolved.Envelope!.InlineValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("customer.id", "{\"customer.id\":\"literal\",\"customer\":{\"id\":\"nested\"}}", "literal")]
+    [InlineData("customer.id", "{\"customer\":{\"id\":\"nested\"}}", "nested")]
+    [InlineData("$", "\"whole-result\"", "whole-result")]
+    public async Task Expression_result_reads_preserve_the_completion_projection_path(string path, string json, string expected)
+    {
+        var producer = CompletedProducer(ValueEnvelope.Inline(StringType, JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline));
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding("customer-id", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+            expression: new("Test", "value", parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new ActivityResultExpressionParameterBinding("producer", "customer-id")
+            }));
+        var materializer = new RuntimeActivityInputMaterializer(_resolver, new TestTypeRegistry(), new EchoParameterPortableExpressionEvaluator("value"));
+        var snapshot = await materializer.MaterializeSnapshotAsync(NewConsumerNode(binding), consumer.InvocationId,
+            NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable(projectionPath: path)), DateTimeOffset.UnixEpoch);
+        Assert.Equal(expected, snapshot.Values["customer-id"].InlineValue!.Value.GetString());
+    }
+
     [Fact]
     public void Resolve_reads_a_pinned_workflow_request_member()
     {

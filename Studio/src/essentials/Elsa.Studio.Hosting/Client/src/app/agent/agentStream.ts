@@ -1,4 +1,4 @@
-import { withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
+import { resolveBackendPath, withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
 import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent } from "./agentTypes";
 import { mapAdmittedContextAttachment } from "./agentClient";
 
@@ -40,7 +40,7 @@ async function readStream(
   defaultMessageId?: string
 ) {
   try {
-    const response = await request(new URL(streamUrl, context.baseUrl).toString(), await withStreamHeaders(context, {
+    const response = await request(new URL(resolveBackendPath(context.baseUrl,streamUrl), context.baseUrl).toString(), await withStreamHeaders(context, {
       cache: "no-store",
       headers: { Accept: "text/event-stream, application/x-ndjson, application/json" },
       signal
@@ -65,7 +65,7 @@ async function readStream(
 async function withStreamHeaders(context: StudioEndpointContext, init: RequestInit) {
   const withStaticHeaders = withDefaultHeaders(context.headers, init);
   const token = await context.accessTokenFactory?.();
-  if (!token) return withStaticHeaders;
+  if (!token) return { ...withStaticHeaders, credentials: "omit" as const };
 
   const headers = new Headers(withStaticHeaders.headers);
   headers.set("Authorization", `Bearer ${token}`);

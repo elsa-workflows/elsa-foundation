@@ -182,7 +182,7 @@ export function register(api: ElsaStudioModuleApi) {
   moduleApi = api;
 
   api.navigation.add({
-    id: "open-telemetry",
+    id: "open-telemetry", requiresBackend:[{id:"elsa.api.open-telemetry",contractVersion:"1"}],
     label: "OpenTelemetry",
     path: "/diagnostics/open-telemetry",
     activePathPrefix: "/diagnostics/open-telemetry",
@@ -192,14 +192,14 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.routes.add({
-    id: "open-telemetry",
+    id: "open-telemetry", requiresBackend:[{id:"elsa.api.open-telemetry",contractVersion:"1"}],
     label: "OpenTelemetry",
     path: "/diagnostics/open-telemetry",
     component: OpenTelemetryPage
   });
 
   api.panels.add({
-    id: "open-telemetry",
+    id: "open-telemetry", requiresBackend:[{id:"elsa.api.open-telemetry",contractVersion:"1"}],
     title: "OpenTelemetry",
     order: 1_020,
     component: OpenTelemetryPanel

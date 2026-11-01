@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { ArrowRight, CircleAlert, LoaderCircle, Plus, Workflow } from "lucide-react";
-import { useAuthSession, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { evaluateBackendRequirements, useAuthSession, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { isHomeWidgetFeatureEnabled } from "./homeLayout";
 import { useHomeDialogFocus } from "./useHomeDialogFocus";
 import { loadRecentWorkflows, navigateStudioPath, type HomeWorkflowSummary } from "./widgets/homeData";
@@ -19,11 +19,13 @@ type ActiveDialog = { authorityKey: string; discovery: DiscoveryState };
 
 export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const session = useAuthSession();
-  const workflowsEnabled = isHomeWidgetFeatureEnabled({ requiresFeature: "workflows" }, api.runtime.enabledFeatures);
+  const workflowsEnabled = isHomeWidgetFeatureEnabled({ requiresFeature: "workflows" }, api.runtime.enabledFeatures)
+    && evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available";
   const authenticated = session.status === "authenticated";
   const canRead = !authenticated || hasEffectivePermission(session.permissions, designRead);
   const canManage = !authenticated || hasEffectivePermission(session.permissions, designManage);
-  const canReadRuntime = !authenticated || hasEffectivePermission(session.permissions, runtimeRead);
+  const canReadRuntime = (!authenticated || hasEffectivePermission(session.permissions, runtimeRead))
+    && evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.runtime",contractVersion:"1"}]).state === "available";
   const accessLimited = authenticated && (!canRead || !canManage);
   const authorityKey = useMemo(() => JSON.stringify([
     api.backend.baseUrl,

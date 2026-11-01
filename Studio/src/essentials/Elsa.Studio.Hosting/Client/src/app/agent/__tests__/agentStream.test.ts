@@ -33,6 +33,14 @@ describe("agent stream", () => {
     expect(events[1]).toEqual({ type: "review-requested", messageId: "msg" });
   });
 
+  it("omits ambient cookies for anonymous SSE and aborts its subscription",async()=>{
+    const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>new Response(streamFrom([]),{status:200}));
+    const subscription=subscribeAgentSessionStream(createEndpointContext("https://foundation.example/shell/"),"/_elsa/agent/stream",()=>{},()=>{},{fetch:request});
+    await flushPromises();
+    expect(request.mock.calls[0][1]?.credentials).toBe("omit");
+    subscription.close();expect(request.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  });
+
   it("attaches endpoint access tokens to stream requests", async () => {
     const fetch = vi.fn(async () => new Response(streamFrom([
       `data: ${JSON.stringify({ type: "message-completed", messageId: "msg_01" })}\n\n`

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Agents.AI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <ProjectReference Include="../Core/Elsa.Agent.Specialists.Core.csproj" />
+    <ProjectReference Include="../JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Agent.Specialists.Tests" />
+  </ItemGroup>
+</Project>

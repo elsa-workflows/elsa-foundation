@@ -12,11 +12,13 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > 
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(160px, 1fr) 112px 72px 108px 112px 132px 60px; min-width: 936px; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modified { white-space: normal; }
-html[data-workspace-style="minimal"] .wf-definitions-list :is(.wf-definition-actions-header, .wf-row-actions) { position: sticky; right: 0; background: var(--studio-surface); }
-html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row:hover .wf-row-actions { background: var(--studio-row-hover); }
-html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-selected="true"] .wf-row-actions { background: var(--studio-row-selected); }
+/* Keep actions reachable while optional controls settle or overflowing columns scroll.
+   Blend state tints over the surface so columns never show through the pinned cell. */
+.wf-definitions-list :is(.wf-definition-actions-header, .wf-row-actions) { position: sticky; right: 0; background: var(--studio-surface); }
+.wf-definitions-list .wf-grid-row:hover .wf-row-actions { background: linear-gradient(var(--studio-row-hover) 0 0), var(--studio-surface); }
+.wf-definitions-list .wf-grid-row[aria-selected="true"] .wf-row-actions { background: linear-gradient(var(--studio-row-selected) 0 0), var(--studio-surface); }
 
-.wf-definitions-list > .wf-toolbar {
+.wf-definitions-list .wf-folder-content > .wf-toolbar {
   flex-wrap: wrap;
   gap: 8px;
   margin: 0;
@@ -76,7 +78,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-sele
 }
 
 .wf-definitions-list .wf-folder-nav {
-  margin: 12px 18px 12px 20px;
+  margin: 12px 0 12px 20px;
   border: 0;
   border-right: 1px solid var(--studio-border);
   border-radius: 0;
@@ -371,7 +373,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-sele
 
 @media (max-width: 760px) {
 
-  .wf-definitions-list > .wf-toolbar {
+  .wf-definitions-list .wf-folder-content > .wf-toolbar {
     margin-right: 0;
     margin-left: 0;
   }

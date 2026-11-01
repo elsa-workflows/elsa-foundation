@@ -7,6 +7,34 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 [Collection(FastEndpointsHostCollection.Name)]
 public sealed class LoginPresentationTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Shell_login_form_and_builtin_artwork_keep_the_request_path_base(bool proxyPathBase)
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync(pathBase:proxyPathBase ? "/tenant-a" : null,routePrefix:proxyPathBase ? null : "/tenant-a");
+        var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login?returnUrl=/studio");
+        Assert.Contains("action=\"/tenant-a/_elsa/identity/login\"",html);
+        Assert.Contains("/tenant-a/_elsa/identity/login-assets/",html);
+        Assert.Contains("src=\"/tenant-a/_elsa/identity/login-assets/elsa-logo.png\"",html);
+        var logo = await fixture.Client.GetAsync("/tenant-a/_elsa/identity/login-assets/elsa-logo.png");
+        Assert.Equal(HttpStatusCode.OK,logo.StatusCode);
+        Assert.Equal("image/png",logo.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task Default_login_uses_public_bundled_Elsa_logo()
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync();
+        var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
+        Assert.Contains("src=\"/_elsa/identity/login-assets/elsa-logo.png\"", html);
+        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/elsa-logo.png");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, bytes[..8]);
+    }
+
     [Fact]
     public async Task Presentation_replacement_receives_validated_return_and_real_security_fields()
     {

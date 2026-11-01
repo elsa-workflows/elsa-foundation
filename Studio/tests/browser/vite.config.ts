@@ -2,6 +2,7 @@ import { defineConfig, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { minimalLogEntries } from "./minimalStudioData";
+import { backendStreamProbe } from "./backendStreamProbe";
 
 export default defineConfig({
   root: __dirname,
@@ -11,6 +12,7 @@ export default defineConfig({
   plugins: [react(), {
     name: "minimal-log-browser-witness",
     configureServer(server) {
+      server.middlewares.use(backendStreamProbe);
       server.middlewares.use((request, response, next) => {
         const url = new URL(request.url ?? "/", "http://fixture");
         if (!url.pathname.startsWith("/_elsa/studio/diagnostics/structured-logs/")) return next();
@@ -32,11 +34,12 @@ export default defineConfig({
     }
   }],
   // A first-use optimizer reload discards in-flight mocked authoring sessions.
-  optimizeDeps: { include: ["lucide-react/dynamicIconImports"] },
+  optimizeDeps: { include: ["lucide-react/dynamicIconImports", "@microsoft/signalr"] },
   resolve: {
     alias: {
       "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts"),
       "@elsa-workflows/studio-ui": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts"),
+      "@microsoft/signalr": resolve(__dirname, "../../../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/node_modules/@microsoft/signalr"),
       "@xyflow/react": resolve(__dirname, "../../src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react")
     }
   },

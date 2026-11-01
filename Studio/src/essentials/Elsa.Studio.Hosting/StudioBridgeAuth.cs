@@ -228,7 +228,8 @@ internal sealed class StudioBridgeAuthHandler(
             var outcome = new StudioBridgeCachedSession(
                 session is { IsAuthenticated: true },
                 session?.Subject,
-                session?.Permissions ?? []);
+                session?.Permissions ?? [],
+                session?.TenantId);
 
             // Only a definitive backend session (authenticated or anonymous) is cacheable. A null session means the
             // backend answered but yielded no session — a 5xx, an unauthorized response, or an unparseable body — an
@@ -247,7 +248,7 @@ internal sealed class StudioBridgeAuthHandler(
 
     private AuthenticateResult ToResult(StudioBridgeCachedSession session) =>
         session.IsAuthenticated
-            ? Success(session.Subject ?? "backend-user", session.Permissions)
+            ? Success(session.Subject ?? "backend-user", session.Permissions, session.Subject, session.TenantId)
             : AuthenticateResult.Fail("The backend did not recognize the supplied user session.");
 
     /// <summary>
@@ -279,7 +280,7 @@ internal sealed class StudioBridgeAuthHandler(
         var httpClient = transport.CreateClient();
         httpClient.BaseAddress ??= new Uri(Options.BackendBaseUrl!, UriKind.Absolute);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, SessionPath);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(httpClient.BaseAddress!.AbsoluteUri.TrimEnd('/') + "/"), SessionPath.TrimStart('/')));
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {bearer}");
         request.Headers.TryAddWithoutValidation("Accept", "application/json");
 
@@ -307,9 +308,11 @@ internal sealed class StudioBridgeAuthHandler(
 
     // Anonymous demo mode carries no permissions; the permission policies allow anonymously anyway (see
     // StudioBridgePermissionHandler), so an empty permission set here is correct.
-    private AuthenticateResult Success(string name, IReadOnlyCollection<string>? permissions = null)
+    private AuthenticateResult Success(string name, IReadOnlyCollection<string>? permissions = null, string? subjectId = null, string? tenantId = null)
     {
         var claims = new List<Claim> { new(ClaimTypes.Name, name) };
+        if (!string.IsNullOrWhiteSpace(subjectId)) claims.Add(new Claim(ClaimTypes.NameIdentifier, subjectId));
+        if (!string.IsNullOrWhiteSpace(tenantId)) claims.Add(new Claim(StudioBackendProfiles.TenantClaim, tenantId));
 
         // Project the user's host-control permissions from the backend session onto the ticket so the named permission
         // policies can evaluate them (#249, ADR 0037). The backend session is the single source of truth for the
@@ -329,7 +332,7 @@ internal sealed class StudioBridgeAuthHandler(
 
     // Mirrors the backend AuthSession contract's fields the gate needs: `status` (authenticated/anonymous), `subject`,
     // and the flat `permissions` array the backend already emits (camelCase over the wire).
-    private sealed record BackendSession(string? Status, string? Subject, IReadOnlyList<string>? Permissions)
+    private sealed record BackendSession(string? Status, string? Subject, IReadOnlyList<string>? Permissions, string? TenantId = null)
     {
         public bool IsAuthenticated => string.Equals(Status, "authenticated", StringComparison.OrdinalIgnoreCase);
     }
@@ -340,7 +343,7 @@ internal sealed class StudioBridgeAuthHandler(
 /// permission set the gate projects onto the ticket. Anonymous/invalid outcomes are cached too (with
 /// <see cref="StudioBridgeSessionCache"/>'s shorter negative TTL) so a rejected token cannot stampede the backend.
 /// </summary>
-internal sealed record StudioBridgeCachedSession(bool IsAuthenticated, string? Subject, IReadOnlyList<string> Permissions);
+internal sealed record StudioBridgeCachedSession(bool IsAuthenticated, string? Subject, IReadOnlyList<string> Permissions, string? TenantId = null);
 
 /// <summary>
 /// Bounded, short-TTL in-memory cache for the gate's bearer introspections. Every browser-facing bridge request
