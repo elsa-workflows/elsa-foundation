@@ -18,8 +18,7 @@
     <Project Path="Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj" />
   </Folder>
-  <Folder Name="/Extensions/Agent/src/Specialists/Persistence/" />
-  <Folder Name="/Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/">
+  <Folder Name="/Extensions/Agent/src/Specialists/Persistence/">
     <Project Path="Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/tests/">
