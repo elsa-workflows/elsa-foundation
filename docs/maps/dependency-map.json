@@ -165,6 +165,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Api",
+          "path": "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Bpmn",
           "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
         },
@@ -811,6 +816,119 @@
       ]
     },
     {
+      "path": "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj",
+      "name": "Elsa.Activities.Bpmn.Api",
+      "kind": "source",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Bpmn.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Activities.Bpmn.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Core",
+          "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
+      "name": "Elsa.Activities.Bpmn.Core",
+      "kind": "source",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Bpmn.Core",
+      "role": "contract",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Activities.Bpmn.Core",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
       "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
       "name": "Elsa.Activities.Bpmn",
       "kind": "source",
@@ -824,13 +942,28 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Core",
+          "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Runtime.Core",
           "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Design.Core",
           "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Core",
+          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
         },
         {
           "type": "internal",
@@ -9309,6 +9442,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
         },
@@ -10130,6 +10268,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events",
           "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
@@ -10231,6 +10374,70 @@
       ]
     },
     {
+      "path": "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "name": "Elsa.Activities.Bpmn.Hosting.Tests",
+      "kind": "test",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Bpmn.Hosting.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench",
+          "path": "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Core",
+          "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "DeliveryRecoveryRead",
+          "path": "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "NativeWorkDispatch",
+          "path": "tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Bpmn.Model",
+          "version": "0.5.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Data.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
       "name": "Elsa.Activities.Bpmn.Interchange.Tests",
       "kind": "test",
@@ -10293,8 +10500,18 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Api",
+          "path": "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Bpmn",
           "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Compensation",
+          "path": "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj"
         },
         {
           "type": "internal",
@@ -10318,6 +10535,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
         },
@@ -10338,6 +10565,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Scheduling",
           "path": "Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
         },
@@ -10350,6 +10587,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.Testing",
           "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
         },
         {
           "type": "external",
@@ -12968,6 +13210,16 @@
           "type": "internal",
           "id": "Elsa.Workbench",
           "path": "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Api",
+          "path": "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Core",
+          "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj"
         },
         {
           "type": "internal",
