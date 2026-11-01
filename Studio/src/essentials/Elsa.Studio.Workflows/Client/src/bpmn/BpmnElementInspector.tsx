@@ -79,7 +79,7 @@ export function BpmnElementConfiguration({
             {humanMode === "unsupported" ? <option value="unsupported">Unsupported binding</option> : null}
           </select>
         </label>
-        {humanMode === "human" && (directHumanClaimsAvailable || directHumanClaimRequired(element)) ? <label className="wf-form-field">
+        {humanMode === "human" && (directHumanClaimsAvailable || directHumanClaimRequired(element)) ? <label className="wf-bpmn-claim-choice">
           <input type="checkbox" checked={directHumanClaimRequired(element)}
             disabled={readOnly || !directHumanAvailable || !directHumanClaimsAvailable}
             onChange={event => {
