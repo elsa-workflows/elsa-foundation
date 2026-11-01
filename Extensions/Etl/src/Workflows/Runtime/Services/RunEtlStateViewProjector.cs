@@ -5,13 +5,21 @@ using Elsa.Etl.Workflows.Runtime.Activities;
 using Elsa.Etl.Workflows.Runtime.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Workflows.Runtime.Services;
 
 /// <summary>Projects only a native invocation's ETL run reference after Runtime authorizes its activity context.</summary>
-internal sealed class RunEtlStateViewProjector(IEtlRuntimeStore? runs = null) : IActivityStateViewProjector
+internal sealed class RunEtlStateViewProjector : IActivityStateViewProjector
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private readonly IServiceScopeFactory? scopes;
+    private readonly IEtlRuntimeStore? store;
+
+    /// <summary>Projectors are singletons; the scoped ETL store is resolved per fallback read, never captured.</summary>
+    public RunEtlStateViewProjector(IServiceScopeFactory scopes) => this.scopes = scopes;
+
+    internal RunEtlStateViewProjector(IEtlRuntimeStore? store = null) => this.store = store;
 
     public string StateTypeAlias => typeof(RunEtlState).FullName!;
     public string? ActivityTypeWithoutState => RunEtl.ActivityType;
@@ -40,9 +48,18 @@ internal sealed class RunEtlStateViewProjector(IEtlRuntimeStore? runs = null) : 
     {
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
+        if (store is not null) return await ProjectRetainedAsync(store, context, cancellationToken);
+        if (scopes is null) return null;
+        await using var scope = scopes.CreateAsyncScope();
+        // Optional ETL storage refuses the fallback while live-state projection keeps working.
+        return scope.ServiceProvider.GetService<IEtlRuntimeStore>() is { } runs ? await ProjectRetainedAsync(runs, context, cancellationToken) : null;
+    }
+
+    private static async ValueTask<JsonElement?> ProjectRetainedAsync(IEtlRuntimeStore runs, ActivityStateViewContext context, CancellationToken cancellationToken)
+    {
         var activity = context.ActivityExecution;
         var workflow = context.WorkflowExecution;
-        if (runs is null || activity.PrivateState is not null || workflow.Partition is null ||
+        if (activity.PrivateState is not null || workflow.Partition is null ||
             activity.Execution.ActivityType != RunEtl.ActivityType || context.ExecutableNode.ActivityType != RunEtl.ActivityType ||
             activity.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId ||
             context.ExecutableNode.ExecutableNodeId != activity.Execution.ExecutableNodeId ||

@@ -105,7 +105,7 @@ public sealed partial class BpmnDirectExecutionTests
     public void Authored_provenance_captures_opaque_layout_before_its_owner_can_dispose_or_mutate_it()
     {
         var presentation = new List<WorkflowExecutableActivityPresentationRecord> { new("root", "Review order") };
-        BpmnModelPublicationSource source;
+        BpmnModelPublicationProvenance source;
         using (var document = JsonDocument.Parse("{\"diagram\":{\"shapes\":{\"human\":{\"x\":10}}}}"))
         {
             var layout = new List<WorkflowExecutableLayoutRecord> { new("root", 10, 20, AdditionalProperties: document.RootElement) };
@@ -118,7 +118,7 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal("Review order", Assert.Single(source.ActivityPresentation).DisplayName);
     }
 
-    private static BpmnModelPublicationSource PublicationSource(string id = "version-1", string version = "1.0.0",
+    private static BpmnModelPublicationProvenance PublicationSource(string id = "version-1", string version = "1.0.0",
         double x = 10, string name = "Review order") => new(id, version,
         [new("root", x, 20, AdditionalProperties: JsonSerializer.SerializeToElement(new { diagram = new { shapes = new { human = new { x } } } }))],
         [new("root", name)]);

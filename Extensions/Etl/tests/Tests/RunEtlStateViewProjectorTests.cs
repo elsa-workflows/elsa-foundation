@@ -196,6 +196,24 @@ public sealed class RunEtlStateViewProjectorTests
         return new(workflow, activity, node, [], false);
     }
 
+    [Fact]
+    public async Task The_composed_singleton_resolves_a_scoped_store_per_read_under_scope_validation()
+    {
+        await using var fixture = await EtlNativeTestFixture.CreateAsync();
+        var context = await ClearedContext(fixture, payloadRetired: true);
+        var services = new ServiceCollection();
+        new EtlWorkflowsRuntimeFeature().ConfigureServices(services);
+        var resolutions = 0;
+        services.AddScoped<IEtlRuntimeStore>(_ => { resolutions++; return fixture.Store; });
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        // The registry holds projectors for the shell's lifetime, so the projector must not capture a scoped store.
+        var projector = Assert.Single(provider.GetServices<IActivityStateViewProjector>().OfType<RunEtlStateViewProjector>());
+
+        Assert.Equal(fixture.Invocation.RunId, (await projector.ProjectWithoutStateAsync(context))!.Value.GetProperty("runId").GetString());
+        Assert.NotNull(await projector.ProjectWithoutStateAsync(context));
+        Assert.Equal(2, resolutions);
+    }
+
     private static ServiceProvider Provider()
     {
         var services = new ServiceCollection();

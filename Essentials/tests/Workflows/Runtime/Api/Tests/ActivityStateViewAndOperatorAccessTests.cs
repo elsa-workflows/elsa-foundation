@@ -135,6 +135,17 @@ public sealed class ActivityStateViewAndOperatorAccessTests
         Assert.Equal("StateCleared", document.RootElement.GetProperty("unavailableReason").GetString());
     }
 
+    [Fact]
+    public async Task A_cleared_activity_without_its_pinned_executable_keeps_the_state_cleared_answer()
+    {
+        await using var host = await StateViewHost.StartAsync(Reader, privateState: false, clearedProjector: true, seedExecutable: false);
+        using var response = await host.Client.GetAsync(StatePath);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(document.RootElement.GetProperty("available").GetBoolean());
+        Assert.Equal("StateCleared", document.RootElement.GetProperty("unavailableReason").GetString());
+    }
+
     [Theory]
     [InlineData("tenant")]
     [InlineData("structure")]
@@ -302,7 +313,8 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             bool duplicateProjector = false,
             bool denyManageResource = false,
             bool clearedProjector = false,
-            bool clearedUnavailable = false)
+            bool clearedUnavailable = false,
+            bool seedExecutable = true)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -333,7 +345,7 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             app.UseAuthorization();
             WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
             await app.StartAsync();
-            await SeedAsync(app.Services, privateState, stateAlias);
+            await SeedAsync(app.Services, privateState, stateAlias, seedExecutable);
             var client = app.GetTestClient();
             client.DefaultRequestHeaders.Add("X-Permission", string.Join(",", permissions));
             client.DefaultRequestHeaders.Add("X-Tenant", tenant);
@@ -356,7 +368,7 @@ public sealed class ActivityStateViewAndOperatorAccessTests
 
         private static readonly WorkflowExecutableIdentity Identity = new("artifact-a", "definition-a", "version-a", "1.0.0", "sha256:a");
 
-        private static async Task SeedAsync(IServiceProvider services, bool privateState, string stateAlias)
+        private static async Task SeedAsync(IServiceProvider services, bool privateState, string stateAlias, bool seedExecutable)
         {
             using var scope = services.CreateScope();
             var provider = scope.ServiceProvider;
@@ -364,9 +376,10 @@ public sealed class ActivityStateViewAndOperatorAccessTests
             await provider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(Run());
             var node = new ExecutableNode("node-scope", "authored-scope", "Test.Scope", "1.0.0", "test", JsonSerializer.SerializeToElement(new { }),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
-            await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new WorkflowExecutable(
-                Identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UnixEpoch,
-                new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
+            if (seedExecutable)
+                await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new WorkflowExecutable(
+                    Identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UnixEpoch,
+                    new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
             var activity = new ActivityExecutionState(
                 new ActivityExecution("ae-scope", "run-a", "node-scope", "authored-scope", "Test.Scope", "1.0.0"),
                 ActivityExecutionStatus.Running, null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, null,

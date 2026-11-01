@@ -6,9 +6,9 @@ namespace Elsa.Activities.Bpmn.Core;
 /// Immutable authored provenance captured by a trusted publisher, separate from executable model content.
 /// Runtime publication and recovery do not read the Design store.
 /// </summary>
-public sealed class BpmnModelPublicationSource
+public sealed class BpmnModelPublicationProvenance
 {
-    public BpmnModelPublicationSource(string versionId, string version,
+    public BpmnModelPublicationProvenance(string versionId, string version,
         IReadOnlyList<WorkflowExecutableLayoutRecord>? layout = null,
         IReadOnlyList<WorkflowExecutableActivityPresentationRecord>? activityPresentation = null)
     {

@@ -159,7 +159,7 @@ internal sealed class GetAdmissionEndpoint(IBpmnModelRuntime runtime, BpmnApiCal
     { _ = caller.Current(); return Task.FromResult(new BpmnAdmissionView(runtime.AdmitNewExecutions)); }
 }
 internal sealed record BpmnInspectionView(BpmnExecutionView Execution, WorkflowExecutionAuthoritySnapshot Authority,
-    string Profile, JsonElement Process, BpmnInspectionSource? Source, IReadOnlyList<BpmnInspectionWork> Work,
+    string Profile, JsonElement Process, BpmnInspectionProvenance? Source, IReadOnlyList<BpmnInspectionWork> Work,
     IReadOnlyList<BpmnInspectionAttempt> Attempts, IReadOnlyList<BpmnServiceIncident> Incidents, IReadOnlyList<BpmnInspectionSettlement> Settlements)
 {
     public static BpmnInspectionView From(BpmnModelInspection inspection)

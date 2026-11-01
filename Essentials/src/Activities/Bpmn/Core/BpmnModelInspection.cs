@@ -8,7 +8,7 @@ namespace Elsa.Activities.Bpmn.Core;
 /// <remarks>Transports authorize the exact State snapshot and explicitly project its header; never serialize its private Payload.</remarks>
 public sealed class BpmnModelInspection
 {
-    public BpmnModelInspection(RuntimeModelExecutionState state, string profile, JsonElement process, BpmnInspectionSource? source,
+    public BpmnModelInspection(RuntimeModelExecutionState state, string profile, JsonElement process, BpmnInspectionProvenance? source,
         IReadOnlyList<BpmnInspectionWork> work, IReadOnlyList<BpmnInspectionAttempt> attempts,
         IReadOnlyList<BpmnServiceIncident> incidents, IReadOnlyList<BpmnInspectionSettlement> settlements)
     {
@@ -23,7 +23,7 @@ public sealed class BpmnModelInspection
     public RuntimeModelExecutionState State { get; }
     public string Profile { get; }
     public JsonElement Process { get; }
-    public BpmnInspectionSource? Source { get; }
+    public BpmnInspectionProvenance? Source { get; }
     public IReadOnlyList<BpmnInspectionWork> Work { get; }
     public IReadOnlyList<BpmnInspectionAttempt> Attempts { get; }
     public IReadOnlyList<BpmnServiceIncident> Incidents { get; }
@@ -31,9 +31,9 @@ public sealed class BpmnModelInspection
 }
 
 /// <summary>Frozen provenance/presentation only; authored inputs and connector values are excluded.</summary>
-public sealed class BpmnInspectionSource
+public sealed class BpmnInspectionProvenance
 {
-    public BpmnInspectionSource(WorkflowExecutableSourceReference reference)
+    public BpmnInspectionProvenance(WorkflowExecutableSourceReference reference)
     {
         ArgumentNullException.ThrowIfNull(reference);
         SourceReferenceId = reference.SourceReferenceId; SourceKind = reference.SourceKind;

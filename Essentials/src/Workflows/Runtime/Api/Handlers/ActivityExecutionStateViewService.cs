@@ -43,7 +43,8 @@ public sealed class ActivityExecutionStateViewService(
 
         var executable = await workflowExecutableStore.FindAsync(workflowExecution.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !executable.NodesById.TryGetValue(activity.Execution.ExecutableNodeId, out var node))
-            return null;
+            // A visible cleared activity keeps its StateCleared answer when retained references cannot be read.
+            return privateState is null ? Unavailable(activity, ActivityStateView.StateCleared, canInspectValues) : null;
 
         var incidents = await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken);
         var context = new ActivityStateViewContext(workflowExecution, activity, node, incidents, canInspectValues);

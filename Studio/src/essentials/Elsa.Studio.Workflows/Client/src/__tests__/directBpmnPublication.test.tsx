@@ -89,6 +89,12 @@ describe("Studio direct BPMN publication", () => {
       vi.mocked(getDraft).mockResolvedValue({ ...view.draft, layout: [{ nodeId: "new", x: 5, y: 8 }] });
       view.click(); await vi.waitFor(() => expect(view.setError).toHaveBeenCalledWith(expect.stringContaining("saved draft changed")));
       expect(promoteDraft).toHaveBeenCalledTimes(1); expect(view.postJson).not.toHaveBeenCalled();
+      // The author can leave the stuck operation explicitly: nothing is sent and autosave resumes.
+      const discard = [...view.container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Discard retained publication")!;
+      expect(discard).toBeTruthy(); flushSync(() => discard.click());
+      expect(sessionStorage.length).toBe(0); expect(view.setPaused).toHaveBeenLastCalledWith(false);
+      expect(promoteDraft).toHaveBeenCalledTimes(1); expect(view.postJson).not.toHaveBeenCalled();
+      expect(view.container.textContent).toContain("Publish BPMN"); expect(view.container.textContent).not.toContain("Discard retained publication");
     } finally { view.dispose(); }
   });
 

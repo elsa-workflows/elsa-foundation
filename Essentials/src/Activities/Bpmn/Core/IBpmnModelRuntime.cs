@@ -13,7 +13,7 @@ public interface IBpmnModelRuntime
     bool AdmitNewExecutions => false;
     ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
     /// <summary>Publishes with trusted immutable authored provenance; raw publication keeps its existing identity and payload.</summary>
-    ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source,
+    ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationProvenance source,
         string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<BpmnPublishedModel>(new NotSupportedException("This BPMN host does not support authored-source publication."));
     ValueTask<BpmnModelCommandOutcome> StartAsync(string sourceReferenceId, string requestId,

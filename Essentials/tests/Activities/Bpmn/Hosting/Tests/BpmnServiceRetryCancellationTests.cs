@@ -81,7 +81,12 @@ public sealed class BpmnServiceRetryCancellationTests
         Assert.Equal(2, attempts.Count);
         var replacement = Assert.Single(attempts, attempt => attempt!["attemptId"]!.GetValue<string>() != retry.failedAttemptId)!;
         var replacementStatus = replacement["status"]!.GetValue<string>();
-        Assert.Contains(replacementStatus, status == "Cancelled" ? new[] { "NotAdmitted", "Cancelled" } : new[] { "Faulted" });
+        // A cancellation that wins semantically still records an already running worker's actual terminal for settlement.
+        Assert.Contains(replacementStatus, status == "Cancelled" ? new[] { "NotAdmitted", "Cancelled", "Faulted" } : new[] { "Faulted" });
+        if (status == "Cancelled" && replacementStatus != "NotAdmitted")
+            Assert.Contains((await host.GetAsync(path + "/inspection"))["settlements"]!.AsArray(), settlement =>
+                settlement!["kind"]!.GetValue<string>() == "NativeCancellation" && settlement["settled"]!.GetValue<bool>() &&
+                settlement["attemptId"]!.GetValue<string>() == replacement["attemptId"]!.GetValue<string>());
         var admitted = attempts.Count(attempt => attempt!["status"]!.GetValue<string>() != "NotAdmitted");
         Assert.Equal(admitted, (await host.GetAsync("/runtime/workflows/instances")).AsArray().Count);
         var replayed = await host.PostAsync(path + "/retry-service", retry);

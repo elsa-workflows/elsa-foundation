@@ -74,10 +74,15 @@ async function openRun(page,runUrl,executionId){
  const url=new URL(runUrl);url.pathname=url.pathname.replace(/[^/]+$/,encodeURIComponent(executionId));
  await page.goto(url.toString());await expect(page.locator('.wf-bpmn-run-heading')).toBeVisible({timeout:30000});
 }
-async function claimInUi(page){
+async function claimInUi(page,keyboard=false){
  await expect(page.getByText('Unclaimed. Claim this work before completing it.',{exact:true})).toBeVisible({timeout:30000});
  await expect(page.getByRole('button',{name:'Complete work',exact:true})).toHaveCount(0);
- await page.getByRole('button',{name:'Claim work',exact:true}).click();
+ const claim=page.getByRole('button',{name:'Claim work',exact:true});
+ if(keyboard){
+  let tabs=0;for(;tabs<100;tabs++){await page.keyboard.press('Tab');if(await claim.evaluate(element=>element===document.activeElement))break;}
+  if(tabs===100)throw new Error('Claim work could not be reached by keyboard.');
+  probes.claimKeyboardTabs=tabs+1;await page.keyboard.press('Enter');
+ } else await claim.click();
  await expect(page.getByText('Last claim: accepted.',{exact:true})).toBeVisible({timeout:30000});
  await expect(page.getByText('Claimed by you.',{exact:true})).toBeVisible({timeout:30000});
 }
@@ -115,7 +120,16 @@ try{
  await page.getByRole('button',{name:'Open run',exact:true}).click();
  await expect(page.locator('.wf-bpmn-run-heading')).toContainText('Waiting for a person',{timeout:30000});
  const runUrl=page.url(),executionId=decodeURIComponent(new URL(runUrl).pathname.split('/').pop());
- await shot(page,'ui-claim-unclaimed');await claimInUi(page);await shot(page,'ui-claimed');
+ await shot(page,'ui-claim-unclaimed');await claimInUi(page,true);await shot(page,'ui-claimed');mark('Claimed with Tab and Enter');
+ for(const mode of ['light','dark']){
+  await page.setViewportSize({width:1280,height:900});await page.getByRole('radio',{name:mode==='light'?'Light':'Dark',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-mode',mode);
+  for(const width of [1280,320]){await page.setViewportSize({width,height:900});await expect(page.getByText('Claimed by you.',{exact:true})).toBeVisible();await shot(page,`ui-claimed-${mode}-${width}`);
+   const size=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
+   if(size.scroll>size.width+1)throw new Error(`Horizontal overflow at ${mode}/${width}: ${JSON.stringify(size)}`);
+  }
+ }
+ await page.setViewportSize({width:1280,height:900});await page.getByRole('radio',{name:'Light',exact:true}).click();
  const owner=(await claimOf(executionId)).claim;mark('Claimed through Studio');await command('checkpoint','claimed');
 
  // A real restart that seeds a second administrator; that subject sees the owner and cannot complete.

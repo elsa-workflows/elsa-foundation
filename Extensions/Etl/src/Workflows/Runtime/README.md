@@ -23,3 +23,7 @@ part of this view, including for callers who may inspect sensitive values.
 The reference does not assert that ETL admission has already completed. Opening it uses the ETL
 API's own authorization and availability checks. The projection reads existing state and adds no
 persisted field, dispatch mechanism or Runtime API dependency.
+
+## Cross-domain contributions
+
+`EtlWorkflowsRuntime` contributes `RunEtlStateViewProjector` to the Runtime [`IActivityStateViewProjector`](../../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) port. It projects live `RunEtlState` and, through the port's optional cleared-state members, a completed `RunEtl` whose private state was cleaned up. The cleared-state read verifies the retained scoped invocation, worker and pipeline pins, terminal outcome and consumed typed receipt before exposing only run and result-address identities. Projectors are singletons, so it resolves the scoped ETL store per read; without ETL storage the fallback refuses and live projection still works.

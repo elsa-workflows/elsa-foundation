@@ -135,11 +135,21 @@ export function DirectBpmnPublishAction({ session, definitionId, draft, busy, re
       if (!signal.aborted) { setBusy(false); setPaused(!!pending); }
     }
   };
+  // An explicit way out when a retained operation can no longer resume, for example after the saved draft
+  // changed elsewhere. It sends nothing; a version an earlier promotion created stays unpublished.
+  const discard = () => {
+    if (busy || inFlight.current || !receipt) return;
+    try { sessionStorage.removeItem(storageKey); }
+    catch (error) { setError(error instanceof Error ? error.message : String(error)); return; }
+    setReceipt(null); setError(""); setStatus("The retained BPMN publication was discarded.");
+  };
   return <span>
     <button type="button" disabled={busy || readOnly || !!storageError || session.disposed} onClick={() => void publish()}
       title={receipt ? "Continue the retained BPMN publication using the same operation identities" : "Save a version and publish this process to the BPMN runtime"}>
       {receipt ? "Resume BPMN publication" : "Publish BPMN"}
     </button>
+    {receipt && !busy ? <button type="button" onClick={discard}
+      title="Stop resuming this publication. No request is sent; a version it may already have created stays unpublished.">Discard retained publication</button> : null}
     {published && onOpenProcesses ? <button type="button" onClick={onOpenProcesses}>BPMN processes</button> : null}
     {storageError ? <span role="alert">{storageError}</span> : null}
   </span>;

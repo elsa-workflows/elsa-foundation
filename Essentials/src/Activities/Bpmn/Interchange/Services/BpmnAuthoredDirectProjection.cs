@@ -21,7 +21,7 @@ internal static class BpmnAuthoredDirectProjection
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    public static (BpmnModelDefinition Definition, BpmnModelPublicationSource Source, IReadOnlyList<ServiceSelection> Services) Project(
+    public static (BpmnModelDefinition Definition, BpmnModelPublicationProvenance Source, IReadOnlyList<ServiceSelection> Services) Project(
         WorkflowDefinitionVersion version, WorkflowDefinitionVersionLayout? layout)
     {
         try

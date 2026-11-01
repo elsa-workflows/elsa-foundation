@@ -158,13 +158,13 @@ Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding
 Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BpmnNativeEventBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable) -> void
 Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BindingId.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
-Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource
-Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.PublishFromSourceAsync(Elsa.Activities.Bpmn.Core.BpmnModelDefinition! definition, Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource! source, string! requestId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnPublishedModel!>
-Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.VersionId.get -> string!
-Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.Version.get -> string!
-Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.Layout.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
-Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
-Elsa.Activities.Bpmn.Core.BpmnModelPublicationSource.BpmnModelPublicationSource(string! versionId, string! version, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>? layout = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>? activityPresentation = null) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.PublishFromSourceAsync(Elsa.Activities.Bpmn.Core.BpmnModelDefinition! definition, Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance! source, string! requestId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnPublishedModel!>
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.VersionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.Version.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.Layout.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
+Elsa.Activities.Bpmn.Core.BpmnModelPublicationProvenance.BpmnModelPublicationProvenance(string! versionId, string! version, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>? layout = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>? activityPresentation = null) -> void
 Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt
 Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt.AttemptId.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt.AttemptNumber.get -> int?
@@ -184,17 +184,17 @@ Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement.InvocationId.get -> string?
 Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement.Kind.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement.NotAdmitted.get -> bool
 Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement.Settled.get -> bool
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.BpmnInspectionSource(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! reference) -> void
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.CreatedAt.get -> System.DateTimeOffset
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.Layout.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.PublishedAt.get -> System.DateTimeOffset?
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.RetiredAt.get -> System.DateTimeOffset?
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.SourceId.get -> string!
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.SourceKind.get -> string!
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.SourceReferenceId.get -> string!
-Elsa.Activities.Bpmn.Core.BpmnInspectionSource.SourceVersion.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.ActivityPresentation.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableActivityPresentationRecord!>!
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.BpmnInspectionProvenance(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! reference) -> void
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.CreatedAt.get -> System.DateTimeOffset
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.Layout.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.PublishedAt.get -> System.DateTimeOffset?
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.RetiredAt.get -> System.DateTimeOffset?
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.SourceId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.SourceKind.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.SourceReferenceId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance.SourceVersion.get -> string?
 Elsa.Activities.Bpmn.Core.BpmnInspectionWork
 Elsa.Activities.Bpmn.Core.BpmnInspectionWork.AttemptId.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnInspectionWork.BindingId.get -> string!
@@ -208,12 +208,12 @@ Elsa.Activities.Bpmn.Core.BpmnInspectionWork.TokenId.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnInspectionWork.WorkerExecutionId.get -> string?
 Elsa.Activities.Bpmn.Core.BpmnModelInspection
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Attempts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt!>!
-Elsa.Activities.Bpmn.Core.BpmnModelInspection.BpmnModelInspection(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState! state, string! profile, System.Text.Json.JsonElement process, Elsa.Activities.Bpmn.Core.BpmnInspectionSource? source, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionWork!>! work, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt!>! attempts, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnServiceIncident!>! incidents, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement!>! settlements) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelInspection.BpmnModelInspection(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState! state, string! profile, System.Text.Json.JsonElement process, Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance? source, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionWork!>! work, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionAttempt!>! attempts, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnServiceIncident!>! incidents, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement!>! settlements) -> void
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Incidents.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnServiceIncident!>!
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Process.get -> System.Text.Json.JsonElement
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Profile.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Settlements.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionSettlement!>!
-Elsa.Activities.Bpmn.Core.BpmnModelInspection.Source.get -> Elsa.Activities.Bpmn.Core.BpmnInspectionSource?
+Elsa.Activities.Bpmn.Core.BpmnModelInspection.Source.get -> Elsa.Activities.Bpmn.Core.BpmnInspectionProvenance?
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.State.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState!
 Elsa.Activities.Bpmn.Core.BpmnModelInspection.Work.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnInspectionWork!>!
 Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.InspectAsync(string! executionId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelInspection!>

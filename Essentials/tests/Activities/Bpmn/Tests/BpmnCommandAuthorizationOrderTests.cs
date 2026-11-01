@@ -65,7 +65,7 @@ public sealed class BpmnCommandAuthorizationOrderTests
         Assert.True(json.TryGetProperty("process", out _));
     }
 
-    private static BpmnModelInspection Inspection(RuntimeModelExecutionState state, BpmnInspectionSource? source = null) =>
+    private static BpmnModelInspection Inspection(RuntimeModelExecutionState state, BpmnInspectionProvenance? source = null) =>
         new(state, BpmnModelProtocol.Profile, JsonSerializer.SerializeToElement(new { processId = "process" }), source, [], [], [], []);
 
     [Theory]

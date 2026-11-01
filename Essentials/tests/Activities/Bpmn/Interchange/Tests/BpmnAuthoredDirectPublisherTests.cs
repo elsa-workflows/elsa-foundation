@@ -308,7 +308,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public bool Visible { get; set; } = true;
         public int Publications { get; private set; }
         public BpmnModelDefinition? Model { get; private set; }
-        public BpmnModelPublicationSource? Source { get; private set; }
+        public BpmnModelPublicationProvenance? Source { get; private set; }
         public BpmnModelCaller? Caller { get; private set; }
         public string? RequestId { get; private set; }
         public WorkflowExecutableSourceReference? WorkerSource { get; set; } = new("worker-source", "worker-artifact", "workflow-definition", "worker-definition",
@@ -360,7 +360,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken)
+        public ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationProvenance source, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken)
         { Calls.Add("publish"); Publications++; Model = definition; Source = source; Caller = caller; RequestId = requestId; return ValueTask.FromResult(new BpmnPublishedModel(new("artifact", "definition", "version", "1.0.0", "hash"), "incarnation", "source", "profile")); }
         Task<WorkflowDefinitionVersion> IWorkflowDefinitionVersionStore.GetAsync(string id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string id, CancellationToken cancellationToken) => throw new NotSupportedException();

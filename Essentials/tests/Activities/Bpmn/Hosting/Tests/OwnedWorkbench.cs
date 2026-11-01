@@ -140,6 +140,25 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}");
     }
 
+    /// <summary>An independently signed-in session against the same owned host, for concurrent subjects.</summary>
+    internal async Task<HttpClient> SignInSessionAsync(string username)
+    {
+        var session = new HttpClient(new HttpClientHandler { CookieContainer = new CookieContainer() }) { BaseAddress = client.BaseAddress };
+        using var response = await session.PostAsJsonAsync("/_elsa/identity/login", new { username, password = "Password123!" });
+        if (!response.IsSuccessStatusCode) { session.Dispose(); throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}"); }
+        return session;
+    }
+
+    /// <summary>Changes new-execution admission at the next launch; accepted work stays operable.</summary>
+    internal async Task SetAdmissionAsync(bool admitNewExecutions)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before changing its admission");
+        var path = Path.Combine(ContentRoot, "shells.json");
+        var shells = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        shells["CShells"]!["Shells"]!["default"]!["Features"]!["ActivitiesBpmnHosting"]!["AdmitNewExecutions"] = admitNewExecutions;
+        await File.WriteAllTextAsync(path, shells.ToJsonString());
+    }
+
     /// <summary>Seeds another development administrator at the next launch; earlier accounts and their subjects are kept.</summary>
     internal async Task SeedAdministratorAsync(string username)
     {

@@ -36,7 +36,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         }
     }
 
-    public async ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source,
+    public async ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationProvenance source,
         string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -48,7 +48,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     }
 
     private async ValueTask<BpmnPublishedModel> PublishCoreAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
-        CancellationToken cancellationToken, BpmnModelPublicationSource? source = null)
+        CancellationToken cancellationToken, BpmnModelPublicationProvenance? source = null)
     {
         Scope(caller); InputId(requestId);
         if (!materials.SupportsModelMaterial || !sources.CanWriteRootReferences(materials))
@@ -169,7 +169,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         {
             var definition = BpmnDirectExecutionDriver.Definition(model);
             var document = BpmnDirectExecutionDriver.Read(state);
-            BpmnInspectionSource? source = null;
+            BpmnInspectionProvenance? source = null;
             if (document.SourceReferenceId is { } referenceId && await sources.FindAsync(referenceId, cancellationToken) is { } reference &&
                 reference.TenantId == caller.TenantId && reference.SourceKind == SourceKind && reference.ArtifactId == state.Executable.ArtifactId &&
                 reference.DefinitionId == state.Executable.DefinitionId && reference.DefinitionVersionId == state.Executable.DefinitionVersionId &&
