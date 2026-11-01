@@ -378,7 +378,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
               {
                 id: "elsa.api.activity-design",
                 contractVersion: "1",
-                links: [{ rel: "activity-catalog", href: "design/activities/catalog" }]
+                links: [{ rel: "activity-catalog", href: "design/activities/catalog" },
+                  ...(collectionSlotsFixture === "switch-upgrade" ? [{ rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" }] : [])]
               },
               {
                 id: "elsa.api.expressions",
@@ -408,6 +409,16 @@ export function createEditorContext(live?: { status: string; disconnected: boole
             },
             draft,
             versions: []
+          };
+        }
+        if (collectionSlotsFixture === "switch-upgrade" && url.startsWith("/design/activities/definitions/picker?")) {
+          return {
+            items: catalog.filter(item => item.activityVersionId !== "activity-switch-4.1").map(item => ({
+              definitionId: `recommended-${item.activityVersionId}`, activityTypeKey: item.activityTypeKey,
+              tenantId: null, category: item.category, displayName: item.displayName, description: null,
+              versionId: item.activityVersionId, version: "1.0.0", isAvailable: true, unavailableReason: null
+            })),
+            nextOffset: null
           };
         }
         if (url === "/design/activities/catalog") {

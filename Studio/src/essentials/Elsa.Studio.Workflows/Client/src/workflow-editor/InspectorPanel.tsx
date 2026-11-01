@@ -167,9 +167,10 @@ export function InspectorPanel({
   const selectedCatalogItem = catalogByVersion?.get(selectedNode?.activityVersionId ?? "")
     ?? catalog.find(item => item.activityVersionId === selectedNode?.activityVersionId);
   const collections = selectedNode ? getCollectionSlots(selectedNode, selectedCatalogItem) : [];
-  const switchUpgradeTarget = selectedNode?.structure?.kind === "elsa.switch.structure" && selectedNode.structure.schemaVersion === "1.0.0" ? catalog.find(item => {
+  // The palette can retain a legacy recommendation while the full catalog already offers an upgrade.
+  const switchUpgradeTarget = selectedNode?.structure?.kind === "elsa.switch.structure" && selectedNode.structure.schemaVersion === "1.0.0" ? [...catalog, ...(catalogByVersion?.values() ?? [])].find(item => {
     const facet = readStructureDesignFacet(item);
-    return item.activityTypeKey === selectedCatalogItem?.activityTypeKey && facet?.kind === "elsa.switch.structure" && facet.schemaVersion === "2.0.0";
+    return item.available !== false && item.activityTypeKey === selectedCatalogItem?.activityTypeKey && facet?.kind === "elsa.switch.structure" && facet.schemaVersion === "2.0.0";
   }) : undefined;
   const hasSlots = selectedSlots.length > 0 || collections.length > 0;
   const requestedTabId = activeTabId ?? localActiveTabId;
