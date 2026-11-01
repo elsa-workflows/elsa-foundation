@@ -19,11 +19,11 @@ describe("shell-owned Weaver intent", () => {
   it.each(["same dock", "close/reopen", "registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
     const registries: ElsaStudioModuleApi[] = [];
     let releaseRegistry: (() => void) | undefined;
-    vi.spyOn(loader, "loadStudioModules").mockImplementation(async (_modules, api) => {
+    vi.spyOn(loader, "registerStudioModuleInstances").mockImplementation(async (_modules, api) => {
       registries.push(api);
       api.agent.capabilities.add({ id: "sample.inspect", displayName: "Inspect", description: "Read the selected resource.", kind: "answer", risk: "read-only", surfaces: ["*"] });
       if (registries.length === 2) await new Promise<void>(resolve => { releaseRegistry = resolve; });
-      return [];
+      return;
     });
     const client: clients.AgentClient = {
       bootstrap: vi.fn<clients.AgentClient["bootstrap"]>(async () => ({ enabled: true, providerStatus: "available", modes: ["explain"], capabilities: [{ id: "sample.inspect", displayName: "Inspect", description: "Read.", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }], provider: { providerId: "protocol", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} }, policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] } })),
@@ -57,7 +57,7 @@ describe("shell-owned Weaver intent", () => {
         expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull();
         flushSync(() => container.querySelector<HTMLButtonElement>(".agent-launcher")!.click());
       } else if (transition === "registry reconciliation") {
-        flushSync(() => window.dispatchEvent(new Event("elsa-studio:modules-changed")));
+        flushSync(() => window.dispatchEvent(new CustomEvent("elsa:backend-capabilities-changed",{detail:{key:registries[0].backendSession!.key,refreshed:true}})));
         await vi.waitFor(() => expect(releaseRegistry).toBeTypeOf("function"));
         await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull());
         releaseRegistry!();

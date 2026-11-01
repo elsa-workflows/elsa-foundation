@@ -43,6 +43,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="../../essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
+    <ProjectReference Include="../../essentials/Elsa.Studio.Backends/Elsa.Studio.Backends.csproj" />
     <ProjectReference Include="../../essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <ProjectReference Include="../../essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\ConsoleStream\studio\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj"/>

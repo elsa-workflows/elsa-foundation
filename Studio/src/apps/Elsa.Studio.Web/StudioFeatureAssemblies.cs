@@ -16,6 +16,8 @@ using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
 using Elsa.Studio.Workflows.Dashboard;
 
+using Elsa.Studio.Backends;
+
 namespace Elsa.Studio.Web;
 
 internal static class StudioFeatureAssemblies
@@ -25,6 +27,7 @@ internal static class StudioFeatureAssemblies
     {
         return shells.WithAssemblies(
                 typeof(StudioApiFeature).Assembly,
+                typeof(BackendsStudioFeature).Assembly,
                 typeof(ConsoleStreamStudioFeature).Assembly,
                 typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
                 typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,

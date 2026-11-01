@@ -1,14 +1,13 @@
 import {
-  createAuthenticatedHttpClient, createBackendAuthProviderManager, createEndpointContext, createHttpClient, getBackendCapabilities, invalidateBackendCapabilities,
-  requestStudioNavigation, resolveBackendPath, StudioHttpError, studioBackendCapabilitiesChangedEvent,
-  type AuthProviderManager, type AuthSession, type StudioApiCapabilityDocument, type StudioBackendProfile,
-  type StudioBackendSession, type StudioEndpointContext, type StudioHttpClient, type StudioRequestInit
+  anonymousAuthSession, createBackendAuthProviderManager, requestStudioNavigation, StudioHttpError,
+  studioBackendCapabilitiesChangedEvent, StudioBackendConnection as PreparedBackend,
+  studioConnectionError as connectionError,
+  type AuthProviderManager, type AuthSession, type StudioBackendProfile, type StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
-import { anonymousAuthSession } from "../../auth/types";
-import { createStudioEndpointContext } from "../auth/studioAuth";
-import type { StudioRuntimeConfig } from "../runtime";
+export { StudioBackendConnection as PreparedBackend, studioConnectionError as connectionError } from "@elsa-workflows/studio-sdk";
+import type { BackendRuntimeConfig } from "./runtime";
 
-const profilePath = "/_elsa/studio/backends/profiles";
+
 const profileLimit = 32;
 const profileBytes = 32 * 1024;
 const selectionKey = "elsa.studio.backend.selection.v1";
@@ -57,100 +56,6 @@ function metadata(profile: StudioBackendProfile) {
   return {id,name,baseUrl,environment,...(authenticationProfile ? {authenticationProfile} : {})};
 }
 
-export class PreparedBackend implements StudioBackendSession {
-  readonly key: string;
-  readonly context: StudioEndpointContext;
-  private readonly abort = new AbortController();
-  private writes = 0;
-  private ended = false;
-  private capabilityRefresh = 0;
-  capabilities: StudioApiCapabilityDocument | null = null;
-  discoveryError?: string;
-
-  constructor(readonly profile: StudioBackendProfile, readonly manager: AuthProviderManager | null, readonly identity: AuthSession) {
-    profile = this.profile = Object.freeze({...profile});
-    identity = this.identity = Object.freeze({...identity,roles:[...identity.roles],permissions:[...identity.permissions]});
-    this.key = JSON.stringify([profile.id,profile.baseUrl,identity.subject ?? "anonymous",identity.tenantId ?? "default",backendConnectionNonce()]);
-    const boundAuth = manager ? {
-      getAccessToken:async () => {this.assertActive();const token = await manager.getAccessToken();this.assertActive();return token;},
-      refresh:async () => {this.assertActive();const session = await manager.refresh();this.assertActive();return session;}
-    } : null;
-    const raw = manager ? createStudioEndpointContext(profile.baseUrl,manager) : {
-      ...createEndpointContext(profile.baseUrl),
-      http:createHttpClient(profile.baseUrl,{fetch:(input,init) => fetch(input,{...init,credentials:"omit"})})
-    };
-    if (manager) raw.http = createAuthenticatedHttpClient(profile.baseUrl,boundAuth!,{requireAuthorization:true,notifySessionLoss:false});
-    const run = async <T>(url: string, init: StudioRequestInit | undefined, write: boolean, action: (url:string,init:StudioRequestInit) => Promise<T>, hostAction=false): Promise<T> => {
-      this.assertActive();
-      if (write) this.writes++;
-      try {
-        const signal = init?.signal ? AbortSignal.any([this.abort.signal,init.signal]) : this.abort.signal;
-        let path:string;
-        if (hostAction && /^https?:/i.test(url)) {
-          // Prepared workflow HTTP stimuli intentionally target host routes outside the API shell.
-          const target = new URL(url);
-          if (target.origin !== new URL(profile.baseUrl).origin || target.username || target.password) throw new Error("HTTP actions must stay on the selected backend host.");
-          path = target.href;
-        } else path = resolveBackendPath(profile.baseUrl,url);
-        const result = await action(path,{...init,signal,...(write ? {retryOnUnauthorized:false} : {})});
-        this.assertActive();
-        return result;
-      } finally { if (write) this.writes--; }
-    };
-    const mutates = (init?: StudioRequestInit) => !["GET","HEAD","OPTIONS"].includes((init?.method ?? "GET").toUpperCase());
-    const http: StudioHttpClient = {
-      requestJson: (url,init) => run(url,init,mutates(init),(path,options) => raw.http.requestJson(path,options)),
-      getJson: (url,init) => run(url,init,false,(path,options) => raw.http.getJson(path,options)),
-      postJson: (url,body,init) => run(url,init,true,(path,options) => raw.http.postJson(path,body,options)),
-      putJson: (url,body,init) => run(url,init,true,(path,options) => raw.http.putJson(path,body,options)),
-      deleteJson: (url,init) => run(url,init,true,(path,options) => raw.http.deleteJson(path,options)),
-      postForm: (url,body,init) => run(url,init,true,(path,options) => raw.http.postForm(path,body,options)),
-      ...(raw.http.getJsonWithHeaders ? {getJsonWithHeaders:<T,>(url:string,init?:StudioRequestInit) => run(url,init,false,(path,options) => raw.http.getJsonWithHeaders!<T>(path,options))} : {}),
-      ...(raw.http.requestResponse ? {requestResponse:(url:string,init?:StudioRequestInit) => run(url,init,mutates(init),(path,options) => raw.http.requestResponse!(path,options),true)} : {})
-    };
-    this.context = {...raw,http,accessTokenFactory:manager ? async () => { this.assertActive(); const token = await manager.getAccessToken(); this.assertActive(); return token ?? ""; } : undefined};
-  }
-  get pendingWrites() { return this.writes; }
-  private identityMatches() {
-    const current = this.manager?.getSession();
-    return !current || current.status === this.identity.status && current.subject === this.identity.subject && current.tenantId === this.identity.tenantId;
-  }
-  get disposed() { return this.ended || !this.identityMatches(); }
-  private assertActive() {
-    if (this.ended) throw new DOMException("The previous backend connection has ended.","AbortError");
-    if (this.manager) {
-      const current = this.manager.getSession();
-      if (current.status !== this.identity.status || current.subject !== this.identity.subject || current.tenantId !== this.identity.tenantId) {
-        this.ended = true;this.abort.abort();invalidateBackendCapabilities(this.context);
-        throw new DOMException("The backend identity has changed. Reconnect before continuing.","AbortError");
-      }
-    }
-  }
-  async refreshCapabilities() {
-    this.assertActive();
-    const generation = ++this.capabilityRefresh;
-    invalidateBackendCapabilities(this.context);
-    try {
-      const capabilities = await getBackendCapabilities(this.context);
-      this.assertActive();
-      if (generation === this.capabilityRefresh) {this.capabilities = capabilities;this.discoveryError = undefined;}
-      return capabilities;
-    } catch (error) {if (!this.ended && generation === this.capabilityRefresh) {this.capabilities = null;this.discoveryError = connectionError(error);}throw error; }
-  }
-  dispose() {
-    if (this.writes) throw new Error("Wait for backend changes to finish before switching.");
-    this.ended = true;
-    this.abort.abort();
-    invalidateBackendCapabilities(this.context);
-  }
-}
-
-export function connectionError(error: unknown): string {
-  if (error instanceof StudioHttpError && error.status === 401) return "Sign in to this backend to discover its capabilities.";
-  if (error instanceof StudioHttpError && error.status === 403) return "You do not have permission to discover this backend's capabilities.";
-  return error instanceof Error ? error.message : "The backend could not be reached.";
-}
-
 export interface BackendConnectionsSnapshot {
   profiles: StudioBackendProfile[];
   active: PreparedBackend | null;
@@ -169,13 +74,14 @@ export class BackendConnections {
   private personal: StudioBackendProfile[] = [];
   private revision?: string;
   private operation = 0;
+  private ended = false;
   private initializing?: Promise<void>;
   private signInCandidate: {profile:StudioBackendProfile;manager:AuthProviderManager} | null = null;
   private readonly localKey: string;
   readonly defaultId: string;
   readonly allowPersonal: boolean;
 
-  constructor(readonly config: StudioRuntimeConfig, readonly hostContext: StudioEndpointContext, readonly hostManager: AuthProviderManager | null,
+  constructor(readonly config: BackendRuntimeConfig, readonly hostContext: StudioEndpointContext, readonly hostManager: AuthProviderManager | null,
     readonly hostIdentity: AuthSession, private readonly commitNavigation: (url:string) => void = url => window.location.assign(url)) {
     const declared = config.backends?.profiles ?? [];
     this.configured = declared.length ? declared.map(item => ({...item,baseUrl:canonicalBackendUrl(item.baseUrl),source:"configuration" as const})) : [
@@ -186,6 +92,7 @@ export class BackendConnections {
     this.localKey = `elsa.studio.backend-profiles.v1:${JSON.stringify([window.location.origin,config.hostId ?? "default",hostIdentity.subject ?? "anonymous",hostIdentity.tenantId ?? "default"])}`;
     this.snapshot = {profiles:this.configured,active:null,loading:true,busy:false,error:null,profileError:null,signInProfile:null};
   }
+  dispose() {this.ended=true;this.operation++;this.signInCandidate=null;if(!this.snapshot.active?.pendingWrites)this.snapshot.active?.dispose();this.listeners.clear();}
   getSnapshot = () => this.snapshot;
   subscribe = (listener:() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private update(value: Partial<BackendConnectionsSnapshot>) { this.snapshot = {...this.snapshot,...value}; for (const listener of this.listeners) listener(); }
@@ -200,7 +107,7 @@ export class BackendConnections {
       }
     } else {
       try {
-        const document = await this.hostContext.http.getJson<{revision:string;value:{profiles:unknown}}>(profilePath);
+        const document = await this.hostContext.http.getJson<{revision:string;value:{profiles:unknown}}>(this.config.profileApiPath);
         this.personal = validatePersonalProfiles(document.value.profiles);
         this.revision = document.revision;
       } catch (error) { if (!(error instanceof StudioHttpError && error.status === 404)) throw error; }
@@ -212,6 +119,7 @@ export class BackendConnections {
   private async initializeCore() {
     try { await this.loadPersonal(); }
     catch (error) { this.update({profileError:`Personal profiles could not be loaded. ${connectionError(error)}`}); }
+    if(this.ended)return;
     this.update({profiles:[...this.configured,...this.personal]});
     const query = new URLSearchParams(window.location.search);
     // A resource URL without a backend reference means the configured default, never another tab's last choice.
@@ -220,6 +128,7 @@ export class BackendConnections {
     if (!profile) { this.update({loading:false,error:"The backend referenced by this link is unavailable. Choose a backend in Settings."}); return; }
     try {
       const active = await this.prepare(profile);
+      if(this.ended){active.dispose();return;}
       // Resource hrefs must carry even a tab-restored selection before modules render.
       const selectedUrl = new URL(window.location.href);
       selectedUrl.searchParams.set("backend",profile.id);
@@ -227,6 +136,7 @@ export class BackendConnections {
       this.update({active,loading:false});
     }
     catch (error) {
+      if(this.ended)return;
       const active = new PreparedBackend(profile,null,anonymousAuthSession);
       active.discoveryError = connectionError(error);
       this.update({active,loading:false,error:active.discoveryError});
@@ -331,7 +241,7 @@ export class BackendConnections {
       localStorage.setItem(this.localKey,JSON.stringify({...value,revision}));
       this.revision = revision;
     } else {
-      const document = await this.hostContext.http.putJson<{revision:string}>(profilePath,{schemaVersion:1,value},{headers:this.revision ? {"If-Match":`"${this.revision}"`} : {"If-None-Match":"*"}});
+      const document = await this.hostContext.http.putJson<{revision:string}>(this.config.profileApiPath,{schemaVersion:1,value},{headers:this.revision ? {"If-Match":`"${this.revision}"`} : {"If-None-Match":"*"}});
       this.revision = document.revision;
     }
     this.personal = personal;

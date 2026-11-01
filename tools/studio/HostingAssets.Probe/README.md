@@ -1,6 +1,6 @@
 # Production Hosting browser package qualification
 
-This tool packs the actual Core, Api, Hosting, Dashboard and Preferences.Core projects from an owned committed source snapshot, or consumes those five production candidates from `--packages`. It uses public Hosting/CShells composition in external Web SDK consumers; it creates no replacement library or host implementation.
+This tool packs the actual Core, Api, Hosting and Dashboard projects from an owned committed source snapshot, or consumes those four production candidates from `--packages`. It uses public Hosting/CShells composition in external Web SDK consumers; it creates no replacement library or host implementation.
 
 Build the Studio frontend and commit production inputs first, then run from the repository root:
 
@@ -11,6 +11,8 @@ python3 tools/studio/HostingAssets.Probe/qualify.py
 ```
 
 Expected exits:0,1,0. The negative must report `HTTP asset mismatch: /studio/vendor/react.js (status 404)`. Use `--packages /absolute/artifact-directory` for already packed candidates at one version; `--version` controls only local producer packing. Nothing publishes remotely.
+
+The isolated base-host graph must contain neither Backends nor Preferences.Core. A separately named consumer module checks the real default session/capability snapshot and adds a capability-gated shell contribution; Chromium verifies it at root and on a deep link. Optional backend-management qualification is separate.
 
 Each run retains an owned artifact directory and report: source/tool provenance, exact archive/cache/publish DLL and asset hashes, isolated package graph, locked restore, denied frontend-tool audit, every resource's HTTP/MIME/cache result and real Chromium application/Home-module route. It exercises standard bundle, separately named fallback, same-path collision rejection and direct-reference `ExcludeAssets="build;buildTransitive"` customization. Consumer restore/publish/runtime deny node/npm/pnpm/npx. Owned producer, feed, consumer sources and cache are hidden before published execution; the shared working checkout stays available to other active programs. Only owned server processes are stopped.
 

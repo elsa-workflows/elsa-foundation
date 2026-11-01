@@ -50,7 +50,10 @@ import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
-import { loadStudioModules } from "./loader";
+import { disposeStudioModuleInstance, initializeStudioModules, registerStudioModuleInstances, type StudioLoadedModule } from "./loader";
+import type {StudioConnectionController, StudioManagedBackendSession, StudioShellContribution} from "../sdk";
+import {watchStudioModuleChanges} from "./moduleReset";
+import {ConfiguredBackendConnection,reloadConnectionOnPageRestore} from "./connection";
 import { ThemeProvider, useNavMode, useWorkspaceStyle } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { UserMenu } from "./components/UserMenu";
@@ -96,15 +99,13 @@ import "./themes/workspaceStyles.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
-import { BackendConnections, PreparedBackend, reloadBackendOnPageRestore } from "./backends/connections";
-import { BackendConnectionNotice, BackendSwitcher, backendNavigation } from "./backends/BackendsPage";
-import { HostAuthContext } from "./backends/HostAuthContext";
+import { HostAuthContext } from "./auth/HostAuthContext";
 
 const DevDisclosurePage = import.meta.env.DEV
   ? lazy(() => import("./ui/disclosure/DisclosureFixturePage").then(module => ({ default: module.DisclosureFixturePage })))
   : null;
 const SettingsRoute = lazy(() => import("./settings/SettingsRoute").then(module => ({ default: module.SettingsRoute })));
-const BackendsPage = lazy(() => import("./backends/BackendsPage").then(module => ({default:module.BackendsPage})));
+
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = StudioNavigationSection;
@@ -168,7 +169,14 @@ const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
 const minWorkspaceHeight = 280;
 
-function AppContent({ authManager,backendSession,connections }: { authManager: AuthProviderManager | null;backendSession:PreparedBackend;connections:BackendConnections }) {
+type ConnectionApplicationProps = {authManager:AuthProviderManager|null;backendSession:StudioManagedBackendSession;connections:StudioConnectionController;modules:readonly StudioLoadedModule[];manifest:StudioModulesResponse};
+
+function ShellContributions({modules,api,placement,navigate}:{modules:readonly StudioLoadedModule[];api?:ElsaStudioModuleApi|null;placement:StudioShellContribution["placement"];navigate:(path:string)=>void}) {
+ const slots=api?.shell ? api.shell.compose().filter(item=>item.availability.state==="available").map(item=>item.contribution) : modules.flatMap(item=>item.instance.shell??[]).filter(item=>!item.requiresBackend?.length && (!item.availability || item.availability.state==="available"));
+ return <>{slots.filter(item=>item.placement===placement).sort((a,b)=>(a.order??500)-(b.order??500)).map(item=>{const Component=item.component;return <Component key={item.id} navigate={navigate}/>;})}</>;
+}
+
+function AppContent({ authManager,backendSession,connections,modules,manifest }: ConnectionApplicationProps) {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
@@ -262,7 +270,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
   // The boot manifest is fetched through TanStack Query, using the authenticated shell HTTP client so
   // the manifest request carries auth + management-key headers; the effect below turns manifest data
   // into a loaded registry (module loading + contribution registration are side effects, not cacheable data).
-  const manifestQuery = useStudioManifest(shellContext.http);
+  const manifestQuery = {data:manifest,isPending:false,isError:false,error:null as Error|null};
   useEffect(() => {
     const refresh = (event:Event) => {
       const detail = (event as CustomEvent<{key:string;refreshed?:boolean}>).detail;
@@ -291,18 +299,6 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
       window.removeEventListener(ModulesChangedEventName, loadThemeCapabilities);
     };
   }, [shellContext]);
-
-  // A modules-changed event re-fetches the manifest and bumps the revision so the loader effect re-runs
-  // even when the refetched manifest is structurally identical (a package may have been reconciled
-  // in place). Preserves the original "rebuild the registry on module changes" behavior.
-  useEffect(() => {
-    const onModulesChanged = () => {
-      void manifestQuery.refetch();
-      setModuleRegistryRevision(revision => revision + 1);
-    };
-    window.addEventListener(ModulesChangedEventName, onModulesChanged);
-    return () => window.removeEventListener(ModulesChangedEventName, onModulesChanged);
-  }, [manifestQuery]);
 
   useEffect(() => {
     if (manifestQuery.isPending) {
@@ -344,6 +340,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
           backendHttp: backendContext.http,
           backendContext,
           backendSession,
+          connection: connections,
           hostSession: connections.hostIdentity,
           runtime: {
             ...getStudioRuntimeSettings(runtimeConfig, backendSession.identity),
@@ -356,13 +353,8 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
           registry.diagnostics.add(diagnostic);
         }
 
-        await loadStudioModules(manifest.modules, registry, {
-          hostVersion: manifest.hostVersion,
-          sdkVersion: manifest.sdkVersion
-        });
+        await registerStudioModuleInstances(modules,registry);
         registerBuiltInContributions(registry);
-        registry.navigation.add(backendNavigation);
-        registry.routes.add({id:"backends",path:"/settings/backends",label:"Backends",component:({navigate}) => <Suspense fallback={<SkeletonRows rows={3} />}><BackendsPage connections={connections} navigate={navigate} featureManagementAvailable={registry.routes.list({includeUnavailable:true}).some(route => route.id === "feature-management")} /></Suspense>});
 
         if (!disposed) {
           setApi(registry);
@@ -384,7 +376,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
     // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
     // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
+  }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl, modules]);
 
   const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api, state]);
   const enabledFeatures = useMemo(() => {
@@ -416,8 +408,8 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
   if (state === "loading") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={[backendNavigation,...navigation]} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={<BackendSwitcher connections={connections} onNavigate={navigateTo} />} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
-          <BackendConnectionNotice connections={connections} />
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+          <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
           <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
@@ -427,10 +419,10 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
   if (state === "failed") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={[backendNavigation,...navigation]} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={<BackendSwitcher connections={connections} onNavigate={navigateTo} />} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <div className="error-state">{error}</div>
-          <BackendConnectionNotice connections={connections} />
-          <Suspense fallback={null}><BackendsPage connections={connections} navigate={navigateTo} /></Suspense>
+          <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
+          <ShellContributions api={api} modules={modules} placement="recovery" navigate={navigateTo}/>
         </ShellFrame>
       </ThemeProvider>
     );
@@ -456,13 +448,13 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
-        backendAction={<BackendSwitcher connections={connections} onNavigate={navigateTo} />}
+        backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
         assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
       >
-        <BackendConnectionNotice connections={connections} />
+        <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
         {settingsSurface ? (
           <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
             {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
@@ -482,7 +474,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!settingsSurface && ActiveComponent ? routeAvailability?.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability?.reason ?? "This route is unavailable."}<button type="button" onClick={() => navigateTo("/settings/backends")}>Choose backend</button></div> : null}
+        {!settingsSurface && ActiveComponent ? routeAvailability?.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability?.reason ?? "This route is unavailable."}<ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/></div> : null}
         {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea
@@ -1488,7 +1480,7 @@ function renderHostSettingsSection(
 ) {
   const route = findRouteForPath(routes, section.path);
   if (route && route.availability.state !== "available") {
-    return <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}<button type="button" onClick={() => navigate("/settings/backends")}>Choose backend</button></div>;
+    return <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div>;
   }
   if (section.id === "modules" || section.path === "/modules") {
     return <ModuleManagementPage api={api} />;
@@ -1618,20 +1610,63 @@ function StableHostApplication({authManager}:{authManager:AuthProviderManager|nu
 }
 
 function BackendApplication({authManager}:{authManager:AuthProviderManager|null}) {
-  const hostAuth = useAuthContext();
-  const [connections] = useState(() => new BackendConnections(getStudioRuntimeConfig(),createStudioEndpointContext(window.location.origin,authManager),authManager,hostAuth.session));
-  const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
-  useEffect(() => {void connections.initialize();return reloadBackendOnPageRestore(connections);},[connections]);
-  if (!snapshot.active) return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[backendNavigation,appearanceNavigation]} panels={[]} path="/settings/backends" title="Backends" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} backendAction={<BackendSwitcher connections={connections} onNavigate={path => window.location.assign(path)} />} onNavigate={path => window.location.assign(path)} accountAction={<UserMenu />}><BackendConnectionNotice connections={connections} />{snapshot.loading ? <SkeletonRows rows={3} label="Loading backend connections" /> : <Suspense fallback={<SkeletonRows rows={3} />}><BackendsPage connections={connections} navigate={path => window.location.assign(path)} /></Suspense>}</ShellFrame></ThemeProvider>;
-  const content = <SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} />;
-  return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager === authManager ? content : snapshot.active.manager ? <AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider> : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;
+ const hostAuth=useAuthContext();
+ const [hostContext]=useState(()=>createStudioEndpointContext(window.location.origin,authManager));
+ const manifestQuery=useStudioManifest(hostContext.http);
+ const [boot,setBoot]=useState<{modules:StudioLoadedModule[];connection:StudioConnectionController;manifest:StudioModulesResponse}|null>(null);
+ const [error,setError]=useState<string|null>(null);
+ const [resetPending,setResetPending]=useState(false);
+ const [hostIdentity]=useState(hostAuth.session);
+ useEffect(()=>{
+  if(!manifestQuery.data)return;
+  let owned:typeof boot=null;
+  const abort=new AbortController();
+  const configuration=getStudioRuntimeConfig();
+  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
+   .then(result=>{
+    if(abort.signal.aborted){for(const {instance} of [...result.instances].reverse())disposeStudioModuleInstance(instance);return;}
+    const connection=result.instances.find(item=>item.instance.connection)?.instance.connection
+     ?? new ConfiguredBackendConnection(hostContext,hostIdentity,authManager,resolveRuntimeBaseUrl(configuration.backendBaseUrl,window.location.origin),configuration.backendId);
+    owned={modules:result.instances,connection,manifest:{...manifestQuery.data!,diagnostics:[...manifestQuery.data!.diagnostics,...result.diagnostics]}};
+    setBoot(owned);
+   }).catch(e=>{if(!abort.signal.aborted)setError(e instanceof Error?e.message:String(e));});
+  return ()=>{
+   abort.abort();
+   if(owned){
+    if(!owned.modules.some(item=>item.instance.connection===owned!.connection) && !owned.connection.getSnapshot().active?.pendingWrites)owned.connection.dispose?.();
+    for(const {instance} of [...owned.modules].reverse())disposeStudioModuleInstance(instance);
+   }
+  };
+ },[manifestQuery.data,hostContext,hostIdentity,authManager]);
+ useEffect(()=>{
+  const reset=watchStudioModuleChanges({canReload:()=>!boot?.connection.getSnapshot().active?.pendingWrites,resetDocument:path=>window.location.assign(path),onPending:()=>setResetPending(true)});
+  return ()=>reset.dispose();
+ },[boot]);
+ return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{if(!boot?.connection.getSnapshot().active?.pendingWrites && requestStudioNavigation(currentRelativeLocation(),"/"))window.location.assign("/");}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
 }
 
+function ConnectionApplication({authManager,connections,modules,manifest}:{authManager:AuthProviderManager|null;connections:StudioConnectionController;modules:StudioLoadedModule[];manifest:StudioModulesResponse}) {
+ const hostAuth=useAuthContext();
+ const snapshot=useSyncExternalStore(connections.subscribe,connections.getSnapshot);
+ const [initializationError,setInitializationError]=useState<string|null>(null);
+ useEffect(()=>{
+  let mounted=true;
+  void connections.initialize().catch(error=>{if(mounted)setInitializationError(error instanceof Error?error.message:String(error));});
+  const stopRestore=reloadConnectionOnPageRestore(connections);
+  return()=>{mounted=false;stopRestore();};
+ },[connections]);
+ const navigate=(path:string)=>window.location.assign(path);
+ if(!snapshot.active || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
+ {snapshot.loading && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
+ </ShellFrame></ThemeProvider>;
+ const content=<SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} modules={modules} manifest={manifest}/>;
+ return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager===authManager ? content : snapshot.active.manager?<AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider>:<AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;
+}
 
-function SelectedBackendApplication({authManager,backendSession,connections}:{authManager:AuthProviderManager|null;backendSession:PreparedBackend;connections:BackendConnections}) {
-  const {session}=useAuthContext();
-  const changed=session.status !== backendSession.identity.status || session.subject !== backendSession.identity.subject || session.tenantId !== backendSession.identity.tenantId;
-  useEffect(()=>{if (changed) window.location.reload();},[changed]);
-  if (changed) return <p role="status">Your backend identity changed. Reloading the connection…</p>;
-  return <AppContent authManager={authManager} backendSession={backendSession} connections={connections} />;
+function SelectedBackendApplication(props:ConnectionApplicationProps) {
+ const {session}=useAuthContext();const {backendSession}=props;
+ const changed=session.status!==backendSession.identity.status || session.subject!==backendSession.identity.subject || session.tenantId!==backendSession.identity.tenantId;
+ useEffect(()=>{if(changed)window.location.reload();},[changed]);
+ if(changed)return <p role="status">Your backend identity changed. Reloading the connection…</p>;
+ return <AppContent {...props}/>;
 }

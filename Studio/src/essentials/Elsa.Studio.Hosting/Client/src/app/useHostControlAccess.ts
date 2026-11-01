@@ -1,7 +1,7 @@
 import { useContext, useMemo } from "react";
 import { useOptionalAuthContext } from "@elsa-workflows/studio-sdk";
 import { hostControlPermissions, moduleManagementReadKeys } from "./hostControlPermissions";
-import { HostAuthContext } from "./backends/HostAuthContext";
+import { HostAuthContext } from "./auth/HostAuthContext";
 
 // Whether the signed-in user may perform each host-control action, from their session permissions. Used to PROACTIVELY
 // hide/disable affordances the user can't use; the server-side bridge gate remains the authority (#249, ADR 0037).

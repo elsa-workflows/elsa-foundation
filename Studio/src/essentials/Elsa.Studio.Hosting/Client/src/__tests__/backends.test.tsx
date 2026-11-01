@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles, reloadBackendOnPageRestore } from "../app/backends/connections";
+import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles, reloadBackendOnPageRestore } from "../../../../Elsa.Studio.Backends/Client/src/connections";
 import {
   evaluateBackendRequirements, getBackendCapabilities, resolveBackendPath, qualifyStudioBackendPath, validateApiCapabilities,
   createEndpointContext, StudioHttpError, studioNavigationRequestedEvent,
@@ -18,7 +18,7 @@ function manager(token="token-a"):AuthProviderManager {
 }
 function controller(commit=vi.fn(),identity=user) {
   const host = {...createEndpointContext("https://studio.example/"),http:{...createEndpointContext("https://studio.example/").http,getJson:vi.fn().mockRejectedValue(new StudioHttpError(404,"Not found"))}};
-  return {commit,connections:new BackendConnections({backendBaseUrl:a.baseUrl,hostId:"studio-one",backends:{profiles:[a,b]}},host,manager(),identity,commit)};
+  return {commit,connections:new BackendConnections({profileApiPath:"/_elsa/studio/backends/profiles",backendBaseUrl:a.baseUrl,hostId:"studio-one",backends:{profiles:[a,b]}},host,manager(),identity,commit)};
 }
 afterEach(() => {vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();window.history.replaceState({},"","/");});
 

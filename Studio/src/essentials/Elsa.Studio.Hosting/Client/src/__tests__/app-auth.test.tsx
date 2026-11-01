@@ -21,11 +21,13 @@ describe("studio auth mounting", () => {
     let release!: (response: Response) => void;
     const pending = new Promise<Response>(resolve => { release = resolve; });
     fetchMock.mockImplementation(async input => String(input).endsWith("/capabilities") ? pending : original(input));
+    const optional = await import("../../../../Elsa.Studio.Backends/Client/src/module");
+    const init = vi.spyOn(moduleLoader,"initializeStudioModules").mockImplementation(async (_manifests,context) => ({instances:[{manifest:{id:"test-backends",displayName:"Backends",version:"1",entry:"",styles:[],requiredHostVersion:"*",requiredSdkVersion:"*",capabilities:[]},instance:optional.initialize({...context,configuration:{...context.configuration,extensions:{backends:{configuration:{},profileApiPath:"/_elsa/studio/backends/profiles"}}}})}],diagnostics:[]}));
     const view = await renderApp();
     try {
       await vi.waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/capabilities"))).toBe(true));
       expect(view.container.querySelector(".backend-form")).toBeNull();
-      expect(view.container.querySelector('[aria-label="Loading backend connections"]')).not.toBeNull();
+      expect(view.container.querySelector('[aria-label="Connecting to backend"]')).not.toBeNull();
       release(new Response(JSON.stringify(failure ? { message: "Unavailable" } : { capabilities: [] }), { status: failure ? 503 : 200, headers: { "content-type": "application/json" } }));
       await vi.waitFor(() => expect(view.container.querySelector(".backend-form")).not.toBeNull());
       const name = view.container.querySelector<HTMLInputElement>(".backend-form input")!;
@@ -37,7 +39,7 @@ describe("studio auth mounting", () => {
       expect(view.container.querySelector<HTMLInputElement>(".backend-form input")?.value).toBe("Retained profile draft");
     } finally {
       release(new Response(JSON.stringify({ capabilities: [] }), { status: 200 }));
-      await flushPromises(); await view.unmount(); window.history.replaceState({}, "", initialPath);
+      await flushPromises(); await view.unmount(); init.mockRestore(); window.history.replaceState({}, "", initialPath);
     }
   });
 
@@ -47,11 +49,11 @@ describe("studio auth mounting", () => {
   ] as const)("honors composed %s policy on %s with a satisfied backend", async (state, path) => {
     const initialPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     const component = vi.fn(() => <div>Disallowed route content</div>);
-    const loader = vi.spyOn(moduleLoader, "loadStudioModules").mockImplementation(async (_manifests, api) => {
+    const loader = vi.spyOn(moduleLoader, "registerStudioModuleInstances").mockImplementation(async (_manifests, api) => {
       const route = { id: path, path, label: "Module policy", component, requiresBackend: [{ id: "elsa.api.runtime", contractVersion: "1" }], availability: { state, reason: "Blocked by module policy" } };
       api.routes.add(route);
       api.navigation.add({ id: "module-policy", path: "/settings/module-policy", label: "Module policy", placement: "settings" });
-      return [];
+      return;
     });
     try {
       localStorage.clear();sessionStorage.clear();window.history.replaceState({}, "", path);
@@ -65,6 +67,42 @@ describe("studio auth mounting", () => {
         expect(component).not.toHaveBeenCalled();
       } finally {await view.unmount();}
     } finally {loader.mockRestore();window.history.replaceState({}, "", initialPath);}
+  });
+
+  it("renders registry shell contributions and honors their composed availability",async()=>{
+    stubShellFetch();
+    const register=vi.spyOn(moduleLoader,"registerStudioModuleInstances").mockImplementation(async(_instances,api)=>{
+      api.shell!.add({id:"acme.allowed",placement:"notice",component:()=> <span>Acme connection extension</span>});
+      api.shell!.add({id:"acme.hidden",placement:"notice",availability:{state:"hidden"},component:()=> <span>Hidden connection extension</span>});
+    });
+    const view=await renderApp();
+    try {await vi.waitFor(()=>expect(view.container.textContent).toContain("Acme connection extension"));expect(view.container.textContent).not.toContain("Hidden connection extension");}
+    finally{await view.unmount();register.mockRestore();}
+  });
+
+  it("cancels deferred document initialization and disposes the late instance",async()=>{
+    const fetch=stubShellFetch(),original=fetch.getMockImplementation()!;
+    fetch.mockImplementation(async input=>String(input).includes("/_elsa/studio/modules") ? Response.json({...emptyModules(),modules:[{id:"acme",displayName:"Acme",entry:"/acme.js",version:"1",styles:[],requiredHostVersion:"*",requiredSdkVersion:"*",capabilities:["host-initialization"]}]}) : original(input));
+    const originalInitializer=moduleLoader.initializeStudioModules;
+    let signal:AbortSignal|undefined,release!:(value:import("../sdk").StudioModuleInstance)=>void;
+    const pending=new Promise<import("../sdk").StudioModuleInstance>(resolve=>release=resolve);
+    const initialize=vi.spyOn(moduleLoader,"initializeStudioModules").mockImplementation((manifests,context,options)=>{
+      signal=context.signal;
+      return originalInitializer(manifests,context,{...options,importModule:async()=>({initialize:()=>pending})});
+    });
+    const dispose=vi.fn();const register=vi.fn();
+    const view=await renderApp();
+    try {await vi.waitFor(()=>expect(signal).toBeDefined());await view.unmount();expect(signal!.aborted).toBe(true);release({dispose,register});await vi.waitFor(()=>expect(dispose).toHaveBeenCalledOnce());expect(register).not.toHaveBeenCalled();}
+    finally{initialize.mockRestore();}
+  });
+
+  it("shows recovery when a custom connection controller rejects initialization",async()=>{
+    stubShellFetch();
+    const snapshot={active:null,loading:true,error:null};
+    const initialize=vi.spyOn(moduleLoader,"initializeStudioModules").mockImplementation(async(_manifests,context)=>({instances:[{manifest:{id:"acme",displayName:"Acme",entry:"",styles:[],version:"1",requiredHostVersion:"*",requiredSdkVersion:"*",capabilities:[]},instance:{register:vi.fn(),connection:{hostContext:context.host,hostIdentity:context.identity,subscribe:()=>()=>{},getSnapshot:()=>snapshot,initialize:async()=>{throw new Error("Acme connection failed");},qualifyPath:path=>path}}}],diagnostics:[]}));
+    const view=await renderApp();
+    try{await vi.waitFor(()=>expect(view.container.textContent).toContain("Acme connection failed"));expect(view.container.textContent).toContain("Return Home");expect(view.container.querySelector('[aria-label="Connecting to backend"]')).toBeNull();}
+    finally{await view.unmount();initialize.mockRestore();}
   });
 
   it("boots anonymously and attaches no bearer token when no provider is configured", async () => {

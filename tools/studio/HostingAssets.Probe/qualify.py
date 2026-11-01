@@ -21,7 +21,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 REPO = Path(__file__).resolve().parents[3]
-IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard", "Elsa.Studio.Preferences.Core")
+IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard")
 RUNTIME_HOST_ID = "package-consumer-proof"
 
 
@@ -212,19 +212,32 @@ using Elsa.Studio.Dashboard;
 using Elsa.Studio.Hosting;
 var builder = WebApplication.CreateBuilder(args);
 var studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.IndexFile = "''' + fallback + '''"; })
-    .ConfigureShells(shells => shells.WithAssemblies(typeof(DashboardStudioFeature).Assembly));
+    .ConfigureShells(shells => shells.WithAssemblies(typeof(DashboardStudioFeature).Assembly, typeof(QualificationFeature).Assembly));
 var app = builder.Build();
 ''' + runtime_fault + '''
 app.UseElsaStudio();
 app.MapElsaStudio();
+app.MapGet("/capabilities", () => new {capabilities = new[] { new {id="qualification.api",contractVersion="1",links=Array.Empty<object>()} }});
+app.MapGet("/_content/Consumer/studio/modules/qualification/module.js", () => Results.Content("""
+import React from "react";
+export function register(api) {
+  const required=[{id:"qualification.api",contractVersion:"1"}];
+  if(!api.backendSession || api.backendSession.disposed || !api.backendSession.capabilities?.capabilities.some(item=>item.id==="qualification.api")) throw new Error("The default connection did not discover the real consumer capability");
+  window.__STUDIO_CONNECTION_QUALIFICATION__={key:api.backendSession.key,id:api.backendSession.profile.id,capabilities:api.backendSession.capabilities};
+  api.shell.add({id:"qualification.connection",placement:"notice",requiresBackend:required,component:()=>React.createElement("span",null,"Configured connection ready")});
+}
+""", "application/javascript"));
 app.MapGet("/__qualification", () => new {
     contentRoot = app.Environment.ContentRootPath,
     locations = new[] { typeof(StudioBuilder).Assembly.Location, typeof(StudioApiOptions).Assembly.Location,
         typeof(StudioModuleAttribute).Assembly.Location, typeof(DashboardStudioFeature).Assembly.Location }
 });
 app.Run();
+[Elsa.Studio.Core.Attributes.StudioModule("qualification", "Qualification", HasStyles=false)]
+[CShells.Features.ShellFeature("QualificationStudio")]
+public class QualificationFeature : CShells.Features.IShellFeature { public virtual void ConfigureServices(IServiceCollection services) { } }
 ''')
-            (path / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"StudioApi": {}, "DashboardStudio": {}}, "Configuration": {"WebRouting": {"Path": ""}}}}}}))
+            (path / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"StudioApi": {}, "DashboardStudio": {}, "QualificationStudio": {}}, "Configuration": {"WebRouting": {"Path": ""}}}}}}))
             shutil.copy2(REPO / "global.json", path / "global.json")
             ET.ElementTree(config).write(path / "NuGet.Config", encoding="utf-8", xml_declaration=True)
             if optout or collision:
@@ -241,6 +254,7 @@ app.Run();
             check({entry["type"] for entry in graph["libraries"].values()} == {"package"}, "Consumer reaches source/project libraries")
             check(len(graph["packageFolders"]) == 1 and Path(next(iter(graph["packageFolders"]))).resolve() == cache.resolve(), "Consumer uses another cache")
             check(not any(key.startswith(("Nuplane", "Elsa.Studio.Web/")) for key in graph["libraries"]), "Unexpected Web/Nuplane dependency")
+            check(not any(key.startswith(("Elsa.Studio.Backends/", "Elsa.Studio.Preferences.Core/")) for key in graph["libraries"]), "Base Hosting unexpectedly requires backend management or Preferences")
             for package_id in IDS:
                 library = graph["libraries"].get(package_id + "/" + version)
                 check(library and library["type"] == "package", "Candidate missing from package closure: " + package_id)

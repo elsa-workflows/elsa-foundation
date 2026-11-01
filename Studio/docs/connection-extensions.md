@@ -1,0 +1,21 @@
+# Connection extensions
+
+Studio separates an immutable connection lifetime from optional connection management. The core host uses one configured endpoint and a real capability snapshot. Backend capability requirements on contributions apply with or without a management module; feature settings remain owned by their existing feature-management surface.
+
+## Server contracts
+
+`IStudioBackendAuthoritySource` is an exclusive replacement for initial authority selection. Register at most one in the root host before `Build`. It receives the configured browser/server addresses and the effective composed selected-shell feature lists. Hosting copies the result into its own immutable `StudioBackendAuthority`, exposed through `IStudioBackendAuthorityAccessor` and shared by reference with shell generations. The stable host authority serves browser authentication, bearer introspection and the server management bridge; interactive backend selection cannot change it. Duplicate sources fail startup. Existing configured single-backend hosts need no source.
+
+A feature can register `IStudioRuntimeConfigurationSource` in its shell container. The API layer collects sources sequentially through `OnStudioRuntimeConfigurationCollecting`. Entries must have unique lower-case namespaces matching `[a-z][a-z0-9-]{0,63}`; collisions or projection errors return 503 instead of partial configuration. Public values appear in `window.__ELSA_STUDIO_RUNTIME__.extensions[namespace]`. Only public allowlisted settings belong here. Values serialize before their owning shell scope is disposed. Features own their endpoints and must project the actual API URL, including any Studio shell prefix.
+
+The optional [Backends package](../src/essentials/Elsa.Studio.Backends/README.md) demonstrates these contracts. Its explicit host adapter enables profiles-only initial authority configuration; its `BackendsStudio` feature owns the profile API and runtime namespace. The reference Web application composes both explicitly.
+
+## Frontend contracts
+
+A legacy module can continue exporting `register(api)`. A module needing document-owned state exports `initialize(host): StudioModuleInstance`; initialization runs after the authenticated Studio-host manifest loads and before any backend-bound registration. The host context provides the original host endpoint/auth identity, public configuration and cancellation signal. Initialization must not request selected-backend resources. Advertise `host-initialization` in the manifest so a failed import or incompatible module cannot silently change the connection policy.
+
+An instance supplies `register(api)`, optional `connection`, optional `shell` contributions and optional `dispose()`. Zero connection providers selects the core configured connection; one replaces it; multiple providers fail explicitly. `StudioConnectionController` supplies initialization, a subscribable snapshot, original host identity/context and backend-qualified navigation. Use `StudioBackendConnection` for an immutable endpoint/auth/capability lifetime with request cancellation, write guards and retired-identity protection. Normal registration runs only after a selected connection exists. `api.connection` and `api.backendSession` expose the chosen controller/session; they do not change host identity.
+
+Shell contributions use the `connection`, `notice` and `recovery` placements. Recovery can render without a selected connection and must use host services only. Backend-bound modules are not registered on this recovery path. Shell and normal contributions may be populated in each fresh registry; document initialization is not repeated during a capability refresh.
+
+Host module changes request a fresh document at Home, discarding the old resource path and backend query so imported module state, endpoint sessions and caches change together. A rejected navigation remains queued with visible recovery. Draft owners call `notifyStudioNavigationGuardReleased()` after their guard releases; completed writes signal it automatically. Backend feature changes use `studioBackendCapabilitiesChangedEvent` with the exact `backendSession.key` to refresh capabilities and contribution admission without reinitializing the connection provider.
