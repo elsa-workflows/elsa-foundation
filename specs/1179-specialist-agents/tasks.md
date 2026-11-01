@@ -4,9 +4,10 @@
 [contracts](contracts/) and [qualification guide](quickstart.md).
 
 **Status**: Implementation in progress. Checked boxes record completed implementation and local
-qualification; they do not assert merge or product acceptance. M2 source/package work is in
-[PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with exact-head CI, dependency
-merge and resulting-main qualification tracked there. The product spec remains nonterminal.
+qualification; they do not assert product acceptance. M2 is complete through
+[PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with exact-head CI and
+resulting-main qualification on `0d6db68a3`. M3 implementation is active under
+[#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523). The product spec remains nonterminal.
 
 **Cadence**: ADR 0080 D1 risk-based behavior tests; no invented TDD rule or coverage quota. Tests
 accompany their owning implementation slice and complete before its review/merge. Use meaningful

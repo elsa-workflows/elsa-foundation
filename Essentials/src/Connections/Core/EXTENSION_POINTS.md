@@ -18,7 +18,9 @@ database connection string, or `RuntimeConnectionToken`.
   unspecified/non-durable until they explicitly supply `ConnectionRepositoryCapabilities`.
 - `IConnectionManager`: lifecycle facade (create, update, test, revoke, delete).
 - `IConnectionResolver`: point-of-use resolution. Tenant-scoped; owner/run-as is reserved and only
-  `tenant` is valid in v1.
+  `tenant` is valid in v1. `IResolvedConnection.Version` identifies the metadata revision captured
+  with that resolved settings snapshot. Its compatibility default is zero (unknown); consumers
+  requiring revision-bound access must refuse zero rather than separately reading a newer revision.
 - `IConnectionCredentialSource` implementations, keyed by `Kind`: how a connection field's material
   is obtained. Built-ins are `secret` (`ISecretValueResolver`) and `named-credential`
   (`IAccessTokenSource`). Hosts add kinds without changing core.

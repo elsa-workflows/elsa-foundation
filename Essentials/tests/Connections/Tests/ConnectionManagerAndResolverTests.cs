@@ -47,6 +47,24 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Resolved_revision_matches_its_snapshot_while_later_resolution_observes_a_save()
+    {
+        await CreateConnectionAsync("versioned");
+        var repository = _scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        var before = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(before > 0);
+        Assert.Equal(before, original.Version);
+
+        await _manager.UpdateAsync(Tenant, "versioned", new UpdateConnectionRequest { DisplayName = "Updated" });
+        var after = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var current = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(after > before);
+        Assert.Equal(after, current.Version);
+        Assert.Equal(before, original.Version);
+    }
+
+    [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
     {
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest

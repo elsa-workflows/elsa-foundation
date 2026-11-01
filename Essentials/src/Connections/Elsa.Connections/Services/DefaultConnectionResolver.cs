@@ -74,6 +74,7 @@ internal sealed class ResolvedConnection(
     public string AuthScheme => document.Definition.AuthScheme;
     public string Owner => document.Definition.Owner;
     public string Status => document.State.Status;
+    public int Version { get; } = document.State.Version;
     public IReadOnlyDictionary<string, string> Settings { get; } = new Dictionary<string, string>(document.Definition.Settings, StringComparer.OrdinalIgnoreCase);
     public AllowedHostsPolicy Hosts => hosts;
 
