@@ -8,7 +8,7 @@ Six whole stores pass hash/integrity and the typed-provider observer: full Desig
 
 | Check | Actual result |
 |---|---|
-| New inspection controls against default-refusing port |5new failures/5existing passes; initial API-tracking/scope-helper build errors retained as diagnostics, not behavioral failures. |
+| New inspection controls against default-refusing port |5new failures/5existing passes; initial API-tracking/scope-helper build errors preceded the behavior control and are setup diagnostics, not behavioral failures. |
 | Focused inspection/catalog/authorization |50passed before the extra missing-reader control; full current project below includes it. Covers exact-revision reauthorization, no private HTTP payload/connector inputs, retired source inspection, current human work, genuine legacy attempts/cancellations and isolated inconsistent-origin refusals. |
 | Whole current BPMN test project |559passed,0failed,0skipped;559listed/559executed. Earlier sourceea9a whole project558passed. |
 | Full current architecture project |608passed,0failed,0skipped.593discovery entries expand two late-enumerated theories to11and6cases; all listed methods/enumerated cases accounted for. |
