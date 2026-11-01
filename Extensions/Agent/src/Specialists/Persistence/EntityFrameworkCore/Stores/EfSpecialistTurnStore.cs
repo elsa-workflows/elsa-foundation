@@ -313,13 +313,18 @@ internal sealed partial class EfSpecialistTurnStore(DbContext context, IPersiste
     private string Scope(SpecialistInvocationIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        var scope = access.Current.RequireScope();
-        access.Current.EnsureTenantScope(identity.TenantId);
-        if (scope.Value != identity.PersistencePartition) throw new InvalidOperationException("The specialist operation does not belong to the selected persistence scope.");
         foreach (var value in new[] { identity.TenantId, identity.PersistencePartition, identity.WorkflowExecutionId, identity.ActivityExecutionId,
                      identity.OperationKey, identity.ArtifactId, identity.ArtifactHash, identity.DefinitionVersionId, identity.TemplateHash })
             if (value is not null) _ = Utf8.GetByteCount(value);
-        return Convert.ToHexString(SHA256.HashData(Utf8.GetBytes(JsonSerializer.Serialize(new[] { identity.PersistencePartition, identity.TenantId })))).ToLowerInvariant();
+        return Scope(identity.TenantId, identity.PersistencePartition);
+    }
+
+    private string Scope(string? tenantId, string persistencePartition)
+    {
+        var scope = access.Current.RequireScope();
+        access.Current.EnsureTenantScope(tenantId);
+        if (scope.Value != persistencePartition) throw new InvalidOperationException("The specialist operation does not belong to the selected persistence scope.");
+        return Convert.ToHexString(SHA256.HashData(Utf8.GetBytes(JsonSerializer.Serialize(new[] { persistencePartition, tenantId })))).ToLowerInvariant();
     }
 
     private static SpecialistTurnDocument Replay(SpecialistTurnDocument existing, SpecialistTurnDocument candidate)

@@ -160,3 +160,22 @@ occurrence exercises real actor/checkpoint/outbox cancellation before a delayed 
 M4 authoring qualification. Retention and complete recovery/upgrade qualification remain T022–T023 work.
 A committed but unreadable receipt can still leave native work faulted; this remains distinct from
 confirmed recovery and from the qualified facade-read operator retry path.
+
+
+`SpecialistsRuntimeFeature.AllowNewOperations` is a host snapshot, default true. False atomically
+refuses only new logical operation creation in both stores; retained matching operation/delivery
+replay and settlement stay available. The host policy is not persisted in request fingerprints.
+
+The runtime contributes an internal `IRecurringTask` through the existing Tasks scheduler and
+`IPersistenceScopeRunner`. Its default thirty-day content policy uses scoped, content-free keyset
+pages from the genuine Core store port. Memory and EF consume the same query/candidate/purge contract;
+EF streams each payload through a private metadata reader rather than retaining a page of ciphertext.
+The scoped pruner verifies terminal native owner age and all delivery/application-source obligations.
+Active/unknown conversation ownership pins previous history; EF conversation-version and turn-version
+CAS compete with concurrent ownership and delivery changes in one fresh owned transaction.
+
+Content purge retains lifecycle, operation/cancellation authority, reservations, usage and conversation
+references. A retained ContentPurgedAt marker explicitly makes protected content unavailable. Matching
+Stage never replaces that marker or resets an old operation to Prepared. Native output retention and
+administrative deletion are separate policies. Reader/key/codec and whole-M3 upgrade qualification
+remain open until their independent receipts are delivered.

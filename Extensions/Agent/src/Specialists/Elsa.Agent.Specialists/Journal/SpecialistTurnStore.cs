@@ -14,7 +14,7 @@ internal sealed class InMemorySpecialistTurnState
     public Dictionary<(string? Tenant, string Partition, string Id), SpecialistConversationDocument> Conversations { get; } = new();
 }
 
-internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAccessor access, InMemorySpecialistTurnState state) : ISpecialistTurnStore
+internal sealed partial class InMemorySpecialistTurnStore(IPersistenceAccessContextAccessor access, InMemorySpecialistTurnState state) : ISpecialistTurnStore
 {
     public ValueTask<SpecialistJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
     {
@@ -310,13 +310,15 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         return rows.TryGetValue(handle, out var row) && SpecialistTurnDeliveryRules.Admits(row, identity) ? SpecialistTurnDocumentRules.Copy(row) : null;
     }
 
-    private void EnsureScope(SpecialistInvocationIdentity identity)
+    private void EnsureScope(SpecialistInvocationIdentity identity) => EnsureScope(identity.TenantId, identity.PersistencePartition);
+
+    private void EnsureScope(string? tenantId, string persistencePartition)
     {
         try
         {
             var scope = access.Current.RequireScope();
-            access.Current.EnsureTenantScope(identity.TenantId);
-            if (scope.Value != identity.PersistencePartition) throw new InvalidOperationException("The specialist operation does not belong to the selected persistence scope.");
+            access.Current.EnsureTenantScope(tenantId);
+            if (scope.Value != persistencePartition) throw new InvalidOperationException("The specialist operation does not belong to the selected persistence scope.");
         }
         catch (Exception exception)
         {

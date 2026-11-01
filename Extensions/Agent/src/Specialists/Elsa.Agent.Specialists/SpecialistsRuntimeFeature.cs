@@ -31,11 +31,18 @@ public class SpecialistsRuntimeFeature : IShellFeature
     /// <summary>Allows new logical operations. Disabling keeps matching admitted work, readers and settlement available.</summary>
     public bool AllowNewOperations { get; set; } = true;
 
+    /// <summary>Protected content retention after native workflow completion; active work remains pinned. Defaults to thirty days.</summary>
+    public TimeSpan ContentRetention { get; set; } = TimeSpan.FromDays(30);
+
     /// <inheritdoc />
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        if (ContentRetention <= TimeSpan.Zero || ContentRetention > TimeSpan.FromDays(3650)) throw new ArgumentOutOfRangeException(nameof(ContentRetention));
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(new SpecialistRetentionPolicy(ContentRetention));
+        services.TryAddScoped<SpecialistRetentionPruner>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, SpecialistRetentionPumpTask>());
         services.TryAddSingleton(new SpecialistAdmissionPolicy(AllowNewOperations));
         services.TryAddScoped<SpecialistSchemaValidator>();
         services.TryAddScoped<SpecialistNativeBinding>();

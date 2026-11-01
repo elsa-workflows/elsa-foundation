@@ -375,6 +375,74 @@ public sealed class SpecialistJournalProviderTests
             Assert.Equal(SpecialistCancellationOutcome.OtherDeliveryUnchanged, (await fresh.CancelAsync(CancelRequest(transferred.Identity, "old-child"), CancellationToken.None)).Outcome);
         }
 
+        var historyRace = RaceDocument("retention-history-race");
+        await recovered.StageAsync(historyRace, CancellationToken.None);
+        Assert.NotNull(await recovered.ClaimAsync(historyRace.Handle, historyRace.Identity, "history-child", "history-fence", now, CancellationToken.None));
+        Assert.True(await recovered.DispatchAsync(historyRace.Handle, historyRace.Identity, new("history-fence", 1), now, CancellationToken.None));
+        Assert.True(await recovered.AcceptAsync(historyRace.Handle, historyRace.Identity, new("history-fence", 1), "history-to-pin", now, CancellationToken.None));
+        var futureIdentity = historyRace.Identity with { ActivityExecutionId = "retention-next", OperationKey = "retention-next" };
+        var future = historyRace with { Identity = futureIdentity, Deliveries = [new(futureIdentity)], Handle = Hash("retention-next"),
+            Key = SpecialistTurnDocument.CalculateOperationKey(futureIdentity), Conversation = new(historyRace.Conversation!.ConversationId, 1) };
+        await recovered.StageAsync(future, CancellationToken.None);
+        var idleHistory = Assert.Single((await recovered.QueryRetentionAsync(new("tenant", "tenant", PageSize: 128), CancellationToken.None)).Items, item => item.Handle == historyRace.Handle);
+        var ownerRace = new RenewalBeforeUpdate(async token =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            Assert.NotNull(await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().ClaimAsync(future.Handle, future.Identity, "future-child", "future-fence", now, token));
+        });
+        ownerRace.Arm("elsa_specialist_conversations");
+        await using (var host = RaceHost(ownerRace))
+        await using (var scope = host.CreateAsyncScope())
+        {
+            Assert.False(await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().PurgeContentAsync(idleHistory, now.AddDays(31), CancellationToken.None));
+            Assert.Equal(1, ownerRace.Count);
+        }
+        Assert.Equal("history-to-pin", (await recovered.ReadAsync(historyRace.Handle, historyRace.Identity, CancellationToken.None))!.ProtectedResult);
+        Assert.Equal(future.Handle, (await recovered.ReadConversationAsync(historyRace.Conversation.ConversationId, historyRace.Identity, CancellationToken.None))!.ActiveTurnHandle);
+
+        var historyPin = Assert.Single((await recovered.QueryRetentionAsync(new("tenant", "tenant", PageSize: 128), CancellationToken.None)).Items,
+            item => item.Handle == candidate.Handle);
+        Assert.False(await recovered.PurgeContentAsync(historyPin, now.AddDays(31), CancellationToken.None));
+        var purgeTarget = transferred;
+        var purgeIdentity = transferred.Identity;
+        // Content-only purge uses its actual row version. Force a concurrent registered
+        // delivery between its read and CAS; it must retain ciphertext until a new proof.
+        var retention = Assert.Single((await recovered.QueryRetentionAsync(new("tenant", "tenant", PageSize: 128), CancellationToken.None)).Items,
+            item => item.Handle == purgeTarget.Handle);
+        var purgeRace = new RenewalBeforeUpdate(async cancellationToken =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            var delivery = purgeIdentity with { ActivityExecutionId = "retention-overlap-parent" };
+            await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().StageAsync(purgeTarget with { Identity = delivery, Deliveries = [new(delivery)] }, cancellationToken);
+        });
+        purgeRace.Arm();
+        await using (var host = RaceHost(purgeRace))
+        await using (var scope = host.CreateAsyncScope())
+        {
+            Assert.False(await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().PurgeContentAsync(retention, now.AddDays(31), CancellationToken.None));
+            Assert.Equal(1, purgeRace.Count);
+        }
+        Assert.Equal("new-delivery-result", (await recovered.ReadAsync(purgeTarget.Handle, purgeIdentity, CancellationToken.None))!.ProtectedResult);
+        var latestRetention = Assert.Single((await recovered.QueryRetentionAsync(new("tenant", "tenant", PageSize: 128), CancellationToken.None)).Items,
+            item => item.Handle == purgeTarget.Handle);
+        Assert.True(await recovered.PurgeContentAsync(latestRetention, now.AddDays(31), CancellationToken.None));
+        await using (var host = Host())
+        await using (var scope = host.CreateAsyncScope())
+        {
+            var fresh = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+            var marker = (await fresh.ReadAsync(purgeTarget.Handle, purgeIdentity, CancellationToken.None))!;
+            Assert.Equal(SpecialistTurnStatus.Accepted, marker.Status);
+            Assert.Equal(now.AddDays(31), marker.ContentPurgedAt);
+            Assert.Null(marker.ProtectedRequest);
+            Assert.Null(marker.ProtectedResult);
+            Assert.Equal(3, marker.Deliveries!.Count);
+            Assert.Null(marker.Applications);
+            Assert.NotNull((await fresh.StageAsync(purgeTarget with { Identity = successorIdentity, Deliveries = [new(successorIdentity)] }, false, CancellationToken.None)).ContentPurgedAt);
+            Assert.Null(await fresh.ClaimAsync(purgeTarget.Handle, purgeIdentity, "purged-child", "purged-fence", now.AddDays(31), CancellationToken.None));
+            Assert.True((await fresh.ReadConversationAsync(conversation.Id, identity, CancellationToken.None))!.OutcomeUnknown);
+            Assert.NotNull((await fresh.ReadAsync(unknown.Handle, unknown.Identity, CancellationToken.None))!.ProtectedRequest);
+        }
+
         SpecialistTurnDocument RaceDocument(string name)
         {
             var owner = identity with { ActivityExecutionId = name, OperationKey = name };

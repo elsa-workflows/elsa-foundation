@@ -29,7 +29,7 @@ public sealed class SpecialistJournalTests
         var retry = request with { Identity = request.Identity with { ActivityExecutionId = "registered-retry" } };
         await journal.StageAsync(retry, DateTimeOffset.UtcNow, default);
         var protector = services.GetRequiredService<ISecretValueProtector>();
-        var frame = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(state.Rows[handle].ProtectedRequest))!;
+        var frame = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(state.Rows[handle].ProtectedRequest!))!;
         frame["identity"]!["activityExecutionId"] = retry.Identity.ActivityExecutionId;
         frame["request"]!["identity"]!["activityExecutionId"] = retry.Identity.ActivityExecutionId;
         state.Rows[handle] = state.Rows[handle] with { ProtectedRequest = protector.Protect(frame.ToJsonString()) };
@@ -354,7 +354,7 @@ public sealed class SpecialistJournalTests
         var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
         var (document, _) = await journal.ReadAsync(handle, request.Identity, CancellationToken.None);
         var protector = services.GetRequiredService<ISecretValueProtector>();
-        var payload = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(document.ProtectedRequest))!.AsObject();
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(document.ProtectedRequest!))!.AsObject();
         payload["purpose"] = "elsa.specialist.turn/result/1";
         var substituted = Memory();
         await substituted.StageAsync(document with { ProtectedRequest = protector.Protect(payload.ToJsonString()) }, CancellationToken.None);

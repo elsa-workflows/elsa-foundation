@@ -25,6 +25,13 @@ public interface ISpecialistTurnStore
     /// <summary>Reads conversation metadata only for the same verified workflow owner and exact specialist version.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken);
+    /// <summary>Scans one bounded page of content-free retention metadata in an explicit ordinary tenant/partition scope.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
+    ValueTask<SpecialistRetentionPage> QueryRetentionAsync(SpecialistRetentionQuery query, CancellationToken cancellationToken);
+    /// <summary>Conditionally removes only protected content from the unchanged settled candidate; preserves all operation, history and cancellation metadata.</summary>
+    /// <remarks>The runtime must first verify native retention eligibility and all outstanding reader/application responsibilities.</remarks>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
+    ValueTask<bool> PurgeContentAsync(SpecialistRetentionCandidate expected, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Claims an unexpired prepared turn, or safely takes over an expired pre-dispatch claim for the same native child or explicitly registered delivery. Expired dispatch becomes unknown.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken);

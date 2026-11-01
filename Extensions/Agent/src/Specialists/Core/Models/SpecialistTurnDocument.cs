@@ -15,9 +15,13 @@ public enum SpecialistTurnStatus { Prepared, Claimed, Dispatching, Accepted, Fai
 /// opaque to persistence providers; immutable acceptance stores their protected pair in one write.
 /// </summary>
 public sealed record SpecialistTurnDocument(string Handle, string Key, string RequestHash, SpecialistInvocationIdentity Identity,
-    string ProtectedRequest, DateTimeOffset Deadline, SpecialistTurnStatus Status = SpecialistTurnStatus.Prepared,
+    string? ProtectedRequest, DateTimeOffset Deadline, SpecialistTurnStatus Status = SpecialistTurnStatus.Prepared,
     string? ChildInvocationId = null, string? Fence = null, string? ProtectedResult = null, string? FailureCode = null)
 {
+    /// <summary>Content was removed under retention; operation and lifecycle metadata remain authoritative.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? ContentPurgedAt { get; init; }
+
     /// <summary>The published/request-lowered finite model request limit, authenticated by the runtime.</summary>
     public int MaximumModelCalls { get; init; } = 1;
     /// <summary>Retained reservations, including requests with unknown outcomes or usage.</summary>

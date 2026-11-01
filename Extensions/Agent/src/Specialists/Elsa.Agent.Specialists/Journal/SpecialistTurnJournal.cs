@@ -46,8 +46,10 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
     {
         EnsureScope(identity);
         var document = await store.ReadAsync(handle, identity, cancellationToken) ?? throw Failure("specialist.journal.missing", "The staged specialist turn is unavailable in this execution scope.");
+        if (document.ContentPurgedAt is not null)
+            throw Failure("specialist.journal.content-unavailable", "The specialist operation is retained, but its protected content has expired.");
         RequestEnvelope? envelope;
-        try { envelope = JsonSerializer.Deserialize<RequestEnvelope>(protector.Unprotect(document.ProtectedRequest), SpecialistJson.Options); }
+        try { envelope = JsonSerializer.Deserialize<RequestEnvelope>(protector.Unprotect(document.ProtectedRequest!), SpecialistJson.Options); }
         catch (Exception exception) { throw Failure("specialist.journal.protection", "The staged specialist request cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != (document.DeliveryProtocol == 1 ? DeliveryRequestPurpose : RequestPurpose) || envelope.Identity != document.Identity || envelope.Request.Identity != document.Identity ||
             !SpecialistTurnDeliveryRules.SameLogical(document.Identity, identity) || !SpecialistTurnDeliveryRules.Admits(document, identity) || envelope.Hash != document.RequestHash ||

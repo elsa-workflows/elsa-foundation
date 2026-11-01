@@ -16,6 +16,24 @@ Already admitted work, readers and application/cancellation settlement remain av
 creation neither cancels work nor resets unknown outcomes, deadlines or conversation history.
 The policy belongs to host configuration and does not alter a persisted request's fingerprint.
 
+## Protected content retention
+
+`SpecialistsRuntimeFeature.ContentRetention` defaults to thirty days after native workflow completion.
+It accepts a positive interval up to ten years. The existing recurring-task scheduler visits each
+host-supplied ordinary persistence partition, scanning one finite metadata page per tenant key every
+five minutes. Retention stays active when new admission is disabled.
+
+Active workflows, missing native ownership/artifacts, unfinished deliveries, and pending or
+unacknowledged application sources pin content. Claimed or unknown conversation work also pins its
+previous history. The relational purge competes with conversation ownership and turn updates in an
+owned transaction. A changed proof is refused; it is reconsidered on a later sweep.
+
+A successful purge removes the protected request/result/session pair while preserving status,
+operation fingerprint, reservations, usage, delivery/application records, cancellation gates and
+conversation references. `specialist.journal.content-unavailable` identifies a retained operation
+whose content expired; reusing its operation key cannot create another model request. Native workflow
+outputs have their own retention policy. This operation does not erase those copies.
+
 ## Cross-domain contributions
 
 `SpecialistsRuntimeFeature` registers these contributions per shell. Implementations stay internal;
@@ -25,14 +43,15 @@ their owning contracts remain in the respective Core packages.
 |---|---|---|
 | Activities.Runtime.Core `IActivityActivationStrategy` | `SpecialistActivationStrategy` | Scoped enumerable contribution for the pinned specialist facade/model-turn consumer |
 | Activities.Runtime.Core `IRuntimeActivityConsumerCapability` | `SpecialistConsumerCapability` | Singleton enumerable contribution advertising supported pinned descriptor schemas |
+| Tasks.Core `IRecurringTask` | `SpecialistRetentionPumpTask` | Singleton bounded sweep through the existing persistence-scope runner and failure backoff; scoped native/source proof and conditional content purge |
 | Tasks.Core `IStartupTask` | `SpecialistTypesStartupTask`, `SpecialistJournalRegistrationStartupTask` | Registers native types and refuses missing/duplicate journal backends at activation |
 | Workflows.Runtime.Core `IRuntimeCheckpointCommitEnricher` | `SpecialistCheckpointEnricher` | Scoped enumerable contribution in default phase0; contributes deterministic application/cancellation responsibility, then validates the final checkpoint envelope; no specialist-store writes during enrichment |
 | Workflows.Runtime.Core `IRuntimePostCommitDurableSourceIntentHandler` | `SpecialistSettlementHandler` | Scoped keyed contribution for `elsa.specialist.applied/1` and `elsa.specialist.cancel/1`, registered through `AddRuntimePostCommitIntentHandler` with a required physical source and retry-until-acknowledged policy; verifies native/receipt authority before idempotent journal metadata settlement |
 
 The last two contributions use the [owning Workflows.Runtime catalog](../../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 Application and cancellation settlement preserve accepted history and distinguish process application
-from journal acceptance. Retention and complete independent-process durable runtime/outbox qualification
-remain M3 obligations.
+from journal acceptance. Retained-reader/key/codec and complete independent-process durable
+runtime/outbox qualification remain M3 obligations.
 
 Checkpoint and settlement failures preserve their original cause in the specialist-domain exception,
 with `contextId` and `workflowExecutionId` identifying the checkpoint or exact source. Native source

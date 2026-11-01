@@ -7,7 +7,7 @@ internal static class SpecialistTurnDocumentRules
     internal static void Prepared(SpecialistTurnDocument document)
     {
         Validate(document);
-        if (document.Status != SpecialistTurnStatus.Prepared || document.ModelRequests is { Count: > 0 } || document.ResponseObservation is not null || document.Applications is not null)
+        if (document.Status != SpecialistTurnStatus.Prepared || document.ModelRequests is { Count: > 0 } || document.ResponseObservation is not null || document.Applications is not null || document.ContentPurgedAt is not null)
             throw new InvalidDataException("Only a prepared specialist operation can be staged.");
     }
 
@@ -25,8 +25,10 @@ internal static class SpecialistTurnDocumentRules
         if (document.Key != SpecialistTurnDocument.CalculateOperationKey(document.Identity))
             throw new InvalidDataException("The specialist operation key does not match its native scope and operation.");
         var unclaimed = document.Status == SpecialistTurnStatus.Prepared || document.Status == SpecialistTurnStatus.Cancelled && document.AdmissionGeneration == 0;
-        if (!Enum.IsDefined(document.Status) || string.IsNullOrWhiteSpace(document.ProtectedRequest) ||
-            document.Status == SpecialistTurnStatus.Accepted && string.IsNullOrWhiteSpace(document.ProtectedResult) ||
+        if (document.ContentPurgedAt is { } purged && (!SpecialistRetentionRules.Settled(document.Status) || purged <= document.Deadline || document.ProtectedRequest is not null || document.ProtectedResult is not null))
+            throw new InvalidDataException("The specialist content-retention marker is invalid.");
+        if (!Enum.IsDefined(document.Status) || document.ContentPurgedAt is null && string.IsNullOrWhiteSpace(document.ProtectedRequest) ||
+            document.ContentPurgedAt is null && document.Status == SpecialistTurnStatus.Accepted && string.IsNullOrWhiteSpace(document.ProtectedResult) ||
             document.Status != SpecialistTurnStatus.Accepted && document.ProtectedResult is not null ||
             unclaimed && (document.ChildInvocationId is not null || document.Fence is not null) ||
             !unclaimed && (string.IsNullOrWhiteSpace(document.ChildInvocationId) || string.IsNullOrWhiteSpace(document.Fence)) ||

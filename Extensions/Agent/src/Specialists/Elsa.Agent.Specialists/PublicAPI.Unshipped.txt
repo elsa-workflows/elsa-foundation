@@ -7,3 +7,5 @@ virtual Elsa.Agent.Specialists.SpecialistsInMemoryJournalFeature.ConfigureServic
 virtual Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Agent.Specialists.SpecialistsRuntimeFeature.AllowNewOperations.get -> bool
 Elsa.Agent.Specialists.SpecialistsRuntimeFeature.AllowNewOperations.set -> void
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ContentRetention.get -> System.TimeSpan
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ContentRetention.set -> void
