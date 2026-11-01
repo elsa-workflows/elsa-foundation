@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PreparedBackend } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/backends/connections";
+import { StudioBackendConnection as PreparedBackend } from "@elsa-workflows/studio-sdk";
 import { subscribeAgentSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentStream";
 import { register as registerConsole, ConsoleStreamPanel } from "../../../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/src/module";
 import { register as registerLogs, StructuredLogsPanel } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
