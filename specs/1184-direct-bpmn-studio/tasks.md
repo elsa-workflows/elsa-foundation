@@ -68,7 +68,7 @@ These prerequisites serve human and service journeys. No new general storage/fra
 
 ## Phase 7: Cross-cutting qualification and delivery
 
-- [ ] T035 Document actual profile/XML/BPMNDI/permissions/replay/claim/external-work/incident/alteration/migration boundaries in Essentials/src/Activities/Bpmn/Api/README.md and Interchange/README.md; update relevant extension-point catalogs only for implemented contributors.
+- [x] T035 Document actual profile/XML/BPMNDI/permissions/replay/claim/external-work/incident/alteration/migration boundaries in Essentials/src/Activities/Bpmn/Api/README.md and Interchange/README.md; update relevant extension-point catalogs only for implemented contributors. The API README documents claim routes/semantics/refusals, the separate claims capability and operational/deferred boundaries; Core declares format 6; Interchange documents claim authoring and its publishing relation; the runtime catalogs record the cleared-state projector members, the duplicate-selector rule and RunEtlStateViewProjector.
 - [ ] T036 Run affected architecture/composition/public API/ApiCompat/magnitude/tier checks; reconcile newer main and record exact results in specs/1184-direct-bpmn-studio/evidence/final/README.md. No inherited PR3410 version exception.
 - [ ] T037 Complete all FR001–021/SC001–006 evidence mapping and independent full-PR review rounds on the exact final head; post receipts on PR3603 and keep Project62 current.
 - [ ] T038 Set specs/1184-direct-bpmn-studio/spec.md to Implemented in the delivery diff only after acceptance is complete; remove terminal checklist residue in that same PR per docs/reference/spec-lifecycle.md.
