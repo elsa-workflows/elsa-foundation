@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 function need(condition, message) { if (!condition) throw new Error(message); }
@@ -73,12 +73,12 @@ page.on("request", request => {
   if (url.origin === backend && owningDraftPath === url.pathname && ["PUT", "POST", "PATCH", "DELETE"].includes(request.method())) {
     owningWrites.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
   }
-  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || request.method() !== "POST") return;
+  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
 page.on("response", response => {
   const url = new URL(response.url());
-  if (url.origin !== backend || url.pathname !== witness.ownerEndpoint || response.request().method() !== "GET") return;
+  if (url.origin !== backend || ![witness.ownerEndpoint, witness.sizeOwnerEndpoint].includes(url.pathname) || response.request().method() !== "GET") return;
   const observation = { url: diagnosticUrl(response.url()), status: response.status(), completed: false };
   moduleOwnerReads.push(observation);
   pendingOwnerReads.push(response.text().then(rawBody => Object.assign(observation, { rawBody, completed: true }))
@@ -86,7 +86,7 @@ page.on("response", response => {
 });
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
 function observeResourceInteractions({ route }) {
-  const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home"];
+  const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
   let pressed = null, sequence = 0;
   function control(target) {
     if (!(target instanceof Element)) return null;
@@ -468,6 +468,136 @@ function unrelated(value) {
 }
 function canonicalLayout(value) {
   return value.map(row => ({ ...row, width: row.width ?? null, height: row.height ?? null, additionalProperties: row.additionalProperties ?? null }));
+}
+async function autonomySize() {
+  const cases = {
+    "automatic-size-control": ["full-auto", "full-auto"],
+    "reviewed-size-control": ["manual", "manual"],
+    "automatic-to-manual": ["full-auto", "manual"],
+    "manual-to-automatic": ["manual", "full-auto"]
+  };
+  const pair = cases[config.autonomyCase];
+  need(pair, "The autonomy baseline requires an exact declared case key.");
+  const [initialMode, requestedMode] = pair;
+  const modeLabels = { manual: "Manual review", "full-auto": "Autopilot" };
+  async function selectMode(mode) {
+    const button = dock().getByRole("button", { name: "Auto-apply mode", exact: true });
+    await expect(button).toBeEnabled();
+    await button.click();
+    await dock().getByRole("menu", { name: "Auto-apply mode", exact: true })
+      .getByRole("menuitemradio", { name: new RegExp("^" + modeLabels[mode] + "(?:\\s|$)") }).click();
+    await expect(button).toHaveText(modeLabels[mode]);
+  }
+  await page.goto(studio + witness.route);
+  await expect(page.getByTestId("acme-home-revision")).toBeVisible();
+  await expect(page.getByTestId("acme-home-size")).not.toHaveText("Not available");
+  const before = await owner("size-owner-before", witness.sizeOwnerEndpoint);
+  const layoutBefore = await owner("size-layout-before", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
+  const bootstrap = await owner("autonomy-native-bootstrap", "/_elsa/agent/bootstrap");
+  const installedCapabilities = bootstrap.value.data?.capabilities;
+  need(Array.isArray(installedCapabilities) && installedCapabilities.some(item => item.id === witness.sizeCapability && item.moduleId === witness.moduleId),
+    "The actual backend must advertise the module's size capability before this journey.");
+  result.ownerBefore = before.receipt;
+  need(["small", "medium"].includes(before.value.size), "A canonical non-noop native size is required.");
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await expect(dock()).toBeVisible();
+  await selectMode(initialMode); // No conversation exists yet: this controls the real create request.
+  need(requests.length === 0, "The initial mode must be selected before the first native session or prompt.");
+  const readCommand = command(witness.readTool, {});
+  const created = responseFor("/sessions"), readMessage = responseFor("/messages");
+  await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
+  const creation = await accepted(created, "autonomy-create-session");
+  expect(creation.response.request().postDataJSON().autonomyMode).toBe(initialMode);
+  const read = await accepted(readMessage, "autonomy-read-message");
+  const sessionId = creation.value.data?.sessionId;
+  need(typeof sessionId === "string" && sessionId && read.value.data?.message?.sessionId === sessionId,
+    "The harmless read must belong to the actual newly created session.");
+  await expect(dock().getByRole("region", { name: "Module results", exact: true }).getByTestId("acme-home-result")).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  expect((await owner("size-owner-after-read", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
+  const initialSession = await owner("autonomy-session-before-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  expect(initialSession.value.data?.sessionId).toBe(sessionId);
+  const selectionOffset = requests.length;
+  if (initialMode !== requestedMode) await selectMode(requestedMode);
+  const selectionRequests = requests.slice(selectionOffset);
+  const targetSize = before.value.size === "small" ? "medium" : "small";
+  const sizeCommand = command(witness.sizeTool, { size: targetSize });
+  await page.getByRole("combobox", { name: "Personal card size", exact: true }).selectOption(targetSize);
+  const sizeMessage = responseFor("/messages");
+  await page.getByRole("button", { name: "Resize with Weaver", exact: true }).click();
+  const sent = await accepted(sizeMessage, "autonomy-size-message");
+  expect(sent.value.data?.message?.sessionId).toBe(sessionId);
+  expect(new URL(sent.response.url()).pathname).toBe("/_elsa/agent/sessions/" + sessionId + "/messages");
+  const sentBody = sent.response.request().postDataJSON();
+  // The current host forwards its first active capability; the module prompt source
+  // identifies the size action. Do not invent action-specific capability propagation.
+  expect(sentBody.requestedCapabilities).toEqual(read.response.request().postDataJSON().requestedCapabilities);
+  need(sentBody.requestedCapabilities.length === 1 && installedCapabilities.some(item => item.id === sentBody.requestedCapabilities[0]
+    && item.moduleId === witness.moduleId), "The requested capability must be actually installed for this module.");
+  expect(sentBody.source).toMatchObject({ moduleId: witness.moduleId, actionId: witness.sizeTool });
+  expect(sentBody.contextAttachments).toEqual(expect.arrayContaining([expect.objectContaining({ moduleId: witness.moduleId,
+    contentType: witness.contextType, target: expect.objectContaining({ resourceId: witness.widgetId, revision: before.value.revision }) })]));
+  // A visible module preview/result distinguishes real review from real application; idle alone can race dispatch.
+  await expect(dock().getByTestId("acme-home-size-result").last()).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const pending = dock().locator('.agent-proposal[data-status="awaiting-approval"]').filter({ has: page.getByTestId("acme-home-size-result") });
+  const pendingCount = await pending.count();
+  need(pendingCount <= 1, "The single size request created duplicate review proposals.");
+  const outcome = pendingCount === 1 ? "review" : "automatic";
+  const atDecision = await owner("size-owner-at-decision", witness.sizeOwnerEndpoint);
+  const layoutAtDecision = await owner("size-layout-at-decision", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
+  if (outcome === "review") {
+    expect(atDecision.value).toEqual(before.value);
+    expect(layoutAtDecision.value).toEqual(layoutBefore.value);
+    await expect(pending.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    result.evidence.push(retain("autonomy-pending-review", { status: await pending.getAttribute("data-status"), text: await pending.innerText() }));
+  } else {
+    expect(atDecision.value.size).toBe(targetSize);
+    expect(atDecision.value.revision).not.toBe(before.value.revision);
+    await expect(dock().getByTestId("acme-home-size-result").last()).toContainText("independently confirmed the saved size");
+  }
+  const expectedOutcome = requestedMode === "manual" ? "review" : "automatic";
+  const mismatch = expectedOutcome !== outcome;
+  need(!mismatch || initialMode !== requestedMode, "An unchanged-mode control has the wrong native behavior; this is not the established-session mismatch.");
+  // Complete an expected reviewed journey once. A wrong review pause in manual-to-automatic is left untouched.
+  if (outcome === "review" && !mismatch) {
+    await approve(pending, "autonomy-size");
+    expect((await owner("size-owner-after-approval", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
+    const executed = responseFor("/execute");
+    await pending.getByRole("button", { name: "Apply", exact: true }).click();
+    await accepted(executed, "autonomy-size-execute");
+    await expect(pending).toHaveAttribute("data-status", "executed");
+    await expect(pending.getByTestId("acme-home-size-result")).toContainText("independently confirmed the saved size");
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+  }
+  const after = await owner("size-owner-after", witness.sizeOwnerEndpoint);
+  const layoutAfter = await owner("size-layout-after", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
+  result.ownerAfter = after.receipt;
+  const finalSession = await owner("autonomy-session-after-outcome", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  expect(finalSession.value.data?.sessionId).toBe(sessionId);
+  expect(requests.filter(item => new URL(item.url).pathname === "/_elsa/agent/sessions")).toHaveLength(1);
+  expect(requests.filter(item => new URL(item.url).pathname.endsWith("/messages"))).toHaveLength(2);
+  const applied = outcome === "automatic" || !mismatch;
+  if (applied) {
+    expect(after.value.size).toBe(targetSize);
+    expect(after.value.revision).not.toBe(before.value.revision);
+  } else expect(after.value).toEqual(before.value);
+  result.autonomy = { caseKey: config.autonomyCase, initialMode, requestedMode, expectedOutcome, outcomeAtDecision: outcome,
+    sameSessionId: sessionId, readCommandId: readCommand.commandId, sizeCommandId: sizeCommand.commandId,
+    readMessageId: read.value.data?.message?.id, sizeMessageId: sent.value.data?.message?.id,
+    readRequestId: read.value.data?.message?.requestId, sizeRequestId: sent.value.data?.message?.requestId,
+    selectionRequests, targetSize, applied, modeMismatch: mismatch, policyAcknowledgementClaimed: false,
+    // Baseline GET is retained verbatim; no effective-policy readback exists on this source.
+    effectivePolicyReadbackExposed: Object.hasOwn(finalSession.value.data, "policy"),
+    ownerAtDecision: atDecision.receipt, layoutBefore: layoutBefore.receipt, layoutAtDecision: layoutAtDecision.receipt,
+    layoutAfter: layoutAfter.receipt, sessionBefore: initialSession.receipt, sessionAfter: finalSession.receipt };
+  result.observations = { sameConversation: true, initialModeBeforeCreation: true, nativeOutcomeBeforeModeAssertion: true,
+    ownerObserved: true, noImplicitExecute: outcome !== "automatic" || !requests.some(item => item.url.endsWith("/execute")) };
+  if (mismatch) {
+    result.status = "failed"; result.expectedFailureObserved = true;
+    result.actual = { stage: "session-mode", diagnostic: "autonomy.mode_mismatch" };
+  }
+  await screenshot("autonomy-native-outcome");
 }
 async function resource() {
   await page.goto(studio + witness.route);
@@ -1022,6 +1152,19 @@ try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
+  else if (config.journey === "autonomy-size") {
+    let deadline;
+    try {
+      await Promise.race([autonomySize(), new Promise((_resolve, reject) => {
+        deadline = setTimeout(() => {
+          // Stop pending UI actions in this owned context; never let an expired
+          // diagnostic submit a late intent while failure evidence is captured.
+          void context.close().catch(error => { result.deadlineCleanupError = redact({ type: error.name, message: error.message }); });
+          reject(new Error("The bounded autonomy browser diagnostic expired after 180 seconds; no retry."));
+        }, 180000);
+      })]);
+    } finally { clearTimeout(deadline); }
+  }
   else if (["workflow", "duplicate-ack", "client-binding-removed", "malformed-result", "lost-confirmation"].includes(config.journey)) await workflow();
   else await resource();
   need(pageErrors.length === 0, "Studio raised browser errors: " + pageErrors.join("; "));

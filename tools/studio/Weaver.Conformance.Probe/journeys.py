@@ -149,7 +149,7 @@ def _active_resource(runtime, name):
     w = runtime.witness
     tools = [item for item in generation["tools"] if item["moduleId"] == w["moduleId"]]
     contexts = [item for item in generation["contextSources"] if item["moduleId"] == w["moduleId"]]
-    check({item["name"] for item in tools} == {w["readTool"], w["writeTool"]} and len(contexts) == 1,
+    check({item["name"] for item in tools} == {w["readTool"], w["writeTool"], w["sizeTool"]} and len(tools) == 3 and len(contexts) == 1,
           "Native serving shell did not compose the exact resource tools and context source")
     registry, reg = runtime.native.json(runtime.studio, name + "-registry", "/_elsa/module-management/registry")
     modules = [item for item in registry["modules"] if item["id"] == w["moduleId"]]
