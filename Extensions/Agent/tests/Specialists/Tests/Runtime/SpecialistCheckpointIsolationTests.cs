@@ -67,8 +67,10 @@ public sealed partial class SpecialistNativeTests
         await enricher.ValidateFinalAsync(enriched with { StateChanges = altered });
     }
 
-    [Fact]
-    public async Task Workflow_only_specialist_cancellation_refuses_a_later_nonterminal_operation_key_change()
+    [Theory]
+    [InlineData("operation-key")]
+    [InlineData("node")]
+    public async Task Workflow_only_specialist_cancellation_refuses_a_later_nonterminal_identity_change(string defect)
     {
         await using var provider = await ServicesAsync(new FixtureFactory("{\"Article\":\"unused\"}"));
         var executable = await ExecutableAsync(provider);
@@ -84,9 +86,11 @@ public sealed partial class SpecialistNativeTests
         var enricher = provider.GetRequiredService<IEnumerable<IRuntimeCheckpointCommitEnricher>>().OfType<SpecialistCheckpointEnricher>().Single();
         var enriched = await enricher.EnrichAsync(commit);
         Assert.Single(enriched.PostCommitIntents);
-        var changed = parent with { Provenance = parent.Provenance with { Metadata = new Dictionary<string, string>(parent.Provenance.Metadata)
-            { [RuntimeMetadataKeys.OperationKey] = "changed-after-cancellation-enrichment" } } };
-        Assert.NotEqual(parent.OperationKey, changed.OperationKey);
+        var changed = defect == "node"
+            ? parent with { Execution = parent.Execution with { ExecutableNodeId = SpecialistNativeBinding.ChildNode(executable.RootActivity).ExecutableNodeId } }
+            : parent with { Provenance = parent.Provenance with { Metadata = new Dictionary<string, string>(parent.Provenance.Metadata)
+                { [RuntimeMetadataKeys.OperationKey] = "changed-after-cancellation-enrichment" } } };
+        Assert.True(parent.OperationKey != changed.OperationKey || parent.Execution.ExecutableNodeId != changed.Execution.ExecutableNodeId);
         await Assert.ThrowsAsync<SpecialistTurnException>(() => enricher.ValidateFinalAsync(enriched with
         {
             StateChanges = changes.WithActivityExecutions([new(parent.InvocationId, RuntimeStateChangeOperation.Upsert, changed, new Dictionary<string, string>())])

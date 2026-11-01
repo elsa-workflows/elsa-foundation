@@ -75,7 +75,9 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
         if (WholeCancelled(commit) != evidence.WholeCancelled ||
             evidence.Plan.FacadeNodes is not null && commit.StateChanges.WorkflowExecution != evidence.Workflow)
             throw SpecialistSettlementBoundary.Invalid();
-        var final = RelevantActivities(commit, evidence.Plan.FacadeNodes).ToDictionary(change => change.Id, StringComparer.Ordinal);
+        var knownInvocations = evidence.Activities.Select(change => change.Id)
+            .Concat(evidence.Plan.ScannedFacades?.Keys ?? []).ToHashSet(StringComparer.Ordinal);
+        var final = RelevantActivities(commit, evidence.Plan.FacadeNodes, knownInvocations).ToDictionary(change => change.Id, StringComparer.Ordinal);
         foreach (var before in evidence.Activities)
             if (!final.Remove(before.Id, out var after) || before != after) throw SpecialistSettlementBoundary.Invalid();
         // The later control producer can add a previously scanned root to the change set. It
@@ -89,9 +91,9 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
     private static ActivityExecutionState WithoutControl(ActivityExecutionState state) =>
         state with { ProducedControl = null, ProducedControlSourceCommitId = null };
 
-    private static IEnumerable<NativeChange> RelevantActivities(RuntimeCheckpointCommit commit, IReadOnlySet<string>? facades) =>
+    private static IEnumerable<NativeChange> RelevantActivities(RuntimeCheckpointCommit commit, IReadOnlySet<string>? facades, IReadOnlySet<string>? knownInvocations = null) =>
         commit.StateChanges.ActivityExecutions.Where(change =>
-            (facades is null || facades.Contains(change.State.Execution.ExecutableNodeId)) &&
+            (facades is null || facades.Contains(change.State.Execution.ExecutableNodeId) || knownInvocations?.Contains(change.StateId) == true) &&
             (WholeCancelled(commit) || change.Operation == RuntimeStateChangeOperation.Upsert &&
                 (change.State.Status == ActivityExecutionStatus.Cancelled ||
                  commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCompleted && change.State.Status == ActivityExecutionStatus.Completed && change.State.ContractIdentity is not null)))
