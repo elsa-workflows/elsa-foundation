@@ -26,9 +26,10 @@ after causal selection and before final contract review.
 
 ## Session replacement owner
 
-Extend `IAgentSessionService` or its demonstrated owning boundary rather than adding a parallel
-admission registry. Unsupported default members may refuse explicitly for legacy replacements;
-they must never emulate atomic support with independent checks or a permissive fallback.
+Extend the session service's demonstrated owning boundary rather than adding a parallel admission
+registry. The T007 selection below keeps the state in the default session row behind a separate
+public policy service. Unsupported compositions refuse explicitly; they never emulate atomic support
+with independent checks or a permissive fallback.
 
 The owner must cover:
 
@@ -65,19 +66,31 @@ are never accepted from or emitted to HTTP, SSE or module payloads.
 | --- | --- | --- |
 | Prompt | Atomically with insertion of a Pending user message; stamps that message's accepted policy and revision | When that exact message becomes terminal, including a never-started Pending message terminalized directly |
 | Foreground | By the orchestrator before it reads policy for a turn or continuation | After actual registry Unregister completes. If Register throws and a write cannot be ruled out, it stays unresolved; the owner never infers that nothing was written |
-| Preparation | By the invoker before module preparation and authority awaits, also for direct callers with no turn | After a proposal claim covers the work, or on refusal |
-| Proposal | Before store insertion, including direct `AddAsync` callers | When the proposal settles as Executed with a validated receipt, Denied, pre-dispatch Expired or refused. AwaitingClient and Uncertain keep it |
+| Preparation | By the invoker for a Mutating tool, after its static checks and before the call gate, preparation or authority awaits; also for direct callers with no turn | In a `finally` on every exit (refusal, duplicate replay, cancellation, audit failure), after the proposal claim exists when there is one |
+| Proposal | Before store insertion, including direct `AddAsync` callers; it records the prepared invocation's deadline | When the proposal reaches Executed, Denied, Expired, Failed, Cancelled or server-scope Uncertain. AwaitingClient keeps it. Client-scope Uncertain keeps it until the continuation consumes it, while the Pause claim still covers the originating turn. A late acknowledgement does not depend on mode |
 | Pause | Before the orchestrator releases foreground for a verified paused turn | After the continuation's foreground claim is held and the pause is removed |
+
+A pre-dispatch proposal claim (AwaitingApproval, or an approved FullAuto proposal that never ran)
+whose prepared deadline has passed does not count as busy. That covers orphans left when a turn is
+cancelled between proposal insertion and the pause. `ExecuteAsync` marks the claim dispatched under
+the row monitor, and refuses if the deadline has passed, before setting Executing. A dispatched
+claim never expires into idle.
+
+The default registry's busy refusal is a known pre-write refusal and releases the new Foreground
+claim. A Foreground claim left unresolved by an unknown registry failure keeps that session busy for
+policy changes. Restart and recovery belong to #3441. That is truthful conservative busy, not a
+fabricated idle state.
 
 Claims may overlap during handoff, so there is no idle gap. Releasing an old token never releases a
 successor's claim. The call-key → per-proposal semaphore → short session-transition order is kept.
 No monitor is held across I/O, callbacks or semaphore waits.
 
-**No reservation before collection.** The only field an update may change is `AutonomyMode`.
-Availability, capability, context visibility and sensitivity checks do not read it. A prompt is
-therefore attributed to the policy current at its atomic insertion. "Policy first" means the new
-prompt carries the new revision; "prompt first" means the update loses as busy. A future update of
-collection-relevant fields would need a reservation and is outside this leaf.
+**No reservation before collection.** The only field an update may change is `AutonomyMode`. The
+default evaluator and collector do not read it. Replaceable evaluators and collectors still receive
+the whole policy, so admission carries the revision read at authorization into insertion. Insertion
+refuses with an explicit `policy_changed` conflict if the revision moved meanwhile. "Policy first"
+then means a retried prompt carries the new revision; "prompt first" means the update loses as busy.
+This protects future policy fields without a reservation.
 
 **Conditional update.** `ChangeAutonomy(session, requestedMode, expectedRevision)` runs under the
 row monitor in this order:
@@ -93,14 +106,22 @@ row monitor in this order:
 A lost response is resolved by readback plus a conditional retry. Reading an unchanged old revision
 does not acknowledge an in-flight request.
 
+**Approval authority.** The claim's snapshot is the approval authority for preparation and turns.
+It replaces reads taken before the claim: the orchestrator's early session lookup feeding the turn
+request, tool loops and continuation, and the invoker's early lookup. A caller-supplied `policy`
+argument can only tighten it. So a proposal's stamped revision always matches its approval basis.
+
 **Readback.** Create and detail responses carry effective autonomy, ceiling, allowed modes and
 revision. Accepted messages carry their accepted revision, so later selector values never relabel
 earlier results.
 
-**Participation and replacements.** The update path is supported only when the resolved session
-service, orchestrator, invoker and proposal service all participate with the same owner instance;
-the default registrations do. Otherwise the update returns an explicit unsupported outcome and
-creates no default shadow state. Policy cannot change without the owner, so admission and turns keep
+**Participation and replacements.** `ChangeAutonomy` and policy readback live on a new public scoped
+policy service. `IAgentSessionService` gains no new members. Claims are internal. The update is
+supported only when the resolved session service, orchestrator, invoker and proposal service are the
+default participants of the same owner instance. Any replacement or forwarding decorator of those
+four makes the update return an explicit unsupported outcome, with no default shadow state. Per-turn
+wrappers are not registrations and are unaffected. A supported participating replacement therefore
+means a turn registry or pause store replacement. Policy cannot change without the owner, so admission and turns keep
 today's behavior under replacements. Registry and pause store replacements need no new members,
 because the orchestrator holds the claims around their calls. Supported, unsupported and forwarding
 replacements are qualified by T019.
