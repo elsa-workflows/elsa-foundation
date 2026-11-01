@@ -155,12 +155,20 @@ function studioRegistry() {
   };
 }
 
+// These tests exercise the Studio host's registry queries, so the pages are switched off their default (Server) tab.
 function renderModuleManagementPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<ModuleManagementPage api={api} />);
+  return selectStudioHost(renderWithClient(<ModuleManagementPage api={api} />));
 }
 
 function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<PackageFeedsPage api={api} />);
+  return selectStudioHost(renderWithClient(<PackageFeedsPage api={api} />));
+}
+
+function selectStudioHost<T extends { container: HTMLElement }>(rendered: T) {
+  const studioTab = Array.from(rendered.container.querySelectorAll("[aria-label='Hosts'] button")).find(button => button.textContent === "Studio");
+  expect(studioTab).toBeTruthy();
+  flushSync(() => studioTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  return rendered;
 }
 
 async function clickSourceButton(container: Element, text: string) {

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { createEndpointContext, StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
+import { createEndpointContext, defaultStudioHostId, StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 describe("module management page", () => {
@@ -14,7 +14,7 @@ describe("module management page", () => {
   });
 
   it("renders Studio host module and package registry details", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     const sourceNav = sourceNavigator(container);
     const gridPanel = activeGridPanel(container);
 
@@ -48,7 +48,7 @@ describe("module management page", () => {
   });
 
   it("keeps drop-folder package management inline instead of opening a dialog", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
@@ -82,7 +82,7 @@ describe("module management page", () => {
   });
 
   it("keeps host operations and feed management outside the selected module inspector", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
 
     expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("Operations");
     expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("Host operations");
@@ -93,7 +93,7 @@ describe("module management page", () => {
   });
 
   it("renders module and package manifests in a dedicated inspector tab", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickSourceButton(container, "Nuplane");
     await clickRowContaining(activeGridPanel(container), "Elsa.Studio.FeatureManagement");
 
@@ -112,7 +112,7 @@ describe("module management page", () => {
   });
 
   it("shows module load status and reasons under module management diagnostics", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickRowContaining(activeGridPanel(container), "Elsa.Studio.FeatureManagement");
 
     const diagnosticsTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Diagnostics");
@@ -132,7 +132,7 @@ describe("module management page", () => {
   });
 
   it("shows package dependencies in the package inspector tab", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickSourceButton(container, "Nuplane");
     await clickRowContaining(activeGridPanel(container), "Elsa.Studio.FeatureManagement");
 
@@ -163,7 +163,7 @@ describe("module management page", () => {
           lastWriteTimeUtc: new Date().toISOString()
         }]
       })
-    }));
+    }), "Studio");
     await clickSourceButton(container, "Nuplane");
     const gridPanel = activeGridPanel(container);
 
@@ -178,7 +178,7 @@ describe("module management page", () => {
   });
 
   it("triggers the hidden file input from the inline Upload Packages button", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
@@ -201,7 +201,7 @@ describe("module management page", () => {
   it("uploads multiple valid package files from the file picker and ignores non-packages", async () => {
     const fetchMock = mockFetch();
     const hostGetJson = vi.fn(async () => studioRegistry());
-    const { container, unmount } = await renderModuleManagementPage(stubApi({ hostGetJson }));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ hostGetJson }), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
@@ -230,7 +230,7 @@ describe("module management page", () => {
 
   it("shows an error when the selected upload files contain no packages", async () => {
     const fetchMock = mockFetch();
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
@@ -253,7 +253,7 @@ describe("module management page", () => {
 
   it("uploads package files dropped on the inline drop zone", async () => {
     const fetchMock = mockFetch();
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     const dropZone = container.querySelector(".modules-upload-dropzone");
@@ -283,7 +283,7 @@ describe("module management page", () => {
   it("deletes staged uploads through the existing drop-folder API after confirmation", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn(async () => true);
-    const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     const deleteButton = stagedUploads(container)?.querySelector<HTMLButtonElement>("[title*='Delete Elsa.Studio.FeatureManagement.1.0.1.nupkg']");
@@ -310,7 +310,7 @@ describe("module management page", () => {
   it("does not delete a staged upload when the confirmation is cancelled", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn(async () => false);
-    const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }), "Studio");
     await clickSourceButton(container, "Nuplane");
 
     const deleteButton = stagedUploads(container)?.querySelector<HTMLButtonElement>("[title*='Delete Elsa.Studio.FeatureManagement.1.0.1.nupkg']");
@@ -346,7 +346,7 @@ describe("module management page", () => {
         ],
         dropFolderPackages: []
       })
-    }));
+    }), "Studio");
 
     expect(sourceNavigator(container)?.textContent).toContain("external-feed");
     expect(sourceNavigator(container)?.textContent).toContain("studio-local-packages");
@@ -367,7 +367,7 @@ describe("module management page", () => {
   });
 
   it("shows origin, source kind, package source, and Nuplane state in the inspector", async () => {
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const { container, unmount } = await renderModuleManagementPage(stubApi(), "Studio");
     const overview = container.querySelector(".modules-inspector");
 
     expect(overview?.textContent).toContain("Origin");
@@ -389,7 +389,7 @@ describe("module management page", () => {
 
   it("renders host-scoped package feeds on a dedicated page", async () => {
     const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(serverRegistry()));
-    const { container, unmount } = await renderPackageFeedsPage(stubApi({ bridgeRegistryGetJson }));
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ bridgeRegistryGetJson }), "Studio");
 
     expect(container.textContent).toContain("Package feeds");
     expect(container.textContent).not.toContain("Studio host");
@@ -460,7 +460,7 @@ describe("module management page", () => {
   });
 
   it.each(["add", "edit"] as const)("focuses, contains, and restores focus for the %s feed dialog", async mode => {
-    const { container, unmount } = await renderPackageFeedsPage(stubApi());
+    const { container, unmount } = await renderPackageFeedsPage(stubApi(), "Studio");
     const opener = mode === "add"
       ? Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!
       : container.querySelector<HTMLButtonElement>("[aria-label='Edit studio-local-packages']")!;
@@ -485,7 +485,7 @@ describe("module management page", () => {
 
   it("submits a new package feed through the form when Enter requests submission", async () => {
     const fetchMock = mockFetch();
-    const { container, unmount } = await renderPackageFeedsPage(stubApi());
+    const { container, unmount } = await renderPackageFeedsPage(stubApi(), "Studio");
     const addFeedButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!;
     flushSync(() => addFeedButton.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     await flushPromises();
@@ -508,7 +508,7 @@ describe("module management page", () => {
   it("confirms before deleting a package feed and calls the delete API when confirmed", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn(async () => true);
-    const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }));
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }), "Studio");
 
     const deleteFeedButton = container.querySelector<HTMLButtonElement>("[aria-label='Delete studio-local-packages']");
     expect(deleteFeedButton).toBeTruthy();
@@ -532,7 +532,7 @@ describe("module management page", () => {
   it("does not delete a package feed when the confirmation is cancelled", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn(async () => false);
-    const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }));
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }), "Studio");
 
     const deleteFeedButton = container.querySelector<HTMLButtonElement>("[aria-label='Delete studio-local-packages']");
     expect(deleteFeedButton).toBeTruthy();
@@ -545,6 +545,29 @@ describe("module management page", () => {
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
+  it("opens module management on the Server host by default", async () => {
+    const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(serverRegistry()));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ bridgeRegistryGetJson }));
+
+    expect(defaultStudioHostId).toBe("server");
+    expect(hostTab(container, "Server")?.getAttribute("aria-selected")).toBe("true");
+    expect(hostTab(container, "Studio")?.getAttribute("aria-selected")).toBe("false");
+    expect(activeGridPanel(container)?.textContent).toContain("Workflows Runtime API");
+
+    await unmount();
+  });
+
+  it("opens package feeds on the Server host by default", async () => {
+    const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(serverRegistry()));
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ bridgeRegistryGetJson }));
+
+    expect(hostTab(container, "Server")?.getAttribute("aria-selected")).toBe("true");
+    expect(hostTab(container, "Studio")?.getAttribute("aria-selected")).toBe("false");
+    expect(container.textContent).toContain("Server host management is read-only in Studio");
 
     await unmount();
   });
@@ -700,9 +723,9 @@ describe("module management page", () => {
     // The bridge throws (Studio-origin failure). The Studio tab still renders its own registry read.
     const { container, unmount } = await renderModuleManagementPage(stubApi({
       bridgeRegistryGetJson: async () => { throw new Error("bridge offline"); }
-    }));
+    }), "Studio");
 
-    // Studio tab (default) renders normally.
+    // Studio tab renders normally.
     expect(activeGridPanel(container)?.textContent).toContain("Feature management");
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
@@ -1158,7 +1181,8 @@ function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePacka
   return registry;
 }
 
-async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
+// Opens the page on its default host tab, or on `host` when a test exercises one host's tab specifically.
+async function renderModuleManagementPage(api: ElsaStudioModuleApi, host?: HostTabLabel) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -1167,6 +1191,7 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
     root.render(withQueryClient(<ModuleManagementPage api={api} />));
   });
   await flushPromises();
+  if (host) await selectHostTab(container, host);
 
   return {
     container,
@@ -1177,7 +1202,7 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
   };
 }
 
-async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
+async function renderPackageFeedsPage(api: ElsaStudioModuleApi, host?: HostTabLabel) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -1186,6 +1211,7 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
     root.render(withQueryClient(<PackageFeedsPage api={api} />));
   });
   await flushPromises();
+  if (host) await selectHostTab(container, host);
 
   return {
     container,
@@ -1194,6 +1220,21 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
       container.remove();
     }
   };
+}
+
+type HostTabLabel = "Studio" | "Server";
+
+function hostTab(container: HTMLElement, label: HostTabLabel) {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>("[aria-label='Hosts'] button")).find(button => button.textContent === label);
+}
+
+async function selectHostTab(container: HTMLElement, label: HostTabLabel) {
+  const tab = hostTab(container, label);
+  expect(tab).toBeTruthy();
+  flushSync(() => {
+    tab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await flushPromises();
 }
 
 async function flushAnimationFrame() {
