@@ -1,0 +1,123 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
+using Acme.Specialist.ModelFixture;
+using Elsa.Activities.Runtime;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
+using Elsa.Agent.Specialists;
+using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Events;
+using Elsa.Locking.FileSystem;
+using Elsa.Tasks;
+using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Secrets.Features;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+
+var mode = args.Length > 1 ? args[1] : "native";
+var checks = new List<string>();
+void Check(bool condition, string name)
+{
+    if (!condition) throw new InvalidOperationException(name);
+    checks.Add(name);
+}
+using var placement = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(args[0], "placement.json")));
+var source = placement.RootElement;
+var node = source.GetProperty("Root").Deserialize<ExecutableNode>()!;
+var resume = source.GetProperty("ResumeTargets").Deserialize<Dictionary<string, WorkflowExecutableResumeTarget>>()!;
+var requirements = source.GetProperty("RuntimeRequirements").Deserialize<RuntimeRequirement[]>()!;
+var storage = JsonSerializer.Deserialize<RuntimeStorageDriverRequirement[]>(await File.ReadAllTextAsync(Path.Combine(args[0], "storage.json")))!;
+Check(node.DescriptorPayload.GetProperty("definitionVersionId").GetString() == "copywriter-v1", "exact reviewed specialist version imported");
+Check(node.ChildSlots.Single().Activities.Single().ExecutableNodeId != "model-turn", "real placement remapped the worker node");
+var services = new ServiceCollection();
+services.AddLogging();
+services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+var locks = Path.Combine(args[0], "runtime-locks-" + mode);
+Directory.CreateDirectory(locks);
+services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature).Assembly,
+        typeof(SpecialistsRuntimeFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
+        typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
+        typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+        typeof(FileSystemLockingFeature).Assembly)
+    .AddShell("specialist-package", shell => shell.WithFeature<PackageHostFeature>()
+        .WithFeature<BackgroundActivitiesFeature>(feature => feature.RunWorkers = false)
+        .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)))
+        .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = locks)));
+await using var host = services.BuildServiceProvider();
+var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("specialist-package");
+await using var executionScope = activated.BeginScope();
+var provider = executionScope.ServiceProvider;
+var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
+Check(types.TryGetType(SpecialistRuntimeIds.FacadeCapability, out _), "CShells startup registered the specialist runtime alias");
+Check(types.TryGetType("String", out var stringType) && stringType == typeof(string) &&
+    types.TryGetType("System.Text.Json.JsonElement", out var jsonType) && jsonType == typeof(JsonElement), "ordinary activity startup registered the native business types");
+Check(AppDomain.CurrentDomain.GetAssemblies().Count(x => x.GetName().Name == "Microsoft.Extensions.AI.Abstractions") == 1,
+    "model and runtime share one chat abstraction assembly");
+var observations = provider.GetRequiredService<ModelObservations>();
+observations.InvalidResult = mode == "invalid-result";
+var identity = new WorkflowExecutableIdentity("packaged-editorial-" + mode, "workflow", "workflow-v1", "1.0.0", node.DescriptorPayload.GetProperty("templateHash").GetString()!);
+var executable = new WorkflowExecutable(identity, node, resume, DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference, requirements, storage);
+await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+var now = DateTimeOffset.UtcNow;
+var executionId = "package-run-" + mode;
+var actor = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(executionId, WorkflowExecutionActorActivationReason.Start, now,
+    "specialist-package-proof", WorkflowExecutionActorCapabilities.InProcessMailbox));
+var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = identity.ArtifactId };
+var payload = new WorkflowExecutionStartCommandPayload(identity, identity.ArtifactId, variables: null, inputs: null, stimulusInput: null, triggerNodeId: null,
+    runKind: WorkflowRunKind.Unknown, pinnedSource: null, parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: null);
+var command = new WorkflowExecutionCommand("start", executionId, WorkflowExecutionCommandKind.Start, now, JsonSerializer.SerializeToElement(payload), metadata);
+var envelope = new WorkflowExecutionCommandEnvelope("start-envelope", executionId, command, "start", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now, 1, metadata);
+await actor.EnqueueAsync(envelope);
+Check(observations.Calls == 0, "coordinator did not call the model inline");
+var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("package-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+Check(claim is not null, "native checkpoint admitted background work");
+await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim!);
+var drain = new WorkflowExecutionCommand("drain", executionId, WorkflowExecutionCommandKind.RunSchedulerWork, DateTimeOffset.UtcNow, null, new Dictionary<string, string>());
+await actor.EnqueueAsync(new("drain-envelope", executionId, drain, "drain", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, DateTimeOffset.UtcNow));
+var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
+var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId);
+Check(observations.Calls == 1 && observations.Opens == 1 && observations.Disposals == 1, "independent model package ran once and disposed its lease");
+if (mode == "invalid-result")
+{
+    Check(workflow?.Status == WorkflowExecutionStatus.Faulted && states.All(x => x.Completion is null), "invalid model result has no accepted native completion");
+}
+else
+{
+    Check(workflow?.Status == WorkflowExecutionStatus.Completed, "native workflow completed through facade and background worker");
+    var completed = states.Single(x => x.Execution.ExecutableNodeId == node.ExecutableNodeId);
+    Check(completed.Completion?.Result.InlineValue?.GetProperty("Article").GetString() == "draft about moss gardens", "validated typed business result committed");
+    Check(observations.Instructions == "Write the supplied brief." && observations.ModelId == "fixture-model", "pinned instructions and model reached MAF");
+    Check(observations.Schema is { } schema && JsonElement.DeepEquals(schema, node.DescriptorPayload.GetProperty("resultSchema")), "exact result schema reached the model client");
+    await actor.EnqueueAsync(envelope);
+    await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim!);
+    Check(observations.Calls == 1, "duplicate native delivery did not repeat the model call");
+}
+Check(!AppDomain.CurrentDomain.GetAssemblies().Any(x => x.GetName().Name is { } name && name.StartsWith("Elsa.", StringComparison.Ordinal) &&
+    (name.Contains(".Design", StringComparison.Ordinal) || name.Contains(".Publishing", StringComparison.Ordinal))), "runtime loaded zero Design or Publishing assemblies");
+Console.WriteLine(JsonSerializer.Serialize(new { mode, checks, passed = checks.Count, liveModel = false, journalProfile = "process-local-development", workflowStatus = workflow?.Status.ToString(),
+    mafAssembly = typeof(ChatClientAgent).Assembly.FullName, chatAbstractionsAssembly = typeof(IChatClient).Assembly.FullName }));
+
+
+[ShellFeature("SpecialistPackageHost", DependsOn = new object[] { "SpecialistsInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking" })]
+public sealed class PackageHostFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddWorkflowRuntime();
+        services.AddFixtureModel();
+        services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+        services.AddPersistenceModes();
+    }
+}

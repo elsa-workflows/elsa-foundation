@@ -70,7 +70,7 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityUpgradePlanner>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
         services.TryAddScoped<IActivityUpgradePlanRefresher>(sp => sp.GetRequiredService<ActivityUpgradePlanner>());
         services.TryAddScoped<IActivityUpgradeDiffBuilder, ActivityUpgradeDiffBuilder>();
-        services.TryAddSingleton<IActivityProviderRegistry, ActivityProviderRegistry>();
+        services.TryAddScoped<IActivityProviderRegistry, ActivityProviderRegistry>();
         services.TryAddSingleton<IActivityContractCapabilityCatalog, ExpressionActivityContractCapabilityCatalog>();
         services.TryAddSingleton<ActivityContractAuthoringValidator>();
         services.TryAddSingleton<IActivityTypeKeyPolicy, DefaultActivityTypeKeyPolicy>();
