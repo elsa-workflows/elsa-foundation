@@ -197,3 +197,11 @@ not permission to exceed Program WIP or run simultaneous solution builds.
 | FR-025 | T054 | A14 |
 | FR-026 | T013,T055,T058–T060 | A15 |
 | SC-001–SC-007 | All story proofs plus T051–T060 | Complete observed A1–A15 |
+
+### M3 review follow-up owned by M7
+
+[M7 #3527](https://github.com/elsa-workflows/elsa-foundation/issues/3527) must resolve indefinite
+protected-content retention for terminal-owner OutcomeUnknown and abandoned Claimed/Dispatching
+turns with a bounded resolution or retention ceiling. Preserve unknown/no-inference-retry semantics,
+conversation pins, diagnostic metadata and replay refusal. The current M3 sweep deliberately pins
+these states; documenting this limitation does not satisfy that M7 acceptance item.

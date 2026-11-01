@@ -34,8 +34,9 @@ publication. Runtime opening requires a positive revision on the same resolved s
 before every SDK transport send, the contributor resolves scope, status, owner, revision and profile
 again; a revoked or edited connection invalidates an already opened lease.
 
-The default primary transport uses HTTPS, HTTP/1.1, no automatic redirects, cookies, proxy credentials
-or `Expect: 100-continue`. SDK retries are disabled. This profile uses explicit API keys, so no ambient
+The default primary transport uses HTTPS, HTTP/1.1, no automatic redirects, cookies, proxies
+or `Expect: 100-continue`. Environment and system egress proxies are unsupported by this built-in
+profile; a host that requires one must supply and qualify an explicit custom transport. SDK retries are disabled. This profile uses explicit API keys, so no ambient
 credential chain or refreshing token callback is admitted. Physical request counting must include the
 primary transport; counting outer agent calls alone does not prove a request budget. Custom transports
 and authentication profiles need separate qualification.

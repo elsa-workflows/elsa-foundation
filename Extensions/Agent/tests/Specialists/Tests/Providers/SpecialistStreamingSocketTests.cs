@@ -24,8 +24,8 @@ public sealed partial class SpecialistProviderSocketTests
 {
     public static IEnumerable<object[]> StreamingCases() =>
         from vendor in new[] { "anthropic", "azure-openai" }
-        from mode in new[] { "success", "thinking", "missing-terminal", "missing-stop", "pause", "refusal", "truncated", "invalid", "oversized", "overrun", "loss", "cancel-after", "cancel-before", "retry" }
-        where vendor == "anthropic" || mode is not ("thinking" or "missing-stop" or "pause")
+        from mode in new[] { "success", "thinking", "missing-terminal", "missing-stop", "missing-reason", "pause", "refusal", "truncated", "invalid", "oversized", "overrun", "loss", "cancel-after", "cancel-before", "retry" }
+        where vendor == "anthropic" || mode is not ("thinking" or "missing-stop" or "missing-reason" or "pause")
         from sqlite in new[] { false, true }
         select new object[] { vendor, mode, sqlite };
 
@@ -107,7 +107,7 @@ public sealed partial class SpecialistProviderSocketTests
                 Assert.Null(result);
                 var code = mode switch
                 {
-                    "refusal" => "specialist.result.refused", "truncated" => "specialist.result.truncated", "pause" or "missing-stop" => "specialist.result.incomplete",
+                    "refusal" => "specialist.result.refused", "truncated" => "specialist.result.truncated", "pause" or "missing-stop" or "missing-reason" => "specialist.result.incomplete",
                     "missing-terminal" => "specialist.result.incomplete",
                     "invalid" => "specialist.result.json", "oversized" => "specialist.result.bounds", "overrun" => "specialist.budget.output-overrun", _ => null
                 };
@@ -167,7 +167,8 @@ public sealed partial class SpecialistProviderSocketTests
             Add("content_block_stop", new { type = "content_block_stop", index });
             if (mode is not ("missing-terminal" or "loss" or "cancel-after"))
             {
-                Add("message_delta", new { type = "message_delta", delta = new { stop_reason = mode switch { "truncated" => "max_tokens", "refusal" => "refusal", "pause" => "pause_turn", "unknown" => "fixture_unknown", _ => "end_turn" }, stop_sequence = (string?)null }, usage = new { output_tokens = mode == "overrun" ? 65 : 7 } });
+                if (mode == "missing-reason") Add("message_delta", new { type = "message_delta", delta = new { stop_sequence = (string?)null }, usage = new { output_tokens = 7 } });
+                else Add("message_delta", new { type = "message_delta", delta = new { stop_reason = mode switch { "truncated" => "max_tokens", "refusal" => "refusal", "pause" => "pause_turn", "unknown" => "fixture_unknown", _ => "end_turn" }, stop_sequence = (string?)null }, usage = new { output_tokens = mode == "overrun" ? 65 : 7 } });
                 if (mode != "missing-stop") Add("message_stop", new { type = "message_stop" });
             }
         }

@@ -28,6 +28,12 @@ unacknowledged application sources pin content. Claimed or unknown conversation 
 previous history. The relational purge competes with conversation ownership and turn updates in an
 owned transaction. A changed proof is refused; it is reconsidered on a later sweep.
 
+Unresolved `OutcomeUnknown`, `Claimed` and `Dispatching` turns currently retain protected request
+content indefinitely, even after the native workflow becomes terminal. They are not silently retried
+or administratively resolved by the sweep. The tracked [M7 qualification work](https://github.com/elsa-workflows/elsa-foundation/issues/3527)
+must deliver a bounded terminal-owner resolution or content-retention ceiling, including conversation
+pins, diagnostic status and replay refusal, before the Program can complete.
+
 A successful purge removes the protected request/result/session pair while preserving status,
 operation fingerprint, reservations, usage, delivery/application records, cancellation gates and
 conversation references. `specialist.journal.content-unavailable` identifies a retained operation
@@ -52,6 +58,13 @@ The last two contributions use the [owning Workflows.Runtime catalog](../../../.
 Application and cancellation settlement preserve accepted history and distinguish process application
 from journal acceptance. Retained-reader/key/codec and complete independent-process durable
 runtime/outbox qualification remain M3 obligations.
+
+Checkpoint enrichment checks the exact pinned executable through the existing burst-scoped reader
+before consulting native workflow/activity stores. Workflows without specialist facade nodes return
+without those state reads or a cancellation activity scan. A warm drain adds no artifact-store read;
+without a warm burst, the capability check requires one artifact read. Final validation compares
+commit-local expected intents without repeating store reads and refuses later changes to relevant
+activity/workflow state or removed, conflicting and duplicate specialist intents.
 
 Checkpoint and settlement failures preserve their original cause in the specialist-domain exception,
 with `contextId` and `workflowExecutionId` identifying the checkpoint or exact source. Native source

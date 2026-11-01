@@ -69,7 +69,10 @@ internal sealed class AnthropicSpecialistModelProvider(IConnectionResolver resol
                     if (raw.TryPickStart(out var start)) inputTokens = start.Message.Usage.InputTokens;
                     if (raw.TryPickDelta(out var delta))
                     {
-                        stopReason = raw.Json.GetProperty("delta").GetProperty("stop_reason").GetString();
+                        stopReason = raw.Json.TryGetProperty("delta", out var terminalDelta) &&
+                            terminalDelta.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                            terminalDelta.TryGetProperty("stop_reason", out var reason) &&
+                            reason.ValueKind == System.Text.Json.JsonValueKind.String ? reason.GetString() : null;
                         if (delta.Usage.InputTokens is { } currentInput) inputTokens = currentInput;
                     }
                     if (raw.TryPickStop(out _)) stopped = true;
