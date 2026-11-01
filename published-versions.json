@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "ebc3fafdce0ee827755b4aa7b4f5ddb78d07ed8b",
+  "last_publish_commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -119,33 +119,33 @@
     },
     {
       "package_id": "Elsa.Agent",
-      "version": "4.0.0-preview",
-      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+      "version": "4.0.1-preview",
+      "commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335"
     },
     {
       "package_id": "Elsa.Agent.Anthropic",
-      "version": "4.0.10-preview",
-      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+      "version": "4.0.11-preview",
+      "commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335"
     },
     {
       "package_id": "Elsa.Agent.Api",
-      "version": "4.0.15-preview",
-      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+      "version": "4.0.16-preview",
+      "commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335"
     },
     {
       "package_id": "Elsa.Agent.Core",
-      "version": "4.0.10-preview",
-      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+      "version": "4.0.11-preview",
+      "commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335"
     },
     {
       "package_id": "Elsa.Agent.GitHubCopilot",
-      "version": "4.0.11-preview",
-      "commit": "ab46bc22a52aa6e456bca6ac0e803c80904de081"
+      "version": "4.0.12-preview",
+      "commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335"
     },
     {
       "package_id": "Elsa.Agent.Workflows",
-      "version": "4.0.10-preview",
-      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+      "version": "4.0.11-preview",
+      "commit": "588da3eb01d0949ba3c9721b61c09fbc2334a335"
     },
     {
       "package_id": "Elsa.Api.AspNetCore",
