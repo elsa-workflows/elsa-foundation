@@ -138,6 +138,7 @@ async Task Cancellation(string provider, bool beforeSend)
     using var cancellation = new CancellationTokenSource();
     using var transport = new FixtureTransport(async (_, _, token) =>
     {
+        // Only the drop-cancellation control reaches this success path for a cancelled caller.
         if (beforeSend) return Response(provider, new HttpRequestMessage(), "success");
         await cancellation.CancelAsync();
         await Task.Delay(Timeout.InfiniteTimeSpan, token);

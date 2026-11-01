@@ -18,12 +18,15 @@ if [[ "$probe_dir/" == "$foundation_root/"* ]]; then
     exit 2
 fi
 printf 'Retained research evidence: %s\n' "$probe_dir"
+provider_flags=0
 for flag in "$@"; do
     case "$flag" in
-        --enable-retries|--drop-schema|--drop-cancellation|--flatten-reasoning|--provider=anthropic|--provider=azure) ;;
+        --enable-retries|--drop-schema|--drop-cancellation|--flatten-reasoning) ;;
+        --provider=anthropic|--provider=azure) provider_flags=$((provider_flags + 1)) ;;
         *) echo "Unknown probe flag: $flag" >&2; exit 2 ;;
     esac
 done
+[[ $provider_flags -le 1 ]] || { echo 'Select at most one provider profile.' >&2; exit 2; }
 cp "$research_dir/Program.cs" "$probe_dir/Program.cs"
 cp "$research_dir/Probe.csproj.template" "$probe_dir/Probe.csproj"
 cp "$research_dir/packages.lock.json.template" "$probe_dir/packages.lock.json"
@@ -45,21 +48,24 @@ XML
 )
 probe_exit=0
 dotnet run --project "$probe_dir/Probe.csproj" --no-build --no-restore --configuration Release -- "$probe_dir" "$@" > "$probe_dir/probe.log" 2>&1 || probe_exit=$?
+cat "$probe_dir/probe.log"
+if [[ ! -f "$probe_dir/report.json" && $probe_exit -eq 0 ]]; then probe_exit=1; fi
 python3 - "$probe_dir" "$research_dir" "$probe_exit" "$@" <<'PY'
 import hashlib, json, pathlib, sys
 output, source = map(pathlib.Path, sys.argv[1:3])
 files = ['Program.cs', 'Probe.csproj.template', 'packages.lock.json.template', 'run.sh']
 lock = json.loads((output / 'packages.lock.json').read_text())['dependencies']['net10.0']
+report = output / 'report.json'
 evidence = {
     'probeExitCode': int(sys.argv[3]), 'controls': sys.argv[4:],
     'sdkVersion': (output / 'sdk-version.txt').read_text().strip(),
     'sourceSha256': {name: hashlib.sha256((source / name).read_bytes()).hexdigest() for name in files},
     'normalRestore': 'Passed', 'lockedRestore': 'Passed', 'build': 'Passed',
     'resolvedPackages': {name: value['resolved'] for name, value in lock.items()},
-    'reportSha256': hashlib.sha256((output / 'report.json').read_bytes()).hexdigest(),
+    'reportPresent': report.is_file(),
+    'reportSha256': hashlib.sha256(report.read_bytes()).hexdigest() if report.is_file() else None,
     'boundary': 'Research fixture only; no live model, sockets, Elsa runtime or durability proof.'
 }
 (output / 'evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
 PY
-cat "$probe_dir/probe.log"
 exit "$probe_exit"

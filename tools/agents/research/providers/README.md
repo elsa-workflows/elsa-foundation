@@ -108,7 +108,9 @@ bash tools/agents/research/providers/run.sh --flatten-reasoning
 
 The controls alter actual SDK options, cancellation propagation or the result projection. They do not
 replace the vendor clients with fake chat clients. A failed restore/build is an infrastructure failure,
-not a successful negative control; its logs remain in the retained directory.
+not a successful negative control; its logs remain in the retained directory. If the probe host exits
+before writing a report, the runner prints its log and records a missing report with the nonzero exit.
+Selecting more than one provider profile is refused.
 Repeat the first three controls with `--provider=azure` to exercise Azure's guards independently;
 the expected failure prefix is `azure:`. `--provider=anthropic` explicitly selects the Anthropic profile.
 Reasoning flattening applies only to the Anthropic thinking fixture.
