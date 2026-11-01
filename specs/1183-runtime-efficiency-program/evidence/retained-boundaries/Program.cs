@@ -32,14 +32,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Dispatch = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
 var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(args[0]))!;
-if (config.Action is not ("run" or "recover" or "initialize")) throw new ArgumentException("Unsupported qualification action.");
+if (config.Action is not ("run" or "recover" or "reclaim" or "initialize")) throw new ArgumentException("Unsupported qualification action.");
 if (File.Exists(config.Result)) throw new IOException("Preserve the existing qualification result and use a fresh output.");
 if (config.Provider is not ("Sqlite" or "PostgreSql")) throw new ArgumentException("Unsupported qualification provider.");
 var connection = config.Provider == "Sqlite" ? $"Data Source={config.Database};Pooling=False" :
     Environment.GetEnvironmentVariable("ELSA_EFFICIENCY_POSTGRES_CONNECTION") ?? throw new InvalidOperationException("Protected qualification connection is absent.");
 Probe.Config = config;
 var gate = new Gate(config);
-var clock = new OffsetClock(config.Action == "recover" ? TimeSpan.FromHours(2) : TimeSpan.Zero);
+var clock = new OffsetClock(config.Action is "recover" or "reclaim" ? TimeSpan.FromHours(2) : TimeSpan.Zero);
 var productionIds = new ServiceCollection().AddWorkflowRuntime().Last(d => d.ServiceType == typeof(IRuntimeExecutionIdGenerator));
 await using var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>
 {
@@ -65,6 +65,7 @@ await using var host = WorkflowExecutionHarness.Create().ConfigureServices(servi
     if (config.Provider == "Sqlite") services.ConfigureDbContext<RuntimeSqliteDbContext>(b => b.AddInterceptors(gate));
     else services.ConfigureDbContext<RuntimePostgreSqlDbContext>(b => b.AddInterceptors(gate));
     services.AddPersistenceModes(o => { o.Mode = Enum.Parse<PersistenceMode>(config.Mode); o.MaxActivitiesPerCommit = config.Cap; });
+    if (config.RetryTransient) services.Replace(ServiceDescriptor.Singleton<IRuntimeDomainRetryPolicy>(new TransientInfrastructureRetryPolicy(Enum.Parse<RuntimeDomainRetryMode>(config.TransientRetryMode))));
     if (config.Point.EndsWith("after-advance", StringComparison.Ordinal))
     {
         var original = services.Last(x => x.ServiceType == typeof(IRuntimeCheckpointCommitStore));
@@ -88,7 +89,7 @@ WorkflowExecutable Executable(string key, ExecutableNode root, bool wait = false
     fixedAt, new Dictionary<string, string>(), new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []), [],
     incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 var child = Executable("boundary-child", ReferenceWorkflows.Clr("child-leaf", typeof(Probe), []));
-var childSource = config.Action == "recover" ? (await host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync("boundary-child-source"))! : await host.PublishAsync(child, "boundary-child-source");
+var childSource = config.Action is "recover" or "reclaim" ? (await host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync("boundary-child-source"))! : await host.PublishAsync(child, "boundary-child-source");
 var work = ReferenceWorkflows.Sequence("sequence", Enumerable.Range(1, 20).Select(i => ReferenceWorkflows.Clr("work-" + i, typeof(Probe), [])).ToArray());
 var edge = ReferenceWorkflows.EventWait();
 if (config.Scenario == "child")
@@ -98,7 +99,31 @@ if (config.Scenario == "child")
     edge = new ExecutableNode(n.ExecutableNodeId, n.AuthoredActivityId, n.ActivityType, n.ActivityTypeVersion, n.DescriptorType, n.DescriptorPayload, n.InputBindings, metadata, childSlots: n.ChildSlots, structure: n.Structure, activityContract: n.ActivityContract);
 }
 var parent = Executable("boundary-parent", ReferenceWorkflows.Parallel("root", ("edge", edge), ("work", work)), config.Scenario == "suspend");
-var parentSource = config.Action == "recover" ? (await host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync("boundary-parent-source"))! : await host.PublishAsync(parent, "boundary-parent-source");
+var parentSource = config.Action is "recover" or "reclaim" ? (await host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().FindAsync("boundary-parent-source"))! : await host.PublishAsync(parent, "boundary-parent-source");
+if (config.Action == "reclaim")
+{
+    // Independent-host root race: after another owner completed the run, delete its terminal history, retire its
+    // source references and run a real executable sweep while the stale owner is still paused before its write.
+    await using var scope = host.Services.CreateAsyncScope();
+    var services = scope.ServiceProvider;
+    var deletion = services.GetRequiredService<IWorkflowExecutionDeletionStore>();
+    var deletions = new Dictionary<string, string>();
+    foreach (var state in await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync())
+    {
+        var candidate = await deletion.ReadAsync(state.WorkflowExecutionId);
+        deletions[state.WorkflowExecutionId] = candidate is null ? "Unread" : (await deletion.TryDeleteTerminalAsync(candidate)).ToString();
+    }
+    var references = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+    var retired = new Dictionary<string, bool>();
+    foreach (var id in new[] { "boundary-parent-source", "boundary-child-source" })
+        retired[id] = await references.RetireAsync(id, clock.GetUtcNow(), "runtime-efficiency-root-race");
+    var sweep = await services.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>().SweepAsync();
+    var remaining = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
+    var reclaimed = deletions.Count != 0 && deletions.Values.All(x => x == nameof(WorkflowExecutionDeletionResult.Deleted)) && remaining.Count == 0;
+    await File.WriteAllTextAsync(config.Result, JsonSerializer.Serialize(new { correct = reclaimed, deletions, retired, sweep, remainingWorkflows = remaining.Count }, new JsonSerializerOptions { WriteIndented = true }));
+    if (!reclaimed) Environment.ExitCode = 2;
+    return;
+}
 if (config.Action != "recover")
     await host.StartPublishedAsync(parentSource, "parent", partition: new WorkflowExecutionPartition(PersistenceScope.DefaultValue));
 else
@@ -132,7 +157,15 @@ await using (var scope = host.Services.CreateAsyncScope())
         Environment.ExitCode = 2;
 }
 
-internal sealed record Config(string Action, string Database, string Mode, string Scenario, string Point, string Reached, string Calls, string Result, string? Release = null, int Cap = 50, string Provider = "Sqlite");
+internal sealed record Config(string Action, string Database, string Mode, string Scenario, string Point, string Reached, string Calls, string Result, string? Release = null, int Cap = 50, string Provider = "Sqlite", bool RetryTransient = false, string TransientRetryMode = "RetryAfter");
+// Host-owned policy for the database-interruption witness: retry transient provider/socket failures a few times.
+internal sealed class TransientInfrastructureRetryPolicy(RuntimeDomainRetryMode mode) : IRuntimeDomainRetryPolicy
+{
+    public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+        (request.FailureType.StartsWith("Npgsql.", StringComparison.Ordinal) || request.FailureType.StartsWith("System.Net.Sockets.", StringComparison.Ordinal)) && request.FailureCount < 5
+            ? new RuntimeDomainRetryDecision(mode, mode == RuntimeDomainRetryMode.RetryAfter ? TimeSpan.FromSeconds(1) : null, "Transient infrastructure failure.", new Dictionary<string, string> { ["policy"] = "runtime-efficiency-transient" })
+            : new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.DoNotRetry, null, "Not a transient infrastructure failure.", new Dictionary<string, string> { ["policy"] = "runtime-efficiency-transient" });
+}
 internal sealed class OffsetClock(TimeSpan offset) : TimeProvider { public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow + offset; }
 namespace Elsa.BoundaryProbe
 {

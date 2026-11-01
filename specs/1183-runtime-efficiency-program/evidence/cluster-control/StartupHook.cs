@@ -50,15 +50,15 @@ public static class StartupHook
             var ct = deadline.Token;
             var membership = host.Services.GetRequiredService<IClusterMembership>();
             var local = membership.GetLocalStanding();
-            if (!local.Identity.HostId.StartsWith("eff-i67-", StringComparison.Ordinal) || membership.ProviderKind != ClusterProviderKind.Durable)
+            if (!local.Identity.HostId.StartsWith("eff-i68-", StringComparison.Ordinal) || membership.ProviderKind != ClusterProviderKind.Durable)
                 throw new InvalidOperationException("Control requires an owned durable-membership fixture.");
             var shell = await host.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync("default", ct);
             Emit(root, "ready.json", new { hostId = local.Identity.HostId, provider = membership.GetType().FullName, fleet = await membership.ReadFleetAsync(FleetReadMode.Fresh, ct) });
             var requestPath = Path.Combine(root, "cancel.json");
             while (!File.Exists(requestPath)) await Task.Delay(50, ct);
             var request = JsonSerializer.Deserialize<CancelRequest>(await File.ReadAllTextAsync(requestPath, ct))!;
-            if (!request.OwnerHostId.StartsWith("eff-i67-", StringComparison.Ordinal) || request.OwnerHostId == local.Identity.HostId ||
-                !request.CommandKey.StartsWith("eff-i67-", StringComparison.Ordinal)) throw new ArgumentException("Use distinct owned sender/owner identities and a synthetic command key.");
+            if (!request.OwnerHostId.StartsWith("eff-i68-", StringComparison.Ordinal) || request.OwnerHostId == local.Identity.HostId ||
+                !request.CommandKey.StartsWith("eff-i68-", StringComparison.Ordinal)) throw new ArgumentException("Use distinct owned sender/owner identities and a synthetic command key.");
             await using var shellScope = shell.BeginScope();
             var factory = shellScope.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>();
             var partition = new WorkflowExecutionPartition(PersistenceScope.DefaultValue);
@@ -84,8 +84,9 @@ public static class StartupHook
             var receipts = await Task.WhenAll(actor.EnqueueAsync(envelope, ct).AsTask(), actor.EnqueueAsync(envelope, ct).AsTask());
             Emit(root, "dispatch.json", new { receipts });
             foreach (var receipt in receipts)
-                if (receipt.Status is not (WorkflowExecutionCommandDispatchStatus.Accepted or WorkflowExecutionCommandDispatchStatus.Duplicate))
-                    throw new InvalidOperationException("A duplicate remote cancellation was not accepted or recognized.");
+                // A command for an execution owned by another host is forwarded through the durable transport and reports Deferred.
+                if (receipt.Status is not (WorkflowExecutionCommandDispatchStatus.Accepted or WorkflowExecutionCommandDispatchStatus.Duplicate or WorkflowExecutionCommandDispatchStatus.Deferred))
+                    throw new InvalidOperationException("A duplicate remote cancellation was not accepted, forwarded or recognized.");
             var settled = false;
             while (!settled)
             {
