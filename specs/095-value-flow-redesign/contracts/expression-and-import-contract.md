@@ -136,7 +136,8 @@ For each expression input the runtime MUST:
 2. resolve every parameter binding from one structural/causal runtime view;
 3. type-check, policy-check, and snapshot parameter values;
 4. evaluate exactly once for the new logical invocation;
-5. coerce and validate the declared result type;
+5. apply the workflow's pinned undefined policy at the JavaScript-to-workflow boundary (ADR 0045 §2
+   amendment, D-11), then coerce and validate the declared result type;
 6. validate result persistability/protection policy; and
 7. include the final input value in the complete invocation snapshot before activity activation.
 
