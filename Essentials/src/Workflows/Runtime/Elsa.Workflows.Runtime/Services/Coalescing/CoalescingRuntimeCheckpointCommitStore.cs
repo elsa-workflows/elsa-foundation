@@ -14,8 +14,9 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// activity cap of Durable or Balanced, or the end-of-drain quiescence flush).
 /// The one boundary that may be dropped instead is the completion of an Ephemeral run that has no record, on a host
 /// that turned completion records off (see <see cref="RuntimeCoalescingSession.CanDiscardCompletion"/>). A durable attempt
-/// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
-/// active (outside a drain, or once a boundary ended the session), Deferred decisions are normalized to Immediate
+/// boundary, cap-hit fold-and-flush, nonterminal native suspension, bookmark creation or child dispatch can start
+/// another segment in the same drain after its immediate durable commit. Terminal, admission and control boundaries
+/// end the session. When no session is active (outside a drain, or once a boundary ended the session), Deferred decisions are normalized to Immediate
 /// because there is no working set to flush later; any other decision is forwarded unchanged.
 /// </summary>
 /// <remarks>
@@ -150,8 +151,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
         var capFold = deferrable && capReached;
 
         // Flush boundary (or cap): fold the buffered segment with this commit into one atomic durable write, then
-        // advance the durable queue. A pre-activation attempt boundary starts a fresh segment so later replayable work
-        // in the same drain can still coalesce without crossing the before-user-code durability guarantee.
+        // advance the durable queue. Qualified nonterminal boundaries start a fresh segment so later replayable work
+        // in the same drain can coalesce while every suspension, dispatch and before-user-code boundary stays durable.
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
 
         // The one completion that is not committed: an Ephemeral run, on a host that opted out of completion records,
@@ -177,7 +178,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             return OwnOutbox(commit);
         }
 
-        var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit, remainingPendingOutbox.Count);
+        var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit);
         if (session.HasBufferedChanges)
         {
             var foldedState = session.FoldBufferedStateChangesWith(commit.StateChanges);
@@ -198,24 +199,22 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             try
             {
-                if (capFold)
+                if (continueAfterBoundary)
                 {
-                    // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
-                    // them durably as the crash-redrive guarantee, so track them for reconciliation at the next flush.
+                    // Scheduler continuations stay overlay-delivered with a durable crash backstop. External intents
+                    // use durable claims immediately; remember all persisted IDs so later folds cannot restage them.
                     session.RecordCapFlushState(commit.StateChanges);
                     session.MarkOutboxDurablyPersisted(outbox);
                 }
-                else if (continueAfterBoundary)
-                    session.RecordDurableBoundaryState(commit.StateChanges);
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
                 // carries the in-flight item's effect in this flush, so the item must be consumed here instead of
                 // surviving as a durable duplicate (see AdvanceInnerQueueAsync). A retaining checkpoint or
                 // pre-activation attempt boundary keeps it for redrive.
                 await session.AdvanceInnerQueueAsync(
-                    consumeInFlightClaims: !commit.RetainSchedulerWork && (capFold || !continueAfterBoundary),
+                    consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
                     cancellationToken,
-                    preserveActiveFusedScheduleAnchors: capFold);
+                    preserveActiveFusedScheduleAnchors: continueAfterBoundary);
             }
             catch
             {
@@ -237,12 +236,15 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
         try
         {
             if (continueAfterBoundary)
-                session.RecordDurableBoundaryState(commit.StateChanges);
+            {
+                session.RecordCapFlushState(commit.StateChanges);
+                session.MarkOutboxDurablyPersisted(commit.StateChanges.PostCommitOutbox);
+            }
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
             await session.AdvanceInnerQueueAsync(
-                consumeInFlightClaims: !commit.RetainSchedulerWork && !continueAfterBoundary,
+                consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
                 cancellationToken,
-                preserveActiveFusedScheduleAnchors: false);
+                preserveActiveFusedScheduleAnchors: continueAfterBoundary);
         }
         catch
         {
@@ -332,12 +334,22 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     private static bool IsAttemptClaim(RuntimeCheckpointCommit commit) =>
         StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
 
-    private static bool CanContinueAfterBoundary(
-        RuntimeCheckpointCommit commit,
-        int pendingSegmentOutboxCount) =>
-        pendingSegmentOutboxCount == 0 &&
-        commit.StateChanges.PostCommitOutbox.Count == 0 &&
-        StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
+    private static bool CanContinueAfterBoundary(RuntimeCheckpointCommit commit)
+    {
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null ||
+            commit.ExpectedModelParentWait is not null || commit.ExpectedBookmarkResume is not null ||
+            commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Delete } ||
+            commit.StateChanges.WorkflowExecution?.State.Status.IsTerminal() == true ||
+            commit.Checkpoint.Name is RuntimeCheckpointNames.WorkflowCompleted or RuntimeCheckpointNames.WorkflowFaulted or RuntimeCheckpointNames.WorkflowCancelled ||
+            commit.StateChanges.Operational.Count > 0 || commit.StateChanges.Incidents.Count > 0 ||
+            !commit.StateChanges.BackgroundActivityWork.IsEmpty || commit.StateChanges.AlterationJobTerminalChange is not null ||
+            commit.StateChanges.WorkflowDispatchCancellations.Count > 0)
+            return false;
+
+        return commit.Checkpoint.Name is RuntimeCheckpointNames.ActivityAttemptClaimed or RuntimeCheckpointNames.ActivitySuspended or
+                   RuntimeCheckpointNames.BookmarkCreated or RuntimeCheckpointNames.WorkflowSuspended ||
+               commit.StateChanges.WorkflowDispatches.Count > 0;
+    }
 
     // Operational (lease/heartbeat/ownership — condition E), incident, and bookmark writes must never be buffered:
     // they are durability-critical and are flushed immediately even if they ride on a deferrable checkpoint name.

@@ -204,7 +204,19 @@ Every shell with the runtime API has this machinery: the runtime API feature cal
 - the attempt claim of an activity that is not ReplaySafe, committed before its body runs;
 - the end of a drain, even when the workflow is still running or waiting.
 
-Because a bookmark (including a `Delay` or other timer) is saved at once, an outside stimulus always finds a saved bookmark and never races one that exists only in memory. A fault is saved the moment it is decided. A boundary save is **complete**: it saves the folded state, the boundary checkpoint, any queued steps still only in memory (queued again durably) and undelivered outbox intents, all together. Nothing buffered is lost at a boundary.
+Because a bookmark (including a `Delay` or other timer) is saved at once, an outside stimulus always finds a saved bookmark and never races one that exists only in memory. A fault is saved the moment it is decided. A boundary save includes the folded state, boundary checkpoint and undelivered outbox intents. Original fused Schedule anchors are made durable before a continuing save; consumed durable queue claims advance only after the checkpoint lands.
+
+**Folding after a boundary.** A nonterminal native activity/workflow suspension, bookmark creation or child-dispatch
+checkpoint commits immediately and starts a fresh segment in the same drain. The later before-user-code attempt
+also commits immediately while preserving folding for subsequent work. Exact bookmark/model admission, terminal
+states, operational or incident changes, alterations, background activity work and dispatch cancellation end the
+session. External outbox delivery uses the durable store's current claim, renewal and completion lifecycle while the
+session stays active; only eligible scheduler continuations keep delivering from its working set. Previously committed
+dispatch/outbox snapshots are not reapplied by the next segment.
+
+**Queue capability.** A queue with `SupportsTargetedDeletion=false` disables folding for the drain. Its checkpoints
+are committed immediately in every mode; the runtime cannot safely advance selected durable items using an overlay.
+This fallback is covered by `RuntimeCheckpointCoalescingTests`; its throughput has not been measured here.
 
 **The one boundary that may be skipped.** Under Ephemeral with `RecordCompletion` off, a `WorkflowCompleted` boundary is not saved when:
 
@@ -293,6 +305,7 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 | Drain wait outcomes | `WorkflowDrainContinuationSettlementTests`: cancellation, failed attempts before and during the wait, queue-read skip rules, back-off, lapse and per-request deadline on a fake clock, and a batch with a mailbox-needing item ahead of the continuation |
 | Batch order and renewals | `RuntimePostCommitOutboxProcessorTests` |
 | Mid-segment crash | `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted` |
+| Retained suspension/dispatch crash and takeover | [Bounded process fixture](../specs/1183-runtime-efficiency-program/evidence/retained-boundaries/README.md): three modes, physical process kill around commit/queue advancement and mid-body; paused stale owner rejected after a fresh process recovers. Independent-host qualification is separate. |
 | Bookmarks saved at once | `RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately` (so the durable timer pump, which reads the saved bookmark store, never races an in-memory bookmark) |
 | Timer and bookmark stores never buffered | `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable` |
 | Every mode | `PersistenceModeFlushTests`: suspension, resume, fault, handler fault, cancellation and ownership loss |

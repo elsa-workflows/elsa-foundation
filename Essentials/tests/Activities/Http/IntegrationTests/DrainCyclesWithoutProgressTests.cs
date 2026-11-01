@@ -16,8 +16,9 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// <summary>
 /// Drains far longer than the drain cycle limit complete under the default options in every persistence mode (#2661). The
 /// limit counts only cycles that dispatch no work item new to the drain, so a run that keeps advancing is not cut off. Each
-/// shape here spends cycles hop by hop: an Event that suspends one Parallel branch ends the folding session, so the other
-/// branch's WriteLines run one hop per cycle after it, and an activity without a ReplaySafe profile is never fused.
+/// shape here spends cycles hop by hop: an External step precedes each WriteLine beside the suspended/faulted branch,
+/// so the shape still crosses the limit when suspension retains folding. Activities without a ReplaySafe profile are
+/// never fused.
 /// Every test first checks that its drains ran more cycles than the limit, so a shape that stopped needing them would fail
 /// here instead of passing without covering anything. <see cref="ShapeLength"/> keeps every shape past the limit in every
 /// mode.
@@ -122,7 +123,11 @@ public sealed class DrainCyclesWithoutProgressTests(ITestOutputHelper output)
             services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = TimeSpan.FromSeconds(90));
         });
 
-    private ExecutableNode WriteLines(params ExecutableNode[] after) => ReferenceWorkflows.Sequence("lines", [.. _lines, .. after]);
+    private ExecutableNode WriteLines(params ExecutableNode[] after) => ReferenceWorkflows.Sequence("lines",
+        [.. _lines.SelectMany((line, index) => new[]
+        {
+            ReferenceWorkflows.Clr($"unfused-{index}", typeof(ExternalStepActivity), []), line
+        }), .. after]);
 
     /// <summary>
     /// The run is still waiting on its Event bookmark and nothing else: every WriteLine completed and the drain left no

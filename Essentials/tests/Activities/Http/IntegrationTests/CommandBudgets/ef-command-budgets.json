@@ -1,5 +1,22 @@
 {
-  "writeline-sequence": { "Durable": 329, "Balanced": 90, "Ephemeral": 90 },
-  "http-reference": { "Durable": 183, "Balanced": 97, "Ephemeral": 97 },
-  "fork-join-resume": { "Durable": 246, "Balanced": 173, "Ephemeral": 173 }
+  "writeline-sequence": {
+    "Durable": 329,
+    "Balanced": 90,
+    "Ephemeral": 90
+  },
+  "http-reference": {
+    "Durable": 183,
+    "Balanced": 97,
+    "Ephemeral": 97
+  },
+  "fork-join-resume": {
+    "Durable": 229,
+    "Balanced": 158,
+    "Ephemeral": 158
+  },
+  "suspending-sequence-100": {
+    "Durable": 2737,
+    "Balanced": 625,
+    "Ephemeral": 585
+  }
 }

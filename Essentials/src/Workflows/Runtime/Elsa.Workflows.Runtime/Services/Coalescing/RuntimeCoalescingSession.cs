@@ -303,8 +303,9 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// Records that a mid-drain flush durably persisted these outbox items while the session stays active. Their
-    /// authoritative lifecycle continues in the overlay; <see cref="ReconcileDurablyPersistedOutboxAsync"/> writes the
-    /// overlay outcome back to the durable store at the next flush so no durable <c>Pending</c> residue survives the
+    /// scheduler continuation lifecycle continues in the overlay; external delivery uses durable claims directly.
+    /// <see cref="ReconcileDurablyPersistedOutboxAsync"/> writes completed overlay outcomes at the next flush so no
+    /// durable <c>Pending</c> residue survives the
     /// drain and gets redelivered as a duplicate by a later sweep.
     /// </summary>
     public void MarkOutboxDurablyPersisted(IEnumerable<RuntimeStateChange<RuntimePostCommitOutboxItem>> changes)
@@ -320,6 +321,10 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>Whether a mid-drain flush already durably persisted this outbox item.</summary>
     public bool IsOutboxDurablyPersisted(string outboxItemId) => _durablyPersistedOutboxIds.Contains(outboxItemId);
+
+    internal IReadOnlyCollection<string> DurablyPersistedOutboxKinds() =>
+        _outboxOrder.Where(_durablyPersistedOutboxIds.Contains)
+            .Select(id => _outboxItems[id].Intent.Kind).Distinct(StringComparer.Ordinal).ToArray();
 
     internal void RegisterFusedScheduleAnchor(RuntimeSchedulerWorkItem workItem)
     {
@@ -343,7 +348,7 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// Persists original fused Schedule items before a continuing checkpoint can advance durable runtime state.
-    /// Registration itself is memory-only; this method is called only at cap-fold and continuing attempt boundaries.
+    /// Registration itself is memory-only; every continuing boundary calls this before its physical commit.
     /// </summary>
     internal async ValueTask EnsureActiveFusedScheduleAnchorsAsync(CancellationToken cancellationToken)
     {

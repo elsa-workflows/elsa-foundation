@@ -135,6 +135,53 @@ EF persistence 1,851 and HTTP integration 113, zero failed/skipped, with complet
 step is to retain qualified suspension/child-dispatch boundaries, then prove their crash and takeover behavior;
 these prerequisite controls do not establish that remaining acceptance.
 
+## Continuing folding after native boundaries (#2828)
+
+The candidate now commits qualified nonterminal suspension, bookmark creation, child dispatch and subsequent
+before-user-code attempts immediately, then keeps folding in a new segment. Terminal, admission and control
+boundaries retain their conservative path. External outbox work uses durable claims and fresh lifecycle reads while
+scheduler continuations retain their local overlay. Seven external-delivery controls include uncommitted exclusion,
+renewal, bounded mixed claims and rejection after another owner takes the claim. Reinstating broad external overlay
+routing fails five; reinstating stale external exact lookup fails three. Restoring the candidate passes all seven.
+
+Twenty-four mode/boundary/buffer cases fail under the former stop rule and pass with continued folding. The actual
+SQLite references execute the workflow and validate completion, resume, settled queues/outbox and no incidents:
+
+| Reference | Mode | Former stop rule | Candidate EF commands |
+|---|---|---:|---:|
+| Ten WriteLines | Durable / Balanced / Ephemeral | 329 / 90 / 90 | 329 / 90 / 90 |
+| HTTP reference | Durable / Balanced / Ephemeral | 183 / 97 / 97 | 183 / 97 / 97 |
+| Fork/join with actual bookmark resume | Durable / Balanced / Ephemeral | 245 / 173 / 173 | 229 / 158 / 158 |
+| Suspension before 100 WriteLines, then actual resume | Durable / Balanced / Ephemeral | 13,779 / 13,722 / 13,722 | 2,737 / 625 / 585 |
+
+This is a controlled stop-rule comparison on otherwise-current source. Its Durable fork baseline of 245 differs
+from the earlier whole-implementation baseline of 246; they are not the same experiment. Six of thirteen budget
+cases fail when the former rule is restored, while their workflow outcome assertions still pass. All thirteen pass
+after restoring the candidate. The 100 distinct WriteLine states are completed before resume and retain their IDs
+and statuses afterward. These are database command counts, not workflows/second or exactly-once Console delivery.
+
+The [bounded process fixture](../../specs/1183-runtime-efficiency-program/evidence/retained-boundaries/README.md)
+passes six normal controls and 24 physical SIGKILL/restart cases, all modes by real Event suspension/child dispatch by
+before commit/after commit/after queue advancement/mid-body. A fresh process reads the same SQLite database and
+recovers using actual sweeps and bookmark resume. Previously durably completed activity identities are preserved;
+none of their probe bodies executes in recovery. Uncommitted ReplaySafe work can repeat. Six additional paused-owner
+cases let B expire A's lease with an offset clock, recover and finish, then release A. Every A is rejected with
+`RuntimeStaleFencingTokenException`, and workflow, activity, incident, queue and outbox rows remain byte-for-byte
+unchanged after B's result. These are physical processes on one macOS machine, not independent-host evidence.
+
+The checked-in fixture and its source-hashed result ledger reproduce this witness. The initial private fixture's
+missing activity registration and create-only source republish failures are setup failures, not engine failures.
+Whole affected suites pass: runtime 3,168, EF persistence 1,851, HTTP integration 116, DispatchWorkflow 380; zero
+failed/skipped, with full discovery accounting. The first whole EF run had four obsolete tests that seeded an
+uncommitted external child-start claim; those now prove durable completion visibility. The first whole HTTP run
+had six coverage failures because continued folding reduced formerly long drains to three/seven cycles. Their
+fixtures now put an External step before each WriteLine, preserving the original greater-than-64-cycle assertion
+under default options. Neither original coverage assertion nor workflow correctness assertion was removed.
+
+The user guide and resumption mechanics describe the retained session and state that queues without targeted
+deletion fall back to immediate checkpoints. That fallback has behavioral controls; its throughput is unmeasured.
+Independent-host takeover, final provider integration, full review and containing-main gates remain open.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.

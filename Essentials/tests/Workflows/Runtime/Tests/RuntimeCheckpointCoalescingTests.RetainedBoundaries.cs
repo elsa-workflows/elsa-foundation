@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
@@ -10,6 +11,60 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed partial class RuntimeCheckpointCoalescingTests
 {
+    public static IEnumerable<object[]> RetainedBoundaryCases()
+    {
+        foreach (var mode in Enum.GetValues<PersistenceMode>())
+        foreach (var boundary in new[] { RuntimeCheckpointNames.ActivitySuspended, RuntimeCheckpointNames.BookmarkCreated,
+                     RuntimeCheckpointNames.WorkflowSuspended, "ChildDispatch" })
+        foreach (var buffered in new[] { false, true })
+            yield return [mode, boundary, buffered];
+    }
+
+    [Theory]
+    [MemberData(nameof(RetainedBoundaryCases))]
+    public async Task A_qualified_boundary_and_following_external_attempt_keep_the_next_segment_folding(
+        PersistenceMode mode, string boundary, bool buffered)
+    {
+        var workflowId = boundary == "ChildDispatch" ? "parent-dispatch" : "retained-boundary";
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var inner = new InMemoryRuntimeCheckpointCommitStore(workflowDispatchStore: new InMemoryWorkflowDispatchStore(state), state: state);
+        var session = new RuntimeCoalescingSession(workflowId, new InMemoryWorkflowSchedulerWorkQueue(),
+            new PersistenceModeOptions(), inner, new(mode, true));
+        var store = new CoalescingRuntimeCheckpointCommitStore(new CoalescingInner<IRuntimeCheckpointCommitStore>(inner),
+            new FixedCoalescingSessionAccessor(session));
+        var deferred = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred);
+        var immediate = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        if (buffered)
+            await store.CommitAsync(NewEmptyCommit(workflowId, 1, "BeforeBoundary"), deferred);
+        var boundaryCommit = boundary == "ChildDispatch" ? NewDispatchBoundaryCommit() : NewEmptyCommit(workflowId, 2, boundary);
+        await store.CommitAsync(boundaryCommit, immediate);
+        Assert.Single(inner.ListCommits());
+        Assert.True(session.IsActive);
+
+        var attempt = NewEmptyCommit(workflowId, 3, RuntimeCheckpointNames.ActivityAttemptClaimed);
+        await store.CommitAsync(attempt, immediate);
+        Assert.Equal(2, inner.ListCommits().Count);
+        Assert.True(session.IsActive);
+        var after = NewEmptyCommit(workflowId, 4, RuntimeCheckpointNames.ActivityCompleted) with
+        {
+            Checkpoint = NewEmptyCommit(workflowId, 4, RuntimeCheckpointNames.ActivityCompleted).Checkpoint with { ActivityExecutionIds = ["after-boundary"] },
+            StateChanges = new(null, new(workflowId, RuntimeStateChangeOperation.Upsert, new SchedulerState(workflowId, 3),
+                new Dictionary<string, string>()), [], [], [], [], [])
+        };
+        await store.CommitAsync(after, deferred);
+        Assert.Equal(2, inner.ListCommits().Count);
+        await store.CommitAsync(NewEmptyCommit(workflowId, 5, RuntimeCheckpointNames.WorkflowCompleted), immediate);
+        Assert.Equal(3, inner.ListCommits().Count);
+        Assert.False(session.IsActive);
+        Assert.Equal(3, inner.ListCommits().Last().Commit.StateChanges.Scheduler!.State.Version);
+        if (boundary == "ChildDispatch")
+        {
+            var id = Assert.Single(boundaryCommit.StateChanges.PostCommitOutbox).StateId;
+            Assert.Equal(RuntimePostCommitOutboxStatus.Pending, (await inner.FindAsync(id))!.Status);
+            Assert.Single(inner.ListCommits(), commit => commit.Commit.StateChanges.PostCommitOutbox.Any(change => change.StateId == id));
+        }
+    }
+
     [Fact]
     public async Task A_new_segment_does_not_reapply_a_committed_dispatch_over_a_later_durable_lifecycle()
     {
