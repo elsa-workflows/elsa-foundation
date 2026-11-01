@@ -60,12 +60,18 @@ whole execution, streaming, durability, continuity and recovery unit is qualifie
 - [x] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
 - [ ] T016 [US3] Implement concrete model connection/client/capability contributors in `Extensions/Agent/src/Specialists/Anthropic/` and `Extensions/Agent/src/Specialists/AzureOpenAI/`, with point-of-use auth, allowed hosts, provider setting/schema support and no Weaver harness activation.
 - [ ] T017 [US3] Test actual provider SDK request/options/response loss/disabled opaque retries and capability drift using protocol servers in `Extensions/Agent/tests/Specialists/Providers/`; count physical requests rather than only outer agent runs.
-- [ ] T018 [US3] Implement conversation/turn/evaluation EF records, CQS/CAS/unexpired fencing and four provider migrations in `Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/`; preserve the model in `data-model.md`.
-- [ ] T019 [US3] Implement exact operation/fingerprint admission, atomic accepted session/result/usage and old-operation replay in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistTurnCoordinator.cs`, with persisted single-specialist call/tool/time/token reservations and deadline/unknown-usage settlement in `SpecialistTurnBudgetAllocator.cs` before real provider dispatch.
+- [ ] T018 [US3] Implement conversation/turn EF records (evaluation records follow T037), CQS/CAS/unexpired fencing and four provider migrations in `Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/`; preserve the model in `data-model.md`.
+- [ ] T019 [US3] Implement exact operation/fingerprint admission, atomic accepted session/result/usage and old-operation replay in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistTurnCoordinator.cs`, with persisted single-specialist model-call/time/output-token reservations and deadline/unknown-usage settlement in `SpecialistTurnBudgetAllocator.cs` before real provider dispatch.
 - [ ] T020 [US3] Implement versioned minimal session codec, scoped protection envelope, key retention/rotation and fresh/explicit-continuation policy in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistSessionCodec.cs`; add optional invocation controls with collision checks, and exclude private reasoning/credentials.
 - [ ] T021 [US3] Implement exact-operation cancel/applied intents, pre-admission tombstones and durable idempotent settlement through existing native checkpoint/outbox seams in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistCheckpointEnricher.cs` and `SpecialistSettlementHandler.cs`.
 - [ ] T022 [US3] Prove sensitive/redacted native flow and explicit encryption-required/secret-input refusal, journal winners, delayed cancellation, lease loss, uncertainty and crash/ack boundaries in `Extensions/Agent/tests/Specialists/Recovery/`; include pre-dispatch budget exhaustion/deadline, unknown usage/restart and SDK physical-request controls, with no accepted model replay/cancelled parent continuation.
 - [ ] T023 [US3] Deliver retention/purge/disabled-new-admission and old codec/key reader compatibility in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistRetentionPruner.cs` and `Extensions/Agent/tests/Specialists/Compatibility/`; retain necessary pins/tombstones.
+
+M3 admits no tool execution, so its tool budget is zero by capability refusal; T043/T047 add and
+reserve actual tool/team effects through the owning #2912 contracts. Evaluation records belong to
+M5/T037 with concrete case/run authorization and retention; T018 owns only the conversation/turn
+persistence needed by specialist execution. This clarifies sequencing and preserves the complete
+Program acceptance rather than adding unused evaluation rows to M3.
 
 ## Phase 4 — Native and BPMN editorial composition (US2; M4)
 

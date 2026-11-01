@@ -45,7 +45,7 @@ using Xunit;
 
 namespace Elsa.Agent.Specialists.Tests.Publication;
 
-public sealed class SpecialistPublicationTests
+public sealed partial class SpecialistPublicationTests
 {
     internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, bool allowContinuity = false, bool invocationControls = false, string originKey = "workflow-v1", RuntimeInputBinding? optionsBinding = null, SpecialistTurnLimits? limits = null)
     {
@@ -265,7 +265,7 @@ public sealed class SpecialistPublicationTests
             new() { Id = id, DefinitionId = "copywriter", Revision = 1, State = await StateAsync(manifest), CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow },
             new() { Id = id + "-layout", DraftId = id, Revision = 1, CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow }, head));
 
-        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false, bool invocationControls = false, SpecialistTurnLimits? limits = null)
+        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false, bool invocationControls = false, SpecialistTurnLimits? limits = null, Action<IServiceCollection>? configureRuntime = null)
         {
             var directory = Path.Combine(Path.GetTempPath(), "elsa-specialist-publication-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -297,6 +297,14 @@ public sealed class SpecialistPublicationTests
             services.AddSingleton<ISpecialistModelCapabilitiesSource>(model);
             services.AddSingleton<IActivityDefinitionAuthoringStore>(stores);
             services.AddSingleton<IActivityDefinitionVersionPublicationStore>(stores);
+            if (configureRuntime is not null)
+            {
+                services.AddSingleton<IPersistenceAccessContextAccessor>(access);
+                services.AddSingleton<IWorkflowExecutableStore>(new EfWorkflowExecutableStore(runtime, access));
+                services.AddSingleton<IExecutableActivityTemplateStore>(templates);
+                services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sources);
+                configureRuntime(services);
+            }
             var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = root.CreateAsyncScope();
             var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief, allowContinuity, invocationControls, limits);
