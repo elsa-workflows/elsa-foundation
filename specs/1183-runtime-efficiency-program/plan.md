@@ -58,3 +58,18 @@ Initial roots without the hint, model/admission writes, unfenced calls and dirty
 ordinary path. Replay is resolved before lease work. An ambiguous acknowledgement still reconciles only through the
 immutable marker. Guards cover stale hints, equal-ID/different-hash pins, replaced/deleted rows, stale ownership and
 uncertain commits. Source mutations disable the optimization, actual-row check and workflow revision token separately.
+
+## M4 pumped decision acknowledgement (#2584)
+
+The owner-approved spec 234 addressed per-hop persistence that #2673 removed. Current attribution instead isolates
+an unclaimed inline parent-completion item still present during its own durable outcome. A private value scope on
+the live coalescing session identifies the item. Only after the actual provider succeeds can a fenced, non-retaining
+checkpoint with matching workflow, work-item ID and command ID acknowledge it. Attempt claims remain recovery
+backstops. Queue advance excludes that accepted item while preserving the existing active fused Schedule anchors.
+Nested receipts restore the unfinished outer dispatch. No new persistence transport or public checkpoint shape is
+introduced. The broader atomic queue-publication experiment added commands and was removed; its raw sources and
+failed experiments remain in the qualification custody directory.
+
+The nine guard cases, eight independent guard mutations, reference budget control and physical process fixture
+qualify this change. The parent process matrix uses an explicit cap of one for Balanced to reach a physical parent
+outcome; Ephemeral does not produce those cap-triggered checkpoints. Independent-host acceptance is separate.

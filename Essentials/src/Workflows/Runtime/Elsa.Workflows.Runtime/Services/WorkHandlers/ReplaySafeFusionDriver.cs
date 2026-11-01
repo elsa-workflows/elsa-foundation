@@ -241,6 +241,7 @@ public sealed class ReplaySafeFusionDriver
                 try
                 {
                     var handler = ResolveHandler(workItem);
+                    using var pumpedDispatch = session.BeginPumpedDispatch(workItem);
                     await handler.HandleAsync(workItem, cancellationToken);
                 }
                 catch (OperationCanceledException)

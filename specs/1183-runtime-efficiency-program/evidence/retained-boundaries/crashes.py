@@ -3,6 +3,7 @@ fixture=pathlib.Path(__file__).resolve().parent
 root=pathlib.Path(sys.argv[1]).resolve() if len(sys.argv)>1 else pathlib.Path(tempfile.mkdtemp(prefix='elsa-retained-boundary-'))
 root.mkdir(parents=True,exist_ok=True)
 dll=fixture/'bin/Debug/net10.0/Worker.dll'
+parent = "--parent" in sys.argv[2:]
 ledger=[]
 def dec(s):
  try:return base64.b64decode(s,validate=True).decode('utf-16-le')
@@ -14,11 +15,12 @@ def snapshot(database):
   if table in ['elsa_runtime_activity_execution_state','elsa_runtime_workflow_execution_state','elsa_runtime_scheduler_work_item','elsa_runtime_checkpoint_commit','elsa_runtime_post_commit_outbox']:
    c.row_factory=sqlite3.Row;d[table]=[dict(r) for r in c.execute('select * from '+table)]
  c.close();return d
-for mode in ['Durable','Balanced','Ephemeral']:
+for mode in (['Durable','Balanced'] if parent else ['Durable','Balanced','Ephemeral']):
  for scenario in ['suspend','child']:
-  for point in ['before-commit','after-commit','after-advance','after-body']:
+  for basepoint in ['before-commit','after-commit','after-advance','after-body']:
+   point = ('parent-' if parent else '') + basepoint
    case=root/f'crash-v3-{mode}-{scenario}-{point}';case.mkdir(exist_ok=False)
-   cfg=dict(Action='run',Database=str(case/'runtime.db'),Mode=mode,Scenario=scenario,Point=point,Reached=str(case/'reached.json'),Calls=str(case/'calls.txt'),Result=str(case/'run-result.json'))
+   cfg=dict(Action='run',Database=str(case/'runtime.db'),Mode=mode,Scenario=scenario,Point=point,Cap=1 if parent else 50,Reached=str(case/'reached.json'),Calls=str(case/'calls.txt'),Result=str(case/'run-result.json'))
    p=case/'config.json';p.write_text(json.dumps(cfg));log=(case/'run.log').open('w');worker=subprocess.Popen(['dotnet',str(dll),str(p)],stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
    try:
     deadline=time.monotonic()+90

@@ -286,6 +286,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             write.Succeed();
         }
 
+        session?.RecordCommittedPumpedEffect(commit);
         // From here the run has a durable record, so its completion is always committed.
         if (session is not null && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, commit.WorkflowExecutionId))
             session.MarkDurableRecord();

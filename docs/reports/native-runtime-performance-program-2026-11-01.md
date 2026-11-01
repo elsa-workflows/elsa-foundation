@@ -201,6 +201,56 @@ Raw command TSVs, run JSON and attribution/linear-fit report are in
 `/private/tmp/elsa-runtime-efficiency-program/m4-command-cost-qualified/`; rerun using the
 [tool instructions](../../Essentials/tests/Activities/Http/CommandCost/Tests/README.md). Nothing in this cohort is timed.
 
+## Avoiding a second queue write for a committed parent decision (#2584)
+
+A private typed value scope identifies the inline pump's current work item. After the actual checkpoint provider
+succeeds, a fenced non-retaining outcome with matching execution, source work ID and command ID acknowledges that
+exact parent completion. Queue advance then removes that item from its remaining frontier, while preserving the
+existing active fused Schedule anchors. Attempt claims, retaining checkpoints and unrelated writes keep their
+backstop. A nested scope restores the unfinished outer decision. The scope introduces no per-dispatch allocation,
+public checkpoint member or storage format.
+
+The current SQLite references pass with Durable ten WriteLines **269** commands (from 329), HTTP **171** (183), and
+long suspension/resume **2,137** (2,737). Other reference counts are unchanged. Disabling only the successful-commit
+receipt fails exactly those three lowered budget cases; restoration passes all thirteen. The ten-WriteLine result
+meets #2584's original under-300 objective without reviving its obsolete per-hop persistence layer.
+
+Nine focused cases cover accepted versus retaining/attempt/unfenced/unrelated decisions, failed physical writes and
+nested receipt isolation. Eight independent mutations each fail their corresponding case and pass the other eight;
+restoration passes nine. The checked-in process fixture now passes six normal controls, the original 24 boundary
+kill/restarts and six takeovers, plus 16 parent-decision kill/restarts and four parent-decision takeovers. The latter
+use an explicit cap of one in Durable/Balanced to reach the physical parent decision; Ephemeral does not produce
+that cap-triggered boundary. The after-advance gate requires a physically committed marker, not just an accepted
+deferred checkpoint. Across all forty crash cases, completed activity identities persist and their bodies do not run
+in the fresh recovery process. All ten old writers are fenced out after B recovers, leaving the inspected durable
+rows unchanged. A stale ReplaySafe owner can still enter code before its next physical fence; no exactly-once
+external-effect guarantee is inferred. These remain single-machine process checks.
+
+Whole suites pass with complete discovery reconciliation and zero failures/skips: Runtime 3,177, activity runtime
+732, EF persistence 1,851, HTTP integration 116, DispatchWorkflow 380, Distributed 114 and BPMN 513. The first BPMN
+attempt ran no tests because a referenced project lacked restored assets; normal restore repaired it. Both whole
+command-cost measurement cases also pass. In PostgreSQL, Durable ten WriteLines falls from 269 to 209 EF commands,
+25 to 15 transactions and 368 to 278 wire round trips, retaining twelve checkpoint markers. The long suspension
+reference retains 109 markers while reducing 216 to 116 transactions and 3,068 to 2,168 round trips. HTTP retains six
+markers and reduces eleven to nine transactions and 193 to 175 round trips. This is statement/wire attribution,
+not timed throughput. Raw evidence is under `m4-pumped-ack-*` in the custody directory.
+
+The broader atomic queue-publication prototype was removed. Its direct storage cases passed, but its corrected
+reference cohort increased Durable ten WriteLines from 329 to 338 and the long suspension run from 2,737 to 2,823.
+Those two budget failures were regressions; no budget was raised. An earlier prototype left a queued row, which was
+corrected before that measurement. Compile/setup failures and all prototype sources are preserved separately at
+`m4-rejected-atomic-queue/`. The narrower acknowledgement resolves the measured cost with the existing transport.
+Independent-host/provider integration and final reviewed-head/main qualification remain due.
+
+## Owner dispositions
+
+[#2582 was retired](https://github.com/elsa-workflows/elsa-foundation/issues/2582#issuecomment-6559721729) as **not planned**
+by the owner's explicit 1 November decision. The older controlled terminal-status experiment did not reduce simple
+or HTTP command counts, and the owner chose to avoid that low-value plumbing. The required exact issue-reference
+search on freshly fetched main `e5896da5f5b93d9c302d67ca99d529f0d7e064b9` returned no landed implementation. This is an
+owner disposition, not a completed implementation or an optimization gain. #2583's rejected owned-state cache remains
+a separate pending owner decision.
+
 ## Original incomplete-start investigation
 
 The original failed snapshots remain unexplained. A new cohort ran the unchanged original local Perf binary and runtime in 100 fresh macOS processes, with the original C1/Memory/Balanced/one-leaf shape and an exit-only startup hook to capture the first failing heap. All 1,425,291 total executions completed, with no capture triggered. Eight earlier original diagnostic processes and eight independent Linux diagnostic processes also completed, in separate cohorts. These passes establish neither a causal explanation nor a fix. No throughput inference is made from these shared-machine correctness runs.

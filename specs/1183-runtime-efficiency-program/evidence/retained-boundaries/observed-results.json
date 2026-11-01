@@ -359,31 +359,233 @@
       "staleFenceRejected": true
     }
   ],
-  "scope": "SQLite, physical processes on one macOS host; offset recovery clock expires dead-owner leases; no capacity or independent-host claim.",
+  "parentCrashes": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 3,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 3,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    }
+  ],
+  "parentTakeovers": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    }
+  ],
+  "scope": "SQLite, physical processes on one macOS host. Parent cases use a cap of one in Durable/Balanced to reach the exact physical decision; Ephemeral has no intermediate cap. Offset recovery clock expires dead-owner leases. No capacity or independent-host claim.",
   "sourceHashes": {
     "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/controls.py": "0be03639a332ffb5d09094919011404a0c2b9ebe3115517db8a8bb437f64ee73",
     "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/Worker.csproj": "b84c799a61c585b5f31a4bc514b6819d1000012a37cbef7951413d71b578889d",
-    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/crashes.py": "4d0459e483fda76f59f93f91893beac51c30f350417c890dfb6cfe6a6b73c85b",
-    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/takeovers.py": "09e71d6d945723c7c4fcd8e3e56019b300292c10f5a9fc8694d46ed8d0fa6315",
-    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/Program.cs": "06e49e121009c3914b3ff6a3132101b6d23e700132ef5ea9da7ceacabe9a0c6f"
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/crashes.py": "b1889372ef2673939a3e5e3f383356beaec8757c5ed324ab2dceca942d9448b1",
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/takeovers.py": "5e3a9d3d637bb292d7afb3647647ed6f325cc47e28cceb760bd4d6610604966f",
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/Program.cs": "1d3b94b06a7a2fe27a293dae863105cef93f61a9cd76639b63d395841b3ae718"
   },
   "productionHashes": {
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "e3195daac4b95a02f7f8f49e76daa2b4c1cf11e13a6ef2af2ffbe01b00db3f49",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingMetadataKeys.cs": "0280ad01841e628e4b35686b69bc5e61882e781fcee73bcf0f8a6a5bfc5bf754",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointPersistencePolicy.cs": "6ada37403220eeb3fb9783f7dd8ebdcad961ed2a628a084c5fd2ea5432f3f607",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeStoreContinuation.cs": "9a07a4df376aa052399fe109bae29f1bd98dd09cd071f6136c7ab98f04809aea",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs": "4a39641227cbb8b8ac52d152b3763d74469bc9f58c17242fd353b5fd4e69fce4",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCheckpointFold.cs": "3cceb928912b1d0e8d748e9dbcb6c15beac69b3b294ade89a0d9059b48bd17b5",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/PersistenceModeCompositionValidator.cs": "f72f383f733372caa692b768a8ab2f71d603c2a19c6aa50ac17db7d18366bc9f",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimePostCommitOutboxStore.cs": "3a5141b0a58e599426d0260f74d92bfa442c78a5aae6d5f92d6786b30d5a8904",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs": "47a5c216bea0ec985df67480a949aaa16c72240a2fb4b74cc81f9f2eeee3397b",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingOrderedView.cs": "96bda39df07140d31849069f7c94d00bfe2255117e56c4185b5009157ae8c998",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingDurableValuePageMemo.cs": "4c96a1ef95eff5e8fd611f3c3a0fcf59d8afab591853a1dd5975d622784356ff",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs": "3d252130dbd672b404accd1b85201197de443eef84b7c0088d0a488b7251f0e1",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingInner.cs": "07e252e56d15d9abf6b27be02d63d753d96acf0245e1ad8e6094cdf7e74761e5",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "8deb32495b8bdcfd512bf367af1db68c7b3b44255f383db4837ab56b30311567",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingPostCommitOutboxLookupStore.cs": "c3ae6ac4e1760fd23fcd7f960bc17d0a7c3d67da976dba8b869d17ead04313cc",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/AsyncLocalRuntimeCoalescingSessionAccessor.cs": "ccb6d1dd17e3545550bb18abd96095f3654a3fa14ea49e1a944f574c8c5139d5",
-    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingDurableValuePageReuseRegistration.cs": "1b6b3d38489af8d746a8127cd42496101191fb95f96980e16058163e8d08b4e7"
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "d6a7ca706f82c4c31602af19281aca89cd1c0ab415b2554e8ee9bba0583fe94a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "71d077ab54558bf4f9f462b178790e971358d92e8aa5287ecca48bd0bfbac773",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs": "aabb355f862d6543181b3c549d8d7ebc364eb96674744e20574c3168348abd59"
   }
 }

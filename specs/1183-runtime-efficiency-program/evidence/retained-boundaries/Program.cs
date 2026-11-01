@@ -58,8 +58,8 @@ await using var host = WorkflowExecutionHarness.Create().ConfigureServices(servi
         HierarchyCursorSigningKey = "private-m4-boundary-hierarchy-signing-key"
     }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
     services.ConfigureDbContext<RuntimeSqliteDbContext>(b => b.AddInterceptors(gate));
-    services.AddPersistenceModes(o => { o.Mode = Enum.Parse<PersistenceMode>(config.Mode); o.MaxActivitiesPerCommit = 50; });
-    if (config.Point == "after-advance")
+    services.AddPersistenceModes(o => { o.Mode = Enum.Parse<PersistenceMode>(config.Mode); o.MaxActivitiesPerCommit = config.Cap; });
+    if (config.Point.EndsWith("after-advance", StringComparison.Ordinal))
     {
         var original = services.Last(x => x.ServiceType == typeof(IRuntimeCheckpointCommitStore));
         services.Remove(original);
@@ -121,7 +121,7 @@ await using (var scope = host.Services.CreateAsyncScope())
         Environment.ExitCode = 2;
 }
 
-internal sealed record Config(string Action, string Database, string Mode, string Scenario, string Point, string Reached, string Calls, string Result, string? Release = null);
+internal sealed record Config(string Action, string Database, string Mode, string Scenario, string Point, string Reached, string Calls, string Result, string? Release = null, int Cap = 50);
 internal sealed class OffsetClock(TimeSpan offset) : TimeProvider { public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow + offset; }
 namespace Elsa.BoundaryProbe
 {
@@ -132,7 +132,7 @@ namespace Elsa.BoundaryProbe
         protected override async ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
         {
             await File.AppendAllTextAsync(Config.Calls, $"{context.WorkflowExecutionId}|{context.ExecutableNodeId}\n");
-            if (context.ExecutableNodeId == "work-3" && Config.Action != "recover" && Config.Point == "after-body")
+            if (context.ExecutableNodeId == "work-3" && Config.Action != "recover" && Config.Point.EndsWith("after-body", StringComparison.Ordinal))
                 await Gate.Wait(Config, new { body = context.ExecutableNodeId });
             return ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Done);
         }
@@ -141,22 +141,27 @@ namespace Elsa.BoundaryProbe
 internal sealed class Gate(Config config) : DbTransactionInterceptor, IRuntimeCheckpointCommitEnricher
 {
     private readonly ConcurrentDictionary<string, string> targets = new();
+    private readonly ConcurrentDictionary<string, byte> committed = new();
     private int reached;
     public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit c, CancellationToken ct = default) => ValueTask.FromResult(c);
     public ValueTask ValidateFinalAsync(RuntimeCheckpointCommit c, CancellationToken ct = default)
     {
-        if (c.WorkflowExecutionId == "parent" && ((config.Scenario == "suspend" && c.Checkpoint.Name == RuntimeCheckpointNames.ActivitySuspended) || (config.Scenario == "child" && c.StateChanges.WorkflowDispatches.Count != 0)))
+        if (c.WorkflowExecutionId == "parent" && (config.Point.StartsWith("parent-", StringComparison.Ordinal)
+            ? c.Checkpoint.Name == RuntimeCheckpointNames.ActivityInspectionCaptured &&
+              c.Metadata.GetValueOrDefault(RuntimeMetadataKeys.CheckpointReason) == "ChildActivityScheduling"
+            : (config.Scenario == "suspend" && c.Checkpoint.Name == RuntimeCheckpointNames.ActivitySuspended) ||
+              (config.Scenario == "child" && c.StateChanges.WorkflowDispatches.Count != 0)))
             targets.TryAdd(EfRelationalIdentity.Encode(c.CommitId), c.Checkpoint.Name);
         return ValueTask.CompletedTask;
     }
     public async ValueTask After(RuntimeCheckpointCommit c)
     {
-        if (config.Action != "recover" && config.Point == "after-advance" && targets.ContainsKey(EfRelationalIdentity.Encode(c.CommitId)) && Interlocked.Exchange(ref reached, 1) == 0)
+        if (config.Action != "recover" && config.Point.EndsWith("after-advance", StringComparison.Ordinal) && committed.ContainsKey(EfRelationalIdentity.Encode(c.CommitId)) && Interlocked.Exchange(ref reached, 1) == 0)
             await Wait(config, new { point = "after-advance", c.CommitId, c.Checkpoint.Name });
     }
     private async Task Hit(DbContext? db, string point)
     {
-        if (config.Action == "recover" || config.Point != point || Volatile.Read(ref reached) != 0 || db is null)
+        if (config.Action == "recover" || config.Point.Replace("parent-", string.Empty, StringComparison.Ordinal) != point || Volatile.Read(ref reached) != 0 || db is null)
             return;
         var marker = db.ChangeTracker.Entries<RuntimeCheckpointCommitEntity>().FirstOrDefault(e => targets.ContainsKey(e.Entity.CommitId));
         if (marker is null || Interlocked.Exchange(ref reached, 1) != 0)
@@ -170,7 +175,13 @@ internal sealed class Gate(Config config) : DbTransactionInterceptor, IRuntimeCh
             await Task.Delay(20);
     }
     public override async ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction t, TransactionEventData d, InterceptionResult r, CancellationToken ct = default) { await Hit(d.Context, "before-commit"); return r; }
-    public override async Task TransactionCommittedAsync(DbTransaction t, TransactionEndEventData d, CancellationToken ct = default) { await Hit(d.Context, "after-commit"); }
+    public override async Task TransactionCommittedAsync(DbTransaction t, TransactionEndEventData d, CancellationToken ct = default)
+    {
+        if (d.Context is { } context)
+            foreach (var entry in context.ChangeTracker.Entries<RuntimeCheckpointCommitEntity>())
+                if (targets.ContainsKey(entry.Entity.CommitId)) committed.TryAdd(entry.Entity.CommitId, 0);
+        await Hit(d.Context, "after-commit");
+    }
 }
 
 internal sealed class OuterGate(IRuntimeCheckpointCommitStore inner, Gate gate) : IRuntimeCheckpointCommitStore

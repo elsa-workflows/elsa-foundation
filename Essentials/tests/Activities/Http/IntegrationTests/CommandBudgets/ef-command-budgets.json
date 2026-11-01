@@ -1,11 +1,11 @@
 {
   "writeline-sequence": {
-    "Durable": 329,
+    "Durable": 269,
     "Balanced": 90,
     "Ephemeral": 90
   },
   "http-reference": {
-    "Durable": 183,
+    "Durable": 171,
     "Balanced": 97,
     "Ephemeral": 97
   },
@@ -15,7 +15,7 @@
     "Ephemeral": 158
   },
   "suspending-sequence-100": {
-    "Durable": 2737,
+    "Durable": 2137,
     "Balanced": 625,
     "Ephemeral": 585
   }

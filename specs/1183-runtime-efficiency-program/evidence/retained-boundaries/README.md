@@ -12,6 +12,8 @@ dotnet build specs/1183-runtime-efficiency-program/evidence/retained-boundaries/
 python3 specs/1183-runtime-efficiency-program/evidence/retained-boundaries/controls.py /tmp/elsa-boundary-controls
 python3 specs/1183-runtime-efficiency-program/evidence/retained-boundaries/crashes.py /tmp/elsa-boundary-crashes
 python3 specs/1183-runtime-efficiency-program/evidence/retained-boundaries/takeovers.py /tmp/elsa-boundary-takeovers
+python3 specs/1183-runtime-efficiency-program/evidence/retained-boundaries/crashes.py /tmp/elsa-parent-crashes --parent
+python3 specs/1183-runtime-efficiency-program/evidence/retained-boundaries/takeovers.py /tmp/elsa-parent-takeovers --parent
 ```
 
 Use fresh output directories. Each controller retains configurations, logs, JSON results, calls and databases there.
@@ -26,11 +28,19 @@ one logical activity state per node, completion, no queued work, undelivered out
 previously completed activity identity, and no re-execution of completed probe bodies. Uncommitted replay-safe work may
 run again, as the persistence modes allow.
 
-The six takeover cases leave A paused after that body while B recovers and completes the workflow, then release A.
+With `--parent`, another 16 crash cases target the actual physical `ActivityInspectionCaptured` parent continuation
+decision and the following body, in Durable and Balanced with an explicit cap of one. Ephemeral has no intermediate
+activity cap, so these particular cap-triggered parent checkpoints do not arise there. The after-advance gate requires
+an observed physical commit; an earlier deferred checkpoint cannot satisfy it. Four additional takeovers pause A
+after that parent decision has committed and advanced its queue.
+
+The six original takeover cases leave A paused after that body while B recovers and completes the workflow, then release A.
 B's clock is offset by two hours to expire A's one-hour lease without waiting an hour. A must be rejected by the real
 fence and must leave the workflow, activity, incident, scheduler and outbox rows byte-for-byte unchanged. A's uncaught
 stale-fence exception gives the child a nonzero exit; it is retained as expected rejection evidence, not a successful
-workflow run. This tests fresh processes on one machine; it does not qualify independent hosts or production clock skew.
+workflow run. This tests fresh processes on one machine; it does not qualify independent hosts or production clock skew. A resumed stale owner can reach ReplaySafe code
+before its next physical fence; only its durable writes are rejected. The body witness distinguishes that stale owner
+from the fresh recovery process and makes no exactly-once external-effect claim.
 
 The EF transaction interceptor observes only the target checkpoint marker. The after-advance wrapper forwards every
 checkpoint-store capability and pauses only after the real coalescing store returns. Recovery never republishes the

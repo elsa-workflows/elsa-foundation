@@ -988,6 +988,42 @@ public sealed class RuntimeCoalescingSession
         return result;
     }
 
+    private RuntimeSchedulerWorkItem? _pumpedWorkItem;
+    private bool _pumpedEffectCommitted;
+
+    internal PumpedDispatchScope BeginPumpedDispatch(RuntimeSchedulerWorkItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!AppliesTo(item.WorkflowExecutionId))
+            throw new InvalidOperationException("An inline dispatch must belong to its active folding session.");
+        var scope = new PumpedDispatchScope(this, _pumpedWorkItem, _pumpedEffectCommitted);
+        _pumpedWorkItem = item;
+        _pumpedEffectCommitted = false;
+        return scope;
+    }
+
+    internal void RecordCommittedPumpedEffect(RuntimeCheckpointCommit commit)
+    {
+        if (_pumpedWorkItem is not { CommandKind: WorkflowExecutionCommandKind.CompleteActivity } current ||
+            commit.ExpectedFence is null || commit.RetainSchedulerWork ||
+            commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed ||
+            commit.WorkflowExecutionId != WorkflowExecutionId ||
+            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.SchedulerWorkItemId, out var sourceId) || sourceId != current.WorkItemId ||
+            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.CommandId, out var commandId) || commandId != current.CommandId)
+            return;
+        _pumpedEffectCommitted = true;
+    }
+
+    // A typed value scope avoids an allocation for each inline scheduler dispatch.
+    internal readonly struct PumpedDispatchScope(RuntimeCoalescingSession owner, RuntimeSchedulerWorkItem? previous, bool previousCommitted) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner._pumpedWorkItem = previous;
+            owner._pumpedEffectCommitted = previousCommitted;
+        }
+    }
+
     // ---- Inline fused pump ---------------------------------------------------------------------------
 
     /// <summary>
@@ -996,7 +1032,7 @@ public sealed class RuntimeCoalescingSession
     /// completion pump reads past live claims in true insertion order — the exact order the drain loop would claim
     /// next. The item is not claimed: the session is single-writer and drain-confined, so the pump dispatches it inline
     /// and then removes it with <see cref="ConsumePumpedOverlayItemAsync"/>. An item still in dispatch at a mid-drain
-    /// flush counts as remaining continuation (the durable crash backstop) exactly like any unclaimed overlay item.
+    /// flush remains a recovery backstop until its exact non-retaining outcome has committed.
     /// </summary>
     public async ValueTask<RuntimeSchedulerWorkItem?> PeekNextPumpableOverlayItemAsync(CancellationToken cancellationToken)
     {
@@ -1113,6 +1149,12 @@ public sealed class RuntimeCoalescingSession
                 StringComparer.Ordinal);
             remaining = remaining.Where(item => !inFlight.Contains(item.WorkItemId)).ToArray();
         }
+
+        // A pumped completion is unclaimed, but its exact non-retaining outcome may already be durable.
+        // Persisting that same in-flight item again adds a redundant crash backstop beside its committed continuation.
+        // Attempt claims and unmatched/nested checkpoints cannot establish this acknowledgement.
+        if (_pumpedEffectCommitted && _pumpedWorkItem is { } accepted)
+            remaining = remaining.Where(item => item.WorkItemId != accepted.WorkItemId).ToArray();
 
         var remainingIds = new HashSet<string>(remaining.Select(item => item.WorkItemId), StringComparer.Ordinal);
         if (preserveActiveFusedScheduleAnchors)
