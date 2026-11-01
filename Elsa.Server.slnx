@@ -9,8 +9,17 @@
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/src/Specialists/">
+    <Project Path="Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/tests/">
     <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/tests/Specialists/">
+    <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/" />
   <Folder Name="/Extensions/Etl/src/">

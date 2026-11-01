@@ -551,7 +551,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           onAvailable={handleFolderAvailability}
           onFoldersMutated={foldersMutated}
           canManage={librarySupport === null ? false : librarySupport.organization ? libraryPermissions.canManageFolders === true : true}
-        />
+        >
         {folderCapability === "unavailable" && folderSelection !== "all" ? (
           <div className="wf-alert" role="status">
             Workflow folders are unavailable. Showing all workflows while preserving the requested folder context.
@@ -732,6 +732,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           onPageChange={changePage}
           onPageSizeChange={changePageSize}
         /> : null}
+        </WorkflowFolderNavigation>
       </div>
       {organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowOrganizationDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {bulkTagTargets ? <Suspense fallback={<p role="status">Loading bulk tag editor…</p>}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}

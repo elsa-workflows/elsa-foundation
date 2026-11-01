@@ -433,9 +433,11 @@ internal sealed class RuntimePortableExpressionEvaluator(
             ?? throw NewParameterException(parameterName, nodeId, inputName, $"requires the pinned contract for producer node '{binding.ProducerNodeId}'");
         var projection = producerNode.ActivityContract?.Result.Projections.GetValueOrDefault(binding.ProjectionKey)
             ?? throw NewParameterException(parameterName, nodeId, inputName, $"references unknown result projection '{binding.ProjectionKey}' on producer node '{binding.ProducerNodeId}'");
-        return new PortableExpressionParameter(
-            ProjectPath(value, projection.Path, null, parameterName, nodeId, inputName),
-            result.Policy);
+        // Activity result projection has literal-member precedence, unlike general variable paths.
+        var projected = StringComparer.Ordinal.Equals(projection.Path, "$") ? value
+            : value.ValueKind == JsonValueKind.Object && value.TryGetProperty(projection.Path, out var exact) ? exact
+            : ProjectPath(value, projection.Path, null, parameterName, nodeId, inputName);
+        return new PortableExpressionParameter(projected, result.Policy);
     }
 
     private async ValueTask<JsonElement> ReadPersistableEnvelopeAsync(

@@ -15,7 +15,7 @@
     <PackageReference Include="Elsa.Agent.Anthropic" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="Elsa.Agent.GitHubCopilot" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="__AI_ABSTRACTIONS_VERSION__" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="__DI_ABSTRACTIONS_VERSION__" />
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="Tests/**/*.cs" />

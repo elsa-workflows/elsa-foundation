@@ -16,7 +16,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list :is(.wf-definition-act
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row:hover .wf-row-actions { background: var(--studio-row-hover); }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-selected="true"] .wf-row-actions { background: var(--studio-row-selected); }
 
-.wf-definitions-list > .wf-toolbar {
+.wf-definitions-list .wf-folder-content > .wf-toolbar {
   flex-wrap: wrap;
   gap: 8px;
   margin: 0;
@@ -76,7 +76,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-sele
 }
 
 .wf-definitions-list .wf-folder-nav {
-  margin: 12px 18px 12px 20px;
+  margin: 12px 0 12px 20px;
   border: 0;
   border-right: 1px solid var(--studio-border);
   border-radius: 0;
@@ -371,7 +371,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-sele
 
 @media (max-width: 760px) {
 
-  .wf-definitions-list > .wf-toolbar {
+  .wf-definitions-list .wf-folder-content > .wf-toolbar {
     margin-right: 0;
     margin-left: 0;
   }
