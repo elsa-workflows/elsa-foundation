@@ -210,7 +210,20 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         if (directory is null) return null;
         if (subdirectory is not null) directory = Path.Combine(directory, subdirectory);
         Directory.CreateDirectory(directory);
-        var backup = Path.Combine(ContentRoot, "evidence-backup"); File.Delete(backup);
+        var backup = await BackupStoreAsync("evidence-backup", design);
+        var data = await File.ReadAllBytesAsync(backup);
+        var path = Path.Combine(directory, name);
+        await using (var file = File.Create(path))
+        await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
+        return new { file = name, databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(data)),
+            gzipSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))) };
+    }
+
+    // A stopped process may retain committed WAL pages. Copy through SQLite, never copy only the base file.
+    internal async Task<string> BackupStoreAsync(string name, bool design = false)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before copying its store");
+        var backup = Path.Combine(ContentRoot, name); File.Delete(backup);
         await using (var source = new SqliteConnection($"Data Source={(design ? DesignDatabase : RuntimeDatabase)};Mode=ReadOnly;Pooling=False"))
         await using (var target = new SqliteConnection($"Data Source={backup};Pooling=False"))
         {
@@ -218,12 +231,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             await using var check = target.CreateCommand(); check.CommandText = "PRAGMA integrity_check";
             if ((string)(await check.ExecuteScalarAsync())! != "ok") throw Failure("The owned Runtime backup failed its integrity check");
         }
-        var data = await File.ReadAllBytesAsync(backup);
-        var path = Path.Combine(directory, name);
-        await using (var file = File.Create(path))
-        await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
-        return new { file = name, databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(data)),
-            gzipSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))) };
+        return backup;
     }
 
     public async Task StopAsync()

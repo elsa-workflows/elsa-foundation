@@ -27,7 +27,7 @@
     <ProjectReference Include="../../../../../src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../Testing/Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../../src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../../src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="../../../../../src/Caching/Memory/Elsa.Caching.Memory.csproj" />
     <ProjectReference Include="../../../../../src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj" />
     <ProjectReference Include="../../../../../src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj" />

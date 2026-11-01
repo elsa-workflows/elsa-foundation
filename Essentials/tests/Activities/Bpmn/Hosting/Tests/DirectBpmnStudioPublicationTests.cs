@@ -77,11 +77,12 @@ public sealed class DirectBpmnStudioPublicationTests
         await host.StopAsync();
         var waitRuntime = await host.SnapshotAsync("authored-wait-runtime.sqlite.gz");
         var waitDesign = await host.SnapshotAsync("authored-wait-design.sqlite.gz", design: true);
+        var recoveryCopy = await host.BackupStoreAsync("authored-recovery-copy.sqlite");
         object runtimeOnlyEvidence;
         // Recover the actual stopped writer's whole Runtime store under a different composition.
         // No synthetic model row or Design store is supplied to this host.
         await using (var runtimeOnly = await OwnedWorkbench.StartAsync(directBpmn: true, runtimeOnly: true,
-                         runtimeSnapshotPath: host.RuntimeDatabase, admitNewBpmnExecutions: false))
+                         runtimeSnapshotPath: recoveryCopy, admitNewBpmnExecutions: false))
         {
             await runtimeOnly.LoginAsync();
             var runtimeCapabilities = await runtimeOnly.GetAsync("/capabilities");

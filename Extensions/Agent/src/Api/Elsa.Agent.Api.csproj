@@ -23,5 +23,5 @@
     <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
-  <ItemGroup><ProjectReference Include="../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
 </Project>

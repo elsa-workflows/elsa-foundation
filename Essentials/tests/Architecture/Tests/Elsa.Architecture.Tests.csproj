@@ -74,7 +74,7 @@
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Api\Elsa.Activities.Bpmn.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Core\Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
-    <ProjectReference Include="..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />

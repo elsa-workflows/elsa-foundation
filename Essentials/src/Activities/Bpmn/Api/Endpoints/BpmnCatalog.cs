@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -18,8 +19,8 @@ internal sealed record BpmnPublicationView(string SourceReferenceId, string Sour
     DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt);
 
 internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore sources, IWorkflowExecutableStore materials,
-    IRuntimeModelExecutionReader executions, IPersistenceAccessContextAccessor access, BpmnApiCaller caller,
-    IRuntimeRecoveryContinuationCodec continuations, TimeProvider clock)
+    IPersistenceAccessContextAccessor access, BpmnApiCaller caller,
+    IRuntimeRecoveryContinuationCodec continuations, TimeProvider clock, IRuntimeModelExecutionReader? executions = null)
 {
     private const string PublicationsPurpose = "bpmn-publication-catalog-v1";
     private const string ExecutionsPurpose = "bpmn-execution-catalog-v1";
@@ -51,7 +52,8 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
     public async ValueTask<BpmnCatalogPage<BpmnExecutionView>> ExecutionsAsync(BpmnCatalogRequest request, CancellationToken cancellationToken)
     {
         var context = Context(request, ExecutionsPurpose, cancellationToken);
-        var page = await executions.ListPageAsync(new(request.Limit, context.Cursor.Raw), cancellationToken);
+        var reader = executions ?? throw new RuntimeSchedulerWorkUnavailableException("bpmn.state-unavailable", "The selected host has no model state reader.");
+        var page = await reader.ListPageAsync(new(request.Limit, context.Cursor.Raw), cancellationToken);
         var items = new List<BpmnExecutionView>();
         foreach (var state in page.Items)
         {

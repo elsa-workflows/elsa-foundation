@@ -10,6 +10,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -22,6 +23,13 @@ namespace Elsa.Activities.Bpmn.Tests;
 /// <summary>Bounded read/authorization controls; not a host-recovery or browser witness.</summary>
 public sealed class BpmnCatalogTests
 {
+    [Fact]
+    public async Task A_host_without_a_selected_model_reader_composes_but_refuses_execution_discovery()
+    {
+        var fixture = new Fixture(missingReader: true);
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => fixture.Catalog.ExecutionsAsync(new(), default).AsTask());
+        Assert.Empty(fixture.ExecutionQueries);
+    }
     [Fact]
     public async Task Optional_hosting_feature_maps_catalog_routes_and_registers_one_scoped_catalog_and_declaration()
     {
@@ -219,7 +227,7 @@ public sealed class BpmnCatalogTests
         public IReadOnlyList<RuntimeModelExecutionState> ExecutionItems = [];
         public RuntimeExecutionMaterial? Material;
         public BpmnCatalog Catalog { get; }
-        public Fixture()
+        public Fixture(bool missingReader = false)
         {
             SetPrincipal(); Material = BuildMaterial();
             var sources = Proxy<IWorkflowExecutableSourceReferenceStore>((method, args) =>
@@ -243,7 +251,7 @@ public sealed class BpmnCatalogTests
             var permissions = new Permission(c => { Authorized.Add(c); return !Denied && c.Resource is not RuntimeModelExecutionState { ExecutionId: "denied" }; });
             var caller = new BpmnApiCaller(Context, new(Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = new HashSet<string>(["catalog-unit"]) })), permissions,
                 Proxy<IBpmnModelRuntime>((_, _) => throw new InvalidOperationException("Catalog must use bounded readers.")));
-            Catalog = new(sources, material, executions, Scope, caller, new Codec(), Clock);
+            Catalog = new(sources, material, Scope, caller, new Codec(), Clock, missingReader ? null : executions);
         }
         public void SetPrincipal()
         {

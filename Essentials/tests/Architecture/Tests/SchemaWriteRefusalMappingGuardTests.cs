@@ -47,6 +47,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     private static readonly Type[] OwnersWithTheirOwnFailureServices =
     [
         typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature),
+        typeof(ActivitiesBpmnDirectPublishingFeature),
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
         typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
