@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using CShells.Features;
@@ -22,7 +23,7 @@ namespace Elsa.Workflows.Dashboard;
     name: "WorkflowsDashboard",
     DisplayName = "Workflow Dashboard",
     Description = "Provides exact workflow run-health dashboard data.",
-    DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsDesignApi", "WorkflowDesignValidations", "ApiCapabilities" })]
+    DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsDesignApi", "WorkflowDesignValidations", typeof(ApiCapabilitiesFeature) })]
 public sealed class WorkflowsDashboardFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

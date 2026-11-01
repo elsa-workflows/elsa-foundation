@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Capabilities.Contracts;
@@ -36,7 +37,7 @@ namespace Elsa.Diagnostics.StructuredLogs;
     name: "DiagnosticsStructuredLogs",
     DisplayName = "Diagnostics: Structured Logs",
     Description = "Captures structured log entries and exposes them for live tailing and recent-history queries.",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
 )]
 public class StructuredLogsFeature : IWebShellFeature
 {

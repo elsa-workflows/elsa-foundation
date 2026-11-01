@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using CShells.AspNetCore.Features;
@@ -25,7 +26,7 @@ namespace Elsa.Connections.Api.Features;
     name: "ConnectionsApi",
     DisplayName = "Connections API",
     Description = "Provides HTTP endpoints for managing service connections and the OAuth callback.",
-    DependsOn = new object[] { "Connections", "ApiCapabilities" }
+    DependsOn = new object[] { "Connections", typeof(ApiCapabilitiesFeature) }
 )]
 public class ConnectionsApiFeature : IWebShellFeature
 {

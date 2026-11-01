@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.AspNetCore;
@@ -23,7 +24,7 @@ namespace Elsa.Secrets.Api.Features;
     name: "SecretsApi",
     DisplayName = "Secrets API",
     Description = "Provides HTTP endpoints for managing and resolving secret metadata.",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
 )]
 public class SecretsApiFeature : IWebShellFeature
 {

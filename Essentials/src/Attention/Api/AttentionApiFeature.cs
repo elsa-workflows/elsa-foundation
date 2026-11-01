@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using CShells.Features;
@@ -17,7 +18,7 @@ namespace Elsa.Attention.Api;
     name: "AttentionApi",
     DisplayName = "Attention API",
     Description = "Aggregates permission-scoped attention contributors through a shared query endpoint.",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
 )]
 public sealed class AttentionApiFeature : IWebShellFeature
 {

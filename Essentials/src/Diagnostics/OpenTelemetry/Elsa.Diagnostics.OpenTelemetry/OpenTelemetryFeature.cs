@@ -1,3 +1,4 @@
+using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using CShells.AspNetCore.Features;
@@ -30,7 +31,7 @@ namespace Elsa.Diagnostics.OpenTelemetry;
     name: "DiagnosticsOpenTelemetry",
     DisplayName = "Diagnostics: OpenTelemetry",
     Description = "Collects OpenTelemetry traces, metrics, and logs over OTLP/HTTP and exposes them for querying and live streaming.",
-    DependsOn = new object[] { "ApiCapabilities" }
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
 )]
 public class OpenTelemetryFeature : IWebShellFeature
 {

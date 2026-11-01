@@ -1,10 +1,14 @@
 using System.Runtime.CompilerServices;
+using CShells;
 using CShells.Configuration;
+using CShells.DependencyInjection;
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Capabilities.Contracts;
+using Elsa.Api.Capabilities;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Core.Contracts;
@@ -23,6 +27,7 @@ using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -75,6 +80,31 @@ public sealed class DomainApiCapabilityRegistrationTests
             Assert.False(link.Href.StartsWith('/'));
             Assert.False(Uri.TryCreate(link.Href, UriKind.Absolute, out _));
         });
+    }
+
+    [Theory]
+    [InlineData(typeof(Elsa.Attention.Api.AttentionApiFeature))]
+    [InlineData(typeof(Elsa.Secrets.Api.Features.SecretsApiFeature))]
+    [InlineData(typeof(Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature))]
+    [InlineData(typeof(Elsa.Diagnostics.StructuredLogs.StructuredLogsFeature))]
+    public async Task A_standalone_contributor_discovers_and_activates_its_capability_dependency(Type featureType)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCShells(builder => builder
+            .WithAssemblies(featureType.Assembly)
+            .AddShell("capability-leaf", shell => shell.WithFeature(featureType)));
+        await using var root = services.BuildServiceProvider();
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync("capability-leaf");
+        await using var scope = shell.BeginScope();
+        var features = scope.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>();
+        var capabilities = Assert.Single(features, feature => feature.Id == "ApiCapabilities");
+        Assert.Equal(typeof(ApiCapabilitiesFeature), capabilities.StartupType);
+        var enabled = scope.ServiceProvider.GetRequiredService<ShellSettings>().EnabledFeatures.ToArray();
+        Assert.Contains("ApiCapabilities", enabled);
+        Assert.True(Array.IndexOf(enabled, "ApiCapabilities") < Array.IndexOf(enabled, ShellBuilder.ResolveFeatureName(featureType)));
     }
 
     [Fact]
