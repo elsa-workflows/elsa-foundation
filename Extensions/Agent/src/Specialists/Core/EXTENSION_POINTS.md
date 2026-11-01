@@ -35,6 +35,14 @@ only when that mechanism is actually installed. Native execution refuses an unkn
 capability before requesting a response. Protocol fixtures may open standalone leases without this
 authority; that establishes no native budget qualification. No callback grants access to a connection.
 
+A lease's `SupportsStreaming` defaults to false. Set it only after qualifying the client's actual
+streaming terminal/refusal signals; a host selecting streaming refuses an unqualified lease before
+model dispatch. The default atomic response path does not require that flag. Streaming still requires
+physical-request authority and current authorization, and grants no tools, provider-managed session or
+resume behavior. The runtime owns [bounded filtering and final acceptance](../Elsa.Agent.Specialists/EXTENSION_POINTS.md#optional-streaming-responses):
+partial visible text is never an accepted business result or reusable history. Include changed effective
+support in the model profile fingerprint; never claim qualification from the presence of an SDK method.
+
 The [connection-backed contributors](../Connections/README.md) add separate Anthropic and Azure OpenAI
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.

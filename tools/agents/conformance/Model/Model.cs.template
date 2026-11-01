@@ -43,11 +43,13 @@ internal sealed class FixtureModel(ModelObservations observations) : ISpecialist
             request.Descriptor.Model.ConnectionName != "test-connection" || request.Descriptor.Model.ModelId != "fixture-model")
             throw new InvalidOperationException("The deterministic fixture does not own the selected test invocation/model.");
         observations.Opens++;
-        return ValueTask.FromResult(new SpecialistModelClientLease(new Client(observations, request), new ChatOptions { MaxOutputTokens = 4096 }, "fixture/1", 1) { EnforcesDispatchAuthority = request.DispatchAuthority is not null });
+        return ValueTask.FromResult(new SpecialistModelClientLease(new Client(observations, request), new ChatOptions { MaxOutputTokens = 4096 }, "fixture/1", 1) { EnforcesDispatchAuthority = request.DispatchAuthority is not null, SupportsStreaming = true });
     }
     private sealed class Client(ModelObservations observations, SpecialistModelOpenRequest request) : IChatClient
     {
-        public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
+            RespondAsync(messages, options, "atomic", cancellationToken);
+        private async Task<ChatResponse> RespondAsync(IEnumerable<ChatMessage> messages, ChatOptions? options, string mode, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (request.DispatchAuthority is { } authority)
@@ -56,7 +58,7 @@ internal sealed class FixtureModel(ModelObservations observations) : ISpecialist
             {
                 Directory.CreateDirectory(counter);
                 await File.WriteAllTextAsync(Path.Combine(counter, "dispatch-" + Guid.NewGuid().ToString("N") + ".json"),
-                    JsonSerializer.Serialize(new { request.Invocation.WorkflowExecutionId, request.Invocation.OperationKey }), cancellationToken);
+                    JsonSerializer.Serialize(new { request.Invocation.WorkflowExecutionId, request.Invocation.OperationKey, responseMode = mode }), cancellationToken);
             }
             observations.Calls++;
             observations.Instructions = options?.Instructions;
@@ -68,7 +70,16 @@ internal sealed class FixtureModel(ModelObservations observations) : ISpecialist
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, body))
                 { Usage = new UsageDetails { InputTokenCount = 5, OutputTokenCount = 3 } };
         }
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var response = await RespondAsync(messages, options, "stream", cancellationToken);
+            var half = response.Text.Length / 2;
+            yield return new(ChatRole.Assistant, response.Text[..half]);
+            yield return new(ChatRole.Assistant, response.Text[half..]);
+            yield return new ChatResponseUpdate { FinishReason = ChatFinishReason.Stop };
+            if (response.Usage is not null) yield return new(ChatRole.Assistant, [new UsageContent(response.Usage)]);
+        }
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
         public void Dispose() => observations.Disposals++;
     }

@@ -33,7 +33,10 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--source", default="HEAD")
     parser.add_argument("--profile", choices=["kernel", "durable-recovery"], default="kernel")
+    parser.add_argument("--stream-responses", action="store_true", help="Qualify the optional streaming path in the durable profile")
     args = parser.parse_args()
+    if args.stream_responses and args.profile != "durable-recovery":
+        parser.error("stream-responses requires durable-recovery")
     if not args.output.is_absolute() or args.output.exists() or args.output.resolve().is_relative_to(ROOT):
         parser.error("output must be a new absolute directory outside the checkout")
     out = args.output
@@ -45,7 +48,7 @@ def main():
     producer.mkdir()
     feed.mkdir()
     report = {"source": source, "version": args.version, "status": "InProgress", "liveModel": False,
-              "durableJournal": False, "profile": args.profile, "stages": [], "consumers": {}}
+              "durableJournal": False, "profile": args.profile, "streamResponses": args.stream_responses, "stages": [], "consumers": {}}
     environment = dict(os.environ, NUGET_PACKAGES=str(out / "consumer-packages"), NUGET_HTTP_CACHE_PATH=str(out / "consumer-http-cache"))
 
     def save():
@@ -196,7 +199,7 @@ def main():
                     case = out / "durable-recovery" / persistence
                     for role in ["start", "worker", "recover", "settle", "verify"]:
                         run("Durable-" + persistence + "-" + role, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--no-build", "--",
-                            str(out / "runtime-inbox"), role, str(case), persistence], directory, expected_exit={"worker": 197, "recover": 198}.get(role, 0))
+                            str(out / "runtime-inbox"), role, str(case), persistence, *(["stream"] if args.stream_responses else [])], directory, expected_exit={"worker": 197, "recover": 198}.get(role, 0))
                     receipts = {role: json.loads((case / (role + "-receipt.json")).read_text()) for role in ["start", "settle", "verify"]}
                     crash = json.loads((case / "crash.json").read_text())
                     ack_crash = json.loads((case / "ack-crash.json").read_text())
@@ -204,7 +207,10 @@ def main():
                         raise RuntimeError("durable case did not cross five distinct processes and both declared crash boundaries")
                     if len(list((case / "dispatches").glob("dispatch-*.json"))) != 1:
                         raise RuntimeError("durable recovery repeated or omitted a model dispatch")
-                    cases.append({"persistenceMode": persistence, "processes": receipts, "expectedCrashes": [crash, ack_crash], "databaseSha256": sha(case / "runtime.db"), "modelDispatches": 1})
+                    dispatch = json.loads(next((case / "dispatches").glob("dispatch-*.json")).read_text())
+                    if dispatch["responseMode"] != ("stream" if args.stream_responses else "atomic"):
+                        raise RuntimeError("durable recovery did not use the selected response path")
+                    cases.append({"persistenceMode": persistence, "responseMode": dispatch["responseMode"], "processes": receipts, "expectedCrashes": [crash, ack_crash], "databaseSha256": sha(case / "runtime.db"), "modelDispatches": 1})
                 report["durableRecoveryCases"] = cases
             inspect(name, directory)
         report["status"] = "PassedDurableRecoveryProfile" if args.profile == "durable-recovery" else "PassedBoundedKernelProfile"

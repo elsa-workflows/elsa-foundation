@@ -77,3 +77,9 @@ The profile proves these two SQLite process-loss boundaries in both persistence 
 continuity-enabled accepted turn. It does not execute a second model turn from that conversation. It does not establish
 power-loss durability, older module binary migration/rollback, the full provider/host matrix, streaming,
 BPMN/Studio authoring or live-model acceptance. Failed run receipts remain failed and separate.
+
+The durable profile also accepts `--stream-responses`. Its external deterministic model contribution
+declares streaming support and emits two visible chunks plus terminal/usage updates through MAF. The
+dispatch receipt identifies the selected atomic/stream path. Recovery/settlement still run without a
+model contribution. This is packaged streaming/runtime proof, distinct from the concrete SDK socket
+fixtures and live-provider qualification.

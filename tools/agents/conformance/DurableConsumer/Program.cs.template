@@ -35,6 +35,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 var role = args[1];
+var streaming = args.Length > 4 && args[4] == "stream";
 var directory = Path.GetFullPath(args[2]);
 var persistence = Enum.Parse<PersistenceMode>(args[3]);
 Directory.CreateDirectory(directory);
@@ -56,7 +57,7 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(DurablePackageHostF
         typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly, typeof(FileSystemLockingFeature).Assembly)
     .AddShell("specialist-durable-package", shell => shell
         .WithFeature<DurablePackageHostFeature>(feature => { feature.Role = role; feature.Directory = directory; feature.Persistence = persistence; })
-        .WithFeature<SpecialistsRuntimeFeature>(feature => feature.AllowNewOperations = role == "start")
+        .WithFeature<SpecialistsRuntimeFeature>(feature => { feature.AllowNewOperations = role == "start"; feature.StreamResponses = streaming; })
         .WithFeature<BackgroundActivitiesFeature>(feature => { feature.RunWorkers = false; feature.LeaseDurationSeconds = 5; feature.RenewalIntervalSeconds = 1; })
         .WithFeature<WorkflowsRuntimeResumptionFeature>(feature => { feature.SweepIntervalSeconds = 3600; feature.MaxBackoffIntervalMinutes = 120; })
         .WithFeature<SpecialistsEntityFrameworkCoreFeature>(feature => { feature.Provider = "Sqlite"; feature.ConnectionString = connection; })
