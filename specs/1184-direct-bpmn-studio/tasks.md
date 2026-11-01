@@ -1,0 +1,83 @@
+# Tasks: Direct BPMN journeys in Studio
+
+**Input**: [plan.md](plan.md), [spec.md](spec.md), research/data model/contracts/quickstart.
+
+**Cadence**: Local work-unit choice in plan.md: failing control for behavioral regression fixes, focused checks alongside implementation, actual acceptance before review. No global Elsa TDD policy is inferred. Keep feature composition and risk-based per-implementation tests. Builds remain serial through the configured wrapper.
+
+## Phase 1: Setup
+
+- [x] T001 Refresh exact claim/PR/main/org protocol and review planning artifacts in specs/1184-direct-bpmn-studio/artifact-reviews.md.
+- [x] T002 Capture and archive actual pre-claim wait/completion/replay stores with specs/1184-direct-bpmn-studio/evidence/preclaim/capture.py and verify receipt.json after download.
+
+## Phase 2: Foundational authoring retention
+
+These prerequisites serve human and service journeys. No new general storage/framework setup is needed.
+
+- [ ] T003 Reproduce lost owned binding metadata and add meaningful negative controls in Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnDirectBindingInterchangeTests.cs.
+- [ ] T004 Preserve bounded owned direct-binding JSON through XML in Essentials/src/Activities/Bpmn/Interchange/Services/BpmnDirectBindingMetadata.cs, BpmnDocumentExporter.cs and BpmnDocumentImporter.cs; keep unrelated extensions diagnosed and old documents unchanged.
+- [ ] T005 Run the affected interchange suite and record actual failing/passing controls in specs/1184-direct-bpmn-studio/evidence/interchange/README.md.
+
+## Phase 3: US1 — Direct human journey (P1, MVP)
+
+**Independent test**: Actual Studio save/publish/start/wait, owned host restart, fresh-session catalog discovery, exact completion and retained replay with no native wrapper rows or script-supplied run ID.
+
+- [ ] T006 [US1] Add compatible trusted publication context and tests for raw replay/provenance conflicts in Essentials/src/Activities/Bpmn/Core/IBpmnModelRuntime.cs and Essentials/tests/Activities/Bpmn/Tests/BpmnDirectPublicationTests.cs.
+- [ ] T007 [US1] Implement source-aware publication without changing material identity recipes in Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs.
+- [ ] T008 [US1] Add mechanical supported-root projection and immutable version publication in Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectPublisher.cs; test unsupported/native intent, missing source and exact dependency validation in Essentials/tests/Activities/Bpmn/Interchange/Tests/BpmnAuthoredDirectPublisherTests.cs.
+- [ ] T009 [US1] Compose optional authored publisher/endpoints/capability in Essentials/src/Activities/Bpmn/Interchange/ActivitiesBpmnDirectPublishingFeature.cs and Endpoints/DirectPublication/; cover conditional registration and runtime-only absence in the existing interchange/hosting test projects.
+- [ ] T010 [US1] Add bounded authorized catalogs and protected continuation DTOs/read queries in Essentials/src/Activities/Bpmn/Api/; test empty filtered pages, raw-page budget, live-clock continuity and foreign/scope/filter cursor refusal in Essentials/tests/Activities/Bpmn/Tests/BpmnCatalogTests.cs.
+- [ ] T011 [US1] Expose persisted graph/source/current-work/attempt/settlement inspection through Essentials/src/Activities/Bpmn/Core/ and Api/Endpoints/BpmnHostingApi.cs; test authorization before disclosure/replay and no invented history.
+- [ ] T012 [P] [US1] Add scoped typed direct BPMN client/capability handling in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/bpmnRuntime.ts with tests for request invalidation, absent capabilities and retained operation identities.
+- [ ] T013 [US1] Add explicit direct-human editor choices, binding inspector, loss-refusing import and direct publish action in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/ and workflow-editor/; preserve undo/redo, save/dirty state, native publish and read-only behavior with component tests.
+- [ ] T014 [US1] Add process/publication/run routes and truthful human-work inspection in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/ and module.tsx; test paging, pending admission, completion/replay and backend/identity/tenant/selection races.
+- [ ] T015 [US1] Prove authored direct publication/restart through actual composed host in Essentials/tests/Activities/Bpmn/Hosting/Tests/DirectBpmnStudioPublicationTests.cs, including zero native wrapper rows and runtime-only inspection.
+- [ ] T016 [US1] Execute real Studio P1, themes/keyboard/narrow viewport, whole-store checkpoints and exact-source receipt using tools/bpmn/ and specs/1184-direct-bpmn-studio/evidence/human/; capture this writer before claims.
+
+## Phase 4: US4 — Existing workflows (P1 compatibility gate)
+
+**Independent test**: Both frozen native saved-Studio families retain authoring/export, normal publish/Test/Published Run, old inspection/restart; affected native composites retain completion/fault/cancel and runtime-only recovery.
+
+- [ ] T017 [US4] Requalify affected frozen authoring/XML, shared normalized traces and native composites using existing Essentials/tests/Activities/Bpmn/ and tools/bpmn/ controls; record source/hash/outcome distinctions in specs/1184-direct-bpmn-studio/evidence/compatibility/.
+- [ ] T018 [US4] Perform both actual saved-Studio families with existing tools/bpmn/verify_studio_upgrade.py and extend only changed behavior; preserve original assets and record all mandatory product observations in specs/1184-direct-bpmn-studio/evidence/compatibility/.
+- [ ] T019 [US4] Prove accepted work with Design unavailable/new admission off in Essentials/tests/Activities/Bpmn/Hosting/Tests/RuntimeOnlyParallelBpmnTests.cs and the affected direct hosting controls; never substitute a synthetic state for upgrade evidence.
+
+## Phase 5: US2 — BPMN → native → ETL failure/recovery (P2)
+
+**Independent test**: Actual selected immutable pipeline/closed worker, physical failure after effects, host restart, retained incident, exact UI retry and one replacement attempt; original fault and destination evidence remain inspectable.
+
+- [ ] T020 [US2] Add closed published service-workflow selection and normal RunEtl service-workflow creation flow using Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/ and existing Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlPublishedSelectionEditor.tsx; no hidden worker compiler.
+- [ ] T021 [US2] Validate pinned service/source/fault policy and preserve JSON/XML/version replay in Essentials/src/Activities/Bpmn/Interchange/Services/BpmnAuthoredDirectPublisher.cs with representative RunEtl tests.
+- [ ] T022 [US2] Project authorized RunEtl result-address/RunId without private values in Extensions/Etl/src/Workflows/Runtime/Services/; test its IActivityStateViewProjector implementation and feature registration in the ETL domain tests.
+- [ ] T023 [US2] Add narrow contextual run-related-link registry/context in Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/ and app/registry.ts; render it in native run details and test missing contribution/context-scope changes.
+- [ ] T024 [US2] Contribute ETL link and durable run URL/back navigation in Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/module.tsx and EtlRunsPage.tsx with authorization/capability/stale-request component tests.
+- [ ] T025 [US2] Show exact native attempts, held incident, budget/retry and retained outcomes in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/; test response loss, stale incident and backend switches.
+- [ ] T026 [US2] Run physical HTTP/file failure/restart/retry/pinning journey through Studio using tools/bpmn/ and retain whole stores/destination/original fault/replacement evidence in specs/1184-direct-bpmn-studio/evidence/etl/; keep wider ETL acceptance open.
+
+## Phase 6: US3 — Exact claims and interruption (P3)
+
+**Independent test**: Two authorized subjects race, one owner survives restart; refuse stale/foreign completion and old readers; interruption in both orders never resurrects work, settlement remains truthful.
+
+- [ ] T027 [US3] Confirm archived pre-claim and actual P1 stores before writer change in specs/1184-direct-bpmn-studio/evidence/preclaim/ and evidence/human/; add actual old-input upgrade/replay controls in the existing BPMN hosting tests.
+- [ ] T028 [US3] Add explicit claim-required material format/profile and compatible default-refusing claim operations in Essentials/src/Activities/Bpmn/Core/; update PublicAPI and test constructor/old material compatibility.
+- [ ] T029 [US3] Add adapter frame15 claim envelope, mailbox/CAS claims and distinct claimed-completion payload in Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs and BpmnModelRuntime.cs; preserve Authority and exact legacy fingerprints.
+- [ ] T030 [US3] Add normalized caller/resource-authorized claim transport and opt-in admission/capability handling in Essentials/src/Activities/Bpmn/Api/; accepted work remains operable when admission is off.
+- [ ] T031 [US3] Test first-claim races, replay/conflicts, foreign/stale attempts, interruption orders and unchanged old receipts in Essentials/tests/Activities/Bpmn/Tests/BpmnHumanClaimTests.cs; verify no separate lease/state writer.
+- [ ] T032 [US3] Add claim-required authoring choice and claim/current-owner/completion UI in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/; test contention, restart/reload, obsolete actions and admission-off accepted work.
+- [ ] T033 [US3] Prove actual claimed-state restart/upgrade and old-reader refusal in Essentials/tests/Activities/Bpmn/Hosting/Tests/BpmnHumanClaimUpgradeTests.cs and tools/bpmn/; archive physical stores under specs/1184-direct-bpmn-studio/evidence/claims/.
+- [ ] T034 [US3] Exercise real timer/cancel/completion and service settlement/replay through Studio, preserving physical attempts and truthful lifecycle under specs/1184-direct-bpmn-studio/evidence/operations/.
+
+## Phase 7: Cross-cutting qualification and delivery
+
+- [ ] T035 Document actual profile/XML/BPMNDI/permissions/replay/claim/external-work/incident/alteration/migration boundaries in Essentials/src/Activities/Bpmn/Api/README.md and Interchange/README.md; update relevant extension-point catalogs only for implemented contributors.
+- [ ] T036 Run affected architecture/composition/public API/ApiCompat/magnitude/tier checks; reconcile newer main and record exact results in specs/1184-direct-bpmn-studio/evidence/final/README.md. No inherited PR3410 version exception.
+- [ ] T037 Complete all FR001–021/SC001–006 evidence mapping and independent full-PR review rounds on the exact final head; post receipts on PR3603 and keep Project62 current.
+- [ ] T038 Set specs/1184-direct-bpmn-studio/spec.md to Implemented in the delivery diff only after acceptance is complete; remove terminal checklist residue in that same PR per docs/reference/spec-lifecycle.md.
+- [ ] T039 Merge under the applicable clean-loop/required-check protocol, verify resulting main and release exact claim6556217536; update #2907/#2892/Project62 using source-bound evidence without closing wider program/ETL acceptance.
+
+## Dependencies and execution
+
+T001–005 precede US1. US1's actual acceptance precedes US4's compatibility gate; US4 precedes broader ETL/claim work. US2 and US3 reuse the proven read/UI shell but each has its own independent real journey. T027 must precede every new claim writer. Cross-cutting delivery waits for all stories; the P1 checkpoint alone cannot close #2907.
+
+Parallel opportunities are limited to independent file work after prerequisites: US1 client T012 can proceed alongside server catalog/inspection once contracts are fixed; US4 backend and browser preparation are independent but builds remain serial; US2 state projection T022 and UI-link preparation T023 can proceed after the exact identity contract; US3 API/client test preparation can follow the claim contract while driver implementation remains sequential. These are work-order opportunities, not a request to launch extra agents.
+
+Deliver meaningful forward commits on the existing PR. Validate P1 before broadening; do not add speculative frameworks. Record actual task completion/evidence, not inferred passes.

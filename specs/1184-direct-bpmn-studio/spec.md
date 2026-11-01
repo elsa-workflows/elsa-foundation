@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: Draft
+**Status**: Approved — specification, plan and tasks reviewed under standing program authorization; implementation acceptance remains open.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 
@@ -92,7 +92,7 @@ Existing native/embedded BPMN authors retain their editor, authoring documents, 
 - **FR-003**: Direct BPMN publication/execution MUST be identifiable and distinct from native BpmnProcess publication, without requiring a native wrapper execution.
 - **FR-004**: Process, published-version and execution discovery MUST be scoped to backend and authorized identity/tenant, use bounded pages and support navigation after browser/host restart. Script-supplied identities or browser-local lists alone MUST NOT be the recovery mechanism.
 - **FR-005**: Inspection MUST show the pinned process/version, lifecycle, current work, service/ETL relationships, incidents and accepted operation outcomes. Transient browser state is not execution authority.
-- **FR-006**: Human claim/completion MUST authorize only the exact current claim and attempt. Concurrent claims cannot produce two current owners; obsolete completion cannot advance the process.
+- **FR-006**: Claim-enabled human work MUST authorize completion only for the exact current claim and attempt. Concurrent claims cannot produce two current owners; obsolete completion cannot advance the process. Existing unclaimed profiles and their retained completion requests MUST remain compatible; claim-required work MUST use an explicit versioned profile that older readers refuse.
 - **FR-007**: Repeating an accepted claim, completion, retry or cancellation after an uncertain response/restart MUST recover its retained outcome. The same operation identity with different content MUST be refused.
 - **FR-008**: Native/external work MUST retain its immutable executable and physical attempt identity under existing shared ownership/settlement rules. Studio integration MUST NOT introduce another scheduler or interpreter.
 - **FR-009**: Authors MUST select an existing published ETL pipeline through available authoring choices. Validation MUST identify unavailable/obsolete selections before publication while preserving already accepted immutable work.
