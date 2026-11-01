@@ -13,6 +13,18 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
 {
     public async ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context)
     {
+        try { return await ExecuteCoreAsync(context); }
+        catch (SpecialistTurnException exception)
+        {
+            // Authentication/binding and accepted-replay reads precede claim ownership. Preserve
+            // their safe domain code without settling a turn this worker has not claimed.
+            return ActivityTransition.Fault<string>(new ActivityFault(exception.Code,
+                "The retained specialist turn is unavailable or does not match this native invocation."));
+        }
+    }
+
+    private async ValueTask<ActivityTransition> ExecuteCoreAsync(ActivityExecutionContext context)
+    {
         var (identity, parent, node) = await binding.ParentAsync(context, context.CancellationToken);
         var handle = SpecialistNativeBinding.Handle(parent);
         var (document, request) = await journal.ReadAsync(handle, identity, context.CancellationToken);
