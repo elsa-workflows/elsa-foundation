@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.RegularExpressions;
 using CShells.Lifecycle;
 using Elsa.Studio.Core.Contracts;
@@ -27,7 +28,7 @@ internal static partial class StudioRuntimeEndpoint
             var value = StudioRuntimeScript.BuildRuntimeConfig(configuration, settings.AuthEnabled, authority);
             if (extensions.Count != 0) value.Add("extensions", extensions);
             // Serialize while the owning shell scope is alive. No scoped module object escapes the read.
-            return Results.Content($"{StudioRuntimeScript.GlobalName} = {JsonSerializer.Serialize(value)};", "application/javascript");
+            return Results.Content($"{StudioRuntimeScript.GlobalName} = {Serialize(value)};", "application/javascript");
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { throw; }
         catch (Exception error) when (error is not OutOfMemoryException)
@@ -36,6 +37,13 @@ internal static partial class StudioRuntimeEndpoint
                 .LogWarning(error, "The selected Studio shell could not project public runtime configuration.");
             return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
         }
+    }
+
+    internal static string Serialize(Dictionary<string, object?> value)
+    {
+        // Module-owned DTO metadata must die with this read, rather than enter the shared serializer cache.
+        var options = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        return JsonSerializer.Serialize(value, options);
     }
 
     [GeneratedRegex("^[a-z][a-z0-9-]{0,63}$", RegexOptions.CultureInvariant)]

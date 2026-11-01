@@ -20,10 +20,13 @@ export async function initializeStudioModules(manifests: StudioModuleManifest[],
   try {
     for (const manifest of manifests) {
       if(host.signal.aborted)throw new DOMException("Module initialization was cancelled.","AbortError");
-      if (!isVersionRangeCompatible(manifest.requiredHostVersion,options.hostVersion)
-        || !isVersionRangeCompatible(manifest.requiredSdkVersion,options.sdkVersion)) {
-        if (manifest.capabilities.includes("host-initialization")) throw new Error(`Host extension ${manifest.displayName} is incompatible.`);
-        diagnostics.push({moduleId:manifest.id,status:"incompatible",reason:"The module requires another host or SDK version."});
+      const incompatibleReason = !isVersionRangeCompatible(manifest.requiredHostVersion,options.hostVersion)
+        ? `Requires host ${manifest.requiredHostVersion}.`
+        : !isVersionRangeCompatible(manifest.requiredSdkVersion,options.sdkVersion)
+          ? `Requires SDK ${manifest.requiredSdkVersion}.` : undefined;
+      if (incompatibleReason) {
+        if (manifest.capabilities.includes("host-initialization")) throw new Error(`Host extension ${manifest.displayName} is incompatible: ${incompatibleReason}`);
+        diagnostics.push({moduleId:manifest.id,status:"incompatible",reason:incompatibleReason});
         continue;
       }
       let instance: StudioModuleInstance | undefined;

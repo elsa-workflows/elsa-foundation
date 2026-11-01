@@ -45,6 +45,13 @@ describe("document-owned connection providers",()=>{
   }
   expect(register).toHaveBeenCalledTimes(2);expect(initialize).toHaveBeenCalledTimes(1);
  });
+ it.each(["host","sdk"])("reports the required %s version before importing an incompatible module",async(kind)=>{
+  const incompatible={...manifest("acme"),capabilities:[],[kind==="host"?"requiredHostVersion":"requiredSdkVersion"]:"999.0.0"};
+  const importModule=vi.fn();
+  const loaded=await initializeStudioModules([incompatible],host,{...options,importModule});
+  expect(loaded.instances).toEqual([]);expect(importModule).not.toHaveBeenCalled();
+  expect(loaded.diagnostics).toEqual([{moduleId:"acme",status:"incompatible",reason:`Requires ${kind==="host"?"host":"SDK"} 999.0.0.`}]);
+ });
  it("fails duplicate connection providers explicitly and disposes their instances",async()=>{
   const dispose=vi.fn();const connection={getSnapshot:()=>({active:null})} as StudioConnectionController;
   await expect(initializeStudioModules([manifest("acme"),manifest("other")],host,{...options,importModule:async()=>({initialize:()=>({connection,dispose,register(){}})})})).rejects.toThrow("Only one");
