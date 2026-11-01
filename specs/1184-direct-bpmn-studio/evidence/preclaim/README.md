@@ -17,3 +17,15 @@ python3.14 specs/1184-direct-bpmn-studio/evidence/preclaim/capture.py \
 ```
 
 Collector refuses changed production trees, owns/stops only its children and snapshots whole stores after stopping them. Excludes private identity/config/logs. Preserve archived inputs unchanged for upgraded-reader checks.
+
+## Old-input controls before the claim writer (T027)
+
+The two actual pre-claim captures are confirmed and now guard the current host. [fixtures.json](../fixtures.json) pins 16 exact members of this archive and of the [Studio P1 archive](../human/README.md). Each pin matches that archive's own index. `tools/bpmn/restore_evidence.py` verifies each archive and member digest and restores them into the ignored `evidence/fixtures/` folder, which CI already restores before building.
+
+`DirectHumanPreClaimUpgradeTests` restores each capture's wait and terminal Runtime/Design stores into the current Workbench:
+
+- **Wait store:** the restored view, the current work or the full inspection equals the capture. An obsolete attempt is refused without changing state. The original completion command returns the original Accepted response and then its replay, both deep-equal to the captured responses. Revision, result and pins match the captured terminal. The replay survives a restart.
+- **Terminal store:** the view and inspection equal the capture. The original command and its command record replay the captured result. A new request is refused as `execution-terminal`, and both survive a restart.
+- **Both:** material rows keep their exact bytes and incarnations, and native workflow/activity/bookmark rows stay zero.
+
+At `bc5f464af` the four controls and the existing direct-human witness pass. A temporary changed request id, with the original attempt id, fails all four. See the [receipt](upgrade-controls.json). The claim writer has not changed. T028–T029 must keep these controls passing unchanged, and future claim captures are added beside them, never in place of them.
