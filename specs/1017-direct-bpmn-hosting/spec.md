@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: In progress
+**Status**: Implemented — prepared for PR #3410; takes effect on merge, with review/CI/protected-delivery gates still open.
 
 **Delivery**: Full author round 12 was clean at `f1546a7f8c3e0a522bff1db1bd98bae6b824ae0a`; subsequent Code Review requests changes for raw evidence size and migration-history ownership. Thirteen total review rounds are now complete within the authorized bound of sixteen. The owner approved archival assets on the existing contributor preview release. The complete archive was re-downloaded and all 9,410 original files verified before pruning raw final-tree copies; the frozen manifest is unchanged. [Archive and restoration](evidence/README.md) preserves original checkpoints, historical failures, source identities and the 94 actual test inputs without a nearly 1 GB Git tree. No branch history is rewritten.
 
