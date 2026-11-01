@@ -17,6 +17,8 @@ assembly by object and derives its history table from the `Connections` EF decla
 shared [migration lifecycle](../../../Persistence/EntityFramework/EXTENSION_POINTS.md): shell
 activation/reload and ordinary host startup honor `Elsa:Persistence:EntityFramework:Migrate:Policy`.
 Named connections, schema selection and optional context pooling use the same shared binding.
+`ConnectionsEfModule` exposes the built-in history identity and canonical schema chain for host and
+migration inventory tooling. Consumer-owned contexts retain their own migration history.
 
 ## Consumer-owned contexts
 

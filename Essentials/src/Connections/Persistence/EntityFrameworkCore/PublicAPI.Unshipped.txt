@@ -1,4 +1,8 @@
 #nullable enable
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEfModule
+static readonly Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
+const Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEfModule.HistoryModuleName = "ElsaConnections" -> string!
+static Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEfModule.HistoryTableName.get -> string!
 Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsModelBuilderExtensions
 static Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsModelBuilderExtensions.AddConnectionsModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
 static Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreRegistration.AddConnectionsRepository<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
