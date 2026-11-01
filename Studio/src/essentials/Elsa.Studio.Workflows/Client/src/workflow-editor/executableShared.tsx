@@ -50,21 +50,45 @@ export function CopyValueButton({ value, ariaLabel, copiedLabel, textLabel, onCo
 // Inspector: per reference the artifact version label, publish time, scope, expiry, and lifecycle
 // status. `activeReferenceId`/`onSelect` are Inspector-only (re-render from another reference's
 // Layout Sidecar); the table renders it read-only.
-export function ExecutableReferenceList({ references, activeReferenceId, onSelect, definitionNames, ariaLabel = "Source references" }: {
+export function ExecutableReferenceList({ references, activeReferenceId, onSelect, definitionNames, ariaLabel = "Source references", variant = "compact" }: {
   references: WorkflowExecutableReference[];
   activeReferenceId?: string | null;
   definitionNames?: ReadonlyMap<string, string>;
   onSelect?(reference: WorkflowExecutableReference): void;
   ariaLabel?: string;
+  variant?: "compact" | "collection";
 }) {
   if (references.length === 0) return <p className="wf-muted">No source references.</p>;
 
   return (
-    <ul className="wf-reference-list" aria-label={ariaLabel}>
+    <ul className={["wf-reference-list", variant === "collection" ? "wf-reference-list--collection" : ""].filter(Boolean).join(" ")} aria-label={ariaLabel}>
       {references.map(reference => {
         const status = getExecutableReferenceStatus(reference);
         const active = reference.sourceReferenceId === activeReferenceId;
-        const body = (
+        const displayName = (reference.definitionId && definitionNames?.get(reference.definitionId)) || reference.definitionId || "Untitled workflow";
+        const body = variant === "collection" ? (
+          <>
+            <strong className="wf-reference-origin">{displayName}</strong>
+            <dl className="wf-reference-collection">
+              <div>
+                <dt>Version</dt>
+                <dd className="wf-identity-cell">{reference.artifactVersion}</dd>
+              </div>
+              <div>
+                <dt>Scope</dt>
+                <dd className="wf-identity-cell">
+                  <span>{formatReferenceScope(reference.scope)}</span>
+                  {status !== "live" ? <span className="wf-chip wf-reference-retired">{status === "retired" ? "Retired" : "Expired"}</span> : null}
+                  {active ? <span className="wf-chip">Shown</span> : null}
+                </dd>
+              </div>
+              <div>
+                <dt>{reference.publishedAt ? "Published" : "Created"}</dt>
+                <dd className="wf-identity-cell">{formatDate(reference.publishedAt ?? reference.createdAt)}</dd>
+              </div>
+            </dl>
+          </>
+        ) : (
           <>
             {definitionNames && reference.definitionId ? <strong className="wf-reference-origin">{definitionNames.get(reference.definitionId) ?? reference.definitionId}</strong> : null}
             <span className="wf-reference-heading">
