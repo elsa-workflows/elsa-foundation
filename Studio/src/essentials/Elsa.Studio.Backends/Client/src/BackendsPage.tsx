@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, ChevronDown, Plus, Server } from "lucide-react";
-import { studioNavigationRequestedEvent, type StudioApiCapabilityDocument, type StudioBackendProfile } from "../../sdk";
-import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel } from "../ui";
+import { studioNavigationRequestedEvent, type StudioApiCapabilityDocument, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
+import { AnchoredPopover, StudioButton, StudioAlert, StudioTabs, StudioTabPanel } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 

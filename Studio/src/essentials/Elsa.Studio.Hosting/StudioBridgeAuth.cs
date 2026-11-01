@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Elsa.Studio.Core.Contracts;
 
 namespace Elsa.Studio.Hosting;
 
@@ -80,13 +81,14 @@ internal static class StudioBridgeAuth
         // enabled, an authenticated backend session is required. This mirrors how `auth.enabled` is derived for the
         // browser runtime config in Program.cs.
         var authEnabled = settings.AuthEnabled;
-        var backendBaseUrl = StudioBackendManagementOptions.ResolveServerBaseUrl(configuration);
+        StudioBackendAuthorityAccessor.Add(services, configuration);
 
         // Named client the handler uses to introspect the browser bearer. Short timeout so an unauthenticated request
         // to a slow backend still resolves quickly.
-        services.AddHttpClient(StudioBridgeAuthHandler.HttpClientName, client =>
+        services.AddHttpClient(StudioBridgeAuthHandler.HttpClientName, (provider, client) =>
         {
             client.Timeout = TimeSpan.FromSeconds(5);
+            var backendBaseUrl = provider.GetRequiredService<IStudioBackendAuthorityAccessor>().Value.ServerBaseUrl;
             if (!string.IsNullOrWhiteSpace(backendBaseUrl))
                 client.BaseAddress = new Uri(backendBaseUrl, UriKind.Absolute);
         });
@@ -108,9 +110,10 @@ internal static class StudioBridgeAuth
             .AddScheme<StudioBridgeAuthOptions, StudioBridgeAuthHandler>(StudioBridgeAuthorization.SchemeName, schemeOptions =>
             {
                 schemeOptions.AuthEnabled = authEnabled;
-                schemeOptions.BackendBaseUrl = backendBaseUrl;
                 schemeOptions.QueryTokenPathPrefixes = settings.QueryTokenPathPrefixes.ToArray();
             });
+        services.AddOptions<StudioBridgeAuthOptions>(SchemeName).Configure<IStudioBackendAuthorityAccessor>(
+            (options, authority) => options.BackendBaseUrl = authority.Value.ServerBaseUrl);
 
         // Adding Studio's explicit scheme must not remove a host's single-scheme implicit default.
         // Run after all ordinary scheme registrations so callers can configure application auth on either side of AddElsaStudio.
@@ -312,7 +315,7 @@ internal sealed class StudioBridgeAuthHandler(
     {
         var claims = new List<Claim> { new(ClaimTypes.Name, name) };
         if (!string.IsNullOrWhiteSpace(subjectId)) claims.Add(new Claim(ClaimTypes.NameIdentifier, subjectId));
-        if (!string.IsNullOrWhiteSpace(tenantId)) claims.Add(new Claim(StudioBackendProfiles.TenantClaim, tenantId));
+        if (!string.IsNullOrWhiteSpace(tenantId)) claims.Add(new Claim(TenantClaimType, tenantId));
 
         // Project the user's host-control permissions from the backend session onto the ticket so the named permission
         // policies can evaluate them (#249, ADR 0037). The backend session is the single source of truth for the

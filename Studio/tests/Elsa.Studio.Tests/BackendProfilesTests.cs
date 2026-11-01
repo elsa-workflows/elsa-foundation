@@ -1,7 +1,9 @@
+using CShells.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Studio.Hosting;
+using Elsa.Studio.Backends;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Stores;
@@ -38,7 +40,8 @@ public sealed class BackendProfilesTests : IAsyncLifetime
             ["Studio:Backends:AuthenticationProfiles:corporate:PrivateKey"] = "never-in-browser",
             ["Studio:BackendServerBaseUrl"] = "http://internal-only.example/",
             ["Studio:BackendModuleManagementApiKey"] = "private-management-key",
-            ["CShells:Shells:Default:Features:StudioApi"] = "true"
+            ["CShells:Shells:Default:Features:StudioApi"] = "true",
+            ["CShells:Shells:Default:Features:BackendsStudio"] = "true"
         });
         if (profilesOnly) builder.Configuration.AddInMemoryCollection(new Dictionary<string,string?>
         { ["Studio:BackendBaseUrl"] = null, ["Studio:BackendServerBaseUrl"] = null, ["Studio:Backends:DefaultId"] = "managed" });
@@ -48,7 +51,9 @@ public sealed class BackendProfilesTests : IAsyncLifetime
             builder.Services.AddScoped<StudioPreferencesDbContext>(services => services.GetRequiredService<StudioPreferencesSqliteDbContext>());
             builder.Services.AddScoped<IStudioPreferenceStore, EfStudioPreferenceStore>();
         }
-        builder.AddElsaStudio(options => options.ShellsFile = null);
+        var studio = builder.AddElsaStudio(options => options.ShellsFile = null);
+        builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
+        studio.ConfigureShells(shells => shells.WithAssemblies(typeof(BackendsStudioFeature).Assembly));
         builder.Services.RouteAllBackendClientsThrough(_identity);
         _app = builder.Build();
         if (database is not null)
@@ -199,6 +204,38 @@ public sealed class BackendProfilesTests : IAsyncLifetime
         using var saved = await WriteAsync(client,"alice-a",Value());
         Assert.Equal(HttpStatusCode.OK,saved.StatusCode);
         Assert.Contains("https://managed.example/tenant-a/_elsa/identity/session",_identity.Paths);
+    }
+
+    [Fact]
+    public async Task Feature_disable_and_reenable_remove_api_and_preserve_profiles_within_host_lifetime()
+    {
+        using var client=await StartAsync();
+        Assert.Equal(HttpStatusCode.OK,(await WriteAsync(client,"alice-a",Value())).StatusCode);
+        var registry=_app!.Services.GetRequiredService<CShells.Lifecycle.IShellRegistry>();
+        await registry.ReloadAsync("Default");
+        Assert.Equal(HttpStatusCode.OK,(await ReadAsync(client,"alice-a")).StatusCode);
+        _app.Configuration["CShells:Shells:Default:Features:BackendsStudio"]="false";
+        await registry.ReloadAsync("Default");
+        Assert.Equal(HttpStatusCode.NotFound,(await ReadAsync(client,"alice-a")).StatusCode);
+        Assert.DoesNotContain("\"backends\"",await client.GetStringAsync("/studio-runtime.js"));
+        _app.Configuration["CShells:Shells:Default:Features:BackendsStudio"]="true";
+        await registry.ReloadAsync("Default");
+        using var restored=await ReadAsync(client,"alice-a");
+        Assert.Equal(HttpStatusCode.OK,restored.StatusCode);
+        Assert.Contains("Personal backend",await restored.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Identical_host_and_identity_keys_do_not_share_default_store_between_host_instances()
+    {
+        using var first=await StartAsync();
+        Assert.Equal(HttpStatusCode.OK,(await WriteAsync(first,"alice-a",Value())).StatusCode);
+        var other=new BackendProfilesTests();
+        try {
+            using var second=await other.StartAsync();
+            Assert.Equal(HttpStatusCode.NotFound,(await ReadAsync(second,"alice-a")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK,(await ReadAsync(first,"alice-a")).StatusCode);
+        } finally {await other.DisposeAsync();}
     }
 
     [Fact]

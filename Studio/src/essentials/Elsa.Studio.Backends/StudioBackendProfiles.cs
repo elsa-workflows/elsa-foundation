@@ -8,20 +8,23 @@ using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Studio.Preferences.Core.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Studio.Hosting;
+namespace Elsa.Studio.Backends;
 
 /// <summary>Host-owned connection metadata; never a proxy to arbitrary backend addresses.</summary>
 internal static partial class StudioBackendProfiles
 {
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Elsa.Studio.Core.Models.StudioBackendAuthority, InMemoryStudioPreferenceStore> Stores = new();
     internal const string Namespace = "backend-profiles";
-    internal const string TenantClaim = "elsa.studio.tenant";
+    internal const string TenantClaim = StudioBridgeAuthorization.TenantClaimType;
     private const string Path = "/_elsa/studio/backends/profiles";
 
     internal static void Add(IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStudioPreferenceNamespace, BackendProfilesPreferenceNamespace>());
         services.TryAddSingleton<IStudioPreferenceNamespaceRegistry, StudioPreferenceNamespaceRegistry>();
-        services.TryAddSingleton<IStudioPreferenceStore, InMemoryStudioPreferenceStore>();
+        services.TryAddSingleton<IStudioPreferenceStore>(provider => provider.GetService<Elsa.Studio.Core.Contracts.IStudioBackendAuthorityAccessor>() is { } authority
+            ? Stores.GetValue(authority.Value, _ => new InMemoryStudioPreferenceStore())
+            : new InMemoryStudioPreferenceStore());
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IStudioPreferenceService, StudioPreferenceService>();
     }
@@ -43,12 +46,12 @@ internal static partial class StudioBackendProfiles
             var environment = section["Environment"] ?? "Development";
             if (!ValidId(id) || !ids.Add(id) || string.IsNullOrWhiteSpace(name) || name.Length > 80 || !ValidUrl(baseUrl)
                 || environment is not ("Development" or "Test" or "Production"))
-                throw new StudioHostingException("Studio:Backends:Profiles contains an invalid or duplicate connection profile.");
+                throw new InvalidOperationException("Studio:Backends:Profiles contains an invalid or duplicate connection profile.");
             profiles.Add(new { id, name, baseUrl, environment, authenticationProfile = section["AuthenticationProfile"], source = "configuration" });
         }
-        if (profiles.Count > 32) throw new StudioHostingException("Studio accepts at most 32 configured backend profiles.");
+        if (profiles.Count > 32) throw new InvalidOperationException("Studio accepts at most 32 configured backend profiles.");
         var defaultId = configuration["Studio:Backends:DefaultId"];
-        if (defaultId is not null && !ids.Contains(defaultId)) throw new StudioHostingException("Studio:Backends:DefaultId must reference a configured profile.");
+        if (defaultId is not null && !ids.Contains(defaultId)) throw new InvalidOperationException("Studio:Backends:DefaultId must reference a configured profile.");
         var authenticationProfiles = configuration.GetSection("Studio:Backends:AuthenticationProfiles").GetChildren()
             .ToDictionary(section => section.Key, section => (object)new
             {

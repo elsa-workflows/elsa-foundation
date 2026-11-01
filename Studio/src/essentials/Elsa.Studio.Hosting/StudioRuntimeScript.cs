@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Studio.Api.Options;
+using Elsa.Studio.Core.Models;
 
 namespace Elsa.Studio.Hosting;
 
@@ -17,13 +17,13 @@ internal static class StudioRuntimeScript
     public const string GlobalName = "window.__ELSA_STUDIO_RUNTIME__";
 
     /// <summary>Builds the browser runtime config object surfaced to the SPA. Contains no server-side secrets.</summary>
-    public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration, bool authEnabled) =>
+    public static Dictionary<string, object?> BuildRuntimeConfig(IConfiguration configuration, bool authEnabled, StudioBackendAuthority? authority = null) =>
         new()
         {
             // This is the browser-facing URL. Server-side calls use Studio:BackendServerBaseUrl when supplied, with
             // Studio:BackendBaseUrl as the backwards-compatible single-host fallback.
-            ["backendBaseUrl"] = StudioBackendProfiles.BrowserAuthority(configuration),
-            ["backends"] = StudioBackendProfiles.ReadConfiguration(configuration),
+            ["backendBaseUrl"] = (authority is null ? configuration["Studio:BackendBaseUrl"] : authority.BrowserBaseUrl) ?? "",
+            ["backendId"] = configuration["Studio:BackendId"] ?? "legacy",
             ["hostId"] = configuration["Studio:HostId"] ?? "default",
             // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry) against the
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);

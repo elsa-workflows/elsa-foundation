@@ -26,7 +26,7 @@ BACKEND_SHARED = (
 )
 STUDIO_SHARED = (
     "Nuplane.Abstractions", "Nuplane.Loading.Abstractions", "CShells.Abstractions",
-    "CShells.AspNetCore.Abstractions", "Elsa.Studio.Core", "Elsa.Studio.Api",
+    "CShells.AspNetCore.Abstractions", "Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Events.Core", "Elsa.Pipelines.Core",
 )
 PROTOCOL_FEATURES = {
     "copilot": ("GitHubCopilotAgent", "AcmeCopilotProtocolFixture"),
