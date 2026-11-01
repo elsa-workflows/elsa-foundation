@@ -1,6 +1,6 @@
 # ETL journey: backend preparation
 
-T020/T022 implement Studio service selection and the native run-reference projection. T021's source/projection validation is implemented but its representative actual RunEtl publication/replay verification remains open. Run navigation, a physical dependency failure after effects, restart and exact UI retry remain T023–026. These results do not establish that journey or wider ETL/provider acceptance.
+T020/T022 implement Studio service selection and the native run-reference projection. T023–024 now implement the [native → ETL navigation and durable URL](navigation.md), with component proof. T021's representative actual RunEtl publication/replay verification remains open. Exact incident retry, a physical dependency failure after effects, restart and the real Studio journey remain T025–026. These results do not establish that journey or wider ETL/provider acceptance.
 
 ## Studio service selection
 
