@@ -30,5 +30,13 @@
     <ProjectReference Include="../../../../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
+    <ProjectReference Include="../../../src/Specialists/Editorial/Elsa.Agent.Specialists.Editorial.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../../../../Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
   </ItemGroup>
 </Project>
