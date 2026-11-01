@@ -1,0 +1,26 @@
+using System.Text.Json;
+using Elsa.Agent.Specialists.Tests.Publication;
+
+var checks = new List<string>();
+var witness = new SpecialistPublicationTests();
+await witness.Reviewed_publication_is_idempotent_and_real_placement_stamps_the_exact_specialist_version();
+checks.Add("reviewed publication, exact real placement and repeated receipt");
+await witness.Constraint_changes_strengthen_the_actual_publication_version_floor();
+checks.Add("constraint change raises actual minimum version");
+await witness.Prompt_changes_affect_behavior_hash_without_rewriting_the_published_artifact_or_forcing_a_schema_major();
+checks.Add("prompt hash isolation and compatibility floor");
+await witness.Model_and_schema_changes_have_causal_template_hash_controls("model");
+checks.Add("model-only hash change with unchanged-content control");
+await witness.Model_and_schema_changes_have_causal_template_hash_controls("schema");
+checks.Add("schema-only hash change with unchanged-content control");
+await witness.Saving_after_review_invalidates_the_reviewed_request_and_publishes_nothing();
+checks.Add("stale review cannot publish partial state");
+await witness.Missing_runtime_or_storage_is_refused_without_partial_publication(false, true, "activity.runtime.consumer-missing");
+checks.Add("missing runtime refuses publication");
+await witness.Missing_runtime_or_storage_is_refused_without_partial_publication(true, false, "activity.runtime.storage-driver-missing");
+checks.Add("missing storage refuses publication");
+var published = await SpecialistPublicationTests.PublishAndPlaceAsync("Article", "String");
+Directory.CreateDirectory(args[0]);
+await File.WriteAllTextAsync(Path.Combine(args[0], "placement.json"), JsonSerializer.Serialize(published.Placement));
+await File.WriteAllTextAsync(Path.Combine(args[0], "storage.json"), JsonSerializer.Serialize(published.Storage));
+Console.WriteLine(JsonSerializer.Serialize(new { checks, passed = checks.Count, liveModel = false, authoringDisposedBeforeConsumer = true }));

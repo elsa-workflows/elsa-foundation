@@ -524,7 +524,19 @@ public sealed class ClrAssemblyScanner(
     // and the runtime registry skips it too, so cataloging it would offer an activity that always fails to activate.
     private static bool IsActivityType(Type type) =>
         type is { IsClass: true, IsAbstract: false, ContainsGenericParameters: false }
-        && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
+        && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName)
+        && IsDiscoverable(type);
+
+    private static bool IsDiscoverable(Type type)
+    {
+        for (Type? current = type; current is not null; current = current.BaseType)
+        {
+            var attribute = current.GetCustomAttributesData().FirstOrDefault(x => x.AttributeType.FullName == ActivityAttributeFullName);
+            if (attribute is not null)
+                return attribute.NamedArguments.FirstOrDefault(x => x.MemberName == nameof(ActivityAttribute.IsDiscoverable)).TypedValue.Value is not false;
+        }
+        return true;
+    }
 
     private static Type? FindTypedActivityResult(Type activityType)
     {

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <ProjectReference Include="../../../src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
+    <ProjectReference Include="../../../src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
+    <ProjectReference Include="../../../src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
+  </ItemGroup>
+</Project>
