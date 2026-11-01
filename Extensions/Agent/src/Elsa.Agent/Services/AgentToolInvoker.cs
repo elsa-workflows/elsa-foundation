@@ -68,10 +68,10 @@ internal sealed class DefaultAgentToolInvoker(
                 var existing = await proposals.FindAsync(existingId, cancellationToken);
                 if (existing?.PreparedInvocation is not { } original)
                     return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                if (!(await authorizer.AuthorizeAsync(descriptor, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
+                if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
                     return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
                 if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
-                    return AgentToolDispatch.Executed(retained);
+                    return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(retained, original));
                 return AgentToolDispatch.Proposed(existing);
             }
 
@@ -107,7 +107,7 @@ internal sealed class DefaultAgentToolInvoker(
                     || invocation.Client is not null && binding != invocation.Client || !matchingSnapshot)
                     return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
             }
-            var admission = await authorizer.AuthorizeAsync(descriptor, session.ActorId, session.TenantId, module.Target, cancellationToken);
+            var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
             if (!admission.Allowed)
                 return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
 
@@ -122,7 +122,8 @@ internal sealed class DefaultAgentToolInvoker(
                     descriptor.Name, descriptor.ContractVersion, descriptor.ModuleId, session.ActorId, session.TenantId,
                     module.Target, AgentInvocationIntegrity.Freeze(module.Arguments), string.Empty,
                     module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk, AgentInvocationIntegrity.Freeze(module.Preview),
-                    descriptor.ExecutionLocation, requiresApproval, module.Client, clock.GetUtcNow().AddMinutes(5));
+                    descriptor.ExecutionLocation, requiresApproval, module.Client, clock.GetUtcNow().AddMinutes(5))
+                { DisclosureSourceId = descriptor.DisclosureSourceId };
                 prepared = prepared with { ApprovalDigest = AgentInvocationIntegrity.PreparedDigest(prepared) };
             }
             catch (Exception ex) when (ex is AgentContributionException or System.Text.Json.JsonException or NotSupportedException)
@@ -139,7 +140,10 @@ internal sealed class DefaultAgentToolInvoker(
                         return await DeniedAsync(result.Error?.Code ?? "agent.tool.failed", result.Error?.Message ?? "The module refused the read.", result.Error?.StatusCode ?? 400);
                     if (result.Value.Receipt is not null || result.Value.ToolCallId != prepared.ToolCallId || result.Value.ToolName != prepared.ToolName)
                         return await DeniedAsync("agent.tool.result_invalid", "The module returned a mismatched read result.", 500);
-                    var read = result.Value with { Payload = result.Value.Payload is null ? null : AgentInvocationIntegrity.Freeze(result.Value.Payload) };
+                    var read = AgentResultProvenance.Stamp(result.Value with
+                    {
+                        Payload = result.Value.Payload is null ? null : AgentInvocationIntegrity.Freeze(result.Value.Payload)
+                    }, prepared);
                     await AuditAsync(invocation, "executed", cancellationToken);
                     return AgentToolDispatch.Executed(read);
                 }
@@ -171,7 +175,7 @@ internal sealed class DefaultAgentToolInvoker(
             if (execution.Succeeded && execution.Value?.ToolResult is { } applied)
             {
                 await AuditAsync(invocation, applied.Succeeded ? "executed" : "uncertain", cancellationToken);
-                return AgentToolDispatch.Executed(applied);
+                return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(applied, prepared));
             }
             if (execution.Succeeded && execution.Value?.ClientInvocation is not null)
                 return AgentToolDispatch.Proposed((await proposals.FindAsync(proposal.Id, cancellationToken))!);

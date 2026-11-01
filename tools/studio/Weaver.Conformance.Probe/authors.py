@@ -227,7 +227,7 @@ def build_authors(run):
     run.module_packages = {}
     run.report["modules"] = {}
     authors = run.report.setdefault("authors", {})
-    version = "1.0.0-witness." + run.source[:8]
+    version = "1.0.0-witness.g" + run.source[:8]
     replacements = {"__FIXTURE_VERSION__": version}
     for name, fixture, package_id, count in (("protocol", "ProviderProtocolFixtures", MODULE_IDS[0], 21),
                                               ("backend", "Resource.Backend", MODULE_IDS[1], 78),

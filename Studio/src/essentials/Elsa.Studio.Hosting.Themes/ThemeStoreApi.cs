@@ -22,13 +22,14 @@ internal static class ThemeStoreApi
     private static readonly string[] ThemeModeNames = ["light", "dark", "dim", "high-contrast"];
     // Mirrors studioThemeLayouts in the SDK's themeLayout.ts.
     private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
-    private static readonly string[] WorkspaceStyleNames = ["linen", "minimal", "quiet", "focus", "open"];
+    private static readonly string[] WorkspaceStyleNames = ["linen", "minimal", "quiet", "focus", "open", "sketchbook"];
     internal static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
         "linen",
         "builtin:porcelain",
         "builtin:atelier",
         "builtin:graphite",
+        "builtin:sketchbook",
         "classic",
         "meridian",
         "drift",
@@ -564,7 +565,7 @@ internal static class ThemeStoreApi
         if (theme.Layout is not null && !ThemeLayoutNames.Contains(theme.Layout))
             return "Theme layout must be classic, floating, workbench or editorial.";
         if (theme.WorkspaceStyle is not null && !WorkspaceStyleNames.Contains(theme.WorkspaceStyle))
-            return "Theme workspace style must be linen, minimal, quiet, focus or open.";
+            return "Theme workspace style must be linen, minimal, sketchbook, quiet, focus or open.";
 
         foreach (var (name, value) in theme.Shape?.Values() ?? [])
         {

@@ -120,11 +120,16 @@ and which cancellations escape (`ShouldRethrowCancellation`; every `OperationCan
 default; override it to narrow to the worker's own token so a dependency's unrelated timeout backs off
 instead). The protected `ComputeBackoff` is reusable for per-item parking maps.
 
-The eight shipped workers live in other domains: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
+The nine shipped workers live in other domains: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
 `RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`, `ExecutionPlacementPumpTask`,
 `WorkflowAlterationOrchestrationPumpTask` and `HttpEndpointRouteTableConvergencePumpTask` in the
 `Elsa.Workflows.Runtime.*` projects, which keep the `…PumpTask` name until that domain's rename, and
-`ExpiredImportCollectionSweepTask` in the Elsa 3 import extension.
+`ExpiredImportCollectionSweepTask` in the Elsa 3 import extension and internal
+`SpecialistRetentionPumpTask` in `Elsa.Agent.Specialists`. The specialist worker uses
+`IPersistenceScopeRunner` to visit fresh ordinary partitions, keeps independent finite keyset cursors
+for explicit tenant and legacy-null tenant keys, and delegates native/source eligibility plus
+conditional content purge to its scoped pruner. Its baseline interval is five minutes, with one-hour
+maximum failure backoff. See the [specialist runtime catalog](../../../../Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md).
 
 ---
 

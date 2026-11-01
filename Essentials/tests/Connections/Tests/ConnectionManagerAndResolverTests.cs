@@ -47,6 +47,39 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Resolved_revision_matches_its_snapshot_while_later_resolution_observes_a_save()
+    {
+        await CreateConnectionAsync("versioned");
+        var repository = _scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        var before = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(before > 0);
+        Assert.Equal(before, original.Version);
+        Assert.False(string.IsNullOrWhiteSpace(original.IncarnationId));
+
+        await _manager.UpdateAsync(Tenant, "versioned", new UpdateConnectionRequest { DisplayName = "Updated" });
+        var after = (await repository.FindAsync(Tenant, "versioned"))!.State.Version;
+        await using var current = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "versioned" });
+        Assert.True(after > before);
+        Assert.Equal(after, current.Version);
+        Assert.Equal(before, original.Version);
+        Assert.Equal(original.IncarnationId, current.IncarnationId);
+    }
+
+    [Fact]
+    public async Task Delete_and_recreate_of_the_same_name_has_a_distinct_creation_identity_even_when_versions_repeat()
+    {
+        await CreateConnectionAsync("recreated");
+        await using var original = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        await _manager.DeleteAsync(Tenant, "recreated");
+        await CreateConnectionAsync("recreated");
+        await using var replacement = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "recreated" });
+        Assert.Equal(original.Version, replacement.Version);
+        Assert.False(string.IsNullOrWhiteSpace(replacement.IncarnationId));
+        Assert.NotEqual(original.IncarnationId, replacement.IncarnationId);
+    }
+
+    [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
     {
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest

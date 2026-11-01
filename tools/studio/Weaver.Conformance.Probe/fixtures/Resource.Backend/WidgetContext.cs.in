@@ -49,17 +49,62 @@ internal sealed class WidgetContextSource(WidgetResource resource, IAgentSession
                 ModuleId = WidgetContract.Module, SchemaVersion = "1", Target = WidgetContract.Target(state),
                 Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = WidgetContract.Scopes
             };
-            var guidance = new AgentContextAttachment("acme.home:installed-guidance", "acme.home.module", null, "Acme Home guidance",
-                WidgetContract.GuidanceType, AgentContextSensitivity.Public, "module",
-                "The Acme module reads the existing personal status card and proposes one reviewed boolean visibility change. Use only its declared tools. " +
-                "A persisted receipt confirms the personal Home layout; reload native Home to observe it. Missing personal layouts/cards, stale revisions and no-op changes are refused. " +
-                "Other widgets, options and default layouts are outside this contribution. An uncertain result must be reread and never replayed automatically.",
-                null, new Dictionary<string, string>())
-            {
-                ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = AgentContextOrigin.InstalledGuidance, AgentScopes = []
-            };
-            return new([canonical, guidance], []);
+            return new([canonical, InstalledGuidance()], []);
         }
         catch (WidgetRefusal refusal) { return new([], [new(Descriptor.Id, refusal.Error.Code, refusal.Error.Message, true)]); }
     }
+
+    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var session = await sessions.FindAsync(request.SessionId, cancellationToken);
+            if (session is not { Status: AgentSessionStatus.Active } || string.IsNullOrWhiteSpace(session.ActorId)
+                || string.IsNullOrWhiteSpace(session.TenantId) || session.ExpiresAt <= DateTimeOffset.UtcNow)
+                WidgetContract.Refuse("session_denied", "A current personal Weaver session is required.", 403);
+            // The actual owner enforces current principal, tenant, host and read permission.
+            // This observation does not repeat a reviewed effect or rewrite its stored receipt.
+            var state = await resource.ObserveAsync(session!.ActorId, session.TenantId, false, cancellationToken);
+            var retained = new List<AgentContextAttachment>();
+            foreach (var item in request.Context)
+            {
+                if (item.ModuleId != WidgetContract.Module || item.SchemaVersion != "1")
+                    WidgetContract.Refuse("disclosure_invalid", "The retained context belongs to another module or schema.");
+                if (item.ContentType == WidgetContract.GuidanceType && item.Origin == AgentContextOrigin.InstalledGuidance) continue;
+                if (item.ContentType != WidgetContract.ContextType)
+                    WidgetContract.Refuse("disclosure_invalid", "The retained context kind is unsupported.");
+                if (item.Sensitivity != AgentContextSensitivity.SecretRedacted)
+                {
+                    if (!OwnTarget(item.Target))
+                        WidgetContract.Refuse("disclosure_invalid", "The retained context does not identify this personal status card.");
+                    if (!request.IsHistorical && !request.IsReceiptContinuation && !WidgetContract.SameTarget(item.Target, state))
+                        WidgetContract.Refuse("context_stale", "The accepted Acme status card reference has changed; submit fresh context.");
+                }
+                retained.Add(item);
+            }
+            foreach (var result in request.Results)
+                if (result.Access is { } access && access.ModuleId != Descriptor.ModuleId
+                    || !OwnTarget(result.Access?.Target ?? result.Receipt?.After))
+                    WidgetContract.Refuse("disclosure_invalid", "The retained result does not identify this module's status card.");
+            if (request.IsReceiptContinuation)
+                return new([InstalledGuidance()], [new(Descriptor.Id, "acme.home.context.receipt_only",
+                    "The prior resource snapshot is withheld; the accepted outcome is historical evidence, not a fresh read.", false)]);
+            retained.Add(InstalledGuidance());
+            return new(retained, []);
+        }
+        catch (WidgetRefusal refusal) { return new([], [new(Descriptor.Id, refusal.Error.Code, refusal.Error.Message, true)]); }
+    }
+
+    private static bool OwnTarget(AgentResourceTarget? target) => target is
+        { ModuleId: WidgetContract.Module, ResourceType: WidgetContract.ResourceType, ResourceId: WidgetContract.WidgetId };
+
+    private static AgentContextAttachment InstalledGuidance() => new("acme.home:installed-guidance", "acme.home.module", null, "Acme Home guidance",
+        WidgetContract.GuidanceType, AgentContextSensitivity.Public, "module",
+        "The Acme module reads the existing personal status card and proposes one reviewed boolean visibility change. Use only its declared tools. " +
+        "A persisted receipt confirms the personal Home layout; reload native Home to observe it. Missing personal layouts/cards, stale revisions and no-op changes are refused. " +
+        "Other widgets, options and default layouts are outside this contribution. An uncertain result must be reread and never replayed automatically.",
+        null, new Dictionary<string, string>())
+    {
+        ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = AgentContextOrigin.InstalledGuidance, AgentScopes = []
+    };
 }

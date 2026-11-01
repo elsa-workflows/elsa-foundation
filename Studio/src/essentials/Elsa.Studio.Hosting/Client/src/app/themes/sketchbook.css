@@ -1,0 +1,67 @@
+/* Sketchbook is a workspace treatment. Colors remain owned by the selected palette. */
+html[data-workspace-style="sketchbook"] {
+  --studio-title-weight: 400;
+  --studio-page-title-size: 30px;
+  --studio-section-title-size: 21px;
+  --studio-edge-subtle: color-mix(in srgb, var(--studio-text) 16%, transparent);
+  --studio-edge-control: color-mix(in srgb, var(--studio-text) 55%, var(--studio-surface));
+  --studio-shadow-sm: .6px 1px 0 color-mix(in srgb, var(--studio-text) 13%, transparent), 0 3px 9px color-mix(in srgb, var(--studio-text) 4%, transparent);
+  --studio-workspace-canvas-background: repeating-linear-gradient(11deg, transparent 0 3px, color-mix(in srgb, var(--studio-text) 1.2%, transparent) 3px 4px), repeating-linear-gradient(99deg, transparent 0 5px, color-mix(in srgb, var(--studio-text) 1%, transparent) 5px 6px), var(--studio-canvas);
+  --studio-workspace-page-background: radial-gradient(ellipse at 2% 0%, color-mix(in srgb, var(--chart-1) 7%, transparent), transparent 38%), radial-gradient(ellipse at 96% 7%, color-mix(in srgb, var(--chart-3) 5%, transparent), transparent 34%), var(--studio-workspace-canvas-background);
+  --studio-workspace-panel-background: linear-gradient(150deg, color-mix(in srgb, var(--chart-2) 3%, var(--studio-panel)), var(--studio-panel) 55%);
+}
+
+html[data-workspace-style="sketchbook"] .studio-shell { background: var(--studio-workspace-page-background); }
+html[data-workspace-style="sketchbook"] .main-frame { background: transparent; }
+html[data-workspace-style="sketchbook"] .sidebar {
+  border-right: 1px solid var(--studio-edge-subtle);
+  background: radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--chart-1) 9%, transparent), transparent 38%), var(--studio-nav-bg);
+}
+html[data-workspace-style="sketchbook"] .topbar { background: transparent; }
+html[data-workspace-style="sketchbook"] .brand strong { font-family: var(--studio-font-display); font-size: 25px; font-weight: 400; letter-spacing: -.5px; }
+html[data-workspace-style="sketchbook"] .brand-mark { border-radius: 0; }
+html[data-workspace-style="sketchbook"] .nav-section a.active {
+  background: radial-gradient(ellipse at 30% 45%, color-mix(in srgb, var(--studio-accent) 15%, transparent), transparent 88%), var(--studio-nav-bg);
+  color: var(--studio-nav-text);
+  border-radius: 7px 13px 8px 11px;
+  box-shadow: inset 2px 0 var(--studio-accent);
+}
+html[data-workspace-style="sketchbook"] .nav-icon-tile svg { stroke-width: 1.45px; }
+html[data-workspace-style="sketchbook"] :is(.studio-page, .settings-page) { background: transparent; }
+html[data-workspace-style="sketchbook"] :is(.studio-page-header, .wf-page-header) { border-color: var(--studio-edge-subtle); }
+html[data-workspace-style="sketchbook"] :is(.studio-page-title, .wf-page-header h1, .settings-page h2, .studio-dialog-title) {
+  font-family: var(--studio-font-display);
+  font-weight: 400;
+  letter-spacing: -.4px;
+}
+html[data-workspace-style="sketchbook"] :is(.studio-card, .appearance-card, .studio-dialog, .studio-popover, .theme-dropdown) {
+  border-color: var(--studio-edge-control);
+  border-radius: 10px 14px 9px 12px;
+  background: var(--studio-workspace-panel-background);
+  box-shadow: var(--studio-shadow-sm);
+}
+html[data-workspace-style="sketchbook"] :is(.studio-collection-table, .studio-resource-list) { border-color: var(--studio-edge-subtle); background: var(--studio-panel); }
+html[data-workspace-style="sketchbook"] :is(.studio-input, .studio-select, .studio-textarea) { border-color: var(--studio-edge-control); background: var(--studio-surface); }
+html[data-workspace-style="sketchbook"] .studio-button { border-radius: 7px 10px 8px 9px; }
+
+/* Decoration never replaces the explicit accessibility palette. */
+html[data-workspace-style="sketchbook"][data-theme-appearance="high-contrast"] {
+  --studio-edge-subtle: var(--studio-border);
+  --studio-edge-control: var(--studio-border);
+  --studio-workspace-canvas-background: var(--studio-canvas);
+  --studio-workspace-page-background: var(--studio-bg);
+  --studio-workspace-panel-background: var(--studio-panel);
+  --studio-shadow-sm: none;
+}
+html[data-workspace-style="sketchbook"][data-theme-appearance="high-contrast"] .sidebar { background: var(--studio-nav-bg); }
+html[data-workspace-style="sketchbook"][data-theme-appearance="high-contrast"] .nav-section a.active { background: var(--studio-nav-active); color: var(--studio-nav-active-text); box-shadow: none; outline: 1px solid var(--studio-border); }
+@media (forced-colors: active) {
+  html[data-workspace-style="sketchbook"] {
+    --studio-workspace-canvas-background: Canvas;
+    --studio-workspace-page-background: Canvas;
+    --studio-workspace-panel-background: Canvas;
+    --studio-shadow-sm: none;
+  }
+  html[data-workspace-style="sketchbook"] .sidebar { background: Canvas; }
+  html[data-workspace-style="sketchbook"] .nav-section a.active { background: Highlight; color: HighlightText; }
+}

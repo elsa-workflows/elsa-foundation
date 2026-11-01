@@ -32,7 +32,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--source", default="HEAD")
+    parser.add_argument("--profile", choices=["kernel", "durable-recovery"], default="kernel")
+    parser.add_argument("--stream-responses", action="store_true", help="Qualify the optional streaming path in the durable profile")
     args = parser.parse_args()
+    if args.stream_responses and args.profile != "durable-recovery":
+        parser.error("stream-responses requires durable-recovery")
     if not args.output.is_absolute() or args.output.exists() or args.output.resolve().is_relative_to(ROOT):
         parser.error("output must be a new absolute directory outside the checkout")
     out = args.output
@@ -44,19 +48,19 @@ def main():
     producer.mkdir()
     feed.mkdir()
     report = {"source": source, "version": args.version, "status": "InProgress", "liveModel": False,
-              "durableJournal": False, "stages": [], "consumers": {}}
+              "durableJournal": False, "profile": args.profile, "streamResponses": args.stream_responses, "stages": [], "consumers": {}}
     environment = dict(os.environ, NUGET_PACKAGES=str(out / "consumer-packages"), NUGET_HTTP_CACHE_PATH=str(out / "consumer-http-cache"))
 
     def save():
         (out / "report.json").write_text(json.dumps(report, indent=2))
 
-    def run(name, command, directory):
+    def run(name, command, directory, expected_exit=0):
         print(name, flush=True)
         with (out / (name + ".log")).open("w") as log:
             result = subprocess.run(command, cwd=directory, stdout=log, stderr=subprocess.STDOUT,
                                     env=None if directory == producer else environment)
-        report["stages"].append({"name": name, "exitCode": result.returncode, "status": "Passed" if result.returncode == 0 else "Failed"})
-        if result.returncode:
+        report["stages"].append({"name": name, "exitCode": result.returncode, "expectedExitCode": expected_exit, "status": ("ExpectedCrash" if expected_exit else "Passed") if result.returncode == expected_exit else "Failed"})
+        if result.returncode != expected_exit:
             report["status"] = "Failed"
             save()
             raise RuntimeError(name + " failed; inspect " + str(out / (name + ".log")))
@@ -87,7 +91,8 @@ def main():
                 visit(project.parent / include)
             selected.append(project)
 
-        for name in PRODUCT_ROOTS:
+        roots = PRODUCT_ROOTS + (["Elsa.Agent.Specialists.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Cluster.Readability"] if args.profile == "durable-recovery" else [])
+        for name in roots:
             visit(projects[name])
         solution = ET.Element("Solution")
         for project in selected:
@@ -128,11 +133,11 @@ def main():
             if any(x["type"] != "package" for x in assets["libraries"].values()):
                 raise RuntimeError(name + " consumed a source project reference")
             authoring = sorted(x for x in assets["libraries"] if x.startswith("Elsa.") and (".Design" in x or ".Publishing" in x))
-            if name in ["Model", "Consumer"] and authoring:
+            if name in ["Model", "Consumer", "DurableConsumer"] and authoring:
                 raise RuntimeError(name + " has an authoring dependency: " + str(authoring))
             shared = {identity.split("/")[0]: identity.split("/")[1] for identity in assets["libraries"]
                       if identity.split("/")[0] in shared_pins}
-            if any(version != shared_pins[identity] for identity, version in shared.items()) or name == "Consumer" and set(shared) != set(shared_pins):
+            if any(version != shared_pins[identity] for identity, version in shared.items()) or name in ["Consumer", "DurableConsumer"] and set(shared) != set(shared_pins):
                 raise RuntimeError(name + " resolved a different shared runtime graph: " + str(shared))
             resolved = {}
             for identity, library in assets["libraries"].items():
@@ -160,17 +165,18 @@ def main():
         central = ET.parse(producer / "Directory.Packages.props")
         sqlite_bundle_version = next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == "SQLitePCLRaw.bundle_e_sqlite3")
         cshells_version = next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == "CShells")
+        ef_core_version = next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == "Microsoft.EntityFrameworkCore.Sqlite")
         shared_pins = {identity: next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == identity)
                        for identity in ["Microsoft.Extensions.AI.Abstractions", "Microsoft.Agents.AI", "CShells"]}
         report["selectedSharedRuntimePins"] = shared_pins
-        report["fixtureDependencyPins"] = {"SQLitePCLRaw.bundle_e_sqlite3": sqlite_bundle_version, "CShells": cshells_version}
-        for name in ["Model", "Author", "Consumer"]:
+        report["fixtureDependencyPins"] = {"SQLitePCLRaw.bundle_e_sqlite3": sqlite_bundle_version, "CShells": cshells_version, "Microsoft.EntityFrameworkCore.Sqlite": ef_core_version}
+        for name in ["Model", "Author", "Consumer"] + (["DurableConsumer"] if args.profile == "durable-recovery" else []):
             directory = out / name
             directory.mkdir()
             for path in (fixtures / name).iterdir():
                 if path.suffix != ".template":
                     continue
-                (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version).replace("__SQLITE_BUNDLE_VERSION__", sqlite_bundle_version).replace("__CSHELLS_VERSION__", cshells_version))
+                (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version).replace("__SQLITE_BUNDLE_VERSION__", sqlite_bundle_version).replace("__CSHELLS_VERSION__", cshells_version).replace("__EF_CORE_VERSION__", ef_core_version))
             if name == "Author":
                 test_source = producer / "Extensions/Agent/tests/Specialists/Tests/Publication/SpecialistPublicationTests.cs"
                 shutil.copy2(test_source, directory / test_source.name)
@@ -182,16 +188,38 @@ def main():
             if name == "Model":
                 run("Model-pack", ["dotnet", "pack", str(project), "-c", "Release", "--no-restore", "-o", str(feed)], directory)
             elif name == "Author":
-                run("Author-execute", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox")], directory)
-            else:
+                run("Author-execute", ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), *( ["continuity"] if args.profile == "durable-recovery" else [])], directory)
+            elif name == "Consumer":
                 for mode in ["native", "invalid-result"]:
                     run("Consumer-" + mode, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--", str(out / "runtime-inbox"), mode], directory)
+            elif name == "DurableConsumer":
+                run("DurableConsumer-build", ["dotnet", "build", str(project), "-c", "Release", "--no-restore"], directory)
+                cases = []
+                for persistence in ["Balanced", "Durable"]:
+                    case = out / "durable-recovery" / persistence
+                    for role in ["start", "worker", "recover", "settle", "verify"]:
+                        run("Durable-" + persistence + "-" + role, ["dotnet", "run", "--project", str(project), "-c", "Release", "--no-restore", "--no-build", "--",
+                            str(out / "runtime-inbox"), role, str(case), persistence, *(["stream"] if args.stream_responses else [])], directory, expected_exit={"worker": 197, "recover": 198}.get(role, 0))
+                    receipts = {role: json.loads((case / (role + "-receipt.json")).read_text()) for role in ["start", "settle", "verify"]}
+                    crash = json.loads((case / "crash.json").read_text())
+                    ack_crash = json.loads((case / "ack-crash.json").read_text())
+                    if crash["phase"] != "journal-accepted-before-native-receipt" or ack_crash["phase"] != "application-written-before-source-ack" or len({value["processId"] for value in [*receipts.values(), crash, ack_crash]}) != 5:
+                        raise RuntimeError("durable case did not cross five distinct processes and both declared crash boundaries")
+                    if len(list((case / "dispatches").glob("dispatch-*.json"))) != 1:
+                        raise RuntimeError("durable recovery repeated or omitted a model dispatch")
+                    dispatch = json.loads(next((case / "dispatches").glob("dispatch-*.json")).read_text())
+                    if dispatch["responseMode"] != ("stream" if args.stream_responses else "atomic"):
+                        raise RuntimeError("durable recovery did not use the selected response path")
+                    cases.append({"persistenceMode": persistence, "responseMode": dispatch["responseMode"], "processes": receipts, "expectedCrashes": [crash, ack_crash], "databaseSha256": sha(case / "runtime.db"), "modelDispatches": 1})
+                report["durableRecoveryCases"] = cases
             inspect(name, directory)
-        report["status"] = "PassedBoundedKernelProfile"
+        report["status"] = "PassedDurableRecoveryProfile" if args.profile == "durable-recovery" else "PassedBoundedKernelProfile"
+        report["durableJournal"] = args.profile == "durable-recovery"
+        report["durableRuntime"] = args.profile == "durable-recovery"
         report["independentPackageConsumers"] = True
         report["runtimeClosureDesignFree"] = True
         save()
-        print(json.dumps({"source": source, "status": report["status"], "productPackages": len(packages), "liveModel": False, "durableJournal": False}))
+        print(json.dumps({"source": source, "status": report["status"], "productPackages": len(packages), "liveModel": False, "durableJournal": report["durableJournal"]}))
     except Exception as exception:
         report["status"] = "Failed"
         report["failure"] = {"type": type(exception).__name__, "message": str(exception)}

@@ -538,6 +538,39 @@ const minimalThemes = minimalStudioPresets.map(preset => ({
   workspaceStyle: "minimal" as const
 }));
 
-export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+// A drawing-paper palette; the independent workspace supplies grain and graphite treatment.
+const sketchbook: StudioThemeDefinition = {
+  ...definition("builtin:sketchbook", "Sketchbook", "Warm drawing paper, graphite and restrained watercolor.",
+    { sans: `"Manrope Variable", "Manrope", ${sansFallback}`, mono: geistTypography.mono, display: '"Instrument Serif", Georgia, serif' },
+    { radiusSm: "5px", radius: "8px", radiusMd: "12px", radiusLg: "18px", radiusXl: "24px" },
+    "classic", {
+      light: mode({
+        scheme: "light", hue: 85, chroma: 0.014,
+        background: 0.964, card: 0.989, muted: 0.932, border: 0.76, input: 0.995, sidebar: 0.948,
+        foreground: 0.27, mutedForeground: 0.46,
+        primary: oklch(0.42, 0.055, 150), primaryForeground: white,
+        wash: oklch(0.916, 0.025, 150), activeForeground: oklch(0.27, 0.025, 150),
+        overrides: { chartColors: [oklch(0.5, 0.07, 150), oklch(0.54, 0.08, 245), oklch(0.55, 0.07, 300), oklch(0.58, 0.09, 55), oklch(0.52, 0.025, 85)] }
+      }),
+      dark: mode({
+        scheme: "dark", hue: 85, chroma: 0.009,
+        background: 0.205, card: 0.255, muted: 0.3, border: 0.46, input: 0.23, sidebar: 0.225,
+        foreground: 0.95, mutedForeground: 0.76,
+        primary: oklch(0.78, 0.065, 150), primaryForeground: oklch(0.2, 0.015, 150),
+        wash: oklch(0.33, 0.028, 150), activeForeground: oklch(0.95, 0.01, 150)
+      }),
+      dim: mode({
+        scheme: "dim", hue: 85, chroma: 0.012,
+        background: 0.3, card: 0.35, muted: 0.39, border: 0.55, input: 0.325, sidebar: 0.28,
+        foreground: 0.96, mutedForeground: 0.82,
+        primary: oklch(0.83, 0.06, 150), primaryForeground: oklch(0.2, 0.015, 150),
+        wash: oklch(0.42, 0.025, 150), activeForeground: oklch(0.96, 0.01, 150)
+      }),
+      highContrast: highContrast(oklch(0.91, 0.06, 150), 150)
+    }),
+  workspaceStyle: "sketchbook"
+};
 
-export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk];
+export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk", "builtin:sketchbook"] as const;
+
+export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk, sketchbook];

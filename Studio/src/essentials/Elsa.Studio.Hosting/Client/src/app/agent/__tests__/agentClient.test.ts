@@ -3,6 +3,28 @@ import { createAgentClient } from "../agentClient";
 import { StudioHttpError, type StudioEndpointContext } from "../../../sdk";
 
 describe("agent client", () => {
+  it("transports the per-message surface and maps only server-admitted context metadata and opaque payload", async () => {
+    const context = stubContext();
+    const admitted = { id: "owner-context", moduleId: "Sample", schemaVersion: "1", source: "Sample", sourceId: "one", label: "Owner snapshot", contentType: "sample", sensitivity: "Internal", scope: "screen", origin: "AuthoritativeRead", summary: "Authorized read", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r2" }, content: { opaque: { value: 42 } }, references: { owner: "one" }, agentScopes: ["sample-read"] };
+    context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "Pending", context: [admitted] }, warnings: [] } })) as typeof context.http.postJson;
+    const activeSurface = { route: "/sample/one", resourceType: "sample", resourceId: "one", selection: { opaqueSelection: "selected" } };
+    const result = await createAgentClient(context).sendMessage("session", { message: "Inspect", mode: "explain", activeSurface, contextAttachments: [] });
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions/session/messages", expect.objectContaining({ activeSurface }));
+    expect(result.contextAttachments).toEqual([expect.objectContaining({ ...admitted, sensitivity: "internal", origin: "authoritativeRead" })]);
+  });
+
+  it("fails closed on missing admitted context and strips redacted content from the server response", async () => {
+    const context = stubContext();
+    context.http.postJson = vi.fn()
+      .mockResolvedValueOnce({ data: { message: { id: "message", status: "Pending" } } })
+      .mockResolvedValueOnce({ data: { message: { id: "redacted-message", status: "Pending", context: [{ id: "redacted", label: "Redacted context", source: "Sample", contentType: "sample", scope: "redacted", sensitivity: "SecretRedacted", content: { excluded: "do not display" }, target: { resourceId: "excluded" }, references: { excluded: "private reference" } }] } } });
+    const client = createAgentClient(context);
+    expect((await client.sendMessage("session", { message: "Inspect", mode: "explain", contextAttachments: [] })).contextAttachments).toEqual([]);
+    const result = await client.sendMessage("session", { message: "Inspect redaction", mode: "explain", contextAttachments: [] });
+    expect(result.contextAttachments).toEqual([expect.objectContaining({ sensitivity: "secret-redacted", content: undefined, target: null, references: {} })]);
+    expect(JSON.stringify(result.contextAttachments)).not.toContain("do not display");
+  });
+
   it.each((["approveProposal", "denyProposal", "executeProposal"] as const)
     .flatMap(decision => ["http", "wrapped"].map(transport => ({ decision, transport }))))("preserves authoritative terminal $decision data on $transport refusal", async ({ decision, transport }) => {
     const context = stubContext();

@@ -296,6 +296,8 @@ internal sealed class InMemoryAgentProposalService(
                 preparedInvocation.ExecutionLocation == AgentExecutionLocation.ClientWorkingState ? AgentEffectScope.ClientWorkingState : AgentEffectScope.ServerPersisted)))
             outcome = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                 "The executor reported success without a valid owning-resource receipt. Its effect is uncertain and will not be replayed."));
+        if (proposal.PreparedInvocation is { } original && outcome.Value?.ToolResult is { } observedResult)
+            outcome = outcome with { Value = outcome.Value with { ToolResult = AgentResultProvenance.Stamp(observedResult, original) } };
         var value = outcome.Value;
         var status = !outcome.Succeeded ? AgentActionProposalStatus.Failed
             : value?.Executed == true ? AgentActionProposalStatus.Executed

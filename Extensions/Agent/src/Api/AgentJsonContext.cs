@@ -32,6 +32,7 @@ public partial class AgentJsonContext : JsonSerializerContext;
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(AgentCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AgentStreamEvent))]
+[JsonSerializable(typeof(AgentContextContribution))]
 [JsonSerializable(typeof(AgentActionProposal))]
 [JsonSerializable(typeof(AgentToolResult))]
 [JsonSerializable(typeof(AgentPayload))]

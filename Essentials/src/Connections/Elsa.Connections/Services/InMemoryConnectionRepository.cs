@@ -157,6 +157,7 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
         {
             Definition = new ConnectionDefinition
             {
+                IncarnationId = document.Definition.IncarnationId,
                 TenantId = document.Definition.TenantId,
                 Name = document.Definition.Name,
                 DisplayName = document.Definition.DisplayName,

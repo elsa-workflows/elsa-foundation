@@ -19,7 +19,8 @@ await witness.Missing_runtime_or_storage_is_refused_without_partial_publication(
 checks.Add("missing runtime refuses publication");
 await witness.Missing_runtime_or_storage_is_refused_without_partial_publication(true, false, "activity.runtime.storage-driver-missing");
 checks.Add("missing storage refuses publication");
-var published = await SpecialistPublicationTests.PublishAndPlaceAsync("Article", "String");
+var explicitContinuity = args.Length > 1 && args[1] == "continuity";
+var published = await SpecialistPublicationTests.PublishAndPlaceAsync("Article", "String", allowContinuity: explicitContinuity, invocationControls: explicitContinuity);
 Directory.CreateDirectory(args[0]);
 await File.WriteAllTextAsync(Path.Combine(args[0], "placement.json"), JsonSerializer.Serialize(published.Placement));
 await File.WriteAllTextAsync(Path.Combine(args[0], "storage.json"), JsonSerializer.Serialize(published.Storage));

@@ -93,9 +93,11 @@ import {
 } from "./settings/settingsSections";
 import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
+import sketchbookLogo from "../assets/images/elsa-sketchbook.png";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./themes/workspaceStyles.css";
+import "./themes/sketchbook.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
@@ -187,6 +189,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<(StudioAgentPromptRequest & { id: string }) | null>(null);
+  const incomingPromptRef = useRef<(StudioAgentPromptRequest & { id: string }) | null>(null);
   const acceptedPathRef = useRef(normalizePath(window.location.pathname));
   const acceptedLocationRef = useRef(currentRelativeLocation());
   const runtimeConfig = getStudioRuntimeConfig();
@@ -236,15 +239,29 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
   useEffect(() => {
     if (!api) return;
-    return api.agent.onPrompt(prompt => {
+    const unsubscribe = api.agent.onPrompt(prompt => {
+      const pending = incomingPromptRef.current;
+      // React may batch synchronous dispatches before the dock consumes either. Explicitly
+      // settle the displaced intent; this transport slot is not a durable prompt queue.
+      const incoming = { ...prompt, id: `prompt-${Date.now()}-${Math.random()}` };
+      incomingPromptRef.current = incoming;
       setAssistantOpen(true);
-      setIncomingPrompt({ ...prompt, id: `prompt-${Date.now()}-${Math.random()}` });
+      setIncomingPrompt(incoming);
+      if (pending?.requestId && pending.requestId !== prompt.requestId) api.agent.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
     });
+    return () => {
+      unsubscribe();
+      const pending = incomingPromptRef.current;
+      incomingPromptRef.current = null;
+      setIncomingPrompt(null);
+      if (pending?.requestId) api.agent.publishPromptResult({ requestId: pending.requestId, status: "cancelled", text: "" });
+    };
   }, [api]);
 
   const consumeIncomingPrompt = useCallback((id: string) => {
     // The shell outlives dock and registry remounts. Retaining an attempted request here
     // would submit it again as fresh intent when a new assistant lifetime becomes ready.
+    if (incomingPromptRef.current?.id === id) incomingPromptRef.current = null;
     setIncomingPrompt(current => current?.id === id ? null : current);
   }, []);
 
@@ -663,7 +680,7 @@ export function ShellFrame({
         <div className="sidebar-top">
           <a className="brand" href={qualifyStudioBackendPath("/")} onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
-              <img src={branding.logoUrl ?? elsaLogo} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
+              <img src={branding.logoUrl ?? (workspaceStyle === "sketchbook" ? sketchbookLogo : elsaLogo)} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
             </span>
             <span className="nav-label">
               <strong>{branding.productName}</strong>

@@ -2,6 +2,11 @@ namespace Elsa.EntityFrameworkCore.Tooling;
 
 // One design-time factory per provider-derived module context. Add a line when a module gains a context.
 
+public sealed class SpecialistsMySqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsMySqlDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+public sealed class SpecialistsPostgreSqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsPostgreSqlDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+public sealed class SpecialistsSqlServerDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqlServerDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+public sealed class SpecialistsSqliteDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqliteDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+
 public sealed class ConnectionsMySqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsMySqlDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);
 public sealed class ConnectionsPostgreSqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsPostgreSqlDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);
 public sealed class ConnectionsSqlServerDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqlServerDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);

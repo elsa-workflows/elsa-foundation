@@ -116,3 +116,9 @@ html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row:ho
 html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
 html[data-workspace-style="minimal"] .wf-artifact-card[data-active="true"] { border-color: var(--studio-selection-mark); background: var(--studio-surface); }
 html[data-workspace-style="minimal"] .wf-page--run-workbench > .studio-page-header { padding: 20px 24px 0; }
+
+/* The drawing treatment consumes shared surface roles, independently of palette identity. */
+html[data-workspace-style="sketchbook"] :is(.wf-page, .wf-editor, .wf-page-header, .wf-toolbar, .wf-editor-top, .wf-breadcrumb, .wf-validation) { background: transparent; }
+html[data-workspace-style="sketchbook"] :is(.wf-property-row, .wf-form-field) :is(input, textarea, select) { background: var(--studio-surface); }
+html[data-workspace-style="sketchbook"] .wf-grid-row { border-bottom-color: var(--studio-edge-subtle); }
+html[data-workspace-style="sketchbook"] .wf-page-header h1 { font-family: var(--studio-font-display); font-weight: 400; }

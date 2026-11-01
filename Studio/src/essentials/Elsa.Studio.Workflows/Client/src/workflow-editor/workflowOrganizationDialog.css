@@ -48,7 +48,8 @@
 .wf-organization-folder p { margin: 8px 0 0 24px; line-height: 1.5; overflow-wrap: anywhere; }
 .wf-tag-search { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .wf-tag-search > .studio-search { flex: 1; min-width: 0; }
-.wf-tag-search > button { flex: 0 0 auto; }
+.wf-tag-search .studio-search-input { align-self: stretch; }
+.wf-tag-search > button { flex: 0 0 auto; align-self: stretch; }
 .wf-tag-assignments > .wf-library-check,
 .wf-tag-assignments > .wf-library-values { border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); padding: 10px 12px; }
 .wf-tag-assignments > .wf-library-values { display: grid; gap: 10px; }

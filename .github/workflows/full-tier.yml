@@ -29,7 +29,9 @@ jobs:
     name: Integration shard (${{ matrix.shard }})
     if: ${{ inputs.integration_count != '0' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The serial native-host cases in integration-other can take almost 40 minutes.
+    # Leave room for setup and artifact upload; run_shard.py still bounds each test.
+    timeout-minutes: ${{ matrix.shard == 'integration-other' && 60 || 45 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(inputs.integration_matrix) }}

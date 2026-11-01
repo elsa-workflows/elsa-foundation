@@ -46,6 +46,7 @@ internal static class NoteContract
     internal const string ResourceType = "weaver-journey-note";
     internal const string NoteId = "note-1";
     internal const string ContextKind = "weaver.journey.note";
+    internal const string ContextSourceId = "weaver-journey.note-context";
     internal const string ResultType = "weaver.journey.note-change";
     internal const string ToolName = "weaver_journey_set_note";
     internal const string Route = "/_qualification/weaver/note";
@@ -169,18 +170,20 @@ internal sealed class NoteCapabilities : IAgentCapabilityProvider
 
 internal sealed class NoteContextSource(NoteStore store, IAgentSessionService sessions, IAgentToolAuthorizer authorizer) : IAgentContextProvider
 {
-    public AgentContextProviderDescriptor Descriptor { get; } = new("weaver-journey.note-context", NoteContract.Module, "weaver-journey",
+    public AgentContextProviderDescriptor Descriptor { get; } = new(NoteContract.ContextSourceId, NoteContract.Module, "weaver-journey",
         [NoteContract.ContextKind], ["1"], [NoteContract.ResourceType]);
     public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
     {
-        var session = await sessions.FindAsync(request.SessionId, cancellationToken);
-        var read = SetNoteTool.ToolDescriptor with { Mutability = AgentToolMutability.ReadOnly, RequiredPermissions = [NoteContract.ReadPermission] };
-        var access = session is null ? new AgentPolicyDecision(false, []) : await authorizer.AuthorizeAsync(read, session.ActorId, session.TenantId, request.Target, cancellationToken);
-        if (!access.Allowed) return new([], [new(Descriptor.Id, "weaver.note.context_denied", "Current permission to read the owned note is required.", true)]);
+        var session = await FindSessionAsync(request.SessionId, cancellationToken);
+        if (session is null) return Refused("session_denied", "A current note session with an authenticated actor and tenant is required.");
+        if (request.Target is not null && !OwnTarget(request.Target)) return InvalidDisclosure();
+        if (!await CanReadAsync(session, request.Target, cancellationToken)) return ReadDenied();
         var note = await store.ReadAsync(cancellationToken);
         var target = NoteContract.Target(note);
+        if (request.Target is not null && request.Target != target)
+            return Refused("context_stale", "The requested note reference does not match the owning file's current revision.");
         foreach (var caller in request.CallerAttachments)
-            if (caller.ContentType != NoteContract.ContextKind || caller.SchemaVersion != "1" || caller.Target is not { } supplied ||
+            if (caller.ModuleId != NoteContract.Module || caller.ContentType != NoteContract.ContextKind || caller.SchemaVersion != "1" || caller.Target is not { } supplied ||
                 supplied.ModuleId != target.ModuleId || supplied.ResourceType != target.ResourceType || supplied.ResourceId != target.ResourceId || supplied.Revision != target.Revision)
                 return new([], [new(Descriptor.Id, "weaver.note.context_stale", "The supplied note reference does not match the owning file's current revision.", true)]);
         // Referenced resource data retains every caller restriction, even when the module rereads it.
@@ -192,6 +195,100 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
         return new([attachment], request.CallerAttachments.Select(caller => new AgentContributionDiagnostic(
             sensitivity >= AgentContextSensitivity.SecretRedacted ? Descriptor.Id : Descriptor.Id + ":" + caller.Id, "weaver.note.reference_admitted", "Admitted reference; canonical owning-resource read used.", false)).ToArray());
     }
+
+    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    {
+        var session = await FindSessionAsync(request.SessionId, cancellationToken);
+        if (session is null) return Refused("session_denied", "A current note session with an authenticated actor and tenant is required.");
+        if (!await CanReadAsync(session, null, cancellationToken)) return ReadDenied();
+        var current = await store.ReadAsync(cancellationToken);
+        foreach (var item in request.Context)
+        {
+            if (item.ContributorId != Descriptor.Id || item.ModuleId != NoteContract.Module || item.ContentType != NoteContract.ContextKind
+                || item.SchemaVersion != "1" || item.Origin != AgentContextOrigin.AuthoritativeRead) return InvalidDisclosure();
+            // The engine removes target/content/scopes when it redacts a Secret attachment.
+            // Current read authority still applies to disclosure of that retained placeholder.
+            if (item.Sensitivity == AgentContextSensitivity.SecretRedacted)
+            {
+                if (item.Content is not null || item.Target is not null || item.AgentScopes.Count != 0) return InvalidDisclosure();
+                continue;
+            }
+            if (!OwnTarget(item.Target) || !TryReadState(item.Content, out var retained) || item.Target != NoteContract.Target(retained!))
+                return InvalidDisclosure();
+            if (!await CanReadAsync(session, item.Target, cancellationToken)) return ReadDenied();
+            if (!request.IsHistorical && !request.IsReceiptContinuation && retained != current)
+                return Refused("context_stale", "The accepted note snapshot has changed; submit a fresh note reference.");
+        }
+        foreach (var result in request.Results)
+        {
+            if (!OwnResult(result)) return InvalidDisclosure();
+            if (!await CanReadAsync(session, result.Access!.Target, cancellationToken)) return ReadDenied();
+        }
+        // A receipt is evidence of the original effect. Do not reread it into a new result or
+        // replay the mutation; withhold the old current snapshot after the accepted write.
+        return request.IsReceiptContinuation
+            ? new([], [new(Descriptor.Id, "weaver.note.context_receipt_only",
+                "The prior note snapshot is withheld; the accepted result is historical evidence, not a fresh note read.", false)])
+            : new(request.Context, []);
+    }
+
+    private async Task<AgentSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        var session = await sessions.FindAsync(sessionId, cancellationToken);
+        return session is { Status: AgentSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
+            && !string.IsNullOrWhiteSpace(session.TenantId) && (session.ExpiresAt is null || session.ExpiresAt > DateTimeOffset.UtcNow) ? session : null;
+    }
+
+    private async Task<bool> CanReadAsync(AgentSession session, AgentResourceTarget? target, CancellationToken cancellationToken)
+    {
+        var read = SetNoteTool.ToolDescriptor with { Mutability = AgentToolMutability.ReadOnly, Risk = AgentRisk.ReadOnly,
+            RequiredPermissions = [NoteContract.ReadPermission] };
+        return (await authorizer.AuthorizeAsync(read, session.ActorId, session.TenantId,
+            target ?? new(NoteContract.Module, NoteContract.ResourceType, NoteContract.NoteId, null), cancellationToken)).Allowed;
+    }
+
+    private static bool OwnTarget(AgentResourceTarget? target) => target is
+        { ModuleId: NoteContract.Module, ResourceType: NoteContract.ResourceType, ResourceId: NoteContract.NoteId, Revision: { } revision }
+        && long.TryParse(revision, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number >= 1;
+
+    private static bool TryReadState(object? content, out NoteState? state)
+    {
+        state = null;
+        try
+        {
+            var json = content is JsonElement element ? element : JsonSerializer.SerializeToElement(content, NoteContract.Json);
+            if (json.ValueKind != JsonValueKind.Object) return false;
+            state = json.Deserialize<NoteState>(NoteContract.Json);
+            return state is { Id: NoteContract.NoteId, Value.Length: <= 256, WriteCount: >= 0 }
+                && OwnTarget(NoteContract.Target(state));
+        }
+        catch (JsonException) { return false; }
+        catch (NotSupportedException) { return false; }
+    }
+
+    private static bool OwnResult(AgentToolResult result)
+    {
+        if (result.ToolName != NoteContract.ToolName || string.IsNullOrWhiteSpace(result.ToolCallId)
+            || result.Access is not { ModuleId: NoteContract.Module, ContractVersion: "1", DisclosureSourceId: NoteContract.ContextSourceId } access
+            || string.IsNullOrWhiteSpace(access.InvocationId) || !OwnTarget(access.Target) || result.Payload is not { SchemaVersion: "1" } payload)
+            return false;
+        if (!result.Succeeded && result.Receipt is null && payload.TypeId == "agent.operation-outcome")
+            return payload.Data.ValueKind == JsonValueKind.Object && payload.Data.EnumerateObject().Count() == 2
+                && payload.Data.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String
+                && status.GetString() is "denied" or "refused" or "uncertain"
+                && payload.Data.TryGetProperty(nameof(AgentPreparedToolInvocation.InvocationId), out var invocationId)
+                && invocationId.ValueKind == JsonValueKind.String && invocationId.GetString() == access.InvocationId;
+        return result.Succeeded && payload.TypeId == NoteContract.ResultType && TryReadState(payload.Data, out var observed)
+            && result.Receipt is { Scope: AgentEffectScope.ServerPersisted } receipt && receipt.InvocationId == access.InvocationId
+            && receipt.Before == access.Target && receipt.After == NoteContract.Target(observed!)
+            && long.Parse(receipt.After.Revision!, CultureInfo.InvariantCulture) - 1 == long.Parse(receipt.Before.Revision!, CultureInfo.InvariantCulture)
+            && receipt.Evidence.TypeId == payload.TypeId && receipt.Evidence.SchemaVersion == payload.SchemaVersion
+            && receipt.Evidence.Data.GetRawText() == payload.Data.GetRawText();
+    }
+
+    private AgentContextContribution Refused(string code, string message) => new([], [new(Descriptor.Id, "weaver.note." + code, message, true)]);
+    private AgentContextContribution ReadDenied() => Refused("context_denied", "Current permission to read the owned note is required.");
+    private AgentContextContribution InvalidDisclosure() => Refused("disclosure_invalid", "The retained evidence does not match this source's supported note, schema and original tool contract.");
 }
 
 internal sealed class SetNoteTool(NoteStore store, IAgentToolAuthorizer authorizer) : IAgentTool
@@ -199,7 +296,8 @@ internal sealed class SetNoteTool(NoteStore store, IAgentToolAuthorizer authoriz
     internal static readonly AgentToolDescriptor ToolDescriptor = new(NoteContract.ToolName, "Set owned note", "Reviews one change to the qualification module's own revisioned note file.",
         AgentToolMutability.Mutating, AgentRisk.ReviewRequired, """{"type":"object","required":["value"],"properties":{"value":{"type":"string","maxLength":256}},"additionalProperties":false}""",
         [NoteContract.ManagePermission], [NoteContract.Scope])
-    { ModuleId = NoteContract.Module, ContractVersion = "1", ResultType = NoteContract.ResultType, ResultSchemaVersion = "1", ResultRendererId = "weaver.journey.note-result" };
+    { ModuleId = NoteContract.Module, ContractVersion = "1", DisclosureSourceId = NoteContract.ContextSourceId,
+        ResultType = NoteContract.ResultType, ResultSchemaVersion = "1", ResultRendererId = "weaver.journey.note-result" };
     public AgentToolDescriptor Descriptor => ToolDescriptor;
     public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {

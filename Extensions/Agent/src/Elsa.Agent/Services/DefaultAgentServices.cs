@@ -78,12 +78,25 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : I
             Source = request.Source,
             Client = request.Client,
             PromptMode = request.PromptMode,
-            DeliveryFingerprint = request.DeliveryFingerprint
+            DeliveryFingerprint = request.DeliveryFingerprint,
+            ToolResults = Array.AsReadOnly(request.ToolResults.ToArray()),
+            HasDisclosureProvenance = request.HasDisclosureProvenance || request.Role == AgentRole.User,
+            DisclosureHistory = request.DisclosureHistory is null ? null : AgentDisclosureHistory.Freeze(request.DisclosureHistory)
         };
         var messages = _messages.GetOrAdd(sessionId, _ => []);
 
         lock (messages)
         {
+            if (request.Role == AgentRole.Tool && !string.IsNullOrEmpty(request.RequestId))
+            {
+                var existing = messages.FirstOrDefault(x => x.Role == AgentRole.Tool && x.RequestId == request.RequestId);
+                if (existing is not null)
+                {
+                    if (!string.IsNullOrEmpty(request.DeliveryFingerprint) && existing.DeliveryFingerprint == request.DeliveryFingerprint)
+                        return existing;
+                    throw new AgentContributionException("An observed tool outcome cannot change its original invocation identity or evidence.");
+                }
+            }
             if (request.Role == AgentRole.User && !string.IsNullOrWhiteSpace(request.RequestId))
             {
                 var existing = messages.FirstOrDefault(x => x.Role == AgentRole.User && x.RequestId == request.RequestId);
