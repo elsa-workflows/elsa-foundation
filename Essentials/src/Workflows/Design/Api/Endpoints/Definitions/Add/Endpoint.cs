@@ -39,7 +39,7 @@ public sealed class Endpoint(
     {
         if (command.FolderId is not null)
         {
-            var folders = WorkflowLibraryAccess.Require(library);
+            var folders = WorkflowLibraryAccess.RequireOrganization(library, HttpContext);
             await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Manage,
                 new WorkflowLibraryResource(FolderId: command.FolderId), cancellationToken);
             // The create response includes the home-folder breadcrumb. Check it before
@@ -88,7 +88,7 @@ public sealed class Endpoint(
         if (library is not null && await library.GetOrganizationAsync(result.DefinitionId, cancellationToken) is { } organization)
         {
             await WorkflowLibraryAccess.RequireOrganizationReadAsync(HttpContext, organization, cancellationToken);
-            definitionView = WorkflowLibraryProjection.WithOrganization(definitionView, organization);
+            definitionView = WorkflowLibraryProjection.WithOrganization(definitionView, organization, WorkflowLibraryAccess.OrganizationEnabled(HttpContext));
         }
         return new WorkflowDefinitionDetailsView(
             definitionView,

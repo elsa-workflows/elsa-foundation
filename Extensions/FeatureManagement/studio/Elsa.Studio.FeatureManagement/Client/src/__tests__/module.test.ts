@@ -64,6 +64,37 @@ describe("feature management module", () => {
     expect(editor.id).toBe("boolean");
   });
 
+  it("reviews the organization Boolean alone, allows cancellation and applies without disabling the design API", async () => {
+    const descriptor = setting({ name: "WorkflowOrganizationEnabled", displayName: "Workflow organization", jsonType: "boolean", defaultValue: true });
+    const original = { WorkflowOrganizationEnabled: true, HostExtensionSetting: "keep" };
+    let payload: unknown = null;
+    const api = stubApi({
+      getJson: async () => ({ revision: "organization-rev-1", features: [feature("WorkflowsDesignApi", true, original, ["Workflows"], { settings: [descriptor] })] }),
+      postJson: async (_url, body) => {
+        payload = body;
+        return { catalog: { revision: "organization-rev-2", features: [feature("WorkflowsDesignApi", true, { ...original, WorkflowOrganizationEnabled: false }, ["Workflows"], { settings: [descriptor] })] }, featureDescriptorCount: 1, reloadedShellCount: 1 };
+      }
+    });
+    register(api);
+    const page = await renderFeatureManagementPage();
+    await click(buttonByText(page.container, "Edit settings"));
+    const toggle = page.container.querySelector<HTMLInputElement>(".feature-management-settings-dialog input[type='checkbox']");
+    expect(toggle?.checked).toBe(true);
+    await click(toggle);
+    await click(buttonByText(page.container.querySelector(".feature-management-settings-dialog")!, "Save draft"));
+    let review = await openImpactReview(page.container);
+    const row = impactRowText(review, "WorkflowsDesignApi");
+    expect(row).toContain("Workflow organization");
+    expect(row).not.toContain("HostExtensionSetting");
+    await click(buttonByText(review, "Cancel"));
+    expect(payload).toBeNull();
+    expect(original.WorkflowOrganizationEnabled).toBe(true);
+    review = await openImpactReview(page.container);
+    await click(buttonByText(review, "Apply"));
+    expect(payload).toEqual({ revision: "organization-rev-1", features: [{ id: "WorkflowsDesignApi", enabled: true, configuration: { WorkflowOrganizationEnabled: false, HostExtensionSetting: "keep" } }] });
+    await page.unmount();
+  });
+
   it("creates apply payload with disabled feature configuration cleared", () => {
     const payload = createApplyPayload("rev-1", [
       feature("Enabled", true, { value: 1 }),
