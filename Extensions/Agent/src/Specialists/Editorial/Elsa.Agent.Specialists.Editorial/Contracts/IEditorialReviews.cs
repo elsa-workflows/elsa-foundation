@@ -73,7 +73,10 @@ public enum EditorialDecisionReceiptStatus
     /// <summary>A dependency was temporarily unavailable; retry with the same request ID.</summary>
     Unavailable,
 
-    /// <summary>Native admission refused this request (for example expiry or revoked permission); the wait stays open.</summary>
+    /// <summary>
+    /// Native admission refused this request (for example expiry or revoked permission); the wait stays open. Submit a
+    /// new request ID. A refusal is not a durable receipt: after a host restart the same ID is evaluated afresh.
+    /// </summary>
     Refused
 }
 

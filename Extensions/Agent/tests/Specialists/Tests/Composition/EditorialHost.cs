@@ -499,6 +499,7 @@ internal sealed class EditorialSubjects : ICurrentSubjectPermissionAuthorizer
     public void Grant(string subject, string tenant = EditorialHost.Tenant) => grants[(tenant, subject)] = true;
     public void Revoke(string subject, string tenant = EditorialHost.Tenant) => grants.TryRemove((tenant, subject), out _);
     public bool Unavailable { get; set; }
+    public bool Broken { get; set; }
     public int Checks => checks;
     private int checks;
     private (string Tenant, string Subject)? revokeAfterNextCheck;
@@ -514,6 +515,7 @@ internal sealed class EditorialSubjects : ICurrentSubjectPermissionAuthorizer
     public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default)
     {
         if (Unavailable) throw new TimeoutException("The identity store is temporarily unavailable.");
+        if (Broken && checks >= 1) throw new InvalidOperationException("The identity configuration is invalid.");
         if (unavailableAfterChecks >= 0 && checks >= unavailableAfterChecks)
         {
             unavailableAfterChecks = -1;

@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Extensions;
@@ -23,6 +24,7 @@ public class SpecialistsEditorialApiFeature : IWebShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddElsaEndpoints();
         services.AddHttpContextAccessor();
         services.TryAddScoped<EditorialRequestCaller>();
         services.TryAddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, EditorialReviewFaultRenderer>(EditorialReviewApi.OwnerId);

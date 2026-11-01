@@ -62,6 +62,18 @@ public sealed class EditorialRevisionGateTests
         Assert.Equal("editorial.revision.deadline-exceeded", fault.Fault.Code);
     }
 
+    [Theory]
+    [InlineData("", 0, null)]
+    [InlineData("article", 1, null)]
+    [InlineData("review", 1, "changes_requested")]
+    public async Task No_specialist_call_is_scheduled_without_the_shared_deadline(string awaiting, int round, string? verdict)
+    {
+        var fault = Assert.IsAssignableFrom<IActivityFaultTransition>(
+            await RunAsync(new(new FakeTimeProvider(Now)) { Awaiting = awaiting, Round = round, Article = "draft", Verdict = verdict }));
+
+        Assert.Equal("editorial.revision.deadline-missing", fault.Fault.Code);
+    }
+
     [Fact]
     public async Task An_approval_or_exhaustion_needs_no_further_call_and_ignores_the_deadline()
     {

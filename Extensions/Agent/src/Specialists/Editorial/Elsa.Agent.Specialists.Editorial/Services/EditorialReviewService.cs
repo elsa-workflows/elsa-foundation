@@ -100,11 +100,14 @@ internal sealed partial class EditorialReviewService(IWorkflowExecutionStateStor
         // No dispatch status is itself an acknowledgement: reconcile from the native records it produced. Pending is
         // reported only while the decision is provably owed; a Duplicate the actor remembers but nothing retains
         // means native admission already refused this request.
-        var after = await activities.FindAsync(review.WorkflowExecutionId, review.ActivityExecutionId, cancellationToken) ?? activity;
-        if (Admitted(after) is { } settled) return Reconcile(settled, command, decider);
         if (dispatched.Status is not (BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate or BookmarkResumeDispatchStatus.NotFound))
             return new(EditorialDecisionReceiptStatus.Unavailable, "The decision could not be queued now; retry with the same request ID.");
-        if (await QueuedAsync(review, idempotencyKey, cancellationToken) is not null) return new(EditorialDecisionReceiptStatus.Pending);
+        // Scan the queue before reading the activity: admission consumes the work item and records the delivery in one
+        // commit, so a decision that leaves the queue is always visible on the activity read that follows.
+        var stillQueued = await QueuedAsync(review, idempotencyKey, cancellationToken) is not null;
+        var after = await activities.FindAsync(review.WorkflowExecutionId, review.ActivityExecutionId, cancellationToken) ?? activity;
+        if (Admitted(after) is { } settled) return Reconcile(settled, command, decider);
+        if (stillQueued) return new(EditorialDecisionReceiptStatus.Pending);
         if (after.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or
             ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded || dispatched.Status == BookmarkResumeDispatchStatus.NotFound)
             return new(EditorialDecisionReceiptStatus.Closed, "The review wait is no longer open.");

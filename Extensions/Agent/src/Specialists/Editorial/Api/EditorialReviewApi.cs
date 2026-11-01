@@ -84,6 +84,12 @@ internal sealed class EditorialReviewFaultRenderer : IEndpointFaultRenderer
 {
     public async ValueTask<bool> TryWriteAsync(HttpContext context, Exception exception)
     {
+        if (exception is Elsa.Primitives.Exceptions.SchemaWriteRefusedException refusal)
+        {
+            // Preserve the framework's actionable schema/dormancy metadata and stable refusal code.
+            await new Elsa.Api.AspNetCore.ElsaFallbackEndpointProblemWriter().WriteAsync(context, Elsa.Api.AspNetCore.SchemaWriteRefusalProblem.For(refusal));
+            return true;
+        }
         var (status, title) = exception switch
         {
             Elsa.Primitives.Exceptions.EntityNotFoundException => (StatusCodes.Status404NotFound, "No visible editorial review matches."),
