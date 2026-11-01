@@ -365,10 +365,10 @@ describe("workflows module", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute(
-      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval"
+      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Opaque workflow");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Opaque workflow")).not.toBeNull());
     const row = rowByLabel(container, "Open workflow definition Opaque workflow");
     const nameLink = row!.querySelector<HTMLAnchorElement>("a");
     expect(nameLink).not.toBeNull();
@@ -395,10 +395,10 @@ describe("workflows module", () => {
     const opaqueId = "definition/opaque ?&=value";
     vi.stubGlobal("fetch", vi.fn(async () => response({ items: [definition({ id: opaqueId, name: "Opaque workflow" })] })));
     const { container, unmount } = await renderRegisteredRoute(
-      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval"
+      "/workflows/definitions?folderId=folder%2Froot&state=all&search=approval", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Opaque workflow");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Opaque workflow")).not.toBeNull());
     const row = rowByLabel(container, "Open workflow definition Opaque workflow");
 
     await click(checkboxByLabel(row!, "Select workflow definition Opaque workflow"));
@@ -808,10 +808,10 @@ describe("workflows module", () => {
       return response({ items: [definition()] });
     }));
     const { container, unmount } = await renderRegisteredRoute(
-      "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=hello"
+      "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=hello", undefined, false, folderBrowseCapabilities()
     );
 
-    await waitForText(container, "Hello World");
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Hello World")).not.toBeNull());
     await click(rowByLabel(container, "Open workflow definition Hello World"));
 
     const parameters = new URLSearchParams(window.location.search);
@@ -3690,7 +3690,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("keeps the flat inventory when folders are advertised without bounded definition browsing", async () => {
+  it("holds scoped browsing when folders are advertised without bounded definition browsing", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/definitions?")) return response({ items: [definition({ name: "Legacy flat workflow" })] });
@@ -3706,13 +3706,12 @@ describe("workflows module", () => {
       capabilities
     );
 
-    await waitForText(container, "Legacy flat workflow");
+    await waitForText(container, "Some organization filters are unavailable");
     expect(container.querySelector("[role='tree']")).toBeNull();
-    expect(container.querySelector("[role='status']")?.textContent).toContain(
-      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
-    );
-    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
-    expect(buttonByText(container, "Search all workflows")).toBeNull();
+    expect(container.textContent).not.toContain("Legacy flat workflow");
+    expect(fetchMock).not.toHaveBeenCalled();
+    await click(buttonByText(container, "Clear unavailable organization filters"));
+    await waitForText(container, "Legacy flat workflow");
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
   });
@@ -3729,12 +3728,14 @@ describe("workflows module", () => {
     );
 
     await waitForText(container, "Couldn't inspect workflow folder support.");
+    await waitForText(container, "Some organization filters are unavailable");
+    await click(buttonByText(container, "Clear unavailable organization filters"));
     await waitForText(container, "Couldn't load workflow definitions");
     expect(container.querySelector(".wf-grid[aria-busy='true']")).toBeNull();
     await unmount();
   });
 
-  it("preserves requested folder context while explaining the capability-unavailable flat fallback", async () => {
+  it("preserves unavailable folder context until explicit recovery", async () => {
     const definitionRequests: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -3754,11 +3755,11 @@ describe("workflows module", () => {
       capabilities
     );
 
-    await waitForText(container, "Flat fallback workflow");
-    expect(container.querySelector("[role='status']")?.textContent).toContain(
-      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
-    );
+    await waitForText(container, "Some organization filters are unavailable");
+    expect(definitionRequests).toEqual([]);
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("opaque-folder");
+    await click(buttonByText(container, "Clear unavailable organization filters"));
+    await waitForText(container, "Flat fallback workflow");
     expect(definitionRequests).toEqual([
       "https://server.example/design/workflows/definition-pages?state=active&searchTerm=approval&pageSize=10"
     ]);
@@ -6011,4 +6012,10 @@ async function waitForUrlParam(name: string, value: string) {
   }
 
   throw new Error(`Timed out waiting for URL parameter: ${name}=${value}`);
+}
+
+function folderBrowseCapabilities() {
+  const capabilities = capabilityDocument();
+  capabilities.capabilities[0].links.push({ rel: "workflow-folders", href: "design/workflows/folders" }, { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+  return capabilities;
 }

@@ -41,3 +41,21 @@ Capabilities depend on the connected server and your permissions. An older or di
 One explicit bulk operation supports at most 100 workflows. Folders support up to 16 levels. Queries accept at most 16 tag conditions and 32 values in a condition. Large jobs selected from a changing query, manually ordered collections, free-text classifications and source-produced tag assignments are future extensions.
 
 Definition content export/import does not automatically copy tenant-specific folders, vocabulary or personal views. Choose organization in the destination library explicitly.
+
+## Turning workflow organization on or off
+
+Administrators can open **Features**, choose **Server** and the intended backend, select
+**Workflows Design API**, then choose **Edit settings → Workflow organization**. It is on by
+default. Save the draft, review the change and Apply. The setting is independent of Studio's
+appearance presets.
+
+Turning organization off hides folders, tags, saved views, favorites and their optional columns.
+It preserves their saved data and your column choices. Workflow search, sorting, publication
+filters, editing, publishing and execution continue to work. Turning organization back on restores
+the saved organization, including after restarting the server.
+
+An old link containing unavailable organization filters pauses the list and offers **Clear
+unavailable organization filters**. This removes only unsupported constraints and their saved-view
+association; supported filters and saved column choices remain. Other users and backends keep
+their own settings and permissions. If the host marks the setting as source-owned, ask the host
+administrator to change its configuration source.
