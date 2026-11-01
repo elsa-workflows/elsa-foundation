@@ -20,11 +20,12 @@ public static class LoginPage
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
 
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "");
-        var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" ? options.Layout : "split";
-        var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" ? options.Palette : "linen";
-        var artwork = options.Artwork is "ember" or "tidal" or "daybreak" or "canopy" ? options.Artwork : "ember";
+        var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" or "sketchbook" ? options.Layout : "split";
+        var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" or "sketchbook" ? options.Palette : "linen";
+        var artwork = options.Artwork is "ember" or "tidal" or "daybreak" or "canopy" or "sketchbook" ? options.Artwork : "ember";
         var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
-        var logoUrl = SafeUrl(options.LogoUrl) ?? $"{pathBase}/_elsa/identity/login-assets/elsa-logo.png";
+        var logoAsset = layout == "sketchbook" ? "sketchbook-logo.png" : "elsa-logo.png";
+        var logoUrl = SafeUrl(options.LogoUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{logoAsset}";
         var logo = $"<img class=\"logo\" src=\"{Encode(logoUrl)}\" alt=\"\" />";
         var links = string.Join("", new[] { (options.HelpUrl, "Help"), (options.PrivacyUrl, "Privacy") }
             .Where(link => SafeUrl(link.Item1) is not null)
@@ -75,11 +76,27 @@ public static class LoginPage
             [data-layout="immersive"] .welcome { position:relative; z-index:2; width:440px; border:1px solid var(--line); border-radius:24px; background:var(--paper); padding:40px; box-shadow:0 24px 80px rgba(10,20,16,.15); }
             [data-layout="editorial"] .entry { padding:5vh 6vw; gap:6vw; }
             [data-layout="editorial"] .visual { border-radius:45% 45% 24px 24px; }
+            body[data-palette="sketchbook"] { --ground:#f5f2ea; --paper:#fcfaf4; --ink:#293c34; --muted:#59655b; --line:#8a907f; --accent:#3e624d; --wash:#e5eadd; }
+            [data-layout="sketchbook"] { background:radial-gradient(ellipse at 0 0,color-mix(in srgb,var(--accent) 8%,transparent),transparent 45%),var(--ground); }
+            [data-layout="sketchbook"] .entry { grid-template-columns:minmax(0,1.12fr) minmax(360px,.82fr); padding:clamp(24px,5vw,80px); gap:clamp(28px,6vw,90px); }
+            [data-layout="sketchbook"] .visual { display:flex; flex-direction:column; min-height:620px; background:transparent; color:var(--ink); border-radius:12px; }
+            [data-layout="sketchbook"] .visual::after { display:none; }
+            [data-layout="sketchbook"] .visual>img { position:relative; inset:auto; order:1; flex:1 1 0; min-height:0; width:100%; height:0; object-fit:contain; mix-blend-mode:darken; }
+            [data-layout="sketchbook"] .story { position:relative; top:auto; bottom:auto; order:0; flex:0 0 auto; padding:24px 12px; text-shadow:none; }
+            [data-layout="sketchbook"] .story h2 { font-family:Georgia,"Times New Roman",serif; font-weight:400; letter-spacing:-.025em; font-size:clamp(36px,3.8vw,58px); }
+            [data-layout="sketchbook"] .story p { color:var(--muted); max-width:470px; }
+            [data-layout="sketchbook"] .welcome { align-self:center; padding:clamp(28px,4vw,56px); border:1px solid var(--line); border-radius:10px 17px 12px 15px; background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 3%,var(--paper)),var(--paper) 45%); box-shadow:1px 2px 0 color-mix(in srgb,var(--ink) 12%,transparent); }
+            [data-layout="sketchbook"] .brand { margin-bottom:42px; font-family:Georgia,"Times New Roman",serif; font-size:22px; font-weight:400; }
+            [data-layout="sketchbook"] .logo { width:44px; height:44px; }
+            [data-layout="sketchbook"] h1 { font-family:Georgia,"Times New Roman",serif; font-size:40px; font-weight:400; }
+            [data-layout="sketchbook"] :is(input,button) { border-radius:7px 11px 8px 10px; }
             @media(prefers-color-scheme:dark) {
               :root,body[data-palette] { --ground:#20231f; --paper:#292d27; --ink:#f0f1eb; --muted:#bbc1b4; --line:#535a4d; --accent:#e0a28b; --on-accent:#28231f; --wash:#353b30; color-scheme:dark; }
               body[data-palette="tidal"] { --ground:#1d2729; --paper:#253338; --ink:#edf4f5; --muted:#b5c9cc; --line:#536b72; --accent:#acd3dc; --on-accent:#183239; }
               body[data-palette="daybreak"] { --ground:#2b242b; --paper:#362e35; --ink:#f5edf1; --muted:#d2bdc8; --line:#78636e; --accent:#dab2c4; --on-accent:#382630; }
               body[data-palette="canopy"] { --ground:#20271f; --paper:#2b3329; --ink:#eff4e9; --muted:#b6c5a7; --line:#5d6b53; --accent:#b4cd9e; --on-accent:#20301e; }
+              body[data-palette="sketchbook"] { --ground:#252622; --paper:#30312b; --ink:#f3f1e8; --muted:#c0c1b4; --line:#828779; --accent:#b3cdb6; --on-accent:#1e2b22; }
+              [data-layout="sketchbook"] .visual>img { background:#f5f2ea; mix-blend-mode:normal; border-radius:12px; }
               .error { color:#ffb6ad; background:#422d2b; }
             }
             @media(max-width:800px) {
@@ -93,11 +110,21 @@ public static class LoginPage
               [data-layout="immersive"] .story { display:none; }
               [data-layout="immersive"] .welcome { width:min(440px,100%); padding:32px 24px; }
             }
+            @media(max-width:800px) {
+              [data-layout="sketchbook"] .entry { grid-template-columns:1fr; padding:20px; gap:24px; }
+              [data-layout="sketchbook"] .visual { min-height:360px; }
+              [data-layout="sketchbook"] .story { padding:8px; }
+              [data-layout="sketchbook"] .story h2 { font-size:34px; }
+              [data-layout="sketchbook"] .visual>img { min-height:200px; }
+              [data-layout="sketchbook"] .welcome { padding:28px; }
+              [data-layout="sketchbook"] .brand { margin-bottom:30px; }
+            }
             @media(forced-colors:active),(prefers-contrast:more) {
               :root,body[data-palette] { --ground:Canvas; --paper:Canvas; --ink:CanvasText; --muted:CanvasText; --line:CanvasText; --accent:Highlight; --on-accent:HighlightText; }
-              .visual { display:none; }
-              .entry,[data-layout="editorial"] .entry { display:flex; justify-content:center; }
-              .welcome { position:relative; width:100%; max-width:520px; box-shadow:none; }
+              [data-layout="sketchbook"] { background:var(--ground); }
+              .visual,[data-layout="sketchbook"] .visual { display:none; }
+              .entry,[data-layout="editorial"] .entry,[data-layout="sketchbook"] .entry { display:flex; justify-content:center; }
+              .welcome,[data-layout="sketchbook"] .welcome { position:relative; width:100%; max-width:520px; background:var(--paper); box-shadow:none; }
               .error { color:CanvasText; background:Canvas; border-color:CanvasText; }
             }
           </style>

@@ -56,14 +56,14 @@ public static class AspNetCoreIdentityApi
     private static async Task HandleLoginArtworkAsync(HttpContext context)
     {
         var name = context.Request.RouteValues["name"]?.ToString();
-        if (name is not ("ember.jpg" or "tidal.jpg" or "daybreak.jpg" or "canopy.jpg" or "elsa-logo.png"))
+        if (name is not ("ember.jpg" or "tidal.jpg" or "daybreak.jpg" or "canopy.jpg" or "sketchbook.jpg" or "elsa-logo.png" or "sketchbook-logo.png"))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
         using var stream = typeof(LoginPage).Assembly.GetManifestResourceStream($"Elsa.LoginArtwork.{name}")
             ?? throw new InvalidOperationException("Bundled login artwork is missing.");
-        context.Response.ContentType = name == "elsa-logo.png" ? "image/png" : "image/jpeg";
+        context.Response.ContentType = name.EndsWith(".png", StringComparison.Ordinal) ? "image/png" : "image/jpeg";
         context.Response.Headers.CacheControl = "public,max-age=86400";
         await stream.CopyToAsync(context.Response.Body, context.RequestAborted);
     }
