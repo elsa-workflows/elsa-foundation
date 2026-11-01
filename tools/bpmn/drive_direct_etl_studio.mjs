@@ -92,7 +92,10 @@ try{
  // Deliver the command to the real server, then cut only its return response.
  let lostResponse;
  await page.route('**/bpmn/executions/*/retry-service',async route=>{const response=await route.fetch();lostResponse={status:response.status(),body:await response.json(),request:route.request().postDataJSON()};write('accepted-retry-response-cut.json',lostResponse);await route.abort('connectionreset');});
- await page.getByRole('button',{name:'Retry service',exact:true}).click();await expect(page.getByRole('button',{name:'Resume retry',exact:true})).toBeVisible({timeout:30000});
+ await page.getByRole('button',{name:'Retry service',exact:true}).click();
+ await expect.poll(()=>lostResponse?.body?.result?.status,{timeout:30000}).toBe('Accepted');
+ await expect(page.getByRole('alert').filter({hasText:'The request identity is retained.'})).toBeVisible({timeout:30000});
+ await expect(page.getByRole('button',{name:'Resume retry',exact:true})).toBeEnabled();
  await page.unroute('**/bpmn/executions/*/retry-service');await shot(page,'ui-retry-response-lost');await page.reload();await expect(page.getByRole('button',{name:'Resume retry',exact:true})).toBeVisible({timeout:30000});
  await page.getByRole('button',{name:'Resume retry',exact:true}).click();await expect(page.getByText('Last retry: accepted (replayed).',{exact:true})).toBeVisible({timeout:30000});
  await expect(async()=>{const refresh=page.getByRole('button',{name:'Refresh run',exact:true});if(await refresh.isEnabled())await refresh.click();await expect(page.locator('.wf-bpmn-run-heading')).toContainText('Completed',{timeout:500});}).toPass({timeout:60000,intervals:[200,500]});
