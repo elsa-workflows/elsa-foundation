@@ -16,7 +16,7 @@ namespace Elsa.Activities.Runtime.Services;
 public sealed class ActivityInputHydrator
 {
     private readonly ConditionalWeakTable<IActivity, object> _hydrated = new();
-    private readonly NullabilityInfoContext _nullability = new();
+    private readonly ConditionalWeakTable<Type, Dictionary<string, InputPropertyPlan>> _inputPlans = new();
 
     public void Hydrate(IActivity activity, ActivityContract contract, ActivityInputSnapshot snapshot)
     {
@@ -28,7 +28,7 @@ public sealed class ActivityInputHydrator
         if (!StringComparer.Ordinal.Equals(contract.SchemaFingerprint, snapshot.ContractFingerprint))
             throw new InvalidOperationException("The pinned activity input snapshot does not match the activation contract fingerprint.");
 
-        var properties = DiscoverProperties(activity.GetType());
+        var properties = _inputPlans.GetValue(activity.GetType(), DiscoverProperties);
         foreach (var unknownKey in snapshot.Values.Keys.Except(contract.Inputs.Keys, StringComparer.Ordinal))
             throw new InvalidOperationException($"Pinned input '{unknownKey}' is not declared by activity contract '{contract.ActivityTypeKey}'.");
 
@@ -43,7 +43,7 @@ public sealed class ActivityInputHydrator
             if (!snapshot.Values.TryGetValue(input.Key, out var envelope))
                 throw new InvalidOperationException($"Activity input '{input.Key}' is missing from the complete pinned snapshot.");
 
-            property.SetValue(activity, Materialize(property, input, envelope));
+            property.Property.SetValue(activity, Materialize(property, input, envelope));
         }
 
         if (activity is IRuntimeStructureInputConsumer consumer)
@@ -60,9 +60,9 @@ public sealed class ActivityInputHydrator
             throw new InvalidOperationException($"Activity instance '{activity.GetType().FullName}' has already been hydrated.");
     }
 
-    private static Dictionary<string, PropertyInfo> DiscoverProperties(Type activityType)
+    private static Dictionary<string, InputPropertyPlan> DiscoverProperties(Type activityType)
     {
-        var result = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+        var result = new Dictionary<string, InputPropertyPlan>(StringComparer.Ordinal);
         foreach (var property in activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             var attribute = ActivityInputPropertyResolver.FindAttribute(property);
@@ -73,28 +73,28 @@ public sealed class ActivityInputHydrator
             ArgumentException.ThrowIfNullOrWhiteSpace(key);
             if (property.SetMethod is null || !property.SetMethod.IsPublic)
                 throw new InvalidOperationException($"Activity input property '{activityType.FullName}.{property.Name}' must have a public setter.");
-            if (!result.TryAdd(key, property))
+            if (!result.TryAdd(key, new InputPropertyPlan(property)))
                 throw new InvalidOperationException($"Activity '{activityType.FullName}' declares duplicate input key '{key}'.");
         }
 
         return result;
     }
 
-    private object? Materialize(
-        PropertyInfo property,
+    private static object? Materialize(
+        InputPropertyPlan plan,
         ActivityInputContract input,
         ValueEnvelope envelope)
     {
         if (envelope.Presence == ValuePresence.Absent)
         {
-            if (input.IsRequired || !input.IsNullable || !AcceptsNull(property))
+            if (input.IsRequired || !input.IsNullable || !plan.AcceptsNull)
                 throw new InvalidOperationException($"Activity input '{input.Key}' does not accept absence.");
             return null;
         }
 
         if (envelope.Presence == ValuePresence.ExplicitNull)
         {
-            if (!input.IsNullable || !AcceptsNull(property))
+            if (!input.IsNullable || !plan.AcceptsNull)
                 throw new InvalidOperationException($"Activity input '{input.Key}' does not accept null.");
             return null;
         }
@@ -106,16 +106,24 @@ public sealed class ActivityInputHydrator
             ?? throw new InvalidOperationException($"Activity input '{input.Key}' has no inline payload.");
         try
         {
-            return inline.Deserialize(property.PropertyType);
+            return inline.Deserialize(plan.Property.PropertyType);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new InvalidOperationException($"Activity input '{input.Key}' cannot be materialized as '{property.PropertyType.FullName}'.", exception);
+            throw new InvalidOperationException($"Activity input '{input.Key}' cannot be materialized as '{plan.Property.PropertyType.FullName}'.", exception);
         }
     }
 
-    private bool AcceptsNull(PropertyInfo property) =>
-        Nullable.GetUnderlyingType(property.PropertyType) is not null ||
-        !property.PropertyType.IsValueType &&
-        _nullability.Create(property).WriteState is not NullabilityState.NotNull;
+    private sealed class InputPropertyPlan(PropertyInfo property)
+    {
+        // Preserve the original lazy nullability boundary. Each property's first nullable value owns
+        // its reflection context; a shared NullabilityInfoContext is never used concurrently.
+        private readonly Lazy<bool> _acceptsNull = new(() =>
+            Nullable.GetUnderlyingType(property.PropertyType) is not null ||
+            !property.PropertyType.IsValueType &&
+            new NullabilityInfoContext().Create(property).WriteState is not NullabilityState.NotNull);
+
+        public PropertyInfo Property { get; } = property;
+        public bool AcceptsNull => _acceptsNull.Value;
+    }
 }
