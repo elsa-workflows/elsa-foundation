@@ -8,6 +8,8 @@ Enable `ActivitiesBpmnHostingApi` together with the explicitly configured `Activ
 |---|---|---|
 | POST | `/bpmn/artifacts` | `bpmn:publish` |
 | POST | `/bpmn/executions` | `bpmn:execute` |
+| GET | `/bpmn/publications` | `bpmn:read` |
+| GET | `/bpmn/executions` | `bpmn:read` |
 | GET | `/bpmn/executions/{id}` | `bpmn:read` |
 | GET | `/bpmn/executions/{id}/work` | `bpmn:read` |
 | POST | `/bpmn/executions/{id}/work/{invocation}/complete` | `bpmn:complete-human` |
@@ -17,6 +19,8 @@ Enable `ActivitiesBpmnHostingApi` together with the explicitly configured `Activ
 | GET | `/bpmn/executions/{id}/commands/{request}` | `bpmn:read` |
 
 The transport captures actor and tenant from the normalized principal. Resource checks precede execution/command disclosure; route identities cannot be replaced by body properties. Start and completion distinguish durable pending admission, consumed results, exact replay and conflicting request content. Obsolete/terminal completions retain a rejection receipt without changing execution state or its revision. The initial human binding defaults missing/empty outcomes to `Done` and refuses other outcomes.
+
+Publication/run catalogs accept `limit` (default50/max500), optional `artifactId` and an opaque `continuationToken`. Each request reads one provider page and resource-authorizes disclosed items. A page may contain no authorized items and still offer continuation; callers choose whether to load another page. Continuations bind purpose, normalized subject, tenant, persistence scope, filter and page size. Source paging retains its initial provider live-clock value while rechecking current liveness and permission. Catalogs make no total or cross-request snapshot promise. The `elsa.api.bpmn-catalog` declaration advertises these two relations separately from optional authored publication or new-execution admission. Catalogs use Runtime readers, not Design storage. [Actual discovery evidence](../../../../../specs/1184-direct-bpmn-studio/evidence/catalog/README.md) does not establish direct Studio browser acceptance.
 
 Work and incident queries use bounded pages. Retry requires the exact incident, invocation and failed attempt; authorization precedes lookup and replay disclosure. A matching request replays the retained result without starting another worker. Cancellation can finish semantics while native cancellation or parent consumption remains owed; inspection preserves that pending-settlement distinction. HTTP202 proves durable admission, not semantic consumption or source acknowledgement.
 
