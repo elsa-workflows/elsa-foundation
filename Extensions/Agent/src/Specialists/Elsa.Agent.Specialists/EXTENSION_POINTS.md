@@ -24,8 +24,16 @@ native completion carries an opaque receipt; the parent verifies that receipt an
 accepted `JsonElement` through the native typed completion checkpoint. Journal acceptance and process
 application are distinct boundaries.
 
-Current execution is fresh-only, with a new MAF session for every turn and no tool or streaming
-admission. A definition's continuity capability does not implicitly reuse history. Validate business
+Current native invocation controls remain fresh-only, with a new MAF session for every turn and no tool or streaming
+admission. A definition's continuity capability does not implicitly reuse history. The private
+`elsa.specialist.text-history/1` codec now produces protected candidates for continuity-enabled turns;
+the journal accepts that candidate and business result together. Restoration requires a trusted
+admitted conversation/revision reference, selected ordinary owner scope and exact specialist version.
+This codec increment does not yet deliver the durable conversation-admission/control path.
+It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
+and uses the existing Secrets key ring, retaining older readers/keys. Histories are bounded to64
+messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.
+Portable history excludes private reasoning, SDK raw state and system-role instruction fields. Validate business
 inputs and outputs against both the exact schema and declared native conversion. Withheld,
 encryption-required and secret-reference business inputs are refused before model dispatch.
 Root-variable captures resolve their current committed destination policy at native entry and worker

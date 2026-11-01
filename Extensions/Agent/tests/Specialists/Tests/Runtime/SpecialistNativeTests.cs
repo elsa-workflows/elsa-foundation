@@ -6,6 +6,7 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Services;
+using Elsa.Agent.Specialists.Journal;
 using Elsa.Agent.Specialists.Tests.Publication;
 using Elsa.Primitives.Models;
 using Elsa.Secrets.Features;
@@ -188,13 +189,14 @@ public sealed class SpecialistNativeTests
     }
 
     [Theory]
-    [InlineData("Article")]
-    [InlineData("Article.body")]
-    public async Task Native_actor_runs_the_published_shape_on_a_background_worker_and_commits_its_typed_result(string outputName)
+    [InlineData("Article", false)]
+    [InlineData("Article", true)]
+    [InlineData("Article.body", false)]
+    public async Task Native_actor_runs_the_published_shape_on_a_background_worker_and_commits_its_typed_result(string outputName, bool allowContinuity)
     {
         var factory = new FixtureFactory(JsonSerializer.Serialize(new Dictionary<string, string> { [outputName] = "draft about moss gardens" }));
         await using var provider = await ServicesAsync(factory);
-        var executable = await ExecutableAsync(provider, outputName);
+        var executable = await ExecutableAsync(provider, outputName, allowContinuity: allowContinuity);
         var (actor, start) = await StartAsync(provider, executable);
         Assert.Equal(0, factory.Calls);
         var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
@@ -234,6 +236,19 @@ public sealed class SpecialistNativeTests
         Assert.Equal("draft about moss gardens", resolved.Envelope!.InlineValue!.Value.GetString());
         var worker = states.Single(x => x.Execution.ExecutableNodeId == executable.RootActivity.ChildSlots.Single().Activities.Single().ExecutableNodeId);
         Assert.Equal(handle, worker.Completion!.Result.InlineValue!.Value.GetString());
+        var descriptor = SpecialistNativeBinding.Descriptor(executable.RootActivity);
+        var identity = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId,
+            boundary.InvocationId, boundary.OperationKey, workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash,
+            descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+        var accepted = await provider.GetRequiredService<SpecialistTurnJournal>().ResultAsync(handle, identity, worker.InvocationId, CancellationToken.None);
+        if (allowContinuity)
+        {
+            Assert.NotNull(accepted.Session);
+            Assert.Equal(handle, accepted.Session.ConversationId);
+            Assert.Equal(1, accepted.Session.Revision);
+            Assert.Equal(2, provider.GetRequiredService<SpecialistSessionCodec>().Restore(accepted.Session, identity).Count);
+        }
+        else Assert.Null(accepted.Session);
         await actor.EnqueueAsync(start);
         await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
         Assert.Equal(1, factory.Calls);
@@ -281,10 +296,10 @@ public sealed class SpecialistNativeTests
         return provider;
     }
 
-    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null)
+    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null, bool allowContinuity = false)
     {
         // The authoring fixture is disposed, including its three SQLite stores, before execution starts.
-        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures);
+        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures, allowContinuity);
         var root = published.Placement.Root;
         if (resultPolicyMode is not null)
         {

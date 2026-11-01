@@ -32,7 +32,9 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             if (!await journal.DispatchAsync(document, time.GetUtcNow(), linked.Token))
                 throw SpecialistModelRunner.Failure("specialist.turn.fence", "The specialist turn cannot dispatch under this worker fence.");
             dispatched = true;
-            var result = await runner.RunAsync(request, linked.Token);
+            // The initial fresh journal's handle is its conversation identity. Durable continuation
+            // replaces this target only after conversation admission; the model cannot choose it.
+            var result = await runner.RunAsync(request with { SessionTarget = new(document.Handle, 1) }, linked.Token);
             _ = await binding.ParentAsync(context, linked.Token);
             if (!await journal.AcceptAsync(document, result, time.GetUtcNow(), linked.Token))
                 throw SpecialistModelRunner.Failure("specialist.turn.fence", "The specialist result cannot be accepted under this worker fence.");

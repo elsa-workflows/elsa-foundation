@@ -32,6 +32,7 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddScoped<SpecialistNativeBinding>();
         services.TryAddScoped<SpecialistTurnJournal>();
         services.TryAddScoped<SpecialistModelRunner>();
+        services.TryAddScoped<SpecialistSessionCodec>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, SpecialistTypesStartupTask>());

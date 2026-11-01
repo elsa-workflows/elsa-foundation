@@ -9,18 +9,22 @@ using Microsoft.Extensions.AI;
 
 namespace Elsa.Agent.Specialists.Services;
 
-internal sealed record SpecialistTurnRequest(SpecialistInvocationIdentity Identity, SpecialistRuntimeDescriptor Descriptor, ActivityContract Contract, JsonElement Inputs, string BindingFingerprint);
-internal sealed record SpecialistTurnResult(JsonElement Result, long? InputTokens, long? OutputTokens, long? TotalTokens, int ModelCalls, int ConnectionVersion);
+internal sealed record SpecialistTurnRequest(SpecialistInvocationIdentity Identity, SpecialistRuntimeDescriptor Descriptor, ActivityContract Contract, JsonElement Inputs, string BindingFingerprint,
+    SpecialistSessionReference? PreparedSession = null, SpecialistSessionTarget? SessionTarget = null);
+internal sealed record SpecialistTurnResult(JsonElement Result, long? InputTokens, long? OutputTokens, long? TotalTokens, int ModelCalls, int ConnectionVersion,
+    SpecialistSessionReference? Session = null);
 internal sealed class SpecialistTurnException(string code, string message, Exception? innerException = null) : Exception(message, innerException)
 {
     public string Code { get; } = code;
 }
 
-internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFactory> factories, SpecialistSchemaValidator schemas)
+internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFactory> factories, SpecialistSchemaValidator schemas, SpecialistSessionCodec sessions)
 {
     public PreparedSpecialistSchema ValidateRequest(SpecialistTurnRequest request)
     {
         var descriptor = request.Descriptor;
+        if (request.PreparedSession is not null && !descriptor.AllowContinuity)
+            throw Failure("specialist.session.disallowed", "This published specialist does not allow conversation continuity.");
         if (request.Contract.Inputs.Values.Any(x => x.Policy.RequiresEncryption || x.IsCredential) || request.Contract.Result.Policy.RequiresEncryption ||
             request.Contract.Result.Projections.Values.Any(x => x.Policy.RequiresEncryption))
             throw Failure("specialist.value.encryption", "This execution profile cannot recover native encryption-required business values.");
@@ -40,13 +44,21 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         cancellationToken.ThrowIfCancellationRequested();
         var resultSchema = ValidateRequest(request);
         var descriptor = request.Descriptor;
+        // Entry validation precedes journal staging. Only the admitted worker requires this target;
+        // a fresh continuity-enabled definition must still be able to enter its native checkpoint.
+        if (descriptor.AllowContinuity && (request.SessionTarget is null || request.PreparedSession is null && request.SessionTarget.Revision != 1 || request.PreparedSession is { } previous &&
+            (previous.ConversationId != request.SessionTarget.ConversationId || previous.Revision == long.MaxValue || previous.Revision + 1 != request.SessionTarget.Revision)))
+            throw Failure("specialist.session.admission", "Conversation continuity requires an exact admitted conversation revision.");
+        var prior = request.PreparedSession is null ? Array.Empty<ChatMessage>() : sessions.Restore(request.PreparedSession, request.Identity);
+        if (descriptor.AllowContinuity) sessions.EnsureCapacity(prior, request.Inputs.GetRawText(), request.Identity, request.SessionTarget!);
         var owners = factories.Where(x => x.ProviderKey == descriptor.Model.ProviderKey).ToArray();
         if (owners.Length != 1)
             throw Failure("specialist.model.provider", "The selected model provider must have exactly one registered owner.");
         await using var lease = await owners[0].OpenAsync(new(descriptor, request.Identity), cancellationToken);
         if (lease.ConnectionVersion < 1 || lease.CapabilitiesFingerprint != descriptor.CapabilitiesFingerprint)
             throw Failure("specialist.model.changed", "The model connection or capabilities no longer satisfy the published specialist.");
-        // A new SDK session for every fresh turn. Tool admission and continuity are separate explicit profiles.
+        // Every invocation gets a new SDK session. Only an explicitly admitted protected snapshot
+        // restores earlier accepted messages; MAF session serialization is never persisted.
         var options = lease.Options.Clone();
         options.ModelId = descriptor.Model.ModelId;
         options.ResponseFormat = ChatResponseFormat.ForJsonSchema(descriptor.ResultSchema, "specialist_result");
@@ -56,8 +68,18 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         options.ToolMode = ChatToolMode.None;
         options.Instructions = null;
         using var bounded = new BoundedClient(lease.Client, descriptor.Limits.MaximumModelCalls);
-        var agent = new ChatClientAgent(bounded, instructions: descriptor.Instructions, name: "Specialist");
-        var response = await agent.RunAsync(request.Inputs.GetRawText(), await agent.CreateSessionAsync(cancellationToken),
+        var history = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+        {
+            StorageInputResponseMessageFilter = SpecialistSessionCodec.VisibleMessages
+        });
+        var agent = new ChatClientAgent(bounded, new ChatClientAgentOptions
+        {
+            Name = "Specialist", ChatOptions = new() { Instructions = descriptor.Instructions },
+            ChatHistoryProvider = history, UseProvidedChatClientAsIs = true, ThrowOnChatHistoryProviderConflict = true
+        });
+        var session = await agent.CreateSessionAsync(cancellationToken);
+        if (prior.Count > 0) history.SetMessages(session, prior.ToList());
+        var response = await agent.RunAsync(request.Inputs.GetRawText(), session,
             new ChatClientAgentRunOptions(options), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (Encoding.UTF8.GetByteCount(response.Text) > SpecialistSchemaValidator.MaximumValueBytes)
@@ -77,7 +99,10 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
                     // The schema owns nullability; the runtime projection contract has no nullable flag.
                     true))).Count != 0)
             throw Failure("specialist.result.invalid", "The model result does not satisfy its published business contract.");
-        return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, bounded.Calls, lease.ConnectionVersion);
+        // No candidate history escapes on refusal, invalid JSON/schema or cancellation. The journal
+        // must accept this snapshot and business result in one transaction before either is reusable.
+        var acceptedSession = descriptor.AllowContinuity ? sessions.Capture(history.GetMessages(session), request.Identity, request.SessionTarget!) : null;
+        return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, bounded.Calls, lease.ConnectionVersion, acceptedSession);
     }
 
     internal static SpecialistTurnException Failure(string code, string message, Exception? innerException = null) => new(code, message, innerException);

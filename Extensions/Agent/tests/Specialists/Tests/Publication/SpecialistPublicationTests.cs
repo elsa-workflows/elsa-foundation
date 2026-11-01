@@ -47,9 +47,9 @@ namespace Elsa.Agent.Specialists.Tests.Publication;
 
 public sealed class SpecialistPublicationTests
 {
-    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null)
+    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, bool allowContinuity = false)
     {
-        await using var fixture = await Fixture.CreateAsync(outputName, outputType, outputNullable, optionalBrief);
+        await using var fixture = await Fixture.CreateAsync(outputName, outputType, outputNullable, optionalBrief, allowContinuity);
         Assert.Equal(ActivityPublicationReceiptStatus.Applied, (await fixture.PublishAsync()).Status);
         var publication = (await fixture.Publications.FindAsync("copywriter-v1"))!;
         var template = (await fixture.Templates.FindAsync(publication.TemplateId))!;
@@ -199,7 +199,7 @@ public sealed class SpecialistPublicationTests
     private sealed class Fixture(string directory, ActivitiesDesignSqliteDbContext design, RuntimeSqliteDbContext runtime,
         PublishingSnapshotReviewSqliteDbContext publishing, ServiceProvider root, AsyncServiceScope scope,
         EfActivityDesignStores stores, EfExecutableActivityTemplateStore templates, EfWorkflowExecutableSourceReferenceStore sources,
-        EfActivityPublicationReceiptStore receipts, EfActivityPublicationCommand commit, Access access, MetadataModel model, string outputName, string outputType, bool outputNullable, bool optionalBrief) : IAsyncDisposable
+        EfActivityPublicationReceiptStore receipts, EfActivityPublicationCommand commit, Access access, MetadataModel model, string outputName, string outputType, bool outputNullable, bool optionalBrief, bool allowContinuity) : IAsyncDisposable
     {
         public ActivitiesDesignSqliteDbContext Design => design;
         public RuntimeSqliteDbContext Runtime => runtime;
@@ -211,7 +211,7 @@ public sealed class SpecialistPublicationTests
         public MetadataModel Model => model;
         public PublishActivityDefinitionRequest? LastPublish { get; private set; }
         public SpecialistManifest Manifest { get; } = new("Write the supplied brief.", new("fixture", "test-connection", "fixture-model"), Json("{}"),
-            new Dictionary<string, JsonElement>(), new Dictionary<string, JsonElement>(), new());
+            new Dictionary<string, JsonElement>(), new Dictionary<string, JsonElement>(), new(), allowContinuity);
         public RuntimeDurableValueStorageDriverRegistry Drivers { get; } = new([new JsonRuntimeDurableValueStorageDriver()]);
         public ActivityTemplateCompiler Compiler => new(new ActivityTemplateProviderCompilerRegistry(Services.GetServices<IActivityTemplateProviderCompiler>()),
             new ActivityTemplateDependencyDiscovererRegistry(Services.GetServices<IActivityTemplateDependencyDiscoverer>()), stores, stores, templates,
@@ -239,7 +239,7 @@ public sealed class SpecialistPublicationTests
             new() { Id = id, DefinitionId = "copywriter", Revision = 1, State = State(manifest), CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow },
             new() { Id = id + "-layout", DraftId = id, Revision = 1, CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow }, head));
 
-        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false)
+        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, bool allowContinuity = false)
         {
             var directory = Path.Combine(Path.GetTempPath(), "elsa-specialist-publication-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -273,7 +273,7 @@ public sealed class SpecialistPublicationTests
             services.AddSingleton<IActivityDefinitionVersionPublicationStore>(stores);
             var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = root.CreateAsyncScope();
-            var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief);
+            var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief, allowContinuity);
             var now = DateTimeOffset.UtcNow;
             await stores.ExecuteAsync(new CreateActivityDefinitionRequest(
                 new() { Id = "copywriter", ActivityTypeKey = "acme.copywriter", Category = "Specialists", DisplayName = "Copywriter", CreatedAt = now, LastModifiedAt = now },

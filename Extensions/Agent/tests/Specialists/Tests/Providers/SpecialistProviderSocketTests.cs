@@ -20,6 +20,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Secrets.Features;
+using Elsa.Secrets.Core.Contracts;
 using Xunit;
 using static Elsa.Agent.Specialists.Tests.Providers.SpecialistConnectionProviderTests;
 
@@ -50,7 +53,11 @@ public sealed class SpecialistProviderSocketTests
         var descriptor = Request(Model(vendor), await provider.GetCapabilitiesAsync(Model(vendor))).Descriptor;
         var contract = new ActivityContract("specialist", "1.0.0", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],
             new(new("System.Text.Json.JsonElement"), true, ActivityValuePolicy.Default, []), ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.FacadeCapability));
-        var runner = new SpecialistModelRunner([provider], new SpecialistSchemaValidator());
+        var codecServices = new ServiceCollection();
+        new SecretsFeature { EncryptionKey = "fixture-session-protection" }.ConfigureServices(codecServices);
+        await using var protection = codecServices.BuildServiceProvider();
+        var runner = new SpecialistModelRunner([provider], new SpecialistSchemaValidator(),
+            new SpecialistSessionCodec(protection.GetRequiredService<ISecretValueProtector>(), new Access()));
         var request = new SpecialistTurnRequest(Identity(), descriptor, contract, SpecialistConnectionProviderTests.Json("{}"), "bindings");
         if (refusal is not null)
         {

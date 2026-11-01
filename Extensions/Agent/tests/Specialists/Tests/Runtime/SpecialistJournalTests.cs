@@ -10,11 +10,39 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.AI;
 
 namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistJournalTests
 {
+    [Fact]
+    public async Task Accepted_business_result_and_bound_session_share_the_same_protected_journal_commit()
+    {
+        await using var services = Services();
+        var store = new InMemorySpecialistTurnStore();
+        var journal = Journal(store, services);
+        var request = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, CancellationToken.None);
+        var claim = await journal.ClaimAsync(handle, request.Identity, "child", now, CancellationToken.None);
+        var codec = new SpecialistSessionCodec(services.GetRequiredService<ISecretValueProtector>(), new Access("tenant"));
+        var session = codec.Capture([new(ChatRole.User, "private brief"), new(ChatRole.Assistant, "{\"Article\":\"accepted\"}")], request.Identity, new(handle, 1));
+        var result = new SpecialistTurnResult(Json("{\"Article\":\"accepted\"}"), 5, 3, 8, 1, 1, session);
+        Assert.False(await journal.AcceptAsync(claim, result, now, CancellationToken.None));
+        Assert.Null((await journal.ReadAsync(handle, request.Identity, CancellationToken.None)).Document.ProtectedResult);
+        Assert.True(await journal.DispatchAsync(claim, now, CancellationToken.None));
+        Assert.True(await journal.AcceptAsync(claim, result, now, CancellationToken.None));
+        var accepted = await journal.ResultAsync(handle, request.Identity, "child", CancellationToken.None);
+        Assert.Equal("accepted", accepted.Result.GetProperty("Article").GetString());
+        Assert.Equal(session, accepted.Session);
+        Assert.Equal("private brief", codec.Restore(accepted.Session!, request.Identity)[0].Text);
+        await journal.FailAsync(claim, "late-failure", true, CancellationToken.None);
+        var replay = await journal.ResultAsync(handle, request.Identity, "child", CancellationToken.None);
+        Assert.True(JsonElement.DeepEquals(accepted.Result, replay.Result));
+        Assert.Equal(accepted.Session, replay.Session);
+    }
+
     [Fact]
     public async Task Repeated_staging_preserves_deadline_and_encrypts_business_material()
     {
