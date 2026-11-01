@@ -52,7 +52,7 @@ Primary source provenance:
 
 ## Observed boundaries
 
-Twenty cases execute through the actual MAF and provider adapters. Success verifies exact schema,
+Twenty-four cases execute through the actual MAF and provider adapters. The simple supported-object success case verifies exact schema,
 model/deployment, temperature and output-token option serialization, visible JSON result, token usage
 (11 input, 7 output) and SDK session retention. Sending a schema does not prove model enforcement.
 
@@ -66,6 +66,8 @@ model/deployment, temperature and output-token option serialization, visible JSO
 | Cancellation after request observation | 1 request; cancellation propagates | 1 request; cancellation propagates |
 | Refusal | `content_filter` finish reason, `TextContent` | `ErrorContent` with `Refusal` code; `stop` finish reason |
 | Malformed business text | Returned without schema validation | Returned without schema validation |
+| Numeric bounds in request | Moved into a description | Moved into a description |
+| Numeric result outside original bounds | Returned without original-contract validation | Returned without original-contract validation |
 | Truncated, valid JSON text | `length` finish reason | `length` finish reason |
 
 Counts describe the injected transport boundary, not sockets or external effects. The handler checks
@@ -90,6 +92,30 @@ Two additional Anthropic cases matter for the production design:
 SDK transport success does not establish business acceptance. Elsa must inspect refusal/content/finish
 signals, validate the complete result schema and enforce policy/usage limits before accepting a turn.
 The research fixture records these signals and deliberately accepts no specialist business result.
+
+## Provider schema compatibility
+
+The numeric cases pass a contract requiring an integer between 0 and 100. Both actual adapters move
+`minimum`/`maximum` into a field description in the outgoing request; the original schema is unchanged.
+The probe asserts the complete vendor-specific serialized projection. Fixtures returning 42 and 101
+both return normally through MAF. This observes SDK request/response handling, not a live model's
+constraint enforcement. A simple string-schema forwarding test cannot establish verbatim forwarding
+of all supported Elsa contracts.
+
+[Anthropic documents this schema transformation](https://platform.claude.com/docs/en/build-with-claude/structured-outputs):
+unsupported numeric/string constraints become descriptions, while helpers that validate results use
+the original constraints. The tested `IChatClient`/MAF path returns the out-of-range fixture normally.
+The [Azure documentation](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/structured-outputs#json-schema-support-and-limitations)
+also lists numeric bounds as unsupported. Its documented profile additionally requires all properties
+in `required`, closed objects, at most 100 object properties and five nesting levels. Do not substitute
+a different service's limits for this Azure profile.
+
+M3 must make the request projection explicit and bind it to the actual model/API/SDK capability
+profile. Elsa's unchanged full contract remains the result-acceptance authority. Never interpret
+constraints moved into descriptions as provider-enforced checks, silently widen accepted output,
+coerce an invalid result into success or add an unbudgeted repair call. Any projection whose acceptance
+semantics cannot be preserved needs an explicit unsupported disposition. Full projection, capability
+and original-schema validation tests belong to T016/T017; this fixture supplies no production lowerer.
 
 ## Causal controls
 

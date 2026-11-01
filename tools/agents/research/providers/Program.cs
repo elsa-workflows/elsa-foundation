@@ -30,6 +30,8 @@ try
         await Retry(provider, defaultPolicy: false);
         await Loss(provider);
         foreach (var mode in new[] { "refusal", "invalid", "truncated" }) await ResultBoundary(provider, mode);
+        await ConstraintProjection(provider, inRange: true);
+        await ConstraintProjection(provider, inRange: false);
         await Cancellation(provider, beforeSend: true);
         await Cancellation(provider, beforeSend: false);
     }
@@ -189,6 +191,43 @@ async Task ResultBoundary(string provider, string mode)
     if (mode == "truncated") Check(observer.Last.FinishReason == ChatFinishReason.Length, provider + ": truncation signal preserved even with syntactically valid JSON");
 }
 
+async Task ConstraintProjection(string provider, bool inRange)
+{
+    var original = JsonSerializer.SerializeToElement(new
+    {
+        type = "object", properties = new { headline = new { type = "integer", minimum = 0, maximum = 100 } },
+        required = new[] { "headline" }, additionalProperties = false
+    });
+    var expected = JsonSerializer.SerializeToElement(new
+    {
+        type = "object", properties = new { headline = new
+        {
+            type = "integer", description = provider == "anthropic" ? "{minimum: 0, maximum: 100}" : "minimum: 0\nmaximum: 100"
+        } }, required = new[] { "headline" }, additionalProperties = false
+    });
+    using var transport = new FixtureTransport((_, request, _) => Task.FromResult(Response(provider, request, inRange ? "numeric-valid" : "numeric-invalid")));
+    using var client = Client(provider, transport, 0);
+    var agent = new ChatClientAgent(client, name: "Copywriter");
+    var response = await agent.RunAsync("A fixture brief.", options: new ChatClientAgentRunOptions(new ChatOptions
+    {
+        ModelId = "fixture-model", MaxOutputTokens = 64,
+        ResponseFormat = ChatResponseFormat.ForJsonSchema(original, "BoundedNumber")
+    }));
+    Check(transport.Count == 1, provider + ": numeric schema uses one request");
+    var body = transport.Requests.Single().Body;
+    var sent = provider == "anthropic" ? body.GetProperty("output_config").GetProperty("format").GetProperty("schema")
+        : body.GetProperty("response_format").GetProperty("json_schema").GetProperty("schema");
+    Check(JsonElement.DeepEquals(expected, sent), provider + ": pinned SDK moves numeric constraints to descriptions");
+    Check(original.GetProperty("properties").GetProperty("headline").GetProperty("maximum").GetInt32() == 100,
+        provider + ": original contract remains unchanged");
+    var value = JsonDocument.Parse(response.Text).RootElement.GetProperty("headline").GetInt32();
+    Check(value == (inRange ? 42 : 101), provider + ": SDK returns the numeric fixture without enforcing original bounds");
+    observations.Add(new { name = provider + (inRange ? "-numeric-in-range" : "-numeric-out-of-range"),
+        transportRequests = transport.Count, originalSchema = original, serializedSchema = sent,
+        sdkReturnedOutOfRangeFixture = !inRange,
+        disposition = "Provider request projection differs from the full contract; Elsa must validate the unchanged original before accepting a result." });
+}
+
 async Task TokenRefresh()
 {
     using var transport = new FixtureTransport((_, request, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)
@@ -217,7 +256,12 @@ async Task TokenRefresh()
 static HttpResponseMessage Response(string provider, HttpRequestMessage request, string mode)
 {
     var retry = mode == "retry";
-    var text = mode == "invalid" ? "fixture invalid business result" : mode == "refusal" ? "Fixture refusal" : "{\"headline\":\"Fixture\"}";
+    var text = mode switch
+    {
+        "invalid" => "fixture invalid business result", "refusal" => "Fixture refusal",
+        "numeric-valid" => "{\"headline\":42}", "numeric-invalid" => "{\"headline\":101}",
+        _ => "{\"headline\":\"Fixture\"}"
+    };
     object body;
     if (retry)
         body = provider == "anthropic" ? new { type = "error", error = new { type = "rate_limit_error", message = "fixture" } }

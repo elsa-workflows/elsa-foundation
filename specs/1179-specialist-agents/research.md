@@ -203,7 +203,7 @@ silently declared supported.
 ## R9 — Concrete provider protocol preparation (#3592)
 
 **Status:** Executable research, not production M3 acceptance. The isolated
-[provider fixture](../../tools/agents/research/providers/README.md) runs twenty cases through actual
+[provider fixture](../../tools/agents/research/providers/README.md) runs twenty-four cases through actual
 MAF 1.27.0, Anthropic 12.32.0 and Azure OpenAI 2.1.0 chat-completion clients, with MEAI 10.10.1,
 OpenAI 2.14.0 and System.ClientModel 1.15.0. Normal and locked restores agree on the committed graph.
 It uses explicit fixture credentials and an injected HTTP handler; no sockets, live inference,
@@ -218,13 +218,26 @@ Consequently, an outer MAF-run counter or disabled ordinary retry setting cannot
 physical-request budget for every authentication profile. T016/T017 must guard each real dispatch
 or refuse unsupported profiles, including caller-added retry/fallback handlers.
 
-**Observed request/result boundary:** Both clients serialize the exact dynamic JSON schema,
+**Observed request/result boundary:** For the simple supported-object fixture, both clients serialize the exact dynamic JSON schema,
 model/deployment, temperature and output-token limit, return visible JSON and preserve observable
 11-input/7-output fixture usage. Both also return malformed business text normally despite the schema
 request. Valid JSON accompanied by a truncation signal remains incomplete. Anthropic refusal maps to
 `content_filter` with text; Azure refusal maps to an `ErrorContent` with `Refusal` code while its finish
 reason is `stop`. Production acceptance must inspect content and finish signals before validating the
 complete result against the authored contract. Provider schema forwarding is not enforcement proof.
+
+**Observed schema projection boundary:** Additional bounded-integer cases change the conclusion
+for richer contracts. Both actual SDK bindings move `minimum: 0` / `maximum: 100` into descriptions,
+leaving the original schema intact. They return both 42 and the out-of-range fixture 101 normally.
+The earlier exploratory assumption of verbatim forwarding failed for each vendor; those failures are
+retained as scope-specific observations. [Anthropic documents this transformation](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+[Azure's documented subset](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/structured-outputs#json-schema-support-and-limitations)
+also excludes numeric bounds and adds required-property, closed-object and depth/size constraints.
+M3 must identify and test the actual request projection, preserve the full original schema for Elsa's
+result validation and fingerprint the effective provider/API/SDK profile. A constraint placed in a
+description is not enforced by the provider's grammar. No wider accepted contract, automatic result
+coercion or unbudgeted repair call is authorized; unsupported semantic transformations must fail
+explicitly. These injected responses establish no live-model enforcement or production lowerer.
 
 **Observed content/session boundary:** Anthropic thinking plus visible output becomes
 `TextReasoningContent` plus `TextContent`. MAF's business text excludes thinking, but raw SDK session
