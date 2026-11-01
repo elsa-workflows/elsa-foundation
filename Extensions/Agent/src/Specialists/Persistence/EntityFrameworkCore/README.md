@@ -111,3 +111,18 @@ and does not establish a deployed-data upgrade path. Required PostgreSQL/SQL Ser
 gate insert, claim, acceptance and successor overlap in both winner orders and restore through a fresh
 host. The earlier forced-registration test now injects before the operation-gate CAS; nesting another
 Stage after acquiring that same gate would test a self-inflicted lock wait instead of a real overlap.
+
+## Host upgrade and rollback boundary
+
+Specialist journal/session compatibility does not override the enclosing runtime's schema family gate.
+The current workflow runtime reads its older native records and the `RuntimeWorkflowExecution` 2.0.0
+family introduced for model-owned work. After normal finalization at 2.0.0, a runtime binary supporting
+only 1.0.0 must refuse activation. Keep a compatible reader/worker installed for admitted specialist
+work; disabling new operations is independent of unloading that reader. A rejected older host must
+leave protected acceptance, conversation and native/source state intact. Resume recovery with the
+compatible runtime, or follow the owning runtime's documented backup/restore process for a downgrade;
+no reverse migration or arbitrary binary rollback is supplied by Specialists.
+
+The [package compatibility witness](../../../../../../tools/agents/conformance/README.md) distinguishes
+a named unchanged-format bidirectional pair from an upgrade with an explicit schema rollback refusal.
+Neither outcome qualifies every host/store, power loss, live inference or a restored backup.

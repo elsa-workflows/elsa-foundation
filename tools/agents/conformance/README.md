@@ -98,3 +98,12 @@ through normal CShell activation/readiness. Reports retain both source/version/r
 the actually used atomic/stream path. This proves this named unchanged-format pair only; it grants no
 arbitrary downgrade, reverse migration, missing-key recovery or live-model support. Input receipts and
 publications remain unchanged.
+
+When the newer ordinary runtime has finalized `RuntimeWorkflowExecution` at 2.0.0 and the older binary
+reads only 1.0.0, use `--expect-runtime-schema-rollback-refusal`. This profile still requires successful
+old-to-new recovery in both modes. For new writes it requires the old binary's exact schema activation
+refusal, read-only proof that accepted specialist/native/source state and the finalized version remain
+unchanged, then successful recovery/settlement with the compatible new binary and one model dispatch.
+The resulting status is `PassedUpgradeAndRollbackRefusal`, never bidirectional recovery. A refusal for
+another cause, a successful incompatible rollback, changed state or repeated inference fails the driver.
+This does not perform a reverse migration or test restoring a backup.
