@@ -19,7 +19,23 @@ internal sealed class SpecialistSettlementHandler(SpecialistSettlementBoundary b
             new NotSupportedException("Specialist settlement requires its physically committed native source."), false));
     }
 
+    /// <exception cref="SpecialistTurnException">A settlement failure retaining its cause and exact source/workflow identity.</exception>
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        try { await HandleCoreAsync(source, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (RuntimePostCommitDeliveryException exception)
+        {
+            exception.Data["contextId"] = source.SourceOutboxItemId;
+            exception.Data["workflowExecutionId"] = source.Intent.WorkflowExecutionId;
+            throw;
+        }
+        catch (Exception exception) { throw SpecialistSettlementBoundary.Failure(source.SourceOutboxItemId, source.Intent.WorkflowExecutionId, exception); }
+    }
+
+    private async ValueTask HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
         await VerifySourceAsync(source, cancellationToken);
         SpecialistAppliedPayload payload;

@@ -61,5 +61,13 @@ internal sealed class SpecialistSettlementBoundary(IWorkflowExecutionStateStore 
         return new(key, payload.Identity.WorkflowExecutionId, AppliedKind, payload.AppliedAt, payload.Identity.ActivityExecutionId, key, value);
     }
 
+    internal static SpecialistTurnException Failure(string contextId, string workflowExecutionId, Exception cause)
+    {
+        var failure = SpecialistModelRunner.Failure("specialist.settlement.failed", "The native specialist application settlement could not be confirmed.", cause);
+        failure.Data["contextId"] = contextId;
+        failure.Data["workflowExecutionId"] = workflowExecutionId;
+        return failure;
+    }
+
     internal static InvalidDataException Invalid() => new("The specialist settlement does not match its committed native delivery.");
 }

@@ -8,7 +8,15 @@ namespace Elsa.Agent.Specialists.Services;
 // Records responsibility in the native checkpoint. No specialist-store writes occur here.
 internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary boundary) : IRuntimeCheckpointCommitEnricher
 {
+    /// <exception cref="SpecialistTurnException">A contribution failure retaining its cause and checkpoint/workflow identity.</exception>
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+    {
+        try { return await EnrichCoreAsync(commit, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) { throw SpecialistSettlementBoundary.Failure(commit.CommitId, commit.WorkflowExecutionId, exception); }
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit> EnrichCoreAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         var expected = await ExpectedAsync(commit, cancellationToken);
         var intents = commit.PostCommitIntents.ToList();
@@ -21,7 +29,15 @@ internal sealed class SpecialistCheckpointEnricher(SpecialistSettlementBoundary 
         return commit with { PostCommitIntents = intents };
     }
 
+    /// <exception cref="SpecialistTurnException">A final-envelope failure retaining its cause and checkpoint/workflow identity.</exception>
     public async ValueTask ValidateFinalAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+    {
+        try { await ValidateFinalCoreAsync(commit, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) { throw SpecialistSettlementBoundary.Failure(commit.CommitId, commit.WorkflowExecutionId, exception); }
+    }
+
+    private async ValueTask ValidateFinalCoreAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         var expected = await ExpectedAsync(commit, cancellationToken);
         var actual = commit.PostCommitIntents.Where(item => item.Kind == SpecialistSettlementBoundary.AppliedKind).ToArray();

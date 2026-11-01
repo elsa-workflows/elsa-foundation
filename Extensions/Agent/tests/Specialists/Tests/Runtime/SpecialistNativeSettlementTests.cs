@@ -90,7 +90,15 @@ public sealed partial class SpecialistNativeTests
         var overlay = new OverlayOnlySource(item);
         var handler = defect is "overlay" or "privileged" ? new SpecialistSettlementHandler(provider.GetRequiredService<SpecialistSettlementBoundary>(), stateStore, defect == "overlay" ? overlay : provider.GetRequiredService<IPostCommitOutboxLookupStore>(),
             selectedAccess, clock, provider.GetRequiredService<SpecialistTurnJournal>(), provider.GetRequiredService<ISpecialistTurnStore>()) : provider.GetRequiredService<SpecialistSettlementHandler>();
-        await Assert.ThrowsAnyAsync<Exception>(() => handler.HandleAsync(presented).AsTask());
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => handler.HandleAsync(presented).AsTask());
+        if (defect is "parent" or "contract" or "child")
+        {
+            var domain = Assert.IsType<SpecialistTurnException>(failure);
+            Assert.Equal("specialist.settlement.failed", domain.Code);
+            Assert.Equal(original.SourceOutboxItemId, domain.Data["contextId"]);
+            Assert.Equal("run", domain.Data["workflowExecutionId"]);
+            Assert.NotNull(domain.InnerException);
+        }
         trace.AfterAcceptedRead = null;
         trace.AlwaysLoseAcceptedReceiptRead = false;
         Assert.Equal(1, trace.ApplicationAttempts); // No journal mutation on any source/receipt refusal.
@@ -192,12 +200,21 @@ public sealed partial class SpecialistNativeTests
         Assert.Equal(enriched.PostCommitIntents.Count, repeated.PostCommitIntents.Count);
         var intent = enriched.PostCommitIntents.Single(item => item.Kind == SpecialistSettlementBoundary.AppliedKind);
         Assert.True(intent.IsEquivalentTo(repeated.PostCommitIntents.Single(item => item.Kind == intent.Kind)));
-        await Assert.ThrowsAsync<InvalidDataException>(() => enricher.ValidateFinalAsync(enriched with { PostCommitIntents = [other] }).AsTask());
+        await ExpectBoundaryAsync(() => enricher.ValidateFinalAsync(enriched with { PostCommitIntents = [other] }).AsTask());
         var conflicting = new RuntimePostCommitIntent(intent.IntentId, intent.WorkflowExecutionId, intent.Kind, intent.RecordedAt,
             intent.ActivityExecutionId, intent.IdempotencyKey, Json("{\"version\":999}"));
-        await Assert.ThrowsAsync<InvalidDataException>(() => enricher.EnrichAsync(commit with { PostCommitIntents = [other, conflicting] }).AsTask());
-        await Assert.ThrowsAsync<InvalidDataException>(() => enricher.ValidateFinalAsync(commit with { PostCommitIntents = [other, conflicting] }).AsTask());
-        await Assert.ThrowsAsync<InvalidDataException>(() => enricher.ValidateFinalAsync(enriched with { PostCommitIntents = [other, intent, intent] }).AsTask());
+        await ExpectBoundaryAsync(() => enricher.EnrichAsync(commit with { PostCommitIntents = [other, conflicting] }).AsTask());
+        await ExpectBoundaryAsync(() => enricher.ValidateFinalAsync(commit with { PostCommitIntents = [other, conflicting] }).AsTask());
+        await ExpectBoundaryAsync(() => enricher.ValidateFinalAsync(enriched with { PostCommitIntents = [other, intent, intent] }).AsTask());
+
+        async Task ExpectBoundaryAsync(Func<Task> action)
+        {
+            var failure = await Assert.ThrowsAsync<SpecialistTurnException>(action);
+            Assert.Equal("specialist.settlement.failed", failure.Code);
+            Assert.Equal(commit.CommitId, failure.Data["contextId"]);
+            Assert.Equal("run", failure.Data["workflowExecutionId"]);
+            Assert.IsType<InvalidDataException>(failure.InnerException);
+        }
     }
 
 }
