@@ -57,6 +57,14 @@ with cumulative numbering and no reset. Full M0–M5 delivery remains authorized
 claim/WIP/readiness rule and resulting-main check remains required. The narrowly authorized one-file
 owner-account workflow update is complete; ordinary writes and merges use the worker's own App.
 
+The [1 November native-baseline exception](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6563215730)
+authorizes resuming #3440's native baseline after its three failed runs (`1495b57a6`, `d82a0b7fa`,
+`81965ed8a`), which stay recorded as Failed. Its scope is a stable locator for the reviewed size card
+in the probe driver, a regression check for it and at most two fresh native attempts. It is not a waiver
+of the three-failure stop or any other gate. The same record hands the Program to Claude. On the owner's
+instruction, Claude [posts through the owner account with the `[Claude]` tag](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6563355491)
+while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge.
+
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol

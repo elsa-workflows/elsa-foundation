@@ -572,13 +572,18 @@ async function autonomySize() {
   const pendingCount = await pending.count();
   need(pendingCount <= 1, "The single size request created duplicate review proposals.");
   const outcome = pendingCount === 1 ? "review" : "automatic";
+  // Approval and application change data-status on the same card, so keep it by
+  // its module result rather than by the status that classified the outcome.
+  const sizeProposal = dock().locator(".agent-proposal").filter({ has: page.getByTestId("acme-home-size-result") });
   const atDecision = await owner("size-owner-at-decision", witness.sizeOwnerEndpoint);
   const layoutAtDecision = await owner("size-layout-at-decision", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   if (outcome === "review") {
     expect(atDecision.value).toEqual(before.value);
     expect(layoutAtDecision.value).toEqual(layoutBefore.value);
-    await expect(pending.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
-    result.evidence.push(retain("autonomy-pending-review", { status: await pending.getAttribute("data-status"), text: await pending.innerText() }));
+    await expect(sizeProposal).toHaveCount(1);
+    await expect(sizeProposal).toHaveAttribute("data-status", "awaiting-approval");
+    await expect(sizeProposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    result.evidence.push(retain("autonomy-pending-review", { status: await sizeProposal.getAttribute("data-status"), text: await sizeProposal.innerText() }));
   } else {
     expect(atDecision.value.size).toBe(targetSize);
     expect(atDecision.value.revision).not.toBe(before.value.revision);
@@ -589,13 +594,13 @@ async function autonomySize() {
   need(!mismatch || initialMode !== requestedMode, "An unchanged-mode control has the wrong native behavior; this is not the established-session mismatch.");
   // Complete an expected reviewed journey once. A wrong review pause in manual-to-automatic is left untouched.
   if (outcome === "review" && !mismatch) {
-    await approve(pending, "autonomy-size");
+    await approve(sizeProposal, "autonomy-size");
     expect((await owner("size-owner-after-approval", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
     const executed = responseFor("/execute");
-    await pending.getByRole("button", { name: "Apply", exact: true }).click();
+    await sizeProposal.getByRole("button", { name: "Apply", exact: true }).click();
     await accepted(executed, "autonomy-size-execute");
-    await expect(pending).toHaveAttribute("data-status", "executed");
-    await expect(pending.getByTestId("acme-home-size-result")).toContainText("independently confirmed the saved size");
+    await expect(sizeProposal).toHaveAttribute("data-status", "executed");
+    await expect(sizeProposal.getByTestId("acme-home-size-result")).toContainText("independently confirmed the saved size");
     await expect(dock()).toHaveAttribute("aria-busy", "false");
   }
   const after = await owner("size-owner-after", witness.sizeOwnerEndpoint);
