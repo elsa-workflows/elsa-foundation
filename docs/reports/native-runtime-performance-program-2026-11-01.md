@@ -417,3 +417,46 @@ and passes. These are fixture failures, not passing workload samples. No failed 
 The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open.
 
 Additional affected-model qualification at production source `63e4c1fc4`: the whole ETL suite passes **1,009 tests** and the real-host BPMN suite passes **46**, both with zero failed/skipped cases. Discovery reconciles every case. These are correctness/hosting results on the shared macOS machine, not model throughput or independent-host evidence. Custody: `m5-model-*` in the program evidence root.
+
+### Persisted diagnostics and storage placement
+
+The final library cohort (`63e4c1fc4`) completes **32 valid 60-second target windows**, each after a 15-second warmup,
+with zero failed request attempts, all instances settled and no PostgreSQL sampler errors. The total 24,813 requests
+includes cold/warmup traffic and is not the timed population. Actual Workbench HTTP4 executes a Sequence,
+HttpEndpoint, JavaScript-backed Set and WriteResponse; the expected response is checked. This is HTTP plus runtime
+and persistence throughput, not native no-op throughput. PostgreSQL 16 runtime data resides on the eight-vCPU
+D8ds_v5's OS volume; persisted SQLite diagnostics are either on that volume or its separate temporary local volume.
+
+| Persistence | Diagnostics persistence | Placement | One caller / s | Highest tested / s | Callers at highest |
+|---|---|---|---:|---:|---:|
+| Durable | On | Runtime OS volume | 2.750 | 5.300 | 8 |
+| Durable | Off | Runtime OS volume | 2.933 | 11.350 | 16 |
+| Durable | On | Separate temporary volume | 2.967 | 12.733 | 32 |
+| Balanced | Off | Runtime OS volume | 4.767 | 22.950 | 32 |
+| Balanced | On | Runtime OS volume | 4.250 | 6.783 | 8 |
+| Balanced | On | Separate temporary volume | 4.883 | 22.617 | 16 |
+
+![Measured HTTP4 concurrency ramps](evidence/runtime-efficiency-program-2026-11-01/diagnostics-throughput.png)
+
+Each configuration has one exploratory concurrency ramp, not replicated estimates or confidence intervals. The
+Durable/separate series completed every tested level and did not reach the stopping threshold. Other ramps stop
+below five percent incremental gain; Balanced/on/OS peaked at eight callers before the next level stopped it.
+Separate placement changes device speed as well as contention, so the comparison does not isolate contention alone.
+
+At those tested peaks, UTC-aligned per-second iostat reports mean OS-volume write waits of **243.5 ms** for
+Balanced/on/OS versus **32.8 ms** for Balanced/on/separate (50.5 ms for persistence off). Mean OS queue depth is
+144.3 versus 19.7, respectively. These are arithmetic means of interval reports, not operation-weighted latencies.
+PostgreSQL observations include WAL-write/sync waits; sampled counts are not durations. This supports an I/O
+explanation but does not attribute every write to a named diagnostics component. Marked-request SQL attribution
+and the final fix/no-fix decision for #2613 remain open. Diagnostics fidelity/defaults have not been reduced.
+
+The original first two passing configurations and four recovery configurations are linked by an explicit
+attestation. The first separate-device startup failed because its parent directory denied the unprivileged host
+access; no timing window was collected. Corrected parent permissions and an unprivileged write preflight precede
+the recovery series. Earlier tooling preflight failures remain in the ledger. All **235 raw files** are collected,
+SHA-256 verified and checked for protected task credentials; see the [evidence receipt](evidence/runtime-efficiency-program-2026-11-01/README.md)
+and its raw archive. This cohort does not complete integrated multi-host/failure or current-main qualification.
+
+The first PostgreSQL schema-only boundary-host attempt also failed before workload: that qualification project
+advertised PostgreSQL but omitted the host's provider package. Its package reference and lock are corrected;
+the failed primer/controller records remain separate. No production library change is involved.

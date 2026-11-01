@@ -1,0 +1,12 @@
+from pathlib import Path
+import json,csv
+r=Path('/private/tmp/elsa-runtime-efficiency-program');root=r/'azure-diagnostics-six-cases-r1/raw';a=json.loads((root/'diagnostics-qualification-attestation.json').read_text());rows=[];series=[]
+for entry in a['cases']:
+ case=entry['case'];capture=json.loads((root/case['label']/'capture.json').read_text());steps=capture['steps'];peak=max(steps,key=lambda s:s['successfulExecutionsPerSecond']);series.append({'case':case,'stopReason':capture['stopReason'],'peakClients':peak['clients'],'peakRate':peak['successfulExecutionsPerSecond'],'c1Rate':steps[0]['successfulExecutionsPerSecond'],'requestAttemptsIncludingWarmup':sum(s['warmupAttempts']+s['measuredAttempts'] for s in steps),'samplerErrors':sum(bool(x.get('postgres',{}).get('error')) for s in steps for x in s['samples'] if x.get('postgres'))})
+ for step in steps:
+  assert step['validForSuccessfulThroughput'] and step['failedAttemptsIncludingWarmup']==0 and step['settlement']['settled'] and step['dotnetCountersExitCode']==0
+  before,after=step['postgresWalBefore'],step['postgresWalAfter'];assert before['stats_reset']==after['stats_reset'];wal={k:float(after[k])-float(before[k]) for k in ['wal_records','wal_bytes','wal_write','wal_sync','wal_write_time','wal_sync_time']}
+  rows.append({'case':case['label'],'mode':case['mode'],'diagnostics':case['diagnostics'],'placement':case['placement'],'clients':step['clients'],'rate':step['successfulExecutionsPerSecond'],'p95ms':step['exploratoryLatencyMilliseconds']['p95'],'hostCpuFraction':step['hostCpuUtilizationOfAllCores'],'driverSeconds':step['measuredDriverElapsedSeconds'],'measuredAttempts':step['measuredAttempts'],'inWindowSuccessful':step['succeededInWindow'],'settledInstances':step['settlement']['instanceCount'],'busyOrConcurrencyLogLines':step['sqliteBusyOrConcurrencyLogLinesAdded'],**wal})
+summary={'libraryHead':a['libraryHead'],'valid60SecondWindows':len(rows),'failedAttempts':0,'allSettled':True,'series':series,'caveat':'Single exploratory closed-loop ramp per configuration, not repeated estimates or an SLO. Separate placement also changes diagnostic device speed. WAL deltas cover driver windows and asynchronous statistics, not exact per-execution cost.'};(r/'m5-diagnostics-summary.json').write_text(json.dumps(summary,indent=2));(r/'m5-diagnostics-windows.json').write_text(json.dumps(rows,indent=2))
+with (r/'m5-diagnostics-windows.csv').open('w') as f:w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+print(json.dumps(summary,indent=2))
