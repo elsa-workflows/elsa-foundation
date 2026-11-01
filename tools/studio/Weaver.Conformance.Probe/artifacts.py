@@ -107,9 +107,12 @@ class ConformanceRun:
         self.save()
         check(result.returncode == 0, f"{name} failed ({result.returncode}); private log: {log}")
 
-    def pin(self, package):
+    def pin(self, package, *, scope=None):
+        """Read the owning central graph; an unscoped lookup must agree across graphs."""
+        sources = {"backend": REPO / "Directory.Packages.props", "studio": REPO / "Studio/Directory.Packages.props"}
+        check(scope is None or scope in sources, "Unknown central pin scope: " + str(scope))
         values = []
-        for path in [REPO / "Directory.Packages.props", REPO / "Studio/Directory.Packages.props"]:
+        for path in ([sources[scope]] if scope is not None else sources.values()):
             values.extend(node.attrib["Version"] for node in ET.parse(path).getroot().iter("PackageVersion")
                           if node.attrib.get("Include") == package and "Version" in node.attrib)
         check(bool(values) and len(set(values)) == 1, "Missing/ambiguous central pin: " + package)
@@ -210,6 +213,7 @@ class ConformanceRun:
         values = {"__PRODUCT_VERSION__": self.version, "__FIXTURE_VERSION__": "1.0.0-witness",
                   "__CSHELLS_VERSION__": self.pin("CShells.Abstractions"),
                   "__AI_ABSTRACTIONS_VERSION__": self.pin("Microsoft.Extensions.AI.Abstractions"),
+                  "__DI_ABSTRACTIONS_VERSION__": self.pin("Microsoft.Extensions.DependencyInjection.Abstractions", scope="backend"),
                   "__SDK_TGZ__": str(self.sdk), "__REQUIRED_SDK_VERSION__": "*"}
         values.update(replacements or {})
         template = FIXTURES / relative

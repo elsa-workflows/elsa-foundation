@@ -2,18 +2,75 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from artifacts import ConformanceRun
 
 
 class MaterializationTests(unittest.TestCase):
+    @staticmethod
+    def real_pin_run(directory, backend_di, studio_di):
+        root = Path(directory)
+        repo = root / "repo"
+        (repo / "Studio").mkdir(parents=True)
+        common = '<PackageVersion Include="CShells.Abstractions" Version="1.0.0"/><PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1"/>'
+        def declaration(versions):
+            return ''.join(f'<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="{version}"/>' for version in versions)
+        (repo / "Directory.Packages.props").write_text('<Project><ItemGroup>' + common + declaration(backend_di) + '</ItemGroup></Project>')
+        (repo / "Studio/Directory.Packages.props").write_text('<Project><ItemGroup>' + declaration(studio_di) + '</ItemGroup></Project>')
+        run = ConformanceRun.__new__(ConformanceRun)
+        run.root = root / "output"
+        run.root.mkdir()
+        run.version = "4.0.0-witness"
+        run.sdk = root / "actual-sdk.tgz"
+        run.config = lambda source: None
+        run.assert_immutable_inputs = lambda: None  # Exercise real pin/template paths without building packages.
+        return repo, run
+
+    def test_protocol_author_selects_backend_pin_when_studio_has_a_different_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo, run = self.real_pin_run(directory, ["10.0.12"], ["10.0.8"])
+            with patch("artifacts.REPO", repo):
+                author = run.materialize("protocol", "ProviderProtocolFixtures")
+            project = (author / "Acme.Weaver.ProtocolFixtures.csproj").read_text()
+            self.assertIn('Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12"', project)
+
+    def test_protocol_author_refuses_missing_or_ambiguous_backend_pin(self):
+        for versions in ([], ["10.0.12", "10.0.13"]):
+            with self.subTest(versions=versions), tempfile.TemporaryDirectory() as directory:
+                repo, run = self.real_pin_run(directory, versions, ["10.0.8"])
+                with patch("artifacts.REPO", repo), self.assertRaisesRegex(RuntimeError, "Missing/ambiguous central pin"):
+                    run.materialize("protocol", "ProviderProtocolFixtures")
+
+    def test_unscoped_pin_keeps_rejecting_conflicting_central_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo, run = self.real_pin_run(directory, ["10.0.12"], ["10.0.8"])
+            with patch("artifacts.REPO", repo), self.assertRaisesRegex(RuntimeError, "Missing/ambiguous central pin"):
+                run.pin("Microsoft.Extensions.DependencyInjection.Abstractions")
+
+    def test_protocol_dependencies_follow_selected_product_pins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = ConformanceRun.__new__(ConformanceRun)
+            run.root = Path(directory)
+            run.version = "4.0.0-witness"
+            run.sdk = run.root / "actual-sdk.tgz"
+            pins = {"Microsoft.Extensions.AI.Abstractions": "10.10.1", "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12"}
+            run.pin = lambda name, **_: pins.get(name, "1.0.0")
+            run.config = lambda source: None
+            run.assert_immutable_inputs = lambda: None
+            author = run.materialize("protocol", "ProviderProtocolFixtures")
+            project = (author / "Acme.Weaver.ProtocolFixtures.csproj").read_text()
+            self.assertIn('Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1"', project)
+            self.assertIn('Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12"', project)
+            self.assertNotIn("__DI_ABSTRACTIONS_VERSION__", project)
+
     def test_studio_author_has_explicit_admission_input_and_can_build_a_real_incompatible_variant(self):
         with tempfile.TemporaryDirectory() as directory:
             run = ConformanceRun.__new__(ConformanceRun)
             run.root = Path(directory)
             run.version = "4.0.0-witness"
             run.sdk = run.root / "actual-sdk.tgz"
-            run.pin = lambda name: "1.0.0"
+            run.pin = lambda name, **_: "1.0.0"
             run.config = lambda source: None
             run.assert_immutable_inputs = lambda: None  # This unit only checks template materialization.
             author = run.materialize("author", "Resource.Studio")

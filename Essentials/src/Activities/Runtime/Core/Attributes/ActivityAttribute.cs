@@ -19,6 +19,12 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
 public sealed class ActivityAttribute : Attribute
 {
+    /// <summary>
+    /// Whether CLR reconciliation offers this type as a standalone catalog activity. Implementation
+    /// activities can opt out while retaining runtime aliases and execution of existing artifacts.
+    /// </summary>
+    public bool IsDiscoverable { get; init; } = true;
+
     /// <summary>The designer icon name. See the type remarks for the accepted forms.</summary>
     public string? Icon { get; init; }
 }

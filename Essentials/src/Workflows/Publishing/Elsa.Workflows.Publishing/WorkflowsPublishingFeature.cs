@@ -136,8 +136,8 @@ public class WorkflowsPublishingFeature : IShellFeature
         // Spec 261 FR-513: the side-effect profile the compiler would compile, for design-time validators.
         services.TryAddScoped<IActivitySideEffectProfileReader, ActivitySideEffectProfileReader>();
         services.TryAddScoped<WorkflowExecutablePlacementSidecarContext>();
-        services.TryAddSingleton<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
-        services.TryAddSingleton<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
+        services.TryAddScoped<IActivityTemplateProviderCompilerRegistry, ActivityTemplateProviderCompilerRegistry>();
+        services.TryAddScoped<IActivityTemplateDependencyDiscovererRegistry, ActivityTemplateDependencyDiscovererRegistry>();
         services.TryAddSingleton<IActivityPlacementHasher, Sha256ActivityPlacementHasher>();
         services.TryAddScoped<ActivityTemplatePlacer>();
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();

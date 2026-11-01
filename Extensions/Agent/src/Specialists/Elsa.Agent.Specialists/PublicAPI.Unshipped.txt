@@ -1,0 +1,7 @@
+#nullable enable
+Elsa.Agent.Specialists.SpecialistsInMemoryJournalFeature
+Elsa.Agent.Specialists.SpecialistsInMemoryJournalFeature.SpecialistsInMemoryJournalFeature() -> void
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature
+Elsa.Agent.Specialists.SpecialistsRuntimeFeature.SpecialistsRuntimeFeature() -> void
+virtual Elsa.Agent.Specialists.SpecialistsInMemoryJournalFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Agent.Specialists.SpecialistsRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
