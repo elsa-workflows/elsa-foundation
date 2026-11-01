@@ -16,6 +16,28 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 public sealed class BpmnCatalogBindingTests
 {
     [Fact]
+    public async Task Registered_binder_can_return_nested_Studio_intrinsic_strings()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityDefinitionLookup>(_ => new Catalog("available"));
+        services.AddScoped<IBpmnWorkBinder, IntrinsicBinder>();
+        new ActivitiesBpmnInterchangeFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IBpmnDocumentImporter>().ImportAsync(Document);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        };
+        var outer = result.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(options)!;
+        var nested = Assert.Single(outer.Activities).Structure!.Payload.Deserialize<BpmnAuthoredStructure>(options)!;
+        var child = Assert.Single(nested.Activities);
+        Assert.Equal(AuthoredWorkflowIntrinsicKind.Set, child.Intrinsic!.Kind);
+        Assert.Equal(AuthoredValueConversionMode.Json, Assert.Single(child.Inputs).Conversion!.Mode);
+    }
+
+    [Fact]
     public async Task Malformed_registered_binder_structure_raises_contextual_domain_exception()
     {
         var services = new ServiceCollection();
@@ -90,6 +112,23 @@ public sealed class BpmnCatalogBindingTests
                 JsonDocument.Parse("{\"activities\":42}").RootElement.Clone())), BpmnImportCapabilityAvailability.Available, "Malformed provider result");
     }
 
+    private sealed class IntrinsicBinder : IBpmnWorkBinder
+    {
+        public BpmnWorkBindingResult Bind(BpmnWorkBindingRequest request)
+        {
+            using var document = JsonDocument.Parse("""
+                { "activities": [{
+                  "nodeId": "set-variable", "activityVersionId": "elsa.intrinsic.set@1", "outputs": [],
+                  "inputs": [{ "referenceKey": "value", "value": { "value": 42, "expressionType": "Literal" }, "conversion": { "mode": "json" } }],
+                  "intrinsic": { "kind": "set", "valueType": { "alias": "Int32" }, "variable": { "referenceKey": "counter" } }
+                }] }
+                """);
+            return new(new ActivityNode(request.BindingRef, "Elsa.BpmnProcess", [], [],
+                new(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion, document.RootElement.Clone())),
+                BpmnImportCapabilityAvailability.Available, "Nested authored process");
+        }
+    }
+
     private sealed class Catalog(string inventory) : IActivityDefinitionLookup
     {
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null,
@@ -121,6 +160,9 @@ public sealed class BpmnCatalogBindingTests
         }
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
+            versionId == "elsa.intrinsic.set@1"
+                ? Task.FromResult<IActivityDefinitionVersion?>(null)
+                : throw new NotSupportedException();
     }
 }

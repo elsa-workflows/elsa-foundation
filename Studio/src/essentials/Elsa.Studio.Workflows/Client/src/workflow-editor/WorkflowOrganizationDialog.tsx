@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
+import { FolderTree, RefreshCw, Search, Tags } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   bulkEditWorkflowTags, getWorkflowOrganization, getWorkflowTag, listWorkflowTags, saveWorkflowOrganization,
@@ -8,6 +10,7 @@ import {
 import { MoveWorkflowDefinitionsDialog } from "./MoveWorkflowDefinitionsDialog";
 import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
+import "./workflowOrganizationDialog.css";
 
 export function WorkflowOrganizationDialog({ context, definitionId, name, onClose, onSaved }: {
   context: StudioEndpointContext; definitionId: string; name: string; onClose(): void; onSaved(): void;
@@ -44,21 +47,20 @@ export function WorkflowOrganizationDialog({ context, definitionId, name, onClos
   if (moveOpen) return <MoveWorkflowDefinitionsDialog context={context} definitionIds={[definitionId]} onClose={() => setMoveOpen(false)} onMoved={() => { onSaved(); setRefresh(value => value + 1); }} />;
   return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
     <form onSubmit={event => { event.preventDefault(); void save(); }}>
-      <h3 id={titleId}>Organize {name}</h3>
+      <header className="wf-organization-heading"><h3 id={titleId}>Organize {name}</h3><p>Choose where this workflow belongs and how to find it.</p></header>
       <div className="wf-organization-scroll">
         {loading ? <p role="status">Loading organization…</p> : null}
         {organization ? <>
-          <div className="wf-library-control-row"><div><span className="wf-library-help">Home folder</span><p>{organization.folderBreadcrumb.map(folder => folder.name).join(" / ") || "Unfiled"}</p></div>
-            {organization.permissions?.canManageFolders === true ? <button type="button" disabled={busy || changed} onClick={() => setMoveOpen(true)}>Move to folder</button> : null}
-          </div>
+          <section className="wf-organization-folder" aria-label="Home folder"><div><h4><FolderTree size={16} aria-hidden="true" />Home folder</h4><p>{organization.folderBreadcrumb.map(folder => folder.name).join(" / ") || "Unfiled"}</p></div>
+            {organization.permissions?.canManageFolders === true ? <StudioButton disabled={busy || changed} onClick={() => setMoveOpen(true)}>Move to folder</StudioButton> : null}
+          </section>
           {changed ? <p className="wf-library-help">Save or reload your tag changes before moving this workflow.</p> : null}
           <WorkflowTagAssignmentsEditor context={context} assignments={tags} disabled={busy || organization.permissions?.canAssignTags !== true} onChange={next => { setTags(next); operationKey.current = workflowOperationKey(); }} />
           {organization.permissions?.canAssignTags !== true ? <p className="wf-library-help">You can view organization. Tag changes require additional permission.</p> : null}
         </> : null}
         {error ? <p role="alert">{error}</p> : null}
-        {!loading ? <button type="button" disabled={busy} onClick={() => setRefresh(value => value + 1)}>Reload organization</button> : null}
       </div>
-      <div className="wf-dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Close</button><button type="submit" disabled={busy || !changed || organization?.permissions?.canAssignTags !== true}>{busy ? "Saving…" : "Save tags"}</button></div>
+      <footer className="wf-organization-footer">{!loading ? <StudioButton variant="ghost" size="sm" disabled={busy} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} aria-hidden="true" />Reload organization</StudioButton> : <span />}<div className="wf-organization-actions"><StudioButton disabled={busy} onClick={onClose}>Close</StudioButton><StudioButton variant="primary" type="submit" disabled={busy || !changed || organization?.permissions?.canAssignTags !== true}>{busy ? "Saving…" : "Save tags"}</StudioButton></div></footer>
     </form>
   </section></div>;
 }
@@ -164,8 +166,13 @@ function WorkflowTagAssignmentsEditor({ context, assignments, disabled, allowRet
     catch (caught) { if (generation === generationRef.current) setError(errorMessage(caught)); }
     finally { if (generation === generationRef.current) setLoading(false); }
   };
-  return <fieldset className="wf-tag-assignments" disabled={disabled}><legend>Tags</legend>
-    <div className="wf-library-control-row"><label>Find tag<input aria-label="Find workflow tags" value={search} onChange={event => setSearch(event.target.value)} /></label><button type="button" disabled={loading} onClick={() => setTerm(search)}>Find</button></div>
+  return <fieldset className="wf-tag-assignments" disabled={disabled}><legend><Tags size={16} aria-hidden="true" />Tags</legend>
+    <div className="wf-tag-search"><label>Find tag<input type="search" placeholder="Search tags…" aria-label="Find workflow tags" value={search} onChange={event => setSearch(event.target.value)} enterKeyHint="search" onKeyDown={event => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        if (!loading) setTerm(search);
+      }
+    }} /></label><StudioButton disabled={loading} onClick={() => setTerm(search)}><Search size={16} aria-hidden="true" />Find</StudioButton></div>
     {catalog.map(tag => tag.mode === "marker" ? <label className="wf-library-check" key={tag.id}><input type="checkbox" checked={selected.has(workflowTagAssignmentKey({ tagId: tag.id }))} disabled={!allowRetired && tag.deprecated && !selected.has(workflowTagAssignmentKey({ tagId: tag.id }))} onChange={event => toggle({ tagId: tag.id }, event.target.checked, true)} />{tag.name}{tag.deprecated ? " (retired)" : ""}</label> :
       <fieldset className="wf-library-values" key={tag.id}><legend>{tag.name}{tag.deprecated ? " (retired)" : ""}{tag.cardinality === "single" && !allowRetired ? " · choose one" : ""}</legend>{tag.values.map(value => {
         const assignment = { tagId: tag.id, valueId: value.id };
@@ -174,8 +181,8 @@ function WorkflowTagAssignmentsEditor({ context, assignments, disabled, allowRet
       })}</fieldset>)}
     {assignments.filter(assignment => !catalog.some(tag => tag.id === assignment.tagId && (!assignment.valueId || tag.values.some(value => value.id === assignment.valueId)))).map(assignment => <label key={workflowTagAssignmentKey(assignment)} className="wf-library-check"><input type="checkbox" checked onChange={() => toggle(assignment, false, false)} />Unavailable tag/value: {assignment.tagId}{assignment.valueId ? ` / ${assignment.valueId}` : ""}</label>)}
     {loading ? <p role="status">Loading tags…</p> : null}
-    {!loading && !catalog.length ? <p>No matching tags. A tag manager can create the vocabulary.</p> : null}
-    {cursor ? <button type="button" disabled={loading} onClick={() => void loadMore()}>Load more tags</button> : null}
+    {!loading && !catalog.length ? <div className="wf-tag-empty"><Tags size={24} aria-hidden="true" /><p>{term ? "No matching tags" : "No tags available"}</p><span>{term ? "Try another search to find a tag." : "A tag manager can create tags from the workflow library."}</span></div> : null}
+    {cursor ? <StudioButton disabled={loading} onClick={() => void loadMore()}>Load more tags</StudioButton> : null}
     {error ? <p role="alert">Couldn't read tags. {error}</p> : null}
   </fieldset>;
 }
