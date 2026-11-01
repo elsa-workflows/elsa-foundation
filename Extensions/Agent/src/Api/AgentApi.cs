@@ -39,6 +39,8 @@ public static class AgentApi
             typeof(AgentCreateSessionRequest), typeof(AgentApiResponse<AgentCreateSessionResponse>), HandleCreateSessionAsync);
         Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}", "GetSession", AgentPermissionKeys.Use,
             typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<AgentSessionDetailsResponse>), HandleGetSessionAsync);
+        Map(api, "PUT", $"{RoutePrefix}/sessions/{{sessionId}}/autonomy", "ChangeAutonomy", AgentPermissionKeys.Use,
+            typeof(AgentSessionAutonomyRequest), typeof(AgentApiResponse<AgentSessionPolicyResponse>), HandleChangeAutonomyAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/messages", "PostMessage", AgentPermissionKeys.Use,
             typeof(AgentMessageRequest), typeof(AgentApiResponse<AgentMessageAcceptedResponse>), HandlePostMessageAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/turns/{{turnId}}/cancel", "CancelTurn", AgentPermissionKeys.Use,
@@ -159,7 +161,11 @@ public static class AgentApi
         await providers.Active.CreateSessionAsync(session, context.RequestAborted);
         // Routes and presentation metadata never establish an authoritative resource target.
         IReadOnlyCollection<AgentContextAttachment> attachments = [];
-        await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Success(new(session.Id, session.Status.ToContractString(), session.Title, attachments.Select(x => x.ToResponse()).ToList())), AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse);
+        var created = new AgentCreateSessionResponse(session.Id, session.Status.ToContractString(), session.Title, attachments.Select(x => x.ToResponse()).ToList())
+        {
+            Policy = await ReadPolicyAsync(context, session.Id, actorId, tenantId)
+        };
+        await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Success(created), AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse);
     }
 
     private static async Task HandleGetSessionAsync(HttpContext context)
@@ -176,8 +182,88 @@ public static class AgentApi
             (await sessions.ListContextAsync(sessionId, context.RequestAborted)).Select(x => x.ToResponse()).ToList(),
             (await sessions.ListMessagesAsync(sessionId, context.RequestAborted))
                 .Where(x => x.Role != AgentRole.Assistant || x.Content.Length > 0 || x.DisclosureHistory is null)
-                .Select(x => x.ToViewModel()).ToList());
+                .Select(x => x.ToViewModel()).ToList())
+        {
+            // Authorization above proved these resolve to the session owner.
+            Policy = await ReadPolicyAsync(context, session.Id, AgentEndpointActor.Resolve(context.User)!, AgentEndpointActor.ResolveTenant(context.User)!)
+        };
         await WriteAsync(context, AgentApiResponse<AgentSessionDetailsResponse>.Success(data), AgentJsonContext.Default.AgentApiResponseAgentSessionDetailsResponse);
+    }
+
+    /// <summary>
+    /// Experimental (#3440, not frozen): an autonomy-only conditional change through the session policy owner.
+    /// The owner is the authenticated actor and tenant; nothing in the request can select it.
+    /// </summary>
+    private static async Task HandleChangeAutonomyAsync(HttpContext context)
+    {
+        if (!context.Request.HasJsonContentType())
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return;
+        }
+        AgentSessionAutonomyRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync(AgentJsonContext.Default.AgentSessionAutonomyRequest, context.RequestAborted);
+        }
+        catch (NotSupportedException)
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return;
+        }
+        catch (JsonException)
+        {
+            request = null;
+        }
+        var requestedMode = AgentApiMapping.ParseAutonomyMode(request?.AutonomyMode);
+        if (request?.ExpectedRevision is not { } expectedRevision || requestedMode is not { } mode)
+        {
+            await WritePolicyFailureAsync(context, new(AutonomyInvalidCode, "Send a defined autonomy mode (manual, auto-read-only or full-auto) and the last acknowledged policy revision.", 400));
+            return;
+        }
+
+        var sessionId = RouteValue(context, "sessionId");
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
+        if (error is not null)
+        {
+            // A foreign session is indistinguishable from a missing one on this write.
+            await WritePolicyFailureAsync(context, new("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404));
+            return;
+        }
+        var policies = context.RequestServices.GetService<IAgentSessionPolicyService>();
+        var result = policies is null
+            ? new AgentSessionPolicyResult(AgentSessionPolicyOutcome.Unsupported, null)
+            : await policies.ChangeAutonomyAsync(new(session!.Id, AgentEndpointActor.Resolve(context.User)!, AgentEndpointActor.ResolveTenant(context.User)!,
+                mode, expectedRevision), context.RequestAborted);
+        if (result is { Outcome: AgentSessionPolicyOutcome.Succeeded, State: { } state })
+        {
+            await WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Success(state.ToResponse()), AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse);
+            return;
+        }
+        await WritePolicyFailureAsync(context, result.Outcome switch
+        {
+            AgentSessionPolicyOutcome.StaleRevision => new("agent.session.policy_stale", "The session policy changed since the expected revision. Read the session back before retrying.", 409),
+            AgentSessionPolicyOutcome.Busy => new("agent.session.busy", "Finish or resolve the current work before changing the session autonomy.", 409),
+            AgentSessionPolicyOutcome.SessionClosed => new("agent.session.closed", "The agent session is closed or expired.", 409),
+            AgentSessionPolicyOutcome.InvalidMode => new(AutonomyInvalidCode, "The requested autonomy mode is not defined.", 400),
+            AgentSessionPolicyOutcome.NotFound => new("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404),
+            _ => new("agent.session.autonomy_unsupported", "The installed agent session services cannot change the session autonomy.", 409)
+        });
+    }
+
+    private const string AutonomyInvalidCode = "agent.session.autonomy_invalid";
+
+    private static Task WritePolicyFailureAsync(HttpContext context, AgentError error) =>
+        WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse, error.StatusCode);
+
+    /// <summary>Reads the owner's acknowledged policy; null only when the installed composition cannot read it back.</summary>
+    private static async Task<AgentSessionPolicyResponse?> ReadPolicyAsync(HttpContext context, string sessionId, string actorId, string tenantId)
+    {
+        var policies = context.RequestServices.GetService<IAgentSessionPolicyService>();
+        if (policies is null)
+            return null;
+        var result = await policies.GetAsync(sessionId, actorId, tenantId, context.RequestAborted);
+        return result is { Outcome: AgentSessionPolicyOutcome.Succeeded, State: { } state } ? state.ToResponse() : null;
     }
 
     private static async Task HandlePostMessageAsync(HttpContext context)

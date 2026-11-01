@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Agent.Core.Models;
 
 namespace Elsa.Agent.Api.Models;
@@ -88,14 +89,47 @@ public sealed record AgentCreateSessionResponse(
     string SessionId,
     string Status,
     string? Title,
-    IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments);
+    IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments)
+{
+    /// <summary>Experimental (#3440, not frozen): the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? Policy { get; init; }
+}
 
 public sealed record AgentSessionDetailsResponse(
     string SessionId,
     string Status,
     string? Title,
     IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments,
-    IReadOnlyCollection<AgentMessageViewModelResponse> Messages);
+    IReadOnlyCollection<AgentMessageViewModelResponse> Messages)
+{
+    /// <summary>Experimental (#3440, not frozen): the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? Policy { get; init; }
+}
+
+/// <summary>
+/// Experimental (#3440, not frozen): a session's effective autonomy, its ceiling, the modes a client may request
+/// and the owner's policy revision.
+/// </summary>
+public sealed record AgentSessionPolicyResponse(
+    string AutonomyMode,
+    string MaxAutonomyMode,
+    IReadOnlyCollection<string> AllowedAutonomyModes,
+    long Revision);
+
+/// <summary>
+/// Experimental (#3440, not frozen): an autonomy-only conditional change. Both members are required; the caller
+/// cannot name an owner, actor or tenant.
+/// </summary>
+public sealed class AgentSessionAutonomyRequest
+{
+    /// <summary><c>manual</c>, <c>auto-read-only</c> or <c>full-auto</c>; clamped to the session's current ceiling.</summary>
+    public string? AutonomyMode { get; init; }
+
+    /// <summary>The policy revision the caller last acknowledged.</summary>
+    public long? ExpectedRevision { get; init; }
+}
 
 public sealed record AgentContextAttachmentResponse(
     string Id,
@@ -121,7 +155,11 @@ public sealed record AgentMessageViewModelResponse(
     string Id,
     string Role,
     string Content,
-    string Status);
+    string Status)
+{
+    /// <summary>Experimental (#3440, not frozen): the policy revision the owner accepted this message under, when it owns revisions.</summary>
+    public long? AcceptedPolicyRevision { get; init; }
+}
 
 public sealed record AgentMessageAcceptedResponse(
     AgentMessage Message,
@@ -296,7 +334,17 @@ public static class AgentApiMapping
         };
 
     public static AgentMessageViewModelResponse ToViewModel(this AgentMessage message)
-        => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString());
+        => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString())
+        {
+            AcceptedPolicyRevision = message.AcceptedPolicy?.Revision
+        };
+
+    public static AgentSessionPolicyResponse ToResponse(this AgentSessionPolicyState state)
+        => new(
+            state.Policy.AutonomyMode.ToContractString(),
+            state.Policy.MaxAutonomyMode.ToContractString(),
+            state.Policy.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
+            state.Revision);
 
     public static AgentProposalDecisionResponse ToDecisionResponse(this AgentActionProposal proposal, AgentProposalExecutionResult? result = null)
         => new(
