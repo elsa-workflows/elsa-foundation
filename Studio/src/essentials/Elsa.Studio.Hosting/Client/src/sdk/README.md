@@ -32,6 +32,7 @@ Known host-owned Slot IDs:
 - `workflow.activity.property-editors`
 - `workflow.expression-editors`
 - `workflow.run-input.editors`
+- `workflow.run.related-links`
 - `workflow.designer.node-renderers`
 - `workflow.designer.toolbox-items`
 - `workflow.designer.panels`
@@ -46,6 +47,10 @@ Known host-owned Slot IDs:
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
+
+## Related run links
+
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 

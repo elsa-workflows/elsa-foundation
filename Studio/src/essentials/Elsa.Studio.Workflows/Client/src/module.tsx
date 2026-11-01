@@ -78,6 +78,7 @@ export function register(api: ElsaStudioModuleApi) {
     window.addEventListener(authSessionEndedEvent, clearActivityDefinitionRecoveryOnAuthSessionEnded);
   }
   const runInputEditors = () => api.workflowRunInputEditors?.list() ?? [];
+  const runRelatedLinks = () => api.workflowRunRelatedLinks?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
     <WorkflowLazyBoundary label={label}>{content}</WorkflowLazyBoundary>;
   api.featureAreas.add({
@@ -143,7 +144,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: ({ navigate }) => deferred("workflow definitions", <WorkflowManagementPage onOpenBpmnProcesses={() => navigate(qualifyStudioBackendPath("/workflows/bpmn"))} backendSession={api.backendSession} operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: ({ navigate }) => deferred("workflow definitions", <WorkflowManagementPage onOpenBpmnProcesses={() => navigate(qualifyStudioBackendPath("/workflows/bpmn"))} backendSession={api.backendSession} operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} runRelatedLinks={runRelatedLinks()} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
@@ -167,7 +168,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} ai={api.agent} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.agent} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],

@@ -78,6 +78,7 @@ export function createStudioRegistry(
     expressionEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["expressionEditors"]>>>({ slot: studioSlots.expressionEditors,hostPolicy }),
     workflowRunInputEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunInputEditors"]>>>({ slot: studioSlots.workflowRunInputEditors,hostPolicy }),
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
+    workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     settingEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["settingEditors"]>>>({ slot: studioSlots.settingEditors,hostPolicy }),
     agent,
     workflowDesigner: {

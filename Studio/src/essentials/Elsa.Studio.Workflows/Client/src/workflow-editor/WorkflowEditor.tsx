@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -155,6 +155,7 @@ export function WorkflowEditor({
   weaver,
   propertyEditors,
   expressionEditors,
+  runRelatedLinks = [],
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
@@ -173,6 +174,7 @@ export function WorkflowEditor({
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -1291,7 +1293,7 @@ export function WorkflowEditor({
           tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
         {inspectorView === "run-data" && runCanvas.eligible ? <div className="wf-inspector-tab-panel">
           <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
-            <AttachedRunActivityInspector context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
+            <AttachedRunActivityInspector backendSession={backendSession} runRelatedLinks={runRelatedLinks} context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
               ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
                 const root = draft.state.rootActivity;
                 const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;

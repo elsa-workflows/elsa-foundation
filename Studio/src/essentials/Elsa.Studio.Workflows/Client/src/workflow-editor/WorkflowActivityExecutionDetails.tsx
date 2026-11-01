@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Undo2 } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { WorkflowRunRelatedLinks } from "./WorkflowRunRelatedLinks";
 import { getActivityExecutionInspection } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary } from "../workflowTypes";
 import type { ExecutableGraphNodeFacts } from "../executableGraph";
@@ -55,6 +56,8 @@ export function WorkflowActivityExecutionDetails({
   activityCatalog,
   executableNodeFacts,
   expressionEditors = [],
+  backendSession,
+  runRelatedLinks = [],
   focusInputKey = null,
   onSelectEvidence,
   refreshKey = 0,
@@ -69,6 +72,8 @@ export function WorkflowActivityExecutionDetails({
   activityCatalog: ActivityCatalogItem[];
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   focusInputKey?: string | null;
   onSelectEvidence?(evidenceId: string): void;
 }) {
@@ -251,6 +256,7 @@ export function WorkflowActivityExecutionDetails({
       </section>
       {executionNavigation}
       {childExecutions}
+      <WorkflowRunRelatedLinks context={context} session={backendSession} activity={activity} contributions={runRelatedLinks} refreshKey={refreshKey} />
       {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">
         <h4>Incidents</h4>
         {recordedIncidents === null ? <p>Incident details are unavailable for this execution.</p> : recordedIncidents.length ? <ul>{recordedIncidents.map(incident => <li key={incident.incidentId}>

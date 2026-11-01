@@ -1503,6 +1503,7 @@ export const studioSlotIds = {
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
+  workflowRunRelatedLinks: "workflow.run.related-links",
   settingEditors: "studio.setting-editors",
   agentContextProviders: "studio.weaver.context-providers",
   agentPromptStarters: "studio.weaver.prompt-starters",
@@ -1593,6 +1594,7 @@ export const studioSlots = {
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
+  workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1831,6 +1833,33 @@ export interface StudioActivityDefinitionImplementationEditorContribution extend
   publicInterfaceComponent?: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
 }
 
+/** An authorized, public activity-state projection for the exact selected native occurrence. */
+export interface StudioWorkflowRunRelatedLinkContext {
+  workflowExecutionId: string;
+  activityExecutionId: string;
+  executableNodeId: string;
+  stateView: { kind: string; version: number; data: unknown };
+  /** Canonical native run/occurrence route in the selected backend; safe to retain in a related-run URL. */
+  returnTo: string;
+}
+
+export interface StudioWorkflowRunRelatedLink {
+  id: string;
+  label: string;
+  /** A Studio-relative route. The host rejects foreign origins/backends and preserves the selected backend. */
+  path: string;
+}
+
+export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  activityTypes: readonly string[];
+  viewKind: string;
+  viewVersion: number;
+  /** Pure synchronous projection of public reference data; the target route reauthorizes its reads. */
+  getLinks(context: StudioWorkflowRunRelatedLinkContext): readonly StudioWorkflowRunRelatedLink[];
+}
+
 export interface ElsaStudioModuleApi {
   readonly connection?: StudioConnectionController;
   readonly shell?: StudioContributionRegistry<StudioShellContribution>;
@@ -1855,6 +1884,8 @@ export interface ElsaStudioModuleApi {
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
   /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
+  /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */
+  readonly workflowRunRelatedLinks?: StudioContributionRegistry<StudioWorkflowRunRelatedLinkContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {

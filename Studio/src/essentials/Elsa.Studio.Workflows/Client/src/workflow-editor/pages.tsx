@@ -1,6 +1,6 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
@@ -23,6 +23,7 @@ export function WorkflowManagementPage({
   weaver,
   propertyEditors,
   expressionEditors,
+  runRelatedLinks = [],
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
@@ -38,6 +39,7 @@ export function WorkflowManagementPage({
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -83,7 +85,7 @@ export function WorkflowManagementPage({
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
@@ -177,10 +179,12 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], navigate }: {
+export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   navigate(path: string): void;
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
@@ -221,7 +225,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
