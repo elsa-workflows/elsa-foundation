@@ -57,3 +57,22 @@ Checkpoint and settlement failures preserve their original cause in the speciali
 with `contextId` and `workflowExecutionId` identifying the checkpoint or exact source. Native source
 boundary and stale-claim exceptions retain their existing runtime delivery semantics. Requested
 cancellation propagates unchanged.
+
+
+## Retained protection and session readers
+
+Configure durable Secrets keys for durable journals. A new active key writes new content; keep the
+older key for every retained request, accepted receipt and session that still needs a reader. The
+runtime supports current v2 key-labelled protection and retained legacy v1 protection through Secrets.
+Missing keys fail explicitly and do not create fresh conversation history. Default retention age
+alone is insufficient for key retirement because active or unresolved work can keep content pinned.
+
+Source compatibility tests reopen the file-backed EF journal with separate providers/DbContexts,
+rotated or retired keys, new admission disabled and no model contribution. They verify immutable
+accepted replay, session restoration, new-key writes and explicit missing-key failure. Authenticated
+unsupported session purpose/codec fixtures fail before model construction after an admitted
+continuation is reopened; known failure leaves the preceding accepted revision intact.
+
+These are library-reader tests within one test process, including seeded retained/future format
+writers. They establish neither an old module binary upgrade/rollback nor independent-process native
+workflow/outbox recovery. Those deployment qualifications remain required by the support contract.
