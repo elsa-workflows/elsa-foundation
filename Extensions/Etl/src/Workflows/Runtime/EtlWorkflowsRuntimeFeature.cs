@@ -20,6 +20,7 @@ public class EtlWorkflowsRuntimeFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, EtlCheckpointEnricher>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStateViewProjector, RunEtlStateViewProjector>());
         services.TryAddScoped<IEtlResultDelivery, EtlNativeResultDelivery>();
         services.TryAddScoped<EtlNativeResultExecutor>();
         var retry = RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1));

@@ -9,3 +9,17 @@ The activity's `Pipeline` input is a canonical published selection from `EtlPubl
 Terminal delivery creates an explicitly scoped native operation and uses the exact saved bookmark, payload alias/schema, provider and delivery identity. A mailbox status does not acknowledge ETL delivery. The adapter reads durable native state to demonstrate consumption or parent/activity termination; missing state by itself leaves delivery owed. Native success/business error use normal authored outcomes, while fault and cancellation use native transitions. Composite activities retain their own continuation semantics.
 
 The complete acceptance gate remains [spec 255](../../../../../specs/255-finite-file-etl/tasks.md). The [native checkpoint](../../../../../specs/255-finite-file-etl/evidence/native-subtree-cancellation.md) proves actual durable Sequence, Flowchart and CompensationScope continuation plus whole-workflow/placed-subtree cancellation in both admission orderings. Full persisted authoring/publication, API/Studio integration of terminal materialization, two-process recovery and the complete product journey remain acceptance gates. Runtime fixtures do not substitute for those gates. Physical effects remain at least once; compensation is explicitly authored.
+
+## Native inspection reference
+
+`EtlWorkflowsRuntime` contributes the existing Runtime activity-state view for `RunEtlState` as
+`etl.run-reference/1`. After Runtime authorizes the run/activity inspection, this projection checks
+the persisted invocation against the native execution's tenant, partition, pin and node. It exposes
+only the ETL `runId` and result-address workflow/activity/node/registration/resume-target identities.
+The actual registration comes from the live wait or its consumed typed receipt, including after
+completion-payload retirement. Connector bindings, pipeline contents and captured values are never
+part of this view, including for callers who may inspect sensitive values.
+
+The reference does not assert that ETL admission has already completed. Opening it uses the ETL
+API's own authorization and availability checks. The projection reads existing state and adds no
+persisted field, dispatch mechanism or Runtime API dependency.
