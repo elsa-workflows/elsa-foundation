@@ -226,5 +226,21 @@ another inference or write; no attempted/unreadable write implies success. Real 
 after journal acceptance retains the accepted history while preventing native completion. Before-commit
 failure remains unknown, unavailable receipt confirmation produces no native success, and changed
 native operation identity, contract or input binding refuses completion. The shared comparison runs
-before and after acceptance, after accepted replay association and before facade typed completion. This does not implement durable cancellation/applied source
-settlement or tombstone/retention policy.
+before and after acceptance, after accepted replay association and before facade typed completion. The acknowledgement increment alone does not implement durable cancellation/applied source
+settlement or tombstone/retention policy. The later application increment is described below.
+
+### Implemented native application settlement increment (T021 remains open)
+
+A completed specialist facade contributes `elsa.specialist.applied/1` in its native checkpoint.
+Final enrichment validation requires the exact deterministic responsibility. The handler requires a
+physically committed ordinary-scope outbox source, current delivery claim, canonical payload, matching
+completed native parent/child/artifact and authenticated accepted receipt. It rechecks the physical
+claim after receipt reads and before the metadata-only journal write. Source context alone and an
+overlay/intent-only read are insufficient.
+
+`SpecialistTurnApplication` records identity, child, native completion time and source ID/fingerprint.
+The optional copied Applications collection is bounded to64 exact native deliveries, including the
+original legacy delivery. Equivalent notifications are idempotent; source conflicts refuse. Accepted
+request/result/session, budget/usage and conversation ownership/revision are unchanged. No relational
+model change is required. This is source-native application settlement; cancellation/tombstones,
+retention and complete durable runtime/outbox package qualification remain open.

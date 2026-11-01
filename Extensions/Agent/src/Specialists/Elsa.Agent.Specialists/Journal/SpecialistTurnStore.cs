@@ -91,6 +91,21 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         }
     }
 
+    public ValueTask<SpecialistTurnDocument?> ApplyAsync(string handle, SpecialistTurnApplication application, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(application);
+        lock (gate)
+        {
+            var document = Find(handle, application.Identity);
+            if (document is null || !SpecialistTurnApplicationRules.Admits(document, application)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            var next = SpecialistTurnApplicationRules.Apply(document, application);
+            ValidateRecord(next, prepared: false);
+            rows[handle] = SpecialistTurnDocumentRules.Copy(next);
+            return ValueTask.FromResult<SpecialistTurnDocument?>(SpecialistTurnDocumentRules.Copy(next));
+        }
+    }
+
     public ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

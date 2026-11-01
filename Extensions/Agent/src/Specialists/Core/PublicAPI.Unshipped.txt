@@ -444,3 +444,26 @@ Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deliveries.get -> Syst
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deliveries.init -> void
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ActiveDeliveryActivityId.get -> string?
 Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ActiveDeliveryActivityId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.SourceId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.SourceId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.ToString() -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.AppliedAt.get -> System.DateTimeOffset
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication? right) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.AppliedAt.init -> void
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.Equals(object? obj) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.Deconstruct(out Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, out string! ChildInvocationId, out string! SourceId, out string! SourceFingerprint, out System.DateTimeOffset AppliedAt) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.SourceFingerprint.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.SourceFingerprint.init -> void
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.ApplyAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication! application, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument?>
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.Identity.get -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.Identity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.SpecialistTurnApplication(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, string! ChildInvocationId, string! SourceId, string! SourceFingerprint, System.DateTimeOffset AppliedAt) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Applications.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Applications.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication!>?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.ChildInvocationId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnApplication.ChildInvocationId.init -> void

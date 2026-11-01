@@ -88,3 +88,9 @@ cannot report native success. Native cancellation after acceptance preserves the
 preventing process application. Current operation identity, contract and input-binding fingerprints
 are compared with the protected request at acceptance, cached replay and final typed completion.
 These source-runtime tests exercise both Memory and SQLite; they do not imply packaged or live-model qualification.
+
+`ApplyAsync` is a versioned, metadata-only transition for an exact accepted parent/child delivery.
+It persists one source ID/fingerprint and native completion time, supports exact-original legacy
+readers, and refuses conflicting sources. It neither changes protected content nor replays a
+conversation transition. Native source validation belongs to the runtime handler; these neutral Core
+facts grant no authority. No relational entity or migration changes in this increment.

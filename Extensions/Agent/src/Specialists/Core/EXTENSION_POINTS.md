@@ -82,7 +82,12 @@ usage from conservative reserved output when attribution is unavailable. Input/t
 are not established by this mechanism. Configured model identity and reported identity remain distinct.
 
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
-credential durability or end-to-end recovery qualification. Native cancellation/applied settlement, hard input/total-token accounting and retention controls remain separate M3 work.
+credential durability or end-to-end recovery qualification. `ApplyAsync` records one exact accepted
+native delivery's application as copied metadata, using `SpecialistTurnApplication` source facts.
+Equivalent sources are idempotent, conflicts refuse, and protected result/session and conversation
+state are preserved. The runtime consumer verifies physical native source authority before calling
+this neutral port. Native cancellation, hard input/total-token accounting, retention and complete
+recovery qualification remain separate M3 work.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.

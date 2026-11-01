@@ -31,7 +31,7 @@ using Xunit;
 
 namespace Elsa.Agent.Specialists.Tests.Runtime;
 
-public sealed class SpecialistNativeTests
+public sealed partial class SpecialistNativeTests
 {
     [Theory]
     [InlineData(false)]
@@ -160,6 +160,7 @@ public sealed class SpecialistNativeTests
         var (document, request) = await NativeTurnAsync(provider, executable);
         Assert.Equal(SpecialistTurnStatus.Accepted, document.Status);
         Assert.NotNull(document.ProtectedResult);
+        Assert.Null(document.Applications);
         Assert.Equal(1, (await provider.GetRequiredService<ISpecialistTurnStore>().ReadConversationAsync(document.Handle, request.Identity, default))!.Revision);
         Assert.Equal(WorkflowExecutionStatus.Cancelled, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
         Assert.Equal(1, factory.Calls);
@@ -311,7 +312,11 @@ public sealed class SpecialistNativeTests
         Assert.NotEqual(firstChild.InvocationId, replayChild.InvocationId);
         Assert.Equal(ActivityExecutionStatus.Completed, replayChild.Status);
         Assert.Equal("accepted once", successor.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString());
+        _ = await provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(10, "run", SpecialistSettlementBoundary.AppliedKind));
         var replayed = (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, originalIdentity with { ActivityExecutionId = successor.InvocationId }, default)).Document;
+        var application = Assert.Single(replayed.Applications!);
+        Assert.Equal(successor.InvocationId, application.Identity.ActivityExecutionId);
+        Assert.Equal(replayChild.InvocationId, application.ChildInvocationId);
         Assert.Equal(accepted.ProtectedResult, replayed.ProtectedResult);
         Assert.Equal(firstChild.InvocationId, replayed.ChildInvocationId);
         Assert.Equal(2, replayed.Deliveries!.Count);
@@ -1036,7 +1041,7 @@ public sealed class SpecialistNativeTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
     }
 
-    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null)
+    private static async ValueTask<ServiceProvider> ServicesAsync(FixtureFactory factory, string? journalConnection = null, TimeProvider? clock = null, LeaseTrace? leaseTrace = null, PersistenceMode persistenceMode = PersistenceMode.Durable)
     {
         var services = new ServiceCollection();
         if (clock is not null) services.AddSingleton(clock);
@@ -1060,7 +1065,7 @@ public sealed class SpecialistNativeTests
         leaseTrace?.Decorate(services);
         if (leaseTrace?.ChangeBindingAtChildCompletion == true)
             services.AddScoped<IRuntimeCheckpointCommitEnricher>(provider => new LateBindingMutation(provider.GetRequiredService<IActivityExecutionStateStore>()));
-        services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+        services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = persistenceMode });
         services.AddPersistenceModes();
         var provider = services.BuildServiceProvider();
         if (journalConnection is not null)

@@ -147,6 +147,21 @@ public sealed class SpecialistJournalProviderTests
         }));
         Assert.All(deliveryReplays, document => { Assert.NotNull(document); Assert.Equal(accepted.ProtectedResult, document.ProtectedResult); Assert.Equal(candidate.Deadline, document.Deadline); });
         Assert.Equal(beforeDeliveryReplay, await recovered.ReadConversationAsync(conversation.Id, identity, CancellationToken.None));
+        var applications = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+            var application = new SpecialistTurnApplication(identity with { ActivityExecutionId = "replay-parent-" + index },
+                "replay-child-" + index, "commit:application-" + index, new string('a', 64), now);
+            var applied = await store.ApplyAsync(candidate.Handle, application, CancellationToken.None);
+            Assert.NotNull(applied);
+            Assert.NotNull(await store.ApplyAsync(candidate.Handle, application, CancellationToken.None));
+            Assert.Null(await store.ApplyAsync(candidate.Handle, application with { SourceId = "foreign-source" }, CancellationToken.None));
+            return applied;
+        }));
+        Assert.All(applications, document => Assert.Equal(accepted.ProtectedResult, document.ProtectedResult));
+        Assert.Equal(8, (await recovered.ReadAsync(candidate.Handle, identity, CancellationToken.None))!.Applications!.Count);
+        Assert.Equal(beforeDeliveryReplay, await recovered.ReadConversationAsync(conversation.Id, identity, CancellationToken.None));
         await using (var deliveryHost = Host())
         await using (var deliveryScope = deliveryHost.CreateAsyncScope())
         {
@@ -154,6 +169,8 @@ public sealed class SpecialistJournalProviderTests
             var deliveryIdentity = identity with { ActivityExecutionId = "replay-parent-7" };
             var read = (await store.ReadAsync(candidate.Handle, deliveryIdentity, CancellationToken.None))!;
             Assert.Equal(9, read.Deliveries!.Count);
+            Assert.Equal(8, read.Applications!.Count);
+            Assert.Equal("commit:application-7", read.Applications.Single(x => x.Identity == deliveryIdentity).SourceId);
             Assert.Equal("replay-child-7", read.Deliveries.Single(x => x.Identity == deliveryIdentity).ChildInvocationId);
             Assert.Null(await store.ReplayAcceptedAsync(candidate.Handle, deliveryIdentity, "foreign-child", CancellationToken.None));
             Assert.Equal(accepted.ChildInvocationId, read.ChildInvocationId);

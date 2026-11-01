@@ -119,6 +119,21 @@ runs before and after acceptance, after cached replay association and before fin
 A test-only checkpoint participant changes the binding after model-child completion to exercise that
 last boundary independently. These cases retain the original failure when confirmation is unavailable; they do not retry an uncertain write.
 
-Cancellation/applied dispositions, pre-admission tombstones and retention are still required by T021–T023.
+Native completed-facade checkpoints now contribute a deterministic `elsa.specialist.applied/1` intent,
+validated again after all checkpoint participants. The required-source outbox handler reopens the
+physical source in ordinary scope, verifies its current owner/fence/visibility and canonical payload,
+reconstructs the completed parent/child/artifact proof and authenticates the exact protected receipt.
+It rechecks source authority immediately before the journal metadata write. Intent-only calls and
+working-set-only source readers refuse; delivery context is not independent authority.
+
+An application records the exact native identity/child, source outbox ID/fingerprint and native
+completion time. Both stores preserve accepted content and conversation state; equivalent delivery is
+idempotent and a conflicting source refuses. Applications work for retained exact-original legacy
+turns as well as registered deliveries. Missing confirmation remains owed through the existing outbox;
+no model request or accepted session transition is repeated. Source-native tests cover Balanced and
+Durable modes with Memory/SQLite journals, including failure before write and lost acknowledgement.
+This increment does not yet qualify an independent-process durable runtime/outbox package host.
+
+Cancellation dispositions, pre-admission tombstones and retention are still required by T021–T023.
 A committed but unreadable receipt can still leave native work faulted; this remains distinct from
 confirmed recovery and from the qualified facade-read operator retry path.

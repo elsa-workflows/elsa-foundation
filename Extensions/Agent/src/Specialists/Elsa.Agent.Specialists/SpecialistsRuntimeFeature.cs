@@ -1,4 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Core.DependencyInjection;
 using Elsa.Agent.Specialists.Core.Contracts;
 using CShells.Features;
@@ -38,6 +40,10 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddScoped<SpecialistTurnBudgetAllocator>();
         services.TryAddScoped<SpecialistTurnLeaseRenewer>();
         services.TryAddScoped<SpecialistSessionCodec>();
+        services.TryAddScoped<SpecialistSettlementBoundary>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, SpecialistCheckpointEnricher>());
+        services.AddRuntimePostCommitIntentHandler<SpecialistSettlementHandler>(SpecialistSettlementBoundary.AppliedKind,
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(5)), requiresDurableSource: true);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, SpecialistTypesStartupTask>());

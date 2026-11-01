@@ -85,7 +85,7 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
         return workflow;
     }
 
-    private static SpecialistInvocationIdentity Identity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
+    internal static SpecialistInvocationIdentity Identity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
     {
         var descriptor = Descriptor(node);
         foreach (var capture in node.OutputCaptures.Values.Where(x => x.CaptureOnSuccessfulCompletion))

@@ -30,6 +30,44 @@ public sealed class SpecialistEfJournalTests
     private static SpecialistTurnDocument Document => new(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Application_is_exact_idempotent_metadata_and_supports_retained_legacy_turns(bool durable, bool legacy)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var original = legacy ? Document : Document with { DeliveryProtocol = 1, Deliveries = [new(Identity)] };
+        await store.StageAsync(original, default);
+        var application = new SpecialistTurnApplication(Identity, "child", "commit:intent", new string('a', 64), Now);
+        Assert.Null(await store.ApplyAsync(original.Handle, application, default));
+        Assert.NotNull(await store.ClaimAsync(original.Handle, Identity, "child", "fence", Now, default));
+        Assert.Null(await store.ApplyAsync(original.Handle, application, default));
+        Assert.True(await store.DispatchAsync(original.Handle, Identity, new("fence", 1), Now, default));
+        Assert.Null(await store.ApplyAsync(original.Handle, application, default));
+        Assert.True(await store.AcceptAsync(original.Handle, Identity, new("fence", 1), "immutable", Now, default));
+        Assert.Null(await store.ApplyAsync(original.Handle, application with { ChildInvocationId = "foreign-child" }, default));
+        var applied = (await store.ApplyAsync(original.Handle, application, default))!;
+        Assert.Equal(application, Assert.Single(applied.Applications!));
+        Assert.Equal(application, Assert.Single((await store.ApplyAsync(original.Handle, application, default))!.Applications!));
+        Assert.Null(await store.ApplyAsync(original.Handle, application with { SourceId = "another-source" }, default));
+        Assert.Null(await store.ApplyAsync(original.Handle, application with { SourceFingerprint = new string('b', 64) }, default));
+        Assert.Null(await store.ApplyAsync(original.Handle, application with { ChildInvocationId = "another-child" }, default));
+        Assert.Null(await store.ApplyAsync(original.Handle, application with { Identity = Identity with { ArtifactHash = "other" } }, default));
+        var returned = (IList<SpecialistTurnApplication>)applied.Applications!;
+        try { returned[0] = application with { SourceId = "mutated" }; }
+        catch (NotSupportedException) { /* A read-only EF result is equally isolated. */ }
+        Assert.Equal(application, Assert.Single((await store.ReadAsync(original.Handle, Identity, default))!.Applications!));
+        if (durable)
+        {
+            await using var fresh = database.Context();
+            Assert.Equal(application, Assert.Single((await Store(fresh).ReadAsync(original.Handle, Identity, default))!.Applications!));
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task A_matching_opaque_fingerprint_cannot_register_another_artifact_or_version(bool durable)
@@ -87,6 +125,10 @@ public sealed class SpecialistEfJournalTests
         Assert.Equal("retry-child", replay.Deliveries!.Single(x => x.Identity == retry).ChildInvocationId);
         Assert.Null(await store.ReplayAcceptedAsync(first.Handle, retry, "foreign-child", default));
         Assert.Equal(conversation, await store.ReadConversationAsync(first.Conversation.ConversationId, Identity, default));
+        var application = new SpecialistTurnApplication(retry, "retry-child", "commit:retry", new string('a', 64), Now);
+        Assert.NotNull(await store.ApplyAsync(first.Handle, application, default));
+        Assert.Equal(conversation, await store.ReadConversationAsync(first.Conversation.ConversationId, Identity, default));
+        Assert.Equal("immutable-first-receipt", (await store.ReadAsync(first.Handle, Identity, default))!.ProtectedResult);
         ((IList<SpecialistTurnDelivery>)replay.Deliveries)[0] = new(retry with { ActivityExecutionId = "injected-parent" });
         Assert.Equal(Identity, (await store.ReadAsync(first.Handle, Identity, default))!.Deliveries![0].Identity);
     }

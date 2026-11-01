@@ -80,9 +80,10 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    on resulting main `5be59cebc`. M3 draft PR #3594 integrates that main and adds concrete model
    access, protected turn/conversation journals, physical request reservations, explicit native
    continuation, finite generation-fenced leases, authenticated caller-lowered execution bounds and
-   matching-operation/native-delivery replay and confirmed acceptance-acknowledgement recovery. These are draft increments with separate source,
+   matching-operation/native-delivery replay, confirmed acceptance-acknowledgement recovery and
+   native checkpoint/outbox application settlement. These are draft increments with separate source,
    provider and bounded package receipts on the owning issue; whole-M3 delivery still requires
-   native cancellation/applied settlement, retention/compatibility,
+   native cancellation/tombstones, retention/compatibility,
    streaming and complete support qualification.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and

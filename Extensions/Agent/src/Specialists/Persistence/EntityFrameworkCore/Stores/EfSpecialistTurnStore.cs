@@ -149,6 +149,14 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             document => document.Status == SpecialistTurnStatus.Accepted && SpecialistTurnDeliveryRules.CanBindChild(document, identity, childInvocationId),
             document => SpecialistTurnDeliveryRules.BindChild(document, identity, childInvocationId), cancellationToken, changeConversation: false);
 
+    public ValueTask<SpecialistTurnDocument?> ApplyAsync(string handle, SpecialistTurnApplication application, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        return ChangeAsync(handle, application.Identity, DateTimeOffset.MinValue, requireDeadline: false,
+            document => SpecialistTurnApplicationRules.Admits(document, application),
+            document => SpecialistTurnApplicationRules.Apply(document, application), cancellationToken, changeConversation: false);
+    }
+
     public ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
         Lease(lease);

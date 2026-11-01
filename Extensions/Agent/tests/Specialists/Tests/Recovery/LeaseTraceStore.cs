@@ -8,6 +8,11 @@ namespace Elsa.Agent.Specialists.Tests.Recovery;
 
 internal sealed class LeaseTrace
 {
+    internal Func<ValueTask>? AfterAcceptedRead { get; set; }
+    internal bool HoldApplication { get; set; }
+    internal bool LoseApplicationResponse { get; init; }
+    internal int ApplicationAttempts;
+    internal int ApplicationResponsesLost;
     internal bool RejectRenewal { get; init; }
     internal bool LoseAcceptanceResponse { get; init; }
     internal bool FailBeforeAcceptance { get; init; }
@@ -49,11 +54,21 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         var document = await inner.ReadAsync(handle, identity, cancellationToken);
         if (document?.Status == SpecialistTurnStatus.Accepted && (trace.AlwaysLoseAcceptedReceiptRead || trace.LoseAcceptedReceiptRead && Interlocked.Increment(ref trace.AcceptedReceiptReadsLost) == 1))
             throw new IOException("The accepted receipt could not be read by the native facade.");
+        if (document?.Status == SpecialistTurnStatus.Accepted && trace.AfterAcceptedRead is { } afterRead) await afterRead();
         if (document?.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching) trace.ClaimedRead.TrySetResult(document);
         return document;
     }
     public ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken) => inner.ReadConversationAsync(conversationId, identity, cancellationToken);
     public ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken) => inner.ClaimAsync(handle, identity, childInvocationId, fence, now, cancellationToken);
+    public async ValueTask<SpecialistTurnDocument?> ApplyAsync(string handle, SpecialistTurnApplication application, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref trace.ApplicationAttempts);
+        if (trace.HoldApplication) throw new IOException("Settlement delivery failed before its journal write.");
+        var result = await inner.ApplyAsync(handle, application, cancellationToken);
+        if (result is not null && trace.LoseApplicationResponse && Interlocked.Increment(ref trace.ApplicationResponsesLost) == 1)
+            throw new IOException("The committed settlement acknowledgement was lost.");
+        return result;
+    }
     public async ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
         trace.Renewals.Enqueue((id, contextId));
