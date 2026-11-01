@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   deleteWorkflowView, getWorkflowTag, listWorkflowTags, listWorkflowViews, saveWorkflowView,
@@ -195,11 +196,18 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
       {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
       <p className="wf-library-help">Saves the current folder, filters, sort and optional columns. Each reader sees only workflows they can access.</p>
       {error ? <p role="alert">{error}</p> : null}
-      <div className="wf-dialog-actions"><button type="button" disabled={busy} onClick={onClose}>Cancel</button>{error ? <button type="button" disabled={busy} onClick={onSaved}>Reload view list</button> : null}
-        {existing?.canDelete ? <button type="button" disabled={busy} onClick={() => void remove()}>Delete saved view</button> : null}
-        {existing?.canEdit ? <button type="button" disabled={busy || !name.trim() || (shared && !canShare)} onClick={() => void save(true)}>Update saved view</button> : null}
-        <button type="submit" disabled={busy || !name.trim() || (shared && !canShare)}>{busy ? "Saving…" : "Save as new view"}</button>
-      </div>
+      <StudioDialogFooter
+        className="wf-dialog-actions"
+        extra={<>
+          {error ? <StudioButton disabled={busy} onClick={onSaved}>Reload view list</StudioButton> : null}
+          {existing?.canDelete ? <StudioButton disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
+          {existing?.canEdit ? <StudioButton disabled={busy || !name.trim() || (shared && !canShare)} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
+        </>}
+        onCancel={onClose}
+        cancelDisabled={busy}
+        confirmLabel={busy ? "Saving…" : "Save as new view"}
+        confirmDisabled={busy || !name.trim() || (shared && !canShare)}
+      />
     </form>
   </section></div>;
 }

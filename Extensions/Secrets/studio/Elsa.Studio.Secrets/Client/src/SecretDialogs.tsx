@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
-import { AdvancedSection } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
 
@@ -135,10 +135,13 @@ export function CreateSecretDialog({
               </div>
             </AdvancedSection>
           </div>
-          <div className="secrets-dialog-actions secrets-create-actions">
-            <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
-            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Creating..." : "Create"}</button>
-          </div>
+          <StudioDialogFooter
+            className="secrets-dialog-actions secrets-create-actions"
+            onCancel={onCancel}
+            cancelDisabled={submitting}
+            confirmLabel={submitting ? "Creating..." : "Create"}
+            confirmDisabled={!canSubmit || submitting}
+          />
         </form>
       </section>
     </div>
@@ -200,10 +203,13 @@ export function RotateSecretDialog({
           <SecretValueField label="New value" value={value} typeName={secret.typeName} editorHint={type?.editorHint ?? null} onChange={setValue} />
         )}
         <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
-        <div className="secrets-dialog-actions">
-          <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
-          <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Rotating..." : "Rotate"}</button>
-        </div>
+        <StudioDialogFooter
+          className="secrets-dialog-actions"
+          onCancel={onCancel}
+          cancelDisabled={submitting}
+          confirmLabel={submitting ? "Rotating..." : "Rotate"}
+          confirmDisabled={!canSubmit || submitting}
+        />
       </form>
     </div>
   );

@@ -23,6 +23,17 @@ function render(tags: WorkflowTag[] = []) {
 }
 
 describe("workflow controlled value wire identities", () => {
+  it("uses StudioDialogFooter so Create tag is the filled primary and Close stays default", () => {
+    const { container } = render();
+    const close = button(container, "Close")!;
+    const create = button(container, "Create tag")!;
+    expect(close.classList.contains("studio-button")).toBe(true);
+    expect(close.getAttribute("data-variant")).toBe("default");
+    expect(create.classList.contains("studio-button")).toBe(true);
+    expect(create.getAttribute("data-variant")).toBe("primary");
+    expect(create.getAttribute("type")).toBe("submit");
+  });
+
   it("sends empty IDs for new controlled values so the server allocates their identities", async () => {
     const { container, postJson } = render();
     await fill(container.querySelector('input[aria-label="Tag name"]'), "Region");
