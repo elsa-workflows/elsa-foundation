@@ -139,7 +139,7 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
         </button>
       </fieldset> : <p role="status">{support === "loading" ? "Checking service selection support…" : "This backend does not advertise authored service publication and its required paged workflow and executable reads."}</p>}
       <p><a href={qualifyStudioBackendPath("/workflows/definitions?homeAction=create")} target="_blank" rel="noopener noreferrer">Create a service workflow</a></p>
-      <p className="wf-muted">For ETL, choose RunEtl as the new workflow’s root, select a published pipeline, then save, review and publish. Return here to select its publication.</p>
+      <p className="wf-muted">For ETL, create a Sequence workflow, add RunEtl and select a published pipeline, then save, review and publish. Return here to select its publication.</p>
     </>}
     {error ? <p role="alert">{error}</p> : null}
   </section>;
