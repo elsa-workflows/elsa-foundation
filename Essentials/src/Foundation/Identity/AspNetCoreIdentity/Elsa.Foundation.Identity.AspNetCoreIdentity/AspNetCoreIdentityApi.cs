@@ -41,6 +41,7 @@ public static class AspNetCoreIdentityApi
         api.MapUnboundOperation("GET", "/_elsa/identity/login-assets/{name}", "LoginArtwork",
                 typeof(byte[]), StatusCodes.Status200OK, null, HandleLoginArtworkAsync,
                 name: "AspNetCoreIdentityLoginArtwork", documentAuthResponses: false, successContentType: "image/jpeg", containFailures: false)
+            .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(byte[]), ["image/jpeg", "image/png"]))
             .AllowPublic(PublicCategory, "Public decorative login artwork; contains no identity data.");
 
         api.MapUnboundOperation("POST", "/" + AspNetCoreIdentityDefaults.LoginRoute, "Login",
@@ -55,14 +56,14 @@ public static class AspNetCoreIdentityApi
     private static async Task HandleLoginArtworkAsync(HttpContext context)
     {
         var name = context.Request.RouteValues["name"]?.ToString();
-        if (name is not ("ember.jpg" or "tidal.jpg" or "daybreak.jpg" or "canopy.jpg"))
+        if (name is not ("ember.jpg" or "tidal.jpg" or "daybreak.jpg" or "canopy.jpg" or "elsa-logo.png"))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
         using var stream = typeof(LoginPage).Assembly.GetManifestResourceStream($"Elsa.LoginArtwork.{name}")
             ?? throw new InvalidOperationException("Bundled login artwork is missing.");
-        context.Response.ContentType = "image/jpeg";
+        context.Response.ContentType = name == "elsa-logo.png" ? "image/png" : "image/jpeg";
         context.Response.Headers.CacheControl = "public,max-age=86400";
         await stream.CopyToAsync(context.Response.Body, context.RequestAborted);
     }
