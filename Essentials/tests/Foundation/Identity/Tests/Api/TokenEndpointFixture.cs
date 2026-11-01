@@ -51,7 +51,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
     /// Mapping the unrelated FastEndpoints canaries mutates process-global state, so the calling test class must join
     /// <see cref="FastEndpointsHostCollection"/>.
     /// </remarks>
-    public static async Task<TokenEndpointFixture> StartAsync(Action<IServiceCollection>? configureServices = null)
+    public static async Task<TokenEndpointFixture> StartAsync(Action<IServiceCollection>? configureServices = null, string? pathBase = null, string? routePrefix = null)
     {
         var databaseSuffix = Guid.NewGuid().ToString("n");
 
@@ -108,6 +108,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                 });
                 webHost.Configure(app =>
                 {
+                    if (pathBase is not null) app.UsePathBase(pathBase);
                     app.UseRouting();
                     app.UseAuthentication();
                     app.UseAuthorization();
@@ -118,8 +119,9 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                             config.Security.PermissionsClaimType = IdentityClaimTypes.Permission;
                             config.Security.RoleClaimType = IdentityClaimTypes.Role;
                         });
-                        ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(endpoints, null);
-                        ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(endpoints, null);
+                        Microsoft.AspNetCore.Routing.IEndpointRouteBuilder identityRoutes = routePrefix is null ? endpoints : endpoints.MapGroup(routePrefix);
+                        ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(identityRoutes, null);
+                        ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(identityRoutes, null);
                         endpoints.MapOpenApi();
                         endpoints
                             .MapGet("/protected", context =>

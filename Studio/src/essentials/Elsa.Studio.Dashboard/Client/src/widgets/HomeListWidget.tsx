@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowRight, CheckCheck, CircleAlert, CircleCheck, Clock3, Inbox, Network, Play, Plus, Workflow, type LucideIcon } from "lucide-react";
-import { type StudioDashboardWidgetBodyProps, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, type StudioDashboardWidgetBodyProps, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import type { HomeRunSummary, HomeWorkflowSummary } from "./homeData";
 import { navigateStudioPath, runStatusTone } from "./homeData";
@@ -9,7 +9,7 @@ const previewRows: Record<StudioDashboardWidgetSize, number> = { small: 3, mediu
 
 // Compact, linked records give the author a route back to their work. Status has both an icon
 // and a caption; technical identities remain secondary and can wrap at any widget size.
-export function QuickActionsWidget() {
+export function QuickActionsWidget({runtimeAvailable=true}:{runtimeAvailable?:boolean}) {
   return (
     <div className="home-actions">
       <ul className="home-quick-actions">
@@ -24,7 +24,7 @@ export function QuickActionsWidget() {
           <ArrowRight size={18} aria-hidden="true" />
         </HomeLink></li>
       </ul>
-      <HomeLink href="/workflows/instances" className="home-action-shortcut"><Play size={15} aria-hidden="true" /><span>Inspect workflow runs</span><ArrowRight size={15} aria-hidden="true" /></HomeLink>
+      {runtimeAvailable ? <HomeLink href="/workflows/instances" className="home-action-shortcut"><Play size={15} aria-hidden="true" /><span>Inspect workflow runs</span><ArrowRight size={15} aria-hidden="true" /></HomeLink> : null}
     </div>
   );
 }
@@ -116,9 +116,10 @@ function HomeEmptyState({ icon: Icon, title, description, action, tone }: { icon
 }
 
 function HomeLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
-  return <a href={href} className={className} onClick={event => {
+  const targetHref=qualifyStudioBackendPath(href);
+  return <a href={targetHref} className={className} onClick={event => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    navigateStudioPath(href);
+    navigateStudioPath(targetHref);
   }}>{children}</a>;
 }

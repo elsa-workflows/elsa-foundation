@@ -128,7 +128,12 @@ describe("Create dialog regression contract", () => {
     const store = fieldControl<HTMLSelectElement>(dialog, "Store");
     const value = fieldControl<HTMLInputElement>(dialog, "Value");
     const create = dialog.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    const cancel = [...dialog.querySelectorAll("button")].find(button => button.textContent === "Cancel")!;
 
+    expect(cancel.classList.contains("studio-button")).toBe(true);
+    expect(cancel.getAttribute("data-variant")).toBe("default");
+    expect(create.classList.contains("studio-button")).toBe(true);
+    expect(create.getAttribute("data-variant")).toBe("primary");
     expect(type.value).toBe("text");
     expect(store.value).toBe("encrypted");
     expect(value.value).toBe("");

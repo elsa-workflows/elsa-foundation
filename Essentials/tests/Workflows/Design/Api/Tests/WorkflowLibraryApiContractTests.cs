@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Tasks.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -22,6 +23,164 @@ namespace Elsa.Workflows.Design.Api.Tests;
 
 public sealed class WorkflowLibraryApiContractTests
 {
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task Organization_setting_controls_organization_relations_without_removing_paged_browsing(bool? configured, bool enabled)
+    {
+        await using var host = await StartAsync(new LibraryProbe(), organizationEnabled: configured);
+        var relations = await RelationsAsync(host);
+        Assert.Contains("workflow-definitions-page", relations);
+        Assert.Contains("workflow-definitions-query", relations);
+        foreach (var relation in new[] { "workflow-folders", "workflow-folder-rename", "workflow-folder-move",
+                     "workflow-folder-delete-empty", "workflow-definition-folder-move", "workflow-organization",
+                     "workflow-tags", "workflow-tag", "workflow-tags-bulk", "workflow-views", "workflow-view", "workflow-favorites" })
+            Assert.Equal(enabled, relations.Contains(relation));
+    }
+
+    [Theory]
+    [InlineData("GET", "/design/workflows/folders", null)]
+    [InlineData("GET", "/design/workflows/folders/invoices", null)]
+    [InlineData("POST", "/design/workflows/folders", "{\"name\":\"New folder\"}")]
+    [InlineData("POST", "/design/workflows/folders/invoices/rename", "{\"name\":\"Renamed\",\"revision\":\"f1\"}")]
+    [InlineData("POST", "/design/workflows/folders/invoices/move", "{\"parentId\":null,\"revision\":\"f1\"}")]
+    [InlineData("DELETE", "/design/workflows/folders/invoices?revision=f1", null)]
+    [InlineData("POST", "/design/workflows/definitions/move", "{\"definitionIds\":[\"orders\"],\"folderId\":\"invoices\"}")]
+    [InlineData("GET", "/design/workflows/definitions/orders/organization", null)]
+    [InlineData("PUT", "/design/workflows/definitions/orders/organization", "{\"tags\":[],\"revision\":\"r1\"}")]
+    [InlineData("GET", "/design/workflows/tags", null)]
+    [InlineData("GET", "/design/workflows/tags/critical", null)]
+    [InlineData("POST", "/design/workflows/tags", "{\"name\":\"New tag\"}")]
+    [InlineData("PUT", "/design/workflows/tags/critical", "{\"name\":\"Renamed\",\"revision\":\"t1\"}")]
+    [InlineData("POST", "/design/workflows/tags/bulk", "{\"targets\":[{\"definitionId\":\"orders\",\"revision\":\"r1\"}],\"add\":[],\"remove\":[]}")]
+    [InlineData("GET", "/design/workflows/views", null)]
+    [InlineData("POST", "/design/workflows/views", "{\"name\":\"New view\",\"query\":{}}")]
+    [InlineData("PUT", "/design/workflows/views/view-1", "{\"name\":\"Renamed\",\"query\":{},\"revision\":\"v1\"}")]
+    [InlineData("DELETE", "/design/workflows/views/view-1?revision=v1", null)]
+    [InlineData("PUT", "/design/workflows/definitions/orders/favorite", "{}")]
+    [InlineData("DELETE", "/design/workflows/definitions/orders/favorite", null)]
+    public async Task Disabled_organization_refuses_stale_operations_before_store_mutations(string method, string path, string? body)
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, organizationEnabled: false);
+        using var response = await SendAsync(host, method, path, "library-all", body);
+        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+        Assert.Contains("disabled", await response.Content.ReadAsStringAsync());
+        Assert.Null(probe.Actor);
+        Assert.Null(probe.Subject);
+        Assert.Null(probe.DefinitionId);
+        Assert.Null(probe.TagId);
+        Assert.Null(probe.Bulk);
+        Assert.False(probe.ListedTags);
+    }
+
+    [Theory]
+    [InlineData("folderId=invoices")]
+    [InlineData("unfiled=true")]
+    [InlineData("includeDescendants=true")]
+    [InlineData("favoritesOnly=true")]
+    [InlineData("tagFilters=%5B%7B%22tagId%22%3A%22critical%22%2C%22operator%22%3A%22exists%22%7D%5D")]
+    public async Task Disabled_organization_filters_cannot_become_a_broader_page(string query)
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, organizationEnabled: false);
+        using var response = await SendAsync(host, "GET", $"/design/workflows/definitions/page?{query}", "library-read");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("disabled", await response.Content.ReadAsStringAsync());
+        Assert.Null(probe.Query);
+    }
+
+    [Fact]
+    public async Task Disabled_organization_preserves_ordinary_paging_and_visibility_without_organization_projection()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, organizationEnabled: false);
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page?searchTerm=invoice&sort=modified&publicationState=published&pageSize=25", "library-all");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("invoice", probe.Query!.SearchTerm);
+        Assert.Equal("modified", probe.Query.Sort);
+        Assert.Equal("published", probe.Query.PublicationState);
+        Assert.Equal("test-tenant-action-v1", probe.ReadScope!.Revision);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var page = document.RootElement;
+        Assert.Equal(123, page.GetProperty("totalCount").GetInt32());
+        Assert.Equal("next-page", page.GetProperty("nextContinuationToken").GetString());
+        var row = Assert.Single(page.GetProperty("items").EnumerateArray());
+        Assert.False(row.TryGetProperty("folderId", out var folder) && folder.ValueKind != JsonValueKind.Null);
+        Assert.False(row.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array && tags.GetArrayLength() > 0);
+        Assert.False(row.GetProperty("favorite").GetBoolean());
+        Assert.All(page.GetProperty("permissions").EnumerateObject(), permission => Assert.False(permission.Value.GetBoolean()));
+    }
+
+    [Fact]
+    public async Task Disabled_organization_does_not_bypass_folder_resource_authorization()
+    {
+        var probe = new LibraryProbe { IncludeHiddenFolder = true };
+        await using var host = await StartAsync(probe,
+            services => services.AddSingleton<IPermissionResourceHandler, DeniedFolderPolicy>(), organizationEnabled: false);
+        using var page = await SendAsync(host, "GET", "/design/workflows/definitions/page", "library-read");
+        Assert.Equal(HttpStatusCode.Forbidden, page.StatusCode);
+        using var details = await SendAsync(host, "GET", "/design/workflows/definitions/orders", "library-read");
+        Assert.Equal(HttpStatusCode.Forbidden, details.StatusCode);
+    }
+
+    [Fact]
+    public async Task Disabled_organization_refuses_folder_placement_before_creation_but_keeps_ordinary_creation()
+    {
+        var add = new LibraryAddCommand();
+        await using var host = await StartAsync(new LibraryProbe(), services =>
+        {
+            services.RemoveAll<IAddWorkflowDefinitionCommand>();
+            services.AddSingleton<IAddWorkflowDefinitionCommand>(add);
+        }, organizationEnabled: false);
+        using var scoped = await SendAsync(host, "POST", "/design/workflows/definitions", "library-all",
+            "{\"name\":\"Invoice\",\"folderId\":\"invoices\"}");
+        Assert.Equal(HttpStatusCode.NotImplemented, scoped.StatusCode);
+        Assert.Contains("disabled", await scoped.Content.ReadAsStringAsync());
+        Assert.False(add.Executed);
+        using var ordinary = await SendAsync(host, "POST", "/design/workflows/definitions", "library-all", "{\"name\":\"Invoice\"}");
+        ordinary.EnsureSuccessStatusCode();
+        Assert.True(add.Executed);
+        Assert.DoesNotContain("folderBreadcrumb", await ordinary.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("folderId=invoices")]
+    [InlineData("favoritesOnly=true")]
+    [InlineData("tagFilters=%5B%5D")]
+    public async Task Disabled_organization_refuses_scoped_legacy_list_requests(string query)
+    {
+        await using var host = await StartAsync(new LibraryProbe(), organizationEnabled: false);
+        using var response = await SendAsync(host, "GET", $"/design/workflows/definitions?{query}", "library-read");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("disabled", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Disabled_organization_omits_metadata_from_details_without_losing_the_definition()
+    {
+        await using var host = await StartAsync(new LibraryProbe(), organizationEnabled: false);
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/orders", "library-read");
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"id\":\"sample-definition\"", body);
+        Assert.DoesNotContain("folderBreadcrumb", body);
+        Assert.DoesNotContain("critical", body);
+    }
+
+    [Fact]
+    public void Organization_setting_has_a_true_default_and_boolean_manifest_metadata()
+    {
+        var feature = new WorkflowsDesignApiFeature();
+        Assert.True(feature.WorkflowOrganizationEnabled);
+        var property = typeof(WorkflowsDesignApiFeature).GetProperty(nameof(feature.WorkflowOrganizationEnabled))!;
+        Assert.Equal(typeof(bool), property.PropertyType);
+        var hint = Assert.Single(property.GetCustomAttributesData(), attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
+        Assert.Equal("true", Assert.Single(hint.NamedArguments, argument => argument.MemberName == "DefaultValue").TypedValue.Value);
+        Assert.Equal("Workflow organization", Assert.Single(hint.NamedArguments, argument => argument.MemberName == "DisplayName").TypedValue.Value);
+    }
+
     [Theory]
     [InlineData("GET", "/design/workflows/folders", null)]
     [InlineData("GET", "/design/workflows/definitions/page", null)]
@@ -45,6 +204,7 @@ public sealed class WorkflowLibraryApiContractTests
         var relations = await RelationsAsync(present);
         Assert.Contains("workflow-folders", relations);
         Assert.Contains("workflow-definitions-page", relations);
+        Assert.Contains("workflow-definitions-query", relations);
         Assert.Contains("workflow-organization", relations);
         Assert.Contains("workflow-views", relations);
         Assert.Contains("workflow-favorites", relations);
@@ -495,12 +655,20 @@ public sealed class WorkflowLibraryApiContractTests
         Assert.Equal("user-a", probe.Actor);
     }
 
-    private static Task<Host> StartAsync(LibraryProbe store, Action<IServiceCollection>? configure = null) => Host.StartAsync(services =>
+    private static Task<Host> StartAsync(LibraryProbe store, Action<IServiceCollection>? configure = null,
+        bool? organizationEnabled = null) => Host.StartAsync(services =>
     {
         services.AddSingleton<IWorkflowLibraryStore>(store);
         services.AddSingleton<IAuthSessionService, PrincipalSession>();
         services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new("test-tenant-action-v1")));
         configure?.Invoke(services);
+    }, feature =>
+    {
+        if (organizationEnabled is not { } enabled) return;
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["WorkflowOrganizationEnabled"] = enabled ? "true" : "false"
+        }).Build().Bind(feature);
     });
 
     private static async Task<HashSet<string>> RelationsAsync(Host host)

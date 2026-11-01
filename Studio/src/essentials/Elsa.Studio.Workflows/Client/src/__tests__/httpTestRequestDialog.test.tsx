@@ -548,6 +548,33 @@ describe("HTTP test request dialog", () => {
     expect(onPublishDraft).toHaveBeenCalledOnce();
   });
 
+  it("keeps published-version inspection available without offering unsupported publication", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue({ artifactId: "artifact-1", sourceReferenceId: "reference-1", accessState: "allowed", authoredInputs: [], compiledInputs: [] });
+    const onPublishDraft = vi.fn(), onOpenPublishedVersion = vi.fn();
+    const container = await renderDialog(undefined, { onPublishDraft, onOpenPublishedVersion, publicationUnavailableReason: "Publishing is unavailable on this backend." });
+    await waitFor(() => expect(container.textContent).toContain(publishedHttpEndpointLiteralsMissingMessage));
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Publish draft")).toBeUndefined();
+    const inspect = [...container.querySelectorAll("button")].find(button => button.textContent === "Open published version")!;
+    expect(inspect).toBeTruthy();
+    await click(inspect);
+    expect(onOpenPublishedVersion).toHaveBeenCalledOnce();
+    expect(onPublishDraft).not.toHaveBeenCalled();
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("explains an unavailable publication capability when no published endpoint exists", async () => {
+    const onPublishDraft = vi.fn();
+    const container = await renderDialog(undefined, { artifactId: null, onPublishDraft, publicationUnavailableReason: "Publishing is unavailable on this backend." });
+    await waitFor(() => expect(container.textContent).toContain("Publishing is unavailable on this backend."));
+    expect(container.textContent).toContain("Published endpoint unavailable");
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Publish draft")).toBeUndefined();
+    expect(container.querySelector("button[type='submit']")).toBeNull();
+    expect(onPublishDraft).not.toHaveBeenCalled();
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
   it("does not render a sendable request when the server omits the workflow mount capability", async () => {
     getJson.mockResolvedValue({ capabilities: [] });
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -569,10 +596,11 @@ function advertiseWorkflowHttpBasePath(basePath = "workflows/http") {
 }
 
 async function renderDialog(onClose = () => undefined, extras: {
-  artifactId?: string;
+  artifactId?: string | null;
   authoredActivityId?: string;
   onPublishDraft?(): void;
   onOpenPublishedVersion?(): void;
+  publicationUnavailableReason?: string;
 } = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -582,11 +610,12 @@ async function renderDialog(onClose = () => undefined, extras: {
     <HttpTestRequestDialog
       context={context}
       open
-      artifactId={extras.artifactId ?? "artifact-1"}
+      artifactId={extras.artifactId === undefined ? "artifact-1" : extras.artifactId}
       authoredActivityId={extras.authoredActivityId ?? "endpoint-1"}
       onClose={onClose}
       onPublishDraft={extras.onPublishDraft}
       onOpenPublishedVersion={extras.onOpenPublishedVersion}
+      publicationUnavailableReason={extras.publicationUnavailableReason}
     />
   ));
   return container;

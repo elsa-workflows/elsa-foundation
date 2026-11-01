@@ -44,7 +44,9 @@ public sealed class AdministrationCompositionTests
         var preview = await maintenance.PruneAsync(new());
         Assert.False(preview.InventoryComplete);
         Assert.Equal("Unknown", preview.ProtectionKnowledge);
-        Assert.Contains(preview.Diagnostics, diagnostic => diagnostic.Code == "EnrollmentRequired");
+        // Linux image filesystems may refuse native inspection before enrollment is inspected.
+        Assert.Contains(preview.Diagnostics, diagnostic => diagnostic.Code == "EnrollmentRequired"
+            || OperatingSystem.IsLinux() && diagnostic.Code == "UnsupportedFilesystem");
     }
 
     [Fact]
@@ -96,7 +98,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
     public string ShellsFile => Path.Combine(Root, "config", "studio-shells.json");
     public const string Credential = "private-feature-credential-sentinel";
 
-    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null, Action<IEndpointRouteBuilder>? mapAdministration = null)
+    public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null, Action<IEndpointRouteBuilder>? mapAdministration = null, Action<StudioBuilder>? configureStudio = null)
     {
         var host = new AdministrationHost(root, keepFiles, nativeStore);
         try
@@ -118,6 +120,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
             else builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:Authoring:Features:StudioApi"] = "true" });
             beforeStudio?.Invoke(builder);
             var studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.ShellsFile = managedFeatures ? "config/studio-shells.json" : null; });
+            configureStudio?.Invoke(studio);
             if (addAdministration) studio.AddElsaStudioNuplane(configureAdministration, configureNuplane: nuplane =>
             {
                 if (nativeStore)

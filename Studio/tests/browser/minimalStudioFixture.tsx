@@ -30,7 +30,7 @@ const navigation = getStudioNavigation([
 
 registerLogs({
   navigation: { add() {} }, routes: { add() {} }, panels: { add() {} },
-  backend: { baseUrl: window.location.origin, http: { getJson: async (path: string) => {
+  backend: { baseUrl: window.location.origin, http: { requestResponse: (path: string, init?: RequestInit) => fetch(path, init), getJson: async (path: string) => {
     const response = await fetch(path);
     if (!response.ok) throw new Error(`Structured log request failed (${response.status}).`);
     return response.json();

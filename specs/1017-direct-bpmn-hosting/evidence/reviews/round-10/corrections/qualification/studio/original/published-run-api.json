@@ -1,0 +1,111 @@
+{
+  "instance": {
+    "workflowExecutionId": "14oPzUXgL8A",
+    "artifactId": "artifact-10b5f0763960",
+    "definitionId": "14iBsLEuiJS",
+    "definitionVersionId": "14oPrKGeekp",
+    "artifactVersion": "3.0.0",
+    "artifactHash": "sha256:10b5f076396044a25aedfe258c01c92974f1738e64ebde69f346f854ff2401ab",
+    "status": "Completed",
+    "runKind": "PublishedRun",
+    "subStatus": null,
+    "createdAt": "2026-10-31T19:46:14.249697+00:00",
+    "startedAt": "2026-10-31T19:46:14.249697+00:00",
+    "updatedAt": "2026-10-31T19:46:15.866339+00:00",
+    "completedAt": "2026-10-31T19:46:15.866339+00:00",
+    "correlationId": null,
+    "parentWorkflowExecutionId": null,
+    "tenantId": "default",
+    "activityCount": 2,
+    "incidentCount": 0,
+    "sourceReferenceId": "activation-ref:publication-14oPrKYcXgj",
+    "publicationId": "publication-14oPrKYcXgj",
+    "slotId": "activation-slot:11:14iBsLEuiJS:7:default",
+    "sourceKind": "WorkflowDefinitionVersion",
+    "sourceId": "14oPrKGeekp",
+    "sourceVersion": "3.0.0",
+    "activeIncidentCount": 0,
+    "blockingIncidentCount": 0
+  },
+  "activities": [
+    {
+      "activityExecutionId": "14oPzVDNkoC",
+      "workflowExecutionId": "14oPzUXgL8A",
+      "executableNodeId": "bpmnprocess-77683892",
+      "authoredActivityId": "bpmnprocess-77683892",
+      "activityType": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+      "activityTypeVersion": "1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+      "status": "Completed",
+      "subStatus": null,
+      "executionSequence": 3311260593468757848,
+      "scheduledAt": "2026-10-31T19:46:14.328044+00:00",
+      "startedAt": "2026-10-31T19:46:14.35285+00:00",
+      "completedAt": "2026-10-31T19:46:15.859845+00:00",
+      "firstCheckpointId": "checkpoint:00257372657bb344:schedule:bpmnprocess-77683892:activity-scheduled:14oPzVDNkoC",
+      "lastCheckpointId": "checkpoint:2d318b1b93989174:checkpoint:WorkflowCompleted:14oPzVDNkoC",
+      "lastCommittedAt": "2026-10-31T19:46:15.866339+00:00",
+      "provenance": {
+        "parentActivityExecutionId": null,
+        "schedulingActivityExecutionId": null,
+        "schedulingWorkflowExecutionId": "14oPzUXgL8A",
+        "branchId": null,
+        "iterationId": null,
+        "executionPathId": null,
+        "executionScopeId": null,
+        "schedulingCause": "WorkflowStart",
+        "metadata": {}
+      },
+      "outcomeNames": [
+        "Done"
+      ],
+      "bookmarkCount": 0,
+      "incidentCount": 0,
+      "valueSnapshotCount": 2,
+      "metadata": {}
+    },
+    {
+      "activityExecutionId": "14oPzXHRMto",
+      "workflowExecutionId": "14oPzUXgL8A",
+      "executableNodeId": "node-wait",
+      "authoredActivityId": "node-wait",
+      "activityType": "Elsa.Activities.Scheduling.Activities.Delay",
+      "activityTypeVersion": "1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+      "status": "Completed",
+      "subStatus": null,
+      "executionSequence": 3797049017522174443,
+      "scheduledAt": "2026-10-31T19:46:14.702465+00:00",
+      "startedAt": "2026-10-31T19:46:14.705901+00:00",
+      "completedAt": "2026-10-31T19:46:15.811069+00:00",
+      "firstCheckpointId": "checkpoint:b4502b22b6476f53:schedule-child:node-wait:14oPzXHRMto:activity-scheduled:14oPzXHRMto",
+      "lastCheckpointId": "checkpoint:14oPzcAMDks:activitycompleted:14oPzXHRMto:attempt:1:trigger:1",
+      "lastCommittedAt": "2026-10-31T19:46:15.821522+00:00",
+      "provenance": {
+        "parentActivityExecutionId": "14oPzVDNkoC",
+        "schedulingActivityExecutionId": "14oPzVDNkoC",
+        "schedulingWorkflowExecutionId": "14oPzUXgL8A",
+        "branchId": null,
+        "iterationId": null,
+        "executionPathId": "token:7",
+        "executionScopeId": null,
+        "schedulingCause": "element:intermediateCatchEvent",
+        "metadata": {}
+      },
+      "outcomeNames": [
+        "Done"
+      ],
+      "bookmarkCount": 1,
+      "incidentCount": 0,
+      "valueSnapshotCount": 2,
+      "metadata": {}
+    }
+  ],
+  "incidents": [],
+  "outputs": {},
+  "persistenceMode": "Balanced",
+  "inspectionGranularity": "boundary-level",
+  "activityNextContinuationToken": null,
+  "permissions": {
+    "canManage": true,
+    "canInspectValues": true
+  }
+}

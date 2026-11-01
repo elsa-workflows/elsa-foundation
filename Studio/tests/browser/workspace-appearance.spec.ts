@@ -11,7 +11,7 @@ async function open(page: Page, style: string, scheme: string, mode: string, vie
     localStorage.setItem("elsa-studio-color-scheme", scheme);
     localStorage.setItem("elsa-studio-theme-mode", mode);
   }, { style, scheme, mode });
-  await page.goto(`/workspace-appearance.html?composition=sequence&view=${view}`);
+  await page.goto(`/workspace-appearance.html?composition=sequence&screen=${view}`);
   await expect(page.locator("html")).toHaveAttribute("data-workspace-style", style);
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", scheme);
 }
@@ -151,7 +151,7 @@ async function chooseStyle(page: Page, name: string) {
 }
 
 test("independent choices survive a real reload without re-seeding preferences", async ({ page }) => {
-  await page.goto("/workspace-appearance.html?view=appearance");
+  await page.goto("/workspace-appearance.html?screen=appearance");
   await page.getByRole("radiogroup", { name: "Workspace style", exact: true }).getByRole("radio", { name: "Focus Canvas", exact: true }).click();
   await page.getByRole("radiogroup", { name: "Color scheme", exact: true }).getByRole("radio", { name: "Drift", exact: true }).click();
   await page.getByRole("region", { name: "Appearance", exact: true }).getByRole("radio", { name: "Dim", exact: true }).click();

@@ -10,6 +10,7 @@ using CShells.Resolution;
 using Elsa.Studio.Api.Features;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Studio.Core.Contracts;
 
 namespace Elsa.Studio.Hosting;
 
@@ -59,13 +60,14 @@ public static class StudioHostingExtensions
         builder.Services.AddSingleton(gate);
         builder.Services.AddAuthentication();
         builder.Services.AddAuthorization();
+        StudioBackendAuthorityAccessor.Add(builder.Services, builder.Configuration);
         builder.Services.AddStudioBridgeAuth(builder.Configuration, settings);
         builder.Services.AddStudioBackendManagementBridge(builder.Configuration);
         CShellsBuilder? shellBuilder = null;
         builder.Services.AddCShellsAspNetCore(shells =>
         {
             shellBuilder = shells;
-            shells.WithAssemblies(typeof(StudioApiFeature).Assembly)
+            shells.WithStudioStartupAssemblies(typeof(StudioApiFeature).Assembly, typeof(Elsa.Events.EventsFeature).Assembly)
                 .WithConfigurationProvider(builder.Configuration)
                 .WithWebRouting(routing => routing.EnablePathRouting = true)
                 .ConfigureResolverPipeline(pipeline => pipeline
@@ -75,6 +77,7 @@ public static class StudioHostingExtensions
                 .ShareSingletonWithShells<TimeProvider>()
                 .ShareSingletonWithShells<StudioBackendManagementOptions>()
                 .ShareSingletonWithShells<StudioSessionTransport>();
+            shells.ShareSingletonWithShells<IStudioBackendAuthorityAccessor>();
         });
         blueprintSource = builder.Services.Last(service => service.ServiceType == typeof(IShellBlueprintProvider));
         shellRegistry = builder.Services.Last(service => service.ServiceType == typeof(IShellRegistry));
@@ -107,7 +110,7 @@ public static class StudioHostingExtensions
     {
         var settings = endpoints.ServiceProvider.GetRequiredService<StudioHostingSettings>();
         var configuration = endpoints.ServiceProvider.GetRequiredService<IConfiguration>();
-        endpoints.MapGet("/studio-runtime.js", () => Results.Content(StudioRuntimeScript.Render(configuration, settings.AuthEnabled), "application/javascript"));
+        endpoints.MapGet("/studio-runtime.js", (Func<HttpContext, Task<IResult>>)(context => StudioRuntimeEndpoint.ReadAsync(context, configuration, settings)));
         endpoints.MapActiveShellStudioApi();
         endpoints.MapStudioBackendManagementBridge();
         endpoints.MapFallback("/_elsa/{**path}", () => Results.NotFound());

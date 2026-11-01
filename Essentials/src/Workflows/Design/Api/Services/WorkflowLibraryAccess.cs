@@ -12,6 +12,22 @@ namespace Elsa.Workflows.Design.Api.Services;
 
 internal static class WorkflowLibraryAccess
 {
+    public static bool OrganizationEnabled(HttpContext context) =>
+        context.RequestServices.GetService<WorkflowOrganizationOptions>()?.Enabled ?? true;
+
+    public static IWorkflowLibraryStore RequireOrganization(IWorkflowLibraryStore? store, HttpContext context)
+    {
+        if (!OrganizationEnabled(context))
+            throw new WorkflowLibraryUnavailableException("Workflow organization is disabled by this backend's administrator.");
+        return Require(store);
+    }
+
+    public static void RequireUnconstrained(HttpContext context, bool hasOrganizationConstraints)
+    {
+        if (!OrganizationEnabled(context) && hasOrganizationConstraints)
+            throw new ArgumentException("Workflow organization is disabled. Remove folder, tag and favorite filters before browsing.");
+    }
+
     public static IWorkflowLibraryStore Require(IWorkflowLibraryStore? store) =>
         store ?? throw new WorkflowLibraryUnavailableException();
 
@@ -39,6 +55,7 @@ internal static class WorkflowLibraryAccess
     }
 
     public static async ValueTask<WorkflowLibraryPermissions> PermissionsAsync(HttpContext context, object? resource, CancellationToken cancellationToken) =>
+        !OrganizationEnabled(context) ? new(false, false, false, false) :
         new(await AllowsAsync(context, WorkflowDesignPermissions.AssignTags, resource, cancellationToken),
             await AllowsAsync(context, WorkflowDesignPermissions.Manage, resource, cancellationToken),
             await AllowsAsync(context, WorkflowDesignPermissions.ManageTags, resource, cancellationToken),
@@ -87,5 +104,5 @@ internal static class WorkflowLibraryAccess
     }
 }
 
-internal sealed class WorkflowLibraryUnavailableException() : Exception("Workflow library organization is not supported by this backend.");
+internal sealed class WorkflowLibraryUnavailableException(string message = "Workflow library organization is not supported by this backend.") : Exception(message);
 internal sealed class WorkflowLibraryAuthorizationException(string message) : Exception(message);

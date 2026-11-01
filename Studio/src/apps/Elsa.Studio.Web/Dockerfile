@@ -24,12 +24,17 @@ ARG STUDIO_VERSION=1.0.0
 COPY Studio/Directory.Build.props Studio/Directory.Packages.props Studio/NuGet.config Studio/icon.png ./Studio/
 COPY Studio/Elsa.Studio.slnx ./Studio/
 
-# The optional administration package references only these lightweight Foundation libraries.
+# Hosting and its optional administration package use these lightweight Foundation libraries.
 # Their shared build/version inputs and compile-only naming analyzer are required in this context too.
 COPY Directory.Build.props Directory.Packages.props VersionLines.props PackageVersioning.props PackageRanges.targets .editorconfig ./
 COPY Essentials/build/Analyzers/ ./Essentials/build/Analyzers/
 COPY Essentials/src/Modularity/Core/ ./Essentials/src/Modularity/Core/
 COPY Essentials/src/Modularity/Nuplane/ ./Essentials/src/Modularity/Nuplane/
+COPY Essentials/src/Studio/Preferences/Core/ ./Essentials/src/Studio/Preferences/Core/
+COPY Essentials/src/Events/ ./Essentials/src/Events/
+COPY Essentials/src/Pipelines/Core/ ./Essentials/src/Pipelines/Core/
+COPY Essentials/src/Primitives/Primitives/ ./Essentials/src/Primitives/Primitives/
+COPY Essentials/src/Tasks/Core/ ./Essentials/src/Tasks/Core/
 
 # Copy the Studio host and shared modules.
 COPY Studio/src/ ./Studio/src/

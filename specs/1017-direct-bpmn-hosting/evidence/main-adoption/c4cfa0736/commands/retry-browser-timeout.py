@@ -1,0 +1,5 @@
+from pathlib import Path
+import subprocess,os,json,time
+r=Path('/tmp/elsa-2898-main-c4cfa-qualification');source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert source=='1cee5acd4e7d7adb01dd467342641a108e349d60';args=['pnpm','exec','playwright','test','tests/browser/design-language.spec.ts','-g','collections share typography and containment at 1440px light linen','--workers=1','--reporter=json'];load=subprocess.check_output(['uptime'],text=True).strip();start=time.time()
+with (r/'browser-timeout-repeat.json').open('w') as log,(r/'browser-timeout-repeat.stderr.log').open('w') as err:p=subprocess.run(args,cwd=Path.cwd()/'Studio',stdout=log,stderr=err,env={**os.environ,'CI':'1'})
+(r/'browser-timeout-repeat-command.json').write_text(json.dumps({'source':source,'arguments':args,'loadBeforeRepeat':load,'elapsedSeconds':time.time()-start,'exitCode':p.returncode,'firstRunPreserved':'browser-affected.json','normalTimeoutUnchanged':True},indent=2)+'\n');print('isolated repeat',p.returncode,flush=True);raise SystemExit(p.returncode)

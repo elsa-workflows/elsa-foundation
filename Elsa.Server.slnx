@@ -122,6 +122,7 @@
   <Folder Name="/tools/bpmn/">
     <Project Path="tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj" />
     <Project Path="tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" />
+    <Project Path="tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj" />
   </Folder>
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
@@ -187,6 +188,8 @@
     <Project Path="Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/Bpmn/">
+    <Project Path="Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj" />
+    <Project Path="Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <Project Path="Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <Project Path="Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
   </Folder>
@@ -460,6 +463,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Bpmn/">
     <Project Path="Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Activities/Bpmn/Hosting/">
+    <Project Path="Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Bpmn/Interchange/">
     <Project Path="Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj" />

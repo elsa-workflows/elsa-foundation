@@ -7,7 +7,17 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/correctness/legacy-pending-fault-model.json" Link="Fixtures/ActualLegacyPendingParentFaultModel.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz" Link="Fixtures/ActualPriorScopeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-10/corrections/delayed-retry-original/queued-result.sqlite.gz" Link="Fixtures/ActualDelayedCompensation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-start-retirement/pending-elsa.sqlite.gz" Link="Fixtures/ActualNativeStartRetirement.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/pending-cancellation/native-terminal/native-cancel/pending-elsa.sqlite.gz" Link="Fixtures/ActualIndependentNativeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/root-complete/waiting-checked.json" Link="Fixtures/ActualHumanEmbedding.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/technical-fault-native-recovery/legacy-model-v2.json" Link="Fixtures/ActualNativeModelV2.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/concurrent-terminal.sqlite.gz" Link="Fixtures/ActualConcurrentFault.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/concurrent-admitted-terminal.sqlite.gz" Link="Fixtures/ActualConcurrentAdmittedFault.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -15,6 +25,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />

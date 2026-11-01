@@ -94,11 +94,11 @@ public sealed class StudioHostingTests
     }
 
     [Fact]
-    public async Task Failed_shell_activation_leaves_real_files_runtime_and_root_fallback_available()
+    public async Task Failed_shell_activation_keeps_files_available_but_refuses_partial_runtime_configuration()
     {
         await using var host = await HostingTestHost.StartAsync(failActivation: true);
         Assert.Equal("export const probe = true;", await host.Client.GetStringAsync("/entry.js"));
-        Assert.StartsWith("window.__ELSA_STUDIO_RUNTIME__", await host.Client.GetStringAsync("/studio-runtime.js"));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await host.Client.GetAsync("/studio-runtime.js")).StatusCode);
         Assert.Equal("<html>custom Studio</html>", await host.Client.GetStringAsync("/"));
         using var missing = await host.Client.GetAsync("/_elsa/unknown");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
@@ -201,7 +201,7 @@ public sealed class StudioHostingTests
         var script = await host.Client.GetStringAsync("/studio-runtime.js");
         using var json = JsonDocument.Parse(script[(script.IndexOf('=') + 1)..].Trim().TrimEnd(';'));
         Assert.False(json.RootElement.GetProperty("auth").GetProperty("enabled").GetBoolean());
-        Assert.Equal(new[] { "activityDefinitions", "appearance", "attention", "auth", "backendBaseUrl", "branding", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "activityDefinitions", "appearance", "attention", "auth", "backendBaseUrl", "backendId", "branding", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
     }
 
     [Theory]

@@ -116,3 +116,12 @@ before writing; a file path alone does not establish that its values control the
 The standard browser supports public host branding and independent Linen/palette/appearance defaults.
 See the [integrator guide](../../../docs/branding.md) for configuration, image-led login layouts,
 custom artwork, replacement presentation and shared module styling.
+
+
+## Backend connections
+
+Base Hosting connects to the single `Studio:BackendBaseUrl` endpoint and discovers its API capabilities. It has no profile store or management UI. `Studio:BackendId` optionally names the configured connection (default `legacy`). A resource link naming another backend is refused before any resource request; returning Home discards that stale resource link.
+
+Install and enable the optional [Backends module](../Elsa.Studio.Backends/README.md) for profiles, selection and Settings → Backends. Disabling its CShells feature removes its server API and public settings. Omitting its package also removes its frontend assets and Preferences dependency. `Studio:Api:DisabledModuleIds` only suppresses the client module and its projected settings; it does not disable the server feature.
+
+See [module connection extensions](../../../docs/connection-extensions.md) for runtime settings, authority replacement and frontend lifecycle contracts.

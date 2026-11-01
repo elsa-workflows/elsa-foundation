@@ -26,7 +26,8 @@
           "WeatherForecastSample": {},
           "WeaverWorkflowsStudio": {},
           "WorkflowsStudio": {},
-          "WorkflowsDashboardStudio": {}
+          "WorkflowsDashboardStudio": {},
+          "BackendsStudio": {}
         },
         "Configuration": {
           "WebRouting": {

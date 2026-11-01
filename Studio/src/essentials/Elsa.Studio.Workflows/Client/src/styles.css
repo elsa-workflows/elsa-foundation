@@ -156,9 +156,15 @@
   min-height: 0;
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* Header, toolbar, and optional run status/error stay auto. The workbench is
+     pinned to the last track so a status line cannot steal minmax(0, 1fr). */
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   border: 0;
   border-radius: 0;
+}
+
+.wf-page--run-workbench > .wf-instance-detail-workbench {
+  grid-row: -2 / -1;
 }
 
 .wf-page--run-workbench > .wf-lazy-state {
@@ -1384,6 +1390,12 @@
   flex: 1;
 }
 
+.wf-instance-canvas .react-flow__minimap {
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+}
+
 .wf-instance-inspector {
   grid-column: 3;
   display: flex;
@@ -1442,6 +1454,73 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wf-executable-identity {
+  gap: 10px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.wf-executable-identity h3 {
+  overflow: visible;
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 16px;
+  line-height: 1.25;
+  text-overflow: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wf-executable-addresses,
+.wf-executable-source-ids {
+  display: grid;
+  gap: 8px;
+}
+
+.wf-instance-section .wf-executable-source-ids {
+  margin-top: 8px;
+}
+
+.wf-executable-addresses .studio-copyable-identifier,
+.wf-executable-source-ids .studio-copyable-identifier {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 3px;
+}
+
+.wf-executable-addresses .studio-copyable-identifier__label,
+.wf-executable-source-ids .studio-copyable-identifier__label {
+  grid-area: 1 / 1 / 2 / -1;
+}
+
+.wf-executable-addresses .studio-copyable-identifier__value,
+.wf-executable-source-ids .studio-copyable-identifier__value {
+  grid-area: 2 / 1 / 3 / 2;
+}
+
+.wf-executable-addresses .studio-copyable-identifier__button,
+.wf-executable-source-ids .studio-copyable-identifier__button {
+  grid-area: 2 / 2 / 3 / 3;
+  width: 24px;
+  height: 24px;
+}
+
+.wf-instance-inspector .wf-instance-section h4 {
+  color: var(--studio-text-muted);
+}
+
+.wf-instance-inspector .wf-instance-meta dt {
+  color: var(--studio-text-muted);
+}
+
+.wf-instance-inspector .wf-instance-meta dd {
+  color: var(--studio-text);
+}
+
+.wf-instance-inspector .wf-instance-section {
+  color: var(--studio-text);
 }
 
 .wf-instance-inspector header button {
@@ -3519,7 +3598,7 @@
   gap: 8px;
 }
 
-.wf-dialog-actions button {
+.wf-dialog-actions button:where(:not(.studio-button)) {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -3532,15 +3611,15 @@
   padding: 0 12px;
 }
 
-.wf-dialog-actions button[type="submit"] {
+.wf-dialog-actions button:where(:not(.studio-button))[type="submit"] {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--wf-border));
   background: var(--wf-accent-soft);
   color: var(--wf-accent);
   font-weight: 700;
 }
 
-.wf-dialog-actions button:disabled,
-.wf-dialog-actions button[aria-disabled="true"] {
+.wf-dialog-actions button:where(:not(.studio-button)):disabled,
+.wf-dialog-actions button:where(:not(.studio-button))[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -5207,6 +5286,57 @@ button.wf-reference-select {
 
 .wf-reference-meta small {
   margin: 0;
+}
+
+.wf-reference-list--collection {
+  gap: 8px;
+}
+
+.wf-reference-list--collection .wf-reference-item {
+  border-color: var(--studio-border);
+  background: var(--studio-surface);
+}
+
+.wf-reference-list--collection .wf-reference-item[data-active="true"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
+  background: var(--studio-surface-muted);
+}
+
+.wf-reference-list--collection .wf-reference-origin {
+  color: var(--studio-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wf-reference-collection {
+  display: grid;
+  gap: 6px 12px;
+  margin: 0;
+  grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
+}
+
+.wf-reference-collection > span {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: start;
+}
+
+.wf-reference-collection-label {
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--wf-label-tracking, 0);
+  text-transform: var(--wf-label-transform, uppercase);
+}
+
+.wf-reference-collection .wf-identity-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--studio-text);
+  font-size: 12px;
 }
 
 /* Scope chips: Published keeps the default accent chip tone; test runs get the warning tint their
@@ -7020,6 +7150,7 @@ html[data-theme-material] .wf-instance-canvas-shell,
 html[data-theme-material] .wf-instance-canvas-shell > header,
 html[data-theme-material] .wf-instance-inspector,
 html[data-theme-material] .wf-instance-inspector header,
+html[data-theme-material] .wf-executable-identity,
 html[data-theme-material] .wf-instance-tabs,
 html[data-theme-material] .wf-instance-activity,
 html[data-theme-material] .wf-instance-incident,

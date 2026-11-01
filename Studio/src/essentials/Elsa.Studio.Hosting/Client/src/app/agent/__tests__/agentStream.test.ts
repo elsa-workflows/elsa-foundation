@@ -4,6 +4,23 @@ import { subscribeAgentSessionStream } from "../agentStream";
 import type { AgentStreamEvent } from "../agentTypes";
 
 describe("agent stream", () => {
+  it.each(["contextAdmitted", 16])("normalizes current disclosure metadata and opaque payload for kind=%s", async kind => {
+    const events: AgentStreamEvent[] = [];
+    const attachment = { Id: "admitted", ModuleId: "Sample", Source: "Sample", Label: "Current owner context", ContentType: "sample", Sensitivity: 1, Scope: "screen", Origin: 2, Target: { ModuleId: "Sample", ResourceType: "sample", ResourceId: "one", Revision: "r2" }, Content: { OpaqueDomainKey: { value: 42 } } };
+    const fetch = vi.fn(async () => new Response(streamFrom([`data: ${JSON.stringify({ Kind: kind, Payload: { Attachments: [attachment], Diagnostics: [{ ContributorId: "optional-source", Code: "unavailable", Message: "Optional context is unavailable.", Required: false }] } })}\n\n`]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([{ type: "context-admitted", attachments: [expect.objectContaining({ id: "admitted", moduleId: "Sample", label: "Current owner context", sensitivity: "internal", origin: "authoritativeRead", target: expect.objectContaining({ moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r2" }), content: { OpaqueDomainKey: { value: 42 } } })], diagnostics: [{ contributorId: "optional-source", code: "unavailable", message: "Optional context is unavailable.", required: false }] }]);
+  });
+
+  it("clears current evidence when a disclosure event has no admitted payload", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([`data: ${JSON.stringify({ kind: "contextAdmitted" })}\n\n`]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([{ type: "context-admitted", attachments: [], diagnostics: [] }]);
+  });
+
   it("recognizes the actual camel-case review pause without inventing completion", async () => {
     const events: AgentStreamEvent[] = [];
     const fetch = vi.fn(async () => new Response(streamFrom([
@@ -14,6 +31,14 @@ describe("agent stream", () => {
     await flushPromises();
     expect(events.map(event => event.type)).toEqual(["proposal-created", "review-requested"]);
     expect(events[1]).toEqual({ type: "review-requested", messageId: "msg" });
+  });
+
+  it("omits ambient cookies for anonymous SSE and aborts its subscription",async()=>{
+    const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>new Response(streamFrom([]),{status:200}));
+    const subscription=subscribeAgentSessionStream(createEndpointContext("https://foundation.example/shell/"),"/_elsa/agent/stream",()=>{},()=>{},{fetch:request});
+    await flushPromises();
+    expect(request.mock.calls[0][1]?.credentials).toBe("omit");
+    subscription.close();expect(request.mock.calls[0][1]?.signal?.aborted).toBe(true);
   });
 
   it("attaches endpoint access tokens to stream requests", async () => {

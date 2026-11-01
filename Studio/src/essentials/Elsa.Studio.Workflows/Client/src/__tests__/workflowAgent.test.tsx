@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authSessionEndedEvent, createAgentRegistry, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, createAgentRegistry, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { WorkflowLayoutResult } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
@@ -23,9 +23,11 @@ let editingAllowed: boolean;
 let layoutResult: StudioAgentToolResult | undefined;
 let persistence: ReturnType<typeof useWorkflowPersistence>, root: Root, container: HTMLDivElement;
 let operations: ReturnType<typeof useWorkflowOperations>;
+let probeLifetime: object;
 const publicationGet = vi.fn(), publicationPost = vi.fn(), publicationError = vi.fn();
 const context = { baseUrl: "https://owned-persistence.example/", http: { getJson: publicationGet, postJson: publicationPost } } as unknown as StudioEndpointContext;
 function Probe() {
+  const lifetime = React.useRef({}); probeLifetime = lifetime.current;
   doc = useWorkflowDocument();
   persistence = useWorkflowPersistence({ context, draft: doc.state.draft, editDraft: doc.editDraft, setStatus: noop, setError: noop });
   operations = useWorkflowOperations({ context, draft: doc.state.draft, details, catalog: [writeLine], busy: false, saveDraft: persistence.saveDraft, flushPendingSave: persistence.flushPendingSave, reload: async () => {}, startTestRun: noop, setPublishedArtifact: noop, setOperation: noop, setStatus: noop, setError: publicationError, setActiveRightPanelId: noop, setInspectorCollapsed: noop, setAutosavePaused: persistence.setAutosavePaused });
@@ -53,15 +55,18 @@ describe("native reviewed workflow effect", () => {
     expect(JSON.stringify(context)).not.toContain("secret-property-value");
   });
   it("observes atomic editor state, holds autosave and undoes the whole change", async () => {
+    const generation = controller.snapshot!.client!.generationId;
     let completion!: ReturnType<NonNullable<typeof controller.execute>>;
     flushSync(() => { completion = controller.execute!(request()); });
     const result = await completion;
     expect(result).toMatchObject({ outcome: "applied", result: { data: { observed: true, revision: getDraftRevision(doc.state.draft!) } } });
     expect(container.textContent).toContain('"x":150'); expect(persistence.reviewHeld).toBe(true);
+    expect(controller.snapshot!.client!.generationId).toBe(generation);
     await vi.advanceTimersByTimeAsync(10000); expect(updateDraft).not.toHaveBeenCalled();
     const token = (result.result!.data as { undoToken: string }).undoToken;
     let undone!: Promise<string>; flushSync(() => { undone = controller.undo!(token); }); await undone;
     expect(doc.state.draft?.layout).toEqual([]);
+    expect(controller.snapshot!.client!.generationId).toBe(generation);
   });
   it("refuses a queued revision race at the reducer without clobbering edits", async () => {
     const invocation = request(); let completion!: ReturnType<NonNullable<typeof controller.execute>>;
@@ -124,6 +129,136 @@ describe("native reviewed workflow effect", () => {
     flushSync(() => window.dispatchEvent(new Event(authSessionEndedEvent)));
     expect((await controller.execute!(invocation)).outcome).toBe("refused");
     expect(doc.state.draft?.layout).toEqual([]);
+  });
+
+  it.each(["controller", "clientId"])("creates a fresh binding on retained-editor %s replacement and refuses the old preparation", async replacement => {
+    const old = request(); const previousController = controller; const previousLifetime = probeLifetime;
+    if (replacement === "controller") {
+      // A custom host withdraws the old contribution registry without remounting its editor or browser client.
+      agent = { ...createAgentRegistry(), clientId: agent.clientId };
+      controller = registerWorkflowAgent(agent);
+    } else agent = { ...agent, clientId: createAgentRegistry().clientId };
+    flushSync(() => root.render(<Probe />));
+    expect(probeLifetime).toBe(previousLifetime);
+    expect(controller.snapshot?.target).toEqual(old.target);
+    expect.soft(controller.snapshot?.client?.generationId).not.toBe(old.client!.generationId);
+    if (replacement === "controller") {
+      expect(controller.snapshot?.client?.clientId).toBe(old.client!.clientId);
+      expect(previousController.snapshot).toBeNull();
+      expect(previousController.execute).toBeNull();
+    }
+    let completion!: ReturnType<NonNullable<typeof controller.execute>>;
+    flushSync(() => { completion = controller.execute!(old); });
+    expect.soft((await completion).outcome).toBe("refused");
+    expect.soft(doc.state.draft?.layout).toEqual([]);
+    expect(updateDraft).not.toHaveBeenCalled();
+    const fresh = request(); fresh.arguments = { activityId: "write", x: 170, y: 270 };
+    flushSync(() => { completion = controller.execute!(fresh); });
+    expect((await completion).outcome).toBe("applied");
+    expect(doc.state.draft?.layout).toEqual([{ nodeId: "write", x: 170, y: 270 }]);
+  });
+
+  it("creates a fresh binding after normal editor unmount and remount with the same controller and client", async () => {
+    const old = request(); const previousLifetime = probeLifetime;
+    flushSync(() => root.render(null));
+    expect(controller.snapshot).toBeNull(); expect(controller.execute).toBeNull();
+    flushSync(() => root.render(<Probe />));
+    flushSync(() => { doc.loadDraft(structuredClone(draft)); persistence.markSaved(draft); });
+    expect(probeLifetime).not.toBe(previousLifetime);
+    expect(controller.snapshot?.target).toEqual(old.target);
+    expect(controller.snapshot?.client?.clientId).toBe(old.client!.clientId);
+    expect(controller.snapshot?.client?.generationId).not.toBe(old.client!.generationId);
+    expect((await controller.execute!(old)).outcome).toBe("refused");
+    expect(doc.state.draft?.layout).toEqual([]);
+    let completion!: ReturnType<NonNullable<typeof controller.execute>>;
+    flushSync(() => { completion = controller.execute!(request()); });
+    expect((await completion).outcome).toBe("applied");
+  });
+
+  it.each([authSessionEndedEvent, authSessionStartedEvent])("keeps %s invalidated on draft updates but permits an explicitly fresh controller", async event => {
+    const old = request(); const previousLifetime = probeLifetime;
+    flushSync(() => window.dispatchEvent(new Event(event)));
+    expect(controller.snapshot).toBeNull();
+    expect((await controller.execute!(old)).outcome).toBe("refused");
+    flushSync(() => doc.editDraft(current => ({ ...current.draft!, layout: [...current.draft!.layout] })));
+    expect(controller.snapshot).toBeNull();
+    expect((await controller.execute!(old)).outcome).toBe("refused");
+    agent = { ...createAgentRegistry(), clientId: agent.clientId }; controller = registerWorkflowAgent(agent);
+    flushSync(() => root.render(<Probe />));
+    expect(probeLifetime).toBe(previousLifetime);
+    expect.soft(controller.snapshot).not.toBeNull();
+    if (!controller.snapshot) return;
+    expect(controller.snapshot.target).toEqual(old.target);
+    expect(controller.snapshot.client?.clientId).toBe(old.client!.clientId);
+    expect(controller.snapshot.client?.generationId).not.toBe(old.client!.generationId);
+    expect((await controller.execute!(old)).outcome).toBe("refused");
+    expect(doc.state.draft?.layout).toEqual([]);
+    let completion!: ReturnType<NonNullable<typeof controller.execute>>;
+    flushSync(() => { completion = controller.execute!(request()); });
+    expect((await completion).outcome).toBe("applied");
+    expect(updateDraft).not.toHaveBeenCalled();
+  });
+
+  it("does not restore an invalidated binding when retained React Activity replays effects under StrictMode", async () => {
+    let setups = 0; let invalidations = 0;
+    function InvalidateOnce() {
+      const sent = React.useRef(false);
+      React.useEffect(() => {
+        setups++;
+        if (!sent.current) { sent.current = true; invalidations++; window.dispatchEvent(new Event(authSessionEndedEvent)); }
+      }, []);
+      return null;
+    }
+    const element = (mode: "visible" | "hidden") => <React.StrictMode><React.Activity mode={mode}><Probe /><InvalidateOnce /></React.Activity></React.StrictMode>;
+    flushSync(() => root.render(null));
+    flushSync(() => root.render(element("visible")));
+    flushSync(() => { doc.loadDraft(structuredClone(draft)); persistence.markSaved(draft); });
+    const retainedLifetime = probeLifetime;
+    // The module uses a production React build, where StrictMode alone does not replay effects.
+    // Activity hiding/revealing does replay them while retaining the exact hook state and identity.
+    flushSync(() => root.render(element("hidden")));
+    flushSync(() => root.render(element("visible")));
+    expect(probeLifetime).toBe(retainedLifetime);
+    expect(setups).toBeGreaterThanOrEqual(2); expect(invalidations).toBe(1);
+    expect(controller.snapshot).toBeNull();
+    flushSync(() => doc.editDraft(current => ({ ...current.draft!, layout: [...current.draft!.layout] })));
+    expect(controller.snapshot).toBeNull();
+    expect(doc.state.draft?.layout).toEqual([]);
+    expect(updateDraft).not.toHaveBeenCalled();
+  });
+
+  it.each(["none", "ended", "started", "ended-started"])("creates a fresh visible origin after Activity hiding with hidden auth signals=%s", async signal => {
+    const element = (mode: "visible" | "hidden") => <React.Activity mode={mode}><Probe /></React.Activity>;
+    flushSync(() => root.render(null));
+    flushSync(() => root.render(element("visible")));
+    flushSync(() => { doc.loadDraft(structuredClone(draft)); persistence.markSaved(draft); });
+    const old = request(); const retainedLifetime = probeLifetime; const retainedController = controller;
+    flushSync(() => root.render(element("hidden")));
+    expect(controller.snapshot).toBeNull(); expect(controller.execute).toBeNull();
+    // Activity has removed the editor's effects and auth listeners, while retaining its hook state.
+    if (signal === "ended" || signal === "ended-started") window.dispatchEvent(new Event(authSessionEndedEvent));
+    if (signal === "started" || signal === "ended-started") window.dispatchEvent(new Event(authSessionStartedEvent));
+    flushSync(() => root.render(element("visible")));
+    expect(probeLifetime).toBe(retainedLifetime); expect(controller).toBe(retainedController);
+    expect(controller.snapshot?.target).toEqual(old.target);
+    expect(controller.snapshot?.client?.clientId).toBe(old.client!.clientId);
+    expect.soft(controller.snapshot?.client?.generationId).not.toBe(old.client!.generationId);
+    let completion!: ReturnType<NonNullable<typeof controller.execute>>;
+    flushSync(() => { completion = controller.execute!(old); });
+    expect.soft((await completion).outcome).toBe("refused");
+    expect.soft(doc.state.draft?.layout).toEqual([]);
+    expect(updateDraft).not.toHaveBeenCalled();
+    const fresh = request(); fresh.arguments = { activityId: "write", x: 170, y: 270 };
+    const generation = fresh.client!.generationId;
+    flushSync(() => { completion = controller.execute!(fresh); });
+    const applied = await completion;
+    expect(applied.outcome).toBe("applied");
+    expect(controller.snapshot!.client!.generationId).toBe(generation);
+    let undone!: Promise<string>;
+    flushSync(() => { undone = controller.undo!((applied.result!.data as { undoToken: string }).undoToken); });
+    await undone;
+    expect(doc.state.draft?.layout).toEqual([]);
+    expect(controller.snapshot!.client!.generationId).toBe(generation);
   });
   it.each(["save", "publish"])("permits explicit %s of the observed draft without changing the autosave preference", async action => {
     let completion!: ReturnType<NonNullable<typeof controller.execute>>;

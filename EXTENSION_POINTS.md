@@ -160,7 +160,9 @@ not automatic constitution violations.
 | Activities design API — catalog and availability services | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
-| Activities BPMN (scoped execution seam, element behavior contributors) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md) |
+| Activities BPMN hosting API (authenticated direct-model commands, cancellation, incident retry and inspection) | [`Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md) |
 | Activities BPMN interchange (document importer and exporter replacement) | [`Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) |
 
 ### Workflows
@@ -221,3 +223,9 @@ not automatic constitution violations.
 - §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section); layer badge convention; Known implementations with intra/cross-domain tags; mandatory maintenance obligation.
 - §2.22.2 — this repo-wide extension-points index (pure links, no inline entries).
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).
+
+
+## Studio
+
+- [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)

@@ -433,7 +433,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<RuntimeSchedulerWorkClaimOptions>(),
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
-                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>()));
+                serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
+            { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>() });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();

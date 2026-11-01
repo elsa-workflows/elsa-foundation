@@ -39,6 +39,11 @@ public sealed record AgentPausedTurn(
     public string SourceMessageId { get; init; } = string.Empty;
     public IReadOnlyCollection<AgentContextAttachment> Context { get; init; } = [];
     public AgentClientBinding? Client { get; init; }
+    public IReadOnlyList<AgentToolResult> DisclosureResults { get; init; } = [];
+    /// <summary>All transcript disclosures, separately retained from the current execution context/results; null is incomplete legacy state.</summary>
+    public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
+    /// <summary>Canonical checksum of the complete paused transcript/state, excluding this field; detects incomplete storage, not malicious replacement.</summary>
+    public string? DisclosureHistoryFingerprint { get; init; }
 }
 
 /// <summary>Stores paused-turn state keyed by session, enabling resume-after-approval.</summary>

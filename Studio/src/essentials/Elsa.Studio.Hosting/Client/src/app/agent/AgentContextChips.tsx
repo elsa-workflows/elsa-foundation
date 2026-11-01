@@ -10,7 +10,8 @@ export function AgentContextChips({ attachments }: { attachments: StudioAgentCon
     <div className="agent-context-chips" aria-label="Weaver context">
       {attachments.map(attachment => (
         <span key={attachment.id} className="agent-context-chip" data-sensitivity={attachment.sensitivity}>
-          {formatContextLabel(attachment)}
+          <span>{attachment.label}</span>
+          {contextMetadata(attachment) ? <small>{contextMetadata(attachment)}</small> : null}
           {attachment.sensitivity === "secret-redacted" ? <em>redacted</em> : null}
         </span>
       ))}
@@ -18,26 +19,16 @@ export function AgentContextChips({ attachments }: { attachments: StudioAgentCon
   );
 }
 
-function formatContextLabel(attachment: StudioAgentContextAttachment) {
-  if (!isRecord(attachment.content)) return attachment.label;
-
-  const hints: string[] = [];
-  const selection = attachment.content.selection ?? attachment.content.selectionHint;
-  if (isRecord(selection) && typeof selection.nodeId === "string" && selection.nodeId) {
-    hints.push("using selected node");
-  } else if (typeof attachment.content.selectedNodeId === "string" && attachment.content.selectedNodeId) {
-    hints.push("using selected node");
-  }
-
-  const catalog = attachment.content.activityCatalog ?? attachment.content.boundedActivityCatalog;
-  if (Array.isArray(catalog)) hints.push(`${catalog.length} catalog item${catalog.length === 1 ? "" : "s"} considered`);
-
-  const redactions = attachment.content.redactions ?? attachment.content.redactionNotes;
-  if (Array.isArray(redactions) && redactions.length > 0) hints.push("secrets/runtime payloads excluded");
-
-  return hints.length > 0 ? `${attachment.label}: ${hints.join(", ")}` : attachment.label;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function contextMetadata(attachment: StudioAgentContextAttachment) {
+  // Only backend-admitted envelope metadata is shared presentation. The owning module interprets
+  // resource payloads and may include an appropriate display name in its declared label.
+  const origin = attachment.origin ? {
+    clientSnapshot: "Client snapshot",
+    resourceData: "Resource data",
+    authoritativeRead: "Authoritative read",
+    installedGuidance: "Installed guidance"
+  }[attachment.origin] : undefined;
+  const target = attachment.target;
+  const resource = target ? [target.resourceType, target.resourceId].filter(Boolean).join(" ") : undefined;
+  return [attachment.moduleId ?? attachment.source, origin, resource, target?.revision ? `Revision ${target.revision}` : undefined].filter(Boolean).join(" · ");
 }

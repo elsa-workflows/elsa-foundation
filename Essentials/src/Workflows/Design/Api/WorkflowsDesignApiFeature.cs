@@ -39,8 +39,13 @@ namespace Elsa.Workflows.Design.Api;
 )]
 public class WorkflowsDesignApiFeature : IWebShellFeature
 {
+    /// <summary>Controls folders, tags, saved views and favorites without removing their stored data.</summary>
+    [ManifestSetting(DisplayName = "Workflow organization", Description = "Enables folders, tags, saved views and favorites. Turning this off preserves saved organization and ordinary workflow browsing, authoring and execution.", Category = "Workflows", DefaultValue = "true")]
+    public bool WorkflowOrganizationEnabled { get; set; } = true;
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton(new WorkflowOrganizationOptions(WorkflowOrganizationEnabled));
         services.AddElsaEndpoints();
         var assembly = GetType().Assembly;
 
@@ -60,6 +65,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         // Publishing replaces this with the slot/journal lookup.
         services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, NullWorkflowDefinitionPublicationStateLookup>();
         services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
+        services.TryAddScoped<IWorkflowDefinitionAuthorizer, HttpWorkflowDefinitionAuthorizer>();
         services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
         services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
@@ -71,6 +77,18 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
         services.TryAddSingleton<IServiceCollection>(services);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, LibraryVisibilityStartupTask>());
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowDefinitionAuthorizationStartupTask))
+                ?.ImplementationInstance is not WorkflowDefinitionAuthorizationStartupTask authorityValidator || !authorityValidator.Owns(services))
+            authorityValidator = new WorkflowDefinitionAuthorizationStartupTask(services);
+        // Shells copy parent descriptors, including application-wide IServiceCollection metadata.
+        // This validator owns only this collection; it captures no scoped authority or request service.
+        services.RemoveAll<WorkflowDefinitionAuthorizationStartupTask>();
+        services.AddSingleton(authorityValidator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowDefinitionAuthorizationStartupTask
+                         || item.ImplementationType == typeof(WorkflowDefinitionAuthorizationStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(authorityValidator));
         services.AddHttpContextAccessor();
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();

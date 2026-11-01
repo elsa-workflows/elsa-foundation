@@ -81,7 +81,7 @@ public sealed class WorkflowDefinitionDetailsReader(
         if (library is not null && await library.GetOrganizationAsync(definitionId, cancellationToken) is { } organization)
         {
             await WorkflowLibraryAccess.RequireOrganizationReadAsync(context!, organization, cancellationToken);
-            definitionView = WorkflowLibraryProjection.WithOrganization(definitionView, organization);
+            definitionView = WorkflowLibraryProjection.WithOrganization(definitionView, organization, WorkflowLibraryAccess.OrganizationEnabled(context!));
         }
 
         return new WorkflowDefinitionDetailsView(

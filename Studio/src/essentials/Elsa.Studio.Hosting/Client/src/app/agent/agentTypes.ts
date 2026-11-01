@@ -1,6 +1,7 @@
 import type {
   StudioAgentCapabilityContribution,
   StudioAgentContextAttachment,
+  StudioAgentContributionDiagnostic,
   StudioAgentMode,
   StudioAgentRisk,
   StudioAgentSurface,
@@ -21,7 +22,7 @@ export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed"
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
 export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
-export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "context-admitted" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
 
 export interface AgentPlanStep {
   id: string;
@@ -88,6 +89,7 @@ export interface AgentMessageRequest {
   promptMode?: StudioAgentPromptRequest["mode"];
   message: string;
   mode: StudioAgentMode;
+  activeSurface?: StudioAgentSurface;
   contextAttachments: StudioAgentContextAttachment[];
   capabilityId?: string;
 }
@@ -96,6 +98,8 @@ export interface AgentMessageResponse {
   messageId: string;
   status: AgentMessageStatus;
   streamUrl: string;
+  /** Sanitized evidence admitted for this message; absent responses fail closed in presentation. */
+  contextAttachments?: StudioAgentContextAttachment[];
   warnings?: { code: string; message: string; target?: string }[];
 }
 
@@ -182,6 +186,7 @@ export type AgentStreamEvent =
   | { type: "message-started"; messageId: string; role: AgentMessageRole }
   | { type: "message-delta"; messageId: string; content: string }
   | { type: "context-used"; messageId: string; attachmentIds: string[] }
+  | { type: "context-admitted"; attachments: StudioAgentContextAttachment[]; diagnostics: StudioAgentContributionDiagnostic[] }
   | { type: "clarification-requested"; messageId: string; clarification: AgentClarificationRequest }
   | { type: "proposal-created"; proposalId: string; messageId: string; proposal?: AgentActionProposalPayload }
   | { type: "progress"; label: string; percent?: number }

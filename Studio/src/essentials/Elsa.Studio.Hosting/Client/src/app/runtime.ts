@@ -4,6 +4,8 @@ export interface StudioRuntimeConfig {
   branding?: StudioBrandingConfig;
   appearance?: { workspaceStyle?: string; paletteId?: string; mode?: string; navigation?: string };
   backendBaseUrl?: string;
+  backendId?: string;
+  extensions?: Record<string,unknown>;
   hostId?: string;
   // The backend host management key is deliberately NOT part of the browser runtime config (ADR 0037 / #248): it is a
   // server-side-only Studio setting the management bridge attaches on Studio→backend calls. Browser code must never

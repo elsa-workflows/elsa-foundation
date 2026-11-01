@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 async function open(page: Page, mode: string, width: number, height: number, parameters = "") {
   await page.setViewportSize({ width, height });
   await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), mode);
-  await page.goto(`/workspace-appearance.html?view=availability&bottom-panel${parameters}`);
+  await page.goto(`/workspace-appearance.html?screen=availability&bottom-panel${parameters}`);
   await expect(page.getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
 }
 
