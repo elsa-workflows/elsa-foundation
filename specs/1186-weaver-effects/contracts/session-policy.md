@@ -1,7 +1,12 @@
 # Candidate session policy and lifecycle contract
 
-The package/browser journeys select the smallest contract. This is the behavioral boundary to
-implement and qualify, not a frozen API or a new module-specific orchestration path.
+**Status: EXPERIMENTAL, not frozen.** This records the surface implemented and qualified by
+T007–T022 (T023). It stays a candidate until the normal composed Studio run (T024) and the
+complete package witness (T025) pass; T026 freezes the demonstrated minimum. Every member below
+may still change. It is not a new module-specific orchestration path. The live domain catalog,
+[Agent `EXTENSION_POINTS.md`](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#session-policy-and-owner-scoped-audit-3440-experimental),
+owns current extension-point documentation; [Core contracts](../../../Extensions/Agent/src/Core/Contracts/AgentContracts.cs)
+and [Core models](../../../Extensions/Agent/src/Core/Models/AgentModels.cs) are the signature authority.
 
 ## Authenticated transport
 
@@ -20,40 +25,79 @@ implement and qualify, not a frozen API or a new module-specific orchestration p
 - Accepted messages/turn results identify the policy that admitted them. A later selector value is
   never the authority for attributing an earlier result.
 
-**Candidate wire shape (T009/T010, not frozen).**
+### Wire shape (implemented by T009/T010, not frozen)
 
-- `PUT /_elsa/agent/sessions/{sessionId}/autonomy`, using the existing `Use` permission. Body:
-  `{ "autonomyMode": "manual" | "auto-read-only" | "full-auto", "expectedRevision": <number> }`.
-- On success it returns 200 with `data` set to the session policy:
-  `{ "autonomyMode", "maxAutonomyMode", "allowedAutonomyModes": [...], "revision" }`. An unchanged
-  idle request returns the current revision.
-- Failures carry no data. The client reads back through session detail.
+`PUT /_elsa/agent/sessions/{sessionId}/autonomy`, using the existing `Use` permission. Body:
+`{ "autonomyMode": "manual" | "auto-read-only" | "full-auto", "expectedRevision": <number> }`.
+Mode names are trimmed and case-insensitive. Success returns 200 with `data` set to the session
+policy `{ "autonomyMode", "maxAutonomyMode", "allowedAutonomyModes": [...], "revision" }`.
+`allowedAutonomyModes` lists every mode up to the ceiling, most restrictive first. An unchanged idle
+request returns the current revision.
 
-  | Condition | Status | Error code |
-  | --- | --- | --- |
-  | Malformed body, or unknown/undefined mode | 400 | `agent.session.autonomy_invalid` |
-  | Missing session, or foreign actor or tenant | 404 / 403 | Unchanged existing session-authorization codes and statuses, as on every other session route |
-  | Stale expected revision | 409 | `agent.session.policy_stale` |
-  | Outstanding work | 409 | `agent.session.busy` |
-  | Closed or expired | 409 | `agent.session.closed` |
-  | Unsupported composition | 409 | `agent.session.autonomy_unsupported` |
+Failures carry no `data`, even when the owner returned the current state; the client reads back
+through session detail. The body is validated before session authorization, so a malformed body
+returns 400 for any session.
+
+| Condition | Status | Error code |
+| --- | --- | --- |
+| Request without a JSON content type, or an unsupported body encoding | 415 | none (empty body) |
+| Malformed JSON, missing `expectedRevision`, or a missing/unknown/undefined mode | 400 | `agent.session.autonomy_invalid` |
+| Missing session | 404 | `agent.session.not_found` (existing session authorization) |
+| Foreign actor or tenant | 403 | `agent.session.forbidden` (existing session authorization) |
+| Session gone or no longer owned between authorization and update | 404 | `agent.session.not_found` |
+| Stale expected revision | 409 | `agent.session.policy_stale` |
+| Outstanding work | 409 | `agent.session.busy` |
+| Closed or expired | 409 | `agent.session.closed` |
+| No policy service, or a non-participating composition | 409 | `agent.session.autonomy_unsupported` |
+
+Readback and attribution:
 
 - Create-session and session-detail responses gain an additive `policy` object of the same shape.
-  It is absent only when the composition cannot read it back.
-- The session-detail message view gains a nullable `acceptedPolicyRevision`. The accepted prompt in
-  the message response already carries its domain `acceptedPolicy`.
-- Prompt admission that loses to a policy change returns 409 `agent.message.policy_changed`.
-- Client rules:
-  - Send at most one update per session at a time, with the last acknowledged revision as `expectedRevision`.
-  - Keep dependent prompt submission blocked while an update is unresolved.
-  - After a lost response, retry the same conditional request. A `policy_stale` answer means another
-    write committed, so read detail back and show that authoritative state, without claiming which
-    intent won.
-  - Ignore responses for another backend, session or client generation.
+  It is omitted only when the composition cannot read it back (Unsupported).
+- Each session-detail message view gains `acceptedPolicyRevision`. It is always serialized, as
+  `null` when the installed store does not own revisions.
+- The accepted-prompt response serializes the domain `AgentMessage`, so its `message.acceptedPolicy`
+  is `{ "policy": <whole frozen AgentPolicy>, "revision" }`. See [Open items](#open-items-before-freeze).
+- Prompt admission whose authorized revision moved before insertion returns 409
+  `agent.message.policy_changed` and inserts nothing. An identical retry of an already accepted
+  delivery (same request ID and fingerprint) returns the original message with its original
+  `acceptedPolicy`, even after a policy change, and re-retains only that message's own context.
+
+Client rules:
+
+- Send at most one update per session at a time, with the last acknowledged revision as `expectedRevision`.
+- Keep dependent prompt submission blocked while an update is unresolved.
+- After a lost response, retry the same conditional request. A `policy_stale` answer means another
+  write committed, so read detail back and show that authoritative state, without claiming which
+  intent won.
+- Ignore responses for another backend, session or client generation.
 
 Use the existing selected-backend HTTP transport and stream URL resolution. Preserve ambient-cookie
-omission and existing backend/generation isolation. Public wire names and methods are recorded here
-after causal selection and before final contract review.
+omission and existing backend/generation isolation.
+
+### Core signatures (experimental, additive)
+
+| Member | Shape |
+| --- | --- |
+| `IAgentSessionPolicyService` (new, scoped) | `GetAsync(sessionId, actorId, tenantId, ct)` and `ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest, ct)`, both returning `Task<AgentSessionPolicyResult>` |
+| `AgentSessionAutonomyChangeRequest` | `(SessionId, ActorId, TenantId, AgentAutonomyMode RequestedMode, long ExpectedRevision)` |
+| `AgentSessionPolicyResult` | `(AgentSessionPolicyOutcome Outcome, AgentSessionPolicyState? State)`, `Succeeded` |
+| `AgentSessionPolicyOutcome` | `Succeeded`, `StaleRevision`, `Busy`, `InvalidMode`, `SessionClosed`, `NotFound`, `Unsupported`. `StaleRevision` and `Busy` return the current state; the others return none |
+| `AgentSessionPolicyState` | `(AgentPolicy Policy, long Revision)`; the default owner starts at revision 1 |
+| `AgentSession.PolicyRevision` | `long? { init; }`, null when the store does not own revisions |
+| `AgentMessage.AcceptedPolicy` | `AgentSessionPolicyState? { init; }`, stamped at atomic insertion |
+| `AgentMessageCreateRequest.ExpectedPolicyRevision` | `long? { init; }`; a moved revision makes the owning store throw `AgentSessionPolicyChangedException` |
+| `AgentActionProposal.PolicyRevision` | `long? { init; }`, the approval basis at preparation; `AddAsync` refuses a stamp that is not the current revision |
+| `AgentSessionPolicyChangedException` | `InvalidOperationException` with `Code = "agent.message.policy_changed"`, `SessionId`, `ExpectedRevision`, `CurrentRevision` |
+| `IAgentAuditReader.ListOwnedAsync` (new default member) | `ListOwnedAsync(AgentAuditOwnerQuery, ct)` returns `Task<AgentAuditQueryResult>`; the default returns `AgentAuditQueryResult.Unsupported` |
+| `IAgentAuditOwnership` (new, singleton) | `AssociateAsync(sessionId, actorId, tenantId, ct)` returns `Task<bool>`; first association wins |
+| `AgentAuditOwnerQuery` | `(ActorId, TenantId, string? SessionId, int Take)`, `MaxTake = 1000` |
+| `AgentAuditQueryOutcome` / `AgentAuditQueryResult` | `Succeeded`, `Unsupported`; `(Outcome, IReadOnlyList<AgentAuditEvent> Events)`, static `Unsupported`, `Succeeded` |
+
+`IAgentAuditReader.ListAsync` remains a trusted, unscoped in-process read and is not an
+authorization boundary. Agent API models add `AgentSessionPolicyResponse`, `AgentSessionAutonomyRequest`,
+`AgentCreateSessionResponse.Policy`, `AgentSessionDetailsResponse.Policy` and
+`AgentMessageViewModelResponse.AcceptedPolicyRevision`.
 
 ## Session replacement owner
 
@@ -77,7 +121,7 @@ existing serialization order and use short session transitions/reservations arou
 work. The same operation may hand off ownership without an idle gap; a different operation receives
 an explicit losing disposition. Preserve original foreground cancellation tokens and pause storage.
 
-## Selected candidate (T007, not frozen)
+## Selected candidate (T007, implemented by T008, not frozen)
 
 Causal input: the `39a1affef` baseline on both actual adapters had 4 Passed controls and 4
 `autonomy.mode_mismatch` failures. Selecting a mode on an established conversation sent zero backend
@@ -123,16 +167,17 @@ refuses with an explicit `policy_changed` conflict if the revision moved meanwhi
 then means a retried prompt carries the new revision; "prompt first" means the update loses as busy.
 This protects future policy fields without a reservation.
 
-**Conditional update.** `ChangeAutonomy(session, requestedMode, expectedRevision)` runs under the
-row monitor in this order:
+**Conditional update.** `ChangeAutonomyAsync` runs under the row monitor in this order:
 
 1. Refuse undefined modes.
-2. Refuse a closed or expired session.
-3. Report a stale `expectedRevision` as a conflict, before any no-op comparison.
-4. Report busy if any claim is outstanding.
-5. Clamp to the current `MaxAutonomyMode`.
-6. Replace only `AutonomyMode`; every other policy field survives.
-7. Increment the revision only on a real change. An unchanged idle request acknowledges at the current revision.
+2. Refuse a missing session or one not owned by the request's actor and tenant (`NotFound`).
+3. Refuse a closed or expired session.
+4. Report a stale `expectedRevision` as a conflict, before any no-op comparison.
+5. Report busy if any claim is outstanding.
+6. Clamp to the current `MaxAutonomyMode`.
+7. Replace only `AutonomyMode`; every other policy field survives.
+8. Increment the revision only on a real change. An unchanged idle request, including one that
+   clamps to the current mode, acknowledges at the current revision.
 
 A lost response is resolved by readback plus a conditional retry. Reading an unchanged old revision
 does not acknowledge an in-flight request.
@@ -146,26 +191,132 @@ argument can only tighten it. So a proposal's stamped revision always matches it
 revision. Accepted messages carry their accepted revision, so later selector values never relabel
 earlier results.
 
-**Participation and replacements.** `ChangeAutonomy` and policy readback live on a new public scoped
-policy service. `IAgentSessionService` gains no new members. Claims are internal. The update is
-supported only when the resolved session service, orchestrator, invoker and proposal service are the
-default participants of the same owner instance. Any replacement or forwarding decorator of those
-four makes the update return an explicit unsupported outcome, with no default shadow state. Per-turn
-wrappers are not registrations and are unaffected. A supported participating replacement therefore
-means a turn registry or pause store replacement. Policy cannot change without the owner, so admission and turns keep
-today's behavior under replacements. Registry and pause store replacements need no new members,
-because the orchestrator holds the claims around their calls. Supported, unsupported and forwarding
-replacements are qualified by T019.
+**Participation.** `ChangeAutonomyAsync` and readback live on the public scoped
+`IAgentSessionPolicyService`. `IAgentSessionService` gains no new members, and claims stay internal.
+The [replacement guidance](#replacement-guidance) lists which replacements keep the update supported.
+Supported, unsupported and forwarding replacements are qualified in the package-composed shell by
+T019 (`AgentCompositionTests`).
 
-## Audit boundary
+## Lifecycle outcomes (T013–T014, T020)
 
-An authenticated owner-scoped query has an explicit supported result/refusal and takes actor,
-tenant, optional session and bounded limit. Filtering/order precede limit in the owning reader.
-Legacy missing ownership is ineligible. The API has no global-read/per-event-lookup fallback.
+| Situation | Proposal status | Caller outcome | Retained result and audit |
+| --- | --- | --- | --- |
+| Deny before dispatch | Denied | Success with the denied proposal | Lifecycle envelope `denied`; zero effect |
+| Prepared deadline passes before dispatch (AwaitingApproval, Edited or Approved), seen by Approve, Execute or the dispatch mark | Expired, recorded once | 409 `agent.proposal.expired`, repeated unchanged for later Approve and Execute | One `ProposalFailed` record with `dispatch=none`, `effect=none` |
+| Cancellation during the current-authority recheck, before module or client dispatch, including turn cancellation before automatic dispatch | Cancelled | 409 `agent.proposal.cancelled`, repeated unchanged | Lifecycle envelope `refused`, zero-effect summary |
+| Cancellation or failure after module dispatch without confirmation | Uncertain | Uncertain result; never replayed | Lifecycle envelope `uncertain` |
+| AwaitingClient reaches its deadline without an admitted receipt | Uncertain, never Expired | Uncertain result; the request is never reissued | `ProposalFailed` with `dispatch=client`, `effect=possible`, `deadline=pending-client` |
+| AwaitingClient loses its reviewed contract or authority on a repeated execute | Uncertain | Uncertain result | `ProposalFailed` with `dispatch=client`, `effect=possible` |
+| A validated receipt arrives for AwaitingClient or client-scope Uncertain | Executed | Accepted receipt; a duplicate identical acknowledgement returns it, a conflicting one is refused | `ProposalExecuted` |
 
-Expiry records retain session/proposal/invocation/turn/call identities and dispatch meaning. Before
-dispatch: Expired, zero effect. After dispatch without confirmation: Uncertain, possible effect.
-Duplicate delivery retains the original transition/receipt; success always requires owning evidence.
+Every proposal audit record carries `proposalId`, `invocationId`, `status`, `turnId` and
+`toolCallId`, with the session on the event. The execute route also returns the retained terminal
+data for Expired, Failed, Denied and Cancelled failures.
+
+**Automatic approval is not a review decision.** A proposal prepared without review
+(`RequiresApproval == false`) never satisfies a current policy that requires review: execution then
+refuses with `agent.proposal.approval_required`, and `ApproveAsync` does not report it as an
+idempotent human decision. `AddAsync` refuses a review-required proposal inserted already approved
+or past review.
+
+**Lifecycle-outcome disclosure.** The engine's receipt-less lifecycle envelope for a mutating tool
+(`agent.operation-outcome` schema `1`, exactly `{ status, invocationId }`, status `denied`,
+`refused` or `uncertain`, matching the stamped `Access.InvocationId`) is admitted into the
+originating turn through the owning module's current disclosure decision
+(`IAgentContextProvider.AdmitDisclosureAsync`), not the tool's mutation authority. Withdrawn write
+authority therefore still lets the refusal continue the turn; withdrawn read/disclosure authority
+still blocks it with `agent.result.disclosure_denied`. Host capability policy applies to both.
+Applied effects, read-tool results and every other shape keep the full tool-authority check.
+
+## Audit boundary (T021–T022)
+
+`GET /_elsa/agent/audit` (existing route and `Audit` permission) now reads only through
+`IAgentAuditReader.ListOwnedAsync`, with the authenticated normalized actor and tenant, the optional
+`sessionId` and `take` clamped to 1..1000 (default 100). The owning reader filters by ownership and
+session and orders newest first (ties: latest append first) before the limit. A record without a
+session, or whose session has no ownership association (legacy), is never returned. There is no
+global-read or per-event session-lookup fallback.
+
+| Condition | Status | Error code |
+| --- | --- | --- |
+| Invalid `take` binding | 400 | Existing binding error |
+| Explicit `sessionId` missing or foreign | 404 / 403 | `agent.session.not_found` / `agent.session.forbidden` |
+| Principal without a resolvable actor or tenant | 403 | `agent.actor.unresolved` |
+| Installed reader returns Unsupported | 409 | `agent.audit.query_unsupported` |
+
+The default session service associates each new session with its actor and tenant through
+`IAgentAuditOwnership` before the row exists or any record is emitted; a conflicting association
+fails creation with `AgentContributionException`. A session with a blank actor or tenant stays
+ineligible. The default store orders append, association and query under one monitor, and the
+association has no dependency on the session service, so there is no DI cycle.
+
+## Replacement guidance
+
+The update is supported only when the resolved `IAgentSessionService`, `IAgentStreamingService`,
+`IAgentToolInvoker` and `IAgentProposalService` are the default participants of one owner
+instance. The check is by the resolved instance, so a `services.Replace(...)`, a forwarding
+decorator or an additive last-registered service all count as replacements.
+
+| Replacement | Effect |
+| --- | --- |
+| `IAgentTurnRegistry`, `IAgentTurnStateStore` | Stay supported: the orchestrator holds the claims around their calls, and they need no new members (qualified by T019). Only the default registry's busy refusal is known to precede a write, so a replacement registry's refusal or failure leaves the session conservatively busy for policy changes until restart (#3441) |
+| `IAgentSessionService`, `IAgentStreamingService`, `IAgentToolInvoker`, `IAgentProposalService`, including forwarding decorators | Readback and update return Unsupported: 409 `agent.session.autonomy_unsupported`, and create/detail omit `policy`. No default shadow state is created; admission and turns keep their existing behavior |
+| `IAgentActionProposalExecutor` | Not a participant; the proposal service holds the claims around it. Only a known zero-effect cancellation before dispatch may be reported as `agent.proposal.cancelled`, which the service records as Cancelled. Not separately qualified by T019 |
+| `IAgentSessionPolicyService` | A replacement cannot join the internal default claims. It must own the same ordering against all admitted work, or return Unsupported. Per-turn wrappers are not registrations and are unaffected |
+| `IAgentAuditReader` | A reader that does not implement `ListOwnedAsync` inherits the Unsupported default, and the audit route answers 409 `agent.audit.query_unsupported`. An implementation must filter and order before the limit and throw `ArgumentException` for a blank actor or tenant or a limit outside 1..1000. Replace `IAgentAuditOwnership` with the same store so association and query stay coherent |
+| `IAgentAuditOwnership` | Must keep first-association-wins. A replacement session service must associate each session before emitting any record for it; otherwise its sessions stay ineligible (empty results, never a fallback) |
+
+## Constitution and SemVer classification
+
+Rechecked against framework v6.1.0 and Elsa v6.3.0.
+
+- **§2.6.2 replacement contracts.** `IAgentSessionPolicyService` and `IAgentAuditOwnership` are
+  single-implementation contracts registered with `TryAdd*`. Unsupported compositions refuse
+  explicitly rather than falling back. As for every Agent contract except `IAgentToolAuthorizer`
+  (`AgentRegistrationValidator`), the kind is declared only in the catalog and a second additive
+  registration is not diagnosed at startup. See [Open items](#open-items-before-freeze).
+- **§2.22.1 catalog.** The Agent catalog is updated in this unit for the new contracts, the new
+  reader member and the participation rules.
+- **§2.23.3 visibility.** The new Core types are public because host and persistence authors
+  implement or call them; `DefaultAgentSessionPolicyService`, the owner, claims and participation
+  are `internal sealed`. Agent Core and Agent API are not yet enrolled in PublicApiAnalyzers (#2591
+  enrolls domains one at a time). The enrolled `Elsa.Agent` surface is unchanged, and the build
+  passes without RS0016/RS0017, so no baseline changes.
+- **§2.23.5 exception boundaries.** `AgentSessionPolicyChangedException` is a Core domain exception;
+  no infrastructure exception crosses the new members.
+- **§4.2.** The members above are additive (Minor): new interfaces, one default interface member,
+  new models, enums and exception, init-only properties, a new route and additive response fields.
+- **Behavior changes** (Major under §4.2's changed-semantics rule; accepted pre-GA under ADR 0080 D4
+  with computed versions under Elsa §E5; this work performs no release):
+  1. The audit route requires `ListOwnedAsync`: custom readers now get 409, and legacy sessions without
+     an ownership association are no longer listed.
+  2. Cancellation during the pre-dispatch authority recheck is Cancelled with zero effect, where it
+     used to be stored as Uncertain.
+  3. Repeated decisions on an expired proposal return `agent.proposal.expired`, where they used to
+     return `invalid_state` or `closed`. Pre-dispatch expiry emits one correlated audit record.
+  4. An automatic approval no longer satisfies a policy that requires review. `AddAsync` refuses
+     review-required proposals inserted already approved.
+  5. For engine lifecycle envelopes of mutating invocations, the owning module's
+     `AdmitDisclosureAsync` decision now replaces the tool's mutation-authority check.
+  6. `AddMessageAsync` and `AddAsync` on the default services can throw `AgentSessionPolicyChangedException`
+     when a caller stamps a revision that is no longer current.
+  7. A duplicate accepted prompt delivery re-retains that message's own context.
+- **Not touched:** §2.6.1 events (no new event or fan-in), §E2 design/runtime split, §E7 tiers
+  (new tests are in the existing `Elsa.Agent.Tests` project), and the draft §2.24.
+
+**Obsolete source.** None removed. The per-event audit lookup was already removed in `95e6d6532`.
+`AgentEndpointActor.CanAccess` still has three production callers. `IAgentAuditReader.ListAsync`
+remains a public, trusted in-process member; removing it would be a Major change outside this leaf.
+
+## Open items before freeze
+
+- The accepted-prompt response's `acceptedPolicy` serializes the whole `AgentPolicy`, including
+  `deniedCapabilityIds`, `allowedContextKinds` and `retentionLabel`.
+  [data-model.md](../data-model.md#conversation-and-accepted-policy) says the client receives no
+  internal denied-capability lists. Before T026, either narrow the wire shape to the revision (the
+  detail view already does) or amend the data model.
+- Decide whether the new replacement contracts join `AgentRegistrationValidator`'s single-registration
+  check (§2.6.2) or stay with the domain's existing undiagnosed `TryAdd*` behavior.
 
 ## Separately packaged module
 
