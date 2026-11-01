@@ -23,8 +23,10 @@ public static class SpecialistRuntimeIds
 {
     public const string ProviderKey = "elsa.specialist";
     public const string ManifestSchema = "1";
+    public const string ContinuityManifestSchema = "2";
     public const string ConsumerKey = "elsa.specialist";
     public const string DescriptorSchema = "1";
+    public const string ContinuityDescriptorSchema = "2";
     public const string SchemaProfile = "elsa.specialist.json/1";
     public const string FacadeCapability = "Elsa.Agent.Specialists.Activities.SpecialistActivity";
     public const string TurnCapability = "Elsa.Agent.Specialists.Activities.SpecialistModelTurn";

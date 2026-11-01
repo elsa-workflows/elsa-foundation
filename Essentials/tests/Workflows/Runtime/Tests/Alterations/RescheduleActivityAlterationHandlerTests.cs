@@ -87,7 +87,13 @@ public sealed class RescheduleActivityAlterationHandlerTests
         Assert.Equal(successor.Execution.ActivityExecutionId, superseded.SupersededByActivityExecutionId);
         Assert.NotNull(superseded.SupersededAt);
         Assert.Equal(source.Execution.ActivityExecutionId, successor.Metadata["runtime.supersedesActivityExecutionId"]);
-        Assert.Equal(input, successor.InputSnapshot);
+        Assert.NotSame(input, successor.InputSnapshot);
+        Assert.Equal(successor.InvocationId, successor.InputSnapshot!.InvocationId);
+        Assert.Equal("source", input.InvocationId);
+        Assert.Equal(input.ContractFingerprint, successor.InputSnapshot.ContractFingerprint);
+        Assert.Equal(input.BindingFingerprint, successor.InputSnapshot.BindingFingerprint);
+        Assert.Equal(input.MaterializedAt, successor.InputSnapshot.MaterializedAt);
+        Assert.Equal(input.Values, successor.InputSnapshot.Values);
         Assert.Equal(ActivityExecutionStatus.Cancelled, cancelledDescendant.Status);
         Assert.Equal("SupersededAncestor", cancelledDescendant.SubStatus);
         var cleanup = Assert.Single(builder.ActivityScopeCleanups);
