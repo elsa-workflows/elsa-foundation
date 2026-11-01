@@ -2,28 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import type { BpmnCommandOutcome, BpmnOperation, BpmnOperationInput, createBpmnRuntimeClient } from "../api/bpmnRuntime";
 
 type Client = ReturnType<typeof createBpmnRuntimeClient>;
-type Input = Extract<BpmnOperationInput, { kind: "start" | "complete-human" }>;
-type Target = { kind: "start"; sourceReferenceId: string } | { kind: "complete-human"; executionId: string };
+type Input = Extract<BpmnOperationInput, { kind: "start" | "complete-human" | "retry-service" }>;
+type Target = { kind: "start"; sourceReferenceId: string } | { kind: "complete-human" | "retry-service"; executionId: string };
 export interface BpmnCommandReceipt { formatVersion: 1; operation: BpmnOperation; outcome?: BpmnCommandOutcome }
 
 function belongs(operation: BpmnOperation, target: Target) {
   return operation.kind === target.kind && (operation.kind === "start" && target.kind === "start"
     ? operation.sourceReferenceId === target.sourceReferenceId
-    : operation.kind === "complete-human" && target.kind === "complete-human" && operation.executionId === target.executionId);
+    : (operation.kind === "complete-human" || operation.kind === "retry-service") && target.kind !== "start" && operation.executionId === target.executionId);
 }
 function sameInput(operation: BpmnOperation, input: Input) {
   return operation.kind === input.kind && (operation.kind === "start" && input.kind === "start"
     ? operation.sourceReferenceId === input.sourceReferenceId
     : operation.kind === "complete-human" && input.kind === "complete-human" && operation.executionId === input.executionId
       && operation.invocationId === input.invocationId && operation.attemptId === input.attemptId
-      && JSON.stringify(operation.outcomes ?? []) === JSON.stringify(input.outcomes ?? []));
+      && JSON.stringify(operation.outcomes ?? []) === JSON.stringify(input.outcomes ?? [])
+      || operation.kind === "retry-service" && input.kind === "retry-service" && operation.executionId === input.executionId
+        && operation.incidentId === input.incidentId && operation.invocationId === input.invocationId && operation.failedAttemptId === input.failedAttemptId);
 }
 export function confirmedBpmnCommand(receipt: BpmnCommandReceipt | null) {
   return receipt?.outcome?.pending === false && ["Accepted", "Rejected"].includes(String(receipt.outcome.result?.status));
 }
 function validateOutcome(operation: BpmnOperation, outcome: BpmnCommandOutcome) {
   if (!outcome || outcome.inputId !== operation.requestId || typeof outcome.executionId !== "string" || !outcome.executionId
-    || typeof outcome.pending !== "boolean" || operation.kind === "complete-human" && outcome.executionId !== operation.executionId)
+    || typeof outcome.pending !== "boolean" || (operation.kind === "complete-human" || operation.kind === "retry-service") && outcome.executionId !== operation.executionId)
     throw new Error("The command response does not match the retained BPMN request.");
 }
 
@@ -40,7 +42,9 @@ export function useBpmnCommand(client: Client, target: Target, onOutcome: () => 
       if (record?.formatVersion !== 1 || !operation || operation.scope !== client.scope || !belongs(operation, target)
         || typeof operation.requestId !== "string" || !operation.requestId
         || operation.kind === "complete-human" && (![operation.invocationId, operation.attemptId].every(value => typeof value === "string" && value.length > 0)
-          || operation.outcomes !== undefined && (!Array.isArray(operation.outcomes) || operation.outcomes.some(value => typeof value !== "string"))))
+          || operation.outcomes !== undefined && (!Array.isArray(operation.outcomes) || operation.outcomes.some(value => typeof value !== "string")))
+        || operation.kind === "retry-service" && ![operation.incidentId, operation.invocationId, operation.failedAttemptId]
+          .every(value => typeof value === "string" && value.trim().length > 0))
         throw new Error("The previous BPMN command cannot be restored safely. Its receipt is kept unchanged.");
       if (record.outcome) validateOutcome(operation, record.outcome);
       return { record, error: "" };
@@ -66,7 +70,7 @@ export function useBpmnCommand(client: Client, target: Target, onOutcome: () => 
     try {
       if (!belongs(operation, target)) throw new Error("This command belongs to another BPMN process or run.");
       if (!readOnly) { store({ formatVersion: 1, operation, ...(record?.operation.requestId === operation.requestId && record.outcome ? { outcome: record.outcome } : {}) }); retained = true; }
-      const executionId = operation.kind === "complete-human" ? operation.executionId : record?.outcome?.executionId;
+      const executionId = operation.kind === "complete-human" || operation.kind === "retry-service" ? operation.executionId : record?.outcome?.executionId;
       const outcome = readOnly
         ? await client.command(executionId ?? "", operation.requestId, signal)
         : await client.execute(operation, signal) as BpmnCommandOutcome;
@@ -80,7 +84,7 @@ export function useBpmnCommand(client: Client, target: Target, onOutcome: () => 
     if (inFlight.current || initial.error) return;
     try {
       if (record && (!confirmedBpmnCommand(record) || !explicitlyNew && sameInput(record.operation, input))) {
-        if (!sameInput(record.operation, input)) throw new Error("Resolve the previous completion before starting another one.");
+        if (!sameInput(record.operation, input)) throw new Error("Resolve the previous command before starting another one.");
         await run(record.operation); return;
       }
       await run(client.prepare(input));

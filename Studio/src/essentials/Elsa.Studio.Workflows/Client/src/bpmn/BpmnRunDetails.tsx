@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { StudioButton, CopyableIdentifier } from "@elsa-workflows/studio-ui";
 import { evaluateBackendRequirements, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
-import type { BpmnExecution, BpmnInspection, createBpmnRuntimeClient } from "../api/bpmnRuntime";
+import type { BpmnExecution, BpmnIncident, BpmnInspection, createBpmnRuntimeClient } from "../api/bpmnRuntime";
 import { BpmnRunCanvas } from "./BpmnRunCanvas";
 import { BpmnCommandNotice } from "./BpmnCommandNotice";
 import { useBpmnCommand } from "./useBpmnCommand";
@@ -29,6 +29,9 @@ function elementName(inspection: BpmnInspection, id: string) {
   const element = Array.isArray(elements) ? elements.find(item => item && typeof item === "object" && item.elementId === id) : null;
   return element && typeof element.name === "string" && element.name.trim() ? element.name : id;
 }
+function linkScope(session: StudioBackendSession) {
+  return JSON.stringify([session.key, session.profile.id, session.profile.baseUrl, session.identity.status, session.identity.subject, session.identity.tenantId]);
+}
 
 export function BpmnRunDetails({ client, session, executionId }: { client: Client; session: StudioBackendSession; executionId: string }) {
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
@@ -39,19 +42,31 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
       return value;
     }, retry: false, refetchOnWindowFocus: false });
   const command = useBpmnCommand(client, { kind: "complete-human", executionId }, () => { void query.refetch(); });
+  const retry = useBpmnCommand(client, { kind: "retry-service", executionId }, () => { void query.refetch(); });
   const completionAvailable = evaluateBackendRequirements(session, [{ id: "elsa.api.bpmn-runtime", contractVersion: "1", relations: ["bpmn-complete-human"] }]).state === "available";
+  const retryAvailable = evaluateBackendRequirements(session, [{ id: "elsa.api.bpmn-runtime", contractVersion: "1", relations: ["bpmn-retry-service"] }]).state === "available";
+  const scope = linkScope(session), context = session.context;
   if (query.isError) return <div role="alert"><p>{query.error.message}</p><StudioButton type="button" onClick={() => void query.refetch()}>Reload run</StudioButton></div>;
   if (!query.data) return <p role="status">Loading BPMN run…</p>;
   const inspection = query.data;
   const canComplete = completionAvailable && session.identity.status === "authenticated" && inspection.profile === "foundation-direct-v1"
     && inspection.execution.status === "Running" && !command.blocked && !command.busy && (!command.record || command.confirmed);
+  const canRetry = (incident: BpmnIncident) => retryAvailable && !session.disposed && session.identity.status === "authenticated"
+    && inspection.profile === "foundation-native-work-v1" && inspection.execution.status === "WaitingIncident" && !query.isFetching
+    && !retry.blocked && !retry.busy && (!retry.record || retry.confirmed) && incident.status === "Open" && incident.retryAttemptId === null
+    && Number.isInteger(incident.attemptNumber) && incident.attemptNumber > 0 && Number.isInteger(incident.maxAttempts) && incident.attemptNumber < incident.maxAttempts
+    && inspection.work.some(work => work.kind === "Native" && work.elementId === incident.elementId && work.bindingId === incident.bindingId
+      && work.invocationId === incident.invocationId && work.attemptId === incident.failedAttemptId && work.workerExecutionId === incident.workerExecutionId)
+    && inspection.attempts.some(attempt => attempt.bindingId === incident.bindingId && attempt.invocationId === incident.invocationId
+      && attempt.attemptId === incident.failedAttemptId && attempt.workerExecutionId === incident.workerExecutionId && attempt.attemptNumber === incident.attemptNumber);
   return <div className="wf-bpmn-run">
     <header className="wf-bpmn-run-heading">
       <div><h3>{processName(inspection)}</h3><p role="status">{bpmnRunState(inspection.execution, inspection)}</p>
         <p>Published version {inspection.source?.sourceVersion ?? "unavailable"} · Revision {inspection.execution.revision}</p></div>
-      <StudioButton type="button" disabled={query.isFetching || command.busy} onClick={() => void query.refetch()}>Refresh run</StudioButton>
+      <StudioButton type="button" disabled={query.isFetching || command.busy || retry.busy} onClick={() => void query.refetch()}>Refresh run</StudioButton>
     </header>
     <BpmnCommandNotice command={command} label="completion" />
+    <BpmnCommandNotice command={retry} label="retry" />
     <div className="wf-bpmn-run-workbench">
       <BpmnRunCanvas key={executionId} inspection={inspection} selectedElement={selectedElement} onSelect={setSelectedElement} />
       <section className="wf-bpmn-current-work" aria-label="Current BPMN work">
@@ -65,12 +80,28 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
               title={!completionAvailable ? "This backend does not offer human completion." : inspection.profile !== "foundation-direct-v1" ? "This process needs a compatible work action." : undefined}
               onClick={() => { if (canComplete) void command.begin({ kind: "complete-human", executionId, invocationId: work.invocationId, attemptId: work.attemptId }); }}>Complete work</StudioButton> : null}</div>
         </article>)}
-        {inspection.incidents.length ? <><h3>Incidents</h3>{inspection.incidents.map(incident => <p key={incident.incidentId}>{elementName(inspection, incident.elementId)} · {incident.status} · {incident.faultCode}</p>)}</> : null}
+        {inspection.incidents.length ? <><h3>Incidents</h3>{inspection.incidents.map(incident => <article key={incident.incidentId} className="wf-bpmn-work-item">
+          <h4>{elementName(inspection, incident.elementId)}</h4><p>{incident.status} · {incident.faultCode}</p>
+          <p>{incident.attemptNumber} of {incident.maxAttempts} attempts used · Failed <time dateTime={incident.failedAt}>{new Date(incident.failedAt).toLocaleString()}</time></p>
+          <CopyableIdentifier label="Failed attempt" value={incident.failedAttemptId} />
+          {incident.retryAttemptId ? <CopyableIdentifier label="Replacement attempt" value={incident.retryAttemptId} /> : null}
+          {incident.status === "Open" ? <StudioButton type="button" disabled={!canRetry(incident)}
+            title={!retryAvailable ? "This backend does not offer service retry." : undefined}
+            onClick={() => { if (canRetry(incident)) void retry.begin({ kind: "retry-service", executionId, incidentId: incident.incidentId,
+              invocationId: incident.invocationId, failedAttemptId: incident.failedAttemptId }); }}>Retry service</StudioButton> : null}
+        </article>)}</> : null}
       </section>
     </div>
     {inspection.attempts.length ? <section><h3>Native attempts</h3><ul>{inspection.attempts.map(attempt => <li key={`${attempt.invocationId}:${attempt.attemptId}`}>
       {attempt.status}{attempt.attemptNumber ? ` · Attempt ${attempt.attemptNumber}` : ""}{attempt.outcomeKey ? ` · ${attempt.outcomeKey}` : ""}{attempt.faultCode ? ` · ${attempt.faultCode}` : ""}
       <CopyableIdentifier label="Native run" value={attempt.workerExecutionId} />
+      <a data-bpmn-native-attempt="" href={`/workflows/instances/${encodeURIComponent(attempt.workerExecutionId)}?${new URLSearchParams({ backend: session.profile.id })}`}
+        onClick={event => { if (session.disposed || session.context !== context || linkScope(session) !== scope) event.preventDefault(); }}>Open native attempt</a>
+      <details><summary>Pinned native executable</summary><div className="wf-bpmn-identifiers">
+        <CopyableIdentifier label="Executable" value={attempt.workerExecutable.artifactId} /><CopyableIdentifier label="Definition" value={attempt.workerExecutable.definitionId} />
+        <CopyableIdentifier label="Definition version" value={attempt.workerExecutable.definitionVersionId} /><CopyableIdentifier label="Artifact version" value={attempt.workerExecutable.artifactVersion} />
+        <CopyableIdentifier label="Artifact hash" value={attempt.workerExecutable.artifactHash} />
+      </div></details>
     </li>)}</ul></section> : null}
     {inspection.settlements.length ? <section><h3>Settlement</h3><ul>{inspection.settlements.map((item, index) => <li key={`${item.kind}:${item.executionId}:${index}`}>
       {item.kind === "NativeParent" ? "Native parent" : "Native cancellation"}: {item.notAdmitted ? "Not admitted" : item.settled ? "Settled" : "Pending"}

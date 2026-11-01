@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { BpmnWorkflowsPage } from "../bpmn/BpmnWorkflowsPage";
 import { clearApiCapabilityCache } from "../api/capabilities";
+import type { BpmnInspection } from "../api/bpmnRuntime";
 
 beforeEach(() => { clearApiCapabilityCache(); sessionStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); });
@@ -17,11 +18,11 @@ const inspection = { execution, authority: { systemIdentity: "system", rootIniti
   process: { processId: "process", name: "Review order", elements: [{ elementId: "start", elementType: "startEvent" }, { elementId: "review", elementType: "userTask", name: "Review order", bindingRef: "human:review" }, { elementId: "end", elementType: "endEvent" }], sequenceFlows: [{ flowId: "a", sourceRef: "start", targetRef: "review" }, { flowId: "b", sourceRef: "review", targetRef: "end" }] },
   source: { sourceReferenceId: "source", sourceKind: "BpmnModel", sourceId: "authored-version", sourceVersion: "2.0.0", layout: [{ nodeId: "review", x: 240, y: 0 }], activityPresentation: [], createdAt: publication.createdAt, publishedAt: publication.publishedAt, retiredAt: null }, work: [work], attempts: [], incidents: [], settlements: [] };
 
-function fixture(view: "processes" | "runs" | "run" = "processes") {
+function fixture(view: "processes" | "runs" | "run" = "processes", runInspection: unknown = inspection) {
   window.history.replaceState({}, "", view === "run" ? "/workflows/bpmn/runs/run?backend=selected" : `/workflows/bpmn${view === "runs" ? "/runs" : ""}?backend=selected`);
   const capabilities = { capabilities: [
     { id: "elsa.api.bpmn-catalog", contractVersion: "1", links: [{ rel: "bpmn-publications", href: "bpmn/publications" }, { rel: "bpmn-executions", href: "bpmn/executions" }] },
-    { id: "elsa.api.bpmn-runtime", contractVersion: "1", links: [{ rel: "bpmn-admission", href: "bpmn/admission" }, { rel: "bpmn-start", href: "bpmn/executions" }, { rel: "bpmn-complete-human", href: "bpmn/executions/{id}/work/{invocation}/complete", templated: true }, { rel: "bpmn-command", href: "bpmn/executions/{id}/commands/{request}", templated: true }] },
+    { id: "elsa.api.bpmn-runtime", contractVersion: "1", links: [{ rel: "bpmn-admission", href: "bpmn/admission" }, { rel: "bpmn-start", href: "bpmn/executions" }, { rel: "bpmn-complete-human", href: "bpmn/executions/{id}/work/{invocation}/complete", templated: true }, { rel: "bpmn-retry-service", href: "bpmn/executions/{id}/retry-service", templated: true }, { rel: "bpmn-command", href: "bpmn/executions/{id}/commands/{request}", templated: true }] },
     { id: "elsa.api.bpmn-inspection", contractVersion: "1", links: [{ rel: "bpmn-inspection", href: "bpmn/executions/{id}/inspection", templated: true }] }
   ] };
   const getJson = vi.fn(async (path: string): Promise<unknown> => {
@@ -29,7 +30,7 @@ function fixture(view: "processes" | "runs" | "run" = "processes") {
     if (path.includes("bpmn/publications")) return { items: [publication], nextContinuationToken: null };
     if (path.endsWith("bpmn/admission")) return { admitNewExecutions: true };
     if (path.includes("bpmn/executions?")) return { items: [execution], nextContinuationToken: null };
-    if (path.endsWith("/inspection")) return structuredClone(inspection);
+    if (path.endsWith("/inspection")) return structuredClone(runInspection);
     throw new Error(`Unexpected read ${path}`);
   });
   const postJson = vi.fn(async (path: string, body: { requestId: string }): Promise<unknown> => ({ executionId: "run", inputId: body.requestId, replay: false, pending: false, result: { status: "Accepted", revision: path.endsWith("/complete") ? 2 : 1, lifecycle: path.endsWith("/complete") ? "TerminalSettled" : "Running" } }));
@@ -283,5 +284,177 @@ it("does not draw unsupported notation as an ordinary task", async () => {
   try {
     await vi.waitFor(() => expect(view.container.textContent).toContain("notation the diagram cannot display"));
     expect(view.container.querySelector(".react-flow__node[data-id='boundary']")).toBeNull(); expect(view.button("Complete work")).toBeTruthy();
+  } finally { view.dispose(); }
+});
+
+function serviceInspection(): BpmnInspection {
+  return { ...structuredClone(inspection), profile: "foundation-native-work-v1",
+    execution: { ...execution, status: "WaitingIncident" },
+    process: { processId: "etl-process", name: "Import orders", elements: [{ elementId: "import", elementType: "serviceTask", name: "Import orders", bindingRef: "service:import" }], sequenceFlows: [] },
+    work: [{ ...work, kind: "Native", elementId: "import", bindingId: "service:import", workerExecutionId: "native/failed" }],
+    attempts: [{ bindingId: "service:import", invocationId: "invocation", attemptId: "attempt", workerExecutionId: "native/failed", workerExecutable: { ...pin, artifactId: "worker", artifactHash: "worker-hash" }, status: "Faulted", attemptNumber: 1, outcomeKey: null, faultCode: "etl-partition-failed" }],
+    incidents: [{ incidentId: "incident", elementId: "import", bindingId: "service:import", invocationId: "invocation", failedAttemptId: "attempt", workerExecutionId: "native/failed", faultCode: "etl-partition-failed", failedAt: "2026-11-01T10:02:00Z", attemptNumber: 1, maxAttempts: 2, status: "Open", retryAttemptId: null }] };
+}
+
+it("shows the held service fault, exact pinned native attempt and explicit retry budget", async () => {
+  const view = fixture("run", serviceInspection());
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")).toBeTruthy());
+    expect(view.container.textContent).toContain("Needs attention");
+    expect(view.container.textContent).toContain("1 of 2 attempts used");
+    expect(view.container.textContent).toContain("etl-partition-failed");
+    expect(view.container.querySelector<HTMLAnchorElement>('a[data-bpmn-native-attempt]')?.getAttribute("href"))
+      .toBe("/workflows/instances/native%2Ffailed?backend=backend");
+    expect(view.container.textContent).toContain("worker-hash");
+    view.click("Retry service");
+    await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(1));
+    expect(view.postJson).toHaveBeenCalledWith("/bpmn/executions/run/retry-service", {
+      requestId: expect.any(String), incidentId: "incident", invocationId: "invocation", failedAttemptId: "attempt"
+    }, { retryOnUnauthorized: false, signal: expect.any(AbortSignal) });
+  } finally { view.dispose(); }
+});
+
+it("recovers an uncertain retry after reconnecting even after the incident has been retired", async () => {
+  const view = fixture("run", serviceInspection()); view.postJson.mockRejectedValueOnce(new TypeError("Retry response lost"));
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Retry response lost")); const first = view.postJson.mock.calls[0];
+    const settled = serviceInspection(); settled.execution.status = "TerminalSettled"; settled.execution.result = { status: "Completed" }; settled.work = [];
+    settled.incidents[0] = { ...settled.incidents[0], status: "Retried", retryAttemptId: "replacement" };
+    settled.attempts.push({ ...settled.attempts[0], attemptId: "replacement", workerExecutionId: "native/replacement", attemptNumber: 2, status: "Completed", faultCode: null });
+    const normal = view.getJson.getMockImplementation()!;
+    view.getJson.mockImplementation(async path => path.endsWith("/inspection") ? settled : normal(path));
+    view.render("run", { ...view.session, key: "fresh" });
+    await vi.waitFor(() => expect(view.container.textContent).toContain("No outstanding work."));
+    expect(view.postJson).toHaveBeenCalledTimes(1); expect(view.button("Retry service")).toBeUndefined();
+    expect(view.container.textContent).toContain("etl-partition-failed"); expect(view.container.querySelectorAll('a[data-bpmn-native-attempt]')).toHaveLength(2);
+    view.click("Resume retry"); await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(2));
+    expect(view.postJson.mock.calls[1].slice(0, 2)).toEqual(first.slice(0, 2));
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Last retry: accepted"));
+  } finally { view.dispose(); }
+});
+
+it("checks a lost retry response without sending another command", async () => {
+  const view = fixture("run", serviceInspection()); view.postJson.mockRejectedValueOnce(new TypeError("Retry response lost"));
+  const normal = view.getJson.getMockImplementation()!;
+  view.getJson.mockImplementation(async path => path.includes("/commands/") ? { executionId: "run", inputId: view.postJson.mock.calls[0][1].requestId, pending: false, replay: true, result: { status: "Accepted" } } : normal(path));
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Retry response lost")); view.click("Check outcome");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Last retry: accepted (replayed)"));
+    expect(view.postJson).toHaveBeenCalledTimes(1);
+    expect(view.getJson.mock.calls.some(([path]) => path === `/bpmn/executions/run/commands/${view.postJson.mock.calls[0][1].requestId}`)).toBe(true);
+  } finally { view.dispose(); }
+});
+
+it("keeps pending retry and newly observed incidents distinct without replacing the request", async () => {
+  const view = fixture("run", serviceInspection());
+  view.postJson.mockImplementationOnce(async (_path, body) => ({ executionId: "run", inputId: body.requestId, pending: true, replay: false, result: null }));
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Pending:"));
+    const newer = serviceInspection(); newer.incidents[0].incidentId = "new-incident";
+    const normal = view.getJson.getMockImplementation()!;
+    view.getJson.mockImplementation(async path => path.endsWith("/inspection") ? newer : normal(path));
+    view.render("run", { ...view.session, key: "fresh" });
+    await vi.waitFor(() => expect(view.button("Retry service")).toBeTruthy());
+    expect(view.button("Retry service").disabled).toBe(true); expect(view.postJson).toHaveBeenCalledTimes(1);
+    view.click("Resume retry"); await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(2));
+    expect(view.postJson.mock.calls[1].slice(0, 2)).toEqual(view.postJson.mock.calls[0].slice(0, 2));
+  } finally { view.dispose(); }
+});
+
+it("reuses the exact retry identity for another click on the same stale incident", async () => {
+  const view = fixture("run", serviceInspection());
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Last retry: accepted"));
+    await vi.waitFor(() => expect(view.button("Retry service").disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.postJson).toHaveBeenCalledTimes(2));
+    expect(view.postJson.mock.calls[1].slice(0, 2)).toEqual(view.postJson.mock.calls[0].slice(0, 2));
+    expect(view.getJson.mock.calls.every(([path]) => !path.includes("design/") && !path.includes("bpmn/admission"))).toBe(true);
+  } finally { view.dispose(); }
+});
+
+it.each(["exhausted", "running", "terminal", "wrong-work", "missing-attempt", "foreign-attempt", "future-profile"])("refuses a new service retry for %s inspection state", async change => {
+  const value = serviceInspection();
+  if (change === "exhausted") value.incidents[0].maxAttempts = 1;
+  if (change === "running") value.execution.status = "Running";
+  if (change === "terminal") value.execution.status = "TerminalPendingSettlement";
+  if (change === "wrong-work") value.work[0].attemptId = "other-attempt";
+  if (change === "missing-attempt") value.attempts = [];
+  if (change === "foreign-attempt") value.attempts[0].workerExecutionId = "foreign-worker";
+  if (change === "future-profile") value.profile = "future-native-profile";
+  const view = fixture("run", value);
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")).toBeTruthy()); expect(view.button("Retry service").disabled).toBe(true);
+    view.click("Retry service"); expect(view.postJson).not.toHaveBeenCalled();
+  } finally { view.dispose(); }
+});
+
+it("refuses a fresh retry if its request identity cannot be saved", async () => {
+  const view = fixture("run", serviceInspection()); const fail = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Storage unavailable")); expect(view.postJson).not.toHaveBeenCalled();
+  } finally { fail.mockRestore(); view.dispose(); }
+});
+
+it.each(["incidentId", "invocationId", "failedAttemptId"])("preserves a retry receipt with corrupt %s and refuses a new command", async field => {
+  const view = fixture("run", serviceInspection()); view.postJson.mockRejectedValueOnce(new TypeError("Response lost"));
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Response lost"));
+    const key = sessionStorage.key(0)!; const receipt = JSON.parse(sessionStorage.getItem(key)!); receipt.operation[field] = "";
+    const raw = JSON.stringify(receipt); sessionStorage.setItem(key, raw); view.render("run", { ...view.session, key: "fresh" });
+    await vi.waitFor(() => expect(view.container.textContent).toContain("cannot be restored safely"));
+    expect(view.button("Retry service").disabled).toBe(true); expect(sessionStorage.getItem(key)).toBe(raw); expect(view.postJson).toHaveBeenCalledTimes(1);
+  } finally { view.dispose(); }
+});
+
+it("refuses a retry response from another execution while preserving the original request", async () => {
+  const view = fixture("run", serviceInspection());
+  view.postJson.mockImplementationOnce(async (_path, body) => ({ executionId: "other-run", inputId: body.requestId, pending: false, replay: false, result: { status: "Accepted" } }));
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("does not match the retained BPMN request"));
+    expect(view.container.textContent).not.toContain("Last retry: accepted"); expect(view.button("Resume retry")).toBeTruthy();
+  } finally { view.dispose(); }
+});
+
+it.each(["subject", "tenant", "backend"])("keeps retained retries out of another %s scope", async change => {
+  const view = fixture("run", serviceInspection()); view.postJson.mockRejectedValueOnce(new TypeError("Response lost"));
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false)); view.click("Retry service");
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Response lost"));
+    const next = { ...view.session, identity: { ...view.session.identity }, profile: { ...view.session.profile }, context: { ...view.session.context } };
+    if (change === "subject") next.identity.subject = "other-subject";
+    if (change === "tenant") next.identity.tenantId = "other-tenant";
+    if (change === "backend") { next.profile.id = "other-backend"; next.profile.baseUrl = "https://other.example"; Object.assign(next.context, { baseUrl: "https://other.example" }); }
+    view.render("run", next);
+    await vi.waitFor(() => expect(view.button("Retry service")?.disabled).toBe(false));
+    expect(view.button("Resume retry")).toBeUndefined(); expect(view.postJson).toHaveBeenCalledTimes(1); expect(sessionStorage.length).toBe(1);
+  } finally { view.dispose(); }
+});
+
+it("does not offer retry without its backend relation", async () => {
+  const view = fixture("run", serviceInspection());
+  view.session.capabilities!.capabilities.find(item => item.id === "elsa.api.bpmn-runtime")!.links = [];
+  try {
+    await vi.waitFor(() => expect(view.button("Retry service")).toBeTruthy()); expect(view.button("Retry service").disabled).toBe(true);
+    view.click("Retry service"); expect(view.postJson).not.toHaveBeenCalled();
+  } finally { view.dispose(); }
+});
+
+it.each(["disposed", "subject", "tenant", "backend"])("retires a native-attempt link after its %s scope changes", async change => {
+  const view = fixture("run", serviceInspection());
+  try {
+    await vi.waitFor(() => expect(view.container.querySelector('a[data-bpmn-native-attempt]')).toBeTruthy());
+    if (change === "disposed") Object.assign(view.session, { disposed: true });
+    if (change === "subject") view.session.identity.subject = "other";
+    if (change === "tenant") view.session.identity.tenantId = "other";
+    if (change === "backend") view.session.profile.id = "other";
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    expect(view.container.querySelector('a[data-bpmn-native-attempt]')!.dispatchEvent(click)).toBe(false);
   } finally { view.dispose(); }
 });
