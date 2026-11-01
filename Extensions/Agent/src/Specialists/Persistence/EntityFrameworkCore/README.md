@@ -71,6 +71,8 @@ New protocol1 records register matching native deliveries through conditional tu
 Concurrent stage/accepted replay is bounded by row versions and preserves the original receipt,
 request deadline and newer conversation history, including uncertainty from another operation.
 The three actual providers qualify eight concurrent registrations/replays and fresh-host restoration.
+A deterministic interceptor also commits one registration between another registration's read/update;
+the metadata CAS retries and preserves both associations.
 No relational schema changed: associations are bounded payload metadata. Cancellation/applied
 settlement and content retention remain part of M3. A fresh service provider/context test proves encrypted pair
 recovery; it is not independent-process or live-model qualification.

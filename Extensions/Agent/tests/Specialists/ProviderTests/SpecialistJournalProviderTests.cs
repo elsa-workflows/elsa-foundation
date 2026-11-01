@@ -169,11 +169,12 @@ public sealed class SpecialistJournalProviderTests
         Assert.True(await recovered.DispatchAsync(race.Handle, race.Identity, raceToken, now, CancellationToken.None));
         var raceReservation = new SpecialistModelRequestReservation(new string('5', 64), 64, now, new("fixture", "model", "incarnation", 1, "fixture/1", "fixture/1"));
         Assert.NotNull(await recovered.ReserveModelRequestAsync(race.Handle, race.Identity, raceToken, raceReservation, now, CancellationToken.None));
-        var overlap = new RenewalBeforeUpdate(async cancellationToken =>
+        Func<CancellationToken, Task> mutation = async cancellationToken =>
         {
             await using var scope = restarted.CreateAsyncScope();
             Assert.NotNull(await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().RenewAsync(race.Handle, race.Identity, raceToken, now.AddSeconds(10), cancellationToken));
-        });
+        };
+        var overlap = new RenewalBeforeUpdate(cancellationToken => mutation(cancellationToken));
         var racingServices = new ServiceCollection();
         racingServices.AddSingleton<IPersistenceAccessContextAccessor>(new Access());
         racingServices.AddDbContext<RaceContext>(options =>
@@ -198,6 +199,20 @@ public sealed class SpecialistJournalProviderTests
             overlap.Arm();
             Assert.True(await store.AcceptAsync(race.Handle, race.Identity, raceToken, "accepted-after-renewal-race", now.AddSeconds(10), CancellationToken.None));
             Assert.Equal(2, overlap.Count);
+            var innerAlias = race.Identity with { ActivityExecutionId = "forced-stage-inner" };
+            var outerAlias = race.Identity with { ActivityExecutionId = "forced-stage-outer" };
+            mutation = async cancellationToken =>
+            {
+                await using var scope = restarted.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>().StageAsync(
+                    race with { Identity = innerAlias, Deliveries = [new(innerAlias)] }, cancellationToken);
+            };
+            overlap.Arm();
+            var registered = await store.StageAsync(race with { Identity = outerAlias, Deliveries = [new(outerAlias)] }, CancellationToken.None);
+            Assert.Equal(3, overlap.Count);
+            Assert.Contains(registered.Deliveries!, delivery => delivery.Identity == innerAlias);
+            Assert.Contains(registered.Deliveries!, delivery => delivery.Identity == outerAlias);
+            Assert.Equal("accepted-after-renewal-race", registered.ProtectedResult);
         }
         Assert.Equal(SpecialistTurnStatus.Accepted, (await recovered.ReadAsync(race.Handle, race.Identity, CancellationToken.None))!.Status);
 

@@ -18,6 +18,68 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistJournalTests
 {
+    [Fact]
+    public async Task Logical_fingerprint_normalization_does_not_allow_protected_request_origin_relocation()
+    {
+        await using var services = Services();
+        var state = new InMemorySpecialistTurnState();
+        var journal = Journal(new InMemorySpecialistTurnStore(new Access("tenant"), state), services);
+        var request = Request();
+        var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, default);
+        var retry = request with { Identity = request.Identity with { ActivityExecutionId = "registered-retry" } };
+        await journal.StageAsync(retry, DateTimeOffset.UtcNow, default);
+        var protector = services.GetRequiredService<ISecretValueProtector>();
+        var frame = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(state.Rows[handle].ProtectedRequest))!;
+        frame["identity"]!["activityExecutionId"] = retry.Identity.ActivityExecutionId;
+        frame["request"]!["identity"]!["activityExecutionId"] = retry.Identity.ActivityExecutionId;
+        state.Rows[handle] = state.Rows[handle] with { ProtectedRequest = protector.Protect(frame.ToJsonString()) };
+        var failure = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ReadAsync(handle, retry.Identity, default));
+        Assert.Equal("specialist.journal.protection", failure.Code);
+    }
+
+    [Fact]
+    public async Task Protected_result_dispatch_identity_cannot_be_replaced_by_a_replay_delivery()
+    {
+        await using var services = Services();
+        var state = new InMemorySpecialistTurnState();
+        var journal = Journal(new InMemorySpecialistTurnStore(new Access("tenant"), state), services);
+        var request = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        var claim = await journal.ClaimAsync(handle, request.Identity, "original-child", now, default);
+        Assert.True(await journal.DispatchAsync(claim, now, default));
+        Assert.True(await journal.AcceptAsync(claim, new(Json("{}"), null, null, null, 1, 1), now, default));
+        var retry = request with { Identity = request.Identity with { ActivityExecutionId = "registered-retry" } };
+        await journal.StageAsync(retry, now, default);
+        await journal.ReplayAsync(handle, retry.Identity, "retry-child", default);
+        var protector = services.GetRequiredService<ISecretValueProtector>();
+        var frame = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(state.Rows[handle].ProtectedResult!))!;
+        frame["dispatchIdentity"]!["activityExecutionId"] = retry.Identity.ActivityExecutionId;
+        state.Rows[handle] = state.Rows[handle] with { ProtectedResult = protector.Protect(frame.ToJsonString()) };
+        var failure = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ResultAsync(handle, retry.Identity, "retry-child", default));
+        Assert.Equal("specialist.journal.protection", failure.Code);
+    }
+
+    [Fact]
+    public async Task Recovered_predispatch_delivery_accepts_under_its_current_identity_but_preserves_the_origin_request()
+    {
+        await using var services = Services();
+        var journal = Journal(Memory(), services);
+        var request = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        await journal.ClaimAsync(handle, request.Identity, "original-child", now, default);
+        var retry = request with { Identity = request.Identity with { ActivityExecutionId = "registered-retry" } };
+        await journal.StageAsync(retry, now, default);
+        var current = await journal.ClaimAsync(handle, retry.Identity, "retry-child", now.AddSeconds(30), default);
+        Assert.Equal(request.Identity, current.Identity);
+        Assert.Equal(retry.Identity.ActivityExecutionId, current.ActiveDeliveryActivityId);
+        Assert.True(await journal.DispatchAsync(current, now.AddSeconds(31), default));
+        Assert.True(await journal.AcceptAsync(current, new(Json("{\"Article\":\"recovered\"}"), null, null, null, 1, 1), now.AddSeconds(31), default));
+        Assert.Equal("recovered", (await journal.ResultAsync(handle, retry.Identity, "retry-child", default)).Result.GetProperty("Article").GetString());
+        await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ResultAsync(handle, request.Identity, "retry-child", default));
+    }
+
     [Theory]
     [InlineData("business")]
     [InlineData("limits")]
