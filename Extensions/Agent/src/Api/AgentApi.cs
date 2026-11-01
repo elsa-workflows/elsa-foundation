@@ -610,28 +610,35 @@ public static class AgentApi
             await WriteBindingErrorAsync(context, "take", bindingError);
             return;
         }
-        var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
         if (sessionId is not null)
         {
-            var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, context.User, sessionId, context.RequestAborted);
+            var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(),
+                context.User, sessionId, context.RequestAborted);
             if (error is not null)
             {
                 await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(error), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, error.StatusCode);
                 return;
             }
         }
-        var listed = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListAsync(sessionId, null, context.RequestAborted);
-        var owned = new List<AgentAuditEvent>();
-        foreach (var item in listed)
+        var actorId = AgentEndpointActor.Resolve(context.User);
+        var tenantId = AgentEndpointActor.ResolveTenant(context.User);
+        if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(tenantId))
         {
-            if (item.SessionId is null)
-                continue;
-            var session = await sessions.FindAsync(item.SessionId, context.RequestAborted);
-            if (session is not null && AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, context.User))
-                owned.Add(item);
+            var unresolved = new AgentError("agent.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403);
+            await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(unresolved), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, unresolved.StatusCode);
+            return;
         }
-        IReadOnlyCollection<AgentAuditEvent> events = owned.Take(Math.Clamp(take ?? 100, 1, 1000)).ToList();
-        await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Success(events), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent);
+        // The owning reader filters by ownership and orders before the limit. There is deliberately no
+        // global-read or per-event session lookup fallback when the installed reader lacks the query.
+        var result = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListOwnedAsync(
+            new(actorId, tenantId, sessionId, Math.Clamp(take ?? 100, 1, AgentAuditOwnerQuery.MaxTake)), context.RequestAborted);
+        if (!result.Succeeded)
+        {
+            var unsupported = new AgentError("agent.audit.query_unsupported", "The installed agent audit reader cannot answer owner-scoped audit queries.", 409);
+            await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(unsupported), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, unsupported.StatusCode);
+            return;
+        }
+        await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Success(result.Events), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent);
     }
 
     private static async Task WriteDeniedAsync(HttpContext context, string sessionId, AgentPolicyDecision decision)
