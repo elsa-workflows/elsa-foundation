@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Activities.Bpmn.Models;
@@ -13,6 +14,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -153,8 +155,125 @@ public sealed class BpmnAuthoredDirectPublisherTests
         Assert.Equal(0, fixture.Publications);
     }
 
+    [Theory]
+    [InlineData("HoldForRetry", 3)]
+    [InlineData("FinalFault", 1)]
+    public async Task Authored_service_retains_its_exact_selected_pin_source_and_fault_policy(string disposition, int attempts)
+    {
+        var fixture = new Fixture();
+        var metadata = ServiceMetadata();
+        metadata["faultPolicy"]!["disposition"] = disposition;
+        metadata["faultPolicy"]!["maxAttempts"] = attempts;
+        fixture.UseService(metadata.ToJsonString());
+        var before = fixture.Version.StateSource;
+
+        await fixture.Publish();
+
+        Assert.Equal(3, fixture.Model!.FormatVersion);
+        Assert.Empty(fixture.Model.HumanBindings);
+        var binding = Assert.Single(fixture.Model.ServiceBindings!);
+        Assert.Equal("service:human", binding.BindingId);
+        Assert.Equal(new("worker-artifact", "worker-definition", "worker-version", "1.0.0", new string('a', 64)), binding.Executable);
+        Assert.Equal("etl-business-failure", binding.BusinessErrorCode);
+        Assert.Equal(disposition, binding.FaultPolicy!.Disposition.ToString());
+        Assert.Equal(attempts, binding.FaultPolicy.MaxAttempts);
+        Assert.Contains("source:worker-source", fixture.Calls);
+        Assert.Contains("authorize:workflows/runtime:read", fixture.Calls);
+        var element = fixture.Model.Process.GetProperty("elements").EnumerateArray().Single(value => value.GetProperty("elementId").GetString() == "human");
+        Assert.Equal("service:human", element.GetProperty("bindingRef").GetString());
+        Assert.Empty(element.GetProperty("properties").EnumerateObject());
+        Assert.Equal(before, fixture.Version.StateSource);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("foreign")]
+    [InlineData("retired")]
+    [InlineData("expired")]
+    [InlineData("test")]
+    [InlineData("artifact")]
+    [InlineData("definition")]
+    [InlineData("version")]
+    [InlineData("label")]
+    [InlineData("identity")]
+    [InlineData("denied")]
+    public async Task Service_selection_requires_the_exact_live_authorized_published_source(string reason)
+    {
+        var fixture = new Fixture();
+        fixture.UseService(ServiceMetadata().ToJsonString());
+        var source = fixture.WorkerSource!;
+        fixture.WorkerSource = reason switch
+        {
+            "missing" => null,
+            "foreign" => source with { TenantId = "other-tenant" },
+            "retired" => source with { DeletedAt = DateTimeOffset.MinValue },
+            "expired" => source with { ExpiresAt = DateTimeOffset.MinValue },
+            "test" => source with { Scope = WorkflowExecutableReferenceScope.TestRun },
+            "artifact" => source with { ArtifactId = "another-artifact" },
+            "definition" => source with { DefinitionId = "another-definition" },
+            "version" => source with { DefinitionVersionId = "another-version" },
+            "label" => source with { ArtifactVersion = "2.0.0" },
+            "identity" => source with { SourceReferenceId = "another-source" },
+            _ => source
+        };
+        if (reason == "denied") fixture.DeniedPermission = "workflows/runtime:read";
+
+        await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => fixture.Publish());
+        Assert.Equal(0, fixture.Publications);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("pin-unknown")]
+    [InlineData("pin-missing")]
+    [InlineData("blank-source")]
+    [InlineData("policy-missing")]
+    [InlineData("policy-unknown")]
+    [InlineData("policy-version")]
+    [InlineData("policy-disposition")]
+    [InlineData("policy-number")]
+    [InlineData("policy-budget")]
+    [InlineData("policy-final-budget")]
+    [InlineData("duplicate")]
+    [InlineData("duplicate-pin")]
+    [InlineData("duplicate-policy")]
+    public async Task Service_metadata_is_a_closed_versioned_shape_without_implicit_defaults(string invalid)
+    {
+        var fixture = new Fixture();
+        var metadata = ServiceMetadata();
+        switch (invalid)
+        {
+            case "unknown": metadata["other"] = true; break;
+            case "pin-unknown": metadata["executable"]!["other"] = true; break;
+            case "pin-missing": metadata["executable"]!.AsObject().Remove("artifactHash"); break;
+            case "blank-source": metadata["sourceReferenceId"] = " "; break;
+            case "policy-missing": metadata.Remove("faultPolicy"); break;
+            case "policy-unknown": metadata["faultPolicy"]!["other"] = true; break;
+            case "policy-version": metadata["faultPolicy"]!["formatVersion"] = 2; break;
+            case "policy-disposition": metadata["faultPolicy"]!["disposition"] = "holdForRetry"; break;
+            case "policy-number": metadata["faultPolicy"]!["maxAttempts"] = "3"; break;
+            case "policy-budget": metadata["faultPolicy"]!["maxAttempts"] = 33; break;
+            case "policy-final-budget": metadata["faultPolicy"]!["disposition"] = "FinalFault"; break;
+        }
+        var json = metadata.ToJsonString();
+        if (invalid == "duplicate") json = json.Replace("\"kind\":", "\"kind\":\"nativeService\",\"kind\":", StringComparison.Ordinal);
+        if (invalid == "duplicate-pin") json = json.Replace("\"artifactId\":", "\"artifactId\":\"other\",\"artifactId\":", StringComparison.Ordinal);
+        if (invalid == "duplicate-policy") json = json.Replace("\"maxAttempts\":", "\"maxAttempts\":1,\"maxAttempts\":", StringComparison.Ordinal);
+        fixture.UseService(json);
+        await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+        Assert.Equal(0, fixture.Publications);
+    }
+
+    private static JsonObject ServiceMetadata() => JsonSerializer.SerializeToNode(new
+    {
+        formatVersion = 1, kind = "nativeService", sourceReferenceId = "worker-source",
+        executable = new WorkflowExecutableIdentity("worker-artifact", "worker-definition", "worker-version", "1.0.0", new string('a', 64)),
+        businessErrorCode = "etl-business-failure", faultPolicy = new { formatVersion = 1, disposition = "HoldForRetry", maxAttempts = 3 }
+    }, Web)!.AsObject();
+
     private sealed class Fixture : IWorkflowDefinitionVersionStore, IWorkflowDefinitionStore,
-        IWorkflowDefinitionVersionLayoutStore, IActivityDefinitionLookup, IPermissionAuthorizationService, IBpmnModelRuntime
+        IWorkflowDefinitionVersionLayoutStore, IActivityDefinitionLookup, IPermissionAuthorizationService, IBpmnModelRuntime,
+        IWorkflowExecutableSourceReferenceReader
     {
         public List<string> Calls { get; } = [];
         public WorkflowDefinitionVersion Version { get; }
@@ -177,6 +296,8 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public BpmnModelPublicationSource? Source { get; private set; }
         public BpmnModelCaller? Caller { get; private set; }
         public string? RequestId { get; private set; }
+        public WorkflowExecutableSourceReference? WorkerSource { get; set; } = new("worker-source", "worker-artifact", "workflow-definition", "worker-definition",
+            "1.0.0", "worker-definition", "worker-version", "1.0.0", DateTimeOffset.MinValue, DateTimeOffset.MinValue, WorkflowExecutableReferenceScope.Published);
 
         public Fixture(string metadata = "{\"formatVersion\":1,\"kind\":\"human\"}")
         {
@@ -194,7 +315,16 @@ public sealed class BpmnAuthoredDirectPublisherTests
             var validator = new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions
                 { NormalizedAuthenticationTypes = new HashSet<string>(["test"]) }));
             var principal = new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.NameIdentifier, "author"), new(IdentityClaimTypes.Normalized, "v1")], "test"));
-            return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this).PublishAsync("version-1", "operation", principal, default);
+            return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this, this, TimeProvider.System).PublishAsync("version-1", "operation", principal, default);
+        }
+
+        public void UseService(string metadata)
+        {
+            var state = JsonSerializer.SerializeToNode(Version.State, Web)!;
+            var task = state["rootActivity"]!["structure"]!["payload"]!["elements"]![1]!;
+            task["elementType"] = BpmnElementTypes.ServiceTask;
+            task["properties"]!["elsa.direct.binding"] = metadata;
+            Version.StateSource = state.ToJsonString();
         }
 
         Task<WorkflowDefinitionVersion?> IWorkflowDefinitionVersionStore.FindByIdAsync(string id, CancellationToken cancellationToken)
@@ -209,7 +339,12 @@ public sealed class BpmnAuthoredDirectPublisherTests
             string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default)
         { Calls.Add("visible"); return Task.FromResult<IEnumerable<IActivityDefinition>>(Visible ? [CatalogDefinition] : []); }
         public ValueTask<PermissionEvaluationResult> AuthorizeAsync(PermissionEvaluationContext context, CancellationToken cancellationToken)
-        { Calls.Add("authorize:" + context.Permission); Assert.Same(Version, context.Resource); return ValueTask.FromResult(context.Permission == DeniedPermission ? PermissionEvaluationResult.Denied() : PermissionEvaluationResult.Success); }
+        { Calls.Add("authorize:" + context.Permission); Assert.Same(context.Permission == "workflows/runtime:read" ? (object?)WorkerSource : Version, context.Resource); return ValueTask.FromResult(context.Permission == DeniedPermission ? PermissionEvaluationResult.Denied() : PermissionEvaluationResult.Success); }
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken)
+        { Calls.Add("source:" + sourceReferenceId); return ValueTask.FromResult(WorkerSource); }
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationSource source, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken)
         { Calls.Add("publish"); Publications++; Model = definition; Source = source; Caller = caller; RequestId = requestId; return ValueTask.FromResult(new BpmnPublishedModel(new("artifact", "definition", "version", "1.0.0", "hash"), "incarnation", "source", "profile")); }
         Task<WorkflowDefinitionVersion> IWorkflowDefinitionVersionStore.GetAsync(string id, CancellationToken cancellationToken) => throw new NotSupportedException();

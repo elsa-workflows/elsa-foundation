@@ -35,7 +35,7 @@ public sealed class BpmnDirectPublishingFeatureTests
         Assert.Equal(enabled, routes.Any(route => route!.EndsWith("publish-direct", StringComparison.Ordinal)));
         var capabilities = app.Services.GetServices<ApiCapabilityDeclaration>()
             .Where(value => value.CapabilityId == "elsa.api.bpmn-publishing").ToArray();
-        if (enabled) Assert.Equal("bpmn-authored-publish", Assert.Single(Assert.Single(capabilities).Links).Rel);
+        if (enabled) Assert.Equal(["bpmn-authored-publish", "bpmn-authored-service-publish"], Assert.Single(capabilities).Links.Select(link => link.Rel));
         else Assert.Empty(capabilities);
     }
 }

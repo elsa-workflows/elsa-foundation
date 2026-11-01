@@ -30,7 +30,8 @@ public class ActivitiesBpmnDirectPublishingFeature : IWebShellFeature
         services.TryAddScoped<BpmnAuthoredDirectPublisher>();
         services.TryAddKeyedScoped<IEndpointFaultRenderer, BpmnDirectPublishingFaultRenderer>(BpmnDirectPublishingApi.Owner);
         ApiCapabilityRegistration.Add(services, new ApiCapabilityDeclaration("elsa.api.bpmn-publishing", 1,
-            [new("bpmn-authored-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true)],
+            [new("bpmn-authored-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true),
+                new("bpmn-authored-service-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true)],
             "ActivitiesBpmnDirectPublishing"));
     }
 

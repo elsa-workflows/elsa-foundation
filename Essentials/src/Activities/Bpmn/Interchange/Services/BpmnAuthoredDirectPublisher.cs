@@ -5,17 +5,21 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
 internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStore versions,
     IWorkflowDefinitionStore definitions, IWorkflowDefinitionVersionLayoutStore layouts, IActivityDefinitionLookup catalog,
-    NormalizedPrincipalValidator validator, IPermissionAuthorizationService authorization, IBpmnModelRuntime runtime)
+    NormalizedPrincipalValidator validator, IPermissionAuthorizationService authorization, IBpmnModelRuntime runtime,
+    IWorkflowExecutableSourceReferenceReader sources, TimeProvider clock)
 {
     internal const string PublishPermission = "bpmn:publish";
     // Existing workflow publication permission; the domain bridge does not depend on its API assembly.
     internal const string WorkflowPublishPermission = "workflows/publishing:manage";
+    internal const string WorkflowReadPermission = "workflows/runtime:read";
 
     public async Task<BpmnPublishedModel> PublishAsync(string versionId, string requestId, ClaimsPrincipal user, CancellationToken cancellationToken)
     {
@@ -48,6 +52,17 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
         if (layout is not null && (layout.WorkflowDefinitionVersionId != version.Id || layout.TenantId != caller.TenantId))
             throw new BpmnModelResourceMissingException();
         var projected = BpmnAuthoredDirectProjection.Project(version, layout);
+        foreach (var service in projected.Services)
+        {
+            var source = await sources.FindAsync(service.SourceReferenceId, cancellationToken);
+            var pin = service.Binding.Executable;
+            if (source is null || source.SourceReferenceId != service.SourceReferenceId || source.TenantId != caller.TenantId ||
+                source.Scope != WorkflowExecutableReferenceScope.Published || !source.IsLive(clock.GetUtcNow()) ||
+                source.ArtifactId != pin.ArtifactId || source.DefinitionId != pin.DefinitionId ||
+                source.DefinitionVersionId != pin.DefinitionVersionId || source.ArtifactVersion != pin.ArtifactVersion ||
+                !(await authorization.AuthorizeAsync(new(principal, WorkflowReadPermission, caller.TenantId, source), cancellationToken)).Succeeded)
+                throw new BpmnModelResourceMissingException();
+        }
         return await runtime.PublishFromSourceAsync(projected.Definition, projected.Source, requestId, caller, cancellationToken);
     }
 }

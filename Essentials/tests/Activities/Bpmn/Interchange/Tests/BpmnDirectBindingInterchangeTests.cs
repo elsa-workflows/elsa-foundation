@@ -5,6 +5,7 @@ using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Activities.Bpmn.Core;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
@@ -106,15 +107,42 @@ public sealed class BpmnDirectBindingInterchangeTests
         Assert.False(Human(_importer.Import(xml).ProcessNode).Properties.ContainsKey(Property));
     }
 
+    [Fact]
+    public void Complete_native_service_binding_survives_service_task_json_xml_and_immutable_version_projection()
+    {
+        var metadata = """
+            {"formatVersion":1,"kind":"nativeService","sourceReferenceId":"worker-source","executable":{"artifactId":"etl-worker","definitionId":"etl-definition","definitionVersionId":"etl-version","artifactVersion":"1.0.0","artifactHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"businessErrorCode":"etl-failure","faultPolicy":{"formatVersion":1,"disposition":"HoldForRetry","maxAttempts":3}}
+            """;
+        var node = Node(metadata, BpmnElementTypes.ServiceTask);
+        var imported = _importer.Import(_exporter.Export(node));
+        var service = Human(imported.ProcessNode);
+        Assert.Equal(BpmnElementTypes.ServiceTask, service.ElementType);
+        Assert.Null(service.ChildNodeId);
+        Assert.Equal(metadata, service.Properties[Property]);
+        Assert.DoesNotContain(imported.Analysis.Issues, issue => issue.Severity is BpmnImportIssueSeverity.Degraded or BpmnImportIssueSeverity.Dropped);
+        var version = new Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionVersion("process-definition", "1.0.0")
+        {
+            Id = "saved-version",
+            StateSource = JsonSerializer.Serialize(new WorkflowDefinitionState([], imported.ProcessNode, [], [], null), Json)
+        };
+        var projected = BpmnAuthoredDirectProjection.Project(version, null);
+        var selected = Assert.Single(projected.Services);
+        Assert.Equal("worker-source", selected.SourceReferenceId);
+        Assert.Equal("etl-worker", selected.Binding.Executable.ArtifactId);
+        Assert.Equal("etl-version", selected.Binding.Executable.DefinitionVersionId);
+        Assert.Equal(BpmnServiceFaultDisposition.HoldForRetry, selected.Binding.FaultPolicy!.Disposition);
+        Assert.Equal(3, selected.Binding.FaultPolicy.MaxAttempts);
+    }
+
     private static BpmnElement Human(ActivityNode node) =>
         node.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Json)!.Elements.Single(element => element.ElementId == "human");
 
-    private static ActivityNode Node(string? metadata)
+    private static ActivityNode Node(string? metadata, string elementType = BpmnElementTypes.UserTask)
     {
         var structure = new BpmnAuthoredStructure(elements:
         [
             new BpmnElement("start", BpmnElementTypes.StartEvent),
-            new BpmnElement("human", BpmnElementTypes.UserTask,
+            new BpmnElement("human", elementType,
                 properties: metadata is null ? null : new Dictionary<string, string> { [Property] = metadata }),
             new BpmnElement("end", BpmnElementTypes.EndEvent)
         ], sequenceFlows:

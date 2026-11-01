@@ -21,7 +21,7 @@ internal static class BpmnAuthoredDirectProjection
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    public static (BpmnModelDefinition Definition, BpmnModelPublicationSource Source) Project(
+    public static (BpmnModelDefinition Definition, BpmnModelPublicationSource Source, IReadOnlyList<ServiceSelection> Services) Project(
         WorkflowDefinitionVersion version, WorkflowDefinitionVersionLayout? layout)
     {
         try
@@ -40,15 +40,24 @@ internal static class BpmnAuthoredDirectProjection
             if (authored.Activities.Count != 0 || authored.Pools.Count != 0 || authored.MessageFlows.Count != 0)
                 throw new BpmnModelValidationException("The initial authored direct profile does not support native children or collaboration/message-flow bindings.");
             var humans = new List<string>();
+            var services = new List<ServiceSelection>();
             var elements = new List<LibModel.BpmnElement>();
             foreach (var element in authored.Elements)
             {
                 if (element.ChildNodeId is not null || element.ListenerNodeId is not null)
                     throw new BpmnModelValidationException($"Element '{element.ElementId}' has native child/listener intent; it cannot be reinterpreted as direct human work.");
-                if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var metadata))
-                    ValidateHumanBinding(element, metadata);
                 var binding = element.ElementType == BpmnElementTypes.UserTask ? "human:" + element.ElementId : null;
                 if (binding is not null) humans.Add(binding);
+                if (element.ElementType == BpmnElementTypes.ServiceTask)
+                {
+                    if (!element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var serviceMetadata))
+                        throw InvalidBinding(element.ElementId);
+                    var service = ReadServiceBinding(element.ElementId, serviceMetadata);
+                    services.Add(service);
+                    binding = service.Binding.BindingId;
+                }
+                else if (element.Properties.TryGetValue(BpmnDirectBindingMetadata.PropertyKey, out var metadata))
+                    ValidateHumanBinding(element, metadata);
                 elements.Add(new LibModel.BpmnElement(element.ElementId, element.ElementType, element.Name, binding,
                     element.LaneId, element.DefaultFlowId,
                     element.EventDefinitions.Select(value => new LibModel.BpmnEventDefinition(value.Type, value.Properties)).ToArray(),
@@ -58,6 +67,8 @@ internal static class BpmnAuthoredDirectProjection
                     element.LoopCharacteristics is { } loop ? new LibModel.BpmnLoopCharacteristics(loop.IsSequential, loop.Cardinality, loop.CollectionVariable, loop.ItemVariable) : null,
                     element.IsForCompensation, element.CompensationHandlerElementId, element.IsTransaction, element.TriggeredByEvent));
             }
+            if (services.Count > 0 && (services.Count != 1 || humans.Count != 0))
+                throw new BpmnModelValidationException("The authored native-service profile requires one service task and no human bindings.");
             var process = new LibModel.BpmnProcessDefinition(version.DefinitionId, IsExecutable: true,
                 IsTransaction: authored.IsTransaction, Elements: elements,
                 SequenceFlows: authored.SequenceFlows.Select(flow => new LibModel.BpmnSequenceFlow(flow.FlowId,
@@ -77,8 +88,10 @@ internal static class BpmnAuthoredDirectProjection
                 new WorkflowExecutableActivityPresentationRecord(record.NodeId, record.DisplayName, record.Description)).ToList();
             if (!presentation.Any(record => record.ExecutableNodeId == root.NodeId))
                 presentation.Add(new(root.NodeId, "BPMN process"));
-            return (new(1, JsonSerializer.SerializeToElement(process, Strict), humans),
-                new(version.Id, version.Version, records, presentation));
+            var material = services.Count == 0
+                ? new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, Strict), humans)
+                : new BpmnModelDefinition(3, JsonSerializer.SerializeToElement(process, Strict), humans, services.Select(value => value.Binding).ToArray());
+            return (material, new(version.Id, version.Version, records, presentation), services);
         }
         catch (JsonException exception)
         {
@@ -110,6 +123,54 @@ internal static class BpmnAuthoredDirectProjection
             !value.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String || kind.GetString() != "human" ||
             element.ElementType != BpmnElementTypes.UserTask ||
             value.TryGetProperty("claimRequired", out var claim) && claim.ValueKind != JsonValueKind.False)
-            throw new BpmnModelValidationException($"Element '{element.ElementId}' requires a supported direct human binding; claimed/native-service profiles are not admitted by this authoring increment.");
+            throw new BpmnModelValidationException($"Element '{element.ElementId}' requires a supported direct human binding; claimed work is not admitted by this authoring increment.");
     }
+
+    internal sealed record ServiceSelection(BpmnNativeServiceBinding Binding, string SourceReferenceId);
+
+    private static ServiceSelection ReadServiceBinding(string elementId, string metadata)
+    {
+        using var document = JsonDocument.Parse(BpmnDirectBindingMetadata.Validate(metadata, elementId));
+        var value = document.RootElement;
+        RequireProperties(value, elementId, "formatVersion", "kind", "sourceReferenceId", "executable", "businessErrorCode", "faultPolicy");
+        if (ReadInteger(value, "formatVersion", elementId) != 1 || ReadString(value, "kind", elementId) != "nativeService")
+            throw InvalidBinding(elementId);
+        var pin = value.GetProperty("executable");
+        RequireProperties(pin, elementId, "artifactId", "definitionId", "definitionVersionId", "artifactVersion", "artifactHash");
+        var identity = new WorkflowExecutableIdentity(ReadString(pin, "artifactId", elementId), ReadString(pin, "definitionId", elementId),
+            ReadString(pin, "definitionVersionId", elementId), ReadString(pin, "artifactVersion", elementId), ReadString(pin, "artifactHash", elementId));
+        var policy = value.GetProperty("faultPolicy");
+        RequireProperties(policy, elementId, "formatVersion", "disposition", "maxAttempts");
+        var attempts = ReadInteger(policy, "maxAttempts", elementId);
+        var disposition = ReadString(policy, "disposition", elementId) switch
+        {
+            "FinalFault" => BpmnServiceFaultDisposition.FinalFault,
+            "HoldForRetry" => BpmnServiceFaultDisposition.HoldForRetry,
+            _ => throw InvalidBinding(elementId)
+        };
+        if (ReadInteger(policy, "formatVersion", elementId) != 1 || attempts is < 1 or > BpmnServiceFaultPolicy.MaximumAttempts ||
+            disposition == BpmnServiceFaultDisposition.FinalFault && attempts != 1)
+            throw InvalidBinding(elementId);
+        return new(new("service:" + elementId, identity, ReadString(value, "businessErrorCode", elementId), new(1, disposition, attempts)),
+            ReadString(value, "sourceReferenceId", elementId));
+    }
+
+    private static void RequireProperties(JsonElement value, string elementId, params string[] names)
+    {
+        if (value.ValueKind != JsonValueKind.Object) throw InvalidBinding(elementId);
+        var actual = value.EnumerateObject().Select(property => property.Name).ToArray();
+        if (actual.Length != names.Length || !actual.ToHashSet(StringComparer.Ordinal).SetEquals(names))
+            throw InvalidBinding(elementId);
+    }
+
+    private static string ReadString(JsonElement value, string name, string elementId) =>
+        value.GetProperty(name) is { ValueKind: JsonValueKind.String } property && !string.IsNullOrWhiteSpace(property.GetString())
+            ? property.GetString()! : throw InvalidBinding(elementId);
+
+    private static int ReadInteger(JsonElement value, string name, string elementId) =>
+        value.GetProperty(name) is { ValueKind: JsonValueKind.Number } property && property.TryGetInt32(out var number)
+            ? number : throw InvalidBinding(elementId);
+
+    private static BpmnModelValidationException InvalidBinding(string elementId) =>
+        new($"Element '{elementId}' requires a complete supported native-service binding, published pin/source and explicit fault policy.");
 }
