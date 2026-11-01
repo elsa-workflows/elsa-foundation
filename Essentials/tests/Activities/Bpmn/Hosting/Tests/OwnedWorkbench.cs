@@ -133,11 +133,22 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         options["SourceId"] = identities[0];
     }
 
-    public async Task LoginAsync()
+    public async Task LoginAsync(string username = "admin")
     {
-        using var response = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" });
+        using var response = await client.PostAsJsonAsync("/_elsa/identity/login", new { username, password = "Password123!" });
         if (!response.IsSuccessStatusCode)
             throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}");
+    }
+
+    /// <summary>Seeds another development administrator at the next launch; earlier accounts and their subjects are kept.</summary>
+    internal async Task SeedAdministratorAsync(string username)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before changing its seeded account");
+        var path = Path.Combine(ContentRoot, "shells.json");
+        var shells = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        var seed = shells["CShells"]!["Shells"]!["default"]!["Features"]!["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"]!;
+        seed["SeedAdminUserName"] = username; seed["SeedAdminEmail"] = username + "@elsa.local";
+        await File.WriteAllTextAsync(path, shells.ToJsonString());
     }
 
     public async Task<JsonNode> GetAsync(string path, HttpStatusCode? expected = null)

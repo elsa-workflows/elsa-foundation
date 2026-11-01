@@ -31,3 +31,31 @@ Not yet proved: Studio claim UI (T032), actual claimed-state restart and old-bin
 - **Full workflows suite:** at load averages 242–369 on 15 cores it showed 4 failures in unrelated files (activity browser, editor run canvas, library browse). Each passed when rerun on its own. This is not a low-load whole-suite pass; that run is repeated before final qualification.
 
 This is component proof only. Actual browser claiming, two-subject contention, restart and old-binary refusal are T033–T034.
+
+## Actual host claim restart and old-reader fence (T033)
+
+**Owned production Workbench** (`BpmnHumanClaimUpgradeTests`). Products are at `74b82f11e`; the test, fixture and witness were committed afterwards and change no product. [Receipt](claims-host.json).
+
+1. Raw format 6 publication returns `foundation-direct-claims-v1`. The work listing shows `claimRequired` and no claim.
+2. Legacy `complete` is refused as `claim-required`, without a revision.
+3. The seeded administrator claims the work (revision 2).
+4. The process is killed, and the stopped Runtime and Design stores are captured. The host restarts with a second seeded administrator, a distinct subject.
+5. The second subject sees the same view and owner. Its claim is refused as `already-claimed` and its claimed completion as `foreign-claim`, without a revision. Reusing the owner's request id with its different subject conflicts.
+6. The owner completes the work (revision 3, Completed). After another real restart, the same request replays the same result with `replay: true` and an unchanged view.
+7. Native workflow/activity/bookmark rows stay zero.
+
+**Actual pre-claim binary** (`tools/bpmn/verify_claim_reader_fence.py`). The predecessor Workbench was built from `fea85ce64`, the head immediately before the claim writer. It ran under its own configuration against the captured claimed stores. [Receipt](claim-reader-fence.json).
+
+| Request | Status | Reason |
+|---|---|---|
+| Execution header | 200 | Header projection only; it discloses no work or claim |
+| Work listing | 422 | "The BPMN state and exact work inventory differ" (frame 15 refused) |
+| Inspection | 422 | Invalid inspection material (format 6 refused) |
+| Legacy completion | 422 | "The BPMN material profile … is unsupported" |
+| Claim | 404 | Route absent |
+
+The model execution and input rows are byte-identical before and after.
+
+The physical stores are retained here: [claimed runtime](claimed-runtime.sqlite.gz), [claimed design](claimed-design.sqlite.gz) and [completed runtime](completed-runtime.sqlite.gz). Their hashes are in the receipts.
+
+Limits: two administrators in one tenant prove distinct-subject ownership, not role or team policy (which is deferred). Actual Studio browser claiming and interruption are T034.
