@@ -27,7 +27,7 @@ public sealed class SpecialistJournalProviderTests
         var now = DateTimeOffset.UtcNow;
         var identity = new SpecialistInvocationIdentity("tenant", "tenant", "workflow", "attempt", "operation", "artifact", "hash", "version", "template");
         var candidate = new SpecialistTurnDocument(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(identity), new string('b', 64), identity,
-            "opaque-protected-request", now.AddMinutes(5)) { MaximumModelCalls = 2, Conversation = new(new string('e', 64), 0) };
+            "opaque-protected-request", now.AddMinutes(5)) { MaximumModelCalls = 2, Conversation = new(new string('e', 64), 0), DeliveryProtocol = 1, Deliveries = [new(identity)] };
         await using (var first = Host())
         {
             await using (var scope = first.CreateAsyncScope())
@@ -97,7 +97,7 @@ public sealed class SpecialistJournalProviderTests
         var continuations = Enumerable.Range(0, 8).Select(index =>
         {
             var nextIdentity = identity with { OperationKey = "next-" + index, ActivityExecutionId = "next-" + index };
-            return candidate with { Identity = nextIdentity, Handle = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("continuation-" + index))).ToLowerInvariant(),
+            return candidate with { Identity = nextIdentity, Deliveries = [new(nextIdentity)], Handle = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("continuation-" + index))).ToLowerInvariant(),
                 Key = SpecialistTurnDocument.CalculateOperationKey(nextIdentity), Conversation = new(conversation.Id, 1) };
         }).ToArray();
         foreach (var next in continuations) await recovered.StageAsync(next, CancellationToken.None);
@@ -114,7 +114,7 @@ public sealed class SpecialistJournalProviderTests
         Assert.Equal("opaque-protected-result-and-session", (await recovered.StageAsync(candidate, CancellationToken.None)).ProtectedResult);
         Assert.Equal(2, (await recovered.ReadConversationAsync(conversation.Id, identity, CancellationToken.None))!.Revision);
         var unknownIdentity = identity with { OperationKey = "unknown", ActivityExecutionId = "unknown" };
-        var unknown = candidate with { Identity = unknownIdentity, Handle = new string('f', 64), Key = SpecialistTurnDocument.CalculateOperationKey(unknownIdentity), Conversation = new(conversation.Id, 2) };
+        var unknown = candidate with { Identity = unknownIdentity, Deliveries = [new(unknownIdentity)], Handle = new string('f', 64), Key = SpecialistTurnDocument.CalculateOperationKey(unknownIdentity), Conversation = new(conversation.Id, 2) };
         await recovered.StageAsync(unknown, CancellationToken.None);
         Assert.NotNull(await recovered.ClaimAsync(unknown.Handle, unknown.Identity, "unknown-child", "unknown-fence", now, CancellationToken.None));
         Assert.True(await recovered.DispatchAsync(unknown.Handle, unknown.Identity, new("unknown-fence", 1), now, CancellationToken.None));
@@ -127,15 +127,42 @@ public sealed class SpecialistJournalProviderTests
             Assert.True(blocked!.OutcomeUnknown);
             Assert.Equal(2, blocked.Revision);
             var blockedIdentity = identity with { OperationKey = "blocked", ActivityExecutionId = "blocked" };
-            var attempt = unknown with { Identity = blockedIdentity, Handle = new string('9', 64), Key = SpecialistTurnDocument.CalculateOperationKey(blockedIdentity) };
+            var attempt = unknown with { Identity = blockedIdentity, Deliveries = [new(blockedIdentity)], Handle = new string('9', 64), Key = SpecialistTurnDocument.CalculateOperationKey(blockedIdentity) };
             await freshStore.StageAsync(attempt, CancellationToken.None);
             Assert.Null(await freshStore.ClaimAsync(attempt.Handle, attempt.Identity, "blocked", "blocked", now, CancellationToken.None));
+        }
+
+        // Concurrent native delivery registration/replay changes only this old accepted turn,
+        // even while the conversation has newer history and an unrelated unknown active operation.
+        var beforeDeliveryReplay = (await recovered.ReadConversationAsync(conversation.Id, identity, CancellationToken.None))!;
+        var deliveryReplays = await Task.WhenAll(Enumerable.Range(0, 8).Select(async index =>
+        {
+            await using var scope = restarted.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+            var deliveryIdentity = identity with { ActivityExecutionId = "replay-parent-" + index };
+            Assert.Null(await store.ReadAsync(candidate.Handle, deliveryIdentity, CancellationToken.None));
+            var associated = await store.StageAsync(candidate with { Identity = deliveryIdentity, Deliveries = [new(deliveryIdentity)], Deadline = now.AddDays(1) }, CancellationToken.None);
+            Assert.Equal(candidate.Handle, associated.Handle);
+            return await store.ReplayAcceptedAsync(candidate.Handle, deliveryIdentity, "replay-child-" + index, CancellationToken.None);
+        }));
+        Assert.All(deliveryReplays, document => { Assert.NotNull(document); Assert.Equal(accepted.ProtectedResult, document.ProtectedResult); Assert.Equal(candidate.Deadline, document.Deadline); });
+        Assert.Equal(beforeDeliveryReplay, await recovered.ReadConversationAsync(conversation.Id, identity, CancellationToken.None));
+        await using (var deliveryHost = Host())
+        await using (var deliveryScope = deliveryHost.CreateAsyncScope())
+        {
+            var store = deliveryScope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+            var deliveryIdentity = identity with { ActivityExecutionId = "replay-parent-7" };
+            var read = (await store.ReadAsync(candidate.Handle, deliveryIdentity, CancellationToken.None))!;
+            Assert.Equal(9, read.Deliveries!.Count);
+            Assert.Equal("replay-child-7", read.Deliveries.Single(x => x.Identity == deliveryIdentity).ChildInvocationId);
+            Assert.Null(await store.ReplayAcceptedAsync(candidate.Handle, deliveryIdentity, "foreign-child", CancellationToken.None));
+            Assert.Equal(accepted.ChildInvocationId, read.ChildInvocationId);
         }
 
         // Force renewal to commit after the response/acceptance reads its row but before its CAS.
         // Both writes are metadata; a harmless version overlap must not discard the response.
         var raceIdentity = identity with { OperationKey = "renew-race", ActivityExecutionId = "renew-race" };
-        var race = candidate with { Identity = raceIdentity, Key = SpecialistTurnDocument.CalculateOperationKey(raceIdentity), Handle = new string('7', 64), Conversation = new(new string('6', 64), 0) };
+        var race = candidate with { Identity = raceIdentity, Deliveries = [new(raceIdentity)], Key = SpecialistTurnDocument.CalculateOperationKey(raceIdentity), Handle = new string('7', 64), Conversation = new(new string('6', 64), 0) };
         await recovered.StageAsync(race, CancellationToken.None);
         var raceClaim = (await recovered.ClaimAsync(race.Handle, race.Identity, "race-child", "race-fence", now, CancellationToken.None))!;
         var raceToken = new SpecialistTurnLeaseToken(raceClaim.Fence!, raceClaim.AdmissionGeneration);

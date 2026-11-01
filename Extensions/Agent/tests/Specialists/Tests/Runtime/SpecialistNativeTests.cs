@@ -1,3 +1,9 @@
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations;
+using Elsa.Workflows.Runtime.Services.Recovery;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Activities.Runtime;
@@ -27,6 +33,121 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistNativeTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_real_native_operator_retry_replays_committed_acceptance_into_a_new_parent_and_child(bool durable)
+    {
+        using var files = new JournalFiles();
+        var factory = new FixtureFactory("{\"Article\":\"accepted once\"}");
+        var trace = new LeaseTrace { LoseAcceptedReceiptRead = true };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
+        var specialist = await ExecutableAsync(provider, allowContinuity: true, invocationControls: true);
+        var alias = typeof(RetryInterventionActivity).FullName!;
+        var payload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias));
+        var descriptorKind = typeof(ClrActivityDescriptor).FullName!;
+        var contract = new ActivityContract(alias, "1.0.0", descriptorKind, payload, [],
+            new(new(typeof(ActivityUnit).FullName!), true, ActivityValuePolicy.Default, []), ["Done"], new(descriptorKind, alias), SideEffectProfile.ReplaySafe);
+        var root = new ExecutableNode("retry-wrapper", "retry-wrapper", alias, "1.0.0", new RuntimeActivityDescriptor(WellKnownRuntimeActivityConsumers.ClrActivity, "1", payload),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string> { [RuntimeMetadataKeys.StructuralFaultHandling] = RuntimeMetadataKeys.StructuralFaultHandlingChild },
+            [new ExecutableChildSlot("body", [specialist.RootActivity])],
+            new ExecutableActivityStructure("test.specialist-retry", "1", Json("{}")), contract);
+        var executable = new WorkflowExecutable(new("retry-editorial", "retry-workflow", "retry-workflow-v1", "1.0.0", "retry-artifact-hash"), root, specialist.ResumeTargets, DateTimeOffset.UtcNow, new Dictionary<string, string>(),
+            inputContract: null, dependencies: null, specialist.RuntimeRequirements, specialist.StorageDriverRequirements, IncidentStrategyBuiltIns.FaultReference);
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var (actor, _) = await StartAsync(provider, executable, new("specialist-test", "specialist-test"));
+        await DrainAsync(actor, "start-retry-wrapper");
+        var firstClaim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("original-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        Assert.True(firstClaim is not null, JsonSerializer.Serialize(new {
+            States = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.Fault }),
+            Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run") }));
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), firstClaim);
+        await DrainAsync(actor, "lost-acceptance");
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var original = states.Single(x => x.Execution.ExecutableNodeId == specialist.RootActivity.ExecutableNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, original.Status);
+        Assert.True((await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status == WorkflowExecutionStatus.Running,
+            JsonSerializer.Serialize(new { States = states.Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.Fault }), Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run") }));
+        var firstChild = states.Single(x => x.ParentActivityExecutionId == original.InvocationId);
+        var handle = firstChild.Provenance.Metadata[SpecialistNativeBinding.TurnHandleMetadataKey];
+        var model = SpecialistNativeBinding.Descriptor(specialist.RootActivity);
+        var originalIdentity = new SpecialistInvocationIdentity(null, "default", "run", original.InvocationId, original.OperationKey,
+            executable.Identity.ArtifactId, executable.Identity.ArtifactHash, model.DefinitionVersionId!, model.TemplateHash!);
+        var accepted = (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, originalIdentity, default)).Document;
+        Assert.Equal(SpecialistTurnStatus.Accepted, accepted.Status);
+        var admission = await provider.GetRequiredService<WorkflowAlterationPlanService>().SubmitAsync(new WorkflowAlterationSubmission(
+            new("default", "specialist-test", "specialist-test"), WorkflowAlterationTargetSelector.ForExecutionIds(["run"]),
+            [new("RetryFaultedActivity", 1, JsonSerializer.SerializeToElement(new { sourceActivityExecutionId = original.InvocationId }))]),
+            new WorkflowAlterationOperatorProvenance("test-operator", null), "retry-accepted-specialist");
+        WorkflowAlterationJobState? job = null;
+        for (var step = 0; step < 8; step++)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationOrchestrationSweep>().ExecuteAsync(new() { WorkerId = "retry-worker" }, "retry-worker");
+            job = await scope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>().FindJobAsync(WorkflowAlterationIdentity.CreateJobId(admission.Plan.PlanId, "run"));
+            if (job?.Status is WorkflowAlterationJobStatus.Succeeded or WorkflowAlterationJobStatus.Failed) break;
+        }
+        Assert.NotNull(job);
+        Assert.True(job.Status == WorkflowAlterationJobStatus.Succeeded, JsonSerializer.Serialize(job));
+        for (var step = 0; step < 8; step++)
+        {
+            await provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
+            await DrainAsync(actor, "retry-sweep-" + step);
+        }
+        var replayClaim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("replay-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        Assert.True(replayClaim is not null, JsonSerializer.Serialize(new {
+            States = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.Fault }),
+            Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run") }));
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), replayClaim);
+        await DrainAsync(actor, "accepted-replay");
+        for (var step = 0; step < 8 && (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status == WorkflowExecutionStatus.Running; step++)
+        {
+            await provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
+            await DrainAsync(actor, "replay-complete-" + step);
+        }
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(1, factory.Opens);
+        Assert.True((await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status == WorkflowExecutionStatus.Completed,
+            JsonSerializer.Serialize(new { States = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.Fault }),
+                Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run") }));
+        Assert.Equal(1, provider.GetRequiredService<RetryCompletionLog>().Completions);
+        states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var successor = states.Single(x => x.Execution.ExecutableNodeId == specialist.RootActivity.ExecutableNodeId && x.Status == ActivityExecutionStatus.Completed);
+        Assert.NotEqual(original.InvocationId, successor.InvocationId);
+        Assert.Equal(original.OperationKey, successor.OperationKey);
+        var replayChild = states.Single(x => x.ParentActivityExecutionId == successor.InvocationId);
+        Assert.NotEqual(firstChild.InvocationId, replayChild.InvocationId);
+        Assert.Equal(ActivityExecutionStatus.Completed, replayChild.Status);
+        Assert.Equal("accepted once", successor.Completion!.Result.InlineValue!.Value.GetProperty("Article").GetString());
+        var replayed = (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, originalIdentity with { ActivityExecutionId = successor.InvocationId }, default)).Document;
+        Assert.Equal(accepted.ProtectedResult, replayed.ProtectedResult);
+        Assert.Equal(firstChild.InvocationId, replayed.ChildInvocationId);
+        Assert.Equal(2, replayed.Deliveries!.Count);
+        Assert.Equal(1, (await provider.GetRequiredService<ISpecialistTurnStore>().ReadConversationAsync(handle, originalIdentity, default))!.Revision);
+    }
+
+    public sealed class RetryCompletionLog { public int Completions; }
+    [Elsa.Activities.Runtime.Core.Attributes.Activity(IsDiscoverable = false)]
+    public sealed class RetryInterventionActivity(RetryCompletionLog log) : Elsa.Activities.Runtime.Core.Abstractions.StructuralActivity,
+        IRuntimeStructuralActivity, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            context.ScheduleChildActivity(context.ExecutableNode.ChildSlots.Single().Activities.Single().ExecutableNodeId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
+        {
+            ((IRuntimeActivityExecutionContext)context.ParentContext).RequestChildFaultIntervention(context.IncidentId!, "retry-specialist");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            log.Completions++;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -729,6 +850,8 @@ public sealed class SpecialistNativeTests
         if (clock is not null) services.AddSingleton(clock);
         services.AddLogging();
         services.AddWorkflowRuntime();
+        services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+        services.AddSingleton<RetryCompletionLog>();
         services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry>(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
@@ -753,6 +876,7 @@ public sealed class SpecialistNativeTests
         types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
         types.RegisterType(typeof(Elsa.Activities.Sequence.Activities.Sequence), typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!);
         types.RegisterType(typeof(ActivityUnit), typeof(ActivityUnit).FullName!);
+        types.RegisterType(typeof(RetryInterventionActivity), typeof(RetryInterventionActivity).FullName!);
         await new SpecialistTypesStartupTask(types).ExecuteAsync(CancellationToken.None);
         return provider;
     }
@@ -802,7 +926,7 @@ public sealed class SpecialistNativeTests
         return executable;
     }
 
-    private static async ValueTask<(IWorkflowExecutionActor Actor, WorkflowExecutionCommandEnvelope Start)> StartAsync(ServiceProvider provider, WorkflowExecutable executable)
+    private static async ValueTask<(IWorkflowExecutionActor Actor, WorkflowExecutionCommandEnvelope Start)> StartAsync(ServiceProvider provider, WorkflowExecutable executable, WorkflowExecutionAuthoritySnapshot? authority = null)
     {
         var now = DateTimeOffset.UtcNow;
         var actor = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new("run", WorkflowExecutionActorActivationReason.Start, now,
@@ -811,7 +935,7 @@ public sealed class SpecialistNativeTests
         var command = new WorkflowExecutionCommand("start", "run", WorkflowExecutionCommandKind.Start, now,
             JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(executable.Identity, executable.Identity.ArtifactId,
                 variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.Unknown, pinnedSource: null,
-                parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: null)), metadata);
+                parentWorkflowExecutionId: null, correlationId: null, tenantId: null, partition: new("default"), authority: authority)), metadata);
         var envelope = new WorkflowExecutionCommandEnvelope("start-envelope", "run", command, "start", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now, 1, metadata);
         await actor.EnqueueAsync(envelope);
         return (actor, envelope);

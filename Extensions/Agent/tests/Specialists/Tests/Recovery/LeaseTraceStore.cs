@@ -9,6 +9,10 @@ namespace Elsa.Agent.Specialists.Tests.Recovery;
 internal sealed class LeaseTrace
 {
     internal bool RejectRenewal { get; init; }
+    internal bool LoseAcceptanceResponse { get; init; }
+    internal bool LoseAcceptedReceiptRead { get; init; }
+    internal int AcceptedReceiptReadsLost;
+    internal int AcceptedResponsesLost;
     internal bool BlockRenewal { get; init; }
     internal TaskCompletionSource RenewalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal bool LoseRenewalResponse { get; init; }
@@ -38,6 +42,8 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
     public async ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
     {
         var document = await inner.ReadAsync(handle, identity, cancellationToken);
+        if (document?.Status == SpecialistTurnStatus.Accepted && trace.LoseAcceptedReceiptRead && Interlocked.Increment(ref trace.AcceptedReceiptReadsLost) == 1)
+            throw new IOException("The accepted receipt could not be read by the native facade.");
         if (document?.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching) trace.ClaimedRead.TrySetResult(document);
         return document;
     }
@@ -53,6 +59,7 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         if (trace.LoseRenewalResponse) throw new IOException("The committed renewal response was lost.");
         return result;
     }
+    public ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken) => inner.ReplayAcceptedAsync(handle, identity, childInvocationId, cancellationToken);
     public ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken) => inner.DispatchAsync(handle, identity, lease, now, cancellationToken);
     public ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -60,6 +67,11 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         return inner.ReserveModelRequestAsync(handle, identity, lease, reservation, now, cancellationToken);
     }
     public ValueTask<bool> CompleteModelResponseAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, IReadOnlyList<string> requestIds, SpecialistModelResponseObservation observation, DateTimeOffset now, CancellationToken cancellationToken) => inner.CompleteModelResponseAsync(handle, identity, lease, requestIds, observation, now, cancellationToken);
-    public ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken) => inner.AcceptAsync(handle, identity, lease, protectedResult, now, cancellationToken);
+    public async ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var accepted = await inner.AcceptAsync(handle, identity, lease, protectedResult, now, cancellationToken);
+        if (accepted && trace.LoseAcceptanceResponse && Interlocked.Increment(ref trace.AcceptedResponsesLost) == 1) throw new IOException("The committed acceptance response was lost.");
+        return accepted;
+    }
     public ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, string code, bool outcomeUnknown, CancellationToken cancellationToken) => inner.FailAsync(handle, identity, lease, code, outcomeUnknown, cancellationToken);
 }

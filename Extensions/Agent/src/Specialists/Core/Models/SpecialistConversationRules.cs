@@ -26,7 +26,7 @@ internal static class SpecialistConversationRules
         return next.Status switch
         {
             SpecialistTurnStatus.Accepted => current with { Revision = checked(current.Revision + 1), ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0,
-                AcceptedTurn = new(before.Handle, before.Identity, before.ChildInvocationId!) },
+                AcceptedTurn = new(before.Handle, SpecialistTurnDeliveryRules.DispatchIdentity(before), before.ChildInvocationId!) },
             SpecialistTurnStatus.Failed => current with { ActiveTurnHandle = null, ActiveFence = null, ActiveAdmissionGeneration = 0 },
             SpecialistTurnStatus.OutcomeUnknown => current with { OutcomeUnknown = true },
             _ => current

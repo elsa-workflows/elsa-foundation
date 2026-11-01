@@ -10,7 +10,7 @@ internal sealed class SpecialistTurnBudgetAllocator(ISpecialistTurnStore store, 
     internal SpecialistTurnBudgetAuthority Create(SpecialistTurnDocument document, SpecialistTurnRequest request)
     {
         var limits = SpecialistEffectiveLimits.For(request);
-        if (document.Identity != request.Identity || document.MaximumModelCalls != limits.MaximumModelCalls || document.Fence is null || document.AdmissionGeneration < 1 || document.LeaseExpiresAt is null)
+        if (!SpecialistTurnDeliveryRules.OwnsClaim(document, request.Identity) || document.MaximumModelCalls != limits.MaximumModelCalls || document.Fence is null || document.AdmissionGeneration < 1 || document.LeaseExpiresAt is null)
             throw SpecialistModelRunner.Failure("specialist.budget.binding", "The request budget does not match the admitted native turn.");
         return new(store, time, document, request.Descriptor, limits);
     }

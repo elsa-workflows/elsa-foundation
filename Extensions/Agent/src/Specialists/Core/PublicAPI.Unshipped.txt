@@ -423,3 +423,24 @@ override Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken.GetHashCode
 override Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken.ToString() -> string!
 static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLeaseToken? right) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery? right) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.Equals(object? obj) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.Deconstruct(out Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, out string? ChildInvocationId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.Identity.get -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.Identity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.ChildInvocationId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.ChildInvocationId.init -> void
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore.ReplayAcceptedAsync(string! handle, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! identity, string! childInvocationId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument?>
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery.SpecialistTurnDelivery(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Identity, string? ChildInvocationId = null) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.DeliveryProtocol.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.DeliveryProtocol.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deliveries.get -> System.Collections.Generic.IReadOnlyList<Elsa.Agent.Specialists.Core.Models.SpecialistTurnDelivery!>?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.Deliveries.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ActiveDeliveryActivityId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.ActiveDeliveryActivityId.init -> void

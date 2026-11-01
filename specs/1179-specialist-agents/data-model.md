@@ -197,8 +197,7 @@ deadline, nonce/generation fencing and fresh-scope renewal. Only the same native
 expired pre-dispatch work; expired dispatched work becomes OutcomeUnknown and retains reservations.
 Protected receipts authenticate the admitted generation, retaining legacy accepted readers. Required
 native-provider tests force renewal races with response recording and acceptance; rejected metadata
-CAS may retry, while unconfirmed commits cannot. Stable operation versus new-attempt delivery,
-cancellation/applied settlement and retention remain required before M3 can close. This note records the implemented
+CAS may retry, while unconfirmed commits cannot. Native cancellation/applied settlement and retention remain required before M3 can close. This note records the implemented
 boundary; the proposed broader logical model above remains the Program target.
 
 The invocation-limit increment uses the explicit invocation/2 profile and compiler2.1, retaining the
@@ -209,3 +208,12 @@ options enforce the effective values. Identical staging preserves its deadline; 
 conflict. Missing override fields preserve legacy request serialization. Known entry validation
 refusals become coded native structural faults without scheduling a model child. This adds no
 input/total-token hard-limit claim and does not change schema1/continuity-disabled public contracts.
+
+The delivery increment uses explicit delivery protocol1 and request/result purpose2. Only the parent
+invocation ID is normalized out of the logical fingerprint. Native staging registers matching parents;
+claim binds the physical delivery, while accepted replay binds a new verified child without modifying
+conversation history. Original source/result provenance remains immutable; purpose1 legacy readers
+remain exact-original-only. Native typed retry/reschedule snapshots keep pinned values/fingerprints
+but are owned by the successor invocation. Actual RetryFaultedActivity/1 after a facade receipt-read
+failure qualifies a new native parent/child and one total model call; model-child acceptance-response
+loss remains a separate failed settlement probe, not the same supported path. T021–T023 remain open.

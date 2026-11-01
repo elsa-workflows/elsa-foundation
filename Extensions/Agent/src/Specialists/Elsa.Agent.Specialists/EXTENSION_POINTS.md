@@ -30,8 +30,7 @@ the waiting model operation and prevents acceptance. Renewal I/O is itself bound
 confirmed lease expiry, separately from the operation deadline. A dispatched turn records OutcomeUnknown.
 Redelivery of the exact same native child waits for the existing live lease, bounded by native
 cancellation and the original operation deadline. It may recover an expired pre-dispatch claim with
-a new generation. Expired dispatched work is never reissued. This does not supply rebinding to a new
-native attempt/child. Protected accepted receipts also authenticate the admission generation while
+a new generation. Expired dispatched work is never reissued. New native attempt/child associations require the explicit delivery registration below. Protected accepted receipts also authenticate the admission generation while
 retaining the reader for legacy generation-zero accepted receipts.
 
 The native worker creates a journal-bound physical-request authority. Qualified provider transports
@@ -84,8 +83,32 @@ The [EF journal](../Persistence/EntityFrameworkCore/README.md) now implements th
 turn lifecycle over relational storage and supports consumer-owned contexts. A selected database
 survives development-feature registration order; conflicting explicit selections and missing/duplicate
 startup registrations are refused. Conversation claim/accept/failure transitions now commit with the associated turn;
-native delivery recovery remains separate work.
+native cancellation/applied settlement remains separate work.
 
 The [model provider port](../Core/EXTENSION_POINTS.md) owns actual credential resolution/current
 authorization and physical SDK/HTTP retry guarantees. Durable sessions, journal/cancellation/process
 settlement, complete provider qualification, tools, teams and the final support matrix remain Program #3519 work.
+
+## Native retry and accepted-result replay
+
+Staging a new verified native parent uses the request/2 logical fingerprint and registers its delivery
+against the existing operation. The origin request remains protected and immutable; after authentication
+the transient runner request uses the current verified parent identity for point-of-use connection
+authorization. New physical claims record that delivery; accepted result/2 receipts bind its original
+dispatch identity, child, nonce and generation. Replay binds the new native child and returns the same
+accepted business/session/usage without a provider call or conversation mutation. Parent completion
+requires this recorded child and the ordinary native completion proof. Failed/unknown operations
+return coded refusals; changed arguments/bounds/artifact policy conflict.
+
+The real `RetryFaultedActivity/1` test injects a facade receipt-read failure after a completed model
+child, requests native intervention, submits an alteration, and observes a new facade/child completing
+with one total model call in Memory and SQLite. It preserves accepted history and the original physical
+receipt. Native retry/reschedule staging now assigns retained input snapshots to the successor's own
+invocation while preserving their values, policy fingerprints and materialization time; strict
+specialist and kernel ownership checks remain unchanged. This is native delivery proof with a seeded
+structural wrapper, not M4 authoring qualification.
+
+A distinct acceptance-response-loss probe faults the model child and retains its blocking incident;
+intervention on only the facade incident does not override it. That failed probe is retained as open
+native settlement/reconciliation work under M3, separately from the qualified facade-read retry path.
+Cancellation/applied dispositions, pre-admission tombstones and retention are still required by T021–T023.

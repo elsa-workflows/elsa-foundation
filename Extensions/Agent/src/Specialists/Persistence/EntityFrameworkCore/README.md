@@ -67,8 +67,12 @@ version. A rejected row/conversation CAS rolls back and retries a fresh metadata
 attempts. An exception or unconfirmed commit is never retried. Renewal cannot extend the original
 deadline, and expired dispatch is recorded as OutcomeUnknown without releasing reservations.
 
-Stable operation replay across new native attempts, native delivery settlement and content retention
-remain part of M3. A fresh service provider/context test proves encrypted pair
+New protocol1 records register matching native deliveries through conditional turn metadata writes.
+Concurrent stage/accepted replay is bounded by row versions and preserves the original receipt,
+request deadline and newer conversation history, including uncertainty from another operation.
+The three actual providers qualify eight concurrent registrations/replays and fresh-host restoration.
+No relational schema changed: associations are bounded payload metadata. Cancellation/applied
+settlement and content retention remain part of M3. A fresh service provider/context test proves encrypted pair
 recovery; it is not independent-process or live-model qualification.
 
 See [extension points](EXTENSION_POINTS.md). Regenerate pre-GA Initial migrations with

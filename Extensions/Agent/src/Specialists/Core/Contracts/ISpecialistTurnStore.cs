@@ -22,9 +22,12 @@ public interface ISpecialistTurnStore
     /// <summary>Reads conversation metadata only for the same verified workflow owner and exact specialist version.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistConversationDocument?> ReadConversationAsync(string conversationId, SpecialistInvocationIdentity identity, CancellationToken cancellationToken);
-    /// <summary>Claims an unexpired prepared turn, or safely takes over an expired pre-dispatch claim for the same native child. Expired dispatch becomes unknown.</summary>
+    /// <summary>Claims an unexpired prepared turn, or safely takes over an expired pre-dispatch claim for the same native child or explicitly registered delivery. Expired dispatch becomes unknown.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>Binds one registered native delivery to its exact child for immutable accepted-result replay. It never changes conversation history.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
+    ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken);
     /// <summary>Renews a current live claim/dispatch lease without extending the original operation deadline.</summary>
     /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause.</exception>
     ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken);

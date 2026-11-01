@@ -32,6 +32,7 @@ internal static class SpecialistTurnDocumentRules
             document.Status is SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown && string.IsNullOrWhiteSpace(document.FailureCode) ||
             document.Status is not (SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown) && document.FailureCode is not null)
             throw new InvalidDataException("The specialist journal lifecycle record is invalid.");
+        SpecialistTurnDeliveryRules.Validate(document);
         if (document.Fence is { } fence) Fence(fence);
         if (document.AdmissionGeneration < 0 || (document.AdmissionGeneration == 0) != (document.LeaseExpiresAt is null) ||
             document.Status == SpecialistTurnStatus.Prepared && document.AdmissionGeneration != 0 || document.LeaseExpiresAt > document.Deadline ||
@@ -51,7 +52,7 @@ internal static class SpecialistTurnDocumentRules
         }
     }
 
-    internal static SpecialistTurnDocument Copy(SpecialistTurnDocument document) => document with { ModelRequests = document.ModelRequests?.ToArray() };
+    internal static SpecialistTurnDocument Copy(SpecialistTurnDocument document) => document with { ModelRequests = document.ModelRequests?.ToArray(), Deliveries = document.Deliveries?.ToArray() };
 
     internal static void Reservation(SpecialistModelRequestReservation reservation, DateTimeOffset deadline)
     {

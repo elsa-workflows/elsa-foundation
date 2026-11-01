@@ -20,7 +20,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             throw SpecialistModelRunner.Failure("specialist.native.binding", "The staged turn no longer matches its native business contract.");
         if (document.Status == SpecialistTurnStatus.Accepted)
         {
-            _ = await journal.ResultAsync(handle, identity, context.InvocationId, context.CancellationToken);
+            _ = await journal.ReplayAsync(handle, identity, context.InvocationId, context.CancellationToken);
             return ActivityTransition.Complete(handle);
         }
         var dispatched = false;
@@ -34,7 +34,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, deadline.Token);
             // A redelivered copy of this exact native child may observe the old worker's still-live
             // journal lease. Wait only for this operation, never queue a stale conversation request.
-            while (document.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching && document.ChildInvocationId == context.InvocationId &&
+            while (document.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching && (document.DeliveryProtocol == 1 || document.ChildInvocationId == context.InvocationId) &&
                    document.LeaseExpiresAt is { } expires && expires > time.GetUtcNow())
             {
                 var delay = expires - time.GetUtcNow();
@@ -43,7 +43,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             }
             if (document.Status == SpecialistTurnStatus.Accepted)
             {
-                _ = await journal.ResultAsync(handle, identity, context.InvocationId, linked.Token);
+                _ = await journal.ReplayAsync(handle, identity, context.InvocationId, linked.Token);
                 return ActivityTransition.Complete(handle);
             }
             document = await journal.ClaimAsync(handle, identity, context.InvocationId, time.GetUtcNow(), linked.Token);

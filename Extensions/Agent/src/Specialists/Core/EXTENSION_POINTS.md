@@ -62,8 +62,8 @@ The runtime authenticates the opaque protected material before using it.
 The initial lease profile is 30 seconds, capped by the original absolute deadline. Claim returns an
 incremented `AdmissionGeneration` and finite `LeaseExpiresAt`; owned mutations use the complete
 `SpecialistTurnLeaseToken` (nonce and generation). Renew only a still-live Claimed/Dispatching lease;
-renewal cannot reset the operation deadline. After pre-dispatch expiry, only the exact same native
-child can reclaim the turn, incrementing its generation even if a nonce is reused. Expired dispatch
+renewal cannot reset the operation deadline. After pre-dispatch expiry, the same native child or an explicitly registered delivery
+of that logical operation can reclaim the turn, incrementing its generation even if a nonce is reused. Expired dispatch
 becomes OutcomeUnknown and retains its reservations and conversation block. It cannot admit another
 model request. Failure settlement may record uncertainty after expiry but cannot change another
 generation or an accepted/unknown terminal decision. Legacy accepted documents with generation zero
@@ -82,7 +82,7 @@ usage from conservative reserved output when attribution is unavailable. Input/t
 are not established by this mechanism. Configured model identity and reported identity remain distinct.
 
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
-credential durability or end-to-end recovery qualification. Delivery rebinding, hard input/total-token accounting and retention controls remain separate M3 work.
+credential durability or end-to-end recovery qualification. Native cancellation/applied settlement, hard input/total-token accounting and retention controls remain separate M3 work.
 
 Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
 with a safe failure code, canonical opaque handle when available and the original `InnerException`.
@@ -111,3 +111,20 @@ continuation/1 reader refuses the new limits member. Protected request material 
 limits separately from the immutable provider descriptor. A custom physical accounting contribution
 must respect the bound output options and current journal reservation maximum; a control value grants
 no connection, owner or tool authority.
+
+## Logical operation and native deliveries
+
+New runtime records use delivery protocol1, with at most64 verified parent associations. The turn's
+original identity/request and accepted physical-dispatch provenance remain immutable. A new native
+parent can register during staging only when the complete logical fingerprint matches: every native
+scope/artifact/version/template/operation field, business input, contract/binding policy, settings,
+continuation and effective bounds remains bound. Only the parent invocation ID is excluded from the
+new request/2 fingerprint. An unregistered parent cannot read the handle or replay acceptance.
+
+`ReplayAcceptedAsync` binds a registered parent to one exact child. It updates turn delivery metadata
+without reapplying conversation acceptance, even if history has advanced or another operation is
+unknown. Repeated matching binding is safe; a conflicting child refuses. Copies of returned delivery
+collections cannot mutate retained memory state. A new physical claim records its active delivery,
+nonce and generation; expired dispatch and rejected/unknown terminal decisions cannot issue a fresh
+request. Exact-original request/1 and result/1 readers remain; old records do not acquire new native
+alias authority from missing protocol fields. Unsupported legacy cross-attempt staging conflicts.

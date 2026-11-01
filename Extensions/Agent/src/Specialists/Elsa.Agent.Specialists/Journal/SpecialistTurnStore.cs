@@ -36,9 +36,13 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             if (keys.TryGetValue(candidate.Key, out var handle))
             {
                 var existing = rows[handle];
-                if (existing.Identity != candidate.Identity || existing.RequestHash != candidate.RequestHash)
+                if (!SpecialistTurnDeliveryRules.SameLogical(existing.Identity, candidate.Identity) || existing.RequestHash != candidate.RequestHash || existing.DeliveryProtocol != candidate.DeliveryProtocol ||
+                    existing.DeliveryProtocol == 0 && existing.Identity != candidate.Identity)
                     throw new SpecialistJournalException("specialist.journal.conflict", existing.Handle, "A different specialist request already owns this native operation.", new InvalidOperationException("The native operation fingerprint changed."));
-                return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(existing));
+                var associated = SpecialistTurnDeliveryRules.Register(existing, candidate.Identity);
+                ValidateRecord(associated, prepared: false);
+                rows[handle] = SpecialistTurnDocumentRules.Copy(associated);
+                return ValueTask.FromResult(SpecialistTurnDocumentRules.Copy(associated));
             }
             if (rows.Count >= 10_000) throw new SpecialistJournalException("specialist.journal.capacity", null, "The process-local specialist journal is full.", new InvalidOperationException("The development journal capacity was reached."));
             rows.Add(candidate.Handle, SpecialistTurnDocumentRules.Copy(candidate));
@@ -65,9 +69,25 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
                 _ = TrySave(row with { Status = SpecialistTurnStatus.OutcomeUnknown, FailureCode = "specialist.turn.outcome-unknown" });
                 return ValueTask.FromResult<SpecialistTurnDocument?>(null);
             }
-            if (now >= row.Deadline || !SpecialistTurnLeaseRules.CanClaim(row, childInvocationId, now)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
-            row = SpecialistTurnLeaseRules.Claim(row, childInvocationId, fence, now);
+            if (now >= row.Deadline || !SpecialistTurnLeaseRules.CanClaim(row, identity, childInvocationId, now)) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            row = SpecialistTurnLeaseRules.Claim(row, identity, childInvocationId, fence, now);
             return ValueTask.FromResult<SpecialistTurnDocument?>(TrySave(row) ? row : null);
+        }
+    }
+
+    public ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            var document = Find(handle, identity);
+            if (document is null || document.Status != SpecialistTurnStatus.Accepted || !SpecialistTurnDeliveryRules.CanBindChild(document, identity, childInvocationId))
+                return ValueTask.FromResult<SpecialistTurnDocument?>(null);
+            var next = SpecialistTurnDeliveryRules.BindChild(document, identity, childInvocationId);
+            ValidateRecord(next, prepared: false);
+            // Delivery metadata never reapplies the accepted conversation transition.
+            rows[handle] = SpecialistTurnDocumentRules.Copy(next);
+            return ValueTask.FromResult<SpecialistTurnDocument?>(SpecialistTurnDocumentRules.Copy(next));
         }
     }
 
@@ -202,7 +222,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
     private SpecialistTurnDocument? Find(string handle, SpecialistInvocationIdentity identity)
     {
         EnsureScope(identity);
-        return rows.TryGetValue(handle, out var row) && row.Identity == identity ? SpecialistTurnDocumentRules.Copy(row) : null;
+        return rows.TryGetValue(handle, out var row) && SpecialistTurnDeliveryRules.Admits(row, identity) ? SpecialistTurnDocumentRules.Copy(row) : null;
     }
 
     private void EnsureScope(SpecialistInvocationIdentity identity)

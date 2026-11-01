@@ -76,24 +76,40 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         {
             var scope = Scope(candidate.Identity);
             Prepared(candidate);
-            try
+            for (var attempt = 0; attempt < 32; attempt++)
             {
-                await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
-                var owned = transaction.Context<DbContext>();
-                var existing = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
-                if (existing is not null) return Replay(existing, candidate);
-                owned.Set<SpecialistTurnRecord>().Add(Row(scope, candidate));
-                await owned.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return Clone(candidate);
+                try
+                {
+                    await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
+                    var owned = transaction.Context<DbContext>();
+                    var existing = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
+                    if (existing is not null)
+                    {
+                        var before = Read(existing);
+                        var next = Replay(before, candidate);
+                        if (ReferenceEquals(before, next)) return Clone(before);
+                        Validate(next);
+                        var changed = await owned.Set<SpecialistTurnRecord>().Where(x => x.ScopeKey == scope && x.Handle == existing.Handle &&
+                            x.SchemaVersion == SpecialistsEfModule.SchemaVersion && x.Version == existing.Version)
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, existing.Version + 1).SetProperty(x => x.Payload, Serialize(next)), cancellationToken);
+                        if (changed != 1) continue;
+                        await transaction.CommitAsync(cancellationToken);
+                        return Clone(next);
+                    }
+                    owned.Set<SpecialistTurnRecord>().Add(Row(scope, candidate));
+                    await owned.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return Clone(candidate);
+                }
+                catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
+                {
+                    // A confirmed competing insert has no inference effect. Register this exact
+                    // matching delivery against its committed winner in a fresh metadata transaction.
+                    var winner = await context.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
+                    if (winner is null) throw Failure(exception, candidate.Handle);
+                }
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
-            {
-                // Staging has no inference effect. A concurrent insert's exact committed winner is
-                // authoritative; never replace it with this caller's ciphertext, deadline or arguments.
-                var winner = await context.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
-                return winner is null ? throw Failure(exception, candidate.Handle) : Replay(winner, candidate);
-            }
+            throw Failure(new InvalidOperationException("The bounded specialist stage metadata retries were exhausted."), candidate.Handle);
         }
         catch (OperationCanceledException) { throw; }
         catch (SpecialistJournalException) { throw; }
@@ -109,7 +125,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             var row = await context.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Handle == handle, cancellationToken);
             if (row is null) return null;
             var document = Read(row);
-            return document.Identity == identity ? document : null;
+            return SpecialistTurnDeliveryRules.Admits(document, identity) ? document : null;
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) { throw Failure(exception, handle); }
@@ -124,9 +140,14 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             document => document.Status == SpecialistTurnStatus.Dispatching && (document.LeaseExpiresAt is null || document.LeaseExpiresAt <= now || document.Deadline <= now),
             document => document with { Status = SpecialistTurnStatus.OutcomeUnknown, FailureCode = "specialist.turn.outcome-unknown" }, cancellationToken);
         return await ChangeAsync(handle, identity, now, requireDeadline: true,
-            document => SpecialistTurnLeaseRules.CanClaim(document, childInvocationId, now),
-            document => SpecialistTurnLeaseRules.Claim(document, childInvocationId, fence, now), cancellationToken);
+            document => SpecialistTurnLeaseRules.CanClaim(document, identity, childInvocationId, now),
+            document => SpecialistTurnLeaseRules.Claim(document, identity, childInvocationId, fence, now), cancellationToken);
     }
+
+    public ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken) =>
+        ChangeAsync(handle, identity, DateTimeOffset.MinValue, requireDeadline: false,
+            document => document.Status == SpecialistTurnStatus.Accepted && SpecialistTurnDeliveryRules.CanBindChild(document, identity, childInvocationId),
+            document => SpecialistTurnDeliveryRules.BindChild(document, identity, childInvocationId), cancellationToken, changeConversation: false);
 
     public ValueTask<SpecialistTurnDocument?> RenewAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -201,7 +222,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
     }
 
     private async ValueTask<SpecialistTurnDocument?> ChangeAsync(string handle, SpecialistInvocationIdentity identity, DateTimeOffset now, bool requireDeadline,
-        Func<SpecialistTurnDocument, bool> admits, Func<SpecialistTurnDocument, SpecialistTurnDocument> change, CancellationToken cancellationToken)
+        Func<SpecialistTurnDocument, bool> admits, Func<SpecialistTurnDocument, SpecialistTurnDocument> change, CancellationToken cancellationToken, bool changeConversation = true)
     {
         try
         {
@@ -214,12 +235,12 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
                 var row = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Handle == handle, cancellationToken);
                 if (row is null) return null;
                 var before = Read(row);
-                if (before.Identity != identity || !admits(before) || requireDeadline && before.Deadline <= now) return null;
+                if (!SpecialistTurnDeliveryRules.Admits(before, identity) || !admits(before) || requireDeadline && before.Deadline <= now) return null;
                 var next = change(before);
                 Validate(next);
                 SpecialistConversationRecord? conversationRow = null;
                 SpecialistConversationDocument? conversationNext = null;
-                if (before.Conversation is { } admission)
+                if (changeConversation && before.Conversation is { } admission)
                 {
                     conversationRow = await owned.Set<SpecialistConversationRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Id == admission.ConversationId, cancellationToken);
                     conversationNext = SpecialistConversationRules.Change(before, next, conversationRow is null ? null : ReadConversation(conversationRow));
@@ -273,12 +294,12 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         return Convert.ToHexString(SHA256.HashData(Utf8.GetBytes(JsonSerializer.Serialize(new[] { identity.PersistencePartition, identity.TenantId })))).ToLowerInvariant();
     }
 
-    private static SpecialistTurnDocument Replay(SpecialistTurnRecord row, SpecialistTurnDocument candidate)
+    private static SpecialistTurnDocument Replay(SpecialistTurnDocument existing, SpecialistTurnDocument candidate)
     {
-        var existing = Read(row);
-        if (existing.Identity != candidate.Identity || existing.Key != candidate.Key || existing.RequestHash != candidate.RequestHash)
+        if (!SpecialistTurnDeliveryRules.SameLogical(existing.Identity, candidate.Identity) || existing.Key != candidate.Key || existing.RequestHash != candidate.RequestHash ||
+            existing.DeliveryProtocol != candidate.DeliveryProtocol || existing.DeliveryProtocol == 0 && existing.Identity != candidate.Identity)
             throw new SpecialistJournalException("specialist.journal.conflict", existing.Handle, "A different specialist request already owns this native operation.", new InvalidOperationException("The native operation fingerprint changed."));
-        return existing;
+        return SpecialistTurnDeliveryRules.Register(existing, candidate.Identity);
     }
 
     private static SpecialistTurnRecord Row(string scope, SpecialistTurnDocument document) => new()

@@ -18,6 +18,71 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistJournalTests
 {
+    [Theory]
+    [InlineData("business")]
+    [InlineData("limits")]
+    [InlineData("binding")]
+    [InlineData("settings")]
+    [InlineData("model")]
+    [InlineData("version")]
+    [InlineData("template")]
+    [InlineData("artifact")]
+    public async Task A_registered_native_retry_must_preserve_every_logical_request_field(string changed)
+    {
+        await using var services = Services();
+        var journal = Journal(Memory(), services);
+        var original = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(original, now, default);
+        var retry = original with { Identity = original.Identity with { ActivityExecutionId = "retry-parent" } };
+        Assert.Equal(handle, await journal.StageAsync(retry, now.AddSeconds(1), default));
+        var read = await journal.ReadAsync(handle, retry.Identity, default);
+        Assert.Equal(original.Identity, read.Document.Identity);
+        Assert.Equal(retry.Identity, read.Request.Identity); // Current point-of-use provider provenance.
+        Assert.Equal(2, read.Document.Deliveries!.Count);
+        var modified = changed switch
+        {
+            "business" => retry with { Inputs = Json("{\"Brief\":\"changed\"}") },
+            "limits" => retry with { EffectiveLimits = new(1, 1000, 32) },
+            "binding" => retry with { BindingFingerprint = "changed-binding" },
+            "settings" => retry with { Descriptor = retry.Descriptor with { Settings = Json("{\"changed\":true}") } },
+            "model" => retry with { Descriptor = retry.Descriptor with { Model = retry.Descriptor.Model with { ModelId = "another-model" } } },
+            "version" => retry with { Identity = retry.Identity with { DefinitionVersionId = "another-version" } },
+            "template" => retry with { Identity = retry.Identity with { TemplateHash = "another-template" } },
+            _ => retry with { Identity = retry.Identity with { ArtifactHash = "another-artifact" } }
+        };
+        var error = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.StageAsync(modified, now, default));
+        Assert.Equal("specialist.turn.conflict", error.Code);
+        Assert.Equal(read.Document.ProtectedRequest, (await journal.ReadAsync(handle, original.Identity, default)).Document.ProtectedRequest);
+    }
+
+    [Fact]
+    public async Task Replaying_acceptance_requires_a_registered_exact_child_and_keeps_original_receipt_provenance()
+    {
+        await using var services = Services();
+        var journal = Journal(Memory(), services);
+        var request = Request();
+        var now = DateTimeOffset.UtcNow;
+        var handle = await journal.StageAsync(request, now, default);
+        var claim = await journal.ClaimAsync(handle, request.Identity, "original-child", now, default);
+        Assert.True(await journal.DispatchAsync(claim, now, default));
+        Assert.True(await journal.AcceptAsync(claim, new(Json("{\"Article\":\"accepted\"}"), null, null, null, 1, 1), now, default));
+        var accepted = (await journal.ReadAsync(handle, request.Identity, default)).Document;
+        var retry = request with { Identity = request.Identity with { ActivityExecutionId = "retry-parent" } };
+        await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ReplayAsync(handle, retry.Identity, "retry-child", default));
+        Assert.Equal(handle, await journal.StageAsync(retry, now.AddDays(1), default));
+        await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ResultAsync(handle, retry.Identity, "retry-child", default));
+        var result = await journal.ReplayAsync(handle, retry.Identity, "retry-child", default);
+        Assert.Equal("accepted", result.Result.GetProperty("Article").GetString());
+        Assert.True(JsonElement.DeepEquals(result.Result, (await journal.ResultAsync(handle, retry.Identity, "retry-child", default)).Result));
+        await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.ReplayAsync(handle, retry.Identity, "foreign-child", default));
+        var replayed = (await journal.ReadAsync(handle, retry.Identity, default)).Document;
+        Assert.Equal(accepted.ProtectedResult, replayed.ProtectedResult);
+        Assert.Equal(accepted.ChildInvocationId, replayed.ChildInvocationId);
+        Assert.Equal(accepted.AdmissionGeneration, replayed.AdmissionGeneration);
+        Assert.Equal(accepted.Deadline, replayed.Deadline);
+    }
+
     [Fact]
     public async Task An_accepted_receipt_authenticates_its_claim_generation()
     {
@@ -45,17 +110,22 @@ public sealed class SpecialistJournalTests
         var store = new InMemorySpecialistTurnStore(new Access("tenant"), state);
         var journal = Journal(store, services);
         var request = Request();
-        var now = DateTimeOffset.UtcNow;
-        var handle = await journal.StageAsync(request, now, default);
-        var claim = await journal.ClaimAsync(handle, request.Identity, "child", now, default);
-        Assert.True(await journal.DispatchAsync(claim, now, default));
-        Assert.True(await journal.AcceptAsync(claim, new(Json("{}"), null, null, null, 1, 1), now, default));
+        var serialized = JsonSerializer.Serialize(request, SpecialistJson.Options);
+        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(serialized))).ToLowerInvariant();
         var protector = services.GetRequiredService<ISecretValueProtector>();
-        var old = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(state.Rows[handle].ProtectedResult!))!.AsObject();
-        old.Remove("admissionGeneration");
-        state.Rows[handle] = state.Rows[handle] with { AdmissionGeneration = 0, LeaseExpiresAt = null, ProtectedResult = protector.Protect(old.ToJsonString()) };
+        var protectedRequest = protector.Protect(JsonSerializer.Serialize(new { purpose = "elsa.specialist.turn/request/1", identity = request.Identity, hash, request }, SpecialistJson.Options));
+        var protectedResult = protector.Protect(JsonSerializer.Serialize(new { purpose = "elsa.specialist.turn/result/1", identity = request.Identity, requestHash = hash,
+            childInvocationId = "child", fence = "legacy", result = new SpecialistTurnResult(Json("{}"), null, null, null, 1, 1) }, SpecialistJson.Options));
+        var handle = new string('a', 64);
+        var document = new SpecialistTurnDocument(handle, SpecialistTurnDocument.CalculateOperationKey(request.Identity), hash, request.Identity, protectedRequest,
+            DateTimeOffset.UtcNow.AddDays(-1), SpecialistTurnStatus.Accepted, "child", "legacy", protectedResult) { MaximumModelCalls = request.Descriptor.Limits.MaximumModelCalls };
+        state.Rows[handle] = document;
+        state.Keys[document.Key] = handle;
         Assert.Equal(JsonValueKind.Object, (await journal.ResultAsync(handle, request.Identity, "child", default)).Result.ValueKind);
-        Assert.Null(await store.ClaimAsync(handle, request.Identity, "child", "new", now, default));
+        Assert.Null(await store.ClaimAsync(handle, request.Identity, "child", "new", DateTimeOffset.UtcNow, default));
+        Assert.Null(await store.ReplayAcceptedAsync(handle, request.Identity, "foreign-child", default));
+        var conflict = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.StageAsync(request with { Identity = request.Identity with { ActivityExecutionId = "retry" } }, DateTimeOffset.UtcNow, default));
+        Assert.Equal("specialist.turn.conflict", conflict.Code);
     }
 
     [Fact]
@@ -153,7 +223,8 @@ public sealed class SpecialistJournalTests
         Assert.Equal("very-private-brief", restored.Inputs.GetProperty("Brief").GetString());
         Assert.DoesNotContain("very-private", JsonSerializer.Serialize(document), StringComparison.Ordinal);
         var changed = request with { Inputs = Json("{\"Brief\":\"changed\"}") };
-        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await journal.StageAsync(changed, now, CancellationToken.None));
+        var conflict = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await journal.StageAsync(changed, now, CancellationToken.None));
+        Assert.Equal("specialist.turn.conflict", conflict.Code);
     }
 
     [Fact]
@@ -288,9 +359,9 @@ public sealed class SpecialistJournalTests
         var read = await journal.ReadAsync(handle, request.Identity, default);
         Assert.Equal(now.AddSeconds(20), read.Document.Deadline);
         Assert.Equal(request.EffectiveLimits, read.Request.EffectiveLimits);
-        var conflict = await Assert.ThrowsAsync<SpecialistJournalException>(async () =>
+        var conflict = await Assert.ThrowsAsync<SpecialistTurnException>(async () =>
             await journal.StageAsync(request with { EffectiveLimits = new(2, 20_000, 32) }, now, default));
-        Assert.Equal("specialist.journal.conflict", conflict.Code);
+        Assert.Equal("specialist.turn.conflict", conflict.Code);
     }
 
     private static InMemorySpecialistTurnStore Memory() => new(new Access("tenant"), new());

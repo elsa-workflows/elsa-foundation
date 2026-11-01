@@ -32,6 +32,115 @@ public sealed class SpecialistEfJournalTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task A_matching_opaque_fingerprint_cannot_register_another_artifact_or_version(bool durable)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var original = Document with { DeliveryProtocol = 1, Deliveries = [new(Identity)] };
+        await store.StageAsync(original, default);
+        foreach (var forged in new[] { Identity with { ActivityExecutionId = "forged", ArtifactHash = "foreign-hash" },
+                     Identity with { ActivityExecutionId = "forged", DefinitionVersionId = "foreign-version" },
+                     Identity with { ActivityExecutionId = "forged", TemplateHash = "foreign-template" } })
+        {
+            var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(
+                original with { Identity = forged, Deliveries = [new(forged)], Handle = new string('d', 64) }, default));
+            Assert.Equal("specialist.journal.conflict", error.Code);
+            Assert.Null(await store.ReadAsync(original.Handle, forged, default));
+        }
+        Assert.Single((await store.ReadAsync(original.Handle, Identity, default))!.Deliveries!);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Registered_accepted_delivery_replays_without_reapplying_or_rewinding_conversation_history(bool durable)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var first = Document with { DeliveryProtocol = 1, Deliveries = [new(Identity)], Conversation = new(new string('e', 64), 0) };
+        await store.StageAsync(first, default);
+        var claim = (await store.ClaimAsync(first.Handle, Identity, "original-child", "first", Now, default))!;
+        Assert.True(await store.DispatchAsync(first.Handle, Identity, new("first", 1), Now, default));
+        Assert.True(await store.AcceptAsync(first.Handle, Identity, new("first", 1), "immutable-first-receipt", Now, default));
+        var laterIdentity = Identity with { ActivityExecutionId = "later-parent", OperationKey = "later-operation" };
+        var later = Document with { Handle = new string('b', 64), Key = SpecialistTurnDocument.CalculateOperationKey(laterIdentity), Identity = laterIdentity,
+            DeliveryProtocol = 1, Deliveries = [new(laterIdentity)], Conversation = first.Conversation with { ExpectedRevision = 1 } };
+        await store.StageAsync(later, default);
+        Assert.NotNull(await store.ClaimAsync(later.Handle, laterIdentity, "later-child", "later", Now, default));
+        Assert.True(await store.DispatchAsync(later.Handle, laterIdentity, new("later", 1), Now, default));
+        Assert.True(await store.AcceptAsync(later.Handle, laterIdentity, new("later", 1), "later-receipt", Now, default));
+        var conversation = (await store.ReadConversationAsync(first.Conversation.ConversationId, Identity, default))!;
+        Assert.Equal(2, conversation.Revision);
+        var retry = Identity with { ActivityExecutionId = "retry-parent" };
+        Assert.Null(await store.ReadAsync(first.Handle, retry, default));
+        Assert.Null(await store.ReplayAcceptedAsync(first.Handle, retry, "retry-child", default));
+        var associated = await store.StageAsync(first with { Handle = new string('d', 64), Identity = retry, Deliveries = [new(retry)], Deadline = Now.AddDays(1) }, default);
+        Assert.Equal(first.Handle, associated.Handle);
+        Assert.Equal(first.Deadline, associated.Deadline);
+        Assert.Equal(Identity, associated.Identity);
+        var replay = (await store.ReplayAcceptedAsync(first.Handle, retry, "retry-child", default))!;
+        Assert.Equal("immutable-first-receipt", replay.ProtectedResult);
+        Assert.Equal("original-child", replay.ChildInvocationId);
+        Assert.Equal(Identity.ActivityExecutionId, replay.ActiveDeliveryActivityId);
+        Assert.Equal("retry-child", replay.Deliveries!.Single(x => x.Identity == retry).ChildInvocationId);
+        Assert.Null(await store.ReplayAcceptedAsync(first.Handle, retry, "foreign-child", default));
+        Assert.Equal(conversation, await store.ReadConversationAsync(first.Conversation.ConversationId, Identity, default));
+        ((IList<SpecialistTurnDelivery>)replay.Deliveries)[0] = new(retry with { ActivityExecutionId = "injected-parent" });
+        Assert.Equal(Identity, (await store.ReadAsync(first.Handle, Identity, default))!.Deliveries![0].Identity);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task A_new_registered_delivery_can_recover_predispatch_but_never_repeat_dispatch(bool durable, bool dispatched)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        ISpecialistTurnStore store = durable ? Store(context) : new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var first = Document with { DeliveryProtocol = 1, Deliveries = [new(Identity)], Conversation = new(new string('e', 64), 0) };
+        await store.StageAsync(first, default);
+        var original = (await store.ClaimAsync(first.Handle, Identity, "original-child", "first", Now, default))!;
+        if (dispatched)
+        {
+            Assert.True(await store.DispatchAsync(first.Handle, Identity, new("first", 1), Now, default));
+            Assert.NotNull(await store.ReserveModelRequestAsync(first.Handle, Identity, new("first", 1), Reservation(0), Now, default));
+        }
+        var retry = Identity with { ActivityExecutionId = "retry-parent" };
+        await store.StageAsync(first with { Handle = new string('d', 64), Identity = retry, Deliveries = [new(retry)] }, default);
+        Assert.Null(await store.ClaimAsync(first.Handle, retry, "retry-child", "second", Now.AddSeconds(29), default));
+        var recovered = await store.ClaimAsync(first.Handle, retry, "retry-child", "second", Now.AddSeconds(30), default);
+        if (dispatched)
+        {
+            Assert.Null(recovered);
+            var unknown = (await store.ReadAsync(first.Handle, retry, default))!;
+            Assert.Equal(SpecialistTurnStatus.OutcomeUnknown, unknown.Status);
+            Assert.Single(unknown.ModelRequests!);
+            Assert.Equal(1, unknown.AdmissionGeneration);
+            Assert.Null(await store.ReplayAcceptedAsync(first.Handle, retry, "retry-child", default));
+        }
+        else
+        {
+            Assert.NotNull(recovered);
+            Assert.Equal(2, recovered.AdmissionGeneration);
+            Assert.Equal("retry-parent", recovered.ActiveDeliveryActivityId);
+            Assert.Equal(original.Deadline, recovered.Deadline);
+            Assert.False(await store.DispatchAsync(first.Handle, Identity, new("first", 1), Now.AddSeconds(31), default));
+            await store.FailAsync(first.Handle, Identity, new("first", 1), "stale", true, default);
+            Assert.True(await store.DispatchAsync(first.Handle, retry, new("second", 2), Now.AddSeconds(31), default));
+            Assert.True(await store.AcceptAsync(first.Handle, retry, new("second", 2), "accepted", Now.AddSeconds(31), default));
+            var conversation = (await store.ReadConversationAsync(first.Conversation.ConversationId, Identity, default))!;
+            Assert.Equal(retry, conversation.AcceptedTurn!.Identity);
+            Assert.Equal("retry-child", conversation.AcceptedTurn.ChildInvocationId);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Expired_predispatch_claim_can_recover_but_old_generation_never_regains_ownership(bool durable)
     {
         await using var database = await Database.CreateAsync();
