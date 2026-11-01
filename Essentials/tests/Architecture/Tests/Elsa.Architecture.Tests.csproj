@@ -66,6 +66,10 @@
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Elsa.Agent\Elsa.Agent.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Core\Elsa.Agent.Specialists.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
+    <ProjectReference Include="../../../../Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Design\Elsa.Agent.Specialists.Design.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\JsonSchema\Elsa.Agent.Specialists.JsonSchema.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Specialists\Elsa.Agent.Specialists\Elsa.Agent.Specialists.csproj" />

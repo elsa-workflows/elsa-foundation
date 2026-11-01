@@ -47,12 +47,19 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
             throw Failure();
     }
 
+    internal static void VerifyRequest(SpecialistTurnRequest request, SpecialistInvocationIdentity identity, ActivityExecutionState parent, ExecutableNode node)
+    {
+        if (request.Identity != identity || request.Contract.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint ||
+            request.BindingFingerprint != parent.InputSnapshot!.BindingFingerprint) throw Failure();
+    }
+
     public static SpecialistRuntimeDescriptor Descriptor(ExecutableNode node)
     {
         SpecialistRuntimeDescriptor? descriptor;
         try { descriptor = node.DescriptorPayload.Deserialize<SpecialistRuntimeDescriptor>(SpecialistJson.Options); }
         catch (JsonException exception) { throw Failure(exception); }
-        if (descriptor is null || node.DescriptorType != SpecialistRuntimeIds.ConsumerKey || node.DescriptorSchemaVersion != SpecialistRuntimeIds.DescriptorSchema ||
+        if (descriptor is null || node.DescriptorType != SpecialistRuntimeIds.ConsumerKey || node.DescriptorSchemaVersion is not (SpecialistRuntimeIds.DescriptorSchema or SpecialistRuntimeIds.ContinuityDescriptorSchema) ||
+            (node.DescriptorSchemaVersion == SpecialistRuntimeIds.ContinuityDescriptorSchema) != SpecialistNativeControls.Enabled(descriptor) ||
             node.ActivityContract?.Activation.Capability != SpecialistRuntimeIds.FacadeCapability ||
             node.ActivityContract.DescriptorKind != SpecialistRuntimeIds.ConsumerKey ||
             !JsonElement.DeepEquals(node.ActivityContract.DescriptorPayload, node.DescriptorPayload) ||
@@ -78,7 +85,7 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
         return workflow;
     }
 
-    private static SpecialistInvocationIdentity Identity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
+    internal static SpecialistInvocationIdentity Identity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
     {
         var descriptor = Descriptor(node);
         foreach (var capture in node.OutputCaptures.Values.Where(x => x.CaptureOnSuccessfulCompletion))
@@ -95,6 +102,19 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
         if (state.ContractIdentity?.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint || state.InputSnapshot is null ||
             state.InputSnapshot.ContractFingerprint != node.ActivityContract.SchemaFingerprint || state.InputSnapshot.InvocationId != state.InvocationId)
             throw Failure();
+        return new(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, state.InvocationId, state.OperationKey,
+            workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+    }
+
+    internal static SpecialistInvocationIdentity CancellationIdentity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
+    {
+        var descriptor = Descriptor(node);
+        if (state.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId || state.Execution.ExecutableNodeId != node.ExecutableNodeId ||
+            state.ContractIdentity is { } contract && contract.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint ||
+            state.InputSnapshot is { } input && (input.InvocationId != state.InvocationId || input.ContractFingerprint != node.ActivityContract!.SchemaFingerprint))
+            throw Failure();
+        // Cancellation also covers a scheduled invocation whose input snapshot/staged handle does
+        // not exist yet. It grants no permission to infer, and never weakens normal entry/worker checks.
         return new(workflow.TenantId, workflow.Partition!.Value, workflow.WorkflowExecutionId, state.InvocationId, state.OperationKey,
             workflow.PinnedExecutable.ArtifactId, workflow.PinnedExecutable.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
     }

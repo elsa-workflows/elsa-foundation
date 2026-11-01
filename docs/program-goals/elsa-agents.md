@@ -68,13 +68,25 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
 2. M1 design is complete through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540)
    and resulting-main core/Studio qualification on `e26c11bd9`.
 3. M2 publication/runtime kernel [#3548](https://github.com/elsa-workflows/elsa-foundation/issues/3548)
-   is finishing qualification in [PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573).
-   Its bounded source and independent package proof passed, with no production durability or live-model
-   claim. Draft discovery #3541 merged through #3543; central MEAI enabler #3544/#3546 merged at
-   `fd304319c`. The kernel is rebased onto that main; its fresh exact-head qualification and CI,
-   resulting-main qualification and product M2–M7 acceptance remain open. Independent durable
-   Connections prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
-   implements T014–T015 under its existing owner #2854 while M2 occupies the review lane.
+   is complete through [PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with
+   exact-head CI and resulting-main source/package/core/Studio qualification on `0d6db68a3`.
+   Its bounded profile establishes no production durability or live-model acceptance. Draft discovery
+   #3541 merged through #3543; central MEAI enabler #3544/#3546 merged at `fd304319c`.
+4. M3 [#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) is the active implementation
+   unit for T016–T023. Concrete SDK integration, protected turn/conversation journals, bounded physical
+   requests, optional streaming, native application/cancellation, retention and retained readers are
+   implemented in [PR #3594](https://github.com/elsa-workflows/elsa-foundation/pull/3594). The shared draft
+   Test Run application service executes the exact saved candidate through the same production worker.
+   Independent review and local source/shared/package gates passed; remote CI, Code Review merge and
+   resulting-main verification remain. The milestone and Program are still open.
+   Connections prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578) delivered
+   T014–T015 under owner #2854 through PR #3591 and resulting-main receipts on `5be59cebc`.
+   Package proof uses deterministic models and file SQLite in Balanced/Durable. Current binaries recover
+   earlier accepted work; an older runtime reading only workflow schema 1 correctly refuses a database
+   finalized at 2. Compatible-reader recovery preserves that acceptance without another model call.
+   The earlier unchanged-format binary pair has its own bidirectional receipt. Neither proves arbitrary
+   downgrade, backup restore, power loss, live inference or the complete M4–M7 support matrix.
+
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
@@ -97,7 +109,7 @@ The design is approved to implement; neither the packet nor the illustrative wir
 implemented product acceptance. Public signatures remain proposed until their first implementing slice.
 [M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) merged through
 [PR #3543](https://github.com/elsa-workflows/elsa-foundation/pull/3543). Native specialist kernel #3548
-continues in the review/qualification lane; #3578 is the sole active implementation leaf.
+is complete; #3523 is the sole active implementation unit and #3578 is complete.
 
 ## Completion
 

@@ -176,3 +176,96 @@ lease expiry/supersession, both journal cancellation winners, pre-admission tomb
 cancellation, crash after provider dispatch, after journal acceptance, before/after native receipt, and
 before/after settlement acknowledgement. Include unknown usage and retained-reader/key rotation/purge.
 Observe accepted journal/session revisions and native parent completion/effect count independently.
+
+## M3 implementation boundary: workflow-owned conversation admission
+
+Draft PR #3594 adds a conversation row to the existing turn journal, with the same scoped backend
+selection. The first owner profile derives tenant, partition, workflow execution and exact specialist
+version/template from verified native provenance. It does not infer a user principal or grant
+cross-workflow access. Claim reserves the expected revision and fence in the same transaction as the
+turn claim. Acceptance advances one revision and points at the immutable accepted turn receipt;
+the protected session remains in that receipt rather than a second history copy. Known failures
+release the revision; unknown outcomes retain the active reference and block continuation. Replaying
+an older accepted turn returns its original receipt without changing current conversation state.
+
+The runtime worker restores only this admitted accepted reference. The following draft increment adds
+explicit manifest2/descriptor2 continuation controls, retaining fresh-only schema1 readers and business
+schemas. The safe Conversation value can flow through native output capture/variable bindings; its
+revision is used as the expected base revision. Normal published graph/direct-reference authoring
+remains M4 qualification. The next draft increment adds 30-second leases capped by the original
+deadline, nonce/generation fencing and fresh-scope renewal. Only the same native child may recover
+expired pre-dispatch work; expired dispatched work becomes OutcomeUnknown and retains reservations.
+Protected receipts authenticate the admitted generation, retaining legacy accepted readers. Required
+native-provider tests force renewal races with response recording and acceptance; rejected metadata
+CAS may retry, while unconfirmed commits cannot. Native cancellation/applied settlement and retention remain required before M3 can close. This note records the implemented
+boundary; the proposed broader logical model above remains the Program target.
+
+The invocation-limit increment uses the explicit invocation/2 profile and compiler2.1, retaining the
+conversation-only continuation/1 reader. Native controls can lower call/time/output bounds for a
+fresh or continuing control-enabled invocation. Effective limits are separate protected request
+material; the published descriptor stays pinned. Journal maximum/deadline and actual SDK output
+options enforce the effective values. Identical staging preserves its deadline; changed limits
+conflict. Missing override fields preserve legacy request serialization. Known entry validation
+refusals become coded native structural faults without scheduling a model child. This adds no
+input/total-token hard-limit claim and does not change schema1/continuity-disabled public contracts.
+
+The delivery increment uses explicit delivery protocol1 and request/result purpose2. Only the parent
+invocation ID is normalized out of the logical fingerprint. Native staging registers matching parents;
+claim binds the physical delivery, while accepted replay binds a new verified child without modifying
+conversation history. Original source/result provenance remains immutable; purpose1 legacy readers
+remain exact-original-only. Native typed retry/reschedule snapshots keep pinned values/fingerprints
+but are owned by the successor invocation. Actual RetryFaultedActivity/1 after a facade receipt-read
+failure qualifies a new native parent/child and one total model call; model-child acceptance-response
+loss was a separate failed settlement probe. The acknowledgement-confirmation increment below qualifies
+authoritatively confirmed acceptance, without claiming the same support for unavailable confirmation.
+T021–T023 remain open.
+
+After an acceptance attempt fails, the worker may revalidate current native provenance and read the
+exact authenticated immutable receipt for that parent/child. Confirmed acceptance can complete without
+another inference or write; no attempted/unreadable write implies success. Real actor cancellation
+after journal acceptance retains the accepted history while preventing native completion. Before-commit
+failure remains unknown, unavailable receipt confirmation produces no native success, and changed
+native operation identity, contract or input binding refuses completion. The shared comparison runs
+before and after acceptance, after accepted replay association and before facade typed completion. The acknowledgement increment alone does not implement durable cancellation/applied source
+settlement or tombstone/retention policy. The later application increment is described below.
+
+### Implemented native application settlement increment (T021 remains open)
+
+A completed specialist facade contributes `elsa.specialist.applied/1` in its native checkpoint.
+Final enrichment validation requires the exact deterministic responsibility. The handler requires a
+physically committed ordinary-scope outbox source, current delivery claim, canonical payload, matching
+completed native parent/child/artifact and authenticated accepted receipt. It rechecks the physical
+claim after receipt reads and before the metadata-only journal write. Source context alone and an
+overlay/intent-only read are insufficient.
+
+`SpecialistTurnApplication` records identity, child, native completion time and source ID/fingerprint.
+The optional copied Applications collection is bounded to64 exact native deliveries, including the
+original legacy delivery. Equivalent notifications are idempotent; source conflicts refuse. Accepted
+request/result/session, budget/usage and conversation ownership/revision are unchanged. No relational
+model change is required. This is source-native application settlement; cancellation/tombstones,
+retention and complete durable runtime/outbox package qualification remain open.
+
+### Implemented cancellation/operation-gate increment (M3 remains open)
+
+`elsa_specialist_operations` retains full logical pins and up to64 exact-parent cancellation decisions,
+including pre-admission tombstones with no fake protected turn. Memory uses its existing lock; EF Stage,
+Claim and Cancel serialize on this row before changing the turn. Confirmed gate CAS/insert conflicts can
+retry; an uncertain commit cannot. Turn CAS decides acceptance versus cancellation. A cancelled old
+parent does not invalidate another delivery's generation. Unknown ownership can be explicitly released
+without changing the previous accepted reference or a later turn's owner. Reservations remain retained.
+
+The native producer contributes/final-validates deterministic cancel responsibility for cancelled
+facades, including scheduled pre-entry state without inputs/private handle. The source-owned handler
+reopens the physical outbox claim in ordinary scope, validates exact committed native cancellation and
+canonical payload, then rechecks the physical claim before Cancel. The receipt distinguishes
+CancelledBeforeAdmission, Cancelled, AlreadyAccepted, AlreadyTerminal and OtherDeliveryUnchanged.
+Equivalent native responsibility keeps its first source; changed canonical content conflicts.
+
+A delayed cancel notification cannot be the only pre-dispatch guard. Native binding is rechecked after
+journal dispatch before client construction and before/after each physical reservation. Four red cases
+reproduced the original after-claim notification-delay gap; the expanded native suite closes it while
+retaining already-admitted exposure. This does not promise an atomic remote-model cancellation.
+
+The four module Initial migrations were regenerated under the pre-GA policy. Source/native/database
+receipts and complete qualification are separate; this change alone does not establish deployed-data
+upgrade compatibility, independent-process durable runtime/outbox recovery or complete M3 acceptance.
