@@ -30,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   flushSync(() => root.unmount());
   container.remove();
+  window.history.replaceState({}, "", "/");
   vi.clearAllMocks();
 });
 
@@ -108,7 +109,8 @@ describe("WorkflowExecutables", () => {
     expect(published?.getAttribute("title")).toBe(publishedAt.toLocaleString());
   });
 
-  it("shows a primary empty-state action and the pager footer when there are no executables", async () => {
+  it("shows a primary empty-state action and preserves the backend when opening definitions", async () => {
+    window.history.replaceState({}, "", "/workflows/executables?backend=runtime");
     vi.mocked(listExecutables).mockResolvedValue([]);
     vi.mocked(listDefinitions).mockResolvedValue({ definitions: [], page: 1, pageSize: 100, totalCount: 0 });
 
@@ -124,6 +126,11 @@ describe("WorkflowExecutables", () => {
     expect(container.textContent).toContain("No workflow executables");
     expect(container.textContent).toContain("Open workflow definitions");
     expect(container.querySelector('footer[aria-label="Workflow executable pagination"]')?.textContent).toContain("Showing 0-0 of 0");
+    const open = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Open workflow definitions");
+    expect(open).toBeTruthy();
+    open!.click();
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(window.location.search).toBe("?backend=runtime");
   });
 });
 

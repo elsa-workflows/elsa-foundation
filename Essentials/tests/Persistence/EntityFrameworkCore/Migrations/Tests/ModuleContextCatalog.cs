@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Connections.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
@@ -27,6 +28,7 @@ internal static class ModuleContextCatalog
     [
         typeof(ActivitiesDesignDbContext).Assembly,
         typeof(ClusterMembershipDbContext).Assembly,
+        typeof(ConnectionsDbContext).Assembly,
         typeof(DataProtectionKeysDbContext).Assembly,
         typeof(OpenTelemetryDbContext).Assembly,
         typeof(StructuredLogsDbContext).Assembly,
@@ -72,7 +74,7 @@ internal static class ModuleContextCatalog
     /// </summary>
     public static readonly string[] OrdinalModules =
     [
-        "ActivitiesDesign", "ClusterMembership", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
     ];
 

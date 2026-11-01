@@ -174,7 +174,9 @@ public sealed class PackageMaintenanceTests
         var result = await Prune(host, new JsonObject());
         Assert.Equal("Unknown", (string?)result["protectionKnowledge"]);
         Assert.False((bool)result["inventoryComplete"]!);
-        Assert.Contains(result["diagnostics"]!.AsArray(), diagnostic => (string?)diagnostic!["code"] == "EnrollmentRequired");
+        // Both refusals preserve the ordinary store; Linux can refuse filesystem inspection first.
+        Assert.Contains(result["diagnostics"]!.AsArray(), diagnostic => (string?)diagnostic!["code"] == "EnrollmentRequired"
+            || OperatingSystem.IsLinux() && (string?)diagnostic!["code"] == "UnsupportedFilesystem");
         Assert.Empty(Directory.EnumerateFiles(host.Root, "*.ledger*", SearchOption.AllDirectories));
     }
 

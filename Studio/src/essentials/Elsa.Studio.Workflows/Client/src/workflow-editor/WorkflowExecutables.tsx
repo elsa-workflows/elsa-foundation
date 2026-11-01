@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
@@ -42,11 +43,11 @@ import { WorkflowListIdentifiers, type WorkflowListIdentifier } from "./Workflow
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
-  window.history.pushState({}, "", `/workflows/executables/${encodeURIComponent(artifactId)}${query}`);
+  window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/executables/${encodeURIComponent(artifactId)}${query}`));
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
+export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
@@ -146,7 +147,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   };
 
   const openDefinitions = () => {
-    window.history.pushState({}, "", "/workflows/definitions");
+    window.history.pushState({}, "", qualifyStudioBackendPath("/workflows/definitions"));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
@@ -208,10 +209,10 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <WfEmptyState headingLevel={3}
             icon={<Play size={22} />}
             title="No workflow executables"
-            description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
+            description={definitionFilter ? "No executables match this definition filter." : "This backend has no executables in the selected scope."}
             action={definitionFilter
               ? <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear filter</StudioButton>
-              : <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton>}
+              : canBrowseDefinitions ? <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton> : undefined}
           />
         )
       ) : null}
@@ -386,7 +387,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
   const definitionIds = getExecutableDefinitionIds(executable);
 
   const openSourceDefinition = (definitionId: string) => {
-    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
@@ -504,7 +505,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   ].filter((command): command is string => Boolean(command));
 
   const openExecutablePage = () => {
-    window.history.pushState({}, "", `/workflows/executables?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/executables?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 

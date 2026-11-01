@@ -119,6 +119,7 @@ not automatic constitution violations.
 |---|---|
 | Connections core (provider-neutral contracts — repository, manager, resolver, credential sources, auth schemes, `SensitiveValue`) | [`Essentials/src/Connections/Core/EXTENSION_POINTS.md`](Essentials/src/Connections/Core/EXTENSION_POINTS.md) |
 | Connections (default services, http type, built-in schemes, named credentials) | [`Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md`](Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md) |
+| Connections EF persistence (scoped metadata, version checks, secret references and consumer-owned contexts) | [`Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Connections API (CRUD, picker, OAuth callback) | [`Essentials/src/Connections/Api/EXTENSION_POINTS.md`](Essentials/src/Connections/Api/EXTENSION_POINTS.md) |
 | Connections Design (publish gate) | [`Essentials/src/Connections/Design/EXTENSION_POINTS.md`](Essentials/src/Connections/Design/EXTENSION_POINTS.md) |
 | Connections Workflows (http applicator + secret mask) | [`Essentials/src/Connections/Workflows/EXTENSION_POINTS.md`](Essentials/src/Connections/Workflows/EXTENSION_POINTS.md) |
@@ -218,3 +219,9 @@ not automatic constitution violations.
 - §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section); layer badge convention; Known implementations with intra/cross-domain tags; mandatory maintenance obligation.
 - §2.22.2 — this repo-wide extension-points index (pure links, no inline entries).
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).
+
+
+## Studio backend connections
+
+- [Hosting backend connection composition and SDK seams](Studio/src/essentials/Elsa.Studio.Hosting/README.md#backend-connections)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)

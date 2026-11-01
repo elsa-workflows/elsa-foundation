@@ -93,3 +93,11 @@ All store/source contracts are overridable — see [`EXTENSION_POINTS.md`](EXTEN
 - Domain extension points: [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md).
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Migration evidence: [`../../../../docs/reports/structured-logs-minimal-api-migration-2026-08.md`](../../../../../docs/reports/structured-logs-minimal-api-migration-2026-08.md).
+
+
+## Cross-domain contributions
+
+`StructuredLogsApiCapabilitySource` implements the API Capabilities `IApiCapabilitySource` seam. It advertises
+`elsa.api.structured-logs` contract 1 with shell-relative links for the configured recent, sources and stream routes.
+The [owning seam catalog](../../../Api/Capabilities/EXTENSION_POINTS.md) defines registration and compatibility;
+this declaration neither grants permissions nor changes feature enablement.

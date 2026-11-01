@@ -27,6 +27,7 @@ export function createStudioAuthManager(config: StudioRuntimeConfig, baseUrl: st
 
   return createBackendAuthProviderManager({
     baseUrl,
+    shellRelative: true,
     tokenEndpoint: config.auth?.tokenEndpoint,
     refreshEndpoint: config.auth?.refreshEndpoint
   });

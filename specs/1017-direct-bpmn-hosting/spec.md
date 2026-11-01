@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Implemented — prepared in this implementation PR, effective only upon merge; current-source affected runtime/host/saved-Studio qualification is evidenced, while review/CI/protected delivery and resulting-main gates remain open.
+**Status**: In progress — current main077 Studio/backend changes require affected qualification before approved publication; no runtime/delivery evidence is relabelled.
 
 **Delivery**: Fifteen complete-PR rounds are recorded. Review 15 was not clean; its material-boundary S1 is corrected and qualified. Final authorized round 16 remains reserved for Code Review on the published corrected head. The existing changes request explicitly requires history cleanup, and its pending owner no-force exception card remains unresolved. The draft remote head is stillf154; branch publication, current required CI, protected merge and resulting-main verification are not complete. [Current qualification](evidence/main-adoption/0d6db68a3/README.md) preserves exact sources and all original checkpoints/frozen authoring. The full 9,410-file archive and source/raw follow-ups use only the approved existing release; no new release/tag.
 
@@ -169,3 +169,6 @@ As an existing user, I can retain published definitions and saved executions, up
 
 
 [Current-main adoption qualification](evidence/main-adoption/0d6db68a3/README.md) completes on executing products 6a990/base 0d6: nine whole backend projects7,207 cases pass, all discovery accounted; actual host 46 and both saved-Studio families/four new completed runs/nine old observations/twelve stores/13 controls pass. Frontend: 14 unit and 36 browser cases and maps/tier/size guards pass;104 originals remain unchanged. The 154-file proof/source archive is published, downloaded and member-verified. Initial harness/restore/screenshot-output diagnostics are retained. Older native 21/ABI 18 keep their own sources; current required CI remains due. T043 is evidenced; T044 prepares Implemented effective on merge. Fifteen full reviews complete,15 S1 fixed/qualified; final round 16 reserved for Code Review after corrected publication. Existing history card, draftf154/changes request, exact-head required CI, protected merge/resulting-main and wider acceptance/deferrals remain.
+
+
+Owner approved the existing history-cleanup/no-force exception and resumed the goal. Main077 (connection persistence, identity presentation and Studio backend selection/capabilities) is adopted normally. Prior products6a990 results retain their exact source. Affected host/Studio and graph/migration/map qualification reopens; final16 remains reserved for Code Review after approved publication. Broader acceptance and all merge safeguards remain.

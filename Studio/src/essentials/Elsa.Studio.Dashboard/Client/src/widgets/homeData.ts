@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { requestStudioNavigation, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 export interface HomeWorkflowSummary {
@@ -165,7 +166,7 @@ export async function homeHasRun(api: ElsaStudioModuleApi, signal: AbortSignal) 
 
 export function navigateStudioPath(href: string) {
   if (!requestStudioNavigation(window.location.pathname, href)) return false;
-  window.history.pushState(window.history.state, "", href);
+  window.history.pushState(window.history.state, "", qualifyStudioBackendPath(href));
   window.dispatchEvent(new PopStateEvent("popstate"));
   return true;
 }

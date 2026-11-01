@@ -486,8 +486,7 @@ describe("Activity Definitions experience", () => {
     expect(remounted.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
     expect(controlByLabel<HTMLInputElement>(remounted.container, "Provider key").value).toBe("visual-graph");
     expect(controlByLabel<HTMLSelectElement>(remounted.container, "Rows per page").value).toBe("10");
-    const resumedRequests = getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=unmounted-auth-cursor"));
-    expect(resumedRequests.some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10"))).toBe(true);
+    await waitFor(() => expect(getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=unmounted-auth-cursor")).some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10"))).toBe(true));
 
     resolveAuthorized(page([definition({ displayName: "Authorized after remount" })]));
     await waitFor(() => expect(`${remounted.container.textContent} ${getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).join(" | ")}`).toContain("Authorized after remount"));

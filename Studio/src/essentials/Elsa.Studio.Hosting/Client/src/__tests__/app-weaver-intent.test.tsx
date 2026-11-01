@@ -38,6 +38,7 @@ describe("shell-owned Weaver intent", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.endsWith("/capabilities")) return Response.json({capabilities:[{id:"elsa.api.agent",contractVersion:"1",links:[]}]});
       if (url.includes("/_elsa/studio/modules")) return Response.json({ hostVersion: "1.0.0", sdkVersion: "1.0.0", modules: [], diagnostics: [] });
       if (url.includes("/_elsa/module-management/registry")) return Response.json({ modules: [], diagnostics: [] });
       return Response.json({ status: "Healthy" });

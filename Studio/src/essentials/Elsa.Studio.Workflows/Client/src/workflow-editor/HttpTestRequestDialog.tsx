@@ -47,7 +47,8 @@ export function HttpTestRequestDialog({
   authoredActivityId,
   onClose,
   onPublishDraft,
-  onOpenPublishedVersion
+  onOpenPublishedVersion,
+  publicationUnavailableReason
 }: {
   context: StudioEndpointContext;
   open: boolean;
@@ -56,6 +57,7 @@ export function HttpTestRequestDialog({
   onClose(): void;
   onPublishDraft?(): void;
   onOpenPublishedVersion?(): void;
+  publicationUnavailableReason?: string;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
@@ -265,9 +267,9 @@ export function HttpTestRequestDialog({
               headingLevel={3}
               tone="danger"
               icon={<AlertCircle size={18} aria-hidden="true" />}
-              title={loadFailure === "publish-required" ? "Publish this workflow" : "Cannot build a test request"}
-              description={loadError}
-              actions={httpTestRecoveryAction({ loadFailure, onPublishDraft, onOpenPublishedVersion })}
+              title={loadFailure === "publish-required" ? publicationUnavailableReason ? "Published endpoint unavailable" : "Publish this workflow" : "Cannot build a test request"}
+              description={loadFailure === "publish-required" && publicationUnavailableReason ? publicationUnavailableReason : loadError}
+              actions={httpTestRecoveryAction({ loadFailure, onPublishDraft, onOpenPublishedVersion, publicationUnavailableReason })}
             />
           ) : null}
           {loadError && loadFailure === "error" ? <p className="wf-http-test-error" role="alert">{loadError}</p> : null}
@@ -348,13 +350,15 @@ export function HttpTestRequestDialog({
 function httpTestRecoveryAction({
   loadFailure,
   onPublishDraft,
-  onOpenPublishedVersion
+  onOpenPublishedVersion,
+  publicationUnavailableReason
 }: {
   loadFailure: HttpTestLoadFailure;
   onPublishDraft?(): void;
   onOpenPublishedVersion?(): void;
+  publicationUnavailableReason?: string;
 }) {
-  if (onPublishDraft) {
+  if (onPublishDraft && !publicationUnavailableReason) {
     return <StudioButton variant="primary" onClick={onPublishDraft}>Publish draft</StudioButton>;
   }
   if (onOpenPublishedVersion && loadFailure === "missing-literals") {

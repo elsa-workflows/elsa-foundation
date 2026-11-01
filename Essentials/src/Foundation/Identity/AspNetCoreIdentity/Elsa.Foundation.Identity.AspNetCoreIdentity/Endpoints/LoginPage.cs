@@ -11,8 +11,11 @@ public static class LoginPage
 
     /// <summary>Renders configured presentation or invokes its single host replacement. The return URL must already be sanitized.</summary>
     public static string Render(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options)
+        => RenderInShell(returnUrl,showError,antiforgeryToken,options,"");
+
+    internal static string RenderInShell(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options, string pathBase)
     {
-        var form = RenderForm(returnUrl, showError, antiforgeryToken);
+        var form = RenderForm(returnUrl, showError, antiforgeryToken, pathBase);
         if (options.Renderer is { } renderer)
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
 
@@ -20,8 +23,9 @@ public static class LoginPage
         var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" ? options.Layout : "split";
         var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" ? options.Palette : "linen";
         var artwork = options.Artwork is "ember" or "tidal" or "daybreak" or "canopy" ? options.Artwork : "ember";
-        var image = SafeUrl(options.ImageUrl) ?? $"/_elsa/identity/login-assets/{artwork}.jpg";
-        var logo = SafeUrl(options.LogoUrl) is { } logoUrl ? $"<img class=\"logo\" src=\"{Encode(logoUrl)}\" alt=\"\" />" : "<span class=\"monogram\" aria-hidden=\"true\">✦</span>";
+        var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
+        var logoUrl = SafeUrl(options.LogoUrl) ?? $"{pathBase}/_elsa/identity/login-assets/elsa-logo.png";
+        var logo = $"<img class=\"logo\" src=\"{Encode(logoUrl)}\" alt=\"\" />";
         var links = string.Join("", new[] { (options.HelpUrl, "Help"), (options.PrivacyUrl, "Privacy") }
             .Where(link => SafeUrl(link.Item1) is not null)
             .Select(link => $"<a href=\"{Encode(SafeUrl(link.Item1))}\">{link.Item2}</a>"));
@@ -52,8 +56,7 @@ public static class LoginPage
             .story p { max-width:370px; font-size:14px; line-height:1.7; margin:0; }
             .welcome { display:flex; flex-direction:column; justify-content:center; padding:clamp(24px,5vw,80px); }
             .brand { display:flex; align-items:center; gap:12px; font-size:14px; font-weight:650; overflow-wrap:anywhere; margin-bottom:64px; }
-            .logo,.monogram { width:34px; height:34px; object-fit:contain; flex-shrink:0; }
-            .monogram { display:grid; place-items:center; border:1px solid var(--line); border-radius:11px; color:var(--accent); font-size:24px; }
+            .logo { width:34px; height:34px; object-fit:contain; flex-shrink:0; }
             .form-wrap { width:100%; max-width:360px; margin:auto; }
             h1 { margin:0 0 10px; font-size:30px; font-weight:550; letter-spacing:-.035em; }
             .subtitle { margin:0 0 32px; color:var(--muted); font-size:14px; line-height:1.6; }
@@ -120,12 +123,12 @@ public static class LoginPage
         """;
     }
 
-    private static string RenderForm(string returnUrl, bool showError, string? token)
+    private static string RenderForm(string returnUrl, bool showError, string? token, string pathBase)
     {
         var antiforgery = string.IsNullOrEmpty(token) ? "" : $"<input type=\"hidden\" name=\"{AspNetCoreIdentityDefaults.AntiforgeryFieldName}\" value=\"{WebUtility.HtmlEncode(token)}\" />";
         var error = showError ? "<p class=\"error\" role=\"alert\">Invalid username or password.</p>" : "";
         return $$"""
-        <form method="post" action="/{{AspNetCoreIdentityDefaults.LoginRoute}}">
+        <form method="post" action="{{WebUtility.HtmlEncode(pathBase)}}/{{AspNetCoreIdentityDefaults.LoginRoute}}">
           {{error}}{{antiforgery}}
           <input type="hidden" name="returnUrl" value="{{WebUtility.HtmlEncode(returnUrl)}}" />
           <label for="username">Username</label>

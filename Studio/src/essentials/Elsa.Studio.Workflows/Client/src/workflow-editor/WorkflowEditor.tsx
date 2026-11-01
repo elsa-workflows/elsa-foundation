@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -157,6 +158,7 @@ export function WorkflowEditor({
   testStimulusEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
+  operations,
   onBack
 }: {
   context: StudioEndpointContext;
@@ -172,8 +174,10 @@ export function WorkflowEditor({
   testStimulusEditors: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
+  operations?: {publishing:import("@elsa-workflows/studio-sdk").StudioContributionAvailability;testRuns:import("@elsa-workflows/studio-sdk").StudioContributionAvailability};
   onBack(): void;
 }) {
+  const publicationUnavailableReason = operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined;
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
   const [templatesAvailable, setTemplatesAvailable] = useState(false);
@@ -345,7 +349,7 @@ export function WorkflowEditor({
     return groupActivityPalette(matches);
   }, [paletteCatalog, paletteSearch, paletteGroups]);
   const busy = operation !== "idle" || editorDoc.pinned;
-  const canRunTest = !!draft?.state.rootActivity && !busy;
+  const canRunTest = !!draft?.state.rootActivity && !busy && operations?.testRuns.state !== "unavailable";
 
   // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
   // backend advertises the relation), and combine them with the draft's reconciled errors and
@@ -1182,7 +1186,7 @@ export function WorkflowEditor({
   const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
   const openWorkflowRun = (workflowExecutionId: string, initialTab?: "issues") => {
     const tabQuery = initialTab ? `?tab=${encodeURIComponent(initialTab)}` : "";
-    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}${tabQuery}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}${tabQuery}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
   const contributedPanelTabs = availableDesignerPanels
@@ -1384,11 +1388,12 @@ export function WorkflowEditor({
             if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); }
           }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
         }}
-        onSave={() => { if (documentAdapter) void flushDefinitionMeta().then(saved => { if (saved) void save(); }); else void save(); }}
-        onPublish={mode => void preparePublication(mode)}
-        onRun={() => void run()}
+        onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
+        publicationUnavailableReason={publicationUnavailableReason}
+        onPublish={mode => { if (operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
+        onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
-        runTitle={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
+        runTitle={operations?.testRuns.state === "unavailable" ? operations.testRuns.reason ?? "Test runs are unavailable on this backend." : draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
         runStatus={renderedTestRun ? (
           <AttachedTestRunStatus
             view={renderedTestRun}
@@ -1519,6 +1524,7 @@ export function WorkflowEditor({
             artifactId={publishedRuntimeExecutable?.artifactId ?? null}
             authoredActivityId={httpTestRequestActivityId}
             onClose={() => setHttpTestRequestActivityId(null)}
+            publicationUnavailableReason={publicationUnavailableReason}
             onPublishDraft={() => {
               setHttpTestRequestActivityId(null);
               void preparePublication("review");
