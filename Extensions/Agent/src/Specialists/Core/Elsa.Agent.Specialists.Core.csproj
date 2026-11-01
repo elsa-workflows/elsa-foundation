@@ -8,5 +8,6 @@
     <InternalsVisibleTo Include="Elsa.Agent.Specialists.Design" />
     <InternalsVisibleTo Include="Elsa.Agent.Specialists" />
     <InternalsVisibleTo Include="Elsa.Agent.Specialists.Tests" />
+    <InternalsVisibleTo Include="Elsa.Agent.Specialists.Persistence.EntityFrameworkCore" />
   </ItemGroup>
 </Project>

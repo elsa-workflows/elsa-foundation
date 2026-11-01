@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Models;
 namespace Elsa.Agent.Specialists.Core.Exceptions;
 
 /// <summary>A refused or unconfirmed journal operation. It never authorizes another provider request.</summary>
@@ -7,5 +8,5 @@ public sealed class SpecialistJournalException(string code, string? handle, stri
     /// <summary>Stable specialist failure family, without provider payload or credentials.</summary>
     public string Code { get; } = code;
     /// <summary>The canonical opaque turn handle when available.</summary>
-    public string? Handle { get; } = handle;
+    public string? Handle { get; } = SpecialistTurnDocumentRules.IsToken(handle) ? handle : null;
 }

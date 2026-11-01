@@ -27,9 +27,9 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
     public ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(candidate);
         EnsureScope(candidate.Identity);
-        if (candidate.Key != SpecialistTurnDocument.CalculateOperationKey(candidate.Identity))
-            throw new SpecialistJournalException("specialist.journal.identity", candidate.Handle, "The specialist operation key does not match its native scope and operation.", new InvalidDataException("The native operation index is invalid."));
+        ValidateRecord(candidate, prepared: true);
         lock (gate)
         {
             if (keys.TryGetValue(candidate.Key, out var handle))
@@ -60,7 +60,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
             var row = Find(handle, identity);
             if (row is null || row.Status != SpecialistTurnStatus.Prepared || now >= row.Deadline) return ValueTask.FromResult<SpecialistTurnDocument?>(null);
             row = row with { Status = SpecialistTurnStatus.Claimed, ChildInvocationId = childInvocationId, Fence = fence };
-            rows[handle] = row;
+            Save(row);
             return ValueTask.FromResult<SpecialistTurnDocument?>(row);
         }
     }
@@ -72,7 +72,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         {
             var row = Find(handle, identity);
             if (row is null || row.Status != SpecialistTurnStatus.Claimed || row.Fence != fence || now >= row.Deadline) return ValueTask.FromResult(false);
-            rows[handle] = row with { Status = SpecialistTurnStatus.Dispatching };
+            Save(row with { Status = SpecialistTurnStatus.Dispatching });
             return ValueTask.FromResult(true);
         }
     }
@@ -84,7 +84,7 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         {
             var row = Find(handle, identity);
             if (row is null || row.Status != SpecialistTurnStatus.Dispatching || row.Fence != fence || now >= row.Deadline) return ValueTask.FromResult(false);
-            rows[handle] = row with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult };
+            Save(row with { Status = SpecialistTurnStatus.Accepted, ProtectedResult = protectedResult });
             return ValueTask.FromResult(true);
         }
     }
@@ -96,9 +96,29 @@ internal sealed class InMemorySpecialistTurnStore(IPersistenceAccessContextAcces
         {
             var row = Find(handle, identity);
             if (row is not null && row.Fence == fence && row.Status is SpecialistTurnStatus.Claimed or SpecialistTurnStatus.Dispatching)
-                rows[handle] = row with { Status = outcomeUnknown ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Failed, FailureCode = code };
+                Save(row with { Status = outcomeUnknown ? SpecialistTurnStatus.OutcomeUnknown : SpecialistTurnStatus.Failed, FailureCode = code });
         }
         return ValueTask.CompletedTask;
+    }
+
+    private void Save(SpecialistTurnDocument document)
+    {
+        ValidateRecord(document, prepared: false);
+        rows[document.Handle] = document;
+    }
+
+    private static void ValidateRecord(SpecialistTurnDocument document, bool prepared)
+    {
+        try
+        {
+            if (prepared) SpecialistTurnDocumentRules.Prepared(document);
+            else SpecialistTurnDocumentRules.Validate(document);
+        }
+        catch (SpecialistJournalException) { throw; }
+        catch (Exception exception)
+        {
+            throw new SpecialistJournalException("specialist.journal.record", document.Handle, "The specialist journal record is invalid.", exception);
+        }
     }
 
     private SpecialistTurnDocument? Find(string handle, SpecialistInvocationIdentity identity)

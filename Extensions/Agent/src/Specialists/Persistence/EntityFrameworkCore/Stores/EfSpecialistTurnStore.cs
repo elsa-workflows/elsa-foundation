@@ -1,3 +1,4 @@
+using static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocumentRules;
 using Elsa.Agent.Specialists.Core.Exceptions;
 using System.Data.Common;
 using System.Security.Cryptography;
@@ -70,12 +71,11 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
 
     public async ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(candidate);
         try
         {
             var scope = Scope(candidate.Identity);
-            Validate(candidate);
-            if (candidate.Status != SpecialistTurnStatus.Prepared || candidate.Fence is not null || candidate.ChildInvocationId is not null || candidate.ProtectedResult is not null || candidate.FailureCode is not null)
-                throw new InvalidOperationException("Only a prepared specialist operation can be staged.");
+            Prepared(candidate);
             try
             {
                 await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
@@ -218,23 +218,6 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         return document;
     }
 
-    private static void Validate(SpecialistTurnDocument document)
-    {
-        ArgumentNullException.ThrowIfNull(document.Identity);
-        Token(document.Handle); Token(document.Key); Token(document.RequestHash);
-        if (document.Key != SpecialistTurnDocument.CalculateOperationKey(document.Identity))
-            throw new InvalidDataException("The specialist operation key does not match its native scope and operation.");
-        if (!Enum.IsDefined(document.Status) || string.IsNullOrWhiteSpace(document.ProtectedRequest) ||
-            document.Status == SpecialistTurnStatus.Accepted && string.IsNullOrWhiteSpace(document.ProtectedResult) ||
-            document.Status != SpecialistTurnStatus.Accepted && document.ProtectedResult is not null ||
-            document.Status == SpecialistTurnStatus.Prepared && (document.ChildInvocationId is not null || document.Fence is not null) ||
-            document.Status != SpecialistTurnStatus.Prepared && (string.IsNullOrWhiteSpace(document.ChildInvocationId) || string.IsNullOrWhiteSpace(document.Fence)) ||
-            document.Status is SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown && string.IsNullOrWhiteSpace(document.FailureCode) ||
-            document.Status is not (SpecialistTurnStatus.Failed or SpecialistTurnStatus.OutcomeUnknown) && document.FailureCode is not null)
-            throw new InvalidDataException("The specialist journal lifecycle record is invalid.");
-        if (document.Fence is { } fence) Fence(fence);
-    }
-
     private static string Serialize(SpecialistTurnDocument document)
     {
         var payload = JsonSerializer.Serialize(document, Json);
@@ -243,17 +226,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         return payload;
     }
     private static SpecialistTurnDocument Clone(SpecialistTurnDocument document) => JsonSerializer.Deserialize<SpecialistTurnDocument>(Serialize(document), Json)!;
-    private static void Token(string value)
-    {
-        if (value is null || value.Length != 64 || value.Any(c => c is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
-            throw new ArgumentException("The specialist journal identity is not a canonical opaque token.");
-    }
-    private static void Fence(string value)
-    {
-        if (value is null || value.Length is < 1 or > 64 || value.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')))
-            throw new ArgumentException("The specialist journal fence is invalid.");
-    }
     private static SpecialistJournalException Failure(Exception exception, string? handle = null) =>
-        new("specialist.journal.store", handle is { Length: 64 } && handle.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') ? handle : null,
+        new("specialist.journal.store", handle,
             "The specialist journal store could not confirm its conditional operation.", exception);
 }

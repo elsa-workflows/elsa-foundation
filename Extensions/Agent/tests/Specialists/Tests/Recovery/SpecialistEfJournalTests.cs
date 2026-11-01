@@ -29,6 +29,31 @@ public sealed class SpecialistEfJournalTests
     private static SpecialistInvocationIdentity Identity => new("tenant", "tenant", "workflow", "activity", "operation", "artifact", "hash", "version", "template");
     private static SpecialistTurnDocument Document => new(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));
 
+    [Theory]
+    [InlineData(SpecialistTurnStatus.Prepared)]
+    [InlineData(SpecialistTurnStatus.Dispatching)]
+    public async Task Development_staging_cannot_forge_claim_or_dispatch_state(SpecialistTurnStatus status)
+    {
+        var store = new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document with
+            { Status = status, ChildInvocationId = "forged-child", Fence = "forged-fence" }, CancellationToken.None));
+        Assert.Null(await store.ReadAsync(Document.Handle, Identity, CancellationToken.None));
+        Assert.False(await store.AcceptAsync(Document.Handle, Identity, "forged-fence", "forged-acceptance", Now, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Noncanonical_handles_cannot_enter_development_storage_or_its_safe_exception_context(bool validKey)
+    {
+        var store = new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new());
+        var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document with
+            { Handle = "private value", Key = validKey ? Document.Key : new string('d', 64) }, CancellationToken.None));
+        Assert.Null(error.Handle);
+        Assert.DoesNotContain("private", error.Message, StringComparison.Ordinal);
+        Assert.Null(await store.ReadAsync("private value", Identity, CancellationToken.None));
+    }
+
     [Fact]
     public async Task Scoped_development_adapters_share_one_host_lifetime_journal_without_capturing_a_scoped_accessor()
     {
