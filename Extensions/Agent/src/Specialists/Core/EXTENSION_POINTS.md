@@ -55,3 +55,8 @@ The runtime authenticates the opaque protected material before using it.
 `SpecialistJournalCapabilities` describes the configured backend, separately from reachability,
 credential durability or end-to-end recovery qualification. This initial conditional turn boundary
 does not yet provide conversation admission, delivery rebinding, reservations or retention controls.
+
+Storage, persisted-record and scope failures cross the journal boundary as `SpecialistJournalException`,
+with a safe failure code, canonical opaque handle when available and the original `InnerException`.
+Cancellation remains cancellation. An exception means the transition is unconfirmed; it never permits
+another inference request. Callers do not infer remote absence from a failed journal write.

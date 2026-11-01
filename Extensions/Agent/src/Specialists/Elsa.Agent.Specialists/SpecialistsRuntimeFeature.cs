@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Agent.Specialists.Core.DependencyInjection;
 using Elsa.Agent.Specialists.Core.Contracts;
 using CShells.Features;
@@ -66,7 +67,9 @@ public class SpecialistsInMemoryJournalFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        services.TryAddSpecialistTurnStore<InMemorySpecialistTurnStore>(ServiceLifetime.Singleton);
+        services.AddPersistenceCore();
+        services.TryAddSingleton<InMemorySpecialistTurnState>();
+        services.TryAddSpecialistTurnStore<InMemorySpecialistTurnStore>(ServiceLifetime.Scoped);
     }
 }
 

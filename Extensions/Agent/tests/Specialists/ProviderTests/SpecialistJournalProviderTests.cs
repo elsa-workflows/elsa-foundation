@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Exceptions;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore;
@@ -67,7 +68,7 @@ public sealed class SpecialistJournalProviderTests
         Assert.Equal("opaque-protected-result-and-session", accepted.ProtectedResult);
         Assert.Equal(candidate.Deadline, accepted.Deadline);
         Assert.Equal(accepted, await recovered.StageAsync(candidate with { Handle = new string('c', 64), Deadline = now.AddHours(1) }, CancellationToken.None));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await recovered.StageAsync(candidate with { RequestHash = new string('d', 64) }, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await recovered.StageAsync(candidate with { RequestHash = new string('d', 64) }, CancellationToken.None));
         Assert.Null(await recovered.ReadAsync(candidate.Handle, identity with { ActivityExecutionId = "foreign-attempt" }, CancellationToken.None));
         Assert.Null(await recovered.ClaimAsync(candidate.Handle, identity, "replacement", "replacement", now, CancellationToken.None));
 

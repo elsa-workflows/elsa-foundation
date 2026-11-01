@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Exceptions;
 using Elsa.Agent.Specialists.Core.Contracts;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -21,7 +22,7 @@ public sealed class SpecialistJournalTests
     public async Task Accepted_business_result_and_bound_session_share_the_same_protected_journal_commit()
     {
         await using var services = Services();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var journal = Journal(store, services);
         var request = Request();
         var now = DateTimeOffset.UtcNow;
@@ -48,7 +49,7 @@ public sealed class SpecialistJournalTests
     public async Task Repeated_staging_preserves_deadline_and_encrypts_business_material()
     {
         await using var services = Services();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var journal = Journal(store, services);
         var request = Request();
         var now = DateTimeOffset.UtcNow;
@@ -60,14 +61,14 @@ public sealed class SpecialistJournalTests
         Assert.Equal("very-private-brief", restored.Inputs.GetProperty("Brief").GetString());
         Assert.DoesNotContain("very-private", JsonSerializer.Serialize(document), StringComparison.Ordinal);
         var changed = request with { Inputs = Json("{\"Brief\":\"changed\"}") };
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await journal.StageAsync(changed, now, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await journal.StageAsync(changed, now, CancellationToken.None));
     }
 
     [Fact]
     public async Task Only_one_worker_can_claim_and_only_its_live_fence_can_accept()
     {
         await using var services = Services();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var journal = Journal(store, services);
         var request = Request();
         var now = DateTimeOffset.UtcNow;
@@ -92,7 +93,7 @@ public sealed class SpecialistJournalTests
     public async Task Expired_claims_and_late_acceptance_are_refused()
     {
         await using var services = Services();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var journal = Journal(store, services);
         var request = Request();
         var now = DateTimeOffset.UtcNow;
@@ -109,7 +110,7 @@ public sealed class SpecialistJournalTests
     public async Task Tenant_partition_and_native_identity_are_independent_guards()
     {
         await using var services = Services();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var request = Request();
         var journal = Journal(store, services);
         var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
@@ -123,14 +124,14 @@ public sealed class SpecialistJournalTests
     {
         await using var services = Services();
         var request = Request();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var journal = Journal(store, services);
         var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
         var (document, _) = await journal.ReadAsync(handle, request.Identity, CancellationToken.None);
         var protector = services.GetRequiredService<ISecretValueProtector>();
         var payload = System.Text.Json.Nodes.JsonNode.Parse(protector.Unprotect(document.ProtectedRequest))!.AsObject();
         payload["purpose"] = "elsa.specialist.turn/result/1";
-        var substituted = new InMemorySpecialistTurnStore();
+        var substituted = Memory();
         await substituted.StageAsync(document with { ProtectedRequest = protector.Protect(payload.ToJsonString()) }, CancellationToken.None);
         var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await Journal(substituted, services).ReadAsync(handle, request.Identity, CancellationToken.None));
         Assert.Equal("specialist.journal.protection", exception.Code);
@@ -141,11 +142,11 @@ public sealed class SpecialistJournalTests
     {
         await using var services = Services();
         var request = Request();
-        var store = new InMemorySpecialistTurnStore();
+        var store = Memory();
         var journal = Journal(store, services);
         var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
         var (document, _) = await journal.ReadAsync(handle, request.Identity, CancellationToken.None);
-        var substituted = new InMemorySpecialistTurnStore();
+        var substituted = Memory();
         await substituted.StageAsync(document with { ProtectedRequest = "malformed-private-ciphertext" }, CancellationToken.None);
         var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await Journal(substituted, services).ReadAsync(handle, request.Identity, CancellationToken.None));
         Assert.Equal("specialist.journal.protection", exception.Code);
@@ -158,11 +159,12 @@ public sealed class SpecialistJournalTests
     {
         await using var services = Services();
         var request = Request();
-        var handle = await Journal(new InMemorySpecialistTurnStore(), services).StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
-        var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await Journal(new InMemorySpecialistTurnStore(), services).ReadAsync(handle, request.Identity, CancellationToken.None));
+        var handle = await Journal(Memory(), services).StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
+        var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await Journal(Memory(), services).ReadAsync(handle, request.Identity, CancellationToken.None));
         Assert.Equal("specialist.journal.missing", exception.Code);
     }
 
+    private static InMemorySpecialistTurnStore Memory() => new(new Access("tenant"), new());
     private static ServiceProvider Services()
     {
         var services = new ServiceCollection();

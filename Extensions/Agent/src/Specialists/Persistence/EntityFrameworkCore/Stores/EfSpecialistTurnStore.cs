@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Exceptions;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,90 +20,99 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
     public ValueTask<SpecialistJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var provider = context.Database.ProviderName ?? "unconfigured";
-        var durable = provider is EfProviderNames.SqlServer or EfProviderNames.PostgreSql or EfProviderNames.MySql;
-        if (provider == EfProviderNames.Sqlite)
-        {
-            var connection = context.Database.GetDbConnection();
-            var factory = DbProviderFactories.GetFactory(connection);
-            if (factory is null) return ValueTask.FromResult(new SpecialistJournalCapabilities(provider, false));
-            var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
-            builder.ConnectionString = connection.ConnectionString;
-            var source = new[] { "Data Source", "DataSource", "Filename" }.Select(key => builder.TryGetValue(key, out var value) ? value?.ToString() : null)
-                .FirstOrDefault(value => value is not null) ?? connection.DataSource;
-            var memory = builder.TryGetValue("Mode", out var mode) && string.Equals(mode?.ToString(), "Memory", StringComparison.OrdinalIgnoreCase);
-            var path = source;
-            if (source.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
-            {
-                // SQLite decodes percent escapes in URI keys/values and discards fragments.
-                // An omitted path is a temporary database, even without mode=memory.
-                var uri = source[5..].Split('#', 2)[0];
-                var parts = uri.Split('?', 2);
-                path = parts[0];
-                if (path.StartsWith("//", StringComparison.Ordinal))
-                {
-                    var slash = path.IndexOf('/', 2);
-                    path = slash < 0 ? "" : path[slash..];
-                }
-                path = Uri.UnescapeDataString(path);
-                if (parts.Length == 2)
-                    foreach (var parameter in parts[1].Split('&'))
-                    {
-                        var pair = parameter.Split('=', 2);
-                        var key = Uri.UnescapeDataString(pair[0]);
-                        var value = pair.Length == 2 ? Uri.UnescapeDataString(pair[1]) : "";
-                        memory |= key.Equals("mode", StringComparison.OrdinalIgnoreCase) && value.Equals("memory", StringComparison.OrdinalIgnoreCase);
-                        // Custom VFS persistence is not established by this provider profile.
-                        memory |= key.Equals("vfs", StringComparison.OrdinalIgnoreCase) || key.Contains('\0') || value.Contains('\0');
-                    }
-            }
-            memory |= path.Equals(":memory:", StringComparison.OrdinalIgnoreCase) || path.Contains('\0');
-            durable = !string.IsNullOrWhiteSpace(path) && !memory;
-        }
-        return ValueTask.FromResult(new SpecialistJournalCapabilities(provider, durable));
-    }
-
-    public async ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
-    {
-        var scope = Scope(candidate.Identity);
-        Validate(candidate);
-        if (candidate.Status != SpecialistTurnStatus.Prepared || candidate.Fence is not null || candidate.ChildInvocationId is not null || candidate.ProtectedResult is not null || candidate.FailureCode is not null)
-            throw new InvalidOperationException("Only a prepared specialist operation can be staged.");
         try
         {
-            await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
-            var owned = transaction.Context<DbContext>();
-            var existing = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
-            if (existing is not null) return Replay(existing, candidate);
-            owned.Set<SpecialistTurnRecord>().Add(Row(scope, candidate));
-            await owned.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return Clone(candidate);
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
-        {
-            // Staging has no inference effect. A concurrent insert's exact committed winner is
-            // authoritative; never replace it with this caller's ciphertext, deadline or arguments.
-            var winner = await context.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
-            return winner is null ? throw Failure(exception) : Replay(winner, candidate);
+            var provider = context.Database.ProviderName ?? "unconfigured";
+            var durable = provider is EfProviderNames.SqlServer or EfProviderNames.PostgreSql or EfProviderNames.MySql;
+            if (provider == EfProviderNames.Sqlite)
+            {
+                var connection = context.Database.GetDbConnection();
+                var factory = DbProviderFactories.GetFactory(connection);
+                if (factory is null) return ValueTask.FromResult(new SpecialistJournalCapabilities(provider, false));
+                var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
+                builder.ConnectionString = connection.ConnectionString;
+                var source = new[] { "Data Source", "DataSource", "Filename" }.Select(key => builder.TryGetValue(key, out var value) ? value?.ToString() : null)
+                    .FirstOrDefault(value => value is not null) ?? connection.DataSource;
+                var memory = builder.TryGetValue("Mode", out var mode) && string.Equals(mode?.ToString(), "Memory", StringComparison.OrdinalIgnoreCase);
+                var path = source;
+                if (source.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                {
+                    // SQLite decodes percent escapes in URI keys/values and discards fragments.
+                    // An omitted path is a temporary database, even without mode=memory.
+                    var uri = source[5..].Split('#', 2)[0];
+                    var parts = uri.Split('?', 2);
+                    path = parts[0];
+                    if (path.StartsWith("//", StringComparison.Ordinal))
+                    {
+                        var slash = path.IndexOf('/', 2);
+                        path = slash < 0 ? "" : path[slash..];
+                    }
+                    path = Uri.UnescapeDataString(path);
+                    if (parts.Length == 2)
+                        foreach (var parameter in parts[1].Split('&'))
+                        {
+                            var pair = parameter.Split('=', 2);
+                            var key = Uri.UnescapeDataString(pair[0]);
+                            var value = pair.Length == 2 ? Uri.UnescapeDataString(pair[1]) : "";
+                            memory |= key.Equals("mode", StringComparison.OrdinalIgnoreCase) && value.Equals("memory", StringComparison.OrdinalIgnoreCase);
+                            // Custom VFS persistence is not established by this provider profile.
+                            memory |= key.Equals("vfs", StringComparison.OrdinalIgnoreCase) || key.Contains('\0') || value.Contains('\0');
+                        }
+                }
+                memory |= path.Equals(":memory:", StringComparison.OrdinalIgnoreCase) || path.Contains('\0');
+                durable = !string.IsNullOrWhiteSpace(path) && !memory;
+            }
+            return ValueTask.FromResult(new SpecialistJournalCapabilities(provider, durable));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) { throw Failure(exception); }
     }
 
-    public async ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
+    public async ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken)
     {
-        var scope = Scope(identity);
-        Token(handle);
         try
         {
+            var scope = Scope(candidate.Identity);
+            Validate(candidate);
+            if (candidate.Status != SpecialistTurnStatus.Prepared || candidate.Fence is not null || candidate.ChildInvocationId is not null || candidate.ProtectedResult is not null || candidate.FailureCode is not null)
+                throw new InvalidOperationException("Only a prepared specialist operation can be staged.");
+            try
+            {
+                await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
+                var owned = transaction.Context<DbContext>();
+                var existing = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
+                if (existing is not null) return Replay(existing, candidate);
+                owned.Set<SpecialistTurnRecord>().Add(Row(scope, candidate));
+                await owned.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return Clone(candidate);
+            }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
+            {
+                // Staging has no inference effect. A concurrent insert's exact committed winner is
+                // authoritative; never replace it with this caller's ciphertext, deadline or arguments.
+                var winner = await context.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.OperationKey == candidate.Key, cancellationToken);
+                return winner is null ? throw Failure(exception, candidate.Handle) : Replay(winner, candidate);
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (SpecialistJournalException) { throw; }
+        catch (Exception exception) { throw Failure(exception, candidate.Handle); }
+    }
+
+    public async ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var scope = Scope(identity);
+            Token(handle);
             var row = await context.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Handle == handle, cancellationToken);
             if (row is null) return null;
             var document = Read(row);
             return document.Identity == identity ? document : null;
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception exception) { throw Failure(exception); }
+        catch (Exception exception) { throw Failure(exception, handle); }
     }
 
     public ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken)
@@ -143,10 +153,10 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
     private async ValueTask<SpecialistTurnDocument?> ChangeAsync(string handle, SpecialistInvocationIdentity identity, DateTimeOffset now, bool requireDeadline,
         Func<SpecialistTurnDocument, bool> admits, Func<SpecialistTurnDocument, SpecialistTurnDocument> change, CancellationToken cancellationToken)
     {
-        var scope = Scope(identity);
-        Token(handle);
         try
         {
+            var scope = Scope(identity);
+            Token(handle);
             await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
             var owned = transaction.Context<DbContext>();
             var row = await owned.Set<SpecialistTurnRecord>().AsNoTracking().SingleOrDefaultAsync(x => x.ScopeKey == scope && x.Handle == handle, cancellationToken);
@@ -167,7 +177,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
             return next;
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception exception) { throw Failure(exception); }
+        catch (Exception exception) { throw Failure(exception, handle); }
     }
 
     private string Scope(SpecialistInvocationIdentity identity)
@@ -186,7 +196,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
     {
         var existing = Read(row);
         if (existing.Identity != candidate.Identity || existing.Key != candidate.Key || existing.RequestHash != candidate.RequestHash)
-            throw new InvalidOperationException("A different specialist request already owns this native operation.");
+            throw new SpecialistJournalException("specialist.journal.conflict", existing.Handle, "A different specialist request already owns this native operation.", new InvalidOperationException("The native operation fingerprint changed."));
         return existing;
     }
 
@@ -243,5 +253,7 @@ internal sealed class EfSpecialistTurnStore(DbContext context, IPersistenceAcces
         if (value is null || value.Length is < 1 or > 64 || value.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')))
             throw new ArgumentException("The specialist journal fence is invalid.");
     }
-    private static InvalidOperationException Failure(Exception exception) => new("The specialist journal store could not complete its conditional operation.", exception);
+    private static SpecialistJournalException Failure(Exception exception, string? handle = null) =>
+        new("specialist.journal.store", handle is { Length: 64 } && handle.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') ? handle : null,
+            "The specialist journal store could not confirm its conditional operation.", exception);
 }

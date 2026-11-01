@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Exceptions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,22 +22,30 @@ public sealed record SpecialistTurnDocument(string Handle, string Key, string Re
     /// Identifies one operation in its native workflow and ordinary tenant/partition scope.
     /// Attempts and dispatch ownership remain separate conditional journal state.
     /// </summary>
+    /// <exception cref="SpecialistJournalException">The identity contains malformed Unicode.</exception>
     public static string CalculateOperationKey(SpecialistInvocationIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        var utf8 = new UTF8Encoding(false, true);
-        foreach (var value in new[] { identity.PersistencePartition, identity.WorkflowExecutionId, identity.OperationKey })
+        try
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(value);
-            _ = utf8.GetByteCount(value);
+            var utf8 = new UTF8Encoding(false, true);
+            foreach (var value in new[] { identity.PersistencePartition, identity.WorkflowExecutionId, identity.OperationKey })
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(value);
+                _ = utf8.GetByteCount(value);
+            }
+            if (identity.TenantId is { } tenant)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
+                _ = utf8.GetByteCount(tenant);
+            }
+            var material = JsonSerializer.Serialize(new { identity.TenantId, identity.PersistencePartition, identity.WorkflowExecutionId, identity.OperationKey });
+            return Convert.ToHexString(SHA256.HashData(utf8.GetBytes(material))).ToLowerInvariant();
         }
-        if (identity.TenantId is { } tenant)
+        catch (EncoderFallbackException exception)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
-            _ = utf8.GetByteCount(tenant);
+            throw new SpecialistJournalException("specialist.journal.identity", null, "The specialist operation identity is not valid Unicode.", exception);
         }
-        var material = JsonSerializer.Serialize(new { identity.TenantId, identity.PersistencePartition, identity.WorkflowExecutionId, identity.OperationKey });
-        return Convert.ToHexString(SHA256.HashData(utf8.GetBytes(material))).ToLowerInvariant();
     }
 }
 

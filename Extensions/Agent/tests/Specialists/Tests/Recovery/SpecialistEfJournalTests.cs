@@ -1,5 +1,7 @@
+using Elsa.Agent.Specialists.Core.Exceptions;
 using Elsa.Agent.Specialists.Core.Contracts;
 using System.Security.Cryptography;
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Journal;
@@ -14,6 +16,7 @@ using Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Xunit;
@@ -27,13 +30,76 @@ public sealed class SpecialistEfJournalTests
     private static SpecialistTurnDocument Document => new(new string('a', 64), SpecialistTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));
 
     [Fact]
+    public async Task Scoped_development_adapters_share_one_host_lifetime_journal_without_capturing_a_scoped_accessor()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new Access(PersistenceAccessContext.Scoped(new("tenant"))));
+        new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var first = provider.CreateAsyncScope();
+        await using var second = provider.CreateAsyncScope();
+        var writer = first.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+        var reader = second.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+        Assert.NotSame(writer, reader);
+        await writer.StageAsync(Document, CancellationToken.None);
+        Assert.Equal(Document, await reader.ReadAsync(Document.Handle, Identity, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_development_backend_enforces_the_selected_ordinary_scope_at_its_public_boundary(bool global)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new Access(global ? PersistenceAccessContext.Global : PersistenceAccessContext.Scoped(new("foreign"))));
+        new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ISpecialistTurnStore>();
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_failed_conflict_recovery_read_retains_its_infrastructure_cause_behind_the_domain_boundary()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var seed = database.Context()) await Store(seed).StageAsync(Document, CancellationToken.None);
+        var cause = new IOException("private infrastructure details");
+        await using var failing = database.Context(new RecoveryReadFailure(cause));
+        var different = Identity with { OperationKey = "different-operation" };
+        var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await Store(failing).StageAsync(
+            Document with { Identity = different, Key = SpecialistTurnDocument.CalculateOperationKey(different) }, CancellationToken.None));
+        Assert.Equal("specialist.journal.store", error.Code);
+        Assert.Equal(Document.Handle, error.Handle);
+        Assert.Same(cause, error.InnerException);
+        Assert.DoesNotContain("private", error.Message, StringComparison.Ordinal);
+        await using var verify = database.Context();
+        Assert.Equal(Document, await Store(verify).ReadAsync(Document.Handle, Identity, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Record_validation_is_a_domain_failure_with_its_original_cause_and_cancellation_remains_cancellation()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var context = database.Context();
+        var store = Store(context);
+        var error = await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document with { Key = new string('d', 64) }, CancellationToken.None));
+        Assert.IsType<InvalidDataException>(error.InnerException);
+        Assert.Equal(Document.Handle, error.Handle);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await store.ReadAsync(Document.Handle, Identity, cancelled.Token));
+        Assert.Equal(0, await context.Set<SpecialistTurnRecord>().CountAsync());
+    }
+
+    [Fact]
     public async Task Malformed_native_identity_is_refused_before_it_can_alias_a_replacement_character_operation()
     {
         await using var database = await Database.CreateAsync();
         await using var context = database.Context();
         var malformed = Identity with { OperationKey = new string((char)0xD800, 1) };
-        Assert.Throws<System.Text.EncoderFallbackException>(() => SpecialistTurnDocument.CalculateOperationKey(malformed));
-        await Assert.ThrowsAsync<System.Text.EncoderFallbackException>(async () => await Store(context).StageAsync(Document with { Identity = malformed }, CancellationToken.None));
+        Assert.Throws<SpecialistJournalException>(() => SpecialistTurnDocument.CalculateOperationKey(malformed));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await Store(context).StageAsync(Document with { Identity = malformed }, CancellationToken.None));
         Assert.Equal(0, await context.Set<SpecialistTurnRecord>().CountAsync());
     }
 
@@ -46,7 +112,7 @@ public sealed class SpecialistEfJournalTests
         Assert.Throws<InvalidOperationException>(() => services.AddSpecialistTurnStore<ConsumerContext>());
         Assert.Same(selected, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ISpecialistTurnStore)));
         var unowned = new ServiceCollection();
-        unowned.AddSingleton<ISpecialistTurnStore>(new InMemorySpecialistTurnStore());
+        unowned.AddSingleton<ISpecialistTurnStore>(new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new()));
         Assert.Throws<InvalidOperationException>(() => unowned.AddSpecialistTurnStore<ConsumerContext>());
         Assert.IsType<InMemorySpecialistTurnStore>(Assert.Single(unowned, descriptor => descriptor.ServiceType == typeof(ISpecialistTurnStore)).ImplementationInstance);
     }
@@ -58,7 +124,7 @@ public sealed class SpecialistEfJournalTests
     {
         var services = new ServiceCollection();
         new SpecialistsRuntimeFeature().ConfigureServices(services);
-        for (var index = 0; index < count; index++) services.AddSingleton<ISpecialistTurnStore>(new InMemorySpecialistTurnStore());
+        for (var index = 0; index < count; index++) services.AddSingleton<ISpecialistTurnStore>(new InMemorySpecialistTurnStore(new Access(PersistenceAccessContext.Scoped(new("tenant"))), new()));
         var registration = Assert.Single(services, descriptor => descriptor.ImplementationInstance is SpecialistJournalRegistrationStartupTask);
         await Assert.ThrowsAsync<InvalidOperationException>(() => ((SpecialistJournalRegistrationStartupTask)registration.ImplementationInstance!).ExecuteAsync(CancellationToken.None));
     }
@@ -141,7 +207,7 @@ public sealed class SpecialistEfJournalTests
         await using var context = database.Context();
         var store = Store(context);
         await store.StageAsync(Document, CancellationToken.None);
-        await Assert.ThrowsAsync<InvalidDataException>(async () => await store.StageAsync(Document with { Handle = new string('d', 64), Key = new string('e', 64) }, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document with { Handle = new string('d', 64), Key = new string('e', 64) }, CancellationToken.None));
         Assert.Equal(1, await context.Set<SpecialistTurnRecord>().CountAsync());
     }
 
@@ -177,7 +243,7 @@ public sealed class SpecialistEfJournalTests
         await store.StageAsync(Document, CancellationToken.None);
         var replay = await store.StageAsync(Document with { Handle = new string('d', 64), ProtectedRequest = "different-encryption-nonce", Deadline = Now.AddMinutes(10) }, CancellationToken.None);
         Assert.Equal(Document, replay);
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.StageAsync(Document with { RequestHash = new string('e', 64) }, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.StageAsync(Document with { RequestHash = new string('e', 64) }, CancellationToken.None));
         Assert.Equal(1, await context.Set<SpecialistTurnRecord>().CountAsync());
         Assert.Equal(Document, await store.ReadAsync(Document.Handle, Identity, CancellationToken.None));
     }
@@ -210,8 +276,8 @@ public sealed class SpecialistEfJournalTests
         await using var context = database.Context();
         await Store(context).StageAsync(Document, CancellationToken.None);
         Assert.Null(await Store(context).ReadAsync(Document.Handle, Identity with { ActivityExecutionId = "foreign" }, CancellationToken.None));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Store(context, PersistenceAccessContext.Global).ReadAsync(Document.Handle, Identity, CancellationToken.None));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Store(context).ReadAsync(Document.Handle, Identity with { TenantId = "foreign" }, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await Store(context, PersistenceAccessContext.Global).ReadAsync(Document.Handle, Identity, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await Store(context).ReadAsync(Document.Handle, Identity with { TenantId = "foreign" }, CancellationToken.None));
         var foreignIdentity = Identity with { TenantId = "foreign", PersistencePartition = "foreign" };
         var foreign = Store(context, PersistenceAccessContext.Scoped(new("foreign")));
         Assert.Null(await foreign.ReadAsync(Document.Handle, foreignIdentity, CancellationToken.None));
@@ -228,8 +294,8 @@ public sealed class SpecialistEfJournalTests
         var store = Store(context);
         await store.StageAsync(Document, CancellationToken.None);
         await context.Set<SpecialistTurnRecord>().ExecuteUpdateAsync(setters => setters.SetProperty(x => x.SchemaVersion, "99"));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.ReadAsync(Document.Handle, Identity, CancellationToken.None));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.ReadAsync(Document.Handle, Identity, CancellationToken.None));
+        await Assert.ThrowsAsync<SpecialistJournalException>(async () => await store.ClaimAsync(Document.Handle, Identity, "child", "fence", Now, CancellationToken.None));
         Assert.Equal("99", (await context.Set<SpecialistTurnRecord>().SingleAsync()).SchemaVersion);
         Assert.Equal(0, (await context.Set<SpecialistTurnRecord>().SingleAsync()).Version);
     }
@@ -270,6 +336,17 @@ public sealed class SpecialistEfJournalTests
     private static EfSpecialistTurnStore Store(DbContext context, PersistenceAccessContext? access = null) => new(context, new Access(access ?? PersistenceAccessContext.Scoped(new("tenant"))));
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
     private sealed class Access(PersistenceAccessContext current) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => current; }
+    private sealed class RecoveryReadFailure(Exception cause) : DbCommandInterceptor
+    {
+        private bool insertAttempted;
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (insertAttempted && command.CommandText.StartsWith("SELECT", StringComparison.Ordinal)) throw cause;
+            if (command.CommandText.StartsWith("INSERT INTO \"elsa_specialist_turns\"", StringComparison.Ordinal)) insertAttempted = true;
+            return ValueTask.FromResult(result);
+        }
+    }
     private sealed class Unrelated { public string Id { get; set; } = ""; }
     private sealed class ConsumerContext(DbContextOptions<ConsumerContext> options) : DbContext(options)
     {
@@ -282,7 +359,7 @@ public sealed class SpecialistEfJournalTests
     private sealed class Database(string directory) : IAsyncDisposable
     {
         private string ConnectionString => "Data Source=" + Path.Combine(directory, "journal.db") + ";Pooling=False;Default Timeout=30";
-        public SpecialistsSqliteDbContext Context() => new(new DbContextOptionsBuilder<SpecialistsSqliteDbContext>().UseSqlite(ConnectionString).Options);
+        public SpecialistsSqliteDbContext Context(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<SpecialistsSqliteDbContext>().UseSqlite(ConnectionString).AddInterceptors(interceptors).Options);
         public ConsumerContext Consumer() => new(new DbContextOptionsBuilder<ConsumerContext>().UseSqlite(ConnectionString).Options);
         public static async Task<Database> CreateAsync(bool consumer = false)
         {

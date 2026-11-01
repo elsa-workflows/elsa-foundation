@@ -240,3 +240,7 @@ static Elsa.Agent.Specialists.Core.Models.SpecialistTurnDocument.CalculateOperat
 Elsa.Agent.Specialists.Core.DependencyInjection.SpecialistTurnStoreRegistration
 static Elsa.Agent.Specialists.Core.DependencyInjection.SpecialistTurnStoreRegistration.ReplaceSpecialistTurnStore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Func<System.IServiceProvider!, Elsa.Agent.Specialists.Core.Contracts.ISpecialistTurnStore!>! factory) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Elsa.Agent.Specialists.Core.DependencyInjection.SpecialistTurnStoreRegistration.TryAddSpecialistTurnStore<TStore>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException
+Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException.Code.get -> string!
+Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException.Handle.get -> string?
+Elsa.Agent.Specialists.Core.Exceptions.SpecialistJournalException.SpecialistJournalException(string! code, string? handle, string! message, System.Exception! innerException) -> void

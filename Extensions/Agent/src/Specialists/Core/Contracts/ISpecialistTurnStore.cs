@@ -1,3 +1,4 @@
+using Elsa.Agent.Specialists.Core.Exceptions;
 using Elsa.Agent.Specialists.Core.Models;
 
 namespace Elsa.Agent.Specialists.Core.Contracts;
@@ -10,17 +11,24 @@ namespace Elsa.Agent.Specialists.Core.Contracts;
 public interface ISpecialistTurnStore
 {
     /// <summary>Reports the configured storage profile without claiming live-provider execution.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default);
     /// <summary>Inserts or replays the identical native operation; conflicting requests change nothing.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument> StageAsync(SpecialistTurnDocument candidate, CancellationToken cancellationToken);
     /// <summary>Reads only the exact handle and native identity in the caller's selected scope.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument?> ReadAsync(string handle, SpecialistInvocationIdentity identity, CancellationToken cancellationToken);
     /// <summary>Claims a prepared, unexpired turn once and binds its native child and journal fence.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<SpecialistTurnDocument?> ClaimAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, string fence, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Persists dispatch responsibility under the live claim before inference can begin.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, string fence, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Atomically accepts the protected result/session pair only for its live dispatch fence.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask<bool> AcceptAsync(string handle, SpecialistInvocationIdentity identity, string fence, string protectedResult, DateTimeOffset now, CancellationToken cancellationToken);
     /// <summary>Settles a matching nonterminal claim; accepted results and other fences are preserved.</summary>
+    /// <exception cref="SpecialistJournalException">A storage, record or scope failure, retaining its cause. Cancellation propagates separately.</exception>
     ValueTask FailAsync(string handle, SpecialistInvocationIdentity identity, string fence, string code, bool outcomeUnknown, CancellationToken cancellationToken);
 }

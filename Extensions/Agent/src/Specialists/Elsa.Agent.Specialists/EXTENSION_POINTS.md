@@ -40,7 +40,8 @@ Root-variable captures resolve their current committed destination policy at nat
 binding checks; encryption-required or withheld destinations are refused before opening a client.
 
 `SpecialistsInMemoryJournal` is an explicit development/test profile, retaining at most 10,000 turns
-for one host lifetime. Requests/results are protected with purpose/scope/provenance checks inside
+for one host lifetime through scoped adapters over shared in-memory state. Both backends enforce the
+selected ordinary scope at their public store boundary. Requests/results are protected with purpose/scope/provenance checks inside
 the authenticated envelope. Repeated operations retain their deadline; altered arguments conflict;
 stale fences and late acceptance are refused. Missing state after restart is a fault, never permission
 for a fresh model request. This profile establishes no durable recovery or distributed ownership.
