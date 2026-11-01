@@ -1,10 +1,11 @@
 using Elsa.Studio.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Studio.Core.Events;
 
 namespace Elsa.Studio.Api.Services;
 
 internal sealed class CollectStudioRuntimeConfiguration(IEnumerable<IStudioRuntimeConfigurationSource> sources)
-    : IStudioEventHandler<OnStudioRuntimeConfigurationCollecting>
+    : IEventHandler<OnStudioRuntimeConfigurationCollecting>
 {
     public Task Handle(OnStudioRuntimeConfigurationCollecting @event, CancellationToken cancellationToken)
     {

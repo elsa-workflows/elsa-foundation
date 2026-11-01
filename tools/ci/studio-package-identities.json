@@ -3,6 +3,50 @@
   "studio_source_commit": "3eef8fa788bfe2ebd4686df0e9a116532c9b0dc9",
   "layout_manifest": "tools/consolidation/layout-manifest.json",
   "identity_rule": "PackageId defaults to AssemblyName, which defaults to the project filename; the shared Studio props and project files set neither identity override.",
+  "support_projects": [
+    {
+      "id": "Elsa.Modularity.Core",
+      "project": "Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj"
+    },
+    {
+      "id": "Elsa.Modularity.Nuplane",
+      "project": "Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj"
+    },
+    {
+      "id": "Elsa.Studio.Preferences.Core",
+      "project": "Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj"
+    },
+    {
+      "id": "Elsa.Events",
+      "project": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
+      "hosting_required": true
+    },
+    {
+      "id": "Elsa.Events.Core",
+      "project": "Essentials/src/Events/Core/Elsa.Events.Core.csproj",
+      "hosting_required": true
+    },
+    {
+      "id": "Elsa.Events.Strategies",
+      "project": "Essentials/src/Events/Strategies/Elsa.Events.Strategies.csproj",
+      "hosting_required": true
+    },
+    {
+      "id": "Elsa.Pipelines.Core",
+      "project": "Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",
+      "hosting_required": true
+    },
+    {
+      "id": "Elsa.Primitives",
+      "project": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "hosting_required": true
+    },
+    {
+      "id": "Elsa.Tasks.Core",
+      "project": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "hosting_required": true
+    }
+  ],
   "packable_projects": [
     { "id": "Elsa.Studio.Api", "project": "Studio/src/essentials/Elsa.Studio.Api/Elsa.Studio.Api.csproj", "verify_dependency_metadata": true },
     { "id": "Elsa.Studio.Core", "project": "Studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj", "verify_dependency_metadata": true },

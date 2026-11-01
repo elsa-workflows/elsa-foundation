@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using CShells.Lifecycle;
 using Elsa.Studio.Core.Contracts;
 using Elsa.Studio.Core.Events;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Studio.Hosting;
 
@@ -16,11 +17,8 @@ internal static partial class StudioRuntimeEndpoint
             var services = context.RequestServices;
             var authority = services.GetRequiredService<IStudioBackendAuthorityAccessor>().Value;
             await using var scope = await StudioShellActivation.AcquireScopeAsync(services.GetRequiredService<IShellRegistry>(), settings.ShellName, context.RequestAborted);
-            var handlers = scope.ServiceProvider.GetServices<IStudioEventHandler<OnStudioRuntimeConfigurationCollecting>>().ToArray();
-            if (handlers.Length != 1)
-                throw new StudioHostingException("Studio runtime configuration requires exactly one collecting handler.");
             var collection = new OnStudioRuntimeConfigurationCollecting(context.Request.PathBase.Value ?? "");
-            await handlers[0].Handle(collection, context.RequestAborted);
+            await scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>().Publish(collection, context.RequestAborted);
             var extensions = new Dictionary<string, object?>(StringComparer.Ordinal);
             foreach (var entry in collection.Configuration)
                 if (!NamespacePattern().IsMatch(entry.Namespace) || !extensions.TryAdd(entry.Namespace, entry.Value))

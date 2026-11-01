@@ -2,6 +2,10 @@
 
 Owner authorization: extract the delivered Backends management from Hosting into an optional module; frontend and backend extensibility seams are explicitly permitted. Program: none/free-flow. This work follows #3531/#3536; it does not undo their isolation and feature-management contracts.
 
+**Status**: Implemented
+
+Implementation is delivered by PR #3600; exact-head qualification and resulting-main receipts are recorded on that PR.
+
 ## Required behavior
 
 - `Elsa.Studio.Backends` / `BackendsStudio` owns profile configuration, storage namespace, HTTP endpoints, CRUD/inspection UI and switching. Disabling the feature removes those registrations/endpoints and client contributions. Omitting its package leaves a usable Studio host without a Preferences dependency.

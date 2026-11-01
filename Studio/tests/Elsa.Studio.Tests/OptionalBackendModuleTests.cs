@@ -1,3 +1,9 @@
+using System.Text.Json;
+using CShells.Lifecycle;
+using Elsa.Events.Core.Contracts;
+using Elsa.Events.Core.Extensions;
+using Elsa.Pipelines.Core.Contracts;
+using Elsa.Studio.Core.Events;
 using System.Net;
 using System.Net.Http.Json;
 using Elsa.Studio.Api.Models;
@@ -142,7 +148,9 @@ public sealed class OptionalBackendModuleTests
     public class AcmeRuntimeFeature : IShellFeature
     {
         public virtual void ConfigureServices(IServiceCollection services) {
-            services.AddSingleton<IStudioRuntimeConfigurationSource>(provider=>new RuntimeSource(provider.GetRequiredService<IConfiguration>()["Test:DuplicateRuntime"]=="true" ? "backends" : "acme",new {label="Acme extension"}));
+            services.AddScoped(_ => new RuntimeScopeMarker());
+            services.AddScoped<IStudioRuntimeConfigurationSource>(provider=>new RuntimeSource(provider.GetRequiredService<IConfiguration>()["Test:DuplicateRuntime"]=="true" ? "backends" : "acme",new {label="Acme extension",scope=provider.GetRequiredService<RuntimeScopeMarker>().Id}));
+            services.AddEventHandler<OnStudioRuntimeConfigurationCollecting, RuntimeObserver>();
         }
     }
 
@@ -152,6 +160,45 @@ public sealed class OptionalBackendModuleTests
         await using var app=await Start(true,true,customRuntime:true,configure:builder=>builder.Configuration["Test:DuplicateRuntime"]="true");
         using var client=app.GetTestClient();
         Assert.Equal(HttpStatusCode.ServiceUnavailable,(await client.GetAsync("/studio-runtime.js")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Runtime_projection_awaits_the_selected_shell_event_pipeline_and_independent_subscribers()
+    {
+        await using var app = await Start(false, false, customRuntime: true);
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync("Default", CancellationToken.None);
+        await using (var scope = shell.BeginScope())
+            scope.ServiceProvider.GetRequiredService<IEventPipeline>().Setup(builder => builder.UseMiddleware<RuntimeProjectionMiddleware>());
+        using var client = app.GetTestClient();
+        var script = await client.GetStringAsync("/studio-runtime.js");
+        using var json = JsonDocument.Parse(script[script.IndexOf('{')..(script.LastIndexOf('}') + 1)]);
+        var extensions = json.RootElement.GetProperty("extensions");
+        var marker = extensions.GetProperty("acme").GetProperty("scope").GetString();
+        Assert.False(string.IsNullOrEmpty(marker));
+        Assert.Equal(marker, extensions.GetProperty("pipeline").GetString());
+        Assert.Equal(marker, extensions.GetProperty("observer").GetString());
+    }
+
+    private sealed class RuntimeScopeMarker { public string Id { get; } = Guid.NewGuid().ToString("N"); }
+
+    private sealed class RuntimeObserver(RuntimeScopeMarker marker) : IEventHandler<OnStudioRuntimeConfigurationCollecting>
+    {
+        public Task Handle(OnStudioRuntimeConfigurationCollecting value, CancellationToken token)
+        {
+            value.Configuration.Add(new("observer", marker.Id));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RuntimeProjectionMiddleware(PipelineDelegate<IEventContext> next) : IEventMiddleware
+    {
+        public async ValueTask Invoke(IEventContext context)
+        {
+            await next(context);
+            await Task.Yield();
+            if (context.Event is OnStudioRuntimeConfigurationCollecting value)
+                value.Configuration.Add(new("pipeline", context.ServiceProvider.GetRequiredService<RuntimeScopeMarker>().Id));
+        }
     }
 
     private sealed class RuntimeSource(string name,object value):IStudioRuntimeConfigurationSource

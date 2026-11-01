@@ -21,7 +21,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 REPO = Path(__file__).resolve().parents[3]
-IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard")
+SUPPORT_PROJECTS = {item["id"]: item["project"] for item in json.loads((REPO / "tools/ci/studio-package-identities.json").read_text())["support_projects"] if item.get("hosting_required")}
+IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard") + tuple(SUPPORT_PROJECTS)
 RUNTIME_HOST_ID = "package-consumer-proof"
 
 
@@ -129,7 +130,7 @@ def main(args):
                 source_assets[package_id] = {path.relative_to(source).as_posix(): path.read_bytes() for path in source.rglob("*") if path.is_file()}
                 shutil.copytree(source, producer / relative)
             for package_id in IDS:
-                project = producer / ("Essentials/src/Studio/Preferences/Core" if package_id == "Elsa.Studio.Preferences.Core" else "Studio/src/essentials/" + package_id) / (package_id + ".csproj")
+                project = producer / SUPPORT_PROJECTS.get(package_id, "Studio/src/essentials/" + package_id + "/" + package_id + ".csproj")
                 run("pack-" + package_id, [dotnet, "pack", str(project), "-c", "Release", "-p:Version=" + version,
                                           "-p:SourceRevisionId=" + revision, "-o", str(feed)], producer)
             report.update(producer="owned committed source snapshot with unchanged production project files", producerSourceRevision=revision)
