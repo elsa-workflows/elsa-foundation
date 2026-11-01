@@ -1,26 +1,31 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7",
+  "last_publish_commit": "12c8e54df111a1d73f9cb393afbfb997f43edc7e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
-      "version": "4.0.20-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.21-preview",
+      "commit": "12c8e54df111a1d73f9cb393afbfb997f43edc7e"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Api",
-      "version": "4.0.1-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.2-preview",
+      "commit": "12c8e54df111a1d73f9cb393afbfb997f43edc7e"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Core",
-      "version": "4.0.1-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.2-preview",
+      "commit": "12c8e54df111a1d73f9cb393afbfb997f43edc7e"
+    },
+    {
+      "package_id": "Elsa.Activities.Bpmn.Design",
+      "version": "4.0.0-preview",
+      "commit": "12c8e54df111a1d73f9cb393afbfb997f43edc7e"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
-      "version": "4.0.19-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.20-preview",
+      "commit": "12c8e54df111a1d73f9cb393afbfb997f43edc7e"
     },
     {
       "package_id": "Elsa.Activities.Compensation",
