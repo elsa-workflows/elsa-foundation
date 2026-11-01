@@ -43,6 +43,29 @@ afterEach(async () => {
 });
 
 describe("independent workspace appearance", () => {
+  it("applies Sketchbook, preserves an unsaved edit across palette changes and restores the selection", async () => {
+    await render();
+    await update(() => appearance.setNavModePreference("top"));
+    await update(() => appearance.applyPreset("builtin:sketchbook"));
+    expect(html().getAttribute("data-theme")).toBe("builtin:sketchbook");
+    expect(html().getAttribute("data-workspace-style")).toBe("sketchbook");
+    expect(html().getAttribute("data-theme-appearance")).toBe("light");
+    const input = container.querySelector("input")!;
+    input.value = "Keep this workflow edit";
+    const display = html().style.getPropertyValue("--font-display");
+    await update(() => appearance.setColorScheme("drift"));
+    await update(() => appearance.setModePreference("dim"));
+    expect(input.value).toBe("Keep this workflow edit");
+    expect(html().style.getPropertyValue("--font-display")).toBe(display);
+    expect(html().getAttribute("data-workspace-style")).toBe("sketchbook");
+    await update(() => root.render(<div />));
+    await render();
+    expect(html().getAttribute("data-workspace-style")).toBe("sketchbook");
+    expect(html().getAttribute("data-color-scheme")).toBe("drift");
+    expect(html().getAttribute("data-theme-appearance")).toBe("dim");
+    expect(html().getAttribute("data-nav-mode")).toBe("top");
+  });
+
   it.each(["builtin:porcelain", "builtin:atelier", "builtin:graphite"] as const)("applies %s as an explicit complete preset and restores it after remount", async id => {
     await render();
     await update(() => appearance.setNavModePreference("top"));

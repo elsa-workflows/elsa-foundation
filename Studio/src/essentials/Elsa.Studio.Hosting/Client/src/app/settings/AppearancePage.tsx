@@ -11,7 +11,7 @@ import {
 import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
-import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
+import { studioPresets, type StudioPresetId } from "../themes/studioPresets";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
 function keyTarget(key: string, index: number, count: number): number | undefined {
@@ -61,13 +61,13 @@ export function AppearancePage({
       <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">
         <RadioCardGroup
           ariaLabel="Studio preset"
-          value={workspaceStyle === "minimal" && currentColorScheme.id === currentTheme.id && minimalStudioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode) ? currentTheme.id : ""}
-          options={minimalStudioPresets.flatMap(preset => {
+          value={currentColorScheme.id === currentTheme.id && studioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode && preset.workspaceStyle === workspaceStyle) ? currentTheme.id : ""}
+          options={studioPresets.flatMap(preset => {
             const theme = availableThemes.find(candidate => candidate.id === preset.id);
             const colors = theme && getThemeModeDefinition(theme, preset.mode);
             return colors ? [{ value: preset.id, label: preset.name, description: preset.description, preview: colors }] : [];
           })}
-          onChange={value => applyPreset(value as MinimalStudioPresetId)}
+          onChange={value => applyPreset(value as StudioPresetId)}
         />
       </AppearanceCard>
 

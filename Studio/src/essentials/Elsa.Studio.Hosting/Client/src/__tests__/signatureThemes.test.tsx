@@ -110,7 +110,7 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "classic", "classic", "classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "classic", "classic", "classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic", "classic"]);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {

@@ -50,9 +50,9 @@ Browser pages and bundled assets belong to Hosting's frontend delivery contract;
 
 The [standalone custom-host guide](../../../docs/custom-hosting.md) covers explicit candidate sources, optional feature selection and supported filesystem limits. Normal managed-file/link qualification does not cover broken/cyclic or externally mutated source trees.
 
-Theme definitions accept optional `workspaceStyle` metadata: `linen`, `minimal`, `quiet`, `focus`
+Theme definitions accept optional `workspaceStyle` metadata: `linen`, `minimal`, `sketchbook`, `quiet`, `focus`
 or `open`. Absence retains the theme's original treatment. Save, clone, directory sources and pack
 import/export preserve this value; unknown values are rejected. The built-in IDs `builtin:porcelain`,
-`builtin:atelier` and `builtin:graphite` are reserved. The original `atelier` ID remains unchanged and is
+`builtin:atelier`, `builtin:graphite` and `builtin:sketchbook` are reserved. The original `atelier` ID remains unchanged and is
 shown as Atelier Original. See [branding](../../../docs/branding.md#minimal-studio-presets) for host
 defaults, independent user choices and login visual customization.
