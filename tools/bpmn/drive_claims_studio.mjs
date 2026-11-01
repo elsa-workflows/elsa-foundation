@@ -161,8 +161,9 @@ try{
  probes.timerInspection={status:timedInspection.execution.status,result:timedInspection.execution.result,work:timedInspection.work};
  const claimEvent=events.findLast(event=>event.path.endsWith('/claim'));
  probes.lateClaimedCompletion=await api('POST',claimEvent.path.replace(/\/claim$/,'/complete-claimed'),{requestId:'late-after-timer',attemptId:claimEvent.request.attemptId,claimId:timedClaim.claimId});
- if(probes.lateClaimedCompletion.status!==409||probes.lateClaimedCompletion.body.result.code!=='obsolete-human-work')throw new Error('Interrupted claimed work was not refused as obsolete.');
- await shot(page,'ui-timer-interrupted');await command('checkpoint','timer-interrupted');mark('The duration timer interrupted claimed work; the late claimed completion is obsolete');
+ // The timer path ends the process, so the late claimed completion meets the terminal execution first.
+ if(probes.lateClaimedCompletion.status!==409||probes.lateClaimedCompletion.body.result.code!=='execution-terminal')throw new Error('Interrupted claimed work was not refused.');
+ await shot(page,'ui-timer-interrupted');await command('checkpoint','timer-interrupted');mark('The duration timer interrupted claimed work; the late claimed completion is refused');
 
  // Cancellation interruption of claimed work through the authorized API, observed in Studio.
  probes.cancelStart=await api('POST','/bpmn/executions',{requestId:'cancel-start',sourceReferenceId:publication.response.sourceReferenceId});
