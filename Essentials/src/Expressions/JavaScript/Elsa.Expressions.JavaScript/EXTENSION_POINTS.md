@@ -10,6 +10,10 @@ functions, workflow contexts, raw Jint engine factories, mutable JavaScript exec
 delegate-backed host functions, or service-location seams. Extending the binding language requires
 a separately reviewed capability profile; a global registration cannot join `binding-pure-v1`.
 
+Jint reuses immutable prepared syntax under weak source-string ownership, with separate preparation for value
+bindings and script activities. Arguments, variables, limits, cancellation and engine state remain per evaluation;
+discarding executable source also releases its preparation. No engine or evaluated result is cached.
+
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.
 It accepts one explicit JSON argument document and returns JSON. It is not registered as an
 expression handler, cannot evaluate canonical input bindings, and shares only the closed

@@ -17,7 +17,7 @@ internal sealed class JintJavaScriptScriptEvaluator(IOptions<FeatureOptions> fea
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.Arguments, featureOptions.Value);
 
-        var result = engine.Evaluate($"\"use strict\"; (() => {{ {request.Source} }})()");
+        var result = engine.Evaluate(PreparedJavaScript.Script(request.Source));
         if (result.IsUndefined())
             return ValueTask.FromResult<JsonElement?>(null);
 
