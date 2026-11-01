@@ -166,7 +166,7 @@ def main():
         shared_pins = {identity: next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == identity)
                        for identity in ["Microsoft.Extensions.AI.Abstractions", "Microsoft.Agents.AI", "CShells"]}
         report["selectedSharedRuntimePins"] = shared_pins
-        report["fixtureDependencyPins"] = {"SQLitePCLRaw.bundle_e_sqlite3": sqlite_bundle_version, "CShells": cshells_version}
+        report["fixtureDependencyPins"] = {"SQLitePCLRaw.bundle_e_sqlite3": sqlite_bundle_version, "CShells": cshells_version, "Microsoft.EntityFrameworkCore.Sqlite": ef_core_version}
         for name in ["Model", "Author", "Consumer"] + (["DurableConsumer"] if args.profile == "durable-recovery" else []):
             directory = out / name
             directory.mkdir()

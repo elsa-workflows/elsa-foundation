@@ -53,7 +53,7 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(DurablePackageHostF
         .WithFeature<DurablePackageHostFeature>(feature => { feature.Role = role; feature.Directory = directory; feature.Persistence = persistence; })
         .WithFeature<SpecialistsRuntimeFeature>(feature => feature.AllowNewOperations = role == "start")
         .WithFeature<BackgroundActivitiesFeature>(feature => { feature.RunWorkers = false; feature.LeaseDurationSeconds = 5; feature.RenewalIntervalSeconds = 1; })
-        .WithFeature<WorkflowsRuntimeResumptionFeature>(feature => feature.SweepIntervalSeconds = 3600)
+        .WithFeature<WorkflowsRuntimeResumptionFeature>(feature => { feature.SweepIntervalSeconds = 3600; feature.MaxBackoffIntervalMinutes = 120; })
         .WithFeature<SpecialistsEntityFrameworkCoreFeature>(feature => { feature.Provider = "Sqlite"; feature.ConnectionString = connection; })
         .WithFeature<RuntimeEntityFrameworkCoreFeature>(feature =>
         {
@@ -116,7 +116,8 @@ else
             Check(File.Exists(Path.Combine(directory, "crash.json")), "worker process left the exact accepted-before-receipt crash marker");
             Check(before.Status == SpecialistTurnStatus.Accepted && before.ProtectedResult is not null, "accepted journal survived worker process loss");
             using var lost = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "worker-claim.json")));
-            var expiry = lost.RootElement.GetProperty("VisibleUntil").GetDateTimeOffset();
+            using var crash = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "crash.json")));
+            var expiry = crash.RootElement.GetProperty("claimExpires").GetDateTimeOffset();
             var delay = expiry - DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(100);
             if (delay > TimeSpan.Zero) await Task.Delay(delay);
         }
@@ -136,8 +137,22 @@ else
             "durable-package-recover", WorkflowExecutionActorCapabilities.InProcessMailbox));
         var drain = new WorkflowExecutionCommand("recover-drain", executionId, WorkflowExecutionCommandKind.RunSchedulerWork, now, null, new Dictionary<string, string>());
         await actor.EnqueueAsync(new("recover-drain-envelope", executionId, drain, "recover-drain", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
-        var delivery = await provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(32, executionId, "elsa.specialist.applied/1"));
-        Check(delivery.DeliveredCount == 1, "native completion application settled through its actual durable outbox");
+        var settled = false;
+        for (var sweep = 0; sweep < 16; sweep++)
+        {
+            // Actual durable completion can owe further scheduler work through post-commit
+            // enqueue sources. Drive the normal bounded resumption service until that chain settles.
+            await provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new(32, 32, 32, maxExecutionsPerSweep: 1));
+            var current = (await turns.ReadAsync(handoff.Handle, handoff.Identity, default))!;
+            var workflow = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
+            if (workflow?.Status == WorkflowExecutionStatus.Completed && current.Applications is { Count: 1 })
+            {
+                var physical = await provider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(current.Applications.Single().SourceId);
+                if (physical?.Status == RuntimePostCommitOutboxStatus.Delivered) { settled = true; break; }
+            }
+            await Task.Delay(50);
+        }
+        Check(settled, "native completion application settled through its actual durable outbox and resumption service");
     }
     if (role is "recover" or "verify")
     {
@@ -200,7 +215,7 @@ public sealed class CrashAfterAcceptanceActivator(IActivityActivator inner, ISer
             if (turn?.Status != SpecialistTurnStatus.Accepted || turn.ProtectedResult is null || work?.Status != BackgroundActivityWorkStatus.Claimed)
                 throw new InvalidOperationException("The crash boundary requires accepted specialist content and an unreceipted native claim.");
             await inner.DisposeAsync();
-            await File.WriteAllTextAsync(Path.Combine(directory, "crash.json"), JsonSerializer.Serialize(new { phase = "journal-accepted-before-native-receipt", processId = Environment.ProcessId, claimExpires = claim.RootElement.GetProperty("VisibleUntil").GetDateTimeOffset() }));
+            await File.WriteAllTextAsync(Path.Combine(directory, "crash.json"), JsonSerializer.Serialize(new { phase = "journal-accepted-before-native-receipt", processId = Environment.ProcessId, claimExpires = work.VisibleUntil }));
             Environment.Exit(197);
         }
     }
