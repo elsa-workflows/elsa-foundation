@@ -32,6 +32,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Dispatch = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
 var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(args[0]))!;
+if (config.Action is not ("run" or "recover" or "initialize")) throw new ArgumentException("Unsupported qualification action.");
+if (File.Exists(config.Result)) throw new IOException("Preserve the existing qualification result and use a fresh output.");
+if (config.Provider is not ("Sqlite" or "PostgreSql")) throw new ArgumentException("Unsupported qualification provider.");
+var connection = config.Provider == "Sqlite" ? $"Data Source={config.Database};Pooling=False" :
+    Environment.GetEnvironmentVariable("ELSA_EFFICIENCY_POSTGRES_CONNECTION") ?? throw new InvalidOperationException("Protected qualification connection is absent.");
 Probe.Config = config;
 var gate = new Gate(config);
 var clock = new OffsetClock(config.Action == "recover" ? TimeSpan.FromHours(2) : TimeSpan.Zero);
@@ -52,12 +57,13 @@ await using var host = WorkflowExecutionHarness.Create().ConfigureServices(servi
     services.AddSingleton<IRuntimeCheckpointCommitEnricher>(gate);
     services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
     {
-        Provider = "Sqlite",
-        ConnectionString = $"Data Source={config.Database};Pooling=False",
+        Provider = config.Provider,
+        ConnectionString = connection,
         RecoveryContinuationSigningKey = "private-m4-boundary-recovery-signing-key",
         HierarchyCursorSigningKey = "private-m4-boundary-hierarchy-signing-key"
-    }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
-    services.ConfigureDbContext<RuntimeSqliteDbContext>(b => b.AddInterceptors(gate));
+    }).AddEfModuleMigrations<RuntimeDbContext>(config.Provider);
+    if (config.Provider == "Sqlite") services.ConfigureDbContext<RuntimeSqliteDbContext>(b => b.AddInterceptors(gate));
+    else services.ConfigureDbContext<RuntimePostgreSqlDbContext>(b => b.AddInterceptors(gate));
     services.AddPersistenceModes(o => { o.Mode = Enum.Parse<PersistenceMode>(config.Mode); o.MaxActivitiesPerCommit = config.Cap; });
     if (config.Point.EndsWith("after-advance", StringComparison.Ordinal))
     {
@@ -69,6 +75,11 @@ await using var host = WorkflowExecutionHarness.Create().ConfigureServices(servi
 
 }).Build();
 foreach (var initializer in host.Services.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
+if (config.Action == "initialize")
+{
+    await File.WriteAllTextAsync(config.Result, JsonSerializer.Serialize(new { initialized = true, config.Provider }));
+    return;
+}
 host.InitializeActivityTypes();
 var fixedAt = DateTimeOffset.Parse("2026-11-01T00:00:00Z");
 WorkflowExecutable Executable(string key, ExecutableNode root, bool wait = false) => new(
@@ -121,7 +132,7 @@ await using (var scope = host.Services.CreateAsyncScope())
         Environment.ExitCode = 2;
 }
 
-internal sealed record Config(string Action, string Database, string Mode, string Scenario, string Point, string Reached, string Calls, string Result, string? Release = null, int Cap = 50);
+internal sealed record Config(string Action, string Database, string Mode, string Scenario, string Point, string Reached, string Calls, string Result, string? Release = null, int Cap = 50, string Provider = "Sqlite");
 internal sealed class OffsetClock(TimeSpan offset) : TimeProvider { public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow + offset; }
 namespace Elsa.BoundaryProbe
 {
@@ -171,8 +182,12 @@ internal sealed class Gate(Config config) : DbTransactionInterceptor, IRuntimeCh
     public static async Task Wait(Config c, object details)
     {
         await File.WriteAllTextAsync(c.Reached, JsonSerializer.Serialize(new { pid = Environment.ProcessId, details }));
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
         while (c.Release is null || !File.Exists(c.Release))
+        {
+            if (deadline.Elapsed > TimeSpan.FromMinutes(3)) throw new TimeoutException("Qualification gate was not released within three minutes.");
             await Task.Delay(20);
+        }
     }
     public override async ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction t, TransactionEventData d, InterceptionResult r, CancellationToken ct = default) { await Hit(d.Context, "before-commit"); return r; }
     public override async Task TransactionCommittedAsync(DbTransaction t, TransactionEndEventData d, CancellationToken ct = default)

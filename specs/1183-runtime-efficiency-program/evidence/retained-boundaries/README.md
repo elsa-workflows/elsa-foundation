@@ -50,3 +50,7 @@ The counting activity is deliberately ReplaySafe; this fixture makes no exactly-
 `observed-results.json` records the macOS run of this fixture, with fixture and production source hashes.
 Subsequent runs have their own result ledgers; an old receipt does not qualify a changed head. The full program report names the remaining
 provider and independent-host acceptance.
+
+For independent-host PostgreSQL qualification, set `Provider` to `PostgreSql` and supply the protected task-only connection through `ELSA_EFFICIENCY_POSTGRES_CONNECTION`. Create a fresh owned database per case and initialize it before another process recovers. The local controllers above remain SQLite witnesses. Host-local gate files are controlled separately on each VM; the operator retains the observed physical checkpoint and durable PostgreSQL snapshots before and after releasing a stale owner. The gate expires after three minutes. A PostgreSQL build alone is not an independent-host qualification result.
+
+The `initialize` action applies the real provider migrations and exits before publication or execution, so independent-host cases can start with an empty runtime database. Its SQLite smoke verifies zero workflow/activity/queue/outbox/incident rows. Existing result files are refused before I/O. The final six SQLite control shapes also pass with these guards; PostgreSQL execution remains a separate qualification.
