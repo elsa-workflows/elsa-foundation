@@ -45,6 +45,66 @@ existing serialization order and use short session transitions/reservations arou
 work. The same operation may hand off ownership without an idle gap; a different operation receives
 an explicit losing disposition. Preserve original foreground cancellation tokens and pause storage.
 
+## Selected candidate (T007, not frozen)
+
+Causal input: the `39a1affef` baseline on both actual adapters had 4 Passed controls and 4
+`autonomy.mode_mismatch` failures. Selecting a mode on an established conversation sent zero backend
+requests, and session detail exposed no effective policy. The gap is a missing acknowledged update
+path, not a rejected update, so the candidate adds the smallest owned path. It does not rework admission.
+
+**State owner.** The default `IAgentSessionService` row owns the session's current policy, a policy
+revision and its outstanding operation claims, under the same per-session monitor that already
+orders message insertion. No second registry, coordinator or engine is added.
+
+**Claims, not a status scan.** Each operation that reads policy for work acquires a claim on that
+row. The claim returns the policy snapshot and revision governing that work. Policy is read *after*
+acquisition, never from an earlier session lookup. The claims are internal, server-only tokens: they
+are never accepted from or emitted to HTTP, SSE or module payloads.
+
+| Claim | Acquired | Released |
+| --- | --- | --- |
+| Prompt | Atomically with insertion of a Pending user message; stamps that message's accepted policy and revision | When that exact message becomes terminal, including a never-started Pending message terminalized directly |
+| Foreground | By the orchestrator before it reads policy for a turn or continuation | After actual registry Unregister completes. If Register throws and a write cannot be ruled out, it stays unresolved; the owner never infers that nothing was written |
+| Preparation | By the invoker before module preparation and authority awaits, also for direct callers with no turn | After a proposal claim covers the work, or on refusal |
+| Proposal | Before store insertion, including direct `AddAsync` callers | When the proposal settles as Executed with a validated receipt, Denied, pre-dispatch Expired or refused. AwaitingClient and Uncertain keep it |
+| Pause | Before the orchestrator releases foreground for a verified paused turn | After the continuation's foreground claim is held and the pause is removed |
+
+Claims may overlap during handoff, so there is no idle gap. Releasing an old token never releases a
+successor's claim. The call-key → per-proposal semaphore → short session-transition order is kept.
+No monitor is held across I/O, callbacks or semaphore waits.
+
+**No reservation before collection.** The only field an update may change is `AutonomyMode`.
+Availability, capability, context visibility and sensitivity checks do not read it. A prompt is
+therefore attributed to the policy current at its atomic insertion. "Policy first" means the new
+prompt carries the new revision; "prompt first" means the update loses as busy. A future update of
+collection-relevant fields would need a reservation and is outside this leaf.
+
+**Conditional update.** `ChangeAutonomy(session, requestedMode, expectedRevision)` runs under the
+row monitor in this order:
+
+1. Refuse undefined modes.
+2. Refuse a closed or expired session.
+3. Report a stale `expectedRevision` as a conflict, before any no-op comparison.
+4. Report busy if any claim is outstanding.
+5. Clamp to the current `MaxAutonomyMode`.
+6. Replace only `AutonomyMode`; every other policy field survives.
+7. Increment the revision only on a real change. An unchanged idle request acknowledges at the current revision.
+
+A lost response is resolved by readback plus a conditional retry. Reading an unchanged old revision
+does not acknowledge an in-flight request.
+
+**Readback.** Create and detail responses carry effective autonomy, ceiling, allowed modes and
+revision. Accepted messages carry their accepted revision, so later selector values never relabel
+earlier results.
+
+**Participation and replacements.** The update path is supported only when the resolved session
+service, orchestrator, invoker and proposal service all participate with the same owner instance;
+the default registrations do. Otherwise the update returns an explicit unsupported outcome and
+creates no default shadow state. Policy cannot change without the owner, so admission and turns keep
+today's behavior under replacements. Registry and pause store replacements need no new members,
+because the orchestrator holds the claims around their calls. Supported, unsupported and forwarding
+replacements are qualified by T019.
+
 ## Audit boundary
 
 An authenticated owner-scoped query has an explicit supported result/refusal and takes actor,
