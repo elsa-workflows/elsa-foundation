@@ -24,7 +24,7 @@ public sealed class OrdinalCollationMigrationTests
     private static readonly string[] CollatingModules =
     [
         "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
-        "PublishingSnapshotReview", "Secrets", "WorkflowsDesign"
+        "PublishingSnapshotReview", "Secrets", "Specialists", "WorkflowsDesign"
     ];
 
     /// <summary>
@@ -67,6 +67,14 @@ public sealed class OrdinalCollationMigrationTests
         // Part of the key and of the projection audit's keyset cursor, beside the name.
         ("Secrets", "elsa_secrets", "Tombstone"),
         ("Secrets", "elsa_secrets", "ScopeLookupKey"),
+        ("Specialists", "elsa_specialist_turns", "ScopeKey"),
+        ("Specialists", "elsa_specialist_turns", "Handle"),
+        ("Specialists", "elsa_specialist_turns", "OperationKey"),
+        ("Specialists", "elsa_specialist_turns", "SchemaVersion"),
+        ("Specialists", "elsa_specialist_turns", "Fence"),
+        ("Specialists", "elsa_specialist_conversations", "ScopeKey"),
+        ("Specialists", "elsa_specialist_conversations", "Id"),
+        ("Specialists", "elsa_specialist_conversations", "SchemaVersion"),
         ("WorkflowsDesign", "elsa_workflow_definitions_v2", "IdLookupHash"),
         ("WorkflowsDesign", "elsa_workflow_definition_versions", "SemVerSortKey")
     ];
@@ -82,6 +90,8 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_definitions", "Description"),
         ("ActivitiesDesign", "elsa_activity_definitions", "DisplayName"),
         ("ClusterMembership", "elsa_cluster_members", "ReportJson"),
+        ("Specialists", "elsa_specialist_turns", "Payload"),
+        ("Specialists", "elsa_specialist_conversations", "Payload"),
         ("Elsa3Import", "elsa3_reusable_import_collections", "ContentJson"),
         ("IdentityIam", "identity_users", "PasswordHash"),
         ("IdentityIam", "identity_roles", "PermissionsJson"),

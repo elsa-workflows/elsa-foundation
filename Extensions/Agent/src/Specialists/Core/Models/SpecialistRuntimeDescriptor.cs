@@ -17,7 +17,12 @@ public sealed record SpecialistRuntimeDescriptor(
     string? DefinitionVersionId = null,
     string? Version = null,
     string? TemplateHash = null,
-    string? SourceReferenceId = null);
+    string? SourceReferenceId = null)
+{
+    /// <summary>Explicit native invocation contract profile. Null retains the legacy fresh-only public boundary.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? InvocationControlsProfile { get; init; }
+}
 
 /// <summary>Native persisted provenance supplied by the runtime, never an authorization grant from a caller.</summary>
 public sealed record SpecialistInvocationIdentity(

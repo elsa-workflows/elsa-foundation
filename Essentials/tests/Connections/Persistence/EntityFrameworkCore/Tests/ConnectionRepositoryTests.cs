@@ -13,6 +13,8 @@ public sealed class ConnectionRepositoryTests
     {
         await using var database = await Database.CreateAsync();
         var document = Document("Tenant-A", "Mail");
+        document.Definition.IncarnationId = Guid.NewGuid().ToString("N");
+        var incarnation = document.Definition.IncarnationId;
         document.Definition.Settings["Endpoint"] = "https://example.test";
         document.Definition.SecretFields["token"] = new() { SecretName = "private-reference", SourceKind = "secret" };
         await using (var context = database.Context())
@@ -26,6 +28,7 @@ public sealed class ConnectionRepositoryTests
         await using var restarted = database.Context();
         var restored = (await new EfConnectionRepository(restarted).FindAsync("Tenant-A", "MAIL"))!;
         Assert.Equal("https://example.test", restored.Definition.Settings["endpoint"]);
+        Assert.Equal(incarnation, restored.Definition.IncarnationId);
         Assert.Equal(0, restored.State.Version);
         Assert.Null(await new EfConnectionRepository(restarted).FindAsync("tenant-a", "mail"));
         Assert.True(await new EfConnectionRepository(restarted).IsSecretReferencedAsync("Tenant-A", "PRIVATE-REFERENCE"));

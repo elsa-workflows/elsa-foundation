@@ -14,6 +14,7 @@
     <ProjectReference Include="../../../../../Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
     <InternalsVisibleTo Include="Elsa.Agent.Specialists.Tests" />
   </ItemGroup>
 </Project>

@@ -222,7 +222,13 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
         Assert.Equal(successor.Execution.ActivityExecutionId, superseded.SupersededByActivityExecutionId);
 
         Assert.Equal(ActivityExecutionStatus.Running, successor.Status);
-        Assert.Same(source.InputSnapshot, successor.InputSnapshot);
+        Assert.NotSame(source.InputSnapshot, successor.InputSnapshot);
+        Assert.Equal(successor.InvocationId, successor.InputSnapshot!.InvocationId);
+        Assert.Equal("source", source.InputSnapshot!.InvocationId);
+        Assert.Equal(source.InputSnapshot.ContractFingerprint, successor.InputSnapshot.ContractFingerprint);
+        Assert.Equal(source.InputSnapshot.BindingFingerprint, successor.InputSnapshot.BindingFingerprint);
+        Assert.Equal(source.InputSnapshot.MaterializedAt, successor.InputSnapshot.MaterializedAt);
+        Assert.Equal(source.InputSnapshot.Values, successor.InputSnapshot.Values);
         if (structureSnapshot)
         {
             Assert.True(successor.InputSnapshot!.Values["Case:first:Condition"].InlineValue!.Value.GetBoolean());

@@ -60,6 +60,10 @@ internal static class ActivitySuccessorStaging
             Metadata = metadata,
             Attempts = [],
             PrivateState = null,
+            // Values and binding policy stay pinned, but the typed snapshot belongs to this new
+            // native invocation. Carrying the old owner fails VF-ACT-001 at typed completion.
+            InputSnapshot = source.InputSnapshot is { } input ? new ActivityInputSnapshot(successorId,
+                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) : null,
             Completion = null,
             Fault = null,
             TriggerRegistrations = [],

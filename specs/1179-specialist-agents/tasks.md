@@ -4,9 +4,10 @@
 [contracts](contracts/) and [qualification guide](quickstart.md).
 
 **Status**: Implementation in progress. Checked boxes record completed implementation and local
-qualification; they do not assert merge or product acceptance. M2 source/package work is in
-[PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with exact-head CI, dependency
-merge and resulting-main qualification tracked there. The product spec remains nonterminal.
+qualification; they do not assert product acceptance. M2 is complete through
+[PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573), with exact-head CI and
+resulting-main qualification on `0d6db68a3`. M3 implementation is active under
+[#3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523). The product spec remains nonterminal.
 
 **Cadence**: ADR 0080 D1 risk-based behavior tests; no invented TDD rule or coverage quota. Tests
 accompany their owning implementation slice and complete before its review/merge. Use meaningful
@@ -49,21 +50,31 @@ also requires M3/M5/M7 evidence.
 **Independent test**: Restart between turns/acceptance/delivery, force scope/revision/fence/uncertainty
 and cancellation races, and verify journal and process independently.
 
-T014–T015 are locally implemented/qualified by prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
-under existing Connections owner #2854. Their checks record source/package qualification; required
-CI, review/merge and resulting-main qualification remain open. They do not establish M3 specialist
-execution or later product acceptance.
+T014–T015 are complete through prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
+under existing Connections owner #2854, independently reviewed PR #3591 and source/package/core/Studio
+qualification on resulting main `5be59cebc`. They do not establish M3 specialist execution or later product
+acceptance. M3 source and local qualification are implemented in PR #3594, including the shared draft
+Test Run application service, concrete SDK/socket profiles, optional streaming, protected continuity,
+retention and packaged recovery. T016–T023 implementation is complete; independent review converged.
+Required remote CI, Code Review merge and resulting-main verification remain before M3 closes.
+The complete host/provider/store and live/Studio product acceptance remains M4–M7.
 
 - [x] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.
 - [x] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
-- [ ] T016 [US3] Implement concrete model connection/client/capability contributors in `Extensions/Agent/src/Specialists/Anthropic/` and `Extensions/Agent/src/Specialists/AzureOpenAI/`, with point-of-use auth, allowed hosts, provider setting/schema support and no Weaver harness activation.
-- [ ] T017 [US3] Test actual provider SDK request/options/response loss/disabled opaque retries and capability drift using protocol servers in `Extensions/Agent/tests/Specialists/Providers/`; count physical requests rather than only outer agent runs.
-- [ ] T018 [US3] Implement conversation/turn/evaluation EF records, CQS/CAS/unexpired fencing and four provider migrations in `Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/`; preserve the model in `data-model.md`.
-- [ ] T019 [US3] Implement exact operation/fingerprint admission, atomic accepted session/result/usage and old-operation replay in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistTurnCoordinator.cs`, with persisted single-specialist call/tool/time/token reservations and deadline/unknown-usage settlement in `SpecialistTurnBudgetAllocator.cs` before real provider dispatch.
-- [ ] T020 [US3] Implement versioned minimal session codec, scoped protection envelope, key retention/rotation and fresh/explicit-continuation policy in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistSessionCodec.cs`; add optional invocation controls with collision checks, and exclude private reasoning/credentials.
-- [ ] T021 [US3] Implement exact-operation cancel/applied intents, pre-admission tombstones and durable idempotent settlement through existing native checkpoint/outbox seams in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistCheckpointEnricher.cs` and `SpecialistSettlementHandler.cs`.
-- [ ] T022 [US3] Prove sensitive/redacted native flow and explicit encryption-required/secret-input refusal, journal winners, delayed cancellation, lease loss, uncertainty and crash/ack boundaries in `Extensions/Agent/tests/Specialists/Recovery/`; include pre-dispatch budget exhaustion/deadline, unknown usage/restart and SDK physical-request controls, with no accepted model replay/cancelled parent continuation.
-- [ ] T023 [US3] Deliver retention/purge/disabled-new-admission and old codec/key reader compatibility in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistRetentionPruner.cs` and `Extensions/Agent/tests/Specialists/Compatibility/`; retain necessary pins/tombstones.
+- [x] T016 [US3] Implement concrete model connection/client/capability contributors in `Extensions/Agent/src/Specialists/Anthropic/` and `Extensions/Agent/src/Specialists/AzureOpenAI/`, with point-of-use auth, allowed hosts, provider setting/schema support and no Weaver harness activation.
+- [x] T017 [US3] Test actual provider SDK request/options/response loss/disabled opaque retries and capability drift using protocol servers in `Extensions/Agent/tests/Specialists/Tests/Providers/`; count physical requests rather than only outer agent runs.
+- [x] T018 [US3] Implement conversation/turn EF records (evaluation records follow T037), CQS/CAS/unexpired fencing and four provider migrations in `Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/`; preserve the model in `data-model.md`.
+- [x] T019 [US3] Implement exact operation/fingerprint admission, atomic accepted session/result/usage and old-operation replay in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Journal/SpecialistTurnJournal.cs`, with persisted single-specialist model-call/time/output-token reservations and deadline/unknown-usage settlement in `SpecialistTurnBudgetAllocator.cs` before real provider dispatch.
+- [x] T020 [US3] Implement versioned minimal session codec, scoped protection envelope, key retention/rotation and fresh/explicit-continuation policy in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistSessionCodec.cs`; add optional invocation controls with collision checks, and exclude private reasoning/credentials.
+- [x] T021 [US3] Implement exact-operation cancel/applied intents, pre-admission tombstones and durable idempotent settlement through existing native checkpoint/outbox seams in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistCheckpointEnricher.cs` and `SpecialistSettlementHandler.cs`.
+- [x] T022 [US3] Prove sensitive/redacted native flow and explicit encryption-required/secret-input refusal, journal winners, delayed cancellation, lease loss, uncertainty and crash/ack boundaries in `Extensions/Agent/tests/Specialists/Tests/Recovery/`; include pre-dispatch budget exhaustion/deadline, unknown usage/restart and SDK physical-request controls, with no accepted model replay/cancelled parent continuation.
+- [x] T023 [US3] Deliver retention/purge/disabled-new-admission and old codec/key reader compatibility in `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Services/SpecialistRetentionPruner.cs` and `Extensions/Agent/tests/Specialists/Tests/Recovery/`; retain necessary pins/tombstones.
+
+M3 admits no tool execution, so its tool budget is zero by capability refusal; T043/T047 add and
+reserve actual tool/team effects through the owning #2912 contracts. Evaluation records belong to
+M5/T037 with concrete case/run authorization and retention; T018 owns only the conversation/turn
+persistence needed by specialist execution. This clarifies sequencing and preserves the complete
+Program acceptance rather than adding unused evaluation rows to M3.
 
 ## Phase 4 — Native and BPMN editorial composition (US2; M4)
 
@@ -133,7 +144,7 @@ four authorized live journeys, retaining exact artifacts/readiness/original fail
 
 - [ ] T051 [US8] Produce immutable packages/Studio distribution and independent module/consumer projects with isolated locks/caches/archive and loaded-byte checks in `tools/agents/conformance/`.
 - [ ] T052 [US8] Execute four-store × three-host × two-provider protocol matrix and independently retained authoring-only/runtime-only/combined/Studio shapes through `tools/agents/conformance/`; use normal public readiness/shell lifecycle and private state.
-- [ ] T053 [US8] Qualify disabled admission, retained in-flight work/readers, key/codec/schema upgrades, interrupted migration and explicitly supported rollback across actual providers in `Extensions/Agent/tests/Specialists/Compatibility/` and `tools/agents/conformance/`.
+- [ ] T053 [US8] Qualify disabled admission, retained in-flight work/readers, key/codec/schema upgrades, interrupted migration and explicitly supported rollback across actual providers in `Extensions/Agent/tests/Specialists/Tests/Recovery/` and `tools/agents/conformance/`.
 - [ ] T054 [US8] Run bounded authorized live Anthropic/Azure OpenAI Copywriter/Proofreader examples through native and BPMN workflows, recording exact access/deployment/model identity and observed evidence in `specs/1179-specialist-agents/evidence/`; do not publish secrets/raw private state.
 - [ ] T055 [US8] Ship user guide `website/docs/extensions/specialist-agents.md` with `website/docs/SUMMARY.md` navigation, operator guide `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/README.md`, and module-author `Extensions/Agent/src/Specialists/Core/README.md`, covering examples/configuration, actual support, migration/rollback and uncertainty/cancellation.
 - [ ] T056 [US8] Reconcile real host startup asset budgets, missing/incompatible/restored module controls, native resource isolation and owned-process cleanup in `tools/agents/conformance/`; do not substitute static closure or source-tree hosts.
@@ -186,3 +197,11 @@ not permission to exceed Program WIP or run simultaneous solution builds.
 | FR-025 | T054 | A14 |
 | FR-026 | T013,T055,T058–T060 | A15 |
 | SC-001–SC-007 | All story proofs plus T051–T060 | Complete observed A1–A15 |
+
+### M3 review follow-up owned by M7
+
+[M7 #3527](https://github.com/elsa-workflows/elsa-foundation/issues/3527) must resolve indefinite
+protected-content retention for terminal-owner OutcomeUnknown and abandoned Claimed/Dispatching
+turns with a bounded resolution or retention ceiling. Preserve unknown/no-inference-retry semantics,
+conversation pins, diagnostic metadata and replay refusal. The current M3 sweep deliberately pins
+these states; documenting this limitation does not satisfy that M7 acceptance item.

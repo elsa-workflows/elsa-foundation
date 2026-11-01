@@ -49,6 +49,7 @@ public sealed class UsesEfModuleGuardTests
         ("IdentityIamEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityProviderConfigurationEntityFrameworkCore", ["Identity.ProviderConfiguration"], true),
         ("SecretsEntityFrameworkCore", ["Secrets"], true),
+        ("SpecialistsEntityFrameworkCore", ["Specialists"], true),
         ("StudioPreferencesEntityFrameworkCore", ["Studio.Preferences"], true),
         ("WorkflowsDashboardEntityFrameworkCore", ["Workflows.Design", "Workflows.Runtime"], false),
         ("WorkflowsDesignEntityFrameworkCore", ["Workflows.Design"], true),

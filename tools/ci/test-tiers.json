@@ -612,6 +612,12 @@
       "medianMinutes": 0.25
     },
     {
+      "project": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
@@ -899,7 +905,8 @@
           "runtime-distributed",
           "transaction-topology",
           "workbench-openiddict",
-          "connections"
+          "connections",
+          "specialist-journal"
         ]
       },
       {
@@ -1062,6 +1069,11 @@
       "suite": "connections",
       "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "specialist-journal",
+      "project": "Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     }
   ],
   "secretsCompositionSuite": {
