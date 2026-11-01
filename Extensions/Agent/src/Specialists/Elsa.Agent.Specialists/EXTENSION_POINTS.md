@@ -114,8 +114,10 @@ now rechecks current native provenance and authenticates the exact immutable rec
 attempt fails. Only a confirmed accepted result can complete without another model call. Failure before
 commit remains unknown, and an unavailable receipt confirms no success. Cancellation through the real
 native actor after journal acceptance preserves history but prevents process application. A changed
-committed binding also refuses cached completion. These cases retain the original failure when
-confirmation is unavailable; they do not retry an uncertain write.
+committed operation identity, contract or input binding also refuses completion. The same comparison
+runs before and after acceptance, after cached replay association and before final facade typed completion.
+A test-only checkpoint participant changes the binding after model-child completion to exercise that
+last boundary independently. These cases retain the original failure when confirmation is unavailable; they do not retry an uncertain write.
 
 Cancellation/applied dispositions, pre-admission tombstones and retention are still required by T021–T023.
 A committed but unreadable receipt can still leave native work faulted; this remains distinct from

@@ -47,6 +47,12 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
             throw Failure();
     }
 
+    internal static void VerifyRequest(SpecialistTurnRequest request, SpecialistInvocationIdentity identity, ActivityExecutionState parent, ExecutableNode node)
+    {
+        if (request.Identity != identity || request.Contract.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint ||
+            request.BindingFingerprint != parent.InputSnapshot!.BindingFingerprint) throw Failure();
+    }
+
     public static SpecialistRuntimeDescriptor Descriptor(ExecutableNode node)
     {
         SpecialistRuntimeDescriptor? descriptor;

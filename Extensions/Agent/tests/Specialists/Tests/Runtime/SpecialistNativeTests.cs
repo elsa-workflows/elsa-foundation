@@ -36,30 +36,104 @@ public sealed class SpecialistNativeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Acceptance_confirmation_refuses_changed_committed_native_binding(bool durable)
+    public async Task Facade_completion_refuses_binding_changed_by_the_child_completion_checkpoint(bool durable)
     {
         using var files = new JournalFiles();
-        var factory = new FixtureFactory("{\"Article\":\"accepted before binding changed\"}");
-        var trace = new LeaseTrace { LoseAcceptanceResponse = true };
+        var factory = new FixtureFactory("{\"Article\":\"accepted before final binding changed\"}");
+        var trace = new LeaseTrace { ChangeBindingAtChildCompletion = true };
         await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
         var executable = await ExecutableAsync(provider, allowContinuity: true);
         var (actor, _) = await StartAsync(provider, executable);
-        trace.AfterAccepted = async () =>
-        {
-            var store = provider.GetRequiredService<IActivityExecutionStateStore>();
-            var parent = (await store.ListAllAsync("run")).Single(state => state.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
-            var identity = parent.ContractIdentity!;
-            await store.SaveAsync(parent with { ContractIdentity = new(identity.ActivityTypeKey, identity.ContractVersion, "changed-contract-fingerprint") });
-        };
         var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
         await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
         await DrainAsync(actor);
         var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+        var parent = states.Single(state => state.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        Assert.Equal("changed-at-child-completion", parent.InputSnapshot!.BindingFingerprint);
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Null(parent.Completion);
+        Assert.Equal(ActivityExecutionStatus.Completed, states.Single(state => state.ParentActivityExecutionId == parent.InvocationId).Status);
+        Assert.Equal(1, factory.Calls);
+        Assert.Equal(SpecialistTurnStatus.Accepted, (await NativeTurnAsync(provider, executable)).Document.Status);
+    }
+
+    private sealed class LateBindingMutation(IActivityExecutionStateStore states) : IRuntimeCheckpointCommitEnricher
+    {
+        public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+        {
+            var child = commit.StateChanges.ActivityExecutions.FirstOrDefault(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
+                change.State.Status == ActivityExecutionStatus.Completed && change.State.Provenance.Metadata.ContainsKey(SpecialistNativeBinding.TurnHandleMetadataKey))?.State;
+            if (child?.ParentActivityExecutionId is not { } parentId) return commit;
+            var change = commit.StateChanges.ActivityExecutions.FirstOrDefault(candidate => candidate.StateId == parentId);
+            var parent = change?.State ?? await states.FindAsync(commit.WorkflowExecutionId, parentId, cancellationToken);
+            if (parent?.InputSnapshot is not { } input || parent.Status != ActivityExecutionStatus.Running) return commit;
+            var updated = parent with { InputSnapshot = new(input.InvocationId, input.ContractFingerprint, "changed-at-child-completion", input.Values, input.MaterializedAt) };
+            return commit with { StateChanges = commit.StateChanges.WithActivityExecutions([
+                .. commit.StateChanges.ActivityExecutions.Where(candidate => candidate.StateId != parentId),
+                new(parentId, RuntimeStateChangeOperation.Upsert, updated, change?.Metadata ?? new Dictionary<string, string>())]) };
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "contract", "before-accept")]
+    [InlineData(false, "contract", "after-accept")]
+    [InlineData(false, "contract", "confirmation")]
+    [InlineData(false, "binding", "before-accept")]
+    [InlineData(false, "binding", "after-accept")]
+    [InlineData(false, "binding", "confirmation")]
+    [InlineData(false, "operation", "before-accept")]
+    [InlineData(false, "operation", "after-accept")]
+    [InlineData(false, "operation", "confirmation")]
+    [InlineData(true, "contract", "before-accept")]
+    [InlineData(true, "contract", "after-accept")]
+    [InlineData(true, "contract", "confirmation")]
+    [InlineData(true, "binding", "before-accept")]
+    [InlineData(true, "binding", "after-accept")]
+    [InlineData(true, "binding", "confirmation")]
+    [InlineData(true, "operation", "before-accept")]
+    [InlineData(true, "operation", "after-accept")]
+    [InlineData(true, "operation", "confirmation")]
+    public async Task Revalidation_refuses_changed_committed_native_binding(bool durable, string changed, string phase)
+    {
+        using var files = new JournalFiles();
+        var factory = new FixtureFactory("{\"Article\":\"accepted before binding changed\"}");
+        var afterAccept = phase != "before-accept";
+        var trace = new LeaseTrace { LoseAcceptanceResponse = phase == "confirmation" };
+        await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
+        var executable = await ExecutableAsync(provider, allowContinuity: true);
+        var (actor, _) = await StartAsync(provider, executable);
+        var stateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
+        var original = (await stateStore.ListAllAsync("run")).Single(state => state.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!;
+        var descriptor = SpecialistNativeBinding.Descriptor(executable.RootActivity);
+        var retainedIdentity = new SpecialistInvocationIdentity(workflow.TenantId, workflow.Partition!.Value, "run", original.InvocationId, original.OperationKey,
+            executable.Identity.ArtifactId, executable.Identity.ArtifactHash, descriptor.DefinitionVersionId!, descriptor.TemplateHash!);
+        var handle = SpecialistNativeBinding.Handle(original);
+        async ValueTask ChangeBindingAsync()
+        {
+            var parent = (await stateStore.FindAsync("run", original.InvocationId))!;
+            var identity = parent.ContractIdentity!;
+            var input = parent.InputSnapshot!;
+            var updated = changed switch
+            {
+                "contract" => parent with { ContractIdentity = new(identity.ActivityTypeKey, identity.ContractVersion, "changed-contract-fingerprint") },
+                "binding" => parent with { InputSnapshot = new(input.InvocationId, input.ContractFingerprint, "changed-binding-fingerprint", input.Values, input.MaterializedAt) },
+                _ => parent with { Provenance = parent.Provenance with { Metadata = new Dictionary<string, string>(parent.Provenance.Metadata) { [RuntimeMetadataKeys.OperationKey] = "changed-operation" } } }
+            };
+            await stateStore.SaveAsync(updated);
+        }
+        if (afterAccept) trace.AfterAccepted = ChangeBindingAsync;
+        else factory.BeforeResponse = ChangeBindingAsync;
+        var claim = (await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))!;
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        var states = await stateStore.ListAllAsync("run");
         var child = states.Single(state => state.Execution.ExecutableNodeId == SpecialistNativeBinding.ChildNode(executable.RootActivity).ExecutableNodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, child.Status);
         Assert.Null(child.Completion);
         Assert.Equal(1, factory.Calls);
-        Assert.Equal(SpecialistTurnStatus.Accepted, (await NativeTurnAsync(provider, executable)).Document.Status);
+        Assert.Equal(afterAccept ? SpecialistTurnStatus.Accepted : SpecialistTurnStatus.Failed,
+            (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, retainedIdentity, default)).Document.Status);
     }
 
     [Theory]
@@ -134,9 +208,11 @@ public sealed class SpecialistNativeTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task A_real_native_operator_retry_replays_committed_acceptance_into_a_new_parent_and_child(bool durable)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task A_real_native_operator_retry_replays_committed_acceptance_into_a_new_parent_and_child(bool durable, bool changeReplayBinding)
     {
         using var files = new JournalFiles();
         var factory = new FixtureFactory("{\"Article\":\"accepted once\"}");
@@ -198,6 +274,13 @@ public sealed class SpecialistNativeTests
         Assert.True(replayClaim is not null, JsonSerializer.Serialize(new {
             States = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.Fault }),
             Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run") }));
+        if (changeReplayBinding) trace.AfterReplayBound = async identity =>
+        {
+            var store = provider.GetRequiredService<IActivityExecutionStateStore>();
+            var parent = (await store.FindAsync("run", identity.ActivityExecutionId))!;
+            var input = parent.InputSnapshot!;
+            await store.SaveAsync(parent with { InputSnapshot = new(input.InvocationId, input.ContractFingerprint, "changed-replay-binding", input.Values, input.MaterializedAt) });
+        };
         await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), replayClaim);
         await DrainAsync(actor, "accepted-replay");
         for (var step = 0; step < 8 && (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status == WorkflowExecutionStatus.Running; step++)
@@ -207,6 +290,15 @@ public sealed class SpecialistNativeTests
         }
         Assert.Equal(1, factory.Calls);
         Assert.Equal(1, factory.Opens);
+        if (changeReplayBinding)
+        {
+            states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run");
+            var refusedChild = states.Single(state => state.Execution.ExecutableNodeId == SpecialistNativeBinding.ChildNode(specialist.RootActivity).ExecutableNodeId && state.ParentActivityExecutionId != original.InvocationId);
+            Assert.Equal(ActivityExecutionStatus.Faulted, refusedChild.Status);
+            Assert.Null(refusedChild.Completion);
+            Assert.Equal(accepted.ProtectedResult, (await provider.GetRequiredService<SpecialistTurnJournal>().ReadAsync(handle, originalIdentity, default)).Document.ProtectedResult);
+            return;
+        }
         Assert.True((await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status == WorkflowExecutionStatus.Completed,
             JsonSerializer.Serialize(new { States = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run")).Select(x => new { x.InvocationId, x.Execution.ExecutableNodeId, x.Status, x.Fault }),
                 Incidents = await provider.GetRequiredService<IIncidentStateStore>().ListAsync("run") }));
@@ -966,6 +1058,8 @@ public sealed class SpecialistNativeTests
                 new() { Provider = "Sqlite", ConnectionString = journalConnection });
         services.AddSingleton<ISpecialistModelClientFactory>(factory);
         leaseTrace?.Decorate(services);
+        if (leaseTrace?.ChangeBindingAtChildCompletion == true)
+            services.AddScoped<IRuntimeCheckpointCommitEnricher>(provider => new LateBindingMutation(provider.GetRequiredService<IActivityExecutionStateStore>()));
         services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
         services.AddPersistenceModes();
         var provider = services.BuildServiceProvider();
@@ -1063,6 +1157,7 @@ public sealed class SpecialistNativeTests
         public int? MaximumOutputTokens { get; private set; }
         public JsonElement? Schema { get; private set; }
         public TaskCompletionSource? ResponseGate { get; init; }
+        public Func<ValueTask>? BeforeResponse { get; set; }
         public TaskCompletionSource RequestSent { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
         public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
@@ -1081,6 +1176,7 @@ public sealed class SpecialistNativeTests
                 owner.Requests.Add(messages.ToArray());
                 owner.RequestSent.TrySetResult();
                 if (owner.ResponseGate is not null) await owner.ResponseGate.Task.WaitAsync(cancellationToken);
+                if (owner.BeforeResponse is { } callback) await callback();
                 owner.LastUser = messages.Last(x => x.Role == ChatRole.User).Text;
                 owner.Instructions = options?.Instructions;
                 owner.ModelId = options?.ModelId;

@@ -16,11 +16,16 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
         var (identity, parent, node) = await binding.ParentAsync(context, context.CancellationToken);
         var handle = SpecialistNativeBinding.Handle(parent);
         var (document, request) = await journal.ReadAsync(handle, identity, context.CancellationToken);
-        if (request.Contract.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint || request.BindingFingerprint != parent.InputSnapshot!.BindingFingerprint)
-            throw SpecialistModelRunner.Failure("specialist.native.binding", "The staged turn no longer matches its native business contract.");
+        SpecialistNativeBinding.VerifyRequest(request, identity, parent, node);
+        async ValueTask VerifyCurrentBindingAsync(CancellationToken cancellationToken)
+        {
+            var current = await binding.ParentAsync(context, cancellationToken);
+            SpecialistNativeBinding.VerifyRequest(request, current.Identity, current.Parent, current.Node);
+        }
         if (document.Status == SpecialistTurnStatus.Accepted)
         {
             _ = await journal.ReplayAsync(handle, identity, context.InvocationId, context.CancellationToken);
+            await VerifyCurrentBindingAsync(context.CancellationToken);
             return ActivityTransition.Complete(handle);
         }
         var dispatched = false;
@@ -45,6 +50,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
             if (document.Status == SpecialistTurnStatus.Accepted)
             {
                 _ = await journal.ReplayAsync(handle, identity, context.InvocationId, linked.Token);
+                await VerifyCurrentBindingAsync(linked.Token);
                 return ActivityTransition.Complete(handle);
             }
             document = await journal.ClaimAsync(handle, identity, context.InvocationId, time.GetUtcNow(), linked.Token);
@@ -59,10 +65,11 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
                 dispatched = true;
                 var result = await runner.RunAsync(request, active.Token, budgets.Create(document, request));
                 renewal.ThrowIfLost();
-                _ = await binding.ParentAsync(context, active.Token);
+                await VerifyCurrentBindingAsync(active.Token);
                 acceptanceStarted = true;
                 if (!await journal.AcceptAsync(document, result, time.GetUtcNow(), active.Token))
                     throw SpecialistModelRunner.Failure("specialist.turn.fence", "The specialist result cannot be accepted under this worker lease.");
+                await VerifyCurrentBindingAsync(context.CancellationToken);
                 return ActivityTransition.Complete(handle);
             }
         }
@@ -75,7 +82,7 @@ internal sealed class SpecialistModelTurn(SpecialistNativeBinding binding, Speci
                     // An acceptance acknowledgement may be lost after its durable commit. Confirm
                     // both current native authority and the exact protected receipt; never infer
                     // success from an attempted write or issue another model request.
-                    _ = await binding.ParentAsync(context, context.CancellationToken);
+                    await VerifyCurrentBindingAsync(context.CancellationToken);
                     _ = await journal.ResultAsync(handle, identity, context.InvocationId, context.CancellationToken);
                     return ActivityTransition.Complete(handle);
                 }

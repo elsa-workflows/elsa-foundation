@@ -54,9 +54,11 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         return (document, envelope.Request with { Identity = identity });
     }
 
-    public async ValueTask<SpecialistTurnResult> ResultAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken)
+    public async ValueTask<SpecialistTurnResult> ResultAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken,
+        Action<SpecialistTurnRequest>? verifyRequest = null)
     {
-        var (document, _) = await ReadAsync(handle, identity, cancellationToken);
+        var (document, request) = await ReadAsync(handle, identity, cancellationToken);
+        verifyRequest?.Invoke(request);
         if (document.Status != SpecialistTurnStatus.Accepted || !BoundToChild(document, identity, childInvocationId) || document.ProtectedResult is null)
             throw Failure("specialist.turn.unaccepted", "This native child has no accepted specialist turn.");
         ResultEnvelope? envelope;

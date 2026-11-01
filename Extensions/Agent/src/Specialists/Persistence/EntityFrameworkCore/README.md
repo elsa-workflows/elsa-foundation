@@ -85,4 +85,6 @@ A runtime acceptance attempt whose acknowledgement is lost can be reconciled thr
 protected receipt read after rechecking native provenance. This is confirmation of an immutable
 committed result, not a retry of an uncertain write. Before-commit failure or unavailable confirmation
 cannot report native success. Native cancellation after acceptance preserves the journal winner while
-preventing process application.
+preventing process application. Current operation identity, contract and input-binding fingerprints
+are compared with the protected request at acceptance, cached replay and final typed completion.
+These source-runtime tests exercise both Memory and SQLite; they do not imply packaged or live-model qualification.

@@ -78,7 +78,8 @@ internal sealed class SpecialistActivity(SpecialistNativeBinding binding, Specia
         var handle = SpecialistNativeBinding.Handle(context.ActivityExecutionState);
         await binding.VerifyChildCompletionAsync(context, child.CompletedChildActivityExecutionId, child.CompletedChildExecutableNodeId, handle, context.CancellationToken);
         acceptedResult = SpecialistNativeControls.Complete(SpecialistNativeBinding.Descriptor(context.ExecutableNode),
-            await journal.ResultAsync(handle, identity, child.CompletedChildActivityExecutionId, context.CancellationToken));
+            await journal.ResultAsync(handle, identity, child.CompletedChildActivityExecutionId, context.CancellationToken,
+                request => SpecialistNativeBinding.VerifyRequest(request, identity, context.ActivityExecutionState, context.ExecutableNode)));
         return RuntimeStructuralContinuation.Complete();
     }
 

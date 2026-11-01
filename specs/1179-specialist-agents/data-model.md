@@ -225,5 +225,6 @@ exact authenticated immutable receipt for that parent/child. Confirmed acceptanc
 another inference or write; no attempted/unreadable write implies success. Real actor cancellation
 after journal acceptance retains the accepted history while preventing native completion. Before-commit
 failure remains unknown, unavailable receipt confirmation produces no native success, and changed
-native binding refuses cached completion. This does not implement durable cancellation/applied source
+native operation identity, contract or input binding refuses completion. The shared comparison runs
+before and after acceptance, after accepted replay association and before facade typed completion. This does not implement durable cancellation/applied source
 settlement or tombstone/retention policy.

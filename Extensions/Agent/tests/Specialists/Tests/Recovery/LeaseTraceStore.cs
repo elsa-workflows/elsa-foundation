@@ -12,6 +12,8 @@ internal sealed class LeaseTrace
     internal bool LoseAcceptanceResponse { get; init; }
     internal bool FailBeforeAcceptance { get; init; }
     internal Func<ValueTask>? AfterAccepted { get; set; }
+    internal Func<SpecialistInvocationIdentity, ValueTask>? AfterReplayBound { get; set; }
+    internal bool ChangeBindingAtChildCompletion { get; init; }
     internal bool AlwaysLoseAcceptedReceiptRead { get; set; }
     internal bool LoseAcceptedReceiptRead { get; init; }
     internal int AcceptedReceiptReadsLost;
@@ -62,7 +64,12 @@ internal sealed class LeaseTraceStore(ISpecialistTurnStore inner, LeaseTrace tra
         if (trace.LoseRenewalResponse) throw new IOException("The committed renewal response was lost.");
         return result;
     }
-    public ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken) => inner.ReplayAcceptedAsync(handle, identity, childInvocationId, cancellationToken);
+    public async ValueTask<SpecialistTurnDocument?> ReplayAcceptedAsync(string handle, SpecialistInvocationIdentity identity, string childInvocationId, CancellationToken cancellationToken)
+    {
+        var result = await inner.ReplayAcceptedAsync(handle, identity, childInvocationId, cancellationToken);
+        if (result is not null && trace.AfterReplayBound is { } callback) await callback(identity);
+        return result;
+    }
     public ValueTask<bool> DispatchAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, DateTimeOffset now, CancellationToken cancellationToken) => inner.DispatchAsync(handle, identity, lease, now, cancellationToken);
     public ValueTask<SpecialistModelRequestReservation?> ReserveModelRequestAsync(string handle, SpecialistInvocationIdentity identity, SpecialistTurnLeaseToken lease, SpecialistModelRequestReservation reservation, DateTimeOffset now, CancellationToken cancellationToken)
     {
