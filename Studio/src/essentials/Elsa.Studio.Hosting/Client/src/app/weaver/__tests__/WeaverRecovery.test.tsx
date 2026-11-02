@@ -211,6 +211,30 @@ describe("Weaver session recovery", () => {
     a.unmount(); b.unmount();
   });
 
+  it.each(["reloaded page", "closed editor"])("refuses an approved client change after recovery with zero effect when its unsaved target is gone (%s)", async cause => {
+    const server = fakeServer();
+    const api = readyApi("ada");
+    const execute = vi.fn(async () => ({ outcome: "applied" as const, summary: "Moved." }));
+    api.agent.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
+      executeClient: execute, clientTargetAvailability: () => ({ status: "unavailable", reason: "The editor that held this unsaved draft was closed." }) });
+    const sessionId = server.seed("ada", [], [clientProposal("prop_c", "approved")]);
+    // A reload gives the page a new client identity; a closed editor keeps the identity but loses its unsaved target.
+    if (cause === "closed editor") server.prepareClientDelivery(sessionId, "prop_c", api.agent.clientId);
+    remember(sessionId);
+    const view = mount(server, "ada", api);
+    await flush();
+    click(buttonIn(proposalByTitle(view.container, "Move activity"), "Apply"));
+    await flush();
+    expect(execute).not.toHaveBeenCalled();
+    expect(server.client.acknowledgeClient).toHaveBeenCalledWith(sessionId, "inv_prop_c", expect.objectContaining({
+      outcome: "refused",
+      summary: cause === "closed editor" ? "The editor that held this unsaved draft was closed." : "The originating Studio context is unavailable."
+    }));
+    expect(server.proposal(sessionId, "prop_c").status).toBe("failed");
+    expect(proposalByTitle(view.container, "Move activity")?.getAttribute("data-status")).toBe("failed");
+    view.unmount();
+  });
+
   it("never lists or opens another user's session and shows the shared not-found outcome", async () => {
     const server = fakeServer();
     const foreign = server.seed("grace", [message("g1", "user", "Grace's secret prompt", "completed")]);

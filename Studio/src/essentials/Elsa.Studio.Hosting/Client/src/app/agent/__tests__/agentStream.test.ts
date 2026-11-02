@@ -286,3 +286,22 @@ function streamFrom(chunks: string[]) {
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
+
+// Preview (#3441): explicit provider notices and coded stream refusals.
+describe("agent stream recovery outcomes", () => {
+  it("keeps a provider notice and a refusal's code instead of treating them as transient progress or bare text", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ Kind: "progress", Content: "GitHub Copilot could not resume this session's earlier conversation.", Payload: { Code: "agent.provider.github_copilot.conversation_reset", Message: "GitHub Copilot could not resume this session's earlier conversation." } })}\n\n`,
+      `data: ${JSON.stringify({ Kind: "progress", Content: "Reading context" })}\n\n`,
+      `data: ${JSON.stringify({ Kind: "error", Error: { Code: "agent.context.disclosure_budget_exceeded", Message: "Session limit reached." } })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([
+      { type: "provider-notice", code: "agent.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." },
+      { type: "progress", label: "Reading context" },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+    ]);
+  });
+});

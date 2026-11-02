@@ -1293,6 +1293,13 @@ export interface StudioAgentToolContractContribution extends StudioBackendAwareC
   executionLocation?: StudioAgentExecutionLocation;
   /** Invoked only for a matching backend-prepared, explicitly reviewed client request. */
   executeClient?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult>;
+  /**
+   * Preview (#3441): the owning module's report, before anything is dispatched, of whether the invocation's exact
+   * unsaved target (for example its editor and working generation) still exists in this page. Anything other than
+   * `available`, or a failure to answer, refuses the operation with zero effect and the module's reason; nothing is
+   * reconstructed. A module that omits it is dispatched as before, and its `executeClient` may still refuse.
+   */
+  clientTargetAvailability?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): StudioAgentToolAvailability | Promise<StudioAgentToolAvailability>;
 }
 
 export interface StudioAgentResourceTarget {
