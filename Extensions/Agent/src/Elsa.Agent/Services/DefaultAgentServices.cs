@@ -303,6 +303,19 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     internal Task<AgentSessionClaim?> AcquireProposalAsync(string sessionId, DateTimeOffset? deadline, CancellationToken cancellationToken = default)
         => CommitAsync<AgentSessionClaim?>(sessionId, () => null, row => new(row.NewClaim(AgentSessionClaimKind.Proposal, deadline)), cancellationToken);
 
+    /// <summary>
+    /// Gives a recorded, unsettled proposal its claim on the session's current row, as hydration rebuilds it, when the
+    /// provisional claim could not be bound because its row was replaced between acquisition and insertion. An existing
+    /// claim (for example, one a newer hydration rebuilt from the record) is kept.
+    /// </summary>
+    internal Task EnsureProposalClaimAsync(string sessionId, string proposalId, DateTimeOffset? deadline, CancellationToken cancellationToken = default)
+        => CommitAsync<bool>(sessionId, () => false, row =>
+        {
+            if (row.Find(ProposalKey(proposalId)) is null)
+                row.Bind(row.NewClaim(AgentSessionClaimKind.Proposal, deadline), ProposalKey(proposalId));
+            return new(true);
+        }, cancellationToken);
+
     /// <summary>Binds a provisional proposal claim to its inserted proposal identity.</summary>
     internal bool BindProposal(AgentSessionClaim claim, string proposalId)
     {

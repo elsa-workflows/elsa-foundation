@@ -157,8 +157,19 @@ internal sealed class InMemoryAgentProposalService(
             inserted = true;
             if (claim is not null)
             {
-                inserted = _owner!.BindProposal(claim, proposal.Id);
-                if (inserted && Settled(proposal)) _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
+                if (_owner!.BindProposal(claim, proposal.Id))
+                {
+                    if (Settled(proposal)) _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
+                }
+                else
+                {
+                    // The row the provisional claim was acquired on was replaced before the insertion committed (an eviction
+                    // and a new hydration). The proposal is recorded, so its claim is rebuilt on the current row from the
+                    // recorded facts, as hydration would; without it a later execute would find no claim and expire it early.
+                    _owner.Release(claim);
+                    if (!Settled(proposal))
+                        await _owner.EnsureProposalClaimAsync(proposal.SessionId, proposal.Id, proposal.PreparedInvocation!.ExpiresAt, CancellationToken.None);
+                }
             }
         }
         finally

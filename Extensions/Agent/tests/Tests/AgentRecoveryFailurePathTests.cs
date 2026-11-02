@@ -110,6 +110,37 @@ public sealed class AgentRecoveryFailurePathTests
         Assert.NotNull(await c.Sessions.FindAsync(session.Id));
         Assert.Equal(AgentActionProposalStatus.Expired, (await c.Proposals.FindAsync(proposal.Id))!.Status);
     }
+
+    [Fact]
+    public async Task A_proposal_inserted_after_its_row_was_reloaded_keeps_a_claim_on_the_reloaded_row()
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var session = await harness.Host.CreateAsync();
+        var first = (await harness.Host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await harness.Host.Proposals.DenyAsync(first.Id, session.ActorId, "not this one")).Succeeded);
+        var second = first with
+        {
+            Id = "proposal-2", Status = AgentActionProposalStatus.AwaitingApproval,
+            PreparedInvocation = first.PreparedInvocation! with { InvocationId = "invocation-2", ToolCallId = "call-2" }
+        };
+        var b = harness.Restart();
+        // The provisional claim is acquired on the row its hydration loads; before the insertion's own commit, another
+        // operation of the session evicts that row, so the insertion commits on a newly hydrated row.
+        var held = store.HoldNextAcquire();
+        var insert = Task.Run(() => b.Proposals.AddAsync(second));
+        await held.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        store.RefuseNextWrite(write => write.Context.Count > 0, AgentSessionRecordOutcome.OwnershipLost);
+        var evicting = b.Sessions.AddContextAsync(session.Id,
+            [new("attachment-1", "test", null, "Label", "test.kind", AgentContextSensitivity.Internal, "scope", "Summary", null, new Dictionary<string, string>())]);
+        held.Release.SetResult();
+        await Assert.ThrowsAsync<AgentSessionOwnershipException>(() => evicting);
+        await insert.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The recorded, undecided proposal holds the session busy until its deadline, exactly as a hydrated one would.
+        Assert.Equal(AgentActionProposalStatus.AwaitingApproval, (await b.Proposals.FindAsync(second.Id))!.Status);
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, (await b.ProbeAsync(session)).Outcome);
+    }
 }
 
 /// <summary>A forwarding record store whose next matching write or acquisition fails as an unavailable store would.</summary>
@@ -126,17 +157,51 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
     /// <summary>The next ownership acquisition throws.</summary>
     public void FailNextAcquire() => Volatile.Write(ref _failAcquire, 1);
 
+    private (Func<AgentSessionRecordWrite, bool> Condition, AgentSessionRecordOutcome Outcome)? _refuseWrite;
+    private (TaskCompletionSource Entered, TaskCompletionSource Release)? _holdAcquire;
+
+    /// <summary>The next write matching <paramref name="condition"/> answers <paramref name="outcome"/> and records nothing.</summary>
+    public void RefuseNextWrite(Func<AgentSessionRecordWrite, bool> condition, AgentSessionRecordOutcome outcome)
+    {
+        lock (this) _refuseWrite = (condition, outcome);
+    }
+
+    /// <summary>Holds the next ownership acquisition at a barrier until released.</summary>
+    public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNextAcquire()
+    {
+        var hold = (new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously), new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        lock (this) _holdAcquire = hold;
+        return hold;
+    }
+
     public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default)
     {
+        lock (this)
+            if (_refuseWrite is { } refuse && refuse.Condition(write))
+            {
+                _refuseWrite = null;
+                return Task.FromResult(new AgentSessionRecordResult(refuse.Outcome));
+            }
         if (Volatile.Read(ref _failWrite) is { } condition && condition(write) && Interlocked.CompareExchange(ref _failWrite, null, condition) == condition)
             throw new InvalidOperationException("The record store is unavailable for this write.");
         return inner.WriteAsync(write, cancellationToken);
     }
 
-    public Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)
+    public async Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)
     {
         if (Interlocked.Exchange(ref _failAcquire, 0) == 1) throw new InvalidOperationException("The record store is unavailable for this read.");
-        return inner.AcquireOwnershipAsync(sessionId, ownerToken, cancellationToken);
+        (TaskCompletionSource Entered, TaskCompletionSource Release)? hold;
+        lock (this)
+        {
+            hold = _holdAcquire;
+            _holdAcquire = null;
+        }
+        if (hold is { } held)
+        {
+            held.Entered.TrySetResult();
+            await held.Release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+        }
+        return await inner.AcquireOwnershipAsync(sessionId, ownerToken, cancellationToken);
     }
 
     public Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default)
