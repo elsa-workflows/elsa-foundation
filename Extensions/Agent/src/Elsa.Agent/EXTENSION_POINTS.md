@@ -179,7 +179,8 @@ EF feature gives the owner a durable store and does not replace it.
 **Ownership.** Each process has one owner token. Hydration takes ownership when the record has no live
 owner, its lease lapsed or this process owns it; a takeover increments the fence. Every write is guarded on
 owner and fence and extends the lease (EF: database time, 30 seconds by default); while a foreground turn
-runs or an execution is dispatched the lease is renewed every 10 seconds. A graceful host stop, or the drain of a
+runs or a dispatched execution's executor is still running the lease is renewed every 10 seconds (an operation that only
+waits on a client or on its owner keeps the session busy but does not renew its lease). A graceful host stop, or the drain of a
 reloaded shell generation, gives every loaded session's lease back before the shell's container is disposed (the
 `ReleaseAgentSessionLeasesTerminator` shell terminator), so the next process takes those sessions over at once;
 only a crashed process's leases have to lapse. A live lease elsewhere answers the

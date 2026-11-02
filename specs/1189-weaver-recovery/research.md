@@ -146,7 +146,7 @@ Owner resolution of an uncertain client operation releases only that proposal's 
 **Decision:** The session record carries `OwnerToken` (one per process), `Fence` (incremented on every takeover), `LeaseExpiresAt` (in database time) and a concurrency token.
 - Ownership is acquired at hydrate, when the owner is empty or its lease has expired, or when this process already owns it.
 - Every write is guarded on the current owner and fence only. The same conditional update extends the lease, or re-acquires an expired lease that no other process took over. An idle session that one host revisits after the lease has lapsed therefore never fails. The Rules precedent, by contrast, requires an unexpired lease (`EfRuleRunStore.Leases.cs:136`).
-- While a Foreground claim is held or an execution is dispatched, the lease is also renewed in the background. The default is 30 seconds, configurable.
+- While a Foreground claim is held or a dispatched execution's executor is still running, the lease is also renewed in the background. An operation that only waits on a client or on its owner keeps the session busy without renewing the lease. The default is 30 seconds, configurable.
 - A process that finds another process's live lease returns a retryable 409 `agent.session.owned_elsewhere` with a retry hint. It does not take over.
 - Acknowledgements and owner resolutions are idempotent on retry. A retry after a takeover returns the retained outcome.
 

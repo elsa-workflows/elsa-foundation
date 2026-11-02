@@ -62,6 +62,34 @@ public sealed class AgentRecoveryFailurePathTests
         Assert.Equal("uncertain", (await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Status);
         Assert.Equal((1, 1), (harness.Module.Dispatches, harness.Module.Effects));
     }
+
+    [Fact]
+    public async Task A_recovered_uncertain_client_operation_keeps_the_session_busy_but_not_its_lease()
+    {
+        var client = new ProposalClientTool();
+        var authority = new ProposalTestAuthorizer();
+        using var harness = new AgentRestartHarness(configure: services =>
+        {
+            services.AddSingleton<IAgentTool>(client);
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
+        });
+        var (session, proposal, release) = await AgentRecoveryApiTests.UncertainClientOperationAsync(harness, client, authority);
+        var b = harness.Host;
+        // Process B recovered the operation Uncertain: it still holds the session busy, but nothing is in flight here.
+        Assert.Equal(AgentSessionPolicyOutcome.Busy, (await b.ProbeAsync(session)).Outcome);
+        using var c = harness.StartAnotherHost();
+
+        harness.Clock.Advance(PastLease);
+        await b.Owner.RenewLeasesAsync();
+
+        // B is idle, so its lease lapsed: process C takes the session over and the owner resolves the operation there.
+        var resolved = await c.Proposals.ResolveClientInvocationAsync(session.Id, proposal.PreparedInvocation!.InvocationId, session.ActorId,
+            AgentOwnerResolutionClaim.NotApplied);
+        Assert.True(resolved.Succeeded, resolved.Error?.Code);
+        Assert.Equal(AgentOwnerResolutionClaim.NotApplied, resolved.Value!.OwnerResolution?.Claim);
+        Assert.Equal((0, 0), (client.ExecuteCalls, client.CompleteCalls));
+        await release();
+    }
 }
 
 /// <summary>A forwarding record store whose next matching write or acquisition fails as an unavailable store would.</summary>

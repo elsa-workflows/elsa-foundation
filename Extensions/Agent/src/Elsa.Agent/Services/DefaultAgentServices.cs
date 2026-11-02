@@ -32,7 +32,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     IAgentSessionRecordStore? recordStore = null, InMemoryAgentProposalStore? proposalStore = null, IAgentTurnRegistry? turns = null)
     : IAgentSessionService, IAgentSessionPolicyParticipant, IDisposable, IAsyncDisposable
 {
-    /// <summary>How often leases of sessions with a running turn or a dispatched execution are renewed in the background.</summary>
+    /// <summary>How often leases of sessions with a running turn or a running executor are renewed in the background.</summary>
     internal static readonly TimeSpan RenewalInterval = TimeSpan.FromSeconds(10);
     private const long InitialPolicyRevision = 1;
     private const string PauseKey = "pause";
@@ -798,7 +798,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     }
 
     /// <summary>
-    /// Renews the lease of every loaded session that has a running turn or a dispatched execution, as the background
+    /// Renews the lease of every loaded session that has a running turn or a running executor, as the background
     /// timer does. A session whose ownership moved is lost: its row is evicted and its running turn cancelled. After a
     /// graceful shutdown began, nothing is renewed, and a renewal that was already in flight releases the lease it
     /// extended again, so it can never undo the shutdown's release.
@@ -1084,9 +1084,13 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 _keyed.Remove(key);
         }
 
-        /// <summary>A running turn or a dispatched execution needs its lease kept alive while it works.</summary>
+        /// <summary>
+        /// A running turn, or an execution whose executor is still running here, needs its lease kept alive while it
+        /// works. A dispatched operation that waits on a client or on its owner keeps the session busy, but nothing is in
+        /// flight in this process, so it must not keep another process from taking the session over.
+        /// </summary>
         public bool NeedsRenewal => _claims.Any(claim => claim.Kind == AgentSessionClaimKind.Foreground
-            || claim.Kind == AgentSessionClaimKind.Proposal && claim.Dispatched);
+            || claim.Kind == AgentSessionClaimKind.Proposal && claim.Executing);
 
         // A pre-dispatch proposal past its prepared deadline can never be dispatched, so it is not busy.
         public bool IsBusy(DateTimeOffset now) => _claims.Any(claim => claim.Kind != AgentSessionClaimKind.Proposal
