@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Agent.Core.Models;
 
@@ -21,12 +22,22 @@ internal static class AgentInvocationIntegrity
         return value with { Data = Freeze(value.Data) };
     }
 
-    public static string Digest<T>(T value)
+    public static string Digest<T>(T value) => DigestCanonical(CanonicalBytes(value));
+
+    /// <summary>The canonical JSON text (sorted keys, raw scalars) that <see cref="Digest{T}"/> is taken over.</summary>
+    public static string Canonical<T>(T value) => Encoding.UTF8.GetString(CanonicalBytes(value));
+
+    /// <summary>The digest of recorded canonical JSON text, exactly as <see cref="Digest{T}"/> computes it for the value it was written from.</summary>
+    public static string DigestCanonical(string canonical) => DigestCanonical(Encoding.UTF8.GetBytes(canonical));
+
+    private static string DigestCanonical(byte[] canonical) => Convert.ToHexString(SHA256.HashData(canonical)).ToLowerInvariant();
+
+    private static byte[] CanonicalBytes<T>(T value)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(writer, JsonSerializer.SerializeToElement(value));
-        return Convert.ToHexString(SHA256.HashData(stream.ToArray())).ToLowerInvariant();
+        return stream.ToArray();
     }
 
     public static string PreparedDigest(AgentPreparedToolInvocation value) => Digest(new

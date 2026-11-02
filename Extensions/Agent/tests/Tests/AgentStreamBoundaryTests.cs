@@ -34,7 +34,7 @@ public sealed partial class AgentCumulativeDisclosureTests
         Assert.True((await proposals.ApproveAsync(proposal.Id, fixture.Session!.ActorId, proposal.BaseRevision)).Succeeded);
         Assert.True((await proposals.ExecuteAsync(proposal.Id, fixture.Session.ActorId, proposal.BaseRevision)).Succeeded);
         var accepted = await proposals.FindResultAsync(proposal.Id);
-        var pause = fixture.Services.GetRequiredService<PauseBoundary>().Find(fixture.Session.Id);
+        var pause = await fixture.Services.GetRequiredService<PauseBoundary>().FindAsync(fixture.Session.Id);
         var store = fixture.Services.GetRequiredService<SessionBoundary>();
         store.AsyncFailures = asynchronous;
         if (fails) store.ThrowBeforeToolInsert = failure;
@@ -52,7 +52,7 @@ public sealed partial class AgentCumulativeDisclosureTests
             Assert.DoesNotContain(failure.Message, domain.Message, StringComparison.Ordinal);
             if (api) Assert.DoesNotContain(failure.Message, wire, StringComparison.Ordinal);
             Assert.Single(fixture.Probe.Inputs);
-            Assert.Equal(pause, fixture.Services.GetRequiredService<PauseBoundary>().Find(fixture.Session.Id));
+            Assert.Equal(pause, await fixture.Services.GetRequiredService<PauseBoundary>().FindAsync(fixture.Session.Id));
             Assert.Equal(accepted, await proposals.FindResultAsync(proposal.Id));
             Assert.False(fixture.Services.GetRequiredService<IAgentTurnRegistry>().IsActive(fixture.Session.Id));
             Assert.Contains(await fixture.Stream(), item => item.Kind == AgentStreamEventKind.Completed);

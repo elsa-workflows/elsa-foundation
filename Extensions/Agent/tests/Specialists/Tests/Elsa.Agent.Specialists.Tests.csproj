@@ -33,6 +33,7 @@
     <ProjectReference Include="../../../../../Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="../../../src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
     <ProjectReference Include="../../../src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj" />
+    <ProjectReference Include="../../../src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="../../../../../Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />

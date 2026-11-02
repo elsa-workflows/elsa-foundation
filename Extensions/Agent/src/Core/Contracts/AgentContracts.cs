@@ -21,6 +21,35 @@ public interface IAgentSessionService
     Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Preview: the session's owner, or null when it is not found. Callers authorize on it before anything hydrates the
+    /// session, takes its ownership or settles its recorded work, so a foreign caller causes none of those. The default
+    /// reads <see cref="FindAsync"/>; the default session owner reads the record store's plain owner columns instead.
+    /// </summary>
+    async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+        => await FindAsync(sessionId, cancellationToken) is { } session ? new(session.ActorId, session.TenantId) : null;
+
+    /// <summary>
+    /// Preview: the sessions of the query's actor and tenant, narrowed to its workspace, newest first, at most
+    /// <see cref="AgentSessionOwnerQuery.Take"/>, older than its cursor. The owning store filters by owner before it orders
+    /// and limits; there is no global read. The default refuses with <see cref="AgentSessionQueryOutcome.Unsupported"/>,
+    /// so a replacement that predates this query never falls back to scanning sessions. Implementations throw
+    /// <see cref="ArgumentException"/> for a blank actor or tenant, a limit outside 1..<see cref="AgentSessionOwnerQuery.MaxTake"/>
+    /// and a cursor they did not issue.
+    /// </summary>
+    Task<AgentSessionListResult> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentSessionListResult.Unsupported);
+
+    /// <summary>
+    /// Preview: withdraws an accepted prompt that never started: a compare-and-set from Pending to Cancelled with reason
+    /// <c>withdrawn</c>, refused with <c>agent.message.not_pending</c> when the prompt is not Pending or a turn is
+    /// registered for the session, so a withdraw cannot lose to a concurrent start. A missing prompt is
+    /// <c>agent.message.not_found</c>. The default refuses with <c>agent.message.withdraw_unsupported</c>.
+    /// </summary>
+    Task<AgentResult<AgentMessage>> WithdrawMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<AgentMessage>.Failure("agent.message.withdraw_unsupported",
+            "The installed agent session service cannot withdraw prompts.", 409));
 }
 
 /// <summary>
@@ -39,6 +68,70 @@ public interface IAgentSessionPolicyService
     Task<AgentSessionPolicyResult> GetAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default);
 
     Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Preview replacement contract: the record of every session aggregate behind the default session owner. At most
+/// one implementation may be registered; select a replacement with
+/// <c>services.SelectAgentSessionRecordStore(...)</c> (<c>Elsa.Agent.Extensions.AgentPersistenceSelection</c>), which
+/// replaces only the process-local default and refuses a second selection.
+/// </summary>
+/// <remarks>
+/// The default session owner writes through this store before it applies a change in memory, and hydrates a
+/// session from it before acting on a session it has not loaded. One aggregate covers the session (policy, revision
+/// and ownership), its messages and context, the paused turn, its proposals with their outcomes, and the
+/// duplicate-detection keys. Each write is atomic and is guarded on the writer's owner token and fence; the same
+/// write extends the owner's lease, or re-acquires a lapsed lease that no other owner took over. Implementations
+/// return copies: a caller never shares mutable state with the store.
+/// </remarks>
+public interface IAgentSessionRecordStore
+{
+    /// <summary>
+    /// Whether every write is guarded on the current owner and fence. A store that cannot fence cannot back durable
+    /// recovery, because a stale process could then continue a turn: selecting one fails shell activation
+    /// (the Agent durable-recovery validator).
+    /// </summary>
+    bool SupportsFencing { get; }
+
+    /// <summary>Records a new aggregate owned by <paramref name="ownerToken"/>; refuses an identity that is already recorded.</summary>
+    Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one aggregate for hydration, or null when it is not recorded.</summary>
+    Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes ownership when the aggregate has no owner, its lease has lapsed, or <paramref name="ownerToken"/> already
+    /// owns it. A takeover increments the fence. A live lease held by another owner returns
+    /// <see cref="AgentSessionRecordOutcome.OwnedElsewhere"/>.
+    /// </summary>
+    Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default);
+
+    /// <summary>Releases the lease when <paramref name="fence"/> is still current; otherwise a no-op.</summary>
+    Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes one transition atomically when its fence is current, inserting its keys all or nothing, and extends
+    /// the lease. A stale fence returns <see cref="AgentSessionRecordOutcome.OwnershipLost"/>; a key recorded with a
+    /// different value returns <see cref="AgentSessionRecordOutcome.KeyConflict"/>. Neither changes anything.
+    /// </summary>
+    Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default);
+
+    /// <summary>The session that owns a proposal, or null when the proposal is not recorded.</summary>
+    Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The recorded sessions of the query's actor and tenant, filtered before ordering and the limit. Implementations
+    /// throw <see cref="ArgumentException"/> for a blank actor or tenant and a limit outside 1..<see cref="AgentSessionOwnerQuery.MaxTake"/>.
+    /// </summary>
+    Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The plain owner columns of one recorded session, or null when it is not recorded. This read takes no ownership,
+    /// extends no lease and writes nothing, so authorization can run on it before any hydration. The default reads
+    /// <see cref="LoadAsync"/>; a store that protects its payloads overrides it to read the owner columns only.
+    /// </summary>
+    async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+        => await LoadAsync(sessionId, cancellationToken) is { } record ? new(record.Session.ActorId, record.Session.TenantId) : null;
 }
 
 public interface IAgentPolicyEvaluator
@@ -110,6 +203,33 @@ public interface IAgentProposalService
         AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default);
 
     Task<AgentToolResult?> FindResultAsync(string proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Preview: the session that owns the proposal, or null when it is not found, resolved without hydrating that
+    /// session, so the caller can authorize on the session's owner first. The default reads <see cref="FindAsync"/>.
+    /// </summary>
+    async Task<string?> FindSessionIdAsync(string proposalId, CancellationToken cancellationToken = default)
+        => (await FindAsync(proposalId, cancellationToken))?.SessionId;
+
+    /// <summary>
+    /// Preview: the session's proposals with their current statuses, oldest first. The default refuses with
+    /// <c>agent.proposal.query_unsupported</c>.
+    /// </summary>
+    Task<AgentResult<IReadOnlyList<AgentActionProposal>>> ListAsync(string sessionId, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<IReadOnlyList<AgentActionProposal>>.Failure("agent.proposal.query_unsupported",
+            "The installed agent proposal service cannot list a session's proposals.", 409));
+
+    /// <summary>
+    /// Preview: records the owner's statement about a client-scope Uncertain operation on its proposal and releases only
+    /// that operation's claim. It is not a receipt; a later truthful receipt still reconciles the operation. Repeating
+    /// the same statement returns the proposal unchanged; a different statement is <c>agent.invocation.resolution_conflict</c>.
+    /// Any other operation is refused with <c>agent.invocation.not_uncertain</c>. The default refuses with
+    /// <c>agent.invocation.resolution_unsupported</c>.
+    /// </summary>
+    Task<AgentResult<AgentActionProposal>> ResolveClientInvocationAsync(string sessionId, string invocationId, string actorId,
+        AgentOwnerResolutionClaim claim, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<AgentActionProposal>.Failure("agent.invocation.resolution_unsupported",
+            "The installed agent proposal service cannot record an owner's resolution.", 409));
 }
 
 public interface IAgentStreamingService
@@ -120,16 +240,50 @@ public interface IAgentStreamingService
     IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Preview: what a host restart does to this composition's Weaver sessions, as bootstrap reports it. Overridable, at most
+/// one; normally not replaced, because only the default can see whether the default session owner participates with every
+/// default lifecycle service over a fencing record store.
+/// </summary>
+public interface IAgentRecoverySupport
+{
+    /// <summary>One of the <see cref="AgentRecoveryModes"/> values.</summary>
+    string Describe();
+}
+
+/// <summary>Preview: the values of <see cref="IAgentRecoverySupport.Describe"/> and of the bootstrap <c>recovery</c> field.</summary>
+public static class AgentRecoveryModes
+{
+    /// <summary>A store other than the in-memory default backs a supported composition: sessions are recovered after a restart.</summary>
+    public const string Durable = "durable";
+    /// <summary>The in-memory default: sessions survive reloads while the process lives, and a restart ends them.</summary>
+    public const string ProcessLifetime = "processLifetime";
+    /// <summary>The composition cannot recover its sessions, or its support could not be evaluated.</summary>
+    public const string Unsupported = "unsupported";
+}
+
 public interface IAgentFeedbackService
 {
     Task<AgentFeedback> AddAsync(AgentFeedback feedback, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Replacement contract, at most one: the append facet of the audit store. The sink, <see cref="IAgentAuditReader"/>
+/// and <see cref="IAgentAuditOwnership"/> are one store's facets and are replaced together, with
+/// <c>services.SelectAgentAuditStore(...)</c> (<c>Elsa.Agent.Extensions.AgentPersistenceSelection</c>); a second
+/// registration of any facet fails the Agent registration validator.
+/// </summary>
 public interface IAgentAuditSink
 {
     Task EmitAsync(AgentAuditEvent auditEvent, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Replacement contract, at most one: the query facet of the audit store. It is replaced together with
+/// <see cref="IAgentAuditSink"/> and <see cref="IAgentAuditOwnership"/>, with <c>services.SelectAgentAuditStore(...)</c>
+/// (<c>Elsa.Agent.Extensions.AgentPersistenceSelection</c>); a second registration of any facet fails the Agent
+/// registration validator.
+/// </summary>
 public interface IAgentAuditReader
 {
     /// <summary>A trusted, unscoped read for in-process callers. It is not an authorization boundary.</summary>
