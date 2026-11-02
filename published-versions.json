@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "035cf9d1ef8ca0bbe50f7628a7d33868246c973e",
+  "last_publish_commit": "854667110b9ea722200384aea13f8c83f2da51cc",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -354,13 +354,13 @@
     },
     {
       "package_id": "Elsa.Etl.Core",
-      "version": "4.0.3-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.4-preview",
+      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
     },
     {
       "package_id": "Elsa.Etl.Design",
-      "version": "4.0.4-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.5-preview",
+      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
     },
     {
       "package_id": "Elsa.Etl.Design.Api",
@@ -369,18 +369,18 @@
     },
     {
       "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
-      "version": "4.0.4-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.5-preview",
+      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
     },
     {
       "package_id": "Elsa.Etl.Runtime",
-      "version": "4.0.4-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.5-preview",
+      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
     },
     {
       "package_id": "Elsa.Etl.Runtime.Api",
-      "version": "4.0.6-preview",
-      "commit": "774b1e05c53efc99763b1c836609cb57378e7e83"
+      "version": "4.0.7-preview",
+      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
     },
     {
       "package_id": "Elsa.Etl.Workflows.Design",
@@ -839,8 +839,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
-      "version": "4.0.16-preview",
-      "commit": "ea5c4de47d05b58949e1c973b4b560af8625ac0a"
+      "version": "4.0.17-preview",
+      "commit": "854667110b9ea722200384aea13f8c83f2da51cc"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
