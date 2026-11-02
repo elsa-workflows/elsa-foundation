@@ -83,11 +83,12 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await catalog.getByRole("button", { name: "Close", exact: true }).click();
 
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const organization = page.getByRole("dialog", { name: `Organize ${workflowName}`, exact: true });
-  await expect(organization).toContainText(folderName);
-  await organization.getByRole("checkbox", { name: tagName, exact: true }).check();
-  await organization.getByRole("group", { name: `${teamName} · choose one`, exact: true }).getByRole("checkbox", { name: "Finance", exact: true }).check();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const organization = page.getByRole("dialog", { name: `Tags for ${workflowName}`, exact: true });
+  await organization.getByRole("combobox", { name: "Tags", exact: true }).fill(tagName);
+  await organization.getByRole("option", { name: tagName, exact: true }).click();
+  await organization.getByRole("combobox", { name: "Tags", exact: true }).fill(teamName);
+  await organization.getByRole("option", { name: `${teamName}: Finance`, exact: true }).click();
   await organization.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(organization).toBeHidden();
 
@@ -95,7 +96,8 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await page.getByRole("button", { name: "Edit tags", exact: true }).click();
   const bulk = page.getByRole("dialog", { name: "Edit tags on 1 workflows", exact: true });
   await bulk.getByLabel("Bulk tag change", { exact: true }).selectOption("remove");
-  await bulk.getByRole("checkbox", { name: tagName, exact: true }).check();
+  await bulk.getByRole("combobox", { name: "Tags", exact: true }).fill(tagName);
+  await bulk.getByRole("option", { name: tagName, exact: true }).click();
   await bulk.getByRole("button", { name: "Preview changes", exact: true }).click();
   await expect(bulk.getByRole("region", { name: "Bulk tag preview", exact: true })).toBeVisible();
   const bulkResponse = page.waitForResponse(response => response.request().method() === "POST" &&
@@ -105,10 +107,11 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await expect(bulk.getByRole("status", { name: "Bulk tag results", exact: true })).toContainText("success");
   await bulk.getByRole("button", { name: "Close", exact: true }).click();
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  await expect(organization.getByRole("checkbox", { name: tagName, exact: true })).not.toBeChecked();
-  await expect(organization.getByRole("group", { name: `${teamName} · choose one`, exact: true }).getByRole("checkbox", { name: "Finance", exact: true })).toBeChecked();
-  await organization.getByRole("checkbox", { name: tagName, exact: true }).check();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  await expect(organization.getByRole("button", { name: `Remove ${tagName}`, exact: true })).toHaveCount(0);
+  await expect(organization.getByRole("button", { name: `Remove ${teamName}: Finance`, exact: true })).toBeVisible();
+  await organization.getByRole("combobox", { name: "Tags", exact: true }).fill(tagName);
+  await organization.getByRole("option", { name: tagName, exact: true }).click();
   await organization.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(organization).toBeHidden();
 
@@ -158,11 +161,10 @@ test("reopens persisted library organization after the owned host restart", asyn
   await expect(workflowRow(page)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute("aria-pressed", "true");
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const organization = page.getByRole("dialog", { name: `Organize ${workflowName}`, exact: true });
-  await expect(organization).toContainText(folderName);
-  await expect(organization.getByRole("checkbox", { name: tagName, exact: true })).toBeChecked();
-  await expect(organization.getByRole("group", { name: `${teamName} · choose one`, exact: true }).getByRole("checkbox", { name: "Finance", exact: true })).toBeChecked();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const organization = page.getByRole("dialog", { name: `Tags for ${workflowName}`, exact: true });
+  await expect(organization.getByRole("button", { name: `Remove ${tagName}`, exact: true })).toBeVisible();
+  await expect(organization.getByRole("button", { name: `Remove ${teamName}: Finance`, exact: true })).toBeVisible();
   await organization.getByRole("button", { name: "Close", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByLabel("Saved workflow view", { exact: true })).toBeVisible();

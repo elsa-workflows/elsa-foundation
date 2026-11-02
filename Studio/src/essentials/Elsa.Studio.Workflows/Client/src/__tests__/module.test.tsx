@@ -419,7 +419,7 @@ describe("workflows module", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("publishes a saved workflow organization as a notification", async () => {
+  it("publishes a row folder move as a notification", async () => {
     const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -428,30 +428,30 @@ describe("workflows module", () => {
       }
       if (url.includes("folder-inventory?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
       if (url.endsWith("/placement/bulk") && init?.method === "POST") return new Response(null, { status: 204 });
-      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
-      return response({ items: [], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null, permissions: { canManageFolders: true } });
+      return response({ items: [], nextContinuationToken: null, permissions: { canManageFolders: true } });
     });
     vi.stubGlobal("fetch", fetchMock);
     const capabilities = capabilityDocument();
     capabilities.capabilities[0].links.push(
       { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
       { rel: "workflow-folders", href: "inventory/folder-inventory" },
+      { rel: "workflow-tags", href: "design/workflows/tags" },
       { rel: "workflow-definition-folder-move", href: "placement/bulk" },
       { rel: "workflow-organization", href: "design/workflows/organization/{definitionId}", templated: true });
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Organization"));
-    const organizationDialog = await waitForDialog(container);
-    await waitForText(organizationDialog, "Home folder");
-    await click(buttonByText(organizationDialog, "Move to folder"));
+    const menu = await openDefinitionActions(container, "Hello World");
+    await waitForText(menu, "Move to folder…");
+    await click(buttonByText(menu, "Move to folder…"));
     const moveDialog = await waitForDialog(container);
     await waitForText(moveDialog, "Operations");
     await click(moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
     await click(buttonByText(moveDialog, "Move"));
 
-    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Workflow organization updated" }));
-    expect(container.querySelector(".wf-status-line")).toBeNull();
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Moved 1 workflow definition" })));
+    await vi.waitFor(() => expect(container.querySelector(".wf-status-line")).toBeNull());
 
     await unmount();
   });

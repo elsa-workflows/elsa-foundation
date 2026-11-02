@@ -17,13 +17,14 @@ import "./workflowOrganization.css";
 const WorkflowTagCatalogDialog = lazy(() => import("./WorkflowTagCatalogDialog").then(module => ({ default: module.WorkflowTagCatalogDialog })));
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, refreshKey = 0 }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
   onChange(next: WorkflowDefinitionBrowseLocation): void;
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
+  refreshKey?: number;
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
@@ -61,7 +62,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       if (generation === generationRef.current) setError(message(caught, "Couldn't read saved views."));
     });
     return () => { generationRef.current += 1; };
-  }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);
+  }, [catalogTerm, context, onPermissions, refresh, refreshKey, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
   const missingFilterTags = !catalogLoading ? JSON.stringify([...new Set((location.tagFilters ?? []).map(filter => filter.tagId))].filter(id => !tags.some(tag => tag.id === id))) : "[]";
@@ -121,7 +122,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
         </select></label>
         <button type="button" onClick={() => setViewDialogOpen(true)}>Save view</button>
       </> : null}
-      {permissions.canManageTags === true ? <button type="button" onClick={() => setCatalogOpen(true)}>Manage tags</button> : null}
+      {permissions.canManageTags === true ? <button className="wf-library-manage-tags" type="button" onClick={() => setCatalogOpen(true)}>Manage tags</button> : null}
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
     {modifiedView ? <p className="wf-library-help">The current filters differ from the saved view. Save to update it or choose the view again to restore its filters.</p> : null}

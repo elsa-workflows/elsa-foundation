@@ -109,7 +109,7 @@ const deferredHeavySurfaces = [
   "WorkflowTestRunControls",
   "CreateWorkflowDialog",
   "WorkflowLibraryControls",
-  "WorkflowOrganizationDialog",
+  "WorkflowTagsDialog",
   "WorkflowTagCatalogDialog",
   "workflowTestHttpAction"
 ];

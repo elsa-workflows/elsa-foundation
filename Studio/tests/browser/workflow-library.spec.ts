@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 for (const palette of ["atelier", "classic"]) for (const theme of ["light", "dark"]) for (const width of [320, 1440]) {
   test(`unavailable organization has explicit keyboard recovery (${palette}, ${theme}, ${width}px)`, async ({ page }) => {
@@ -37,10 +37,9 @@ test("a workflow keeps its identity while tags, saved views and favorites organi
   const payment = page.getByRole("row", { name: "Open workflow definition Collect overdue payment" });
   await expect(payment).toBeVisible();
   await payment.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment" });
-  await expect(dialog.getByText("Finance", { exact: true })).toBeVisible();
-  await dialog.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Tags for Collect overdue payment" });
+  await chooseTag(dialog, "Critical");
   await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(dialog).toBeHidden();
 
@@ -73,7 +72,7 @@ test("bulk edits preview explicit identities and keep mixed outcomes visible", a
   await page.getByRole("checkbox", { name: "Select visible workflow definitions" }).check();
   await page.getByRole("button", { name: "Edit tags", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Edit tags on 2 workflows" });
-  await dialog.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  await chooseTag(dialog, "Critical");
   await expect(dialog.getByRole("button", { name: "Apply tag changes" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Preview changes" }).click();
   await expect(dialog.getByRole("region", { name: "Bulk tag preview" })).toContainText("collect-payment");
@@ -91,21 +90,20 @@ test("bulk edits preview explicit identities and keep mixed outcomes visible", a
 test("a stale organization write retains the intended change until an explicit reload", async ({ page }) => {
   await page.goto("/?mode=workflow-library&conflict=tags");
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment" });
-  await dialog.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Tags for Collect overdue payment" });
+  await chooseTag(dialog, "Critical");
   await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("409");
-  await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).toBeChecked();
-  await dialog.getByRole("button", { name: "Reload organization" }).click();
-  await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).not.toBeChecked();
+  await expect(dialog.getByRole("button", { name: "Remove Critical", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Reload tags" }).click();
+  await expect(dialog.getByRole("button", { name: "Remove Critical", exact: true })).toHaveCount(0);
 });
 
-test("moving from Organization contains Tab and Shift+Tab in the active move dialog", async ({ page }) => {
+test("the independent move dialog contains Tab and Shift+Tab", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  await page.getByRole("button", { name: "Move to folder", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
   const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
   const first = move.getByRole("radio", { name: "Unfiled", exact: true });
   const last = move.getByRole("button", { name: "Move", exact: true });
@@ -126,7 +124,7 @@ for (const theme of ["light", "dark"] as const) {
       await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
       await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
       await page.getByRole("button", { name: "Actions for Collect overdue payment", exact: true }).click();
-      const organization = page.getByRole("menuitem", { name: "Organization", exact: true });
+      const organization = page.getByRole("menuitem", { name: "Edit tags…", exact: true });
       await expect(organization).toBeVisible();
 
       await table.hover();
@@ -134,25 +132,35 @@ for (const theme of ["light", "dark"] as const) {
       await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBe(0);
       await expect(organization).toBeVisible();
       await organization.click();
-      await expect(page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Tags for Collect overdue payment", exact: true })).toBeVisible();
     });
   }
 }
 
-test("Escape cancels the nested move and restores Organization keyboard focus", async ({ page }) => {
+test("moving from a row closes completely and writes only that workflow", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("checkbox", { name: "Select visible workflow definitions" }).check();
+  await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
+  await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
+  const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(move.getByRole("combobox", { name: "Tags", exact: true })).toHaveCount(0);
+  await move.getByRole("radio", { name: "Unfiled", exact: true }).check();
+  await move.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeFocused();
+  const placement = await page.evaluate(() => (window as unknown as { workflowLibraryRequests: { method: string; url: string; body?: unknown }[] }).workflowLibraryRequests.filter(request => request.method === "POST" && request.url.endsWith("/placement")));
+  expect(placement).toHaveLength(1);
+  expect(placement[0].body).toEqual({ definitionIds: ["collect-payment"], folderId: null });
+});
+
+test("Escape cancels a row move without opening a second dialog", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const organization = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
-  await organization.getByRole("button", { name: "Move to folder", exact: true }).click();
-  const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
-  await expect(move).toBeVisible();
+  await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Move workflow definitions", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(move).toBeHidden();
-  await expect(organization.getByRole("button", { name: "Move to folder", exact: true })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(organization).toBeHidden();
-  await expect(page.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeFocused();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("catalog management creates controlled values and retires their stable tag identity", async ({ page }) => {
@@ -194,9 +202,9 @@ test("reader permissions preserve browsing and private views while withholding m
   await expect(page.getByRole("button", { name: "Manage tags", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create folder", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment" });
-  await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Tags for Collect overdue payment" });
+  await expect(dialog.getByRole("combobox", { name: "Tags", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Save tags", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Move to folder", exact: true })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
@@ -210,9 +218,9 @@ test("bulk removal can clear different values of a single-valued classification 
   await page.getByRole("button", { name: "Edit tags", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Edit tags on 2 workflows" });
   await dialog.getByRole("combobox", { name: "Bulk tag change" }).selectOption("remove");
-  await dialog.getByRole("checkbox", { name: "Billing", exact: true }).check();
-  await dialog.getByRole("checkbox", { name: "Support", exact: true }).check();
-  await expect(dialog.getByRole("checkbox", { name: "Billing", exact: true })).toBeChecked();
+  await chooseTag(dialog, "Owning team: Billing");
+  await chooseTag(dialog, "Owning team: Support");
+  await expect(dialog.getByRole("button", { name: "Remove Owning team: Billing", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Preview changes" }).click();
   await expect(dialog.getByRole("region", { name: "Bulk tag preview" })).toContainText("Remove 2 tag assignments");
   await dialog.getByRole("button", { name: "Apply tag changes" }).click();
@@ -270,10 +278,10 @@ for (const change of ["count-shrinks", "count-grows"] as const) {
 test("Enter in tag search searches without saving pending organization changes", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
-  await dialog.getByRole("checkbox", { name: "Critical", exact: true }).check();
-  const search = dialog.getByRole("searchbox", { name: "Find workflow tags", exact: true });
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Tags for Collect overdue payment", exact: true });
+  await chooseTag(dialog, "Critical");
+  const search = dialog.getByRole("combobox", { name: "Tags", exact: true });
   await search.fill("Owning team");
   await search.press("Enter");
   await expect(dialog).toBeVisible();
@@ -284,8 +292,14 @@ test("Enter in tag search searches without saving pending organization changes",
     workflowLibraryRequests: { method: string; url: string }[];
   }).workflowLibraryRequests.filter(request => request.method === "PUT"));
   expect(writes).toEqual([]);
-  await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).toBeChecked();
+  await expect(dialog.getByRole("button", { name: "Remove Critical", exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(dialog).toBeHidden();
 });
+
+async function chooseTag(dialog: Locator, label: string) {
+  const input = dialog.getByRole("combobox", { name: "Tags", exact: true });
+  await input.fill(label.split(": ")[0]);
+  await dialog.getByRole("option", { name: label, exact: true }).click();
+}
