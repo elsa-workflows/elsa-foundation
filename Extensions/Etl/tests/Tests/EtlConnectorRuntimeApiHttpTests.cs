@@ -168,6 +168,38 @@ public sealed partial class EtlRuntimeApiHttpTests
     }
 
     [Fact]
+    public async Task Connector_jsonl_inspection_reports_its_kind_source_input_and_file_ranges()
+    {
+        await using var host = await EtlDesignApiTestHost.StartRuntimeAsync();
+        var pipeline = EtlV2TestPipelines.Create();
+        pipeline = pipeline with
+        {
+            Source = new EtlJsonlSource("source", [new EtlJsonField("id", "/id", EtlColumnType.Int64, Required: true)]),
+            Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id")],
+            Routes = new(new EtlJsonlDestination("output"), new EtlJsonlDestination("errors")),
+            Limits = pipeline.Limits with { FilePartitionCount = 2 }
+        };
+        var input = EtlRuntimeFixtures.Prepared(3);
+        await SeedConnectorAsync(host, "jsonl-connector", new("tenant-a", "partition-a"), pipeline,
+            new(new(input.Source, input.SourceIndex, input.SourceRecordCount), null));
+
+        using var detailResponse = await host.SendAsync(HttpMethod.Get, "/etl/runs/jsonl-connector", permissions: ReadPermissions);
+        using var detail = await ReadJsonAsync(detailResponse);
+        using var partitionsResponse = await host.SendAsync(HttpMethod.Get, "/etl/runs/jsonl-connector/connector-partitions?limit=20",
+            permissions: ReadPermissions);
+        using var page = await ReadJsonAsync(partitionsResponse);
+
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        Assert.Equal("jsonl", RequiredString(detail.RootElement.GetProperty("connector"), "sourceKind"));
+        Assert.Equal(3, detail.RootElement.GetProperty("sourceRecordCount").GetInt64());
+        Assert.Equal(JsonValueKind.Object, detail.RootElement.GetProperty("sourceInput").ValueKind);
+        Assert.DoesNotContain(Path.GetTempPath(), detail.RootElement.GetRawText());
+        AssertConnectorProjection(detail.RootElement);
+        Assert.Equal(new long[] { 1, 3 }, page.RootElement.GetProperty("items").EnumerateArray()
+            .Select(row => row.GetProperty("file").GetProperty("startOrdinal").GetInt64()));
+    }
+
+    [Fact]
     public async Task Connector_api_distinguishes_captured_input_and_acknowledged_outputs_from_accepted_progress()
     {
         await using var host = await EtlDesignApiTestHost.StartRuntimeAsync();
@@ -287,7 +319,7 @@ public sealed partial class EtlRuntimeApiHttpTests
         string runId, EtlScope scope, EtlPipelineV2? pipeline = null, EtlConnectorPreparedRun? prepared = null)
     {
         var admission = EtlRuntimeFixtures.ConnectorAdmission(runId, scope, pipeline,
-            pipeline?.Source is EtlCsvSource ? [] : ["private-shard-one", "private-shard-two", "private-shard-three"]);
+            pipeline?.Source is EtlCsvSource or EtlJsonlSource ? [] : ["private-shard-one", "private-shard-two", "private-shard-three"]);
         await using var services = host.Host.Services.CreateAsyncScope();
         var store = services.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>();
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);

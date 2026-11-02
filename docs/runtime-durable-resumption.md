@@ -250,10 +250,14 @@ skips that delivery while another Cancel already waits, so no step is queued ahe
 work when the mailbox is passivated (it answers `Deferred`), when the provider has been disposed, when the re-drive
 fails or answers anything but `Accepted` (both are logged), and when the yielded drain throws after it yielded, for
 example from a drain observer or `CheckpointRuleViolationWorkflowFaulter`, so its turn never reports `Yielded`. An idle drain adds no
-database read for this check. Distributed placement uses the configured local mailbox on the owning node; forwarding
-still has to deliver Cancel to that mailbox. The yield signal is internal to the default in-process
-provider: a custom actor provider that wraps the registered `InProcessWorkflowExecutionActorProvider` keeps the handoff,
-and an independent provider does not get it.
+database read for this check. Distributed placement uses the configured local mailbox on the owning node. A Cancel sent
+through another node takes effect once the owner's next placement pump sweep that lists the execution delivers it to
+that mailbox, usually within `SweepInterval` (default 10 seconds). The sweep's own waits for local work, failure
+backoff, or a hand-off or passivation still pending for the execution (#3678) can make it later. The sweep does not
+wait for the running drain (see the
+[distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
+The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
+`InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
 
 **Acknowledging an inline parent decision.** The completion pump's current item remains in the working queue while
 its handler runs. Once that exact fenced, non-retaining decision has physically committed, queue advance acknowledges

@@ -63,7 +63,9 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
         RuntimeCoalescingSession session, string workflowExecutionId, RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken)
     {
         // Only owned scheduler continuations can run before the segment commits. External delivery reads the
-        // actual durable lifecycle, which another scope may already have claimed or completed.
+        // actual durable lifecycle, which another scope may already have claimed or completed. External kinds are
+        // skipped in the overlay on purpose: an external item staged in this segment becomes deliverable only after
+        // the flush persists it, so its effect never runs ahead of the checkpoint that records it.
         var items = new List<RuntimePostCommitOutboxItem>();
         if (UsesOverlayKind(RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
             items.AddRange(session.GetDeliverableOutbox(new(query.Now, query.Limit, workflowExecutionId,

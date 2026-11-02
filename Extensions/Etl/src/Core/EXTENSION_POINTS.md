@@ -65,7 +65,10 @@ host's ceilings. A missing lookup does not reserve a synthetic lookup allowance.
 contract still rejects v2 admissions. An optional `IEtlConnectorRuntimeStore` supplies typed connector transitions;
 the shared worker discovers it and uses the same physical attempt pool, heartbeat and terminal delivery. A selected
 file-only replacement/decorator remains usable and receives a durable v2-unavailable refusal. See the
-[worker checkpoint](../../../../specs/996-http-etl/evidence/http-worker-checkpoint.md).
+[worker checkpoint](../../../../specs/996-http-etl/evidence/http-worker-checkpoint.md). A connector provider's
+`CommitConnectorPreparationAsync` must settle a zero-record file run (CSV or JSON Lines) as success in the same
+transaction, because no partition exists to complete it; an identical replay returns `Replay`
+([spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md) FR-011).
 
 Connector providers distinguish temporary outstanding-capacity pressure (`BudgetExceeded`) from a transition
 that cannot fit the retained-input/output/metadata limits (`PermanentBudgetExceeded`). The worker yields for
