@@ -11,7 +11,7 @@
   overflow: auto;
   padding: var(--studio-space-3, 12px);
   border-radius: var(--studio-radius-md, 6px);
-  background: var(--studio-surface-subtle, rgba(127, 127, 127, 0.08));
+  background: var(--studio-surface-muted);
 }
 .agent-review__decision {
   display: grid;

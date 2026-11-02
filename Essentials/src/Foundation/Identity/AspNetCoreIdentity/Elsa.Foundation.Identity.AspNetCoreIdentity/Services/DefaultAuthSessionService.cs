@@ -31,7 +31,7 @@ public sealed class DefaultAuthSessionService : IAuthSessionService
 
         var tenantId = principal.FindFirst(IdentityClaimTypes.TenantId)?.Value;
         var provider = principal.FindFirst(IdentityClaimTypes.Provider)?.Value ?? AspNetCoreIdentityDefaults.ProviderId;
-        var subject = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("sub")?.Value;
+        var subject = principal.FindFirst(IdentityClaimTypes.UserId)?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("sub")?.Value;
         var displayName = principal.FindFirst(ClaimTypes.Name)?.Value ?? principal.Identity?.Name;
 
         return ValueTask.FromResult(new AuthSession(

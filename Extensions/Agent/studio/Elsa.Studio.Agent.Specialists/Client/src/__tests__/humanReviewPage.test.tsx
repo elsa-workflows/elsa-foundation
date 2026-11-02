@@ -130,12 +130,39 @@ describe("human review page", () => {
     expect(ids[1].contentHash).toBe("hash-2");
   });
 
-  it("reports conflicts and an earlier resolution without deciding again", async () => {
+  it("reports an earlier resolution after a single submission", async () => {
     const fake = fakeContext(view(), ["AlreadyResolved"], undefined);
     const container = await render(fake.context);
     await click([...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Approve")!);
 
     expect(container.querySelector("[data-receipt='AlreadyResolved']")).not.toBeNull();
+    expect(fake.postJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a forbidden decision as final and starts a new request next time", async () => {
+    const fake = fakeContext(view(), []);
+    fake.postJson.mockImplementationOnce(async () => { throw Object.assign(new Error("Forbidden"), { status: 403 }); });
+    const container = await render(fake.context);
+    const deny = () => [...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Deny")!;
+
+    await click(deny());
+    expect(container.querySelector("[data-receipt='Forbidden']")).not.toBeNull();
+    await click(deny());
+
+    const [first, second] = fake.postJson.mock.calls.map(call => (call[1] as unknown as { requestId: string }).requestId);
+    expect(second).not.toBe(first);
+  });
+
+  it("keeps the recorded receipt and last review when the refresh after a decision fails", async () => {
+    const fake = fakeContext(view(), ["Accepted"]);
+    const container = await render(fake.context);
+    fake.getJson.mockImplementation(async () => { throw Object.assign(new Error("Bad gateway"), { status: 502 }); });
+
+    await click([...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Approve")!);
+
+    expect(container.querySelector("[data-receipt='Accepted']")).not.toBeNull();
+    expect(container.querySelector("[data-testid='review-stale']")).not.toBeNull();
+    expect(container.querySelector("[data-testid='review-content']")).not.toBeNull();
   });
 
   it("explains a missing or foreign review", async () => {

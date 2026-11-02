@@ -34,6 +34,7 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState<{ status: ReceiptStatus; reason?: string | null } | null>(null);
+  const [stale, setStale] = useState(false);
   const pending = useRef<Pending | null>(null);
   const commentId = useId();
 
@@ -41,9 +42,14 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
     if (!reference) { setLoad({ kind: "missing" }); return; }
     try {
       setLoad({ kind: "ready", review: await getReview(context, reference) });
+      setStale(false);
     } catch (error) {
       const status = (error as { status?: number }).status;
-      setLoad(status === 404 ? { kind: "missing" } : { kind: "error", message: error instanceof Error ? error.message : "The review could not be loaded." });
+      // A failed refresh keeps the last loaded review (and any receipt) on screen instead of hiding what was decided.
+      setLoad(current => status === 404 ? { kind: "missing" }
+        : current.kind === "ready" ? current
+        : { kind: "error", message: error instanceof Error ? error.message : "The review could not be loaded." });
+      if (status !== 404) setStale(true);
     }
   }, [context, reference?.workflowExecutionId, reference?.activityExecutionId]);
 
@@ -63,7 +69,11 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
       if (result.status !== "Unavailable" && result.status !== "Pending") pending.current = null;
       if (result.status !== "Unavailable" && result.status !== "Forbidden") await refresh();
     } catch (error) {
-      setReceipt({ status: "Unavailable", reason: error instanceof Error ? error.message : null });
+      // A permission, missing or malformed-request answer is final, so it releases the request ID; anything that may
+      // still succeed keeps it for the retry.
+      const status = receiptForError((error as { status?: number }).status);
+      if (status !== "Unavailable") pending.current = null;
+      setReceipt({ status, reason: error instanceof Error ? error.message : null });
     } finally {
       setBusy(false);
     }
@@ -90,6 +100,7 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
         <ReviewContent content={review.content} />
       </section>
       {review.notes ? <section aria-label="Reviewer notes" className="agent-review__notes"><h2>Notes</h2><p>{review.notes}</p></section> : null}
+      {stale ? <p className="agent-review__stale" data-testid="review-stale">The review could not be refreshed; showing the last loaded state.</p> : null}
       {receipt ? <p role="status" data-receipt={receipt.status} className="agent-review__receipt">{receiptMessages[receipt.status]}</p> : null}
       {open ? (
         <form className="agent-review__decision" aria-label="Decision" onSubmit={event => { event.preventDefault(); void decide("Approve"); }}>
@@ -108,6 +119,14 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
       )}
     </StudioPage>
   );
+}
+
+function receiptForError(status?: number): ReceiptStatus {
+  if (status === 403) return "Forbidden";
+  if (status === 404) return "NotFound";
+  // An expired session, a timeout, throttling or a schema write refusal (409) can succeed later with the same request.
+  if (status === undefined || status === 401 || status === 408 || status === 409 || status === 429 || status >= 500) return "Unavailable";
+  return "Refused";
 }
 
 function statusLabel(review: HumanReviewView) {

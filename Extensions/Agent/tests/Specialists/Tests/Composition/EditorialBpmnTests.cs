@@ -61,5 +61,9 @@ public sealed class EditorialBpmnTests
         Assert.Equal(WorkflowExecutionStatus.Completed, (await host.WorkflowAsync()).Status);
         Assert.Equal(6, host.Model.Calls.Count);
         Assert.DoesNotContain(await host.ActivitiesAsync(), x => x.Execution.ExecutableNodeId == EditorialHost.ReviewNodeId);
+        // Every gate pass routed: three rewrites, then the exhausted end, never a dead-ended token.
+        var routes = (await host.ActivitiesAsync()).Where(x => x.Execution.ExecutableNodeId == EditorialHost.GateNodeId)
+            .Select(x => x.Completion?.OutcomeKey).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(["Exhausted", "Write", "Write", "Write"], routes);
     }
 }

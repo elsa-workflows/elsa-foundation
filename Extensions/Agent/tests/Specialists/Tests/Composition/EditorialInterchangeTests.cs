@@ -20,10 +20,11 @@ namespace Elsa.Agent.Specialists.Tests.Composition;
 
 /// <summary>
 /// The editorial BPMN process leaves the host as a portable document without its bound work: agent and review
-/// bindings, with their inputs, never travel in shared XML. Import reports every bound task as requiring an explicit
-/// binding and refuses to execute; once the importing author binds each task to an exact version, the shipped BPMN
-/// structure handler compiles and remaps the imported graph, which runs the same revision loop and admits one human
-/// decision after a restart.
+/// versions and their authored inputs never travel in shared XML. Import reports every bound task as requiring an
+/// explicit binding and refuses to execute. The imported graph itself (elements, outcome flows, the loop) then compiles
+/// and remaps through the shipped BPMN structure handler and runs the same revision loop over this host's placed
+/// children, admitting one human decision after a restart. Resolving the author's rebinding through publication is
+/// proved with workflow-definition publishing in M5 (T036).
 /// </summary>
 public sealed class EditorialInterchangeTests
 {
@@ -31,10 +32,12 @@ public sealed class EditorialInterchangeTests
     private const string GateVersionId = "sample.editorial-gate@1.0.0";
     private const string ReviewVersionId = "elsa.human-review@1.0.0";
     private static readonly string[] BoundTasks = ["gate", "write", "check", "proofread", "human-review"];
+    private const string Brief = "moss gardens";
+    private const string ReviewTitle = "Editorial article";
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public async Task An_imported_process_runs_only_after_the_author_binds_each_task_explicitly()
+    public async Task An_imported_process_refuses_unbound_work_and_its_graph_runs_over_rebound_tasks()
     {
         await using var host = await EditorialHost.StartAsync("bpmn-interchange", new(
             [EditorialCompositionTests.Article("Moss gardens grow slowly."), EditorialCompositionTests.Article("Moss gardens reward patience.")],
@@ -42,10 +45,12 @@ public sealed class EditorialInterchangeTests
         host.Subjects.Grant(Reviewer);
         BpmnImportResult? imported = null;
         var xml = "";
+        string[] bound = [];
 
         var (executable, _, _) = await EditorialExecutable.BuildAsync(DateTimeOffset.UtcNow.AddHours(1), bpmn: true, reauthor: async (graph, copywriter, proofreader) =>
         {
             var versions = Versions(copywriter, proofreader);
+            bound = [copywriter, proofreader];
             await using var services = Interchange(new Catalog([GateVersionId, ReviewVersionId, copywriter, proofreader]));
             xml = new BpmnDocumentExporter().Export(Authored(graph, versions));
             imported = await services.GetRequiredService<IBpmnDocumentImporter>().ImportAsync(xml);
@@ -61,7 +66,8 @@ public sealed class EditorialInterchangeTests
         });
 
         Assert.NotNull(imported);
-        Assert.DoesNotContain("elsa:activity", xml, StringComparison.Ordinal);
+        foreach (var authored in new[] { GateVersionId, ReviewVersionId, Brief, ReviewTitle }.Concat(bound))
+            Assert.DoesNotContain(authored, xml, StringComparison.Ordinal);
         Assert.False(imported.Analysis.CanExecute);
         foreach (var task in BoundTasks)
             Assert.Contains(imported.Analysis.Capabilities, x => x.ElementId == task && x.Availability == BpmnImportCapabilityAvailability.RequiresBinding);
@@ -92,14 +98,22 @@ public sealed class EditorialInterchangeTests
 
     private static string AuthorNodeId(string elementId) => "author-" + elementId;
 
-    /// <summary>The authored process an author would save: each task bound to its exact activity version.</summary>
+    /// <summary>The authored process an author would save: each task bound to its exact version with literal inputs.</summary>
     private static ActivityNode Authored(BpmnStructure graph, IReadOnlyDictionary<string, string> versions)
     {
         var activities = graph.Elements.Where(x => x.ChildNodeId is not null)
-            .Select(x => new ActivityNode(x.ChildNodeId!, versions[x.ElementId], [], []))
+            .Select(x => new ActivityNode(x.ChildNodeId!, versions[x.ElementId], x.ElementId switch
+            {
+                "write" => [Literal("brief-key", Brief)],
+                "human-review" => [Literal("Title", ReviewTitle)],
+                _ => []
+            }, []))
             .ToArray();
         return Process(new BpmnAuthoredStructure(activities, graph.Elements, graph.SequenceFlows));
     }
+
+    private static ArgumentState Literal(string key, string value) =>
+        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
 
     /// <summary>What the importing author does in the designer: bind each imported task to an exact version.</summary>
     private static ActivityNode Rebind(ActivityNode imported, IReadOnlyDictionary<string, string> versions)

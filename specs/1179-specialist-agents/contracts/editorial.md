@@ -37,7 +37,9 @@ new model turn. An author may later start a distinct, explicitly requested revis
 
 ## Required implementation receipts
 
-Both native and BPMN save/reload/publish/run journeys must force one rejected model review, carry the
+In M4 the native and BPMN runs are composed executables over really published specialists, and the BPMN form also
+crosses export, an import that refuses unbound work, and exact rebinding. Saving, reloading and publishing the
+process as a workflow definition is proved in M5 (T036); binding-preserving interchange is T063. Both forms must force one rejected model review, carry the
 exact article/comments to a successful rewrite, and exercise three-round exhaustion. Pause human
 review, restart the host, then approve and deny in separate runs. Force acknowledgement loss, duplicate
 delivery, changed article, foreign scope, expired/tampered envelope, revoked authority, late decision
