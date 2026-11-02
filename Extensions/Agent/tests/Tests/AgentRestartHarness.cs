@@ -16,10 +16,16 @@ namespace Elsa.Agent.Tests;
 /// </summary>
 internal sealed class AgentRestartHarness : IDisposable
 {
-    /// <param name="store">Builds the shared store over the harness clock; the default is the round-tripping in-memory store.</param>
+    /// <summary>
+    /// The store every harness builds when a test names none: the round-tripping in-memory store, unless a test assembly
+    /// sets another once at load (the durable EF suite runs these same scenarios over SQLite this way).
+    /// </summary>
+    internal static Func<TimeProvider, IAgentSessionRecordStore>? DefaultStore { get; set; }
+
+    /// <param name="store">Builds the shared store over the harness clock; the default is <see cref="DefaultStore"/>.</param>
     public AgentRestartHarness(Func<TimeProvider, IAgentSessionRecordStore>? store = null, Action<IServiceCollection>? configure = null)
     {
-        Store = store?.Invoke(Clock) ?? new InMemoryAgentSessionRecordStore(Clock);
+        Store = store?.Invoke(Clock) ?? DefaultStore?.Invoke(Clock) ?? new InMemoryAgentSessionRecordStore(Clock);
         _configure = configure;
         Host = new RecoveryHost(this);
     }

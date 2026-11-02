@@ -52,10 +52,12 @@ columns compare and order ordinally on every provider.
 
 ## Ownership, fence and lease
 
-Every write first moves the session row's version from the version it read, under the writer's owner
-token and fence. That conditional update takes the aggregate's row lock until commit, so the key and
-proposal checks that follow cannot race another writer; a moved version retries the whole write from a
-fresh read through the shared bounded `EfWriteRetry`. A stale owner or fence returns `OwnershipLost`,
+Every write first moves the session row's version under the writer's owner token and fence. That
+conditional update takes the aggregate's row lock until commit, so competing writers of one session wait
+for each other instead of racing, and the key and proposal checks that follow cannot change before the
+write commits. Ownership acquisition takes the same lock before it decides. A transient provider conflict
+or a racing insert of the same proposal identity by another session retries the whole operation through
+the shared bounded `EfWriteRetry`. A stale owner or fence returns `OwnershipLost`,
 a key recorded with another value `KeyConflict`, a proposal of another session `AlreadyExists`, and a
 proposal record that moved since its writer read it `VersionConflict`; none changes anything. The same
 write extends the lease, or re-acquires a lapsed lease nobody took over. Acquisition takes ownership

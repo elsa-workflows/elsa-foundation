@@ -31,6 +31,10 @@
   <Folder Name="/Extensions/Agent/tests/">
     <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/tests/Persistence/">
+    <Project Path="Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj" />
+    <Project Path="Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/tests/Specialists/">
     <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />
     <Project Path="Extensions/Agent/tests/Specialists/ProviderTests/Elsa.Agent.Specialists.ProviderTests.csproj" />

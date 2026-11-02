@@ -10,10 +10,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// The durable session record store. Every operation runs in a fresh owned context. A write first moves the session
-/// row's version from the version it read, under the writer's owner and fence, which serializes the aggregate's
-/// writers on every provider; it then checks keys and proposal versions and applies everything in the same
-/// transaction. Leases are measured in database time. Payload columns hold ciphertext only.
+/// The durable session record store. Every operation runs in a fresh owned context. A write or acquisition first moves
+/// the session row's version (a write only under its owner and fence), which takes the aggregate's row lock until
+/// commit and so serializes its writers on every provider; it then checks keys and proposal versions and applies
+/// everything in the same transaction. Leases are measured in database time. Payload columns hold ciphertext only.
 /// </summary>
 internal sealed partial class EfAgentSessionRecordStore(
     IServiceScopeFactory scopes,
@@ -124,19 +124,24 @@ internal sealed partial class EfAgentSessionRecordStore(
             var db = resolveContext(scope.ServiceProvider);
             try
             {
+                await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                // Moving the version takes the aggregate's row lock until commit: competing writers wait rather than race.
+                if (await db.Set<AgentSessionRow>().Where(x => x.SessionId == sessionId)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, x => x.Version + 1), cancellationToken) != 1)
+                    return new AgentSessionRecordResult(AgentSessionRecordOutcome.NotFound);
                 var row = await db.Set<AgentSessionRow>().AsNoTracking().Where(x => x.SessionId == sessionId)
-                    .Select(x => new { x.OwnerToken, x.Fence, x.LeaseExpiresAtUtcTicks, x.Version }).SingleOrDefaultAsync(cancellationToken);
-                if (row is null) return new AgentSessionRecordResult(AgentSessionRecordOutcome.NotFound);
+                    .Select(x => new { x.OwnerToken, x.Fence, x.LeaseExpiresAtUtcTicks }).SingleAsync(cancellationToken);
                 var now = await _clock.NowAsync(db, cancellationToken);
+                // A refusal returns with the transaction uncommitted, so it changes nothing.
                 if (row.OwnerToken != ownerToken && row.LeaseExpiresAtUtcTicks > now.UtcTicks)
                     return new AgentSessionRecordResult(AgentSessionRecordOutcome.OwnedElsewhere) { LeaseExpiresAt = Time(row.LeaseExpiresAtUtcTicks) };
                 // Only a takeover moves the fence; the current owner re-acquiring its own lapsed lease keeps it.
                 var fence = row.OwnerToken == ownerToken ? row.Fence : checked(row.Fence + 1);
                 var lease = (now + leaseDuration).UtcTicks;
-                var changed = await db.Set<AgentSessionRow>().Where(x => x.SessionId == sessionId && x.Version == row.Version)
+                await db.Set<AgentSessionRow>().Where(x => x.SessionId == sessionId)
                     .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.OwnerToken, ownerToken).SetProperty(x => x.Fence, fence)
-                        .SetProperty(x => x.LeaseExpiresAtUtcTicks, lease).SetProperty(x => x.Version, row.Version + 1), cancellationToken);
-                if (changed != 1) return EfWriteAttempt<AgentSessionRecordResult>.Retry();
+                        .SetProperty(x => x.LeaseExpiresAtUtcTicks, lease), cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
                 return Owned(new(ownerToken, fence), lease);
             }
             catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<AgentSessionRecordResult>.Retry(exception); }
@@ -178,18 +183,18 @@ internal sealed partial class EfAgentSessionRecordStore(
             try
             {
                 await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-                var row = await db.Set<AgentSessionRow>().AsNoTracking().Where(x => x.SessionId == sessionId)
-                    .Select(x => new { x.OwnerToken, x.Fence, x.Version, x.NextSequence }).SingleOrDefaultAsync(cancellationToken);
-                if (row is null) return new AgentSessionRecordResult(AgentSessionRecordOutcome.NotFound);
+                // Moving the version under the writer's owner and fence takes the aggregate's row lock until commit, so
+                // competing writers of the session wait for this one, and the reads below cannot change before it ends.
                 // Guarded on owner and fence only: an unchallenged lapsed lease is re-acquired by this same write.
-                if (row.OwnerToken != write.Fence.OwnerToken || row.Fence != write.Fence.Fence)
-                    return new AgentSessionRecordResult(AgentSessionRecordOutcome.OwnershipLost);
-                // Moving the version under the same guard takes the aggregate's row lock until commit, so the reads below
-                // cannot change before this transaction ends; a version moved since the read retries with a fresh read.
                 var locked = await db.Set<AgentSessionRow>()
-                    .Where(x => x.SessionId == sessionId && x.Version == row.Version && x.OwnerToken == write.Fence.OwnerToken && x.Fence == write.Fence.Fence)
-                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, row.Version + 1), cancellationToken);
-                if (locked != 1) return EfWriteAttempt<AgentSessionRecordResult>.Retry();
+                    .Where(x => x.SessionId == sessionId && x.OwnerToken == write.Fence.OwnerToken && x.Fence == write.Fence.Fence)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, x => x.Version + 1), cancellationToken);
+                if (locked != 1)
+                    return new AgentSessionRecordResult(await db.Set<AgentSessionRow>().AnyAsync(x => x.SessionId == sessionId, cancellationToken)
+                        ? AgentSessionRecordOutcome.OwnershipLost
+                        : AgentSessionRecordOutcome.NotFound);
+                var row = await db.Set<AgentSessionRow>().AsNoTracking().Where(x => x.SessionId == sessionId)
+                    .Select(x => new { x.Version, x.NextSequence }).SingleAsync(cancellationToken);
 
                 var hashes = encoded.Keys.Select(x => x.Hash).Distinct().ToArray();
                 var recordedKeys = hashes.Length == 0 ? [] : await db.Set<AgentCallKeyRow>().AsNoTracking()
@@ -247,7 +252,7 @@ internal sealed partial class EfAgentSessionRecordStore(
                 var paused = encoded.PausedTurn;
                 var removePaused = paused is null && write.RemovePausedTurn;
                 var next = sequence;
-                var applied = await db.Set<AgentSessionRow>().Where(x => x.SessionId == sessionId && x.Version == row.Version + 1)
+                var applied = await db.Set<AgentSessionRow>().Where(x => x.SessionId == sessionId && x.Version == row.Version)
                     .ExecuteUpdateAsync(setters =>
                     {
                         setters.SetProperty(x => x.LeaseExpiresAtUtcTicks, lease).SetProperty(x => x.NextSequence, next);
@@ -260,7 +265,8 @@ internal sealed partial class EfAgentSessionRecordStore(
                         if (paused is not null) setters.SetProperty(x => x.PausedTurnPayload, paused);
                         else if (removePaused) setters.SetProperty(x => x.PausedTurnPayload, (string?)null);
                     }, cancellationToken);
-                if (applied != 1) return EfWriteAttempt<AgentSessionRecordResult>.Retry();
+                if (applied != 1)
+                    throw new InvalidOperationException($"Agent session '{sessionId}' changed while this write held its row lock.");
                 await transaction.CommitAsync(cancellationToken);
                 return Owned(write.Fence, lease);
             }
