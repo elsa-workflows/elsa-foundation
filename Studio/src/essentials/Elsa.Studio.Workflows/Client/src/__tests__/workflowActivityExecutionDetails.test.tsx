@@ -1426,6 +1426,26 @@ it("uses the next occurrence's prepared value immediately after retrying a previ
   expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
 });
 
+it("requires a fresh sensitive reveal after navigating away and back with prepared evidence", async () => {
+  const snapshot = valueEvidence({ inputKey: "Secret", name: "Secret", isSensitive: true });
+  const prepare = (value: ActivityExecutionStateSummary): PreparedAttachedExecution => ({ contextIdentity: runtimeValueContextId(context),
+    workflowExecutionId: value.workflowExecutionId, execution: value,
+    inspection: { ...inspection([snapshot]), activityExecutionId: value.activityExecutionId }, values: new Map() });
+  const next = { ...activity, activityExecutionId: "next-occurrence" };
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepare(activity)} />);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ evidenceId: snapshot.evidenceId!, captureMode: snapshot.captureMode,
+    payload: { kind: "string", preview: "TOP_SECRET_RAW_VALUE" } });
+  const show = [...container.querySelectorAll("button")].find(button => button.textContent === "Show captured value")!;
+  flushSync(() => show.click());
+  await waitFor(() => expect(container.textContent).toContain("TOP_SECRET_RAW_VALUE"));
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={next} activityCatalog={catalog} prepared={prepare(next)} />);
+  expect(container.textContent).not.toContain("TOP_SECRET_RAW_VALUE");
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepare(activity)} />);
+  expect(container.textContent).not.toContain("TOP_SECRET_RAW_VALUE");
+  expect(container.textContent).toContain("Show captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+});
+
 describe("WorkflowIncidentList", () => {
   it("renders a full stack trace disclosure when incident metadata includes one", () => {
     const stackTrace = "System.InvalidOperationException: No value\n   at Elsa.Tests.WriteLine.Execute()";
