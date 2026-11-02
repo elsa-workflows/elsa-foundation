@@ -26,6 +26,7 @@ The two actual pre-claim captures are confirmed and now guard the current host. 
 
 - **Wait store:** the restored view, the current work or the full inspection equals the capture. An obsolete attempt is refused without changing state. The original completion command returns the original Accepted response and then its replay, both deep-equal to the captured responses. Revision, result and pins match the captured terminal. The replay survives a restart.
 - **Terminal store:** the view and inspection equal the capture. The original command and its command record replay the captured result. A new request is refused as `execution-terminal`, and both survive a restart.
+- **Inspection authority:** inspection now discloses only the authority's system identity and root initiator. The test drops the captured `authority.metadata` only after asserting it was empty, so every disclosed value is still compared exactly; the pinned capture files are unchanged.
 - **Both:** material rows keep their exact bytes and incarnations, and native workflow/activity/bookmark rows stay zero.
 
 At `bc5f464af` the four controls and the existing direct-human witness pass. A temporary changed request id, with the original attempt id, fails all four. See the [receipt](upgrade-controls.json). The claim writer has not changed. T028–T029 must keep these controls passing unchanged, and future claim captures are added beside them, never in place of them.

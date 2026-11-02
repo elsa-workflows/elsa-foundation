@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: In progress. PR #3603 delivers P1 human, frozen-native compatibility, BPMN → native RunEtl → ETL recovery and completed-occurrence navigation, and exact human claims with interruption, all verified on real hosts and in Studio ([requirement map](evidence/final/README.md)). Still open after that merge: FR-012, FR-014 and SC-005 are proved only partly or by component tests ([#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650)), as are T038 and the resulting-main verification in T039. The status changes to Implemented in the PR that closes #3650.
+**Status**: In progress — PR #3603 delivers P1 human, frozen-native compatibility, BPMN → native RunEtl → ETL recovery and completed-occurrence navigation, and exact human claims with interruption, all verified on real hosts and in Studio ([requirement map](evidence/final/README.md)). Still open after that merge: FR-012, FR-014 and SC-005 are proved only partly or by component tests ([#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650)). T038 and the resulting-main verification in T039 also remain. The status changes to Implemented in the PR that closes #3650.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 
@@ -132,7 +132,7 @@ Existing native/embedded BPMN authors retain their editor, authoring documents, 
 ## Assumptions
 
 - Delivered #2735/#2898 semantics/hosting and finite file/HTTP ETL are prerequisites, not work to reimplement. Their evidence retains its source and limits.
-- Existing identity/tenant/resource policies govern access. No team-assignment policy, general inbox/product, new remote-worker transport or durable task runner is selected. Exact human claiming still needs implementation or demonstration; completion alone does not prove it.
+- Existing identity/tenant/resource policies govern access. No team-assignment policy, general inbox/product, new remote-worker transport or durable task runner is selected. Exact human claiming is proved by its own claim evidence; completion alone does not prove it.
 - The first external-work journey uses the existing native worker/RunEtl path. Wider connectors, continuous ETL and all-provider production recovery remain #2908 obligations.
 - The initial accepted host composition is #2898's qualified built-in profile. Provider contract tests do not establish new distributed placement or all-provider Studio recovery.
 - [#3597](https://github.com/elsa-workflows/elsa-foundation/issues/3597) owns optional bpmn-js feasibility/same-process switching. This feature retains process identity/configuration without selecting that editor.

@@ -130,7 +130,18 @@ public sealed class DirectHumanPreClaimUpgradeTests
         return new Capture(directory, true, "human-wait", "finished", executionId, Uri.UnescapeDataString(segments[5]),
             events[0]!["request"]!.DeepClone(), events[0]!["response"]!.DeepClone(), events[1]!["response"]!.DeepClone(),
             Assert.Single(waiting["executions"]!["items"]!.AsArray())!.DeepClone(), Assert.Single(finished["executions"]!["items"]!.AsArray())!.DeepClone(),
-            null, waiting["inspections"]![executionId]!.DeepClone(), finished["inspections"]![executionId]!.DeepClone());
+            null, CurrentInspection(waiting["inspections"]![executionId]!), CurrentInspection(finished["inspections"]![executionId]!));
+    }
+
+    // Inspection deliberately stopped disclosing authority metadata after this capture. The capture's
+    // metadata was empty, so dropping it leaves every disclosed value compared exactly.
+    private static JsonNode CurrentInspection(JsonNode captured)
+    {
+        var inspection = captured.DeepClone();
+        var authority = inspection["authority"]!.AsObject();
+        Assert.Empty(authority["metadata"]!.AsObject());
+        authority.Remove("metadata");
+        return inspection;
     }
 
     private static async Task VerifyFixturesAsync()
