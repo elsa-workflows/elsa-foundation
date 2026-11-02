@@ -1922,3 +1922,25 @@ static Elsa.Etl.Core.EtlContinuousRunPolicy.operator ==(Elsa.Etl.Core.EtlContinu
 const Elsa.Etl.Core.EtlContinuousRunPolicy.MaximumPollIntervalSeconds = 86400 -> int
 const Elsa.Etl.Core.EtlContinuousRunPolicy.MinimumPollIntervalSeconds = 1 -> int
 static Elsa.Etl.Core.EtlContinuousRunPolicy.FindViolation(Elsa.Etl.Core.EtlPipelineV2! pipeline) -> string?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out bool Final) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.EtlConnectorHttpCaughtUpResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, bool Final) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Final.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Final.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus
+Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus.Accepted = 0 -> Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus
+Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus.AlreadyRequested = 1 -> Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus
+Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus.NotContinuous = 3 -> Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus
+Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus.NotFound = 4 -> Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus
+Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus.Terminal = 2 -> Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RecordConnectorHttpCaughtUpAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! attempt, System.DateTimeOffset responseReceivedAtUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RequestConnectorRunCompletionAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorRunCompletionStatus>
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? right) -> bool
