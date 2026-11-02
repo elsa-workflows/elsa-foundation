@@ -264,16 +264,17 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // effect at that checkpoint. If the Cancel never ran, the actor re-drives the execution (#3647). A session
         // reads this execution's continuations only from its own overlay, so hand over the flushed ones from the
         // durable outbox before the first segment begins; otherwise only the sweep would find them.
-        // Skip it while a Cancel already waits: the drainer yields before its first step, and delivering now would queue
-        // the next step ahead of that Cancel's work. A withdrawn Cancel re-drives again.
-        if (deliverFlushedContinuations && DrainControls?.ShouldYield(request.WorkflowExecutionId) != true)
+        // Stop before each batch while a Cancel waits: the drainer yields before its first step, and delivering then would
+        // queue the next step ahead of that Cancel's work. A withdrawn Cancel re-drives again.
+        if (deliverFlushedContinuations)
         {
-            RuntimePostCommitOutboxProcessResult delivered;
-            do
+            while (DrainControls?.ShouldYield(request.WorkflowExecutionId) != true)
             {
-                delivered = await _postCommitOutboxProcessor.ProcessAsync(ContinuationDelivery(request.WorkflowExecutionId), cancellationToken);
+                var delivered = await _postCommitOutboxProcessor.ProcessAsync(ContinuationDelivery(request.WorkflowExecutionId), cancellationToken);
                 outboxDeliveryResults.Add(delivered);
-            } while (delivered.DeliveredCount > 0 && delivered.FailedCount == 0);
+                if (delivered.DeliveredCount == 0 || delivered.FailedCount > 0)
+                    break;
+            }
         }
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
         var continuationWait = new ContinuationWaitDeadline(_options.ContinuationClaimWaitLimit);
