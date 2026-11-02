@@ -101,7 +101,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     requestsPaused,
     blockedReason,
     changeSearch,
-    navigateBrowseLocation,
+    navigateBrowseLocation: navigateBrowseLocationNow,
     changePage,
     changePageSize,
     rebase,
@@ -127,9 +127,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
   const createInFlightRef = useRef(false);
-  // A create can finish while this screen's workspace tab is in the background; opening the new
-  // definition then waits for the tab to return instead of taking over the active tab.
+  // A create, folder change or delete can finish while this screen's workspace tab is in the background;
+  // the navigation that follows then waits for the tab to return instead of taking over the active tab.
   const whenActive = useStudioWorkspaceWhenActive();
+  const navigateBrowseLocation = useCallback((...args: Parameters<typeof navigateBrowseLocationNow>) => {
+    whenActive(() => navigateBrowseLocationNow(...args));
+  }, [navigateBrowseLocationNow, whenActive]);
   const workspaceTab = useStudioWorkspaceTab();
   const workspaceTabRef = useRef(workspaceTab);
   workspaceTabRef.current = workspaceTab;

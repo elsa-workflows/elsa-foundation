@@ -6,12 +6,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { WorkflowDefinitions } from "../workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../workflow-editor/workflowDefinitionBrowseSession";
+import { getDialogs, setDialogs } from "../workflow-editor/dialogs";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
 let previousClipboard: PropertyDescriptor | undefined;
 
+const hostDialogs = getDialogs();
+
 afterEach(() => {
+  setDialogs(hostDialogs);
   if (previousClipboard) Object.defineProperty(navigator, "clipboard", previousClipboard);
   else Reflect.deleteProperty(navigator, "clipboard");
   previousClipboard = undefined;
@@ -152,6 +156,41 @@ describe("workflow definition list", () => {
     await waitFor(() => expect(onOpen).toHaveBeenCalledTimes(1));
     expect(onOpen).toHaveBeenCalledWith("created-definition");
   });
+
+  it("holds the folder change after deleting a folder while its workspace tab is in the background", async () => {
+    window.history.replaceState({}, "", "/workflows/definitions?folderId=same-folder");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return folderCapabilities;
+      if (url.endsWith("folders/same-folder")) return { folder: { id: "same-folder", name: "Selected folder", parentId: null, revision: "r1" }, ancestors: [] };
+      if (url.includes("definition-pages")) return { items: [{ id: "definition-1", name: "Invoice evaluator" }] };
+      return { items: [] };
+    });
+    let finishDelete!: () => void;
+    const deleteJson = vi.fn(() => new Promise<void>(resolve => { finishDelete = resolve; }));
+    setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined } as unknown as Parameters<typeof setDialogs>[0]);
+    const tab = renderInTab({ ...context(getJson), http: { getJson, deleteJson } } as unknown as StudioEndpointContext, vi.fn());
+
+    const deleteButton = () => [...tab.container.querySelectorAll<HTMLButtonElement>(".wf-folder-actions button")].find(button => button.textContent?.trim() === "Delete") ?? null;
+    await vi.waitFor(() => expect(deleteButton()).not.toBeNull(), { timeout: 5_000, interval: 20 });
+    click(deleteButton()!);
+    await waitFor(() => expect(deleteJson).toHaveBeenCalledTimes(1));
+
+    tab.hide();
+    await settle();
+    const address = window.location.pathname + window.location.search;
+    const historyLength = window.history.length;
+    finishDelete();
+    await settle();
+
+    expect(window.location.pathname + window.location.search).toBe(address);
+    expect(window.history.length).toBe(historyLength);
+    expect(tab.handle.markPendingWork).toHaveBeenCalled();
+
+    tab.reveal();
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false));
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(window.history.length).toBe(historyLength + 1);
+  });
 });
 
 function renderInTab(contextValue: StudioEndpointContext, onOpen: (id: string) => void) {
@@ -263,4 +302,17 @@ const activityCapability = {
   id: "elsa.api.activity-design",
   contractVersion: "1",
   links: [{ rel: "activity-catalog", href: "design/activities/catalog" }]
+};
+
+const folderCapabilities = {
+  capabilities: [{
+    id: "elsa.api.workflow-design",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-definitions", href: "design/workflows/definitions" },
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true }
+    ]
+  }]
 };
