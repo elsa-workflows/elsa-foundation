@@ -16,8 +16,10 @@ All file refs are {path,sha256} under the owned root. No pending data qualifies.
 validate_complete_witness(report, root, allowed_controls) is the final gate for
 independentPackageWitness: validate_report plus the declared current manifest, the four
 passed current-authority records, every #3440 autonomy case exactly once per actual adapter
-with its expected cause and retained owner/correlation evidence, and each manifest-named
-matrix stage exactly once. witness_gaps(report) is its file-free structural reader.
+with its expected cause and retained owner/correlation evidence, each manifest-named
+matrix stage exactly once, and the #3441 restart inventory (each restart case once per actual
+adapter over the packaged durable store, plus its observed in-memory negative control).
+witness_gaps(report) is its file-free structural reader.
 """
 from __future__ import annotations
 
@@ -181,16 +183,19 @@ def _retained_ref(root, value):
 
 
 def witness_manifest():
-    """The complete witness inventory: original38 + four current-authority + 13 cases per actual adapter.
+    """The complete witness inventory: original38 + four current-authority + 13 cases per actual adapter
+    + the #3441 restart inventory (ten restart cases per actual adapter and one negative control).
 
     Stage expectations are only the matrix's own named browser stages. No total stage count
     (the original run's 135) is part of the contract; production/author stages may change.
     """
     from autonomy_journeys import EXPECTED_CASES as AUTONOMY_CASES, autonomy_stages
     from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
+    from restart_journeys import CONTROL_ID as RESTART_CONTROL, EXPECTED_CASES as RESTART_CASES
     return {"originalCases": sorted(REQUIRED_CASES), "currentAuthorityCases": sorted(AUTHORITY_CASES),
             "autonomyCases": sorted(AUTONOMY_CASES), "autonomyStages": sorted(autonomy_stages()),
-            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(AUTONOMY_CASES)}
+            "restartCases": sorted(RESTART_CASES), "restartControls": [RESTART_CONTROL],
+            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(AUTONOMY_CASES) + len(RESTART_CASES) + 1}
 
 
 def witness_gaps(report):
@@ -218,6 +223,8 @@ def witness_gaps(report):
     if MODE_QUALIFICATION in report:
         gaps.append("A diagnostic mode section cannot stand in for the complete matrix")
     gaps += autonomy_manifest_gaps(report.get(MATRIX_QUALIFICATION), report.get("source"))
+    from restart_journeys import RESTART_QUALIFICATION, restart_manifest_gaps
+    gaps += restart_manifest_gaps(report.get(RESTART_QUALIFICATION), report.get("source"))
     stages = report.get("stages") if isinstance(report.get("stages"), list) else []
     names = [stage.get("name") if isinstance(stage, dict) else None for stage in stages]
     gaps += [f"Matrix stage {name} ran {names.count(name)} times" for name in manifest["autonomyStages"] if names.count(name) != 1]
@@ -237,6 +244,8 @@ def validate_complete_witness(report, root, allowed_controls):
             _need(observed.get("id") == row["id"] and observed.get("status") == "passed", "Current-authority record differs: " + row["id"])
         from autonomy_journeys import MATRIX_QUALIFICATION, require_complete_autonomy
         require_complete_autonomy(report[MATRIX_QUALIFICATION], root, source=report["source"])
+        from restart_journeys import RESTART_QUALIFICATION, require_restart_inventory
+        require_restart_inventory(report[RESTART_QUALIFICATION], root, source=report["source"])
     except EvidenceError:
         raise
     except (RuntimeError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:

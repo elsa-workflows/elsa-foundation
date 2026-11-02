@@ -89,7 +89,8 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Agent foundation (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Agent foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Agent EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
 | Connection-backed specialist model contributors | [`Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md) |
 | Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |

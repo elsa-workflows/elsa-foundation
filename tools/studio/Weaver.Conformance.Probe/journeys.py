@@ -3,8 +3,10 @@
 This driver owns the expected causes. Expected negative children remain failed;
 only the complete evidence set can establish the independent package witness.
 The complete set is evidence.witness_manifest(): the original 38 cases, the four
-current-authority cases and the #3440 inventory (13 cases on each actual adapter),
-all in one fresh run and host pair. No total stage count is required.
+current-authority cases, the #3440 inventory (13 cases on each actual adapter) and the
+#3441 restart inventory (ten restart cases on each actual adapter plus its in-memory control),
+all in one fresh run. The Studio host runs throughout; the backend host is restarted by the
+driver itself only inside the restart inventory. No total stage count is required.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ from case_records import CaseRecords, retained
 from consumers import (configure_runtime, freeze_consumer_baseline, capture_consumer_after,
                        select_native_archives, stage_native_archives, prepare_consumers)
 from autonomy_journeys import qualify_witness_autonomy
+from restart_journeys import qualify_witness_restarts
 from disclosure_journeys import qualify_context_disclosure
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
@@ -29,7 +32,7 @@ from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HO
 from native_lifecycle import (add_resource_archives, remove_resource_archives, restore_resource_archives,
                               require_installed_package, require_removed_package)
 from owner_resources import seed_personal_layout
-from runtime import Http, owned_origin, private_json, server, RUNTIME_ENVIRONMENT
+from runtime import Http, RestartableServer, owned_origin, private_json, server, RUNTIME_ENVIRONMENT
 
 INVALID_CONTEXT = "Only a current Acme status card reference is supported."
 INVALID_SCHEMA = "The installed module does not support this context schema version."
@@ -620,7 +623,7 @@ def qualify_distributions(run):
     private_json(shells_path, shells)
     private_json(runtime.root / "private-seeds.json", {"admin": admin, "principals": principals})
     records = CaseRecords(run, EXPECTED_CONTROLS)
-    with server(run, "backend", backend), server(run, "studio", studio):
+    with RestartableServer(run, "backend", backend) as backend_host, server(run, "studio", studio):
         _bootstrap(runtime)
         freeze_consumer_baseline(run)
         _module_missing(runtime, records)
@@ -658,6 +661,13 @@ def qualify_distributions(run):
         qualify_witness_autonomy(runtime)
         check(same(original, {key: run.report[key] for key in original}),
               "The appended autonomy matrix changed the original or current-authority records")
+        # The #3441 restart inventory comes last: it restarts this backend host between its phases and
+        # configures the packaged durable store, which the earlier cases must not observe.
+        original["autonomyLifecycleQualification"] = copy.deepcopy(run.report["autonomyLifecycleQualification"])
+        qualify_witness_restarts(runtime, backend_host)
+        check(same(original, {key: run.report[key] for key in original}),
+              "The appended restart inventory changed an earlier witness record")
+        run.report["hostRestarts"] = copy.deepcopy(backend_host.restarts)
         capture_consumer_after(run)
         check({case["id"] for case in run.report["cases"]} == set(REQUIRED_CASES) and len(run.report["cases"]) == len(REQUIRED_CASES),
               "Every one of the 38 actual required cases must be completed exactly once")
