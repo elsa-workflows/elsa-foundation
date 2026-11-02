@@ -227,6 +227,20 @@
       "mutated_text": "idle = pipeline.Continuous is not null && owed is null"
     },
     {
+      "mutation": "complete-requires-connector-store",
+      "file": "Extensions/Etl/src/Runtime/Api/EtlRuntimeOperations.cs",
+      "filter": "DisplayName~Completion_reports_not_continuous",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Completion_reports_not_continuous_without_a_connector_store_and_unavailable_for_legacy_operations"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (services.GetService<IEtlConnectorRuntimeStore>() is not { } connectors)\n            return new(\"notContinuous\");\n        var status = await connectors.",
+      "mutated_text": "        var connectors = Required<IEtlConnectorRuntimeStore>();\n        var status = await connectors.",
+      "round": 4,
+      "sourceRevision": "e1a6bcaf7ee746df4a57f7647e7a37d74e7d0c8d"
+    },
+    {
       "mutation": "complete-offered-for-every-run",
       "file": "Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlRunsPage.tsx",
       "filter": "vitest src/__tests__/runsPage.test.tsx",

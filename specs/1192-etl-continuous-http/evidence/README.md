@@ -105,6 +105,7 @@ This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from
 | A caught-up receipt before the attempt started is accepted | 1/1 |
 | Completion is accepted for a finite run | 1/1 |
 | A retry wait reports a next poll | 1/1 |
+| Completion without a connector store reports unavailable instead of `notContinuous` (round 4, at `e1a6bcaf7`) | 1/1 |
 | Studio offers Complete run for every running run | 1/14 |
 
 **Tested without a bite-proof:** cancellation winning over a pending completion (it reuses the unchanged first-terminal settlement); the stale-attempt refusal of a caught-up record; the pagination and interval codes of the shared rule (the bite-proof covers the file-source code); completion accepted during preparation; the 404 for a foreign scope; the editor's visibility rule; `notContinuous` taking precedence for a settled finite run.
