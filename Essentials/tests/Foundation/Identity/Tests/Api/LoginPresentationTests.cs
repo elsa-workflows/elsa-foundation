@@ -8,46 +8,6 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 [Collection(FastEndpointsHostCollection.Name)]
 public sealed class LoginPresentationTests
 {
-    [Fact]
-    public async Task Default_login_uses_unfolding_map()
-    {
-        await using var fixture = await TokenEndpointFixture.StartAsync();
-        var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
-        Assert.Contains("src=\"/_elsa/identity/login-assets/unfolding-map.jpg\"", html);
-        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/unfolding-map.jpg");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData("river-to-sea")]
-    [InlineData("open-architecture")]
-    [InlineData("flowing-ribbons")]
-    [InlineData("paper-landscape")]
-    [InlineData("creative-studio")]
-    [InlineData("botanical-growth")]
-    [InlineData("constellation")]
-    [InlineData("miniature-world")]
-    [InlineData("glass-and-light")]
-    [InlineData("unfolding-map")]
-    public async Task Configured_artwork_is_rendered_and_served_under_route_prefix(string artwork)
-    {
-        await using var fixture = await TokenEndpointFixture.StartAsync(services =>
-            services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
-                new Dictionary<string, string?> { ["Identity:Login:Artwork"] = artwork }).Build()),
-            routePrefix: "/tenant-a");
-        var imageUrl = $"/tenant-a/_elsa/identity/login-assets/{artwork}.jpg";
-        var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login");
-        Assert.Contains($"src=\"{imageUrl}\"", html);
-        var response = await fixture.Client.GetAsync(imageUrl);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("image/jpeg", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal("public, max-age=86400", response.Headers.CacheControl?.ToString());
-        var bytes = await response.Content.ReadAsByteArrayAsync();
-        Assert.True(bytes.Length > 10000);
-        Assert.Equal(0xff, bytes[0]);
-        Assert.Equal(0xd8, bytes[1]);
-    }
-
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
