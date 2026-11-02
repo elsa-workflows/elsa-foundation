@@ -276,7 +276,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -859,6 +859,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.Capabilities.Core",
+          "path": "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Core",
           "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
         },
@@ -1150,6 +1155,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.Capabilities.Core",
+          "path": "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Core",
           "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
         },
@@ -1162,6 +1172,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Core",
           "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.Core",
+          "path": "Essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
         },
         {
           "type": "external",
@@ -1378,7 +1393,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -2286,7 +2301,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -2794,7 +2809,26 @@
       ]
     },
     {
-      "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj",
+      "path": "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj",
+      "name": "Elsa.Api.Capabilities.Core",
+      "kind": "source",
+      "domain": "Elsa.Api",
+      "sub_domain": "Capabilities.Core",
+      "role": "contract",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Api.Capabilities.Core",
+      "line": "B",
+      "edges": [
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj",
       "name": "Elsa.Api.Capabilities",
       "kind": "source",
       "domain": "Elsa.Api",
@@ -2809,6 +2843,11 @@
           "type": "internal",
           "id": "Elsa.Api.AspNetCore",
           "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities.Core",
+          "path": "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj"
         },
         {
           "type": "internal",
@@ -2867,7 +2906,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -3376,7 +3415,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -3908,7 +3947,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -4219,7 +4258,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -4544,7 +4583,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -6640,7 +6679,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -7629,7 +7668,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -7857,7 +7896,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -8675,7 +8714,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -9146,7 +9185,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -12056,7 +12095,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -13048,7 +13087,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -13403,7 +13442,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -17924,7 +17963,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -18926,7 +18965,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -20791,7 +20830,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -21484,7 +21523,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -21762,7 +21801,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -22340,7 +22379,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -23347,7 +23386,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -24643,7 +24682,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -25176,7 +25215,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
@@ -25423,7 +25462,7 @@
         {
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
-          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
         {
           "type": "internal",
