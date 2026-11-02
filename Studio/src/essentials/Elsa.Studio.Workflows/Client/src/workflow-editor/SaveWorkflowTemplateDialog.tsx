@@ -14,7 +14,7 @@ export function SaveWorkflowTemplateDialog({ context, draft, name: initialName, 
       void saveWorkflowTemplate(context, { name, description: text, content: templateContent(draft) }).then(() => setSaved(true))
         .catch(error => setError(error instanceof Error ? error.message : String(error))).finally(() => setSaving(false)); }}>
       <h3 id="save-template-title">Save as template</h3>
-      {saved ? <><p role="status">Template saved. Find it under Workflows → Templates.</p><button type="button" onClick={onClose}>Done</button></> : <>
+      {saved ? <><p role="status">Template saved. Find it under Workflows → Templates.</p><div className="wf-dialog-actions"><button type="button" onClick={onClose}>Done</button></div></> : <>
         <p>Save the current design, including unsaved changes, as an independent template.</p>
         <label className="wf-form-field">Name<input value={name} onChange={event => setName(event.target.value)} maxLength={2048} required /></label>
         <label className="wf-form-field">Description<textarea value={text} onChange={event => setText(event.target.value)} maxLength={2048} /></label>
