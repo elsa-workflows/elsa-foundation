@@ -468,14 +468,7 @@ public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerC
             foreach (var property in (activity.Metadata?.AdditionalProperties ?? new Dictionary<string, JsonElement>()).OrderBy(x => x.Key, StringComparer.Ordinal))
                 fields.AddRange(["activity-metadata", property.Key, property.Value.GetRawText()]);
             foreach (var connection in activity.Connections ?? [])
-            {
                 fields.AddRange(["connection", connection.Source.Activity, connection.Source.Port, connection.Target.Activity, connection.Target.Port]);
-                // Bend points are layout, as positions are; a connection without them hashes as before.
-                foreach (var vertex in connection.Vertices ?? [])
-                    fields.AddRange(["vertex",
-                        vertex.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                        vertex.Y.ToString("R", System.Globalization.CultureInfo.InvariantCulture)]);
-            }
         }
         return ReusableActivityImportIdentity.Create("source", fields.ToArray());
     }

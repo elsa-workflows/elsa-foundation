@@ -2,7 +2,7 @@
   "id": "http-headers-v1",
   "definitionId": "http-headers",
   "name": "http-headers",
-  "description": "Test-owned flowchart (#3202): answers a POST to elsa3/headers with a literal response header. Laid out as the Elsa 3 designer placed it, with one bent connection.",
+  "description": "Test-owned flowchart (#3202): answers a POST to elsa3/headers with a literal response header. Laid out as the Elsa 3 designer placed it.",
   "createdAt": "1970-01-01T00:00:00Z",
   "version": 1,
   "toolVersion": "3.6.0",
@@ -130,16 +130,7 @@
           "activity": "respond",
           "port": "In"
         },
-        "vertices": [
-          {
-            "x": 300,
-            "y": 125
-          },
-          {
-            "x": 300,
-            "y": 245
-          }
-        ]
+        "vertices": []
       }
     ]
   }

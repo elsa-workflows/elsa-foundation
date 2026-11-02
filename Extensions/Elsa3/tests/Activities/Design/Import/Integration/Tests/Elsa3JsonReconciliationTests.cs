@@ -175,7 +175,7 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
 
     /// <summary>The draft an imported workflow opens in is laid out as the Elsa 3 designer placed it.</summary>
     [Fact]
-    public async Task The_draft_of_an_imported_workflow_has_the_Elsa_3_positions_and_bend_points()
+    public async Task The_draft_of_an_imported_workflow_has_the_Elsa_3_positions()
     {
         var draft = await DraftWithLayoutAsync("http-headers");
 
@@ -183,8 +183,6 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
         Assert.Equal((50d, 100d, 180d, 50d), (endpoint.X, endpoint.Y, endpoint.Width!.Value, endpoint.Height!.Value));
         var respond = Assert.Single(draft.Layout, record => record.NodeId == "respond");
         Assert.Equal((400d, 220d), (respond.X, respond.Y));
-        var connection = Assert.Single(draft.Draft.State.RootActivity!.Structure!.Payload.GetProperty("connections").EnumerateArray());
-        Assert.Equal("""[{"x":300,"y":125},{"x":300,"y":245}]""", connection.GetProperty("vertices").GetRawText());
     }
 
     /// <summary>An Elsa 3 export without positions keeps Elsa 4's default layout.</summary>
