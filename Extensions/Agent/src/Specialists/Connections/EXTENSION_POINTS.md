@@ -14,7 +14,9 @@ Anthropic/Azure OpenAI owners opt in for their documented transport profiles. A 
 resends below this guard needs its own reservation mechanism and qualification.
 
 `SpecialistModelConnectionTypeProvider` is the immutable singleton contribution to the existing
-Connections type registry. Keep it separate from the scoped model owner and resolver.
+Connections type registry. Keep it separate from the scoped model owner and resolver. Its `ProviderKey`
+names the model provider whose connections use this type; the specialist authoring API pairs it with the
+provider's single capability owner to offer only providers that can back a specialist.
 
 ## Cross-domain contributions
 
