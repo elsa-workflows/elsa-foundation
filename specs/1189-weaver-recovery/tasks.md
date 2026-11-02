@@ -195,7 +195,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 ## Phase 7: Durable EF store (plan step 4)
 
-- [ ] T026 Create `Extensions/Agent/src/Persistence/EntityFrameworkCore/` following the Specialists EF project:
+- [x] T026 Create `Extensions/Agent/src/Persistence/EntityFrameworkCore/` following the Specialists EF project:
   - feature class `FoundationAgentEntityFrameworkCore`, opt-in, depending on the Agent feature and Secrets;
   - `[EfModule("Agent")]`, `AgentDbContext` and the four provider contexts;
   - a codec using `ISecretValueProtector`;
@@ -204,8 +204,12 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - `PublicAPI` files, `nuplane.json`, a README and `EXTENSION_POINTS.md`.
 
   Add it to `Elsa.Server.slnx`.
-- [ ] T027 Generate the per-provider `Initial` migrations with `tools/ef/generate-module-migrations.sh`. Register the contexts in `tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs`, and update `ModuleContextCatalog`, `EfModuleDescriptorTests`, `EfCoreDependencyGuardTests` and the all-modules migrations provider test.
-- [ ] T028 Add `Extensions/Agent/tests/Persistence/Tests` (SQLite, PR tier) and `Extensions/Agent/tests/Persistence/ProviderTests` (Testcontainers for PostgreSQL, SQL Server and MySQL). They cover:
+
+  Verified: commits `06fe59310` and `e7639b577`. Eight `elsa_agent_*` tables (the context attachments get their own `elsa_agent_context` table rather than a session column, so an append never re-encrypts the session). Writes and acquisitions take the session row lock first, under owner and fence for a write; the provider matrix showed a read-then-compare write exhausting its retries under 18 competing writers. The store and the audit trio are chosen through the new `AgentPersistenceSelection` in `Elsa.Agent`, which replaces only the process-local defaults in either registration order and throws on a second selection; `AgentSessionUnavailableException` gained an inner-exception constructor so unreadable state keeps its cause (§2.23.5). The feature and the API project build in Release.
+- [x] T027 Generate the per-provider `Initial` migrations with `tools/ef/generate-module-migrations.sh`. Register the contexts in `tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs`, and update `ModuleContextCatalog`, `EfModuleDescriptorTests`, `EfCoreDependencyGuardTests` and the all-modules migrations provider test.
+
+  Verified: commit `06fe59310` (test-project closures in `e7639b577`). `Initial` per provider under `Migrations/Agent/<Provider>/`, history `__EFMigrationsHistory_ElsaAgent`, no provider identity column. Updated `ModuleContextCatalog`, `EfModuleDescriptorTests` (18 modules), `ExpandOnlyMigrationScanTests`, `OrdinalCollationMigrationTests`, `UsesEfModuleGuardTests` and the `Spec1189AgentEf` closure. EF migration tests 508/508; the all-modules install, ordinal-collation and schema tests 9/9 on actual PostgreSQL, SQL Server and MySQL containers; architecture 610/610.
+- [x] T028 Add `Extensions/Agent/tests/Persistence/Tests` (SQLite, PR tier) and `Extensions/Agent/tests/Persistence/ProviderTests` (Testcontainers for PostgreSQL, SQL Server and MySQL). They cover:
   - aggregate round-trips with byte-identical fingerprints;
   - the unique keys;
   - fence and lease;
@@ -218,7 +222,11 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - a registration test for `FoundationAgentEntityFrameworkCore`: provider selection, the audit-trio replacement, and the explicit selection that throws on a second selection.
 
   Register both projects in `tools/ci/test-tiers.json` (tier, container suite, EF shard).
-- [ ] T029 Update documentation: what is and isn't recoverable (FR-001), in `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md` (record store, async turn state, audit trio, participation with durable backing, recovery outcomes) and the root `EXTENSION_POINTS.md`. Regenerate the maps and solution filters, and verify Workbench profile membership in `tools/solution-filters/profiles.json`.
+
+  Verified: commit `e7639b577`. `Elsa.Agent.Persistence.Tests` 73/73, including the 38 T009–T014 restart, deduplication, execution and ownership cases compiled unchanged and run over the EF store; removing the write's owner and fence guard turns 8 of them red, removing it together with the proposal compare-and-set 10, and dropping the codec's row binding 1. `Elsa.Agent.Persistence.ProviderTests` 3/3 with `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1` on actual PostgreSQL 16, SQL Server 2022 and MySQL 8.4 containers. Registered as `pr-3`, integration/testcontainers and container suite `agent-records` on `ef-2`; `ef-suites-self-test` and `test-tiers-check` pass. The Agent suite still passes 882/882.
+- [x] T029 Update documentation: what is and isn't recoverable (FR-001), in `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md` (record store, async turn state, audit trio, participation with durable backing, recovery outcomes) and the root `EXTENSION_POINTS.md`. Regenerate the maps and solution filters, and verify Workbench profile membership in `tools/solution-filters/profiles.json`.
+
+  Verified: the `Durable recovery` section of `Elsa.Agent/EXTENSION_POINTS.md`, the record-store and audit rows, and the root index. The maps check reports the committed solution filters current, so none changed. The Workbench profile is the Workbench project's closure, and the Workbench does not reference the EF store yet, so the store is not a member; T032 adds that reference when it configures the Workbench for the EF store.
 
 ## Phase 8: Qualification and freeze (plan step 7)
 
