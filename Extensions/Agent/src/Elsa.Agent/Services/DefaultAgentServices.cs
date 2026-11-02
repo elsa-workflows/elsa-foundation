@@ -670,18 +670,26 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         // and cleared only once emitted, so a process that stops in between never loses them.
         var recovery = Recover(record, history.Messages, ownership.Fence, _clock.GetUtcNow());
         var audits = record.PendingAudits.Concat(recovery.Audits).ToArray();
-        if (recovery.Write is { } write)
+        try
         {
-            write = write with { PendingAudits = audits };
-            try { await WriteThroughAsync(sessionId, null, write); }
-            // A lost ownership is no longer this process's lease to give back; any other refusal or store failure settled
-            // nothing, so the lease this hydration took is released, as a failed load releases it.
-            catch (Exception failure) when (failure is not AgentSessionOwnershipException)
+            if (recovery.Write is { } write)
+                await WriteThroughAsync(sessionId, null, write with { PendingAudits = audits });
+            // Owed records are emitted and cleared before the row is published: if either fails, nothing is loaded, so the
+            // session's next access (in this process or another) hydrates again and emits them then.
+            if (audits.Length > 0)
             {
-                try { await _store.ReleaseOwnershipAsync(sessionId, ownership.Fence, CancellationToken.None); }
-                catch (Exception) { }
-                throw;
+                foreach (var settled in audits)
+                    await auditSink.EmitAsync(settled, CancellationToken.None);
+                await WriteThroughAsync(sessionId, null, new AgentSessionRecordWrite(sessionId, ownership.Fence) { PendingAudits = [] });
             }
+        }
+        // A lost ownership is no longer this process's lease to give back; any other refusal or failure leaves the recorded
+        // facts as they are, so the lease this hydration took is released, as a failed load releases it.
+        catch (Exception failure) when (failure is not AgentSessionOwnershipException)
+        {
+            try { await _store.ReleaseOwnershipAsync(sessionId, ownership.Fence, CancellationToken.None); }
+            catch (Exception) { }
+            throw;
         }
         var row = new SessionRow(recovery.Record.Session, ownership.Fence, recovery.Messages, recovery.Record.Context, history.PausedTurn, history.Snapshots);
         lock (row) RebuildClaims(row, recovery.Messages, history.PausedTurn, recovery.Record.Proposals);
@@ -690,14 +698,6 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         bool renew;
         lock (row) renew = row.NeedsRenewal;
         if (renew) EnsureRenewal();
-        if (audits.Length > 0)
-        {
-            foreach (var settled in audits)
-                await auditSink.EmitAsync(settled, CancellationToken.None);
-            AgentSessionFence fence;
-            lock (row) fence = row.Fence;
-            await WriteThroughAsync(sessionId, row, new AgentSessionRecordWrite(sessionId, fence) { PendingAudits = [] });
-        }
         return row;
     }
 
