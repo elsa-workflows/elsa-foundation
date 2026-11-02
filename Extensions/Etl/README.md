@@ -77,7 +77,9 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
   batch and retained-byte state, so a run's lifetime is bounded by `MaxPagesPerPartition` and the retention budgets.
   Each idle poll claims its partition and audits the shard's retained history, so its cost grows with that history. A
   feed outage longer than the fetch deadline (`DeadlineSeconds`) fails the run. Workers without this feature refuse a
-  continuous artifact; upgrade every worker in a scope before admitting one.
+  continuous artifact; upgrade every worker in a scope before admitting one. Claims are ordered by run creation, so a
+  continuous run whose shards are never idle can keep every connector slot in its scope and delay newer runs. Deciding
+  whether a caught-up response ends a draining shard compares host clocks, which must agree, as leases already require.
 
 ## Implemented boundaries
 

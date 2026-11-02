@@ -48,7 +48,7 @@ Real worker and store, against a loopback cursor feed (`EtlRuntimeJourneyTests.C
 - **Drain race.** The poll interval is an hour. A poll that read the feed before the completion request answers caught up after the request. The shard is re-armed rather than ended, so a record appended in between is still delivered, and idle shards are woken.
 - **Cancellation and refusals.** Cancellation settles `Cancelled`, also when a completion is pending but has not drained. At the store, completion reports `terminal`, `notContinuous` or `notFound` for a settled, finite or unknown run.
 - **Business error.** A drained run with one rejected record settles `BusinessError` with `etl.rows-rejected`.
-- **Moving cursor.** A cursor that moves without records waits one interval: with a 2 s interval, consecutive requests on each shard were at least 1.5 s apart (a hot loop would be milliseconds apart).
+- **Moving cursor.** A cursor that moves without records waits one interval: with a 2 s interval, consecutive requests on each shard were at least 1.5 s apart (a hot loop would be milliseconds apart), both before and after a completion request, which wakes each waiting shard once.
 - **Finite unchanged.** A finite run still fails `etl.http.pagination-cycle` on an empty page that repeats its cursor.
 
 `EtlContinuousRuntimeApiHttpTests` covers the completion endpoint:
@@ -58,11 +58,11 @@ Real worker and store, against a loopback cursor feed (`EtlRuntimeJourneyTests.C
 - only the idle shard is woken, and a 429 retry wait keeps its time;
 - `nextPollAt` appears only on the idle shard, including while its worker still holds the lease.
 
-`Caught_up_records_need_the_live_lease_and_a_continuous_run_and_preparing_runs_accept_completion` refuses a caught-up record under a stale fence, from another attempt, outside its receipt window or for a finite run, and accepts completion during preparation. `A_finite_partition_may_not_wait_without_a_retry_journal` shows the audit still refuses an idle-style wait in a finite run.
+`Caught_up_records_need_the_live_lease_and_a_continuous_run_and_preparing_runs_accept_completion` refuses a caught-up record under a stale fence, from another attempt, outside its receipt window or for a finite run, and accepts completion during preparation. `A_finite_partition_may_not_wait_without_a_retry_journal` shows the audit still refuses an idle-style wait in a finite run. `A_caught_up_record_keeps_the_journal_while_a_superseded_attempt_can_still_answer` supersedes a predecessor's attempt under a new fence, records the successor's caught-up response, and checks that the journal is kept and the shard waits until the superseded attempt has expired.
 
 ## Studio (SC-005, US4)
 
-The fixture-backed Playwright spec authors a continuous run (Run continuously, 30 s) at 320 px and 1024 px, with no axe violations: [320 px](studio/1192-studio-continuous-320.png), [1024 px](studio/1192-studio-continuous-1024.png).
+The fixture-backed Playwright spec authors a continuous run (Run continuously, 30 s) at 320 px and 1024 px, with no axe violations on the authoring page (axe was not run on inspection or the Complete run action; those were checked in a real browser below): [320 px](studio/1192-studio-continuous-320.png), [1024 px](studio/1192-studio-continuous-1024.png).
 
 Vitest covers:
 - the editor's visibility rules;
@@ -79,9 +79,11 @@ The driver ran again with `--keep-host`. The owned Workbench was on 127.0.0.1:53
 
 Both owned processes were stopped. The owner's Workbench on 5095 was not touched.
 
+This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from "Caught up; polls again at" (in these screenshots) to "Next poll at", relaxed the inspection contract check so an idle shard that still shows a claim is accepted, and added the superseded-attempt deferral; none of them changes what the receipt shows.
+
 ## Bite-proofs (SC-004)
 
-[`bite-proofs.json`](bite-proofs.json) records each mutation at `e3dcb4c63`, plus two round-1 mutations at `1afbb0140`. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
+[`bite-proofs.json`](bite-proofs.json) records every mutation at `e11275eb7`, with the failing test names. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
 
 | Mutation | Failing tests |
 |---|---|
@@ -94,14 +96,19 @@ Both owned processes were stopped. The owner's Workbench on 5095 was not touched
 | Completion also clears retry waits | 1/1 |
 | A moving empty page is not delayed | 1/1 |
 | The cache does not normalize a final page's cursor | 1/1 |
-| A caught-up response may clear a non-in-flight journal | 1/5 |
+| A caught-up response may clear a non-in-flight journal | 1/7 |
 | A repeated completion request is accepted again | 1/1 |
 | Completion of a settled run is accepted | 1/1 |
 | Completion requires only the cancel permission | 1/1 |
+| Inspection rejects an idle shard that still shows a claim | 1/1 |
+| A caught-up record ignores the lease fence | 1/1 |
+| A caught-up receipt before the attempt started is accepted | 1/1 |
+| Completion is accepted for a finite run | 1/1 |
+| A caught-up record clears the journal while a superseded attempt can still answer | 1/1 |
 | A retry wait reports a next poll | 1/1 |
 | Studio offers Complete run for every running run | 1/14 |
-| A moving empty page is not delayed (round 1, request-spacing test) | 1/1 |
-| Inspection rejects an idle shard that still shows a claim (round-1 fix) | 1/1 |
+
+**Not bite-proofed:** cancellation winning over a pending completion reuses the unchanged first-terminal settlement and is covered by a test only; the acquirer's cache re-read before recording a caught-up response and the publish-conflict recovery are implemented but not exercised by a test.
 
 ## Artifact reviews
 
@@ -134,7 +141,8 @@ It also found eight further issues, all adopted:
 
 - **Compaction** of accepted pages, requests, batches and retained bytes, which bounds a continuous run's lifetime. It is a follow-up slice, and criterion 1 stays unchecked until it lands.
 - **Publish-conflict recovery race.** The acquirer captures the winning manifest when a predecessor publishes a page under the same request identity after the successor's re-read. This path is implemented but not exercised by a test.
-- **Late pages from a superseded attempt.** If a feed returns records for a cursor and later none for the same cursor (breaking the append-only contract), a superseded attempt that publishes its earlier page after the shard idled leaves a page without provenance in the cleared journal; the shard then fails closed with `etl.http.page-provenance-invalid`.
+- **Very late pages.** A superseded attempt's late page is captured while that attempt can still answer. A page published even later, after a stall between receiving and publishing that outlasts the attempt's expiry, finds no provenance in the cleared journal and fails the shard closed with `etl.http.page-provenance-invalid`.
+- **Host clocks.** Whether a caught-up response ends a draining shard compares the completion host's clock with the worker's, so the hosts' clocks must agree, as leases already require.
 - **Native completion activity.** A native workflow cannot request completion itself.
 - **Other continuous sources:** RabbitMQ, SQL and file drops.
 - **Other stores.** ETL stores are not qualified on databases other than SQLite.

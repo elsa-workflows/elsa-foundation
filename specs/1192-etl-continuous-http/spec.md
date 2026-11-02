@@ -137,9 +137,9 @@ A second run is cancelled and ends `Cancelled`.
 - **A completion request during work.** A shard holding an owed batch or an attached page is not interrupted. It ends at its first qualifying caught-up response after that work is accepted.
 - **A completion request during preparation** is recorded. The shards it creates poll at once and drain as usual.
 - **An exhausted shard stays exhausted.** Completion does not reopen it, and a run whose every shard is exhausted settles as a finite run would.
-- **Clock.** A shard's next-poll time is the store's own time when it records the caught-up response, plus the interval. Claims compare against the same store clock.
+- **Clock.** A shard's next-poll time is the store's own time when it records the caught-up response, plus the interval. Claims compare against the same store clock. Whether a caught-up response qualifies for completion compares the request time, stamped by the host that accepted the request, with the attempt's start, stamped by the worker. Like lease expiry, this assumes the hosts' clocks agree; skew moves the cutoff by the skew.
 - **Cost of an idle poll.** Each poll claims the partition, and every claim audits the shard's retained history. A poll adds no state, but its cost grows with that history until compaction lands.
-- **Fairness.** Claims are ordered by run creation time, so a long-lived continuous run's due shards are claimed before shards of newer runs. Due shards are claimed only once their interval has passed, so idle shards hold no worker slots.
+- **Fairness.** Claims are ordered by run creation time, so a long-lived continuous run's due shards are claimed before shards of newer runs. Due shards are claimed only once their interval has passed, so idle shards hold no worker slots. A continuous run whose shards are never idle, because its feed keeps them busy, can however keep every connector slot in its scope and delay newer runs.
 - **Lifetime budgets.** Until compaction lands, these still accumulate for each accepted non-empty page:
   - pages and requests;
   - batches;
@@ -170,6 +170,7 @@ A second run is cancelled and ends `Cancelled`.
     - sets the partition's next-eligible time to the store's time plus the interval.
 
     It adds no page, request or batch row.
+  - While an earlier attempt in the journal was superseded (closed uncertain by a successor's fence) and could still answer, the transition instead closes the live attempt as uncertain on the retry schedule and keeps the journal; the partition waits at least until the superseded attempt expires. A late page from that attempt then keeps its provenance and is captured. If the retry schedule cannot retry (attempts or deadline), the journal is cleared as above.
   - The position is unchanged, so the execution's normal release frees the lease.
 - **FR-005** The audit invariants accept the idle state.
   - In a continuous run, a partition with no owed batch, no attached page, a cleared journal and a next-eligible time is idle, and that time is valid.
@@ -227,21 +228,21 @@ A second run is cancelled and ends `Cancelled`.
 
 ### Measurable Outcomes
 
-- **SC-001** A continuous run with two shards delivers every record appended after it started, each accepted exactly once across both shards. After each of 20 or more caught-up polls, every count and byte total named in US1 scenario 2 is back at its pre-poll value.
+- **SC-001** A continuous run with two shards delivers every record appended after it started, each accepted exactly once across both shards. After 20 or more caught-up polls, every count and byte total named in US1 scenario 2 equals its value before them, and every store read in between re-runs the accounting audit.
 - **SC-002**
   - Completion drains the run and settles it `Succeeded`, and the native Flowchart resumes through `Done`.
   - A caught-up response from an attempt started before the completion request does not end the shard.
   - Cancellation settles `Cancelled`.
   - Completion of a finite or a terminal run is refused.
 - **SC-003** In real worker processes, a kill after capture replays the page from the cache, and a kill during an idle poll's attempt retries the poll. Accounting is exact in both cases.
-- **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof.
+- **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof. The evidence README names the guards that are tested without a bite-proof, or not tested.
 - **SC-005** Studio authoring and inspection, including "Complete run", work in a real browser against owned hosts, with no axe violations at 320px and 1024px.
 - **SC-006** An actual Workbench journey shows continuous delivery, idle polling, completion and cancellation.
 - **SC-007** Finite pipelines keep their artifact bytes and identities. The whole ETL suite passes, changed only by intended additions.
 
 ## Assumptions and boundaries
 
-- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A feed that returns records for a cursor and later none for the same cursor also breaks the contract: if a superseded attempt then publishes its earlier page late, the shard fails closed with `etl.http.page-provenance-invalid` rather than accepting it.
+- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page is captured while that attempt can still answer (FR-004). A page published even later, after a stall between receiving and publishing that outlasts the attempt's expiry, finds no provenance in the cleared journal and fails the shard closed with `etl.http.page-provenance-invalid` rather than being accepted.
 - **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime is unbounded and its idle-poll cost bounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
 - **Native completion.** No workflow activity requests completion in this slice; the runtime API and Studio do. Native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
 - **Other continuous sources.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.

@@ -24,7 +24,7 @@ Spec: [spec.md](spec.md). Plan: [plan.md](plan.md). Tasks are ordered by depende
 - [x] T006 Change the idle invariant in `EfEtlConnectorHistory`. (R4)
 - [x] T007 Add `RecordConnectorHttpCaughtUpAsync` to the interface and the EF source store, enforcing the R11 attempt-liveness gate, and forward it in `ForwardingEtlConnectorRuntimeStore`. (R3, R11)
 - [x] T008 Add `RequestConnectorRunCompletionAsync`, which wakes only idle partitions. (R5)
-- [x] T009 Apply the interval in `AdvanceEmptyHttpPageAsync` after a moving empty page in a continuous run. Skip it once completion has been requested. (R6, R11)
+- [x] T009 Apply the interval in `AdvanceEmptyHttpPageAsync` after a moving empty page in a continuous run, also while a completion drains. (R6, R11)
 - [x] T010 [P] Store tests:
   - the reservation and metadata totals, and no new rows, across caught-up records (checked by the journey's state snapshot and by every store audit);
   - a stale fence, a stale attempt, an out-of-window receipt and a finite run are each refused;
@@ -93,12 +93,5 @@ Spec: [spec.md](spec.md). Plan: [plan.md](plan.md). Tasks are ordered by depende
   - the Core, Runtime/Api and Studio `EXTENSION_POINTS.md`.
 - [x] T022 Run the feed server and the Workbench journey driver on an owned host, and record the summary JSON.
 - [x] T023 Real-browser inspection and completion against the owned hosts, recorded as screenshots.
-- [x] T024 Record the bite-proofs in `bite-proofs.json`: those listed in the plan, plus R11's:
-  - the validator guard;
-  - the fence, attempt, window and phase refusals;
-  - each completion status guard;
-  - the permission guard;
-  - cancellation winning;
-  - `NextPollAt` only when idle;
-  - the Studio visibility rule.
+- [x] T024 Record the bite-proofs in `bite-proofs.json` (20 mutations at the round-2 head, with failing test names): the validator and serialization guards; classification and cache normalization; the reservation release, idle invariant and superseded-attempt deferral; the fence, window and phase refusals; `Final` versus the attempt start; each completion guard (repeat, terminal, finite) and the selective wake-up; the permission; the moving-cursor interval; `NextPollAt` only when idle and with a claim; the Studio visibility rule. Not bite-proofed: cancellation over a pending completion (unchanged settlement, tested only), the cache re-read before recording and the publish-conflict recovery (untested).
 - [x] T025 Write the evidence README, set the spec status to Implemented with a link to the PR, and run the whole suites: ETL, architecture, maps, links, evidence sizes, Studio and Playwright.

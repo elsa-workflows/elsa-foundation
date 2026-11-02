@@ -96,7 +96,7 @@ It adds no rows. The lease is not released here; the execution's `finally` relea
 
 ## R6. A zero-record page whose continuation moves
 
-**Decision.** In a continuous pipeline, `AdvanceEmptyHttpPageAsync` sets the new partition's `NotBeforeUtcTicks` to the store's time plus the interval. The next request has a null journal and no page, so this is the idle state from R4. Completion clears it the same way. Finite pipelines are unchanged.
+**Decision.** In a continuous pipeline, `AdvanceEmptyHttpPageAsync` sets the new partition's `NotBeforeUtcTicks` to the store's time plus the interval, also while a completion drains (only a caught-up response ends a shard, so skipping the wait would spin). The next request has a null journal and no page, so this is the idle state from R4; a completion request wakes it once. Finite pipelines are unchanged.
 
 ## R7. Validation sites
 
@@ -168,5 +168,6 @@ An independent plan review found no blockers. Its findings change the decisions 
   5. assert `HasPendingModelChanges()` is false.
 
   The migration is a raw `ALTER TABLE … ADD COLUMN … CHECK (…)`, following `20261021170000_ConnectorInspectionEffects`.
-- **R6.** If completion has been requested, a moving empty page does not wait. Its `NotBefore` stays null.
+- **R6.** A moving empty page always waits the interval (round 2 reversed an earlier skip during completion, which could spin).
+- **R3, superseded attempts (round 2).** A caught-up record keeps the journal while a superseded uncertain attempt can still answer: the live attempt closes as uncertain on the retry schedule and the partition waits until the superseded attempt expires. The audit accepts that later eligibility time for continuous runs.
 - **Wrappers.** The new store members are forwarded in `tests/Shared/ForwardingEtlConnectorRuntimeStore.cs`. `ConnectorWorkerGateStore` inherits them.

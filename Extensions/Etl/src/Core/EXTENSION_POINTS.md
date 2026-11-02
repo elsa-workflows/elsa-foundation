@@ -86,8 +86,11 @@ request and makes only idle partitions (cleared journal, no owed batch) due at o
 A provider's audits must accept an idle partition's eligibility time without a waiting journal for continuous runs only.
 A provider that keeps the refusing defaults still admits a continuous artifact, whose first caught-up response then
 fails the run with `etl.http.source-transition-refused`; such a provider should not be offered continuous pipelines.
-`AdvanceEmptyHttpPageAsync` delays a continuous shard's next request by one interval after a moving empty page unless
-completion was requested. `EtlConnectorRunInspection.Continuous` / `CompletionRequestedAt` and
+While a superseded attempt in the journal (closed uncertain by a successor's fence) could still answer, the caught-up
+record instead closes the live attempt as uncertain on the retry schedule and keeps the journal, and the partition waits
+at least until that superseded attempt expires; its late page then keeps its provenance. The audit accepts that later
+eligibility time for continuous runs. `AdvanceEmptyHttpPageAsync` always delays a continuous shard's next request by
+one interval after a moving empty page. `EtlConnectorRunInspection.Continuous` / `CompletionRequestedAt` and
 `EtlConnectorPartitionInspection.NextPollAt` are init-only, so existing inspector implementations keep compiling;
 `NextPollAt` is set only for an idle partition and equals its `NotBefore`.
 
