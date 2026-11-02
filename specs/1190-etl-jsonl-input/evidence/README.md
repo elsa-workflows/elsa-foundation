@@ -69,7 +69,7 @@ The replacement:
 
 ## Bite-proofs (SC-002, SC-004)
 
-[`bite-proofs.json`](bite-proofs.json) records six mutations. For each, the focused tests failed with the mutation in place and passed again once the file was restored from git:
+[`bite-proofs.json`](bite-proofs.json) records eight mutations at `c51023ed8`, with each failing test named. For each, the focused tests failed with the mutation in place and passed again once the file was restored from git:
 
 | Mutation | Tests failed while mutated |
 |---|---|
@@ -79,15 +79,17 @@ The replacement:
 | R10 span check disabled | 2 of 5 forged-index cases |
 | R10 gap check disabled | 1 of 5 |
 | R10 line-start check disabled | 1 of 5 |
+| Record limit off by one (`> max + 1`) | 1 of 1 (the max+1 line parses instead of being too large) |
+| Record ceiling off by one (`>=`) | 1 of 1 (exactly-at-ceiling preparation refused) |
 
 Disabling the span check fails only 2 of its 3 targeted cases: the third forged index is still refused, by the gap check, so that test stays green.
 
 ## Whole-suite checks
 
-Run locally before the PR was opened, at `7ecec65ad`; CI covers the exact head:
+Run locally; CI covers the exact head:
 
-- `Elsa.Etl.Tests`: 1056/1056 passed, 0 skipped; `--list-tests` gives 1056; 3 min 6 s test time on a loaded shared machine.
-- Architecture guard: 609/609.
+- `Elsa.Etl.Tests` at `c51023ed8` (after review round 1): 1058/1058 passed, 0 skipped; `--list-tests` gives 1058; 181.6 s wall time on a loaded shared machine. At `7ecec65ad`: 1056/1056.
+- Architecture guard at `7ecec65ad`: 609/609.
 - `Elsa.Maps.Generator -- check` and `test-tiers-check`: pass.
 - Studio ETL client: typecheck clean; Vitest 70/70.
 - Playwright `etl-connector-authoring`: 6/6.
