@@ -14,7 +14,7 @@ namespace Elsa.Agent.Services;
 internal sealed class AgentTurnRegistry : IAgentTurnRegistry
 {
     private readonly object _gate = new();
-    private readonly Dictionary<string, (string TurnId, CancellationTokenSource Source)> _active = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActiveTurn> _active = new(StringComparer.Ordinal);
 
     public CancellationToken Register(string sessionId, string turnId)
     {
@@ -23,7 +23,7 @@ internal sealed class AgentTurnRegistry : IAgentTurnRegistry
             if (_active.ContainsKey(sessionId))
                 throw new AgentContributionException("A foreground turn is already active for this session.");
             var source = new CancellationTokenSource();
-            _active.Add(sessionId, (turnId, source));
+            _active.Add(sessionId, new(turnId, source));
             return source.Token;
         }
     }
@@ -58,16 +58,35 @@ internal sealed class AgentTurnRegistry : IAgentTurnRegistry
         lock (_gate) return _active.ContainsKey(sessionId);
     }
 
-    /// <summary>Cancels the session's registered turn, whatever its identity; false when none is registered.</summary>
+    /// <summary>
+    /// Cancels the session's registered turn, whatever its identity, because this process lost the session's ownership;
+    /// false when none is registered. The turn is marked superseded first, so its cancellation is never taken for the
+    /// owner's stop.
+    /// </summary>
     internal bool CancelSession(string sessionId)
     {
         string turnId;
         lock (_gate)
         {
             if (!_active.TryGetValue(sessionId, out var active)) return false;
+            active.Superseded = true;
             turnId = active.TurnId;
         }
         return Cancel(sessionId, turnId);
+    }
+
+    /// <summary>Whether the registered turn was cancelled because this process lost the session's ownership.</summary>
+    internal bool IsSuperseded(string sessionId, string turnId)
+    {
+        lock (_gate) return _active.TryGetValue(sessionId, out var active) && active.TurnId == turnId && active.Superseded;
+    }
+
+    private sealed class ActiveTurn(string turnId, CancellationTokenSource source)
+    {
+        public string TurnId { get; } = turnId;
+        public CancellationTokenSource Source { get; } = source;
+        /// <summary>Set under the registry monitor when ownership loss, not the owner, cancelled the turn.</summary>
+        public bool Superseded { get; set; }
     }
 }
 
@@ -168,8 +187,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnToken);
         var token = linked.Token;
-        // Only the registry's own cancellation, which the cancel route requests, is the owner's stop; a dropped stream is not.
-        string? UserStopped() => turnToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested ? AgentMessageStatusReasons.UserStop : null;
+        // Only the registry's own cancellation, which the cancel route requests, is the owner's stop; a dropped stream is
+        // not, and neither is the cancellation of a turn whose session this process lost to another.
+        string? UserStopped() => turnToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested
+            && !(turnRegistry is AgentTurnRegistry registry && registry.IsSuperseded(sessionId, turnId)) ? AgentMessageStatusReasons.UserStop : null;
+        // The status this turn last observed or set on its source prompt. Its final status is a compare-and-set from it, so
+        // a status another process recorded meanwhile (for example, interrupted after a takeover) is never overwritten.
+        var sourceStatus = AgentMessageStatus.Pending;
         PreparedTurn? prepared = null;
         AgentMessage? preparationSource = null;
         var paused = false;
@@ -198,6 +222,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     // Remember lifecycle ownership before a replaceable authority can throw.
                     // A retained receipt pause stays intact; a new prompt must leave Pending.
                     preparationSource = source;
+                    sourceStatus = source.Status;
                     paused = continuation;
                 }));
             }
@@ -212,7 +237,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     var cancelledPrompt = (await boundary.CallAsync("list-cancelled-prompts", () => sessions.ListMessagesAsync(sessionId, CancellationToken.None)))
                         .LastOrDefault(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending);
                     if (cancelledPrompt is not null)
-                        await boundary.CallAsync("cancel-prompt", () => SetStoppedStatusAsync(sessionId, cancelledPrompt.Id, AgentMessageStatus.Cancelled, UserStopped()));
+                        await boundary.CallAsync("cancel-prompt", () => SetStoppedStatusAsync(sessionId, cancelledPrompt.Id, cancelledPrompt.Status,
+                            AgentMessageStatus.Cancelled, UserStopped()));
                 }
                 yield return Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, boundary.Call("read-turn-options", () => Math.Max(1, options.Value.MaxSteps), token)));
                 yield break;
@@ -244,6 +270,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 yield return Error("agent.message.not_pending", "The prompt is no longer pending; it was not started.", 409);
                 yield break;
             }
+            sourceStatus = AgentMessageStatus.Streaming;
             var maxSteps = boundary.Call("read-turn-options", () => Math.Max(1, options.Value.MaxSteps), token);
             yield return Lifecycle(AgentStreamEventKind.Started, new AgentTurnStarted(turnId, maxSteps));
             yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution(prepared.Context, prepared.Diagnostics));
@@ -635,7 +662,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         catch (Exception cause) { RecordCleanupFailure("remove-turn-state", cause); }
                         try
                         {
-                            await SetStoppedStatusAsync(sessionId, source.Id,
+                            await SetStoppedStatusAsync(sessionId, source.Id, sourceStatus,
                                 completed ? AgentMessageStatus.Completed : disclosureStop is not null ? AgentMessageStatus.Failed
                                     : token.IsCancellationRequested ? AgentMessageStatus.Cancelled : AgentMessageStatus.Failed,
                                 UserStopped());
@@ -1234,10 +1261,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
     private static IReadOnlyList<AgentTurnMessage> Append(IReadOnlyList<AgentTurnMessage> history, AgentTurnMessage message) => [.. history, message];
     private static AgentStreamEvent Lifecycle(AgentStreamEventKind kind, object? payload, string? proposalId = null) => new(NewId(), kind, null, proposalId, null, DateTimeOffset.UtcNow, null, payload);
-    /// <summary>Records a turn's terminal prompt status; a Cancelled prompt the owner stopped records reason <c>user-stop</c>.</summary>
-    private Task SetStoppedStatusAsync(string sessionId, string messageId, AgentMessageStatus status, string? reason)
-        => _owner is not null && status == AgentMessageStatus.Cancelled && reason is not null
-            ? _owner.SetMessageStatusWithReasonAsync(sessionId, messageId, status, reason, CancellationToken.None)
+    /// <summary>
+    /// Records a turn's terminal prompt status; a Cancelled prompt the owner stopped records reason <c>user-stop</c>. With
+    /// the default owner it is a compare-and-set from <paramref name="expected"/>, the status this turn last observed.
+    /// </summary>
+    private Task SetStoppedStatusAsync(string sessionId, string messageId, AgentMessageStatus expected, AgentMessageStatus status, string? reason)
+        => _owner is not null
+            ? _owner.TrySetMessageStatusAsync(sessionId, messageId, expected, status, status == AgentMessageStatus.Cancelled ? reason : null, CancellationToken.None)
             : sessions.SetMessageStatusAsync(sessionId, messageId, status, CancellationToken.None);
 
     private static AgentStreamEvent Error(string code, string message, int status) => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, status), DateTimeOffset.UtcNow, AgentResultKind.Error);

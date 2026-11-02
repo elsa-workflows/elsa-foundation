@@ -210,11 +210,6 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         await CommitAsync(sessionId, () => false, row => PlanMessageStatus(row, messageId, null, status, null), cancellationToken);
     }
 
-    /// <summary>Sets one message's status and, for Cancelled, why it stopped (<see cref="AgentMessageStatusReasons"/>).</summary>
-    internal Task SetMessageStatusWithReasonAsync(string sessionId, string messageId, AgentMessageStatus status, string? reason,
-        CancellationToken cancellationToken = default)
-        => CommitAsync(sessionId, () => false, row => PlanMessageStatus(row, messageId, null, status, reason), cancellationToken);
-
     /// <summary>
     /// Withdraws a prompt that never started. Under the session write gate, the prompt must still be Pending and no turn may
     /// be registered for the session: a registered turn may be about to start it, and a start's own compare-and-set from
@@ -659,6 +654,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             throw new AgentSessionOwnershipException(sessionId, AgentSessionOwnershipException.OwnershipLost,
                 "This host process lost the session's ownership to another process; nothing was applied.");
         }
+        // A proposal decided on a version that moved meanwhile; its caller refuses the decision with a conflict.
+        if (written.Outcome == AgentSessionRecordOutcome.VersionConflict)
+            throw new AgentProposalConflictException(write.SessionId);
         throw new AgentContributionException($"Agent session '{write.SessionId}' could not record the transition ({written.Outcome}); nothing was applied.");
     }
 
@@ -691,12 +689,15 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
 
     /// <summary>
     /// Renews the lease of every loaded session that has a running turn or a dispatched execution, as the background
-    /// timer does. A session whose ownership moved is lost: its row is evicted and its running turn cancelled.
+    /// timer does. A session whose ownership moved is lost: its row is evicted and its running turn cancelled. After a
+    /// graceful shutdown began, nothing is renewed, and a renewal that was already in flight releases the lease it
+    /// extended again, so it can never undo the shutdown's release.
     /// </summary>
     internal async Task RenewLeasesAsync(CancellationToken cancellationToken = default)
     {
         foreach (var (sessionId, row) in _rows.ToArray())
         {
+            if (Volatile.Read(ref _disposed) == 1) return;
             AgentSessionFence fence;
             lock (row)
             {
@@ -709,6 +710,12 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             catch (Exception) when (!cancellationToken.IsCancellationRequested) { continue; }
             if (!renewed.Succeeded || renewed.Fence != fence)
                 LoseOwnership(sessionId, row);
+            // Shutdown marks itself disposed before it releases, so a renewal landing after that release sees the mark here.
+            else if (Volatile.Read(ref _disposed) == 1)
+            {
+                try { await _store.ReleaseOwnershipAsync(sessionId, renewed.Fence!, CancellationToken.None); }
+                catch (Exception) { }
+            }
         }
     }
 
@@ -751,9 +758,11 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
 
     private void EnsureRenewal()
     {
-        if (Volatile.Read(ref _renewal) is not null) return;
+        if (Volatile.Read(ref _renewal) is not null || Volatile.Read(ref _disposed) == 1) return;
         var timer = _clock.CreateTimer(_ => _ = RenewInBackgroundAsync(), null, RenewalInterval, RenewalInterval);
         if (Interlocked.CompareExchange(ref _renewal, timer, null) is not null) timer.Dispose();
+        // A shutdown that began meanwhile already stopped renewal; this late timer must not outlive it.
+        else if (Volatile.Read(ref _disposed) == 1) Interlocked.Exchange(ref _renewal, null)?.Dispose();
     }
 
     private async Task RenewInBackgroundAsync()

@@ -103,7 +103,7 @@ internal sealed class InMemoryAgentProposalService(
                     {
                         if (store.Proposals.ContainsKey(proposal.Id))
                             throw new AgentContributionException("A proposal identity is already registered.");
-                        var record = Record(proposal);
+                        var record = Record(proposal, 0);
                         return new(new(proposal, true), Write(fence, proposal.SessionId, record), () =>
                         {
                             lock (store.Mutation)
@@ -135,7 +135,7 @@ internal sealed class InMemoryAgentProposalService(
                         keys.Add(new(AgentSessionKeyKinds.TurnMutation, registered.TurnKey, registered.CallKey));
                         keys.Add(new(AgentSessionKeyKinds.CallInput, registered.CallKey, registered.InputDigest));
                     }
-                    var inserted = Record(proposal);
+                    var inserted = Record(proposal, 0);
                     return new(new(proposal, true), Write(fence, proposal.SessionId, inserted, keys), () =>
                     {
                         lock (store.Mutation)
@@ -205,6 +205,7 @@ internal sealed class InMemoryAgentProposalService(
             var access = await AccessAsync(proposalId, actorId, cancellationToken);
             if (access.Error is { } error) return new(null, error);
             var proposal = access.Proposal!;
+            var version = access.Version;
             if (!RevisionMatches(proposal, expectedRevision))
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.revision_conflict", "Approval does not match the prepared revision.", 409);
             // A pre-dispatch expiry is the accepted lifecycle outcome; repeated decisions observe it unchanged.
@@ -212,7 +213,7 @@ internal sealed class InMemoryAgentProposalService(
                 return Expired<AgentActionProposal>();
             if (PastPreDispatchDeadline(proposal))
             {
-                await ExpireBeforeDispatchAsync(proposal, actorId);
+                await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<AgentActionProposal>();
             }
             // Only a recorded review decision is idempotent. An automatic approval is not one, so approving it
@@ -224,10 +225,11 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", "This operation is not awaiting review.", 409);
             var now = clock.GetUtcNow();
             var approved = proposal with { Status = AgentActionProposalStatus.Approved, ApprovedBy = actorId, ApprovedAt = now, UpdatedAt = now };
-            await TransitionAsync(approved);
+            await TransitionAsync(approved, version);
             await AuditAsync(approved, AgentAuditEventKind.ProposalApproved, actorId, "The exact prepared operation was approved.", cancellationToken);
             return AgentResult<AgentActionProposal>.Success(approved);
         }
+        catch (AgentProposalConflictException) { return Conflict<AgentActionProposal>(); }
         finally { gate.Release(); }
     }
 
@@ -240,13 +242,14 @@ internal sealed class InMemoryAgentProposalService(
             var access = await AccessAsync(proposalId, actorId, cancellationToken);
             if (access.Error is { } error) return new(null, error);
             var proposal = access.Proposal!;
+            var version = access.Version;
             if (proposal.Status == AgentActionProposalStatus.Denied)
                 return AgentResult<AgentActionProposal>.Success(proposal);
             if (proposal.Status == AgentActionProposalStatus.AwaitingClient)
             {
                 var uncertain = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                     "The client request was already dispatched. Denial cannot establish whether a local effect occurred; the request will not be replayed."));
-                await StoreOutcomeAsync(proposal, uncertain);
+                await StoreOutcomeAsync(proposal, version, uncertain);
                 await AuditAsync(store.Proposals[proposalId], AgentAuditEventKind.ToolInvoked, actorId,
                     "Denial arrived after client dispatch; its effect remains uncertain.", CancellationToken.None);
                 return AgentResult<AgentActionProposal>.Success(store.Proposals[proposalId]);
@@ -254,11 +257,12 @@ internal sealed class InMemoryAgentProposalService(
             if (IsTerminal(proposal.Status))
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", "The operation is already closed.", 409);
             var denied = proposal with { Status = AgentActionProposalStatus.Denied, UpdatedAt = clock.GetUtcNow() };
-            await TransitionAsync(denied, proposal.PreparedInvocation is { } prepared
+            await TransitionAsync(denied, version, proposal.PreparedInvocation is { } prepared
                 ? DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "denied", "The reviewed operation was denied before dispatch.") : null);
             await AuditAsync(denied, AgentAuditEventKind.ProposalDenied, actorId, "The operation was denied before dispatch.", cancellationToken);
             return AgentResult<AgentActionProposal>.Success(denied);
         }
+        catch (AgentProposalConflictException) { return Conflict<AgentActionProposal>(); }
         finally { gate.Release(); }
     }
 
@@ -272,6 +276,7 @@ internal sealed class InMemoryAgentProposalService(
             var access = await AccessAsync(proposalId, actorId, cancellationToken);
             if (access.Error is { } error) return new(null, error);
             var proposal = access.Proposal!;
+            var version = access.Version;
             if (!RevisionMatches(proposal, expectedRevision))
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.revision_conflict", "Execution does not match the prepared revision.", 409);
             if (store.Executions.TryGetValue(proposalId, out var retained))
@@ -282,7 +287,7 @@ internal sealed class InMemoryAgentProposalService(
                     // first time. Recheck current authority without rerunning a custom executor.
                     var current = await preparedResolver.ResolveAsync(proposal, cancellationToken);
                     if (current.Error is not null)
-                        return await SettlePendingClientAsync(proposal, actorId, current.Error.Code == "agent.proposal.expired",
+                        return await SettlePendingClientAsync(proposal, version, actorId, current.Error.Code == "agent.proposal.expired",
                             "The pending client operation no longer has its reviewed contract, authority or lifetime. Its effect is uncertain and the request will not be reissued.");
                 }
                 return retained;
@@ -293,7 +298,7 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.closed", "The operation is already closed.", 409);
             if (PastPreDispatchDeadline(proposal))
             {
-                await ExpireBeforeDispatchAsync(proposal, actorId);
+                await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<AgentProposalExecutionResult>();
             }
             if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
@@ -305,7 +310,7 @@ internal sealed class InMemoryAgentProposalService(
             if (_owner is not null && proposal.PolicyRevision is { } stamped
                 && await _owner.CurrentRevisionAsync(proposal.SessionId, CancellationToken.None) is { } currentRevision && currentRevision != stamped)
             {
-                var stale = await StoreOutcomeAsync(proposal, AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.policy_stale",
+                var stale = await StoreOutcomeAsync(proposal, version, AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.policy_stale",
                     "The session policy changed after this operation was approved. It was not dispatched; prepare it again under the current policy.", 409),
                     refusal: "The approval basis is no longer the session's current policy. The operation was not dispatched; no effect occurred.");
                 await AuditAsync(store.Proposals[proposalId], AgentAuditEventKind.ProposalFailed, actorId,
@@ -316,12 +321,12 @@ internal sealed class InMemoryAgentProposalService(
             // longer busy, so policy may have moved; it can never authorize dispatch.
             if (_owner is not null && !await _owner.MarkProposalDispatchedAsync(proposal.SessionId, proposalId, CancellationToken.None))
             {
-                await ExpireBeforeDispatchAsync(proposal, actorId);
+                await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<AgentProposalExecutionResult>();
             }
             // Executing is recorded before the executor runs, so a restart can never mistake a dispatch for "not started".
             var executing = proposal with { Status = AgentActionProposalStatus.Executing, UpdatedAt = clock.GetUtcNow() };
-            await TransitionAsync(executing);
+            var dispatched = await TransitionAsync(executing, version);
             AgentResult<AgentProposalExecutionResult> result;
             try
             {
@@ -338,12 +343,13 @@ internal sealed class InMemoryAgentProposalService(
                 result = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
             }
-            result = await StoreOutcomeAsync(executing, result);
+            result = await StoreOutcomeAsync(executing, dispatched, result);
             await AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
                     : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
                 actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);
             return result;
         }
+        catch (AgentProposalConflictException) { return Conflict<AgentProposalExecutionResult>(); }
         finally { gate.Release(); }
     }
 
@@ -360,6 +366,7 @@ internal sealed class InMemoryAgentProposalService(
             var access = await AccessAsync(proposalId, actorId, cancellationToken);
             if (access.Error is { } error) return new(null, error);
             var proposal = access.Proposal!;
+            var version = access.Version;
             if (proposal.PreparedInvocation is not { ExecutionLocation: AgentExecutionLocation.ClientWorkingState, Client: not null } prepared
                 || acknowledgement.Client is null)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.invocation.client_unavailable", "The retained invocation is not a bound client operation.", 409);
@@ -398,21 +405,29 @@ internal sealed class InMemoryAgentProposalService(
             // An unvalidated application report cannot poison the slot for a later valid receipt.
             // Completion validation never executes the effect, so reconsidering such a report is safe.
             // The accepted acknowledgement is recorded in the same write as the outcome it produced.
-            completion = await StoreOutcomeAsync(proposal, completion, stored => completionValidated && stored.Succeeded && (stored.Value?.Executed == true
+            completion = await StoreOutcomeAsync(proposal, version, completion, stored => completionValidated && stored.Succeeded && (stored.Value?.Executed == true
                 || acknowledgement.Outcome == AgentClientOutcome.Refused && stored.Value?.Status == "refused"
                 || acknowledgement.Outcome == AgentClientOutcome.Uncertain && stored.Value?.Status == "uncertain") ? digest : null);
             await AuditAsync(store.Proposals[proposalId], completion.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted : AgentAuditEventKind.ProposalFailed,
                 actorId, completion.Value?.Executed == true ? "The originating client supplied an admitted local effect receipt." : "The reported client outcome is refused or uncertain.", CancellationToken.None);
             return completion;
         }
+        catch (AgentProposalConflictException) { return Conflict<AgentProposalExecutionResult>(); }
         finally { gate.Release(); }
     }
 
-    /// <summary>The session's proposals after hydrating it, oldest first.</summary>
+    /// <summary>
+    /// The session's proposals after hydrating it, oldest first. A dispatched client request past its deadline is settled
+    /// Uncertain first, as reading its result does, so the list never shows it still awaiting the client.
+    /// </summary>
     public async Task<AgentResult<IReadOnlyList<AgentActionProposal>>> ListAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_owner is not null && !await _owner.HydrateSessionAsync(sessionId, cancellationToken))
             return AgentResult<IReadOnlyList<AgentActionProposal>>.Failure("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+        var now = clock.GetUtcNow();
+        foreach (var overdue in store.Proposals.Values.Where(x => x.SessionId == sessionId && x.Status == AgentActionProposalStatus.AwaitingClient
+                     && x.PreparedInvocation?.ExpiresAt <= now).Select(x => x.Id).ToArray())
+            await FindResultAsync(overdue, cancellationToken);
         IReadOnlyList<AgentActionProposal> listed = store.Proposals.Values.Where(x => x.SessionId == sessionId)
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray();
         return AgentResult<IReadOnlyList<AgentActionProposal>>.Success(listed);
@@ -420,8 +435,10 @@ internal sealed class InMemoryAgentProposalService(
 
     /// <summary>
     /// Under the proposal gate: records the owner's statement on a client-scope Uncertain proposal in one awaited write
-    /// and releases that operation's claim; any paused turn awaiting it keeps its own Pause claim. The same statement again
-    /// is idempotent, also after a later receipt reconciled the operation.
+    /// and releases that operation's claim; any paused turn awaiting it keeps its own Pause claim. A dispatched client
+    /// request past its deadline is first settled Uncertain, as reading its result does. An invocation of another session
+    /// is not found, before any ownership check, so its existence is never disclosed. The same statement again is
+    /// idempotent, also after a later receipt reconciled the operation.
     /// </summary>
     public async Task<AgentResult<AgentActionProposal>> ResolveClientInvocationAsync(string sessionId, string invocationId, string actorId,
         AgentOwnerResolutionClaim claim, CancellationToken cancellationToken = default)
@@ -435,11 +452,21 @@ internal sealed class InMemoryAgentProposalService(
         await gate.WaitAsync(cancellationToken);
         try
         {
+            if (!store.Proposals.TryGetValue(proposalId, out var routed) || routed.SessionId != sessionId)
+                return AgentResult<AgentActionProposal>.Failure("agent.invocation.not_found", "The retained invocation was not found.", 404);
             var access = await AccessAsync(proposalId, actorId, cancellationToken);
             if (access.Error is { } error) return new(null, error);
             var proposal = access.Proposal!;
+            var version = access.Version;
             if (proposal.SessionId != sessionId)
                 return AgentResult<AgentActionProposal>.Failure("agent.invocation.not_found", "The retained invocation was not found.", 404);
+            if (proposal.Status == AgentActionProposalStatus.AwaitingClient && proposal.PreparedInvocation!.ExpiresAt <= clock.GetUtcNow())
+            {
+                // The deadline passed after client dispatch: a local effect is possible, so this is never Expired.
+                await SettlePendingClientAsync(proposal, version, null, true,
+                    "The client request expired without an admitted receipt. Its effect is uncertain and will not be replayed.");
+                (proposal, version) = Observe(proposalId)!.Value;
+            }
             if (proposal.OwnerResolution is { } recorded)
                 return recorded.Claim == claim ? AgentResult<AgentActionProposal>.Success(proposal)
                     : AgentResult<AgentActionProposal>.Failure("agent.invocation.resolution_conflict", "A different statement is already recorded for this operation.", 409);
@@ -448,9 +475,10 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentActionProposal>.Failure("agent.invocation.not_uncertain", "Only an uncertain client operation can be resolved by its owner.", 409);
             var now = clock.GetUtcNow();
             var resolved = proposal with { OwnerResolution = new(claim, actorId, now), UpdatedAt = now };
-            await TransitionAsync(resolved);
+            await TransitionAsync(resolved, version);
             return AgentResult<AgentActionProposal>.Success(resolved);
         }
+        catch (AgentProposalConflictException) { return Conflict<AgentActionProposal>(); }
         finally { gate.Release(); }
     }
 
@@ -466,32 +494,46 @@ internal sealed class InMemoryAgentProposalService(
         {
             if (store.Results.TryGetValue(proposalId, out var result))
                 return result;
-            if (store.Proposals.TryGetValue(proposalId, out var proposal) && proposal.Status == AgentActionProposalStatus.AwaitingClient
+            if (Observe(proposalId) is var (proposal, version) && proposal.Status == AgentActionProposalStatus.AwaitingClient
                 && proposal.PreparedInvocation!.ExpiresAt <= clock.GetUtcNow())
             {
                 // The deadline passed after client dispatch: a local effect is possible, so this is never Expired.
-                await SettlePendingClientAsync(proposal, null, true,
+                await SettlePendingClientAsync(proposal, version, null, true,
                     "The client request expired without an admitted receipt. Its effect is uncertain and will not be replayed.");
                 return store.Results.GetValueOrDefault(proposalId);
             }
             return null;
         }
+        // Another process settled it first; what this process now holds is the recorded state.
+        catch (AgentProposalConflictException) { return store.Results.GetValueOrDefault(proposalId); }
         finally { gate.Release(); }
     }
 
-    private async Task<(AgentActionProposal? Proposal, AgentError? Error)> AccessAsync(string proposalId, string actorId, CancellationToken cancellationToken)
+    /// <summary>
+    /// The proposal its caller may decide on, with the record version it was read at. Every transition the caller then
+    /// records names that version, so a decision made on a state that changed meanwhile (for example, another process
+    /// executed the proposal and this process hydrated its newer record) is refused instead of overwriting it.
+    /// </summary>
+    private async Task<(AgentActionProposal? Proposal, long Version, AgentError? Error)> AccessAsync(string proposalId, string actorId, CancellationToken cancellationToken)
     {
         if (await LookupAsync(proposalId, cancellationToken) is not { } found)
-            return (null, new("agent.proposal.not_found", "The proposal was not found.", 404));
+            return (null, 0, new("agent.proposal.not_found", "The proposal was not found.", 404));
         var session = await sessions.FindAsync(found.SessionId, cancellationToken);
         // Finding the session can hydrate it and load a newer recorded state than the snapshot read before; only the
         // current state may be decided on.
-        if (!store.Proposals.TryGetValue(proposalId, out var proposal))
-            return (null, new("agent.proposal.not_found", "The proposal was not found.", 404));
+        if (Observe(proposalId) is not var (proposal, version))
+            return (null, 0, new("agent.proposal.not_found", "The proposal was not found.", 404));
         if (session is null || session.ActorId != actorId || proposal.PreparedInvocation is { } prepared &&
             (prepared.ActorId != session.ActorId || prepared.TenantId != session.TenantId || prepared.SessionId != session.Id))
-            return (null, new("agent.proposal.forbidden", "The proposal does not belong to the current session actor.", 403));
-        return (proposal, null);
+            return (null, 0, new("agent.proposal.forbidden", "The proposal does not belong to the current session actor.", 403));
+        return (proposal, version, null);
+    }
+
+    /// <summary>The proposal and the record version it holds, read together; null when this process holds no such proposal.</summary>
+    private (AgentActionProposal Proposal, long Version)? Observe(string proposalId)
+    {
+        lock (store.Mutation)
+            return store.Proposals.TryGetValue(proposalId, out var proposal) ? (proposal, store.Versions.GetValueOrDefault(proposalId)) : null;
     }
 
     /// <summary>
@@ -500,7 +542,7 @@ internal sealed class InMemoryAgentProposalService(
     /// released afterwards when the outcome no longer depends on policy. A refusal without its own result records
     /// <paramref name="refusal"/> (or the executor's refusal) as its zero-effect lifecycle envelope.
     /// </summary>
-    private async Task<AgentResult<AgentProposalExecutionResult>> StoreOutcomeAsync(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> outcome,
+    private async Task<AgentResult<AgentProposalExecutionResult>> StoreOutcomeAsync(AgentActionProposal proposal, long version, AgentResult<AgentProposalExecutionResult> outcome,
         Func<AgentResult<AgentProposalExecutionResult>, string?>? acknowledgement = null, string? refusal = null)
     {
         if (outcome.Value?.Executed == true && (proposal.PreparedInvocation is not { } preparedInvocation
@@ -530,33 +572,39 @@ internal sealed class InMemoryAgentProposalService(
                     : refusal ?? "The owning executor refused application before reporting an effect.")
                 : null);
         await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
-            result, outcome, acknowledgement?.Invoke(outcome));
+            version, result, outcome, acknowledgement?.Invoke(outcome));
         return outcome;
     }
 
     /// <summary>
     /// Records one proposal transition (status, and optionally its result, outcome and accepted acknowledgement) as one
     /// awaited write, applies it, then releases the proposal's claim when the outcome no longer depends on policy.
+    /// <paramref name="version"/> is the record version the transition was decided on: when the recorded version moved
+    /// meanwhile the store refuses the write, nothing is applied, and <see cref="AgentProposalConflictException"/> is
+    /// thrown. Returns the version the transition recorded.
     /// </summary>
-    private async Task TransitionAsync(AgentActionProposal proposal, AgentToolResult? result = null,
+    private async Task<long> TransitionAsync(AgentActionProposal proposal, long version, AgentToolResult? result = null,
         AgentResult<AgentProposalExecutionResult>? execution = null, string? acknowledgement = null)
     {
         var invocationId = proposal.PreparedInvocation?.InvocationId;
         await CommitAsync(proposal.SessionId, fence =>
         {
-            // The record names the version this transition was decided on; the store refuses it if that changed.
-            var record = Record(proposal, execution, result, acknowledgement);
+            var record = Record(proposal, version, execution, result, acknowledgement);
             return new AgentSessionTransition<bool>(true, Write(fence, proposal.SessionId, record), () =>
             {
-                store.Versions[proposal.Id] = record.Version + 1;
-                if (execution is not null) store.Executions[proposal.Id] = execution;
-                if (result is not null) store.Results[proposal.Id] = result;
-                if (acknowledgement is not null && invocationId is not null) store.Acknowledgements[invocationId] = acknowledgement;
-                store.Proposals[proposal.Id] = proposal;
+                lock (store.Mutation)
+                {
+                    store.Versions[proposal.Id] = record.Version + 1;
+                    if (execution is not null) store.Executions[proposal.Id] = execution;
+                    if (result is not null) store.Results[proposal.Id] = result;
+                    if (acknowledgement is not null && invocationId is not null) store.Acknowledgements[invocationId] = acknowledgement;
+                    store.Proposals[proposal.Id] = proposal;
+                }
             });
         });
         if (_owner is not null && Settled(proposal))
             _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
+        return version + 1;
     }
 
     /// <summary>
@@ -579,14 +627,17 @@ internal sealed class InMemoryAgentProposalService(
     private static AgentSessionRecordWrite? Write(AgentSessionFence? fence, string sessionId, AgentProposalRecord record, IReadOnlyList<AgentSessionUniqueKey>? keys = null)
         => fence is null ? null : new(sessionId, fence) { Proposals = [record], Keys = keys ?? [] };
 
-    /// <summary>The proposal's complete record after a transition; members the transition does not change keep their retained values.</summary>
-    private AgentProposalRecord Record(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult>? execution = null,
+    /// <summary>
+    /// The proposal's complete record after a transition decided on <paramref name="version"/> (0 for a new proposal);
+    /// members the transition does not change keep their retained values.
+    /// </summary>
+    private AgentProposalRecord Record(AgentActionProposal proposal, long version, AgentResult<AgentProposalExecutionResult>? execution = null,
         AgentToolResult? result = null, string? acknowledgement = null) => new(proposal)
     {
         Execution = execution ?? store.Executions.GetValueOrDefault(proposal.Id),
         Result = result ?? store.Results.GetValueOrDefault(proposal.Id),
         AcknowledgementDigest = acknowledgement ?? (proposal.PreparedInvocation is { } prepared ? store.Acknowledgements.GetValueOrDefault(prepared.InvocationId) : null),
-        Version = store.Versions.GetValueOrDefault(proposal.Id)
+        Version = version
     };
 
     /// <summary>
@@ -609,14 +660,18 @@ internal sealed class InMemoryAgentProposalService(
 
     private static AgentResult<T> Expired<T>() => AgentResult<T>.Failure("agent.proposal.expired", "The prepared operation has expired.", 409);
 
+    /// <summary>The refusal of a decision made on a proposal state that changed meanwhile; nothing was recorded.</summary>
+    private static AgentResult<T> Conflict<T>() => AgentResult<T>.Failure(AgentProposalConflictException.Code,
+        "The operation changed while this decision was being made; nothing was recorded. Read its current state and decide again.", 409);
+
     /// <summary>
     /// Under the proposal gate: records the one pre-dispatch expiry (zero effect), releases the proposal claim
     /// and emits its single correlated audit event. Later attempts observe the retained Expired status.
     /// </summary>
-    private async Task ExpireBeforeDispatchAsync(AgentActionProposal proposal, string? actorId)
+    private async Task ExpireBeforeDispatchAsync(AgentActionProposal proposal, long version, string? actorId)
     {
         var expired = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
-        await TransitionAsync(expired);
+        await TransitionAsync(expired, version);
         await AuditAsync(expired, AgentAuditEventKind.ProposalFailed, actorId, "The prepared operation expired before dispatch; no effect occurred.",
             CancellationToken.None, PreDispatchExpiry);
     }
@@ -625,9 +680,9 @@ internal sealed class InMemoryAgentProposalService(
     /// Under the proposal gate: a dispatched client request whose lifetime or contract ended without an admitted
     /// receipt becomes Uncertain (possible effect). It is never Expired and is never reissued.
     /// </summary>
-    private async Task<AgentResult<AgentProposalExecutionResult>> SettlePendingClientAsync(AgentActionProposal proposal, string? actorId, bool deadline, string summary)
+    private async Task<AgentResult<AgentProposalExecutionResult>> SettlePendingClientAsync(AgentActionProposal proposal, long version, string? actorId, bool deadline, string summary)
     {
-        var outcome = await StoreOutcomeAsync(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal, summary)));
+        var outcome = await StoreOutcomeAsync(proposal, version, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal, summary)));
         await AuditAsync(store.Proposals[proposal.Id], AgentAuditEventKind.ProposalFailed, actorId, deadline
                 ? "The pending client request reached its deadline without an admitted receipt; its effect is uncertain."
                 : "The pending client request lost its reviewed contract or authority; its effect is uncertain.",
@@ -669,6 +724,16 @@ internal sealed class InMemoryAgentProposalService(
 
     internal static IReadOnlyDictionary<string, string> PreDispatchExpiryOutcome => PreDispatchExpiry;
     internal static IReadOnlyDictionary<string, string> PendingClientDeadlineOutcome => PendingClientDeadline;
+}
+
+/// <summary>
+/// A proposal transition named a record version that is no longer recorded: another process changed the proposal after
+/// this decision read it. The store refused the write and nothing was applied.
+/// </summary>
+internal sealed class AgentProposalConflictException(string sessionId)
+    : InvalidOperationException($"A proposal of agent session '{sessionId}' changed after the decision read it; nothing was recorded.")
+{
+    public const string Code = "agent.proposal.conflict";
 }
 
 /// <summary>The duplicate-detection keys of one prepared tool call, recorded together with its proposal.</summary>

@@ -33,6 +33,7 @@ the complete package proof pass with durable recovery configured, as the prior l
 | Any route on a session another process holds a live lease on | n/a | 409 `agent.session.owned_elsewhere`, retryable, with a retry hint |
 | Any route on a session this process lost during the call | n/a | 409 `agent.session.ownership_lost` |
 | Any route on unreadable recorded state | n/a | 409 `agent.session.unavailable_state` with a reason |
+| Approve, deny, execute, acknowledgement and resolution, when the proposal changed after the decision read it (for example, another process settled it and this process hydrated the newer record) | n/a | 409 `agent.proposal.conflict`; nothing is recorded, and the caller reads the current state and decides again |
 
 Authorization runs on the plain owner columns first. A foreign or missing caller receives only the
 shared 404 or 403 and causes no hydration, takeover or settlement. Ownership and unavailable-state
@@ -40,6 +41,11 @@ outcomes are reported only to the owner. Withdraw is a compare-and-set from Pend
 while a turn is registered. Acknowledgement and resolution are idempotent on retry. Resolution
 releases the operation's own claim. A paused turn that awaits it stays busy until the owner continues
 it.
+
+**Paging (Preview limitation).** The session list orders by last update, newest first, and the `before` cursor names
+the last item's update time and id. A session updated while a client pages moves to the front, so a later page can skip
+it, and an earlier page can show it again after the update. Reload the first page to see recent changes; a stable
+cursor over an immutable key can replace this before GA.
 
 The stream route is unchanged. Opening it starts the latest Pending prompt or the paused continuation; Studio opens it only on an explicit Start.
 
