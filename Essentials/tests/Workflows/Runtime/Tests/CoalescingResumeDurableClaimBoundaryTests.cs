@@ -236,6 +236,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     [Theory]
     [InlineData(PersistenceMode.Balanced)]
     [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
     public async Task Ordinary_segment_drains_work_a_competing_delivery_queued_after_the_overlay_was_filled(PersistenceMode mode)
     {
         await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromMinutes(10), mode);
@@ -260,6 +261,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     [Theory]
     [InlineData(PersistenceMode.Balanced)]
     [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
     public async Task Ordinary_segment_takes_back_a_continuation_whose_deliverer_died(PersistenceMode mode)
     {
         await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromSeconds(1), mode);
