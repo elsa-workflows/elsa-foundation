@@ -8,7 +8,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
     PostgreSql = typeof(AgentPostgreSqlDbContext), MySql = typeof(AgentMySqlDbContext))]
 [assembly: ManifestExtension("efModules", "Agent")]
 [assembly: EfSchemaFamily(AgentEfModule.SchemaFamily, "Agent", AgentEfModule.SchemaVersion)]
-[assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentSessionRow), nameof(AgentSessionRow.Payload), nameof(AgentSessionRow.PausedTurnPayload))]
+[assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentSessionRow), nameof(AgentSessionRow.Payload), nameof(AgentSessionRow.PausedTurnPayload),
+    nameof(AgentSessionRow.PendingAuditsPayload))]
 [assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentMessageRow), nameof(AgentMessageRow.Payload))]
 [assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentContextRow), nameof(AgentContextRow.Payload))]
 [assembly: EfSchemaContent(AgentEfModule.SchemaFamily, typeof(AgentProposalRow), nameof(AgentProposalRow.Payload))]
