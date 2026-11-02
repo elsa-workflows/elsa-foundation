@@ -107,6 +107,25 @@ public sealed class AgentProviderInterruptionTests
         Assert.False(string.IsNullOrWhiteSpace(reset.Content));
     }
 
+    // #3441 Phase 3 review: only a completed earlier exchange makes a fallback a reset.
+    [Fact]
+    public async Task A_copilot_fallback_after_only_a_failed_first_prompt_is_not_a_conversation_reset()
+    {
+        var client = new FallbackCopilotClient();
+        var provider = new GitHubCopilotAgentProvider(new CopilotClientFactory(client),
+            Options.Create(new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = "test-token" }), new AgentTestToolInvoker(),
+            NullLogger<GitHubCopilotAgentProvider>.Instance);
+        // The first prompt failed before any Copilot conversation existed; it has no answer.
+        IReadOnlyList<AgentTurnMessage> history = [new(AgentRole.User, "failed first"), new(AgentRole.User, "now")];
+
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in provider.RunTurnAsync(new AgentHarnessTurnRequest("session-1", "actor-1", history, [], [], AgentPolicy.Default)))
+            events.Add(item);
+
+        Assert.True(client.Created);
+        Assert.DoesNotContain(events, x => x.Payload is AgentProviderNotice);
+    }
+
     [Fact]
     public async Task The_orchestrator_records_a_provider_notice_on_the_turn()
     {

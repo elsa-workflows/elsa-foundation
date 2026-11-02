@@ -19,6 +19,34 @@ internal sealed class InMemoryAgentProposalStore
     public ConcurrentDictionary<string, AgentToolResult> Results { get; } = new(StringComparer.Ordinal);
     public ConcurrentDictionary<string, string> Acknowledgements { get; } = new(StringComparer.Ordinal);
     public ConcurrentDictionary<string, SemaphoreSlim> Gates { get; } = new(StringComparer.Ordinal);
+    /// <summary>The recorded version of each proposal record this process read or wrote (<see cref="AgentProposalRecord.Version"/>).</summary>
+    public ConcurrentDictionary<string, long> Versions { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Forgets everything this process loaded for a session it no longer owns, so nothing read before the loss is acted on;
+    /// the next access hydrates the session's recorded state again. Call it under <see cref="Mutation"/>.
+    /// </summary>
+    public void Forget(string sessionId)
+    {
+        var proposals = Proposals.Values.Where(x => x.SessionId == sessionId).ToArray();
+        var ids = proposals.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+        var calls = CallProposals.Where(x => ids.Contains(x.Value)).Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
+        foreach (var proposal in proposals)
+        {
+            Proposals.TryRemove(proposal.Id, out _);
+            Executions.TryRemove(proposal.Id, out _);
+            Results.TryRemove(proposal.Id, out _);
+            Versions.TryRemove(proposal.Id, out _);
+            if (proposal.PreparedInvocation is { } prepared) Acknowledgements.TryRemove(prepared.InvocationId, out _);
+        }
+        foreach (var (invocationId, _) in InvocationProposals.Where(x => ids.Contains(x.Value)).ToArray()) InvocationProposals.TryRemove(invocationId, out _);
+        foreach (var call in calls)
+        {
+            CallProposals.TryRemove(call, out _);
+            CallInputs.TryRemove(call, out _);
+        }
+        foreach (var (turn, _) in TurnMutations.Where(x => calls.Contains(x.Value)).ToArray()) TurnMutations.TryRemove(turn, out _);
+    }
 }
 
 internal sealed class InMemoryAgentProposalService(
@@ -75,9 +103,14 @@ internal sealed class InMemoryAgentProposalService(
                     {
                         if (store.Proposals.ContainsKey(proposal.Id))
                             throw new AgentContributionException("A proposal identity is already registered.");
-                        return new(new(proposal, true), Write(fence, proposal.SessionId, Record(proposal)), () =>
+                        var record = Record(proposal);
+                        return new(new(proposal, true), Write(fence, proposal.SessionId, record), () =>
                         {
-                            lock (store.Mutation) store.Proposals.TryAdd(proposal.Id, proposal);
+                            lock (store.Mutation)
+                            {
+                                store.Proposals.TryAdd(proposal.Id, proposal);
+                                store.Versions[proposal.Id] = record.Version + 1;
+                            }
                         });
                     }
                     var callKey = AgentInvocationIntegrity.Digest(new { prepared.SessionId, prepared.TurnId, prepared.ToolCallId });
@@ -102,11 +135,13 @@ internal sealed class InMemoryAgentProposalService(
                         keys.Add(new(AgentSessionKeyKinds.TurnMutation, registered.TurnKey, registered.CallKey));
                         keys.Add(new(AgentSessionKeyKinds.CallInput, registered.CallKey, registered.InputDigest));
                     }
-                    return new(new(proposal, true), Write(fence, proposal.SessionId, Record(proposal), keys), () =>
+                    var inserted = Record(proposal);
+                    return new(new(proposal, true), Write(fence, proposal.SessionId, inserted, keys), () =>
                     {
                         lock (store.Mutation)
                         {
                             store.Proposals.TryAdd(proposal.Id, proposal);
+                            store.Versions[proposal.Id] = inserted.Version + 1;
                             store.InvocationProposals[prepared.InvocationId] = proposal.Id;
                             store.CallProposals[callKey] = proposal.Id;
                             if (call is { } applied)
@@ -271,7 +306,8 @@ internal sealed class InMemoryAgentProposalService(
                 && await _owner.CurrentRevisionAsync(proposal.SessionId, CancellationToken.None) is { } currentRevision && currentRevision != stamped)
             {
                 var stale = await StoreOutcomeAsync(proposal, AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.policy_stale",
-                    "The session policy changed after this operation was approved. It was not dispatched; prepare it again under the current policy.", 409));
+                    "The session policy changed after this operation was approved. It was not dispatched; prepare it again under the current policy.", 409),
+                    refusal: "The approval basis is no longer the session's current policy. The operation was not dispatched; no effect occurred.");
                 await AuditAsync(store.Proposals[proposalId], AgentAuditEventKind.ProposalFailed, actorId,
                     "The approval basis is no longer the session's current policy; no effect occurred.", CancellationToken.None, PreDispatchExpiry);
                 return stale;
@@ -399,9 +435,13 @@ internal sealed class InMemoryAgentProposalService(
 
     private async Task<(AgentActionProposal? Proposal, AgentError? Error)> AccessAsync(string proposalId, string actorId, CancellationToken cancellationToken)
     {
-        if (await LookupAsync(proposalId, cancellationToken) is not { } proposal)
+        if (await LookupAsync(proposalId, cancellationToken) is not { } found)
             return (null, new("agent.proposal.not_found", "The proposal was not found.", 404));
-        var session = await sessions.FindAsync(proposal.SessionId, cancellationToken);
+        var session = await sessions.FindAsync(found.SessionId, cancellationToken);
+        // Finding the session can hydrate it and load a newer recorded state than the snapshot read before; only the
+        // current state may be decided on.
+        if (!store.Proposals.TryGetValue(proposalId, out var proposal))
+            return (null, new("agent.proposal.not_found", "The proposal was not found.", 404));
         if (session is null || session.ActorId != actorId || proposal.PreparedInvocation is { } prepared &&
             (prepared.ActorId != session.ActorId || prepared.TenantId != session.TenantId || prepared.SessionId != session.Id))
             return (null, new("agent.proposal.forbidden", "The proposal does not belong to the current session actor.", 403));
@@ -411,10 +451,11 @@ internal sealed class InMemoryAgentProposalService(
     /// <summary>
     /// Records an execution outcome as one aggregate write: the retained outcome, its result or lifecycle envelope, the
     /// accepted acknowledgement (when <paramref name="acknowledgement"/> names one) and the proposal status. The claim is
-    /// released afterwards when the outcome no longer depends on policy.
+    /// released afterwards when the outcome no longer depends on policy. A refusal without its own result records
+    /// <paramref name="refusal"/> (or the executor's refusal) as its zero-effect lifecycle envelope.
     /// </summary>
     private async Task<AgentResult<AgentProposalExecutionResult>> StoreOutcomeAsync(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> outcome,
-        Func<AgentResult<AgentProposalExecutionResult>, string?>? acknowledgement = null)
+        Func<AgentResult<AgentProposalExecutionResult>, string?>? acknowledgement = null, string? refusal = null)
     {
         if (outcome.Value?.Executed == true && (proposal.PreparedInvocation is not { } preparedInvocation
             || outcome.Value.ToolResult is not { } observed
@@ -440,7 +481,7 @@ internal sealed class InMemoryAgentProposalService(
             ?? (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared
                 ? DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", cancelled
                     ? "The operation was cancelled before dispatch to its owning module. No effect occurred."
-                    : "The owning executor refused application before reporting an effect.")
+                    : refusal ?? "The owning executor refused application before reporting an effect.")
                 : null);
         await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
             result, outcome, acknowledgement?.Invoke(outcome));
@@ -455,14 +496,19 @@ internal sealed class InMemoryAgentProposalService(
         AgentResult<AgentProposalExecutionResult>? execution = null, string? acknowledgement = null)
     {
         var invocationId = proposal.PreparedInvocation?.InvocationId;
-        await CommitAsync(proposal.SessionId, fence => new AgentSessionTransition<bool>(true,
-            Write(fence, proposal.SessionId, Record(proposal, execution, result, acknowledgement)), () =>
+        await CommitAsync(proposal.SessionId, fence =>
+        {
+            // The record names the version this transition was decided on; the store refuses it if that changed.
+            var record = Record(proposal, execution, result, acknowledgement);
+            return new AgentSessionTransition<bool>(true, Write(fence, proposal.SessionId, record), () =>
             {
+                store.Versions[proposal.Id] = record.Version + 1;
                 if (execution is not null) store.Executions[proposal.Id] = execution;
                 if (result is not null) store.Results[proposal.Id] = result;
                 if (acknowledgement is not null && invocationId is not null) store.Acknowledgements[invocationId] = acknowledgement;
                 store.Proposals[proposal.Id] = proposal;
-            }));
+            });
+        });
         if (_owner is not null && Settled(proposal))
             _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
     }
@@ -493,7 +539,8 @@ internal sealed class InMemoryAgentProposalService(
     {
         Execution = execution ?? store.Executions.GetValueOrDefault(proposal.Id),
         Result = result ?? store.Results.GetValueOrDefault(proposal.Id),
-        AcknowledgementDigest = acknowledgement ?? (proposal.PreparedInvocation is { } prepared ? store.Acknowledgements.GetValueOrDefault(prepared.InvocationId) : null)
+        AcknowledgementDigest = acknowledgement ?? (proposal.PreparedInvocation is { } prepared ? store.Acknowledgements.GetValueOrDefault(prepared.InvocationId) : null),
+        Version = store.Versions.GetValueOrDefault(proposal.Id)
     };
 
     /// <summary>

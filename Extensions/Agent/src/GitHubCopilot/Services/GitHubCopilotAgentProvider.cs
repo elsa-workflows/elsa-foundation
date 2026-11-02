@@ -114,7 +114,19 @@ public sealed class GitHubCopilotAgentProvider(
     /// <summary>The explicit outcome of a resume that fell back to a new SDK conversation for a session with earlier turns.</summary>
     public const string ConversationResetCode = "agent.provider.github_copilot.conversation_reset";
 
-    private static bool HasPriorConversation(IReadOnlyList<AgentTurnMessage> history) => history.Count > 1;
+    /// <summary>
+    /// Whether a Copilot conversation held earlier turns: an answer precedes the latest prompt. A prompt that failed
+    /// before any conversation existed has no answer, so losing it is not a reset.
+    /// </summary>
+    private static bool HasPriorConversation(IReadOnlyList<AgentTurnMessage> history)
+    {
+        var latest = -1;
+        for (var index = 0; index < history.Count; index++)
+            if (history[index].Role == AgentRole.User) latest = index;
+        for (var index = 0; index < latest; index++)
+            if (history[index].Role == AgentRole.Assistant) return true;
+        return false;
+    }
 
     private static AgentStreamEvent ConversationReset()
     {

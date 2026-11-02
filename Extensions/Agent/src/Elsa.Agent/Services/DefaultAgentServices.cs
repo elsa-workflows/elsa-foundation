@@ -29,7 +29,7 @@ namespace Elsa.Agent.Services;
 /// </remarks>
 internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null,
     IAgentSessionRecordStore? recordStore = null, InMemoryAgentProposalStore? proposalStore = null, IAgentTurnRegistry? turns = null)
-    : IAgentSessionService, IAgentSessionPolicyParticipant, IDisposable
+    : IAgentSessionService, IAgentSessionPolicyParticipant, IDisposable, IAsyncDisposable
 {
     /// <summary>How often leases of sessions with a running turn or a dispatched execution are renewed in the background.</summary>
     internal static readonly TimeSpan RenewalInterval = TimeSpan.FromSeconds(10);
@@ -287,7 +287,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     internal Task<bool> MarkProposalDispatchedAsync(string sessionId, string proposalId, CancellationToken cancellationToken = default)
         => CommitAsync<bool>(sessionId, () => false, row =>
         {
-            if (row.Find(ProposalKey(proposalId)) is not { } claim) return new(true);
+            // Every unsettled proposal of a loaded row holds a claim, so a missing one means this process does not hold the
+            // proposal's current state (for example, another process settled it); it can never authorize dispatch.
+            if (row.Find(ProposalKey(proposalId)) is not { } claim) return new(false);
             if (claim.Dispatched) return new(true);
             // An expired pre-dispatch claim no longer counts as busy, so it cannot authorize dispatch.
             if (claim.Deadline is { } deadline && deadline <= _clock.GetUtcNow()) return new(false);
@@ -541,12 +543,14 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             .Where(x => x.Status == AgentMessageStatus.Streaming && x.Id != record.PausedTurn?.SourceMessageId)
             .Select(x => x with { Status = AgentMessageStatus.Cancelled, CompletedAt = now, StatusReason = AgentMessageStatusReasons.Interrupted })
             .ToArray();
+        // Each settlement writes from the version it read, so a concurrent change refuses it instead of being overwritten.
         var settlements = record.Proposals.Select(x => AgentProposalRecovery.Settle(x, now)).OfType<AgentProposalRecovery.Settlement>().ToArray();
         if (closed is null && interrupted.Length == 0 && settlements.Length == 0)
             return (record, null, []);
 
         var messages = record.Messages.Select(x => interrupted.FirstOrDefault(y => y.Id == x.Id) ?? x).ToArray();
-        var proposals = record.Proposals.Select(x => settlements.FirstOrDefault(y => y.Record.Proposal.Id == x.Proposal.Id)?.Record ?? x).ToArray();
+        var proposals = record.Proposals.Select(x => settlements.FirstOrDefault(y => y.Record.Proposal.Id == x.Proposal.Id) is { } settled
+            ? settled.Record with { Version = settled.Record.Version + 1 } : x).ToArray();
         var recovered = record with { Session = closed ?? record.Session, Messages = messages, Proposals = proposals };
         var audits = settlements.Select(x => AgentProposalRecovery.Audit(x, now)).ToArray();
         return (recovered, new AgentSessionRecordWrite(record.Session.Id, fence)
@@ -586,6 +590,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             {
                 var proposal = recorded.Proposal;
                 proposalStore.Proposals[proposal.Id] = proposal;
+                proposalStore.Versions[proposal.Id] = recorded.Version;
                 if (recorded.Execution is { } execution) proposalStore.Executions[proposal.Id] = execution;
                 if (recorded.Result is { } result) proposalStore.Results[proposal.Id] = result;
                 if (recorded.AcknowledgementDigest is { } digest && proposal.PreparedInvocation is { } prepared)
@@ -670,7 +675,10 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 if (!row.NeedsRenewal) continue;
                 fence = row.Fence;
             }
-            var renewed = await _store.AcquireOwnershipAsync(sessionId, _ownerToken, cancellationToken);
+            AgentSessionRecordResult renewed;
+            // One session's failing read must not stop the renewal of the others; the next guarded write detects a lost lease.
+            try { renewed = await _store.AcquireOwnershipAsync(sessionId, _ownerToken, cancellationToken); }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested) { continue; }
             if (!renewed.Succeeded || renewed.Fence != fence)
                 LoseOwnership(sessionId, row);
         }
@@ -679,7 +687,39 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     /// <summary>Whether the background lease renewal is running.</summary>
     internal bool RenewalActive => Volatile.Read(ref _renewal) is not null;
 
-    public void Dispose() => Interlocked.Exchange(ref _renewal, null)?.Dispose();
+    /// <summary>How long disposal waits for the record store to release this process's leases.</summary>
+    private static readonly TimeSpan ReleaseTimeout = TimeSpan.FromSeconds(5);
+    private int _disposed;
+
+    /// <summary>
+    /// A graceful shutdown stops lease renewal and releases the lease of every loaded session, so a restarted process
+    /// takes its sessions over at once instead of waiting for the leases to lapse. Release is best effort: a release that
+    /// fails or does not finish in time leaves its lease to lapse, and fences still refuse any later write from here.
+    /// </summary>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+        Interlocked.Exchange(ref _renewal, null)?.Dispose();
+        try { ReleaseLeasesAsync().Wait(ReleaseTimeout); }
+        catch (Exception) { }
+    }
+
+    /// <inheritdoc cref="Dispose"/>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+        Interlocked.Exchange(ref _renewal, null)?.Dispose();
+        try { await ReleaseLeasesAsync().WaitAsync(ReleaseTimeout); }
+        catch (Exception) { }
+    }
+
+    private Task ReleaseLeasesAsync() => Task.WhenAll(_rows.ToArray().Select(async loaded =>
+    {
+        AgentSessionFence fence;
+        lock (loaded.Value) fence = loaded.Value.Fence;
+        try { await _store.ReleaseOwnershipAsync(loaded.Key, fence, CancellationToken.None); }
+        catch (Exception) { }
+    }));
 
     private void EnsureRenewal()
     {
@@ -695,10 +735,16 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         catch (Exception) { }
     }
 
-    /// <summary>Evicts a row whose ownership moved: its claims become no-ops, and the session's running turn is cancelled.</summary>
+    /// <summary>
+    /// Evicts a row whose ownership moved: its claims become no-ops, everything loaded for its proposals is forgotten,
+    /// and the session's running turn is cancelled. Only the current row is lost: a stale row read before an eviction and
+    /// a newer hydration never ends the newer row's work.
+    /// </summary>
     private void LoseOwnership(string sessionId, SessionRow row)
     {
-        _rows.TryRemove(new KeyValuePair<string, SessionRow>(sessionId, row));
+        if (!_rows.TryRemove(new KeyValuePair<string, SessionRow>(sessionId, row))) return;
+        if (proposalStore is not null)
+            lock (proposalStore.Mutation) proposalStore.Forget(sessionId);
         // Only the default registry can cancel by session; a replaced registry's turn fails at its next guarded write.
         if (turns is AgentTurnRegistry registry) registry.CancelSession(sessionId);
     }

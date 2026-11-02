@@ -120,7 +120,8 @@ public sealed class AgentSessionGateOrderingTests
             fixture.Session.TenantId, AgentAutonomyMode.Manual, 1)).WaitAsync(HandoffTimeout)).Outcome);
         owner.Release((await owner.AcquireAsync(fixture.Session.Id, AgentSessionClaimKind.Foreground).WaitAsync(HandoffTimeout))!);
         owner.Release((await owner.EnsurePauseAsync(fixture.Session.Id).WaitAsync(HandoffTimeout))!);
-        Assert.True(await owner.MarkProposalDispatchedAsync(fixture.Session.Id, "another-proposal").WaitAsync(HandoffTimeout));
+        // Completes under the session gate; an unclaimed proposal is refused (#3441 Phase 3 review).
+        Assert.False(await owner.MarkProposalDispatchedAsync(fixture.Session.Id, "another-proposal").WaitAsync(HandoffTimeout));
         Assert.False(approval.IsCompleted);
         held.Release.SetResult();
 

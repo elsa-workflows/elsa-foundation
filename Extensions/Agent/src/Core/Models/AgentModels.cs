@@ -602,6 +602,13 @@ public sealed record AgentProposalRecord(AgentActionProposal Proposal)
     public AgentToolResult? Result { get; init; }
     /// <summary>The digest of the accepted client acknowledgement; a different later acknowledgement is a conflict.</summary>
     public string? AcknowledgementDigest { get; init; }
+    /// <summary>
+    /// The record's version. A load returns the recorded version (1 after the first record). A write names the version
+    /// its writer read, 0 for a new proposal: the store refuses the write with
+    /// <see cref="AgentSessionRecordOutcome.VersionConflict"/> when the recorded version differs, and otherwise records
+    /// the next version. A transition therefore applies only to the state it was decided on.
+    /// </summary>
+    public long Version { get; init; }
 }
 
 /// <summary>Preview: one session aggregate as the record store holds it.</summary>
@@ -663,7 +670,9 @@ public enum AgentSessionRecordOutcome
     /// <summary>The write's owner or fence is no longer current. Nothing changed.</summary>
     OwnershipLost,
     /// <summary>A key is already recorded with a different value. Nothing changed; <see cref="AgentSessionRecordResult.ConflictingKeys"/> holds the recorded values.</summary>
-    KeyConflict
+    KeyConflict,
+    /// <summary>A proposal record changed since its writer read it (<see cref="AgentProposalRecord.Version"/>). Nothing changed.</summary>
+    VersionConflict
 }
 
 /// <summary>Preview: the result of a record store operation.</summary>

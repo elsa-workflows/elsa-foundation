@@ -31,7 +31,8 @@ public sealed class AgentSessionOwnerWriteThroughTests
         clock.Advance(InMemoryAgentSessionRecordStore.LeaseDuration + TimeSpan.FromSeconds(1));
         var restarted = new InMemoryAgentSessionService(new InMemoryAgentAuditStore(), clock, recordStore: store);
 
-        Assert.True(await restarted.MarkProposalDispatchedAsync(session.Id, "proposal-1"));
+        // An unclaimed proposal never authorizes dispatch (#3441 Phase 3 review); the call still hydrates the session.
+        Assert.False(await restarted.MarkProposalDispatchedAsync(session.Id, "proposal-1"));
         // Hydration took the lapsed ownership over: the earlier owner can no longer record anything.
         var current = (await store.LoadAsync(session.Id))!.Owner!;
         Assert.NotEqual(original.OwnerToken, current.OwnerToken);

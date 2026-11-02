@@ -60,7 +60,8 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 Messages = aggregate.Messages.Values.Select(Deserialize<AgentMessage>).ToArray(),
                 Context = aggregate.Context.Values.Select(Deserialize<AgentContextAttachment>).ToArray(),
                 PausedTurn = aggregate.PausedTurn is null ? null : Deserialize<AgentPausedTurn>(aggregate.PausedTurn),
-                Proposals = aggregate.Proposals.Values.Select(Deserialize<AgentProposalRecord>).ToArray(),
+                Proposals = aggregate.Proposals.Entries
+                    .Select(x => Deserialize<AgentProposalRecord>(x.Json) with { Version = aggregate.Proposals.VersionOf(x.Id) }).ToArray(),
                 Keys = aggregate.Keys.Select(x => new AgentSessionUniqueKey(x.Key.Kind, x.Key.Key, x.Value)).ToArray(),
                 Owner = aggregate.Owner,
                 LeaseExpiresAt = aggregate.LeaseExpiresAt,
@@ -110,7 +111,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         var messages = write.Messages.Select(x => (x.Id, Json: Serialize(x))).ToArray();
         var context = write.Context.Select(x => (x.Id, Json: Serialize(x))).ToArray();
         var paused = write.PausedTurn is null ? null : Serialize(write.PausedTurn);
-        var proposals = write.Proposals.Select(x => (x.Proposal.Id, x.Proposal.Status, Json: Serialize(x))).ToArray();
+        var proposals = write.Proposals.Select(x => (x.Proposal.Id, x.Proposal.Status, x.Version, Json: Serialize(x))).ToArray();
         lock (_gate)
         {
             if (!_sessions.TryGetValue(write.SessionId, out var aggregate))
@@ -124,6 +125,9 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 return Task.FromResult(new AgentSessionRecordResult(AgentSessionRecordOutcome.KeyConflict) { ConflictingKeys = conflicts });
             if (proposals.Any(x => _proposalSessions.TryGetValue(x.Id, out var owner) && owner != write.SessionId))
                 return Task.FromResult(new AgentSessionRecordResult(AgentSessionRecordOutcome.AlreadyExists));
+            // Compare-and-set: each proposal record changes only from the version its writer read (0: not yet recorded).
+            if (proposals.Any(x => aggregate.Proposals.VersionOf(x.Id) != x.Version))
+                return Task.FromResult(new AgentSessionRecordResult(AgentSessionRecordOutcome.VersionConflict));
 
             if (session is not null)
             {
@@ -134,7 +138,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
             foreach (var (id, json) in context) aggregate.Context.TryAdd(id, json);
             if (paused is not null) aggregate.PausedTurn = paused;
             else if (write.RemovePausedTurn) aggregate.PausedTurn = null;
-            foreach (var (id, status, json) in proposals)
+            foreach (var (id, status, _, json) in proposals)
             {
                 aggregate.Proposals.Upsert(id, json, status);
                 _proposalSessions[id] = write.SessionId;
@@ -225,8 +229,13 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         private readonly List<string> _order = [];
         private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
         private readonly Dictionary<string, AgentActionProposalStatus> _statuses = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _versions = new(StringComparer.Ordinal);
 
         public IEnumerable<string> Values => _order.Select(id => _values[id]);
+        public IEnumerable<(string Id, string Json)> Entries => _order.Select(id => (id, _values[id]));
+
+        /// <summary>How many times the value was recorded; 0 when it is not recorded.</summary>
+        public long VersionOf(string id) => _versions.GetValueOrDefault(id);
 
         public int PendingReviewCount => _statuses.Values.Count(x => x is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited);
 
@@ -246,6 +255,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         {
             if (!TryAdd(id, json)) _values[id] = json;
             if (status is { } value) _statuses[id] = value;
+            _versions[id] = VersionOf(id) + 1;
         }
     }
 
