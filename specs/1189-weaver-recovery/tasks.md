@@ -133,19 +133,25 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 **Independent test**: Restart with pending, approved, dispatched and running work. Then attempt recovery with no user, with the original user, with that user after a permission was revoked, and with a different user.
 
-- [ ] T016 [US4] Authorize on the plain owner columns before decoding any payload, hydrating or taking ownership, in `Api/AgentApi.cs` and the owner. A foreign actor receives only the shared 404 or 403, and the test proves no store write occurs.
-- [ ] T017 [US4] Prove that recovery with no authenticated user records zero disclosure events and zero execution events, and only lifecycle outcomes attributed with `settledBy=recovery`. Prove that a revoked permission refuses execution with zero effect. Add the tests to `Extensions/Agent/tests/Tests/`.
+- [x] T016 [US4] Authorize on the plain owner columns before decoding any payload, hydrating or taking ownership, in `Api/AgentApi.cs` and the owner. A foreign actor receives only the shared 404 or 403, and the test proves no store write occurs.
+
+  Verified: commit `33ea3d7d1` (extended to the new routes in `efece695f`); `AgentRecoveryAuthorizationTests` with a recording record store: a foreign actor, a foreign tenant and a claim-less caller reach only the owner-column and proposal-to-session reads on every session and proposal route, across pending, approved, dispatched and running work after a restart, with no write, takeover, settlement or audit record; `owned_elsewhere` reaches only the owner. Red on the previous code. The Phase 3 review fixes landed alongside in `bae4bd903`.
+- [x] T017 [US4] Prove that recovery with no authenticated user records zero disclosure events and zero execution events, and only lifecycle outcomes attributed with `settledBy=recovery`. Prove that a revoked permission refuses execution with zero effect. Add the tests to `Extensions/Agent/tests/Tests/`.
+
+  Verified: commit `e28dc85fc`; `AgentRecoveryAuthorityTests` over hosts with the HTTP tool authorizer: with no request present, hydration records only actor-less `settledBy=recovery` lifecycle records (Expired twice, Uncertain once, the turn interrupted), asks no context source anything, calls no provider and dispatches nothing; an approved operation fails closed without a user; with the tool's permission revoked the execute route records a zero-effect Failed refusal that a restored permission does not reopen. No production change was needed.
 
 ## Phase 5: US1 — Return to the same session after a reload (P1, plan step 5)
 
 **Independent test**: Reload, reopen the dock, open a second tab and drop the stream mid-turn. Compare what Studio shows with the server records and the owning module's state.
 
-- [ ] T018 [US1] Add `IAgentSessionService.ListOwnedAsync` (default Unsupported) and `GET /_elsa/agent/sessions`, `GET …/proposals`, `POST …/messages/{id}/withdraw` and `POST …/client-invocations/{id}/resolution` to `Api/AgentApi.cs` and `Api/Models/AgentApiModels.cs`, following the contract. Requirements:
+- [x] T018 [US1] Add `IAgentSessionService.ListOwnedAsync` (default Unsupported) and `GET /_elsa/agent/sessions`, `GET …/proposals`, `POST …/messages/{id}/withdraw` and `POST …/client-invocations/{id}/resolution` to `Api/AgentApi.cs` and `Api/Models/AgentApiModels.cs`, following the contract. Requirements:
   - Scope by owner before the limit.
   - Withdraw is compare-and-set from Pending, and is refused while a turn is registered.
   - Resolution records the owner's statement, and a later receipt supersedes it. Resolution is idempotent on retry. A user's stop records `StatusReason=user-stop`.
 
   Add `[JsonSerializable]` entries for the new request and response types in `Extensions/Agent/src/Api/AgentJsonContext.cs`. Stamp `Workspace` and `ContinuedFrom` from the create request. Add API tests covering each refusal code and owner scoping with `take=1`.
+
+  Verified: commit `efece695f`; `AgentRecoveryApiTests` (owner scoping with `take=1` across actor, tenant and workspace, the `before` cursor, every refusal code, idempotent resolution and a later superseding receipt, withdraw versus start in both orders behind a store-write barrier, user stop versus dropped stream); the user-stop, registered-turn and resolution-release tests are each red without their change. The complete Agent suite passes 855/855 in three runs (818 before this phase).
 - [ ] T019 [US1] Add the list, proposals, withdraw and resolution calls, plus `workspace` and `continuedFrom` on create, to `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` and `agentTypes.ts`, with Vitest coverage.
 - [ ] T020 [US1] In `weaver/useWeaverSession.ts` and `weaver/WeaverSurface.tsx`:
   - Remember `lastSessionId` under the user-and-backend scope key, inside try/catch.
