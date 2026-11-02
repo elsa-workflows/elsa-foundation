@@ -24,8 +24,9 @@ internal enum WorkflowPublicationStatus
 
 /// <summary>
 /// Publishes the newest imported version of each workflow definition at most once (spec 235 research R-6). A version
-/// its target slot has published before, in any status but <see cref="PublicationStatus.Failed"/>, is left alone, so a
-/// start never takes back a slot an operator moved, and a re-exported newer version is published.
+/// its target slot has published before (an <see cref="PublicationStatus.Active"/> or <see cref="PublicationStatus.Retired"/>
+/// record, or the record the slot serves) is left alone, so a start never takes back a slot an operator moved, and a
+/// re-exported newer version is published.
 /// </summary>
 internal sealed class ImportedWorkflowPublisher(
     IPublicationPolicyStore policyStore,
@@ -107,10 +108,14 @@ internal sealed class ImportedWorkflowPublisher(
     {
         if (slot is null)
             return false;
+        // A candidate the slot never switched to (a process stopped between saving it and the runtime's commit) was
+        // never published, and nothing completes it later: the startup completion pass only visits the publication the
+        // slot names. A candidate the slot does serve is published; that pass completes its journal.
         var records = await recordStore.ListBySlotAsync(slot.SlotId, cancellationToken);
         return records.Any(record =>
             StringComparer.Ordinal.Equals(record.WorkflowDefinitionVersionId, versionId) &&
-            record.Status != PublicationStatus.Failed);
+            (record.Status is PublicationStatus.Active or PublicationStatus.Retired ||
+             record.Status != PublicationStatus.Failed && StringComparer.Ordinal.Equals(record.PublicationId, slot.ActiveActivationId)));
     }
 
     // Slot resolution copied from PublishReconciledWorkflowVersions (Elsa.Workflows.Publishing, ResolveTargetSlotName

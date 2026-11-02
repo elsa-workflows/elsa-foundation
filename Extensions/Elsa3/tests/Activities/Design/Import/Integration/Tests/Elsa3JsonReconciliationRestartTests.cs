@@ -176,6 +176,41 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_candidate_the_slot_never_switched_to_does_not_count_as_published()
+    {
+        WriteHttpHello(1, "http.json");
+        var host = await Elsa3ImportHost.StartAsync(withHttp: true, reconcileFolder: _folder.FullName);
+        try
+        {
+            var served = (await host.PublicationRecordsAsync("http-hello")).Single(record => record.Status == PublicationStatus.Active);
+            var applied = await ApplyWithoutPublishingAsync(host, HttpHello(2));
+            var version = Assert.Single(applied.Workflows!);
+            // A process stopped after the activator saved the candidate for version 2, before the slot switched to it.
+            await SaveRecordAsync(host, served with
+            {
+                PublicationId = Guid.NewGuid().ToString("N"),
+                WorkflowDefinitionVersionId = version.WorkflowVersionId,
+                Status = PublicationStatus.Candidate,
+                ActivatedAt = null
+            });
+
+            Assert.Equal(WorkflowPublicationStatus.Published, await PublishInScopeAsync(host, version));
+            Assert.Equal(version.WorkflowVersionId, (await host.ActivePublicationAsync("http-hello"))!.Value.Workflow.VersionId);
+        }
+        finally
+        {
+            await host.DisposeAsync();
+        }
+    }
+
+    private static async Task SaveRecordAsync(Elsa3ImportHost host, PublicationRecord record)
+    {
+        await using var scope = await host.Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+            .CreateAsync(new PersistenceScope(Elsa3ImportHost.TenantId));
+        await scope.ServiceProvider.GetRequiredService<Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore>().SaveAsync(record);
+    }
+
     private static async Task<WorkflowPublicationStatus> PublishInScopeAsync(Elsa3ImportHost host, ReusableActivityImportedWorkflowVersion version)
     {
         await using var scope = await host.Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()

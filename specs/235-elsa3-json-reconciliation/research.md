@@ -127,8 +127,9 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
   take its newest version in the input (T) and:
   - skip it when a reusable it depends on is not `Published` or `AlreadyPublished` (FR-009);
   - resolve T's target slot; skip it when the slot's publication journal (`IPublicationRecordStore.ListBySlotAsync`)
-    already holds a record of T in any status but `Failed` (active, retired, or in flight, which
-    `CompleteInterruptedPublicationsStartupTask` finishes at Order 5);
+    already holds a record of T that is `Active` or `Retired`, or that the slot serves (a candidate the slot
+    serves is finished by `CompleteInterruptedPublicationsStartupTask` at Order 5; one it never switched to is
+    not published and nothing finishes it; plan A-11);
   - otherwise send `IRequestSender.Send(new PublishWorkflow(T, ExpectedPublicationId: <the slot's active publication
     id read for the check, or null>, TenantId: <the operation scope's tenant>))`.
   Workflows publish after the import's own reusable publish phase.
