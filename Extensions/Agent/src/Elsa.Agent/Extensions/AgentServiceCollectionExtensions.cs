@@ -36,6 +36,9 @@ public static class AgentServiceCollectionExtensions
         // A durable store is chosen with SelectAgentSessionRecordStore, which replaces only this default.
         AgentPersistenceSelection.TryAddDefaultSessionRecordStore(services, sp => new InMemoryAgentSessionRecordStore(sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IAgentSessionService, InMemoryAgentSessionService>();
+        // A graceful stop releases the owner's leases before the shell's container is disposed (story 2.1).
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(ReleaseAgentSessionLeasesTerminator)))
+            services.AddShellTerminator<ReleaseAgentSessionLeasesTerminator>(LifecyclePhase.Default, 0);
         // The process-wide store holds data only; current authority/tools are resolved by scoped facades.
         services.TryAddSingleton<InMemoryAgentProposalStore>();
         services.TryAddSingleton(TimeProvider.System);

@@ -793,7 +793,14 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     }
 
     /// <inheritdoc cref="Dispose"/>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync() => new(ShutDownAsync());
+
+    /// <summary>
+    /// The graceful shutdown of <see cref="Dispose"/>, run by <see cref="ReleaseAgentSessionLeasesTerminator"/> while the
+    /// shell's container is still usable: a store that opens a scope per operation (the EF store) can no longer do so once
+    /// the container is being disposed. Idempotent; the container's later disposal finds the work already done.
+    /// </summary>
+    internal async Task ShutDownAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
         Interlocked.Exchange(ref _renewal, null)?.Dispose();
