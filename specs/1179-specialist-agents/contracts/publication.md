@@ -1,7 +1,7 @@
 # Specialist authoring and publication contract
 
 **Status**: Proposed behavior; implementation/public signatures require their independent consumer proof.
-Owning requirements: FR-001–FR-009, FR-021, FR-023 and Program A1–A5/A12–A13.
+Owning requirements: FR-001–FR-009, FR-021, FR-023, FR-027 and Program A1–A5/A12–A13. Configuration-defined specialists ([plan D10](../plan.md#d10--configuration-defined-specialists)) are source-owned versions compiled through the same provider compiler and preflight.
 
 ## Resource and provider identity
 

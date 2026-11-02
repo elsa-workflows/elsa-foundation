@@ -165,6 +165,10 @@ at normal and narrow widths, with edit, read-only and denied permissions.
    incidents and links are visible without secrets or private model reasoning.
 4. **Given** unsaved edits, undo/redo, navigation and reload, **when** used on each editable surface,
    **then** the declared working-state/save boundary is consistent and no accepted server write is silently undone.
+5. **Given** a specialist defined in host configuration, **when** the host starts, **then** it is published as an
+   exact source-owned version that workflows bind like a Studio-authored one, and Studio shows it read-only. A definition
+   with a bumped version publishes a new version without rewriting existing bindings. An invalid definition, or changed
+   content without a version bump, is refused with an actionable diagnostic, without blocking other specialists.
 
 ### User Story 8 — Operate supported deployments (Priority: P1)
 
@@ -226,6 +230,14 @@ consumer, process restart, migration/rollback and disabling new admission while 
 - **FR-024**: Supported deployment/provider/store combinations MUST qualify installation, restart, migration, rollback, retained old-artifact interpretation and independent package consumption.
 - **FR-025**: Delivered editorial examples MUST run with an authorized real model through native and BPMN workflows, with evidence distinguished from fixtures.
 - **FR-026**: Users, module authors and operators MUST receive usable documentation, configuration examples, extension contracts and failure/recovery guidance.
+- **FR-027**: Operators MUST be able to define specialists in host configuration as well as in Studio (plan D10). A configuration-defined specialist:
+  - uses the same manifest as a Studio-authored one: instructions, input and result schemas, outcomes, a model connection *name* and model, and limits;
+  - declares its own SemVer version;
+  - is compiled through the same provider compiler and preflight as Studio publication, and published as an exact, immutable, source-owned version;
+  - is read-only in Studio, but can be copied or forked into an editable draft where permitted;
+  - never carries credentials;
+  - is validated before contribution, and again at compile and preflight. An invalid definition, changed content without a version bump, or a definition that fails compile or preflight is left out with an actionable per-definition diagnostic, and every other activity still reconciles;
+  - composes identically in native and BPMN workflows.
 
 ### Key Entities *(include if feature involves data)*
 

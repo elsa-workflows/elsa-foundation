@@ -1,7 +1,7 @@
 # Studio product journeys and working-state contract
 
 **Status**: Proposed interaction contract. [Interactive wireframes](../design/studio-wireframes.html)
-use illustrative local data, not a real backend/model. FR-001–FR-008/FR-020–FR-022 and Program
+use illustrative local data, not a real backend/model. FR-001–FR-008/FR-020–FR-022/FR-027 and Program
 A1–A5/A10/A12 own the production journeys.
 
 ## Navigation and composition

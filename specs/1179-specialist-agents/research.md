@@ -197,7 +197,7 @@ and its own process-failure proof. A mandatory Azure control plane is not implie
 ## Research disposition
 
 The three planning research lenses inspected package/dependency ownership, runtime recovery and
-Studio/support source. The packet resolves the identified design questions with D1–D9; implementation
+Studio/support source. The packet resolves the identified design questions with D1–D9, plus D10 for configuration-defined specialists (owner decision, 2 Nov 2026); implementation
 must prove the choices. The [support contract](contracts/support.md) names the actual matrix and
 remaining evidence. No untested provider/store/host or generic background protection capability is
 silently declared supported.
