@@ -8,8 +8,9 @@ using Xunit.Sdk;
 namespace Elsa.Agent.Tests;
 
 /// <summary>
-/// #3441 story 2 (T009-T011): restarts at each lifecycle boundary, before and after each deadline. The owning module's
-/// dispatch count is the authority on how often an effect ran.
+/// #3441 story 2 (T009-T011): restarts at each lifecycle boundary, before and after each deadline, on both provider loops
+/// (the host-driven loop and a delegated, harness-owned loop as the Copilot adapter runs). The owning module's dispatch
+/// count is the authority on how often an effect ran.
 /// </summary>
 public sealed class AgentRecoveryRestartTests
 {
@@ -48,11 +49,13 @@ public sealed class AgentRecoveryRestartTests
     // ---- T009 SC-001 matrix: six boundaries, before and after each deadline ----
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Idle_session(bool afterDeadline)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Idle_session(bool afterDeadline, bool delegated)
     {
-        using var harness = new AgentRestartHarness();
+        using var harness = new AgentRestartHarness(delegated: delegated);
         var session = await harness.Host.CreateAsync();
         await harness.Host.PostAsync(session, "hello");
         Assert.Equal(AgentStreamEventKind.Completed, (await harness.Host.StreamAsync(session))[^1].Kind);
@@ -84,11 +87,13 @@ public sealed class AgentRecoveryRestartTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Pending_review(bool afterDeadline)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Pending_review(bool afterDeadline, bool delegated)
     {
-        using var harness = new AgentRestartHarness();
+        using var harness = new AgentRestartHarness(delegated: delegated);
         var session = await harness.Host.CreateAsync();
         var proposal = await harness.Host.PauseOnReviewAsync(session);
         if (afterDeadline) harness.Clock.Advance(PastPreparedDeadline);
@@ -121,11 +126,13 @@ public sealed class AgentRecoveryRestartTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Approved_before_dispatch(bool afterDeadline)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Approved_before_dispatch(bool afterDeadline, bool delegated)
     {
-        using var harness = new AgentRestartHarness();
+        using var harness = new AgentRestartHarness(delegated: delegated);
         await ApprovedBeforeDispatchAsync(harness, afterDeadline);
     }
 
@@ -160,11 +167,13 @@ public sealed class AgentRecoveryRestartTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Dispatched_before_the_receipt(bool afterDeadline)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Dispatched_before_the_receipt(bool afterDeadline, bool delegated)
     {
-        using var harness = new AgentRestartHarness();
+        using var harness = new AgentRestartHarness(delegated: delegated);
         var session = await harness.Host.CreateAsync();
         var proposal = await harness.Host.PauseOnReviewAsync(session);
         var old = harness.Host;
@@ -193,11 +202,13 @@ public sealed class AgentRecoveryRestartTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Receipt_recorded_before_the_provider_continuation(bool afterDeadline)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Receipt_recorded_before_the_provider_continuation(bool afterDeadline, bool delegated)
     {
-        using var harness = new AgentRestartHarness();
+        using var harness = new AgentRestartHarness(delegated: delegated);
         var session = await harness.Host.CreateAsync();
         var proposal = await harness.Host.PauseOnReviewAsync(session);
         Assert.True((await harness.Host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
@@ -217,11 +228,13 @@ public sealed class AgentRecoveryRestartTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Mid_provider_turn(bool afterDeadline)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Mid_provider_turn(bool afterDeadline, bool delegated)
     {
-        using var harness = new AgentRestartHarness();
+        using var harness = new AgentRestartHarness(delegated: delegated);
         var session = await harness.Host.CreateAsync();
         var old = harness.Host;
         var prompt = await old.PostAsync(session, "hello");

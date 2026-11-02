@@ -26,8 +26,10 @@ internal sealed class AgentRestartHarness : IDisposable
     internal static Action<IAgentSessionRecordStore>? ReleaseDefaultStore { get; set; }
 
     /// <param name="store">Builds the shared store over the harness clock; the default is <see cref="DefaultStore"/>.</param>
-    public AgentRestartHarness(Func<TimeProvider, IAgentSessionRecordStore>? store = null, Action<IServiceCollection>? configure = null)
+    /// <param name="delegated">Runs turns through a delegated (harness-owned) loop, as the Copilot adapter does, instead of the host-driven loop.</param>
+    public AgentRestartHarness(Func<TimeProvider, IAgentSessionRecordStore>? store = null, Action<IServiceCollection>? configure = null, bool delegated = false)
     {
+        Provider = delegated ? new HeldDelegatedProvider() : new HeldTurnProvider();
         if (store is null && DefaultStore is { } defaultStore)
         {
             Store = defaultStore(Clock);
@@ -44,7 +46,7 @@ internal sealed class AgentRestartHarness : IDisposable
     public RestartTestClock Clock { get; } = new();
     public IAgentSessionRecordStore Store { get; }
     public RecoveryModuleTool Module { get; } = new();
-    public HeldTurnProvider Provider { get; } = new();
+    public IRecoveryTestProvider Provider { get; }
     public RecoveryHost Host { get; private set; }
 
     /// <summary>
@@ -191,8 +193,19 @@ internal sealed class RecoveryModuleTool : IAgentTool
     }
 }
 
+/// <summary>What a provider was given for one turn, on either loop.</summary>
+internal sealed record RecordedTurn(IReadOnlyList<AgentTurnMessage> History, IReadOnlyList<AgentToolResult> PendingToolResults);
+
+/// <summary>A recovery test provider: its next turn can be held mid-provider, and every turn's input is recorded.</summary>
+internal interface IRecoveryTestProvider : IAgentProvider
+{
+    int Turns { get; }
+    List<RecordedTurn> Contexts { get; }
+    (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNext();
+}
+
 /// <summary>The deterministic host-driven provider; its next turn can be held mid-provider, and every context is recorded.</summary>
-internal sealed class HeldTurnProvider : IAgentProvider
+internal sealed class HeldTurnProvider : IRecoveryTestProvider
 {
     private readonly DeterministicAgentProvider _inner = new();
     private (TaskCompletionSource Entered, TaskCompletionSource Release)? _next;
@@ -200,7 +213,7 @@ internal sealed class HeldTurnProvider : IAgentProvider
 
     public string ProviderId => _inner.ProviderId;
     public int Turns => Volatile.Read(ref _turns);
-    public List<AgentTurnContext> Contexts { get; } = [];
+    public List<RecordedTurn> Contexts { get; } = [];
 
     public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNext()
     {
@@ -217,7 +230,7 @@ internal sealed class HeldTurnProvider : IAgentProvider
         (TaskCompletionSource Entered, TaskCompletionSource Release)? hold;
         lock (_inner)
         {
-            Contexts.Add(context);
+            Contexts.Add(new(context.History, context.PendingToolResults));
             hold = _next;
             _next = null;
         }
@@ -233,6 +246,85 @@ internal sealed class HeldTurnProvider : IAgentProvider
 
     public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default) => _inner.ApproveToolAsync(request, cancellationToken);
     public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) => _inner.GetDiagnosticsAsync(cancellationToken);
+}
+
+/// <summary>
+/// The deterministic delegated provider: it owns the turn's loop as the Copilot adapter does, dispatching the same
+/// reviewed mutation through the server's tool invoker and reporting a created proposal as a stream event, and it receives
+/// a recorded receipt as a continuation. Its next turn can be held mid-provider, and every request is recorded.
+/// </summary>
+internal sealed class HeldDelegatedProvider : IRecoveryTestProvider, IAgentHarness
+{
+    private readonly object _gate = new();
+    private (TaskCompletionSource Entered, TaskCompletionSource Release)? _next;
+    private int _turns;
+
+    public string ProviderId => DeterministicAgentProvider.Id;
+    public AgentHarnessCapabilities Capabilities => AgentHarnessCapabilities.Tools;
+    public int Turns => Volatile.Read(ref _turns);
+    public List<RecordedTurn> Contexts { get; } = [];
+
+    public (TaskCompletionSource Entered, TaskCompletionSource Release) HoldNext()
+    {
+        var hold = (new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously), new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        lock (_gate) _next = hold;
+        return hold;
+    }
+
+    public async IAsyncEnumerable<AgentStreamEvent> RunTurnAsync(AgentHarnessTurnRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _turns);
+        (TaskCompletionSource Entered, TaskCompletionSource Release)? hold;
+        lock (_gate)
+        {
+            Contexts.Add(new(request.History, request.PendingToolResults));
+            hold = _next;
+            _next = null;
+        }
+        await Task.Yield();
+        if (hold is { } held)
+        {
+            yield return Delta("Partial ");
+            held.Entered.TrySetResult();
+            await held.Release.Task.WaitAsync(cancellationToken);
+        }
+        if (request.PendingToolResults.Count > 0)
+        {
+            yield return Delta("Tool results: " + string.Join("; ", request.PendingToolResults.Select(x => x.Content)));
+            yield break;
+        }
+        if ((request.LatestUserMessage?.Content ?? string.Empty).Contains("mutate", StringComparison.OrdinalIgnoreCase))
+        {
+            var invocation = new AgentToolInvocation("delegated-call-1", DeterministicAgentProvider.MutatingToolName, request.SessionId, request.ActorId,
+                new Dictionary<string, object?> { ["change"] = "add-activity" }, request.Context)
+            { TenantId = request.TenantId, TurnId = request.TurnId, Client = request.Client };
+            var dispatch = await request.ToolInvoker!.DispatchAsync(invocation, request.Policy, cancellationToken);
+            if (dispatch.Outcome == AgentToolDispatchOutcome.ProposalCreated && dispatch.Proposal is { } proposal)
+            {
+                yield return new(Core.Services.AgentProviderPrimitives.NewId(), AgentStreamEventKind.ProposalCreated, null, proposal.Id, null, DateTimeOffset.UtcNow,
+                    AgentResultKind.Proposal, proposal);
+                yield break;
+            }
+            yield return Delta(dispatch.Result?.Content ?? dispatch.Error?.Message ?? "The change was refused.");
+            yield break;
+        }
+        yield return Delta("Delegated agent provider response.");
+    }
+
+    public IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, CancellationToken cancellationToken = default)
+        => throw new InvalidOperationException("A delegated provider's turn runs through its harness entry point.");
+
+    public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
+        => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>()));
+
+    public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
+        => Task.FromResult(new AgentToolApprovalResult(false, "Reviewed operations are decided through the server's review."));
+
+    public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => new DeterministicAgentProvider().GetDiagnosticsAsync(cancellationToken);
+
+    private static AgentStreamEvent Delta(string content)
+        => new(Core.Services.AgentProviderPrimitives.NewId(), AgentStreamEventKind.MessageDelta, content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
 }
 
 /// <summary>
