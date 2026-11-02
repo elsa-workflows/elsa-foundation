@@ -65,6 +65,17 @@ services.AddIdentityGenerator(IdentityGeneratorKind.Snowflake, options =>
 
 `UuidV7`, `Short`, and `Guid` are stateless and registered **scoped** (matching the existing defaults and the scoped `ISystemClock`). `Snowflake` keeps monotonic state (last timestamp + sequence) in a **singleton** `SnowflakeIdentitySequence`, while the generator itself stays scoped and supplies the clock per call — so there is no captive-dependency on the scoped clock.
 
+## Runtime execution ids
+
+Runtime-owned ids (workflow executions, commands, envelopes, activity executions, ownership leases and folded
+checkpoints) come from a separate seam, `IRuntimeExecutionIdGenerator`, not from `IIdentityGenerator`. Since #3601 its
+default is a 32-character UUIDv7 hex id. Earlier preview builds used 11-character Base62 ids, which
+`ShortRuntimeExecutionIdGenerator` still produces when selected explicitly. Already persisted ids are kept as they are.
+
+The two formats do not share an ordinal order: a UUIDv7 id and an older Base62 id do not sort by creation time
+against each other. Nothing in the runtime orders by id across them. If your own queries or tools sort runtime rows
+by id, sort by their timestamps instead for data that spans the upgrade.
+
 ## Adding your own
 
 Implement `IIdentityGenerator`, then register it last so it wins:

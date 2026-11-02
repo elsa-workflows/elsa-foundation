@@ -90,6 +90,8 @@ A consumed single-use bookmark therefore cannot resume the workflow twice.
 
 Each claimed timer fires under a `FencedClaimLease` (#2195). The store's `ClaimDueAsync` gives the pump a batch under one visibility timeout (`ClaimVisibilityTimeout`). The lease is renewed immediately before the fire and kept renewed while it runs. Renewal is a compare-and-set on owner, fencing token and revision: a peer that re-claimed the row after the lease lapsed increments the fence, so a stale claimant cannot renew, complete or release — that timer is logged and skipped, and the sweep continues. A node that dies while holding a claim leaves the timer hidden until `VisibleAfter`; once the lease expires a peer (or the same node after a restart) reclaims it. Completing the claim (`CompleteClaimAsync`) deletes the timer.
 
+A host shutdown during a fire also leaves the timer claimed, even when the fire itself succeeded: the lease reports the shutdown instead of the result, so the pump never completes that claim. Once the lease lapses the timer fires again. The repeat answers *Duplicate* on `timer:{TimerId}` and deletes the timer. Expect this refire after every shutdown that interrupts a sweep; it is how a fire stays at least once, not a lost or doubled resume.
+
 ## Timer and Cron start triggers: at least once per occurrence
 
 A `Timer` or `Cron` *start* trigger starts a new workflow run on a schedule. It does not use the durable
@@ -103,7 +105,9 @@ the next occurrence, and the recurring-trigger pump (`RecurringTriggerPumpTask`,
   it, and moves the schedule past the occurrence only after the route returned. If the node crashes after
   claiming, before or after routing, a peer (or the same node after a restart) fires the occurrence again
   once the lease lapses. The lease is the feature setting *Occurrence claim visibility*, 60 seconds by
-  default, so it bounds how late a crashed occurrence fires.
+  default, so it bounds how late a crashed occurrence fires. A host shutdown while an occurrence is being
+  routed counts the same way, even when the route succeeded: the pump does not settle that claim, so the
+  occurrence fires again after the lease lapses and the repeat finds the run the first fire started.
 - **A failed fire is retried, not skipped.** If starting the run throws, or no trigger binding is found for
   the schedule (for example while a republish is replacing the index), the occurrence is released with a
   backoff that doubles from the sweep interval up to the maximum backoff, and then fired again. Each retry
