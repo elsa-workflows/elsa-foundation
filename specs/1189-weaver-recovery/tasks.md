@@ -15,7 +15,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 ## Phase 1: Setup
 
 - [x] T001 Refresh main, #3441 and its parents, dependencies, claims, PRs and Project state. Record the claim, Project In progress and the PR receipt on #3441, and update `docs/program-goals/weaver-across-studio.md` without adding Ready work. Verified: claim comment 6570049738, draft PR #3640, Program doc commit `7506a1b40`.
-- [ ] T002 Complete the independent task review of this file and record the review outcomes for the spec, plan and tasks on #3441.
+- [x] T002 Complete the independent task review of this file and record the review outcomes for the spec, plan and tasks on #3441. Verified: two spec rounds, one planning review and one task review, all recorded on #3441.
 
 ## Phase 2: Foundational — owner seams with unchanged behaviour (plan step 1)
 
