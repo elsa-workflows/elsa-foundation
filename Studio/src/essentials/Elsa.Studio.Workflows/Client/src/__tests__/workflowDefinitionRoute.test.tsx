@@ -129,7 +129,7 @@ describe("workflow definition route browse session", () => {
     });
     const capabilities = pagedDefinitionCapabilities({ folders: true });
     capabilities.capabilities[0].links.push({ rel: "workflow-definition-folder-move", href: "design/workflows/definitions/move" });
-    const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions", fetchMock, capabilities);
+    const { api, container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions", fetchMock, capabilities);
     await waitForText(container, "Previous backend workflow");
     await click(row(container, "Previous backend workflow")!.querySelector("input[type='checkbox']"));
     await click(button(container, "Move to folder"));
@@ -147,7 +147,7 @@ describe("workflow definition route browse session", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
     expect(container.textContent).toContain("1 selected");
-    expect(container.textContent).not.toContain("Moved 1 workflow definition");
+    expect(api.notifications!.notify).not.toHaveBeenCalled();
   }, 20_000);
 
   it("clears retained folder actions when the endpoint context is replaced at the same base URL", async () => {

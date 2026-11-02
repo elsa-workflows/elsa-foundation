@@ -99,16 +99,18 @@ case as green or aggregate a rubric score into contract correctness. Comparison 
 latest versions. Saved cases redact/deny credential or disallowed protected data; content access and
 retention use the specialist state policy. Model-based assessment consumes a declared separate budget.
 
-## Team configuration and editorial review
+## Team configuration and human review
 
 The seventh wireframe view configures the finite [team contract](teams.md): exact participant versions,
 typed causal inputs, result aggregation/completion predicate, limits and failure policy. Sequential,
 concurrent-cohort and refinement show their effective order/barrier and maximum attempts.
 
-M4 supplies the finite [editorial decision page](editorial.md) reached from an exact pending activity
-occurrence. Display the pinned article/round, permit Approve or Deny only with current review permission,
-and reconcile pending/resolved/conflicting receipts across reload/restart. Model review verdict and
-human content decision remain separate visible steps.
+M4 supplies the generic [human review page](human-review.md) for one exact wait, addressed by its workflow and
+activity execution IDs. It displays the pinned content (text or formatted JSON), title, notes and status, and
+reconciles pending/resolved/conflicting receipts across reload/restart. It offers Approve and Deny on every pending
+review; the server enforces `agent-reviews:decide` and the page reports `Forbidden` without deciding. In M4 the page
+is reachable by URL only; the occurrence link from run inspection is T034 (M5). Any model assessment of the content
+and the human decision remain separate visible steps.
 
 ## Save, history and undo/redo
 

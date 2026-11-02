@@ -1,0 +1,4 @@
+{
+  "extends": "../../../../../Studio/tsconfig.base.json",
+  "include": ["src"]
+}

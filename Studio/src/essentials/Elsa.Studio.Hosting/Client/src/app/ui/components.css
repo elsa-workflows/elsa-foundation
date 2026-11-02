@@ -543,6 +543,391 @@ html[data-theme-material] .studio-action-notice {
   box-shadow: var(--studio-material-shadow);
 }
 
+/*
+ * --studio-shell-header-bottom is published by the shell (ShellFrame) from the live top bar, whose
+ * height and position change with the theme layout and the narrow-viewport stacked sidebar.
+ * Toasts sit below dialogs (1200) and level with header menus, which portal later and so stay on top.
+ */
+.studio-toast-host {
+  position: fixed;
+  top: calc(var(--studio-shell-header-bottom, 54px) + 10px);
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.studio-toast {
+  --studio-toast-tone: var(--studio-accent);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--studio-border);
+  border-left: 3px solid var(--studio-toast-tone);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 10px 8px 10px 12px;
+  pointer-events: auto;
+}
+
+.studio-toast[data-level="success"] { --studio-toast-tone: var(--studio-success); }
+.studio-toast[data-level="warning"] { --studio-toast-tone: var(--studio-warning); }
+.studio-toast[data-level="error"] { --studio-toast-tone: var(--studio-danger); }
+
+.studio-toast-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--studio-toast-tone);
+  padding-top: 1px;
+}
+
+.studio-toast-body {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.studio-toast-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.studio-toast-message {
+  margin-top: 2px;
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.studio-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.studio-toast-button,
+.studio-toast-dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--studio-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.studio-toast-button {
+  min-height: 28px;
+  border-radius: var(--studio-radius-sm);
+  margin-left: -7px;
+  padding: 0 7px;
+}
+
+.studio-toast-dismiss {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text-muted);
+  padding: 0;
+}
+
+.studio-toast-button:hover,
+.studio-toast-dismiss:hover {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-toast:focus-visible,
+.studio-toast-button:focus-visible,
+.studio-toast-dismiss:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+
+html[data-theme-material] .studio-toast {
+  border-color: var(--studio-material-edge);
+  border-left-color: var(--studio-toast-tone);
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .studio-toast {
+    animation: studio-toast-in 0.18s ease-out;
+  }
+
+  .studio-toast-spinner {
+    animation: studio-toast-spin 1s linear infinite;
+  }
+}
+
+@keyframes studio-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes studio-toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Visually hidden live regions that announce toasts, and level/read prefixes for assistive technology. */
+.studio-toast-live,
+.studio-notification-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.studio-notification-bell {
+  position: relative;
+}
+
+.studio-notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--studio-accent);
+  color: var(--studio-accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  padding: 0 4px;
+  text-align: center;
+}
+
+.studio-notification-badge[data-tone="danger"] {
+  background: var(--studio-danger);
+  color: var(--studio-danger-text);
+}
+
+.studio-notification-center {
+  position: fixed;
+  top: var(--studio-shell-header-bottom, 54px);
+  right: 0;
+  bottom: 0;
+  z-index: 1050;
+  display: flex;
+  width: min(400px, 100vw);
+  flex-direction: column;
+  border-left: 1px solid var(--studio-border);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+}
+
+/* Title and Close share the first row; the list actions sit below so the header fits at 320px. */
+.studio-notification-header {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--studio-border);
+  padding: 10px 12px 8px 16px;
+}
+
+.studio-notification-header-actions {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: -8px;
+}
+
+.studio-notification-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--studio-section-title-size);
+  font-weight: 700;
+}
+
+.studio-notification-header-button,
+.studio-notification-close,
+.studio-notification-link,
+.studio-notification-action,
+.studio-notification-dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--studio-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.studio-notification-header-button,
+.studio-notification-link,
+.studio-notification-action {
+  min-height: 28px;
+  border-radius: var(--studio-radius-sm);
+  padding: 0 8px;
+}
+
+.studio-notification-header-button:disabled {
+  color: var(--studio-text-muted);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.studio-notification-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-notification-empty {
+  color: var(--studio-text-muted);
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.studio-notification-entry {
+  --studio-notification-tone: var(--studio-accent);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-bottom: 1px solid var(--studio-border);
+  padding: 10px 8px 10px 16px;
+}
+
+.studio-notification-entry[data-level="success"] { --studio-notification-tone: var(--studio-success); }
+.studio-notification-entry[data-level="warning"] { --studio-notification-tone: var(--studio-warning); }
+.studio-notification-entry[data-level="error"] { --studio-notification-tone: var(--studio-danger); }
+
+.studio-notification-entry[data-unread]::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--studio-notification-tone);
+  content: "";
+}
+
+.studio-notification-entry-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--studio-notification-tone);
+  padding-top: 1px;
+}
+
+.studio-notification-entry-body {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.studio-notification-entry-main {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.studio-notification-entry-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.studio-notification-entry[data-unread] .studio-notification-entry-title {
+  color: var(--studio-text);
+}
+
+.studio-notification-entry-message {
+  margin-top: 2px;
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.studio-notification-time {
+  margin-top: 2px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.studio-notification-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.studio-notification-link,
+.studio-notification-action {
+  margin-left: -8px;
+}
+
+.studio-notification-close,
+.studio-notification-dismiss {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text-muted);
+  padding: 0;
+}
+
+.studio-notification-header-button:hover:not(:disabled),
+.studio-notification-close:hover,
+.studio-notification-link:hover,
+.studio-notification-action:hover,
+.studio-notification-dismiss:hover {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-notification-title:focus-visible,
+.studio-notification-header-button:focus-visible,
+.studio-notification-close:focus-visible,
+.studio-notification-entry-main:focus-visible,
+.studio-notification-link:focus-visible,
+.studio-notification-action:focus-visible,
+.studio-notification-dismiss:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+
+html[data-theme-material] .studio-notification-center {
+  border-left-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow);
+}
+
 .studio-stat-tile {
   display: grid;
   grid-template-columns: 1fr auto;

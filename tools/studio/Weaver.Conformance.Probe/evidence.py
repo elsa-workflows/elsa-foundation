@@ -12,6 +12,12 @@ observations, ownerBefore/ownerAfter refs, nonempty evidence ref list. Controls
 also retain expectedFailureObserved=true on record+receipt and exact actual
 stage/diagnostic matching DRIVER-owned allowed_controls[id]={stage,diagnostic}.
 All file refs are {path,sha256} under the owned root. No pending data qualifies.
+
+validate_complete_witness(report, root, allowed_controls) is the final gate for
+independentPackageWitness: validate_report plus the declared current manifest, the four
+passed current-authority records, every #3440 autonomy case exactly once per actual adapter
+with its expected cause and retained owner/correlation evidence, and each manifest-named
+matrix stage exactly once. witness_gaps(report) is its file-free structural reader.
 """
 from __future__ import annotations
 
@@ -164,3 +170,74 @@ def _validate(report, root, allowed_controls):
             _need(receipt["stage"] == expected["stage"] and receipt["diagnostic"] in diagnostics, "Wrong-cause control failure: " + name)
         else:
             _need(case.get("expectedFailureObserved") in (None, False), "Positive case cannot be an expected failure")
+
+
+def _retained_ref(root, value):
+    _need(isinstance(value, dict) and isinstance(value.get("path"), str) and isinstance(value.get("sha256"), str), "Missing retained file reference")
+    path = Path(value["path"])
+    _need(path.is_absolute() and path.resolve().is_relative_to(root) and path.is_file(), "Missing/foreign retained file: " + str(path))
+    _need(hashlib.sha256(path.read_bytes()).hexdigest() == value["sha256"], "Retained file hash mismatch: " + str(path))
+    return path
+
+
+def witness_manifest():
+    """The complete witness inventory: original38 + four current-authority + 13 cases per actual adapter.
+
+    Stage expectations are only the matrix's own named browser stages. No total stage count
+    (the original run's 135) is part of the contract; production/author stages may change.
+    """
+    from autonomy_journeys import EXPECTED_CASES as AUTONOMY_CASES, autonomy_stages
+    from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
+    return {"originalCases": sorted(REQUIRED_CASES), "currentAuthorityCases": sorted(AUTHORITY_CASES),
+            "autonomyCases": sorted(AUTONOMY_CASES), "autonomyStages": sorted(autonomy_stages()),
+            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(AUTONOMY_CASES)}
+
+
+def witness_gaps(report):
+    """Structural completeness against the current manifest; reads no files and never accepts a report."""
+    from autonomy_journeys import MATRIX_QUALIFICATION, MODE_QUALIFICATION, autonomy_manifest_gaps
+    manifest, gaps = witness_manifest(), []
+    if not isinstance(report, dict):
+        return ["No report"]
+    if report.get("witnessManifest") != manifest:
+        gaps.append("The run did not declare the current complete witness manifest")
+    cases = report.get("cases") if isinstance(report.get("cases"), list) else []
+    identities = [case.get("id") if isinstance(case, dict) else None for case in cases]
+    if len(identities) != len(REQUIRED_CASES) or set(identities) != set(REQUIRED_CASES):
+        gaps.append(f"Original cases are missing, duplicated or extra ({len(identities)} of {len(REQUIRED_CASES)})")
+    disclosure = report.get("contextDisclosureQualification")
+    disclosure = disclosure if isinstance(disclosure, dict) else {}
+    authority = disclosure.get("caseIDs") if isinstance(disclosure.get("caseIDs"), list) else []
+    records = disclosure.get("records") if isinstance(disclosure.get("records"), list) else []
+    if (disclosure.get("status") != "passed" or disclosure.get("source") != report.get("source")
+            or disclosure.get("evidenceCategory") != "deterministic-provider-protocol" or disclosure.get("liveProvider") is not False
+            or sorted(authority) != manifest["currentAuthorityCases"]
+            or [row.get("id") if isinstance(row, dict) else None for row in records] != authority
+            or not all(isinstance(row, dict) and row.get("status") == "passed" and isinstance(row.get("record"), dict) for row in records)):
+        gaps.append("The four current-authority cases were not each observed passed exactly once")
+    if MODE_QUALIFICATION in report:
+        gaps.append("A diagnostic mode section cannot stand in for the complete matrix")
+    gaps += autonomy_manifest_gaps(report.get(MATRIX_QUALIFICATION), report.get("source"))
+    stages = report.get("stages") if isinstance(report.get("stages"), list) else []
+    names = [stage.get("name") if isinstance(stage, dict) else None for stage in stages]
+    gaps += [f"Matrix stage {name} ran {names.count(name)} times" for name in manifest["autonomyStages"] if names.count(name) != 1]
+    gaps += ["Failed stage: " + str(stage.get("name")) for stage in stages if not isinstance(stage, dict) or stage.get("exitCode") != 0]
+    return gaps
+
+
+def validate_complete_witness(report, root, allowed_controls):
+    """The only acceptance gate for independentPackageWitness under the extended inventory."""
+    root = Path(root).resolve()
+    validate_report(report, root, allowed_controls)
+    try:
+        gaps = witness_gaps(report)
+        _need(not gaps, "Incomplete complete witness: " + "; ".join(gaps[:20]))
+        for row in report["contextDisclosureQualification"]["records"]:
+            observed = json.loads(_retained_ref(root, row["record"]).read_text())
+            _need(observed.get("id") == row["id"] and observed.get("status") == "passed", "Current-authority record differs: " + row["id"])
+        from autonomy_journeys import MATRIX_QUALIFICATION, require_complete_autonomy
+        require_complete_autonomy(report[MATRIX_QUALIFICATION], root, source=report["source"])
+    except EvidenceError:
+        raise
+    except (RuntimeError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:
+        raise EvidenceError("Incomplete complete witness: " + str(error)) from error

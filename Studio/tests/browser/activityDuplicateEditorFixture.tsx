@@ -40,7 +40,7 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
-function collectionFixtureCatalog(conditions = collectionSlotsFixture === "switch-conditions") {
+function collectionFixtureCatalog(conditions = collectionSlotsFixture === "switch-conditions" || collectionSlotsFixture === "switch-ports") {
   const catalog = collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch");
   if (conditions) {
     catalog.activityVersionId = "activity-switch-4.1";
@@ -152,6 +152,13 @@ function editorDraft(): WorkflowDraft {
     if (collectionSlotsFixture === "switch-conditions" && new URLSearchParams(window.location.search).has("read-only"))
       collectionOwner.structure!.payload.cases = [{ caseId: "readonly", match: "Approved", condition: { referenceKey: "Case:readonly:Condition", value: { expressionType: "JavaScript", value: "true" } }, activity: null }];
     root.structure!.payload.activities = [collectionOwner];
+    if (collectionSlotsFixture === "switch-ports") {
+      collectionOwner.structure!.payload.cases = ["Approved", "Rejected"].map((match, index) => ({
+        match, caseId: `case-${index}`, activity: null,
+        condition: { referenceKey: `Case:case-${index}:Condition`, value: { expressionType: "Literal", value: index === 0 } }
+      }));
+      root.structure!.payload.activities.push(leafNode("write-one"), leafNode("write-two"));
+    }
     if (!sequence) root.structure!.payload.connections = [];
     if (composition === "bpmn") {
       root.structure!.payload.elements = [{ elementId: "collection-element", elementType: "task", childNodeId: "collection-owner" }];
@@ -178,6 +185,9 @@ function editorDraft(): WorkflowDraft {
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
     layout: bpmnDecisionFixture ? [
       { nodeId: "decision-element", x: 220, y: 200 }, { nodeId: "high-end", x: 480, y: 80 }, { nodeId: "low-end", x: 480, y: 320 }
+    ] : collectionSlotsFixture === "switch-ports" ? [
+      { nodeId: "collection-owner", x: 120, y: 160 },
+      { nodeId: "write-one", x: 540, y: 40 }, { nodeId: "write-two", x: 540, y: 360 }
     ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
@@ -378,7 +388,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
               {
                 id: "elsa.api.activity-design",
                 contractVersion: "1",
-                links: [{ rel: "activity-catalog", href: "design/activities/catalog" }]
+                links: [{ rel: "activity-catalog", href: "design/activities/catalog" },
+                  ...(collectionSlotsFixture === "switch-upgrade" ? [{ rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" }] : [])]
               },
               {
                 id: "elsa.api.expressions",
@@ -408,6 +419,16 @@ export function createEditorContext(live?: { status: string; disconnected: boole
             },
             draft,
             versions: []
+          };
+        }
+        if (collectionSlotsFixture === "switch-upgrade" && url.startsWith("/design/activities/definitions/picker?")) {
+          return {
+            items: catalog.filter(item => item.activityVersionId !== "activity-switch-4.1").map(item => ({
+              definitionId: `recommended-${item.activityVersionId}`, activityTypeKey: item.activityTypeKey,
+              tenantId: null, category: item.category, displayName: item.displayName, description: null,
+              versionId: item.activityVersionId, version: "1.0.0", isAvailable: true, unavailableReason: null
+            })),
+            nextOffset: null
           };
         }
         if (url === "/design/activities/catalog") {

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Agent.Core.Models;
 
 namespace Elsa.Agent.Api.Models;
@@ -88,14 +89,47 @@ public sealed record AgentCreateSessionResponse(
     string SessionId,
     string Status,
     string? Title,
-    IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments);
+    IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments)
+{
+    /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? Policy { get; init; }
+}
 
 public sealed record AgentSessionDetailsResponse(
     string SessionId,
     string Status,
     string? Title,
     IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments,
-    IReadOnlyCollection<AgentMessageViewModelResponse> Messages);
+    IReadOnlyCollection<AgentMessageViewModelResponse> Messages)
+{
+    /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? Policy { get; init; }
+}
+
+/// <summary>
+/// Preview: a session's effective autonomy, its ceiling, the modes a client may request
+/// and the owner's policy revision.
+/// </summary>
+public sealed record AgentSessionPolicyResponse(
+    string AutonomyMode,
+    string MaxAutonomyMode,
+    IReadOnlyCollection<string> AllowedAutonomyModes,
+    long Revision);
+
+/// <summary>
+/// Preview: an autonomy-only conditional change. Both members are required; the caller
+/// cannot name an owner, actor or tenant.
+/// </summary>
+public sealed class AgentSessionAutonomyRequest
+{
+    /// <summary><c>manual</c>, <c>auto-read-only</c> or <c>full-auto</c>; clamped to the session's current ceiling.</summary>
+    public string? AutonomyMode { get; init; }
+
+    /// <summary>The policy revision the caller last acknowledged.</summary>
+    public long? ExpectedRevision { get; init; }
+}
 
 public sealed record AgentContextAttachmentResponse(
     string Id,
@@ -121,11 +155,47 @@ public sealed record AgentMessageViewModelResponse(
     string Id,
     string Role,
     string Content,
-    string Status);
+    string Status)
+{
+    /// <summary>Preview: the policy revision the owner accepted this message under, when it owns revisions.</summary>
+    public long? AcceptedPolicyRevision { get; init; }
+}
 
 public sealed record AgentMessageAcceptedResponse(
-    AgentMessage Message,
+    AgentAcceptedMessageResponse Message,
     IReadOnlyCollection<AgentViolation> Warnings);
+
+/// <summary>
+/// The accepted message as the client sees it: the members the domain <see cref="AgentMessage"/> has always
+/// serialized, with the frozen accepted policy projected to its public session-policy shape. The client never
+/// receives denied capabilities, admitted context kinds, sensitivity ceilings or retention labels.
+/// </summary>
+public sealed record AgentAcceptedMessageResponse(
+    string Id,
+    string SessionId,
+    AgentRole Role,
+    string Content,
+    AgentMessageStatus Status,
+    string? CapabilityId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt,
+    AgentError? Error,
+    IReadOnlyCollection<string> ContextAttachmentIds,
+    IReadOnlyCollection<string> ProposalIds,
+    IReadOnlyCollection<AgentContextAttachment> Context)
+{
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public string? PromptMode { get; init; }
+    public string? DeliveryFingerprint { get; init; }
+    public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
+    public bool HasDisclosureProvenance { get; init; }
+    public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
+
+    /// <summary>Preview: the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
+    public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+}
 
 public sealed class AgentSessionRouteRequest
 {
@@ -296,7 +366,45 @@ public static class AgentApiMapping
         };
 
     public static AgentMessageViewModelResponse ToViewModel(this AgentMessage message)
-        => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString());
+        => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString())
+        {
+            AcceptedPolicyRevision = message.AcceptedPolicy?.Revision
+        };
+
+    /// <summary>Projects an accepted domain message for the client; the frozen policy stays with the owner for attribution.</summary>
+    public static AgentMessageAcceptedResponse ToAcceptedResponse(this AgentMessage message, IReadOnlyCollection<AgentViolation> warnings)
+        => new(new(
+                message.Id,
+                message.SessionId,
+                message.Role,
+                message.Content,
+                message.Status,
+                message.CapabilityId,
+                message.CreatedAt,
+                message.CompletedAt,
+                message.Error,
+                message.ContextAttachmentIds,
+                message.ProposalIds,
+                message.Context)
+            {
+                RequestId = message.RequestId,
+                Source = message.Source,
+                Client = message.Client,
+                PromptMode = message.PromptMode,
+                DeliveryFingerprint = message.DeliveryFingerprint,
+                ToolResults = message.ToolResults,
+                HasDisclosureProvenance = message.HasDisclosureProvenance,
+                DisclosureHistory = message.DisclosureHistory,
+                AcceptedPolicy = message.AcceptedPolicy?.ToResponse()
+            },
+            warnings);
+
+    public static AgentSessionPolicyResponse ToResponse(this AgentSessionPolicyState state)
+        => new(
+            state.Policy.AutonomyMode.ToContractString(),
+            state.Policy.MaxAutonomyMode.ToContractString(),
+            state.Policy.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
+            state.Revision);
 
     public static AgentProposalDecisionResponse ToDecisionResponse(this AgentActionProposal proposal, AgentProposalExecutionResult? result = null)
         => new(

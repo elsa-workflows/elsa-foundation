@@ -106,7 +106,7 @@ def _current_function_results(request):
             if isinstance(content, dict) and content.get("kind") == "functionResult"]
 
 
-def _native_reads(output, requests):
+def _native_results(output, requests):
     """Read complete native SSE frames, including frames received before an abort.
 
     CDP preserves the response bytes and transport termination independently. A
@@ -134,7 +134,7 @@ def _native_reads(output, requests):
             try:
                 event = strict_json(data)
             except (ValueError, TypeError):
-                check(False, "Malformed native SSE cannot prove a read result")
+                check(False, "Malformed native SSE cannot prove a tool result")
             if (isinstance(event, dict) and event.get("kind") == "contributedResult"
                     and event.get("resultKind") == "moduleResult" and event.get("error") is None
                     and isinstance(event.get("id"), str) and event["id"] and isinstance(event.get("payload"), dict)):
@@ -149,8 +149,9 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
     Command IDs identify the generic fixture request. Native tool-call IDs identify
     owning results; they need not equal SDK call IDs. Copilot additionally supplies
     its native session identity. Anthropic supplies FunctionResult call correlation.
-    Reads require the unchanged full ContributedResult envelope captured from the
-    browser's native SSE response; a successful provider result alone is no proof.
+    Reads and inline automatic server effects require the unchanged full
+    ContributedResult envelope captured from native SSE. Reviewed execution uses
+    its accepted execute/ACK response. A provider result alone is never proof.
     """
     check(provider in ("copilot", "anthropic"), "Unknown actual adapter")
     output = Path(browser_output)
@@ -163,7 +164,7 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
     sessions = {urlparse(item["url"]).path.split("/")[-2] for item in requests
                 if urlparse(item["url"]).path.endswith("/messages")}
     check(bool(sessions), "The browser did not send a native message")
-    native_reads = _native_reads(output, requests)
+    native_results = _native_results(output, requests)
     # These are real accepted execute/ACK responses, not an expected domain model.
     accepted = []
     for path in output.glob("*.json"):
@@ -223,11 +224,26 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
         result = results[0]
         check(result.get("succeeded") is True, "A refused outcome cannot qualify a positive journey")
         matches = [value for value in accepted if value["toolCallId"] == result["toolCallId"]]
+        inline = None
         if result.get("receipt"):
-            check(bool(matches) and all(_same_json(_normalized_result(value), _normalized_result(result)) for value in matches),
-                  "Adapter continuation differs from the actual execute/ACK result")
+            normalized = _normalized_result(result)
+            if matches:
+                check(all(_same_json(_normalized_result(value), normalized) for value in matches),
+                      "Adapter continuation differs from the actual execute/ACK result")
+            else:
+                # A genuine automatic server effect has no execute HTTP exchange.
+                # Its original full native result is evidence; issuing execute to
+                # satisfy this checker would itself change the delivery journey.
+                check(normalized["receipt"]["scope"] == 1,
+                      "A client working-state receipt requires the accepted execute/ACK result")
+                matches = [item for item in native_results if item["result"].get("toolCallId") == result["toolCallId"]
+                           and item["result"].get("toolName") == command["toolName"]
+                           and (provider != "copilot" or item["sessionId"] == offered[0]["sessionId"])]
+                check(len(matches) == 1 and _same_json(_normalized_result(matches[0]["result"]), normalized),
+                      "Adapter automatic receipt differs from its actual native ContributedResult envelope")
+                inline = matches[0]
         else:
-            matches = [item for item in native_reads if item["result"].get("toolCallId") == result["toolCallId"]
+            matches = [item for item in native_results if item["result"].get("toolCallId") == result["toolCallId"]
                        and item["result"].get("toolName") == command["toolName"]
                        and (provider != "copilot" or item["sessionId"] == offered[0]["sessionId"])]
             check(len(matches) == 1 and _same_json(matches[0]["result"], result),
@@ -237,6 +253,8 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
                              "oneActualCall": True, "actualResultObserved": True})
         if not result.get("receipt"):
             correlations[-1]["nativeRead"] = {key: value for key, value in matches[0].items() if key != "result"}
+        elif inline is not None:
+            correlations[-1]["nativeAutomaticReceipt"] = {key: value for key, value in inline.items() if key != "result"}
     path = output / "adapter-correlation.json"
     check(not path.exists(), "Never overwrite an actual adapter correlation")
     private_json(path, {"provider": provider, "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,

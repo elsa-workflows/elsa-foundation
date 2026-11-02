@@ -166,6 +166,8 @@
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
+          "SpecialistsReview": {},
+          "SpecialistsReviewApi": {},
           "Connections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},

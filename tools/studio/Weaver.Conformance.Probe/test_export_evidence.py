@@ -4,7 +4,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from autonomy_journeys import MATRIX_QUALIFICATION
 from export_evidence import export_evidence
+import test_qualification  # module import: do not collect its TestCase classes twice
 
 
 class ExportEvidenceTests(unittest.TestCase):
@@ -88,6 +90,54 @@ class ExportEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Credential"):
             export_evidence(self.root, other_destination)
         self.assertFalse(other_destination.exists())
+
+
+class WitnessExportTests(unittest.TestCase):
+    """Export records completeness against the current manifest and never promotes or relabels."""
+    def setUp(self):
+        self.base = test_qualification.QualificationTests("test_complete_synthetic_receipts_validate_without_status_or_file_mutation")
+        self.base.setUp()
+        self.addCleanup(self.base.tearDown)
+        self.complete = test_qualification.complete_witness_report(self.base)
+        self.outside = tempfile.TemporaryDirectory()
+        self.addCleanup(self.outside.cleanup)
+
+    def export(self, report, name="export"):
+        (self.base.root / "report.json").write_text(json.dumps(report))
+        return export_evidence(self.base.root, Path(self.outside.name) / name)
+
+    def test_complete_promoted_witness_exports_every_autonomy_reference(self):
+        report = dict(self.complete, status="passed", independentPackageWitness=True)
+        index = self.export(report)
+        self.assertEqual({"complete": True, "expectedCaseCount": 68, "gaps": []}, index["witnessCompleteness"])
+        self.assertEqual("passed", index["qualificationStatus"]); self.assertFalse(index["qualificationStatusChanged"])
+        root = self.base.root.resolve()
+        for row in report[MATRIX_QUALIFICATION]["cases"]:
+            for ref in [row["ownerBefore"], row["ownerAfter"], *row["evidence"]]:
+                self.assertIn(Path(ref["path"]).resolve().relative_to(root).as_posix(), index["files"])
+        for row in report["contextDisclosureQualification"]["records"]:
+            self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
+
+    def test_promoted_report_without_the_complete_inventory_is_refused(self):
+        def missing_case(r): r[MATRIX_QUALIFICATION]["cases"].pop()
+        def duplicate_case(r): r[MATRIX_QUALIFICATION]["cases"].append(r[MATRIX_QUALIFICATION]["cases"][0])
+        def wrong_cause(r): next(row for row in r[MATRIX_QUALIFICATION]["cases"] if "outcome" in row)["outcome"].update(effects=2)
+        def legacy(r): r.pop(MATRIX_QUALIFICATION); r.pop("witnessManifest")
+        for index, change in enumerate((missing_case, duplicate_case, wrong_cause, legacy)):
+            with self.subTest(change=change.__name__):
+                report = json.loads(json.dumps(dict(self.complete, status="passed", independentPackageWitness=True)))
+                change(report)
+                with self.assertRaisesRegex(ValueError, "complete current inventory"):
+                    self.export(report, "refused-" + str(index))
+                self.assertFalse((Path(self.outside.name) / ("refused-" + str(index))).exists())
+
+    def test_unpromoted_failed_or_partial_report_still_exports_with_its_gaps(self):
+        report = json.loads(json.dumps(dict(self.complete, status="failed", independentPackageWitness=False)))
+        report[MATRIX_QUALIFICATION]["cases"][0].update(status="failed", cause="lifecycle.refusal_cause")
+        index = self.export(report)
+        self.assertFalse(index["witnessCompleteness"]["complete"])
+        self.assertTrue(any("lifecycle.refusal_cause" in gap for gap in index["witnessCompleteness"]["gaps"]))
+        self.assertEqual("failed", index["qualificationStatus"])
 
 
 if __name__ == "__main__":

@@ -3,7 +3,9 @@
 
 This is an artifact selector, not an acceptance check. It preserves passed/failed
 statuses and never promotes an incomplete report. Generated credentials, databases,
-keys and host settings are deliberately not an upload artifact.
+keys and host settings are deliberately not an upload artifact. The index records the
+report's structural completeness against the current complete witness manifest; a report
+claiming independentPackageWitness without that complete inventory is refused.
 """
 from __future__ import annotations
 
@@ -55,6 +57,10 @@ def export_evidence(source, destination):
     _need(not JWT.search(report_bytes), "Credential material is not exportable")
     report = json.loads(report_bytes)
     _safe_json(report)
+    from evidence import witness_gaps, witness_manifest
+    gaps = witness_gaps(report) if isinstance(report, dict) else ["No report"]
+    _need(not (isinstance(report, dict) and report.get("independentPackageWitness") is True and gaps),
+          "A report claiming independentPackageWitness without the complete current inventory is not exportable as a witness")
     selected = {"report.json": report_bytes}
     pending = [report]
     visited = set()
@@ -96,7 +102,8 @@ def export_evidence(source, destination):
             path.chmod(0o600)
         index = {"status": "evidence-exported", "qualificationStatus": report.get("status"),
                  "source": report.get("source"), "files": {name: hashlib.sha256(data).hexdigest() for name, data in selected.items()},
-                 "privateRuntimeStateIncluded": False, "qualificationStatusChanged": False}
+                 "privateRuntimeStateIncluded": False, "qualificationStatusChanged": False,
+                 "witnessCompleteness": {"complete": not gaps, "expectedCaseCount": witness_manifest()["expectedCaseCount"], "gaps": gaps[:100]}}
         (destination / "export-index.json").write_text(json.dumps(index, indent=2) + "\n")
     except BaseException:
         shutil.rmtree(destination)

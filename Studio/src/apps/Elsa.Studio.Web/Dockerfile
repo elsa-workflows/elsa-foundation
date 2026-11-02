@@ -40,6 +40,7 @@ COPY Essentials/src/Tasks/Core/ ./Essentials/src/Tasks/Core/
 COPY Studio/src/ ./Studio/src/
 
 # Copy only the optional Studio modules consumed by the host, not every Foundation extension.
+COPY Extensions/Agent/studio/ ./Extensions/Agent/studio/
 COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
 COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
 COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/

@@ -354,6 +354,139 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("soft delete offers restore through a notification action and link", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE" || init?.method === "POST") return new Response(null, { status: 204 });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Hello World");
+    const menu = await openDefinitionActions(container, "Hello World");
+    await click(buttonByText(menu, "Delete"));
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
+      level: "success",
+      title: "Deleted Hello World",
+      link: { label: "View deleted", path: "/workflows/definitions?state=deleted" },
+      action: expect.objectContaining({ label: "Restore" })
+    })));
+    expect(container.textContent).not.toContain("Deleted Hello World");
+
+    const input = vi.mocked(api.notifications!.notify).mock.calls.find(([candidate]) => candidate.title === "Deleted Hello World")![0];
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/restore"), expect.anything());
+    await input.action!.run();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/design/workflows/definitions/definition-1/restore",
+      expect.objectContaining({ method: "POST" })
+    );
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
+      level: "success",
+      title: "Restored Hello World",
+      link: { label: "Open", path: "/workflows/definitions?definition=definition-1" }
+    })));
+
+    await unmount();
+  });
+
+  it("a Restore started from the notification reports its own result after leaving the page", async () => {
+    let restoreFails = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/restore")) return restoreFails ? response({ title: "Restore is unavailable" }, 500) : new Response(null, { status: 204 });
+      if (init?.method === "DELETE") return new Response(null, { status: 204 });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute();
+    const notify = vi.mocked(api.notifications!.notify);
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Delete"));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: "Deleted Hello World" })));
+    const action = notify.mock.calls.find(([candidate]) => candidate.title === "Deleted Hello World")![0].action!;
+    await unmount();
+
+    await action.run();
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      level: "success",
+      title: "Restored Hello World",
+      link: { label: "Open", path: "/workflows/definitions?definition=definition-1" }
+    }));
+
+    restoreFails = true;
+    notify.mockClear();
+    await expect(action.run()).rejects.toThrow();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("publishes a saved workflow organization as a notification", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/organization/definition-1")) {
+        return response({ definitionId: "definition-1", folderId: null, folderBreadcrumb: [], tags: [], revision: "r1", permissions: { canManageFolders: true } });
+      }
+      if (url.includes("folder-inventory?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/placement/bulk") && init?.method === "POST") return new Response(null, { status: 204 });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      return response({ items: [], nextContinuationToken: null });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "inventory/folder-inventory" },
+      { rel: "workflow-definition-folder-move", href: "placement/bulk" },
+      { rel: "workflow-organization", href: "design/workflows/organization/{definitionId}", templated: true });
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Organization"));
+    const organizationDialog = await waitForDialog(container);
+    await waitForText(organizationDialog, "Home folder");
+    await click(buttonByText(organizationDialog, "Move to folder"));
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    await click(moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
+    await click(buttonByText(moveDialog, "Move"));
+
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Workflow organization updated" }));
+    expect(container.querySelector(".wf-status-line")).toBeNull();
+
+    await unmount();
+  });
+
+  it("publishes favorite results as notifications and a failed favorite as an error", async () => {
+    let favoriteFails = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/favorites/")) return favoriteFails ? response({ title: "Favorites are unavailable" }, 500) : new Response(null, { status: 204 });
+      if (init?.method === "DELETE") return new Response(null, { status: 204 });
+      return response({ items: [definition()], nextContinuationToken: null });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-favorites", href: "design/workflows/favorites/{definitionId}", templated: true });
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+    const notify = vi.mocked(api.notifications!.notify);
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Add to favorites"));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Added to favorites" })));
+    // The success rebases the list; wait for the reload so the row is not caught mid-refresh.
+    await vi.waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("definition-pages")).length).toBeGreaterThan(1));
+    await vi.waitFor(() => expect(rowByLabel(container, "Open workflow definition Hello World")).not.toBeNull());
+
+    favoriteFails = true;
+    await click(buttonByText(await openDefinitionActions(container, "Hello World"), "Add to favorites"));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ level: "error" })));
+    expect(container.querySelector(".wf-status-line")).toBeNull();
+
+    await unmount();
+  });
+
   it("opens an opaque definition from its name link while preserving encoded browse query parameters", async () => {
     const opaqueId = "definition/opaque ?&=value";
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -417,7 +550,7 @@ describe("workflows module", () => {
   it("renders deleted definition actions in the row menu and calls restore and permanent delete endpoints", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST" || init?.method === "DELETE") return response(null, 204);
+      if (init?.method === "POST" || init?.method === "DELETE") return new Response(null, { status: 204 });
       return response({ items: url.includes("state=deleted") ? [definition({ deletedAt: "2026-06-18T01:00:00Z" })] : [] });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -453,6 +586,8 @@ describe("workflows module", () => {
       "https://server.example/design/workflows/definitions/definition-1/permanent",
       expect.objectContaining({ method: "DELETE" })
     );
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Permanently deleted Hello World" }));
+    expect(container.querySelector(".wf-status-line")).toBeNull();
 
     await unmount();
   });
@@ -4135,7 +4270,7 @@ describe("workflows module", () => {
       { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
       { rel: "workflow-folders", href: "inventory/folder-inventory" },
       { rel: "workflow-definition-folder-move", href: "placement/bulk" });
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
 
     await waitForText(container, "Hello World");
     await click(checkboxByLabel(container, "Select workflow definition Hello World"));
@@ -4158,8 +4293,12 @@ describe("workflows module", () => {
 
     resolveMove?.(new Response(null, { status: 204 }));
     await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
-    await waitForText(container, "Moved 2 workflow definitions");
-    expect(container.querySelector("[role='status']")?.textContent).toContain("Moved 2 workflow definitions");
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
+      level: "success",
+      title: "Moved 2 workflow definitions",
+      link: { label: "Open folder", path: "/workflows/definitions?folderId=folder-root" }
+    })));
+    expect(container.querySelector(".wf-status-line")).toBeNull();
     await vi.waitFor(() => expect(container.querySelector(".wf-selection-bar")).toBeNull());
     expect(document.activeElement).toBe(buttonByText(container, "Refresh"));
     await unmount();
@@ -4244,7 +4383,7 @@ describe("workflows module", () => {
     capabilities.capabilities[0].links.push(
       { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
       { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
 
     await waitForText(container, "Hello World");
     await click(checkboxByLabel(container, "Select workflow definition Hello World"));
@@ -4255,7 +4394,11 @@ describe("workflows module", () => {
     await click(buttonByText(moveDialog, "Move"));
     await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1"], folderId: null }));
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
-    await waitForText(container, "Moved 1 workflow definition");
+    await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
+      level: "success",
+      title: "Moved 1 workflow definition",
+      link: { label: "Open folder", path: "/workflows/definitions?unfiled=true" }
+    })));
     await unmount();
   });
 

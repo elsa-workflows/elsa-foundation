@@ -42,6 +42,7 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, WidgetCapabilities>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, ReadWidgetTool>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, SetWidgetVisibilityTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, SetWidgetSizeTool>());
     }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
@@ -54,6 +55,20 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
                 http.Response.Headers.ETag = "\"" + observed.Document.Revision + "\"";
                 http.Response.Headers.CacheControl = "no-store";
                 return Results.Json(WidgetContract.State(observed));
+            }
+            catch (WidgetRefusal refusal)
+            {
+                return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
+            }
+        }).RequireAuthorization();
+        endpoints.MapGet(WidgetContract.SizeEndpoint, async (HttpContext http, WidgetResource resource, CancellationToken ct) =>
+        {
+            try
+            {
+                var observed = await resource.ObserveAsync(null, null, false, ct);
+                http.Response.Headers.ETag = "\"" + observed.Document.Revision + "\"";
+                http.Response.Headers.CacheControl = "no-store";
+                return Results.Json(WidgetContract.SizeState(observed));
             }
             catch (WidgetRefusal refusal)
             {

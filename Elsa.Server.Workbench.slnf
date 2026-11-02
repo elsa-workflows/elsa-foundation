@@ -141,6 +141,8 @@
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
       "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
       "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj",
+      "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj",
       "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
       "Extensions/Etl/src/Api/Elsa.Etl.Api.csproj",
       "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj",

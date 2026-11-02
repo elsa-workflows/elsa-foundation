@@ -56,6 +56,7 @@
     <ProjectReference Include="..\..\..\..\Extensions\ExtensionBuilder\studio\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\FeatureManagement\studio\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Secrets\studio\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj"/>
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\studio\Elsa.Studio.Agent.Specialists\Elsa.Studio.Agent.Specialists.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Connections\studio\Elsa.Studio.Connections\Elsa.Studio.Connections.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Etl\studio\Elsa.Studio.Etl\Elsa.Studio.Etl.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Weaver\studio\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj"/>

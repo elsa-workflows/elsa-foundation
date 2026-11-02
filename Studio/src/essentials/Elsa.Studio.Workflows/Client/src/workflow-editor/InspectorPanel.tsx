@@ -12,7 +12,7 @@ import type {
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
-import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
+import { hasSwitchCaseOutgoingConnections, slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { canUpgradeSwitch, getCollectionSlots, isPredicateOnlySwitch, upgradeSwitch } from "../collectionSlots";
 import { CollectionSlotEditor } from "./CollectionSlotEditor";
 import { CaseConditionEditor } from "./CaseConditionEditor";
@@ -167,9 +167,10 @@ export function InspectorPanel({
   const selectedCatalogItem = catalogByVersion?.get(selectedNode?.activityVersionId ?? "")
     ?? catalog.find(item => item.activityVersionId === selectedNode?.activityVersionId);
   const collections = selectedNode ? getCollectionSlots(selectedNode, selectedCatalogItem) : [];
-  const switchUpgradeTarget = selectedNode?.structure?.kind === "elsa.switch.structure" && selectedNode.structure.schemaVersion === "1.0.0" ? catalog.find(item => {
+  // The palette can retain a legacy recommendation while the full catalog already offers an upgrade.
+  const switchUpgradeTarget = selectedNode?.structure?.kind === "elsa.switch.structure" && selectedNode.structure.schemaVersion === "1.0.0" ? [...catalog, ...(catalogByVersion?.values() ?? [])].find(item => {
     const facet = readStructureDesignFacet(item);
-    return item.activityTypeKey === selectedCatalogItem?.activityTypeKey && facet?.kind === "elsa.switch.structure" && facet.schemaVersion === "2.0.0";
+    return item.available !== false && item.activityTypeKey === selectedCatalogItem?.activityTypeKey && facet?.kind === "elsa.switch.structure" && facet.schemaVersion === "2.0.0";
   }) : undefined;
   const hasSlots = selectedSlots.length > 0 || collections.length > 0;
   const requestedTabId = activeTabId ?? localActiveTabId;
@@ -392,6 +393,7 @@ export function InspectorPanel({
           <StudioTabPanel {...tabPanelProps("slots")}>
             <div className="wf-slot-list">
               {collections.map(collection => <CollectionSlotEditor
+                hasOutgoingConnections={workflowState?.rootActivity ? index => hasSwitchCaseOutgoingConnections(workflowState.rootActivity!, selectedNode, index, catalogByVersion) : undefined}
                 key={collection.property} activity={selectedNode} collection={collection} readOnly={readOnly}
                 onChange={next => { setSlotPicker(null); (onSelectedStructureChange ?? onSelectedActivityChange)(next); }}
                 renderCondition={item => <CaseConditionEditor
