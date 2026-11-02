@@ -1944,3 +1944,9 @@ override Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.GetHashCode() -> i
 override Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpCaughtUpResult? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.NextPollAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionInspection.NextPollAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.CompletionRequestedAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.CompletionRequestedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Continuous.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRunInspection.Continuous.init -> void

@@ -120,6 +120,25 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Equal(EtlRunStatus.Running, (await FindRunAsync(host.Services, files.Scope, invocation.RunId))!.Status);
     }
 
+    [Fact]
+    public async Task A_finite_run_still_refuses_an_empty_page_that_repeats_its_cursor()
+    {
+        await using var files = new RuntimeFiles(CsvJourneySource);
+        var feed = new CursorFeed();
+        feed.Append("a", 1, "Ada");
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync(feed.RespondAsync);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, configureRuntime: runtime =>
+            ConfigureConnectorBindings(runtime, files.Scope, endpoint, csvSource: false, httpMain: false, httpErrors: false));
+        var invocation = ConnectorInvocation(files.Scope, "finite-cycle", ContinuousPipeline(1) with { Continuous = null });
+
+        await files.AdmitAsync(host, invocation);
+        var run = await files.WaitForTerminalAsync(host, invocation.RunId);
+
+        // Shard a's second page is empty and repeats cursor "1": only a continuous run treats that as caught up.
+        Assert.NotEqual(EtlRunStatus.Succeeded, run.Status);
+        Assert.Equal("etl.http.pagination-cycle", run.TerminalResult!.Diagnostic!.Code);
+    }
+
     private static EtlPipelineV2 ContinuousPipeline(int pollIntervalSeconds)
     {
         var baseline = EtlV2TestPipelines.Create();
