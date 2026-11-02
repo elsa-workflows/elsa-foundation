@@ -143,7 +143,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 - [ ] T018 [US1] Add `IAgentSessionService.ListOwnedAsync` (default Unsupported) and `GET /_elsa/agent/sessions`, `GET …/proposals`, `POST …/messages/{id}/withdraw` and `POST …/client-invocations/{id}/resolution` to `Api/AgentApi.cs` and `Api/Models/AgentApiModels.cs`, following the contract. Requirements:
   - Scope by owner before the limit.
   - Withdraw is compare-and-set from Pending, and is refused while a turn is registered.
-  - Resolution records the owner's statement, and a later receipt supersedes it.
+  - Resolution records the owner's statement, and a later receipt supersedes it. Resolution is idempotent on retry. A user's stop records `StatusReason=user-stop`.
 
   Add `[JsonSerializable]` entries for the new request and response types in `Extensions/Agent/src/Api/AgentJsonContext.cs`. Stamp `Workspace` and `ContinuedFrom` from the create request. Add API tests covering each refusal code and owner scoping with `take=1`.
 - [ ] T019 [US1] Add the list, proposals, withdraw and resolution calls, plus `workspace` and `continuedFrom` on create, to `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` and `agentTypes.ts`, with Vitest coverage.
