@@ -67,6 +67,7 @@
     { "id": "Elsa.Studio.FeatureManagement", "project": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" },
     { "id": "Elsa.Studio.Samples.WeatherForecast", "project": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" },
     { "id": "Elsa.Studio.Secrets", "project": "Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" },
+    { "id": "Elsa.Studio.Agent.Specialists", "project": "Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Elsa.Studio.Agent.Specialists.csproj" },
     { "id": "Elsa.Studio.Connections", "project": "Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" },
     { "id": "Elsa.Studio.Weaver.Core", "project": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" },
     { "id": "Elsa.Studio.Weaver.Workflows", "project": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj" },
