@@ -893,6 +893,8 @@ public sealed partial class AgentCumulativeDisclosureTests
     private sealed class ProjectionSource : IAgentContextProvider
     {
         internal bool ShowDetail = true;
+        /// <summary>When positive, every current attachment carries this many characters of content (a large disclosure).</summary>
+        internal int Padding;
         internal bool AddSection, RefreshPayload, OfferToolScope, RevokeToolScope;
         internal string? TargetPresentation;
         private int payloadRevision;
@@ -928,6 +930,7 @@ public sealed partial class AgentCumulativeDisclosureTests
                 var value = ++payloadRevision;
                 current = current.Select(item => item with { Summary = "Authorized summary " + value, Content = new { timestamp = value } }).ToList();
             }
+            if (Padding > 0) current = current.Select(item => item with { Content = new { pad = new string('q', Padding) } }).ToList();
             return ValueTask.FromResult(new AgentContextContribution(current, []));
         }
         internal void SetAuthority(string authority)

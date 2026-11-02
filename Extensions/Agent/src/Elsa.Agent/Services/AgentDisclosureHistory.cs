@@ -42,7 +42,13 @@ internal sealed class AgentDisclosureHistory
                     "This context is larger than one conversation can record (8 MiB), so it was not disclosed. Narrow it and try again; this conversation is unchanged.", 409)
                 { Limit = SnapshotTooLarge };
             if (_bytes + recorded.Size > MaximumBytes)
-                return LimitReached("bytes", "8 MiB of recorded disclosure");
+                // Only a session with less than the minimum room left is full; otherwise this one snapshot does not fit, a
+                // smaller one still would, and nothing about the session is recorded.
+                return MaximumBytes - _bytes < MinimumRoom
+                    ? LimitReached("bytes", "nearly 8 MiB of disclosure, with less than 64 KiB left")
+                    : new("agent.context.disclosure_budget_exceeded",
+                        $"This context does not fit in the room left in this conversation: {Mebibytes(_bytes)} of 8 MiB used. It was not disclosed; narrow it and try again. This conversation is unchanged.", 409)
+                    { Limit = SnapshotDoesNotFit };
             _identities.Add(recorded.Digest);
             _snapshots.Add(snapshot);
             _bytes += recorded.Size;
@@ -57,6 +63,21 @@ internal sealed class AgentDisclosureHistory
 
     /// <summary>The <see cref="AgentError.Limit"/> of one snapshot larger than any session can record; not a session limit.</summary>
     internal const string SnapshotTooLarge = "snapshot-too-large";
+
+    /// <summary>
+    /// The <see cref="AgentError.Limit"/> of a snapshot that does not fit in the room left in a session that is not full; not
+    /// a session limit, so nothing is recorded and the session can continue with smaller context.
+    /// </summary>
+    internal const string SnapshotDoesNotFit = "snapshot-does-not-fit";
+
+    /// <summary>
+    /// A session is genuinely full of recorded disclosure, and reports the <c>bytes</c> session limit, only when less than this
+    /// much room is left: no admissible context snapshot fits any more. Otherwise a snapshot that does not fit is refused on
+    /// its own (<see cref="SnapshotDoesNotFit"/>).
+    /// </summary>
+    internal const int MinimumRoom = 64 * 1024;
+
+    private static string Mebibytes(long bytes) => (bytes / (1024d * 1024d)).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MiB";
 
     /// <summary>Whether <paramref name="limit"/> names a documented session limit, which the session records.</summary>
     internal static bool IsSessionLimit(string? limit) => limit is "snapshots" or "bytes";

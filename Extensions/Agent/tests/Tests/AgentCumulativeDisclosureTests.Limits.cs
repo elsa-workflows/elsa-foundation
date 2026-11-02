@@ -23,11 +23,94 @@ public sealed partial class AgentCumulativeDisclosureTests
         var count = counted.Add([HistoryAttachment("same", new { index = 65 })], []);
         Assert.Equal((BudgetExceeded, "snapshots", 409), (count?.Code, count?.Limit, count?.StatusCode));
 
+        // Genuinely full: less than the documented minimum room is left when the next snapshot does not fit.
         var sized = new AgentDisclosureHistory();
-        Assert.Null(sized.Add([HistoryAttachment("first", new { value = new string('x', AgentDisclosureHistory.MaximumBytes / 2) })], []));
-        var size = sized.Add([HistoryAttachment("second", new { value = new string('y', AgentDisclosureHistory.MaximumBytes / 2) })], []);
+        Assert.Null(sized.Add([HistoryAttachment("first", new { value = new string('x', AgentDisclosureHistory.MaximumBytes - 40_000) })], []));
+        var size = sized.Add([HistoryAttachment("second", new { value = new string('y', 50_000) })], []);
         Assert.Equal((BudgetExceeded, "bytes", 409), (size?.Code, size?.Limit, size?.StatusCode));
         Assert.Contains("session limit", size!.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_snapshot_that_does_not_fit_the_room_left_in_a_session_that_is_not_full_names_no_session_limit()
+    {
+        var history = new AgentDisclosureHistory();
+        Assert.Null(history.Add([HistoryAttachment("first", new { value = new string('x', 1024 * 1024) })], []));
+
+        var refused = history.Add([HistoryAttachment("large", new { value = new string('y', 7 * 1024 * 1024 + 512 * 1024) })], []);
+
+        Assert.Equal((BudgetExceeded, AgentDisclosureHistory.SnapshotDoesNotFit, 409), (refused?.Code, refused?.Limit, refused?.StatusCode));
+        Assert.DoesNotContain("session limit", refused!.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("of 8 MiB used", refused.Message, StringComparison.Ordinal);
+        // Nothing was counted: a snapshot that fits is still admitted.
+        Assert.Null(history.Add([HistoryAttachment("fits", new { value = new string('z', 1024 * 1024) })], []));
+    }
+
+    // A context attachment is bounded (32 KB of content), so the session is filled with many bounded snapshots, and a turn
+    // discloses two or three attachments of 30 000 characters each.
+    [Theory]
+    [InlineData(70_000, true, "snapshot-does-not-fit", null)]
+    [InlineData(40_000, false, "bytes", "bytes")]
+    public async Task A_turn_records_the_bytes_limit_only_when_the_session_is_genuinely_full(int room, bool threeAttachments, string limit, string? recorded)
+    {
+        using var fixture = new Fixture(true, Script.Answer);
+        var left = await SeedRetainedBytes(fixture, room);
+        Assert.InRange(left, room - 1_000, room);
+        Assert.Equal(threeAttachments, left >= AgentDisclosureHistory.MinimumRoom);
+        fixture.Source.Padding = 30_000;
+        fixture.Source.AddSection = threeAttachments;
+        await fixture.Post("Request the current projection");
+
+        Assert.Equal(limit, Assert.Single(await fixture.Stream(), item => item.Error?.Code == BudgetExceeded).Error!.Limit);
+
+        var sessions = fixture.Services.GetRequiredService<IAgentSessionService>();
+        Assert.Equal(recorded, (await sessions.FindAsync(fixture.Session!.Id))!.LimitReached);
+        Assert.Equal(AgentSessionRecoveryStates.Of(recorded),
+            Assert.Single((await sessions.ListOwnedAsync(new(fixture.Session.ActorId, fixture.Session.TenantId, null, 20, null))).Page!.Items).RecoveryState);
+    }
+
+    /// <summary>
+    /// Records an earlier completed exchange whose distinct snapshots of bounded attachments leave about <paramref name="room"/>
+    /// bytes of the session's disclosure budget; returns the exact room left.
+    /// </summary>
+    private static async Task<long> SeedRetainedBytes(Fixture fixture, int room)
+    {
+        await fixture.Post("An earlier authorized request");
+        var sessions = fixture.Services.GetRequiredService<IAgentSessionService>();
+        var original = Assert.Single(await sessions.ListMessagesAsync(fixture.Session!.Id));
+        await sessions.SetMessageStatusAsync(fixture.Session.Id, original.Id, AgentMessageStatus.Completed);
+        var attachment = Assert.Single(original.Context);
+        AgentDisclosureSnapshot Snapshot(int index, IReadOnlyList<int> pads) => new(pads.Select((pad, item) =>
+            attachment with { Id = $"seed-{index}-{item}", Content = new { index, item, pad = new string('p', pad) } }).ToArray(), []);
+        long Size(AgentDisclosureSnapshot snapshot) => AgentDisclosureHistory.Record(snapshot).Size;
+        var target = AgentDisclosureHistory.MaximumBytes - room;
+        var snapshots = new List<AgentDisclosureSnapshot>();
+        long total = 0;
+        while (true)
+        {
+            var full = Snapshot(snapshots.Count, Enumerable.Repeat(30_000, 6).ToArray());
+            if (total + Size(full) > target) break;
+            snapshots.Add(full);
+            total += Size(full);
+        }
+        // The last snapshot fills the remainder: whole attachments, then one sized by its measured overhead.
+        var remainder = target - total;
+        var pads = new List<int>();
+        var perAttachment = Size(Snapshot(snapshots.Count, [30_000])) - Size(Snapshot(snapshots.Count, [0]));
+        while (remainder - (pads.Count + 1) * perAttachment > 1_000) pads.Add(30_000);
+        pads.Add(0);
+        var partial = (int)(remainder - Size(Snapshot(snapshots.Count, pads)));
+        pads[^1] = Math.Max(0, partial);
+        snapshots.Add(Snapshot(snapshots.Count, pads));
+        total = snapshots.Sum(Size);
+        var history = AgentDisclosureHistory.Freeze(snapshots);
+        const string priorAnswer = "The authorized earlier snapshots were observed.";
+        await sessions.AddMessageAsync(fixture.Session.Id, new(AgentRole.Assistant, priorAnswer, AgentMessageStatus.Completed, null, [], [])
+        {
+            HasDisclosureProvenance = true, DisclosureHistory = history,
+            DeliveryFingerprint = AgentDisclosureHistory.MessageFingerprint(priorAnswer, [], [], history)
+        });
+        return AgentDisclosureHistory.MaximumBytes - total;
     }
 
     [Fact]
