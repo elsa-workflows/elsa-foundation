@@ -46,6 +46,9 @@ public sealed class BpmnServiceRetryCancellationTests
         await WaitAsync(host, path, status => status == "WaitingIncident", "The actual native fault was not held.");
         var incident = Assert.Single((await host.GetAsync(path + "/incidents"))["items"]!.AsArray())!;
         Assert.Equal("Open", incident["status"]!.GetValue<string>());
+        // Inspection discloses only the authority identities, never its metadata.
+        var authority = (await host.GetAsync(path + "/inspection"))["authority"]!.AsObject();
+        Assert.Equal(["rootInitiator", "systemIdentity"], authority.Select(property => property.Key).Order(StringComparer.Ordinal));
         var retry = new { requestId = "retry", incidentId = incident["incidentId"]!.GetValue<string>(),
             invocationId = incident["invocationId"]!.GetValue<string>(), failedAttemptId = incident["failedAttemptId"]!.GetValue<string>() };
         var cancel = new { requestId = "cancel", reason = "Withdrawn while held" };

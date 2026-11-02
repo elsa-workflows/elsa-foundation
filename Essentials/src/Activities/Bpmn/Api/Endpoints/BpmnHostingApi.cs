@@ -158,7 +158,9 @@ internal sealed class GetAdmissionEndpoint(IBpmnModelRuntime runtime, BpmnApiCal
     public override Task<BpmnAdmissionView> HandleAsync(CancellationToken cancellationToken)
     { _ = caller.Current(); return Task.FromResult(new BpmnAdmissionView(runtime.AdmitNewExecutions)); }
 }
-internal sealed record BpmnInspectionView(BpmnExecutionView Execution, WorkflowExecutionAuthoritySnapshot Authority,
+/// <summary>Only the authority identities an inspector shows; authority metadata stays in the runtime.</summary>
+internal sealed record BpmnInspectionAuthority(string SystemIdentity, string RootInitiator);
+internal sealed record BpmnInspectionView(BpmnExecutionView Execution, BpmnInspectionAuthority Authority,
     string Profile, JsonElement Process, BpmnInspectionProvenance? Source, IReadOnlyList<BpmnInspectionWork> Work,
     IReadOnlyList<BpmnInspectionAttempt> Attempts, IReadOnlyList<BpmnServiceIncident> Incidents, IReadOnlyList<BpmnInspectionSettlement> Settlements)
 {
@@ -166,7 +168,7 @@ internal sealed record BpmnInspectionView(BpmnExecutionView Execution, WorkflowE
     {
         var state = inspection.State;
         return new(new(state.ExecutionId, state.Revision, state.Lifecycle.ToString(), state.Protocol, state.Executable,
-            state.MaterialIncarnationId, state.CreatedAt, state.UpdatedAt, state.TerminalResult), state.Authority,
+            state.MaterialIncarnationId, state.CreatedAt, state.UpdatedAt, state.TerminalResult), new(state.Authority.SystemIdentity, state.Authority.RootInitiator),
             inspection.Profile, inspection.Process, inspection.Source, inspection.Work, inspection.Attempts, inspection.Incidents, inspection.Settlements);
     }
 }

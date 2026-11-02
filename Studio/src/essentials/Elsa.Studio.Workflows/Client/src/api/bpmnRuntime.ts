@@ -28,7 +28,7 @@ export interface BpmnIncident {
 }
 export interface BpmnInspection {
   execution: BpmnExecution;
-  authority: { systemIdentity: string; rootInitiator: string; metadata: Record<string, string> };
+  authority: { systemIdentity: string; rootInitiator: string };
   profile: string;
   process: Record<string, unknown>;
   source: {
