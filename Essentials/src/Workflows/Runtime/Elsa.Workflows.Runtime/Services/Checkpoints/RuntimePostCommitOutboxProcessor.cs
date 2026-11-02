@@ -30,6 +30,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
     private readonly ILogger<RuntimePostCommitOutboxProcessor> _logger;
+    private readonly IRuntimeAdmissionLoadSignal? _loadSignal;
     private readonly FencedClaimLease<RuntimePostCommitOutboxClaim>? _claimLease;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
     private static readonly TimeSpan ClaimVisibilityTimeout = RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout;
@@ -134,10 +135,11 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         IWorkflowDispatchStore? workflowDispatchStore, IEnumerable<IPostCommitFailureProjector> deliveryFailureProjectors,
         ILogger<RuntimePostCommitOutboxProcessor>? logger, IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
         IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor, IPersistenceAccessContextAccessor? persistenceAccessContextAccessor,
-        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, IRuntimeAdmissionLoadSignal? loadSignal = null)
         : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, deliveryFailureProjectors,
             logger, liveDrainDeliveryAccessor, coalescingSessionAccessor)
     {
+        _loadSignal = loadSignal;
         _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
         _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
     }
@@ -232,6 +234,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 new NotSupportedException("Required-source delivery needs the provider's fenced claim path."), false);
         try
         {
+            using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
             await _intentDispatcher.DispatchAsync(item.Intent, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -260,6 +263,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             claim,
             async dispatchCancellationToken =>
             {
+                using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
                 if (RequiresDurableSource(item))
                     await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
                 else

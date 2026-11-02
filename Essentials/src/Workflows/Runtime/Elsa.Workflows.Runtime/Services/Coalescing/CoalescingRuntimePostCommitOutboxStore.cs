@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -8,8 +9,9 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// <summary>
 /// Coalescing-aware overlay for <see cref="IRuntimePostCommitOutboxStore"/>. While a coalescing session owns the target
 /// workflow execution, deliverable continuation intents are read from the session's overlay outbox and delivery results
-/// recorded there, so intra-segment continuation is delivered from the working set and not durably persisted until the
-/// flush. When no session is active it is a byte-for-byte pass-through to the durable inner outbox store.
+/// recorded there, so intra-segment continuation runs from the working set until the flush. External intents and
+/// source-authorized deliveries use the durable store's current claim lifecycle even while folding stays active.
+/// Without a matching session, calls pass through to the durable inner store.
 /// </summary>
 public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
@@ -46,19 +48,45 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-
+        cancellationToken.ThrowIfCancellationRequested();
         if (query.WorkflowExecutionId is { } workflowExecutionId &&
             sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
-            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(session.GetDeliverableOutbox(query));
-
+        {
+            if (query.IntentKind is { } kind)
+                return UsesOverlayKind(kind) ? new(session.GetDeliverableOutbox(query)) : _inner.GetDeliverableAsync(query, cancellationToken);
+            return GetMixedDeliverableAsync(session, workflowExecutionId, query, cancellationToken);
+        }
         return _inner.GetDeliverableAsync(query, cancellationToken);
     }
+
+    private async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetMixedDeliverableAsync(
+        RuntimeCoalescingSession session, string workflowExecutionId, RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken)
+    {
+        // Only owned scheduler continuations can run before the segment commits. External delivery reads the
+        // actual durable lifecycle, which another scope may already have claimed or completed.
+        var items = new List<RuntimePostCommitOutboxItem>();
+        if (UsesOverlayKind(RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+            items.AddRange(session.GetDeliverableOutbox(new(query.Now, query.Limit, workflowExecutionId,
+                RuntimePostCommitIntentKinds.EnqueueSchedulerWork)).Where(IsOverlayContinuation));
+        foreach (var durableKind in session.DurablyPersistedOutboxKinds().Where(kind => !UsesOverlayKind(kind)))
+        {
+            if (items.Count >= query.Limit) break;
+            items.AddRange(await _inner.GetDeliverableAsync(new(query.Now, query.Limit - items.Count,
+                workflowExecutionId, durableKind), cancellationToken));
+        }
+        return items;
+    }
+
+    private bool UsesOverlayKind(string kind) => kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && !requiredSourceKinds.Contains(kind);
+    private bool IsOverlayContinuation(RuntimePostCommitOutboxItem item) => UsesOverlayKind(item.Intent.Kind) && item.StimulusDeliverySourceScope is null;
+    private bool OwnsOverlayContinuation(RuntimeCoalescingSession session, string id) =>
+        session.TryFindOutboxItem(id, out var item) && IsOverlayContinuation(item!);
 
     public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(result);
 
-        if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(result.OutboxItemId))
+        if (sessionAccessor.Current is { } session && session.IsActive && OwnsOverlayContinuation(session, result.OutboxItemId))
         {
             // An overlay item lives only in this session's working set and carries no durable claim, so no other
             // deliverer can hold it and supersession is not reachable on this branch.
@@ -91,15 +119,37 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-
+        cancellationToken.ThrowIfCancellationRequested();
         if (request.WorkflowExecutionId is { } workflowExecutionId &&
             sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
-            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>>(session.ClaimOutbox(request, item => item.StimulusDeliverySourceScope is null && !requiredSourceKinds.Contains(item.Intent.Kind)));
-
-        return (_innerClaimStore ?? throw new InvalidOperationException(
-            "The configured post-commit outbox store does not provide atomic claim support."))
-            .ClaimAsync(request, cancellationToken);
+        {
+            if (request.IntentKind is { } kind)
+                return UsesOverlayKind(kind) ? new(session.ClaimOutbox(request, IsOverlayContinuation))
+                    : InnerClaims.ClaimAsync(request, cancellationToken);
+            return ClaimMixedAsync(session, workflowExecutionId, request, cancellationToken);
+        }
+        return InnerClaims.ClaimAsync(request, cancellationToken);
     }
+
+    private async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimMixedAsync(
+        RuntimeCoalescingSession session, string workflowExecutionId, RuntimePostCommitOutboxClaimRequest request, CancellationToken cancellationToken)
+    {
+        var claims = new List<RuntimePostCommitOutboxClaim>();
+        if (UsesOverlayKind(RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+            claims.AddRange(session.ClaimOutbox(new(request.OwnerId, request.Now, request.VisibilityTimeout,
+                request.Limit, workflowExecutionId, RuntimePostCommitIntentKinds.EnqueueSchedulerWork), IsOverlayContinuation));
+        foreach (var durableKind in session.DurablyPersistedOutboxKinds().Where(kind => !UsesOverlayKind(kind)))
+        {
+            if (claims.Count >= request.Limit) break;
+            // Sequential awaits: the inner stores may share one scoped EF context.
+            claims.AddRange(await InnerClaims.ClaimAsync(new(request.OwnerId, request.Now, request.VisibilityTimeout,
+                request.Limit - claims.Count, workflowExecutionId, durableKind), cancellationToken));
+        }
+        return claims;
+    }
+
+    private IRuntimePostCommitOutboxClaimStore InnerClaims => _innerClaimStore ?? throw new InvalidOperationException(
+        "The configured post-commit outbox store does not provide atomic claim support.");
 
     public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
         RuntimePostCommitOutboxClaim claim,
@@ -109,7 +159,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
     {
         ArgumentNullException.ThrowIfNull(claim);
 
-        if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(claim.OutboxItemId))
+        if (sessionAccessor.Current is { } session && session.IsActive && OwnsOverlayContinuation(session, claim.OutboxItemId))
             return new ValueTask<RuntimePostCommitOutboxClaim?>(session.RenewOutboxClaim(claim, now, visibilityTimeout));
 
         return (_innerClaimStore ?? throw new InvalidOperationException(
@@ -138,7 +188,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
         ArgumentNullException.ThrowIfNull(claim);
         ArgumentNullException.ThrowIfNull(result);
 
-        if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(claim.OutboxItemId))
+        if (sessionAccessor.Current is { } session && session.IsActive && OwnsOverlayContinuation(session, claim.OutboxItemId))
         {
             session.RecordOutboxDelivery(claim, result);
             return ValueTask.CompletedTask;
@@ -155,7 +205,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
     {
         ArgumentNullException.ThrowIfNull(completion);
 
-        if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(completion.Claim.OutboxItemId))
+        if (sessionAccessor.Current is { } session && session.IsActive && OwnsOverlayContinuation(session, completion.Claim.OutboxItemId))
         {
             var childExecution = completion.WorkflowDispatch is { } dispatch
                 ? await workflowExecutionStateStore.FindAsync(dispatch.ChildWorkflowExecutionId, cancellationToken)

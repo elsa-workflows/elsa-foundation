@@ -1,0 +1,762 @@
+{
+ "serverBuild": "Elsa.Workbench Debug at ce2f04ffd (runtime identical to 38ce116db; later commits change docs and one setting description)",
+ "pwsh": "PowerShell 7.6.9 (.NET tool, scratch-local)",
+ "scripts": 107,
+ "counts": {
+  "needs-own-parameters": 22,
+  "passed": 77,
+  "passed-on-rerun": 1,
+  "harness-platform-defect": 1,
+  "pre-existing-stale-test": 1,
+  "package-separate": 3,
+  "passed-on-isolated-rerun": 1,
+  "environment": 1
+ },
+ "scripts_detail": {
+  "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnCallActivity.ps1": "passed",
+  "e2e-tests/bpmn/Test-BpmnCalledAckBaseline.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnCalledAckHost.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnClaimRenewalControls.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnCollectedProposalControls.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnCompensationHost.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnConcurrentCalledHost.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnDecision.ps1": "passed",
+  "e2e-tests/bpmn/Test-BpmnLegacyCalledUpgrade.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnLibraryAdoption.ps1": "passed",
+  "e2e-tests/bpmn/Test-BpmnMultiInstanceBaseline.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnNativeParentBaseline.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnNativeParentPendingBaseline.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnPublicationRetentionControls.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnRecoveryCleanupControls.ps1": "passed",
+  "e2e-tests/bpmn/Test-BpmnSameArtifactControls.ps1": "needs-own-parameters",
+  "e2e-tests/bpmn/Test-BpmnScopeControls.ps1": "needs-own-parameters",
+  "e2e-tests/branching/Test-ParallelFork.ps1": "passed",
+  "e2e-tests/composition/Test-ChildWorkflowInput.ps1": "passed",
+  "e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1": "passed",
+  "e2e-tests/composition/Test-SharedPersistence.ps1": "passed-on-rerun (9/9; first run met a .nuplane store left in the Debug Workbench output by this session\u2019s own external server; main passes the same test)",
+  "e2e-tests/composition/Test-UnknownFeatures.ps1": "passed",
+  "e2e-tests/concurrency/Test-ParallelFaultJoin.ps1": "passed",
+  "e2e-tests/concurrency/Test-ParallelSuspendedBranches.ps1": "passed",
+  "e2e-tests/correlate/Test-Correlate.ps1": "passed",
+  "e2e-tests/diagnostics/Test-OpenTelemetryApiMigration.ps1": "passed",
+  "e2e-tests/diagnostics/Test-SharedDiagnosticsPersistence.ps1": "passed",
+  "e2e-tests/durability/Test-RestartRecovery.ps1": "passed",
+  "e2e-tests/durability/Test-VariableSurvivesSuspend.ps1": "passed",
+  "e2e-tests/etl/Test-FiniteFileEtl.ps1": "needs-own-parameters",
+  "e2e-tests/etl/Test-FiniteFileEtlStudio.ps1": "needs-own-parameters",
+  "e2e-tests/etl/Test-FiniteHttpEtl.ps1": "needs-own-parameters",
+  "e2e-tests/events/Test-Event.ps1": "passed",
+  "e2e-tests/fault-handling/Test-FaultActivity.ps1": "passed",
+  "e2e-tests/fault-handling/Test-FaultVsFinish.ps1": "passed",
+  "e2e-tests/fault-handling/Test-IncidentStrategies.ps1": "passed",
+  "e2e-tests/fault-handling/Test-NestedFaultPropagation.ps1": "passed",
+  "e2e-tests/file-deployment/Test-FileBasedDeployment.ps1": "harness-platform-defect (PowerShell passes $null as an empty environment value on macOS, so the unconfigured launch fails to bind PublishOnReconcile)",
+  "e2e-tests/file-deployment/Test-JsonSourceComposition.ps1": "passed",
+  "e2e-tests/http/Test-HttpEcho.ps1": "passed",
+  "e2e-tests/http/Test-HttpMethods.ps1": "passed",
+  "e2e-tests/http/Test-HttpResponseFlowchart.ps1": "passed",
+  "e2e-tests/http/Test-JsonActivityBindings.ps1": "needs-own-parameters",
+  "e2e-tests/http/Test-RuntimeConcurrencyCorrectness.ps1": "passed",
+  "e2e-tests/http/Test-SendHttpRequestStatusOutcomes.ps1": "passed",
+  "e2e-tests/javascript/Test-JavaScriptExpressions.ps1": "passed",
+  "e2e-tests/logging/Test-DiagnosticsSettings.ps1": "passed",
+  "e2e-tests/logging/Test-ValueCapture.ps1": "pre-existing-stale-test (fails identically on main b392aef0a: script list omits the SendHttpRequest Connection input)",
+  "e2e-tests/orchestration-controls/Test-FinishTerminate.ps1": "passed",
+  "e2e-tests/orchestration-controls/Test-StimulusRouting.ps1": "passed",
+  "e2e-tests/orchestration-controls/Test-SuspendResume.ps1": "passed",
+  "e2e-tests/persistence-querying/Test-IncidentQuery.ps1": "passed",
+  "e2e-tests/persistence-querying/Test-InstanceFilters.ps1": "passed",
+  "e2e-tests/persistence-querying/Test-InstancePaging.ps1": "passed",
+  "e2e-tests/resilience/Test-IncidentTroubleshooting.ps1": "passed",
+  "e2e-tests/resilience/Test-PoisonedWork.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ActivityDraftTestRun.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ActivityUpgradePlan.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-DraftTestRun.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-PublishingLifecycle.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ReusableActivity.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ReusableActivityComplete.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ReusableActivityDeep.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ReusableActivityOutcomeLimit.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ReusableActivityPinning.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-ReusableSequenceNesting.ps1": "passed",
+  "e2e-tests/reusable-activities/Test-SetOutcome.ps1": "passed",
+  "e2e-tests/rules/Test-DurableRules.ps1": "package-separate",
+  "e2e-tests/rules/Test-NativeRulesInstallation.ps1": "package-separate",
+  "e2e-tests/rules/Test-RulesAdmissionRecovery.ps1": "package-separate",
+  "e2e-tests/runtime-alterations/Test-AlterationPlans.ps1": "passed",
+  "e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1": "passed",
+  "e2e-tests/scheduling/Test-Cron.ps1": "passed",
+  "e2e-tests/scheduling/Test-Delay.ps1": "passed",
+  "e2e-tests/scheduling/Test-DelayDeadline.ps1": "passed-on-isolated-rerun (first run collided with the external server port)",
+  "e2e-tests/scheduling/Test-Timer.ps1": "passed",
+  "e2e-tests/single-outcome/Test-ForEachLoop.ps1": "passed",
+  "e2e-tests/single-outcome/Test-ForLoop.ps1": "passed",
+  "e2e-tests/single-outcome/Test-SetOutput.ps1": "passed",
+  "e2e-tests/single-outcome/Test-SetVariable.ps1": "passed",
+  "e2e-tests/single-outcome/Test-WhileCounter.ps1": "passed",
+  "e2e-tests/single-outcome/Test-WhileLoop.ps1": "passed",
+  "e2e-tests/stimuli/Test-CorrelationScopedResume.ps1": "passed",
+  "e2e-tests/stimuli/Test-FanInResume.ps1": "passed",
+  "e2e-tests/stimuli/Test-IdempotentStart.ps1": "passed",
+  "e2e-tests/stimuli/Test-StartAndResume.ps1": "passed",
+  "e2e-tests/templates/Test-WorkflowTemplates.ps1": "passed",
+  "e2e-tests/Test-ChildWorkflow.ps1": "passed",
+  "e2e-tests/Test-HttpWorkflow.ps1": "passed",
+  "e2e-tests/Test-IfWorkflow.ps1": "passed",
+  "e2e-tests/Test-SequenceWorkflow.ps1": "passed",
+  "e2e-tests/Test-SequenceWorkflowVerdict.ps1": "needs-own-parameters",
+  "e2e-tests/Test-ServerLifecycleGuard.ps1": "environment (PowerShell installed as a .NET tool reports dotnet as its own executable, so the bystander relaunch is dotnet -NoProfile)",
+  "e2e-tests/Test-SourceEditTrxVerdict.ps1": "needs-own-parameters",
+  "e2e-tests/Test-SwitchWorkflow.ps1": "passed",
+  "e2e-tests/Test-WorkflowFlow.ps1": "passed",
+  "e2e-tests/Test-WorkflowFlowVerdict.ps1": "needs-own-parameters",
+  "e2e-tests/variables/Test-CrossTypeCoercion.ps1": "passed",
+  "e2e-tests/variables/Test-SetVariableLoop.ps1": "passed",
+  "e2e-tests/variables/Test-SetVariableRetainedArtifact.ps1": "passed",
+  "e2e-tests/variables/Test-TypedVariables.ps1": "passed",
+  "e2e-tests/variables/Test-ValueConversionProfiles.ps1": "passed",
+  "e2e-tests/variables/Test-WorkflowInputsOutputs.ps1": "passed",
+  "e2e-tests/versioning/Test-VersionPinning.ps1": "passed",
+  "e2e-tests/workflow-version-override/Test-WorkflowVersionOverride.ps1": "passed"
+ },
+ "ledger": [
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 7.3
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnCallActivity.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 183.3
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnCalledAckBaseline.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 2.2
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnCalledAckHost.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 1.9
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.8
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnClaimRenewalControls.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 2.4
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnCollectedProposalControls.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.8
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnCompensationHost.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.6
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnConcurrentCalledHost.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 1.1
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnDecision.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 156.8
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnLegacyCalledUpgrade.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 28.8
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnLibraryAdoption.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 78.9
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnMultiInstanceBaseline.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 3.8
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnNativeParentBaseline.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 5.5
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnNativeParentPendingBaseline.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 5.4
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnPublicationRetentionControls.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 2.0
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnRecoveryCleanupControls.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 21.8
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnSameArtifactControls.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 13.0
+  },
+  {
+   "script": "e2e-tests/bpmn/Test-BpmnScopeControls.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 6.5
+  },
+  {
+   "script": "e2e-tests/branching/Test-ParallelFork.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 29.3
+  },
+  {
+   "script": "e2e-tests/composition/Test-ChildWorkflowInput.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 7.7
+  },
+  {
+   "script": "e2e-tests/composition/Test-DispatchWorkflowOutcomes.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 81.5
+  },
+  {
+   "script": "e2e-tests/composition/Test-SharedPersistence.ps1",
+   "exit": 1,
+   "selfHosted": true,
+   "seconds": 169.1
+  },
+  {
+   "script": "e2e-tests/composition/Test-UnknownFeatures.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 7.8
+  },
+  {
+   "script": "e2e-tests/concurrency/Test-ParallelFaultJoin.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.7
+  },
+  {
+   "script": "e2e-tests/concurrency/Test-ParallelSuspendedBranches.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.0
+  },
+  {
+   "script": "e2e-tests/correlate/Test-Correlate.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.0
+  },
+  {
+   "script": "e2e-tests/diagnostics/Test-OpenTelemetryApiMigration.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 0.8
+  },
+  {
+   "script": "e2e-tests/diagnostics/Test-SharedDiagnosticsPersistence.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 35.5
+  },
+  {
+   "script": "e2e-tests/durability/Test-RestartRecovery.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 15.3
+  },
+  {
+   "script": "e2e-tests/durability/Test-VariableSurvivesSuspend.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.1
+  },
+  {
+   "script": "e2e-tests/etl/Test-FiniteFileEtl.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.4
+  },
+  {
+   "script": "e2e-tests/etl/Test-FiniteFileEtlStudio.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.3
+  },
+  {
+   "script": "e2e-tests/etl/Test-FiniteHttpEtl.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.3
+  },
+  {
+   "script": "e2e-tests/events/Test-Event.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.1
+  },
+  {
+   "script": "e2e-tests/fault-handling/Test-FaultActivity.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.0
+  },
+  {
+   "script": "e2e-tests/fault-handling/Test-FaultVsFinish.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.6
+  },
+  {
+   "script": "e2e-tests/fault-handling/Test-IncidentStrategies.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.7
+  },
+  {
+   "script": "e2e-tests/fault-handling/Test-NestedFaultPropagation.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.0
+  },
+  {
+   "script": "e2e-tests/file-deployment/Test-FileBasedDeployment.ps1",
+   "exit": 1,
+   "selfHosted": true,
+   "seconds": 302.8
+  },
+  {
+   "script": "e2e-tests/file-deployment/Test-JsonSourceComposition.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 12.8
+  },
+  {
+   "script": "e2e-tests/http/Test-HttpEcho.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.9
+  },
+  {
+   "script": "e2e-tests/http/Test-HttpMethods.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.6
+  },
+  {
+   "script": "e2e-tests/http/Test-HttpResponseFlowchart.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 10.0
+  },
+  {
+   "script": "e2e-tests/http/Test-JsonActivityBindings.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.8
+  },
+  {
+   "script": "e2e-tests/http/Test-RuntimeConcurrencyCorrectness.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 5.1
+  },
+  {
+   "script": "e2e-tests/http/Test-SendHttpRequestStatusOutcomes.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.0
+  },
+  {
+   "script": "e2e-tests/javascript/Test-JavaScriptExpressions.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 10.3
+  },
+  {
+   "script": "e2e-tests/logging/Test-DiagnosticsSettings.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 0.7
+  },
+  {
+   "script": "e2e-tests/logging/Test-ValueCapture.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 1.7
+  },
+  {
+   "script": "e2e-tests/orchestration-controls/Test-FinishTerminate.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.6
+  },
+  {
+   "script": "e2e-tests/orchestration-controls/Test-StimulusRouting.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.9
+  },
+  {
+   "script": "e2e-tests/orchestration-controls/Test-SuspendResume.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.5
+  },
+  {
+   "script": "e2e-tests/persistence-querying/Test-IncidentQuery.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 16.7
+  },
+  {
+   "script": "e2e-tests/persistence-querying/Test-InstanceFilters.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.9
+  },
+  {
+   "script": "e2e-tests/persistence-querying/Test-InstancePaging.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.4
+  },
+  {
+   "script": "e2e-tests/resilience/Test-IncidentTroubleshooting.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.1
+  },
+  {
+   "script": "e2e-tests/resilience/Test-PoisonedWork.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 16.1
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ActivityDraftTestRun.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.5
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ActivityUpgradePlan.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.8
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-DraftTestRun.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.0
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-PublishingLifecycle.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 0.8
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ReusableActivity.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.1
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ReusableActivityComplete.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.0
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ReusableActivityDeep.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.2
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ReusableActivityOutcomeLimit.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.7
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ReusableActivityPinning.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 0.5
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-ReusableSequenceNesting.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.1
+  },
+  {
+   "script": "e2e-tests/reusable-activities/Test-SetOutcome.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.7
+  },
+  {
+   "outcome": "package-qualification-separate",
+   "script": "e2e-tests/rules/Test-DurableRules.ps1"
+  },
+  {
+   "outcome": "package-qualification-separate",
+   "script": "e2e-tests/rules/Test-NativeRulesInstallation.ps1"
+  },
+  {
+   "outcome": "package-qualification-separate",
+   "script": "e2e-tests/rules/Test-RulesAdmissionRecovery.ps1"
+  },
+  {
+   "script": "e2e-tests/runtime-alterations/Test-AlterationPlans.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 25.2
+  },
+  {
+   "script": "e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 52.6
+  },
+  {
+   "script": "e2e-tests/scheduling/Test-Cron.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 16.1
+  },
+  {
+   "script": "e2e-tests/scheduling/Test-Delay.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.5
+  },
+  {
+   "script": "e2e-tests/scheduling/Test-DelayDeadline.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.8
+  },
+  {
+   "script": "e2e-tests/scheduling/Test-Timer.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 16.0
+  },
+  {
+   "script": "e2e-tests/single-outcome/Test-ForEachLoop.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.2
+  },
+  {
+   "script": "e2e-tests/single-outcome/Test-ForLoop.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.8
+  },
+  {
+   "script": "e2e-tests/single-outcome/Test-SetOutput.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.9
+  },
+  {
+   "script": "e2e-tests/single-outcome/Test-SetVariable.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.5
+  },
+  {
+   "script": "e2e-tests/single-outcome/Test-WhileCounter.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.4
+  },
+  {
+   "script": "e2e-tests/single-outcome/Test-WhileLoop.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.3
+  },
+  {
+   "script": "e2e-tests/stimuli/Test-CorrelationScopedResume.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.3
+  },
+  {
+   "script": "e2e-tests/stimuli/Test-FanInResume.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.3
+  },
+  {
+   "script": "e2e-tests/stimuli/Test-IdempotentStart.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.6
+  },
+  {
+   "script": "e2e-tests/stimuli/Test-StartAndResume.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 3.5
+  },
+  {
+   "script": "e2e-tests/templates/Test-WorkflowTemplates.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 18.6
+  },
+  {
+   "script": "e2e-tests/Test-ChildWorkflow.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 9.5
+  },
+  {
+   "script": "e2e-tests/Test-HttpWorkflow.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 18.1
+  },
+  {
+   "script": "e2e-tests/Test-IfWorkflow.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 12.2
+  },
+  {
+   "script": "e2e-tests/Test-SequenceWorkflow.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.8
+  },
+  {
+   "script": "e2e-tests/Test-SequenceWorkflowVerdict.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.5
+  },
+  {
+   "script": "e2e-tests/Test-ServerLifecycleGuard.ps1",
+   "exit": 1,
+   "selfHosted": true,
+   "seconds": 61.0
+  },
+  {
+   "script": "e2e-tests/Test-SourceEditTrxVerdict.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.6
+  },
+  {
+   "script": "e2e-tests/Test-SwitchWorkflow.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.3
+  },
+  {
+   "script": "e2e-tests/Test-WorkflowFlow.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.2
+  },
+  {
+   "script": "e2e-tests/Test-WorkflowFlowVerdict.ps1",
+   "exit": 1,
+   "selfHosted": false,
+   "seconds": 0.5
+  },
+  {
+   "script": "e2e-tests/variables/Test-CrossTypeCoercion.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.8
+  },
+  {
+   "script": "e2e-tests/variables/Test-SetVariableLoop.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 14.1
+  },
+  {
+   "script": "e2e-tests/variables/Test-SetVariableRetainedArtifact.ps1",
+   "exit": 0,
+   "selfHosted": true,
+   "seconds": 13.6
+  },
+  {
+   "script": "e2e-tests/variables/Test-TypedVariables.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.4
+  },
+  {
+   "script": "e2e-tests/variables/Test-ValueConversionProfiles.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 0.6
+  },
+  {
+   "script": "e2e-tests/variables/Test-WorkflowInputsOutputs.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 1.2
+  },
+  {
+   "script": "e2e-tests/versioning/Test-VersionPinning.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 2.5
+  },
+  {
+   "script": "e2e-tests/workflow-version-override/Test-WorkflowVersionOverride.ps1",
+   "exit": 0,
+   "selfHosted": false,
+   "seconds": 0.5
+  }
+ ]
+}

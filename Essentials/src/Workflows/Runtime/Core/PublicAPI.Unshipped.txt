@@ -4577,6 +4577,8 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.BacklogBatchSiz
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.ExcludedWorkflowExecutionIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.HeartbeatTimeout.get -> System.TimeSpan
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.LeaseTimeout.get -> System.TimeSpan
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.MaxConcurrentDispatches.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.MaxConcurrentDispatches.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.MaxExecutionsPerSweep.get -> int?
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.OutboxBatchSize.get -> int
 Elsa.Workflows.Runtime.Core.Models.RuntimeResumptionSweepRequest.RecoveryScanBatchSize.get -> int
@@ -4635,6 +4637,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason.OutboxDeliver
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason.Paused = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason.Quiesced = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason.WorkflowTerminated = 5 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason.Yielded = 7 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerDrainStopReason
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonDisposition
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonDisposition.Poisoned = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonDisposition
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonDisposition.RetryScheduled = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonDisposition
