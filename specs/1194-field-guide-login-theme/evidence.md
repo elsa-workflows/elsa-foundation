@@ -1,7 +1,7 @@
 # Verification
 
-Implementation: PR #3682, initially stacked on artwork PR #3679. Implementation code reviewed at
-`9df15f0f42de38e784e253ab007c632149b596de`; later bookkeeping does not change that code.
+Implementation: PR #3682, initially stacked on artwork PR #3679. Implementation reviews and exact-head receipts are recorded on PR #3682. The final high-contrast
+button correction is included in review round 4.
 
 ## Automated checks
 
@@ -21,7 +21,7 @@ The temporary preview host inherits the repository's central package versions. I
 - Visually inspected 1280×800 desktop, 768×1024 tablet, and 320×740 mobile. The form is first on mobile and the full illustration is contained.
 - At 320px: document width equals viewport width; all art/logo images loaded.
 - Chrome dark-preference emulation: paper `rgb(245,242,234)`, root and body color schemes both `light`.
-- Chrome forced-colors emulation: illustration hidden, form controls retained. The saved button-label image was visually ambiguous; native follow-up access failed, so no stronger button-label claim is made.
+- Chrome forced-colors emulation: illustration hidden and form controls retained. Final native verification reproduced a solid block in place of the button label with Highlight/HighlightText. The Field Guide button now uses ButtonFace/ButtonText and its matching system border in contrast mode; the same actual endpoint then renders a legible “Sign in” label. Foreground is black, background white, and the button stays enabled. No JavaScript or forced-color-adjust bypass was added.
 - Real missing-art composition: the illustration request fails, while the button remains visible/enabled, the prefixed form action remains correct, and invalid-credential feedback stays present.
 - Tidal under a dark preference retains `--ground:#1d2729` and `--accent:#acd3dc` after the review fix.
 - Browser preference overrides and temporary viewport were reset. No user credentials were entered.
@@ -31,6 +31,8 @@ The temporary preview host inherits the repository's central package versions. I
 Round 1 against the parent PR head found two real specificity regressions in dark/contrast selectors.
 They were fixed in `9df15f0f4` with zero-specificity `:where()` exclusions, preserving the prior cascade.
 Round 2 independently reviewed correctness, repository standards and acceptance: all clean.
+Round 3 checked the evidence-only delta. Round 4 covers the final native-contrast button fix and
+completion metadata; its exact-head results are on the PR.
 
 Hosted checks, prerequisite merge, retargeting to main, and resulting-main verification remain pending;
 they are not represented as passed by these local checks.

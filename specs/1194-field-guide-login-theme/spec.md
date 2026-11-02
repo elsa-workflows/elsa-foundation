@@ -1,6 +1,6 @@
 # Field Guide login theme
 
-**Status**: In progress
+**Status**: Implemented — delivery and exact-head gate receipts on PR #3682
 **Issue**: #3680 · **Goal**: none/free-flow · **Owner request**: 2 November 2026
 
 Provide a new opt-in backend-owned login appearance matching the Elsa 4 brochure. A user signs in through a clear form on warm paper, with sage ink, serif headings, the drawn Elsa logo, and a full pencil/watercolor capability plate.

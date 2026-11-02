@@ -141,6 +141,7 @@ public static class LoginPage
               .entry,[data-layout="editorial"] .entry,[data-layout="field-guide"] .entry { display:flex; justify-content:center; }
               .welcome { position:relative; width:100%; max-width:520px; box-shadow:none; }
               .error { color:CanvasText; background:Canvas; border-color:CanvasText; }
+              [data-layout="field-guide"] button { background:ButtonFace; color:ButtonText; border-color:ButtonText; }
             }
           </style>
         </head>
