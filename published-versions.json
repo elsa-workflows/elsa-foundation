@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "ea5c4de47d05b58949e1c973b4b560af8625ac0a",
+  "last_publish_commit": "364e636c91d6d58d8a2966a9f60f42792a92f00a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -134,8 +134,8 @@
     },
     {
       "package_id": "Elsa.Agent",
-      "version": "4.0.5-preview",
-      "commit": "95e4e96109ee4e85dfd755fa5aa35cae8cbce359"
+      "version": "4.0.6-preview",
+      "commit": "364e636c91d6d58d8a2966a9f60f42792a92f00a"
     },
     {
       "package_id": "Elsa.Agent.Anthropic",
@@ -144,18 +144,23 @@
     },
     {
       "package_id": "Elsa.Agent.Api",
-      "version": "4.0.20-preview",
-      "commit": "95e4e96109ee4e85dfd755fa5aa35cae8cbce359"
+      "version": "4.0.21-preview",
+      "commit": "364e636c91d6d58d8a2966a9f60f42792a92f00a"
     },
     {
       "package_id": "Elsa.Agent.Core",
-      "version": "4.0.15-preview",
-      "commit": "95e4e96109ee4e85dfd755fa5aa35cae8cbce359"
+      "version": "4.0.16-preview",
+      "commit": "364e636c91d6d58d8a2966a9f60f42792a92f00a"
     },
     {
       "package_id": "Elsa.Agent.GitHubCopilot",
-      "version": "4.0.15-preview",
-      "commit": "8dcbf2345d96507d7b81b2483cc37445333cb1d7"
+      "version": "4.0.16-preview",
+      "commit": "364e636c91d6d58d8a2966a9f60f42792a92f00a"
+    },
+    {
+      "package_id": "Elsa.Agent.Persistence.EntityFrameworkCore",
+      "version": "4.0.0-preview",
+      "commit": "364e636c91d6d58d8a2966a9f60f42792a92f00a"
     },
     {
       "package_id": "Elsa.Agent.Specialists",
