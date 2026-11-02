@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Menu, Move, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Inbox, LayoutList, Menu, Move, PanelLeftClose, PanelLeftOpen, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
@@ -26,6 +26,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [available, setAvailable] = useState<boolean | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const folderTreeId = useId();
   const [crumbs, setCrumbs] = useState<WorkflowFolder[]>([]);
   const [breadcrumbState, setBreadcrumbState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [breadcrumbError, setBreadcrumbError] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const keyboardExpansionIntents = useRef(new Set<string>());
   const navigationRef = useRef<HTMLElement>(null);
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const folderToggleButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
   const selectedId = selectedFolderId(selection);
@@ -177,6 +180,10 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         folderPickerButtonRef.current?.focus();
         return;
       }
+      if (navigationRef.current?.dataset.collapsed === "true") {
+        folderToggleButtonRef.current?.focus();
+        return;
+      }
       findTreeItemByKey(navigationRef.current, key)?.focus();
     });
   };
@@ -239,15 +246,24 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   };
 
   return <>
-    <div className="wf-folder-browser" data-folders-available={available ? "true" : undefined}>
+    <div className="wf-folder-browser" data-folders-available={available ? "true" : undefined} data-folders-collapsed={collapsed ? "true" : undefined}>
       {available ? <div className="wf-folder-navigation">
         <div className="wf-folder-mobile-actions">
           <button ref={folderPickerButtonRef} type="button" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="workflow-folder-picker"><Menu size={15} /> Folders</button>
         </div>
         {!drawerOpen ? (
-          <aside ref={navigationRef} className="wf-folder-nav" aria-label="Workflow folders">
-            <div className="wf-folder-nav-heading"><strong>Folders</strong>{canManage ? <button type="button" title="Create folder" aria-label="Create folder" onClick={() => void createFolder()}><FolderPlus size={16} /></button> : null}</div>
-            <FolderTree {...treeProps} />
+          <aside ref={navigationRef} className="wf-folder-nav" aria-label="Workflow folders" data-collapsed={collapsed ? "true" : undefined}>
+            <div className="wf-folder-nav-heading">
+              <strong hidden={collapsed}>Folders</strong>
+              <div className="wf-folder-nav-actions">
+                {canManage && !collapsed ? <button type="button" title="Create folder" aria-label="Create folder" onClick={() => void createFolder()}><FolderPlus size={16} /></button> : null}
+                <button ref={folderToggleButtonRef} type="button" title={collapsed ? "Expand folders" : "Collapse folders"} aria-label={collapsed ? "Expand folders" : "Collapse folders"}
+                  aria-expanded={!collapsed} aria-controls={folderTreeId} onClick={() => setCollapsed(current => !current)}>
+                  {collapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
+                </button>
+              </div>
+            </div>
+            <div id={folderTreeId} hidden={collapsed}><FolderTree {...treeProps} /></div>
           </aside>
         ) : null}
       </div> : null}
@@ -433,7 +449,7 @@ function FolderTree(props: FolderTreeProps) {
         if (event.currentTarget === event.target) onFocusedKeyChange(value);
       }}
       onClick={() => onSelect(value)}
-    >{label}</div>
+    >{value === "all" ? <LayoutList size={14} aria-hidden="true" /> : <Inbox size={14} aria-hidden="true" />}<span>{label}</span></div>
   );
 
   const actionRow = (parentId: string | undefined, kind: "load-more" | "retry", label: string, announcement?: string) => {
