@@ -10,7 +10,7 @@ namespace Elsa.Studio.Tests;
 public sealed class AgentSpecialistsStudioModuleTests
 {
     [Fact]
-    public async Task GetModules_ReturnsTheAgentReviewModuleWithRoutesAndHttpOnly()
+    public async Task GetModules_ReturnsTheAgentsModuleWithNavigationRoutesAndActivityEditors()
     {
         using var provider = CreateProvider();
 
@@ -21,7 +21,8 @@ public sealed class AgentSpecialistsStudioModuleTests
         Assert.Equal("AgentSpecialistsStudio", module.ShellFeatureName);
         Assert.StartsWith("/_content/Elsa.Studio.Agent.Specialists/studio/modules/agent-specialists/module.js", module.Entry, StringComparison.Ordinal);
         Assert.Contains("routes", module.Capabilities);
-        Assert.DoesNotContain("navigation", module.Capabilities);
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("activity-editors", module.Capabilities);
         Assert.Contains(response.Diagnostics, x => x.ModuleId == "Elsa.Studio.Agent.Specialists" && x.Status == StudioModuleDiagnosticStatuses.Available);
     }
 
