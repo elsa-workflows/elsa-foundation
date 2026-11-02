@@ -136,8 +136,10 @@ last-registered service of those four returns `Unsupported`, with no shadow defa
 and turns keep their existing behavior. `IAgentTurnRegistry` and `IAgentTurnStateStore` replacements
 stay supported because the orchestrator holds the claims around their calls. Only the default
 registry's busy refusal is known to precede a write, so a replacement registry's refusal leaves the
-session conservatively busy for policy changes. `IAgentActionProposalExecutor` is not a participant;
-it may report `agent.proposal.cancelled` only for a known zero-effect cancellation before dispatch.
+session conservatively busy for policy changes. `IAgentActionProposalExecutor` is not a participant.
+Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled; any
+failure a replacement returns, including the `agent.proposal.cancelled` code, is recorded as a Failed
+zero-effect refusal.
 
 **Lifecycle disclosure.** For the engine's receipt-less `agent.operation-outcome` envelope
 (`denied`, `refused` or `uncertain`) of a mutating invocation, the owning module's

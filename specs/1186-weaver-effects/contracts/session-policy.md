@@ -1,11 +1,14 @@
 # Session policy and lifecycle contract
 
 **Status: Frozen for #3440 (T026), preview API.** This records the surface implemented by
-T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum, after these proofs passed on `7fc0a3c2e`:
-- the normal composed Studio gate (T024): the complete browser suite, 901 passed and 0 failed;
-- the complete independent package witness (T025): 38 original, 4 current-authority and 26 per-adapter autonomy cases, `independentPackageWitness:true`.
+T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum after two proofs passed:
+- the normal composed Studio gate (T024): the complete browser suite;
+- the complete independent package witness (T025): 38 original, 4 current-authority and 26 per-adapter autonomy cases.
 
-The members stay preview (pre-GA) API under ADR 0080 D4, and the source marks them "Preview (#3440)". A later change needs its own scoped contract decision. It is not a new module-specific orchestration path. The live domain catalog,
+Both first passed on `7fc0a3c2e`. They are rerun on the final reviewed head after the review fixes.
+#3440 records the exact heads, counts and hashes of every run, passing or failing.
+
+The members stay preview (pre-GA) API under ADR 0080 D4, and the source marks them "Preview". A later change needs its own scoped contract decision. It is not a new module-specific orchestration path. The live domain catalog,
 [Agent `EXTENSION_POINTS.md`](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#session-policy-and-owner-scoped-audit-3440-preview),
 owns current extension-point documentation; [Core contracts](../../../Extensions/Agent/src/Core/Contracts/AgentContracts.cs)
 and [Core models](../../../Extensions/Agent/src/Core/Models/AgentModels.cs) are the signature authority.
@@ -92,7 +95,7 @@ omission and existing backend/generation isolation.
 | `AgentSession.PolicyRevision` | `long? { init; }`, null when the store does not own revisions |
 | `AgentMessage.AcceptedPolicy` | `AgentSessionPolicyState? { init; }`, stamped at atomic insertion |
 | `AgentMessageCreateRequest.ExpectedPolicyRevision` | `long? { init; }`; a moved revision makes the owning store throw `AgentSessionPolicyChangedException` |
-| `AgentActionProposal.PolicyRevision` | `long? { init; }`, the approval basis at preparation; `AddAsync` refuses a stamp that is not the current revision |
+| `AgentActionProposal.PolicyRevision` | `long? { init; }`, the approval basis at preparation; `AddAsync` refuses a stamp that is not the current revision. A proposal without a prepared invocation is never claimed or checked, because it can never be dispatched |
 | `AgentSessionPolicyChangedException` | `InvalidOperationException` with `Code = "agent.message.policy_changed"`, `SessionId`, `ExpectedRevision`, `CurrentRevision` |
 | `IAgentAuditReader.ListOwnedAsync` (new default member) | `ListOwnedAsync(AgentAuditOwnerQuery, ct)` returns `Task<AgentAuditQueryResult>`; the default returns `AgentAuditQueryResult.Unsupported` |
 | `IAgentAuditOwnership` (new, singleton) | `AssociateAsync(sessionId, actorId, tenantId, ct)` returns `Task<bool>`; first association wins |
@@ -148,7 +151,7 @@ are never accepted from or emitted to HTTP, SSE or module payloads.
 | Prompt | Atomically with insertion of a Pending user message; stamps that message's accepted policy and revision | When that exact message becomes terminal, including a never-started Pending message terminalized directly |
 | Foreground | By the orchestrator before it reads policy for a turn or continuation | After actual registry Unregister completes. If Register throws and a write cannot be ruled out, it stays unresolved; the owner never infers that nothing was written |
 | Preparation | By the invoker for a Mutating tool, after its static checks and before the call gate, preparation or authority awaits; also for direct callers with no turn | In a `finally` on every exit (refusal, duplicate replay, cancellation, audit failure), after the proposal claim exists when there is one |
-| Proposal | Before store insertion, including direct `AddAsync` callers; it records the prepared invocation's deadline | When the proposal reaches Executed, Denied, Expired, Failed, Cancelled or server-scope Uncertain. AwaitingClient keeps it. Client-scope Uncertain keeps it until the continuation consumes it, while the Pause claim still covers the originating turn. A late acknowledgement does not depend on mode |
+| Proposal | Before store insertion, including direct `AddAsync` callers; it records the prepared invocation's deadline. A proposal without a prepared invocation can never be dispatched, so it is never claimed | When the proposal reaches Executed, Denied, Expired, Failed, Cancelled or server-scope Uncertain. AwaitingClient keeps it. Client-scope Uncertain keeps it until the continuation consumes it, while the Pause claim still covers the originating turn. A late acknowledgement does not depend on mode |
 | Pause | Before the orchestrator releases foreground for a verified paused turn | After the continuation's foreground claim is held and the pause is removed |
 
 A pre-dispatch proposal claim (AwaitingApproval, or an approved FullAuto proposal that never ran)
@@ -267,7 +270,7 @@ decorator or an additive last-registered service all count as replacements.
 | --- | --- |
 | `IAgentTurnRegistry`, `IAgentTurnStateStore` | Stay supported: the orchestrator holds the claims around their calls, and they need no new members (qualified by T019). Only the default registry's busy refusal is known to precede a write, so a replacement registry's refusal or failure leaves the session conservatively busy for policy changes until restart (#3441) |
 | `IAgentSessionService`, `IAgentStreamingService`, `IAgentToolInvoker`, `IAgentProposalService`, including forwarding decorators | Readback and update return Unsupported: 409 `agent.session.autonomy_unsupported`, and create/detail omit `policy`. No default shadow state is created; admission and turns keep their existing behavior |
-| `IAgentActionProposalExecutor` | Not a participant; the proposal service holds the claims around it. Only a known zero-effect cancellation before dispatch may be reported as `agent.proposal.cancelled`, which the service records as Cancelled. Not separately qualified by T019 |
+| `IAgentActionProposalExecutor` | Not a participant; the proposal service holds the claims around it. Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled. A replacement cannot signal Cancelled, so any failure it returns, including the `agent.proposal.cancelled` code, is recorded as a Failed refusal with zero effect. Not separately qualified by T019 |
 | `IAgentSessionPolicyService` | A replacement cannot join the internal default claims. It must own the same ordering against all admitted work, or return Unsupported. Per-turn wrappers are not registrations and are unaffected |
 | `IAgentAuditReader` | A reader that does not implement `ListOwnedAsync` inherits the Unsupported default, and the audit route answers 409 `agent.audit.query_unsupported`. An implementation must filter and order before the limit and throw `ArgumentException` for a blank actor or tenant or a limit outside 1..1000. Replace `IAgentAuditOwnership` with the same store so association and query stay coherent |
 | `IAgentAuditOwnership` | Must keep first-association-wins. A replacement session service must associate each session before emitting any record for it; otherwise its sessions stay ineligible (empty results, never a fallback) |
@@ -313,6 +316,9 @@ Rechecked against framework v6.1.0 and Elsa v6.3.0.
   6. `AddMessageAsync` and `AddAsync` on the default services can throw `AgentSessionPolicyChangedException`
      when a caller stamps a revision that is no longer current.
   7. A duplicate accepted prompt delivery re-retains that message's own context.
+  8. Only the default executor's engine-private signal records Cancelled. A replacement
+     `IAgentActionProposalExecutor` returning `agent.proposal.cancelled` is recorded as a Failed refusal,
+     not Cancelled. A module cannot fake a zero-effect cancellation after dispatch.
 - **Not touched:** §2.6.1 events (no new event or fan-in), §E2 design/runtime split, §E7 tiers
   (new tests are in the existing `Elsa.Agent.Tests` project), and the draft §2.24.
 
