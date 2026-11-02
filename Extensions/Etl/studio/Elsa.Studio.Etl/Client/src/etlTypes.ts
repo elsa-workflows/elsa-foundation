@@ -87,7 +87,7 @@ export interface EtlPipelineV2 {
   http: EtlHttpPolicy;
 }
 
-export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource;
+export type EtlSourceV2 = EtlCsvSource | EtlHttpJsonSource | EtlJsonlSource;
 
 export interface EtlCsvSource {
   kind: "csv";
@@ -101,6 +101,13 @@ export interface EtlHttpJsonSource {
   recordsPointer: string;
   fields: EtlJsonField[];
   pagination: EtlHttpPagination;
+}
+
+/** A host-approved JSON Lines file: one JSON object per line, with fields selected by JSON Pointer. */
+export interface EtlJsonlSource {
+  kind: "jsonl";
+  binding: string;
+  fields: EtlJsonField[];
 }
 
 export interface EtlJsonField {

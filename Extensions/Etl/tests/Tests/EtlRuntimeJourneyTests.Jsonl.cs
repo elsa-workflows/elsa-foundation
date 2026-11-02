@@ -202,7 +202,7 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     private static string[] PublishedMainFiles(RuntimeFiles files) => Directory.Exists(files.OutputRoot)
-        ? Directory.EnumerateFiles(files.OutputRoot, "*.jsonl").Select(Path.GetFileName).Order().ToArray()!
+        ? Directory.EnumerateFiles(files.OutputRoot, "*.jsonl").Select(path => Path.GetFileName(path)).Order().ToArray()
         : [];
 
     private static void AssertPublishedMatchesRetained(RuntimeFiles files, EtlConnectorBatchRecord batch)
