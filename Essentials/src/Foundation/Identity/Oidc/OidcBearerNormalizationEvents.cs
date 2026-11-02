@@ -21,7 +21,7 @@ public sealed class OidcBearerNormalizationEvents(
     public const string NormalizedAuthenticationType = "Elsa.Foundation.Identity.Oidc.Bearer.Normalized";
 
     private static readonly string[] InternalClaimTypes =
-    [IdentityClaimTypes.Normalized, IdentityClaimTypes.TenantId, IdentityClaimTypes.Provider, IdentityClaimTypes.Role, IdentityClaimTypes.Permission];
+    [IdentityClaimTypes.Normalized, IdentityClaimTypes.TenantId, IdentityClaimTypes.Provider, IdentityClaimTypes.Role, IdentityClaimTypes.Permission, IdentityClaimTypes.UserId];
 
     public override async Task MessageReceived(MessageReceivedContext context)
     {

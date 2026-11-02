@@ -24,6 +24,12 @@ const receiptMessages: Record<ReceiptStatus, string> = {
 
 export function HumanReviewPage({ context, reference: given }: { context: StudioEndpointContext; reference?: ReviewReference | null }) {
   const reference = given ?? readReviewReference(window.location.pathname);
+  // Each exact wait gets its own page state, so content, comment, receipt and request ID never carry over to another review.
+  const key = reference ? `${reference.workflowExecutionId}/${reference.activityExecutionId}` : "";
+  return <ReviewScreen key={key} context={context} reference={reference} />;
+}
+
+function ReviewScreen({ context, reference }: { context: StudioEndpointContext; reference: ReviewReference | null }) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,7 +59,8 @@ export function HumanReviewPage({ context, reference: given }: { context: Studio
     try {
       const result = await decideReview(context, reference, { contentHash: load.review.contentHash, decision, comment, requestId: attempt.requestId });
       setReceipt(result);
-      if (result.status !== "Unavailable") pending.current = null;
+      // A queued decision may still be replayed, so only a final receipt releases its request ID.
+      if (result.status !== "Unavailable" && result.status !== "Pending") pending.current = null;
       if (result.status !== "Unavailable" && result.status !== "Forbidden") await refresh();
     } catch (error) {
       setReceipt({ status: "Unavailable", reason: error instanceof Error ? error.message : null });

@@ -90,6 +90,8 @@ internal static class BpmnUnboundHostPolicy
         "subProcess" or "transaction" => true,
         "callActivity" => !string.IsNullOrWhiteSpace((string?)host.Attribute(BpmnVendorNamespace.Elsa + "workflowDefinitionId")),
         "sendTask" or "receiveTask" => ((string?)host.Attribute("messageRef"))?.Trim() is { Length: > 0 } messageRef && namedMessageIds.Contains(messageRef),
+        // A plain task binds the exact activity an exported document retained, so its boundaries stay meaningful.
+        var task when BpmnPortableBinding.IsPortableHost(task) => BpmnPortableBinding.IsReadable((string?)host.Attribute(BpmnVendorNamespace.Elsa + BpmnDocumentImporter.BoundActivityAttributeName)),
         _ => false
     };
 }

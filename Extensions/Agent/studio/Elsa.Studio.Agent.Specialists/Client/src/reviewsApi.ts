@@ -50,7 +50,12 @@ export function decideReview(context: StudioEndpointContext, reference: ReviewRe
 /** Reads the exact wait identity from the page route `/agents/reviews/:workflowExecutionId/:activityExecutionId`. */
 export function readReviewReference(pathname: string): ReviewReference | null {
   const match = /\/agents\/reviews\/([^/]+)\/([^/]+)\/?$/.exec(pathname);
-  return match ? { workflowExecutionId: decodeURIComponent(match[1]), activityExecutionId: decodeURIComponent(match[2]) } : null;
+  if (!match) return null;
+  try {
+    return { workflowExecutionId: decodeURIComponent(match[1]), activityExecutionId: decodeURIComponent(match[2]) };
+  } catch {
+    return null;
+  }
 }
 
 export function newRequestId() {

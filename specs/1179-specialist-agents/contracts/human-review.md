@@ -21,11 +21,11 @@ pending review unreadable, though never approved.
 
 ## Reading and deciding
 
-One module-owned Studio page, `/agents/reviews/{workflowExecutionId}/{activityExecutionId}`, is reached from an
-exact pending occurrence. Two endpoints sit under `agent/reviews/{workflowExecutionId}/{activityExecutionId}`:
+One module-owned Studio page, `/agents/reviews/{workflowExecutionId}/{activityExecutionId}`, addresses one exact
+wait. In M4 it is reachable by URL only; the link from a pending occurrence in run inspection is T034 (M5). Two endpoints sit under `agent/reviews/{workflowExecutionId}/{activityExecutionId}`:
 `agent-reviews:read` gates the read and `agent-reviews:decide` gates the decision, and deciding never implies
-reading. The page shows the pinned content, title, notes and status. A permitted reviewer chooses Approve or Deny
-and may add a comment.
+reading. The page shows the pinned content, title, notes and status. A reviewer chooses Approve or Deny and may
+add a comment; the page offers both on every pending review, and the server's permission check decides.
 
 The decision endpoint rechecks two things:
 - the exact pending wait and content hash;

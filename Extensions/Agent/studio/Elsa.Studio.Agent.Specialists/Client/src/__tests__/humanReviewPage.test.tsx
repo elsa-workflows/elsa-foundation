@@ -92,6 +92,44 @@ describe("human review page", () => {
     expect(container.querySelector("[data-testid='review-status']")?.textContent).toBe("Rejected");
   });
 
+  it("replays a queued decision with the same request ID", async () => {
+    const fake = fakeContext(view(), ["Pending", "Accepted"], view({ status: "Approved" }));
+    const container = await render(fake.context);
+    const approve = () => [...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Approve")!;
+
+    await click(approve());
+    expect(container.querySelector("[data-receipt='Pending']")).not.toBeNull();
+    await click(approve());
+
+    const [first, second] = fake.postJson.mock.calls.map(call => (call[1] as unknown as { requestId: string }).requestId);
+    expect(second).toBe(first);
+  });
+
+  it("starts fresh when the page moves to another review", async () => {
+    const fake = fakeContext(view(), ["Unavailable"]);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    cleanup.add(() => { root.unmount(); container.remove(); });
+    flushSync(() => root.render(<HumanReviewPage context={fake.context} reference={reference} />));
+    await settle();
+    await click([...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Deny")!);
+    expect(container.querySelector("[data-receipt]")).not.toBeNull();
+
+    const other = { workflowExecutionId: "run-2", activityExecutionId: "review-9" };
+    fake.getJson.mockImplementation(async () => view({ ...other, title: "Second post", contentHash: "hash-2" }));
+    flushSync(() => root.render(<HumanReviewPage context={fake.context} reference={other} />));
+    await settle();
+
+    expect(container.querySelector("[data-receipt]")).toBeNull();
+    expect(container.textContent).toContain("Second post");
+    expect(fake.getJson.mock.calls.at(-1)?.[0]).toBe("/agent/reviews/run-2/review-9");
+    await click([...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Deny")!);
+    const ids = fake.postJson.mock.calls.map(call => (call[1] as unknown as { requestId: string; contentHash: string }));
+    expect(ids[1].requestId).not.toBe(ids[0].requestId);
+    expect(ids[1].contentHash).toBe("hash-2");
+  });
+
   it("reports conflicts and an earlier resolution without deciding again", async () => {
     const fake = fakeContext(view(), ["AlreadyResolved"], undefined);
     const container = await render(fake.context);

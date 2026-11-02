@@ -25,5 +25,6 @@ describe("agent reviews api", () => {
     expect(readReviewReference("/agents/reviews/run-1/act-2")).toEqual({ workflowExecutionId: "run-1", activityExecutionId: "act-2" });
     expect(readReviewReference("/studio/agents/reviews/run%201/act-2/")).toEqual({ workflowExecutionId: "run 1", activityExecutionId: "act-2" });
     expect(readReviewReference("/agents/reviews/run-1")).toBeNull();
+    expect(readReviewReference("/agents/reviews/run%E0%A4%A/act-2")).toBeNull();
   });
 });

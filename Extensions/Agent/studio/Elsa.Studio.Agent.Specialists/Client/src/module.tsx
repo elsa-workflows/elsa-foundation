@@ -5,7 +5,7 @@ import "./styles.css";
 
 /**
  * Agents are user-defined; this module supplies the generic human review page that a workflow run links to.
- * It is reached from an exact pending occurrence, so it adds a route and no navigation entry or inbox.
+ * It addresses one exact wait by URL, so it adds a route and no navigation entry or inbox; the occurrence link is M5 (T034).
  */
 export function register(api: ElsaStudioModuleApi) {
   api.routes.add({

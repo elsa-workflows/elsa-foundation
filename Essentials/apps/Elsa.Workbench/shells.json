@@ -164,10 +164,10 @@
             "EncryptionKey": "development-demo-only-secrets-encryption-key"
           },
           "SecretsApi": {},
-          "SpecialistsReview": {},
-          "SpecialistsReviewApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
+          "SpecialistsReview": {},
+          "SpecialistsReviewApi": {},
           "Connections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},

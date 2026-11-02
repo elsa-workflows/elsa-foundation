@@ -63,10 +63,6 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
 
     /// <summary>The Elsa extension attribute naming the workflow definition a bound call activity dispatches.</summary>
     private const string WorkflowDefinitionIdAttributeName = "workflowDefinitionId";
-    /// <summary>True for the standard BPMN binding profile, whose work the document already represents in BPMN terms.</summary>
-    internal static bool IsProfileActivityVersion(string activityVersionId) => activityVersionId is DefaultBpmnProcessActivityVersionId or
-        DefaultDelayActivityVersionId or DefaultEventActivityVersionId or DefaultDispatchWorkflowActivityVersionId or DefaultPublishEventActivityVersionId;
-
     /// <summary>The vendor attribute carrying a task's exact bound <see cref="ActivityNode"/>.</summary>
     internal const string BoundActivityAttributeName = "activity";
     internal static readonly JsonSerializerOptions BoundActivitySerializerOptions = new(JsonSerializerDefaults.Web);
@@ -194,7 +190,9 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 ReportUnrepresented(source.Extensions with
                 {
                     ForeignAttributes = source.Extensions.ForeignAttributes.Where(attribute =>
-                        (source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute)) && !IsBoundActivityAttribute(attribute)).ToArray()
+                        (source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute)) &&
+                        // Only a plain task consumes a retained binding; anywhere else it is unrepresented content.
+                        !(BpmnPortableBinding.IsPortableHost(source.ElementType) && IsBoundActivityAttribute(attribute))).ToArray()
                 }, source.ElementId);
                 if (source.Script is not null)
                     Degraded(source.ElementId, "The script body and script format are not represented by the frozen Foundation authoring contract; bind an activity explicitly.");
@@ -379,8 +377,10 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
         try
         {
             var node = JsonSerializer.Deserialize<ActivityNode>(attribute.Value, BoundActivitySerializerOptions);
-            return node is null || string.IsNullOrWhiteSpace(node.ActivityVersionId) || node.Structure is not null
-                ? new BpmnRetainedActivity(null, "The retained Elsa activity binding is incomplete.")
+            if (node is null)
+                return new BpmnRetainedActivity(null, "The retained Elsa activity binding is incomplete.");
+            return BpmnPortableBinding.Problem(node) is { } problem
+                ? new BpmnRetainedActivity(null, problem)
                 : new BpmnRetainedActivity(node with { NodeId = bindingRef }, null);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)

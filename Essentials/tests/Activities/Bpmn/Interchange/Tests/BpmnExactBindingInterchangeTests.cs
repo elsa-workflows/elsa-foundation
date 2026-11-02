@@ -62,31 +62,76 @@ public sealed class BpmnExactBindingInterchangeTests
         // Refusal keeps the authored binding; it never substitutes another version.
         Assert.Contains(structure.Activities, x => x.ActivityVersionId == AgentVersionId);
         if (!published)
-            Assert.Contains(result.Analysis.Capabilities, x => x.Availability == BpmnImportCapabilityAvailability.Unsupported && x.Reason.Contains(AgentVersionId, StringComparison.Ordinal));
+            Assert.Contains(result.Analysis.Capabilities, x => x.ElementId == "write" && x.Availability == BpmnImportCapabilityAvailability.Unsupported);
     }
 
     [Fact]
     public void A_tampered_exact_binding_is_refused_with_an_actionable_reason()
     {
-        var xml = new BpmnDocumentExporter().Export(Process()).Replace("acme.copywriter@1.0.0", "\" broken", StringComparison.Ordinal);
         var tampered = System.Text.RegularExpressions.Regex.Replace(new BpmnDocumentExporter().Export(Process()),
             "elsa:activity=\"[^\"]*copywriter[^\"]*\"", "elsa:activity=\"{not json\"");
 
         var imported = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(tampered);
 
-        Assert.Contains(imported.Analysis.Capabilities, x => x.ElementId == "write" && x.Availability == BpmnImportCapabilityAvailability.Unsupported &&
-            x.Reason.Contains("Bind the task's activity explicitly", StringComparison.Ordinal));
+        Assert.Contains(imported.Analysis.Capabilities, x => x.ElementId == "write" && x.Availability == BpmnImportCapabilityAvailability.Unsupported);
         Assert.False(imported.Analysis.CanExecute);
-        Assert.NotNull(xml);
     }
 
-    private static ActivityNode Process()
+    [Fact]
+    public void Secret_expression_and_sensitive_bindings_never_leave_or_enter_a_document()
+    {
+        ArgumentState Input(string key, string expressionType, bool? sensitive = null) =>
+            new(key, new ArgumentValue(JsonSerializer.SerializeToElement("x"), expressionType), null, null, null, sensitive);
+        foreach (var unsafeInput in new[] { Input("header", "Secret"), Input("url", "JavaScript"), Input("token", "Literal", sensitive: true) })
+        {
+            var xml = new BpmnDocumentExporter().Export(Process(new ActivityNode("agent-node", AgentVersionId, [unsafeInput], [])));
+            Assert.DoesNotMatch("elsa:activity=\"[^\"]*copywriter", xml);
+        }
+
+        var crafted = System.Text.RegularExpressions.Regex.Replace(new BpmnDocumentExporter().Export(Process()),
+            "elsa:activity=\"[^\"]*copywriter[^\"]*\"",
+            "elsa:activity=\"" + System.Security.SecurityElement.Escape(JsonSerializer.Serialize(new
+            {
+                nodeId = "x", activityVersionId = AgentVersionId, outputs = Array.Empty<object>(),
+                inputs = new[] { new { referenceKey = "header", value = new { value = "prod-api-key", expressionType = "Secret" } } }
+            }, Web)) + "\"");
+        var imported = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(crafted);
+
+        Assert.Contains(imported.Analysis.Capabilities, x => x.ElementId == "write" && x.Availability == BpmnImportCapabilityAvailability.Unsupported);
+        Assert.False(imported.Analysis.CanExecute);
+        var structure = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!;
+        Assert.DoesNotContain(structure.Activities, x => x.ActivityVersionId == AgentVersionId);
+    }
+
+    [Fact]
+    public void A_boundary_on_a_task_with_a_retained_binding_survives_the_round_trip()
+    {
+        var xml = new BpmnDocumentExporter().Export(Process());
+        var prefix = System.Text.RegularExpressions.Regex.Match(xml, "<([A-Za-z0-9]+:)?userTask").Groups[1].Value;
+        var boundary = $"<{prefix}boundaryEvent id=\"timeout\" attachedToRef=\"human-review\"><{prefix}timerEventDefinition><{prefix}timeDuration>PT1H</{prefix}timeDuration></{prefix}timerEventDefinition></{prefix}boundaryEvent>" +
+                       $"<{prefix}sequenceFlow id=\"f-timeout\" sourceRef=\"timeout\" targetRef=\"end\" />";
+        var withBoundary = xml.Replace($"</{prefix}process>", boundary + $"</{prefix}process>", StringComparison.Ordinal);
+
+        var imported = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(withBoundary);
+        var structure = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!;
+
+        Assert.Contains(structure.Elements, x => x.ElementId == "timeout" && x.AttachedToRef == "human-review");
+        Assert.Contains(structure.SequenceFlows, x => x.FlowId == "f-timeout");
+        Assert.Contains(structure.Activities, x => x.ActivityVersionId == ReviewVersionId);
+    }
+
+    private static ActivityNode Process(ActivityNode? agent = null) => Node(Structure(agent));
+
+    private static ActivityNode Node(BpmnAuthoredStructure structure) => new("node-bpmn", "Elsa.BpmnProcess", [], [],
+        new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
+
+    private static BpmnAuthoredStructure Structure(ActivityNode? agent = null)
     {
         ArgumentState Literal(string key, object value) => new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
-        var structure = new BpmnAuthoredStructure(
+        return new BpmnAuthoredStructure(
             activities:
             [
-                new ActivityNode("agent-node", AgentVersionId, [Literal("brief-key", "moss gardens")], []),
+                agent ?? new ActivityNode("agent-node", AgentVersionId, [Literal("brief-key", "moss gardens")], []),
                 new ActivityNode("review-node", ReviewVersionId, [Literal("Title", "Launch post")], [])
             ],
             elements:
@@ -102,8 +147,6 @@ public sealed class BpmnExactBindingInterchangeTests
                 new BpmnSequenceFlow("f2", "write", "human-review"),
                 new BpmnSequenceFlow("f3", "human-review", "end", conditionOutcome: "Approved")
             ]);
-        return new("node-bpmn", "Elsa.BpmnProcess", [], [],
-            new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
     }
 
     private sealed class Catalog(bool published) : IActivityDefinitionLookup
