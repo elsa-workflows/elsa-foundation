@@ -585,7 +585,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                     AgentSessionKeyKinds.CallInput => proposalStore.CallInputs,
                     _ => null
                 };
-                if (index is not null) index[key.Key] = key.Value;
+                index?[key.Key] = key.Value;
             }
         }
     }

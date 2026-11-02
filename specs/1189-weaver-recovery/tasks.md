@@ -72,12 +72,14 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 **Independent test**: Restart at all six story 2 boundaries, before and after each deadline. Count executions at the owning fixture.
 
-- [ ] T009 [US2] Add a restart-simulation harness to `Extensions/Agent/tests/Tests/` that disposes and rebuilds the host over one shared in-memory record store. Add these controls:
+- [x] T009 [US2] Add a restart-simulation harness to `Extensions/Agent/tests/Tests/` that disposes and rebuilds the host over one shared in-memory record store. Add these controls:
   - A causal red control: on the current code, a pending review does not survive a restart.
   - A negative control: deliberately skip one awaited write, and a restart test must fail.
 
   Own the SC-001 matrix: the six boundaries, before and after each deadline, with execution counts. That includes story 2.1 (idle restart) and story 2.2 (a review stays decidable before its deadline).
-- [ ] T010 [US2] Rebuild claims at hydrate (research R4) in `DefaultAgentServices.cs`:
+
+  Verified: commit `1bb7ac936`; `AgentRestartHarness` plus `AgentRecoveryRestartTests`. The pending-review control was red on the pre-T010 code (`agent.proposal.not_found`). A skipped approval write makes the approved-before-dispatch scenario fail. The matrix covers 6 boundaries × before/after deadline with module dispatch counts on the host-driven loop; the delegated (Copilot) adapter is exercised by T015's tests and is qualified against actual adapters in T031.
+- [x] T010 [US2] Rebuild claims at hydrate (research R4) in `DefaultAgentServices.cs`:
   - Prompt, from a Pending message;
   - Pause, from the paused turn;
   - Proposal, with deadline and dispatched flag;
@@ -88,7 +90,9 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - an autonomy change returns busy while restored claims are held.
 
   Add one test for each claim-rebuild row and for the interrupted row of the data-model transition table.
-- [ ] T011 [US2] Implement lazy settlement in `AgentProposalServices.cs`:
+
+  Verified: commit `1bb7ac936`; one test per claim-rebuild row (Prompt, Pause, Proposal with deadline and dispatched flag), the interrupted row, the expired-session closure and busy-while-restored, in `AgentRecoveryRestartTests`.
+- [x] T011 [US2] Implement lazy settlement in `AgentProposalServices.cs`:
   - compare-and-set on status and version, with no proposal gates, during hydrate;
   - `ExpireBeforeDispatchAsync` accepts a null actor;
   - audit metadata `settledBy=recovery`;
@@ -99,9 +103,15 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - zero effect, a single Expired record and correlation;
   - a late truthful receipt after restart-Uncertain reconciles once;
   - a conflicting receipt is refused (FR-007, story 2.4).
-- [ ] T012 [US2] Add the story 2.3 recheck to `ExecuteAsync`. The stamped `PolicyRevision` must equal the current revision; otherwise refuse with 409 `agent.proposal.policy_stale`. The approval binding, the module's exact target and revision, current authority, validation, risk and policy must all still permit it, and the deadline must not have passed. Otherwise record Expired or a zero-effect Failed. Map `policy_stale` in `Api/AgentApi.cs`. Add a refusal test for each condition and an execute-once test after a restart.
-- [ ] T013 [US2] Prove that a paused turn with a recorded receipt continues once after a restart and reports the receipt to the provider without re-executing. Prove that an identical retry of an accepted message returns the original message after a restart. Both cases use the stored fingerprints verbatim. Prove that duplicate call, call-input and acknowledgement keys deduplicate after a restart (FR-009).
-- [ ] T014 [US2] Implement owner token, fence and lease (research R5):
+
+  Verified: commit `1bb7ac936`; Expired once with zero effect, one `settledBy=recovery` record with no actor and the original correlation, and no second settlement on a later restart; Executing and a client request past its deadline become Uncertain, never Expired; a late truthful receipt after a restart uncertainty reconciles once and a conflicting one is refused.
+- [x] T012 [US2] Add the story 2.3 recheck to `ExecuteAsync`. The stamped `PolicyRevision` must equal the current revision; otherwise refuse with 409 `agent.proposal.policy_stale`. The approval binding, the module's exact target and revision, current authority, validation, risk and policy must all still permit it, and the deadline must not have passed. Otherwise record Expired or a zero-effect Failed. Map `policy_stale` in `Api/AgentApi.cs`. Add a refusal test for each condition and an execute-once test after a restart.
+
+  Verified: commit `06cdf3860`; `AgentRecoveryExecutionTests` refuses each condition after a restart with zero effects (the policy-revision case executed without the new check), executes once across two restarts, and the execute route answers 409 `agent.proposal.policy_stale` with the recorded failed outcome.
+- [x] T013 [US2] Prove that a paused turn with a recorded receipt continues once after a restart and reports the receipt to the provider without re-executing. Prove that an identical retry of an accepted message returns the original message after a restart. Both cases use the stored fingerprints verbatim. Prove that duplicate call, call-input and acknowledgement keys deduplicate after a restart (FR-009).
+
+  Verified: commit `715952a07`; `AgentRecoveryDeduplicationTests` (verbatim pause fingerprint and one continuation, identical prompt retry, call and call-input keys without re-preparation, acknowledgement retry and conflict).
+- [x] T014 [US2] Implement owner token, fence and lease (research R5):
   - every guarded write extends the lease;
   - background renewal runs while Foreground is held or an execution is dispatched;
   - another process's live lease returns `owned_elsewhere`;
@@ -109,11 +119,15 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - acknowledgement and resolution are idempotent on retry.
 
   Add two-process tests over one store.
-- [ ] T015 [US2] Make provider behaviour after an interruption explicit (FR-021).
+
+  Verified: commit `c2be3ff19`; `AgentSessionOwnershipTests` over two hosts and one store (retryable `owned_elsewhere` with its hint and the API 409, lease extension by writes, takeover with a new fence, refused superseded writes, eviction and turn cancellation, renewal only while a turn runs or an execution is dispatched). Acknowledgement retries after a takeover return the retained outcome (T013); owner resolution and its retry arrive with T018.
+- [x] T015 [US2] Make provider behaviour after an interruption explicit (FR-021).
   - In `Extensions/Agent/src/GitHubCopilot/Services/GitHubCopilotAgentProvider.cs`, emit `agent.provider.github_copilot.conversation_reset` when the resume falls back to a new session, and record it on the turn.
   - In `AgentTurnServices.cs` provider-history assembly, exclude Cancelled, interrupted and withdrawn prompts and their Failed partial assistant text. Keep recorded Tool receipts.
   - Document both behaviours in the Copilot README and in a new `Extensions/Agent/src/Anthropic/README.md`.
   - Add causal tests for each provider.
+
+  Verified: commit `3c0d46622`; `AgentProviderInterruptionTests`, each case red without its change. The complete Agent suite passes 818/818 in three runs (load average up to 12).
 
 ## Phase 4: US4 — Recover only under current authority (P1)
 
