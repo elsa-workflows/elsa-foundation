@@ -2,15 +2,15 @@
 
 Owner project: `Elsa.Agent`. Contract project: `Elsa.Agent.Core`. Domain: `Elsa.Agent`.
 
-This is the domain catalog for framework §2.22.1. The [root index](../../../../EXTENSION_POINTS.md) links here. Signatures and models live in [Core contracts](../Core/Contracts/) and [Core models](../Core/Models/); the [candidate contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md) records the current #3437 limits. The independently packaged extension proof in #3438 still gates contract freeze.
+This is the domain catalog for framework §2.22.1. The [root index](../../../../EXTENSION_POINTS.md) links here. Signatures and models live in [Core contracts](../Core/Contracts/) and [Core models](../Core/Models/); the [M1 contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md) records the accepted minimum supported by the [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json). [M1 final integration](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) is verified Done on main `ab46bc22a`; the broader Program remains open.
 
 ## Composition and lifetimes
 
 `FoundationAgentAbstractionsFeature` in `Elsa.Agent` retains the configured feature name `FoundationAgentAbstractions`. Its virtual registration calls `services.AddFoundationAgentAbstractions()` idempotently. API, workflow and provider features inherit this feature and declare Type dependencies. The base declares the string dependency `Events`; consumers must explicitly discover ordinary Events infrastructure. Missing Events fails composition.
 
-`Elsa.Agent.Core` contains contracts, models, named collecting events and thin provider bridges. Active defaults and registration are in `Elsa.Agent`; modules contribute through Core without referencing these defaults. Context collectors, catalogs, registries, invoker, proposal facade/executor, policy, authorizer, streaming and provider registry are scoped. The scoped tool registry caches only its own collected tools, never a cross-request tool instance.
+`Elsa.Agent.Core` contains contracts, models, named collecting events and thin provider bridges. Active defaults and registration are in `Elsa.Agent`; modules contribute through Core without referencing these defaults. Context collectors, catalogs, registries, invoker, proposal facade/executor, policy, session policy service, authorizer, streaming and provider registry are scoped. The scoped tool registry caches only its own collected tools, never a cross-request tool instance.
 
-`InMemoryAgentSessionService`, `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore`, `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee.
+`InMemoryAgentSessionService` (which also owns policy revisions and work claims), `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore` (sink, reader and audit ownership), `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee.
 
 ## Overridable contracts
 
@@ -18,7 +18,8 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 
 | Contract | Default and lifetime | Signature surface | When to override; dependants |
 |---|---|---|---|
-| [`IAgentSessionService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentSessionService`, singleton | Create/find sessions; add/find/list messages and context; set message status | Supply persistent session/message storage. API, context sources, turn orchestration and proposal authorization consume it. |
+| [`IAgentSessionService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentSessionService`, singleton | Create/find sessions; add/find/list messages and context; set message status | Supply persistent session/message storage. API, context sources, turn orchestration and proposal authorization consume it. The default also owns the session policy revision and work claims; a replacement makes autonomy updates Unsupported ([below](#session-policy-and-owner-scoped-audit-3440-preview)). |
+| [`IAgentSessionPolicyService`](../Core/Contracts/AgentContracts.cs) *(preview, #3440)* | `DefaultAgentSessionPolicyService`, scoped | `GetAsync(sessionId, actorId, tenantId)` and `ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest)` return `Task<AgentSessionPolicyResult>` | Normally not replaced: a replacement cannot join the default claims, so it must own the same ordering against admitted work or return `Unsupported`. API create/detail readback and the autonomy route consume it. |
 | [`IAgentPolicyEvaluator`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentPolicyEvaluator`, scoped | `EvaluateAvailabilityAsync`, `EvaluateContextAsync`, `EvaluateCapabilityAsync` return `ValueTask<AgentPolicyDecision>` | Extend host policy. Context admission, API, invoker and executor consume it; policy does not grant resource permissions. |
 | [`IAgentContextSanitizer`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentContextSanitizer`, scoped | `SanitizeAsync(attachments)` returns `ValueTask<IReadOnlyCollection<AgentContextAttachment>>` | Add generic minimization/redaction. The collector sanitizes installed contributions before final host policy and provider use. |
 | [`IAgentContextCollector`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentContextCollector`, scoped | `CollectAsync(policy, AgentContextRequest)` returns `Task<AgentResult<AgentContextContribution>>` | Replace admission orchestration while preserving installed-source admission, diagnostics, minimization and policy. API/session input uses it. |
@@ -33,7 +34,8 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 | [`IAgentTurnStateStore`](../Core/Contracts/AgentTurnContracts.cs) | `InMemoryAgentTurnStateStore`, singleton | `Save(AgentPausedTurn)`, `Find(sessionId)`, `Remove(sessionId)` | Replace paused-turn retention. Orchestrator consumes the stored proposal/tool/history correlation after review. |
 | [`IAgentFeedbackService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentFeedbackService`, singleton | `AddAsync(AgentFeedback)` returns `Task<AgentFeedback>` | Supply feedback persistence. API consumes it; default emits audit linkage. |
 | [`IAgentAuditSink`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentAuditStore`, singleton shared with reader | `EmitAsync(AgentAuditEvent)` returns `Task` | Supply audit persistence/forwarding. Sessions, context, tools, proposals, feedback and provider diagnostics emit records. |
-| [`IAgentAuditReader`](../Core/Contracts/AgentContracts.cs) | Same `InMemoryAgentAuditStore` | `ListAsync(sessionId?, take?)` returns `Task<IReadOnlyCollection<AgentAuditEvent>>` | Supply audit queries consistent with the sink. API audit views consume it. |
+| [`IAgentAuditReader`](../Core/Contracts/AgentContracts.cs) | Same `InMemoryAgentAuditStore` | `ListAsync(sessionId?, take?)` returns `Task<IReadOnlyCollection<AgentAuditEvent>>` (trusted, unscoped, in-process); preview default member `ListOwnedAsync(AgentAuditOwnerQuery)` returns `Task<AgentAuditQueryResult>`, `Unsupported` by default | Supply audit queries consistent with the sink. The API audit route reads only through `ListOwnedAsync`; a reader that does not implement it makes the route answer 409 `agent.audit.query_unsupported`. |
+| [`IAgentAuditOwnership`](../Core/Contracts/AgentContracts.cs) *(preview, #3440)* | Same `InMemoryAgentAuditStore`, singleton | `AssociateAsync(sessionId, actorId, tenantId)` returns `Task<bool>`; first association wins | Replace together with the reader so association and owner query stay coherent. The default session service associates each session before emitting any record for it. |
 | [`IAgentProviderRegistry`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentProviderRegistry`, scoped | `Active: IAgentProvider?` | Replace provider selection only while preserving the single-active-provider contract. Orchestrator/API consume it; multiple installed providers fail with `AgentHarnessConflictException`. |
 | [`IAgentProvider`](../Core/Contracts/AgentContracts.cs) | No provider in base registration | Provider/session identity, `CreateSessionAsync`, `ContinueTurnAsync(AgentTurnContext)`, approval and diagnostics | Install one provider adapter through its feature. The orchestrator consumes it; zero providers is unavailable, never a deterministic production fallback. |
 
@@ -53,24 +55,31 @@ Known provider implementations:
 
 - **Kind:** Source; the existing interface name is retained. [Signature](../Core/Contracts/AgentContracts.cs): `Descriptor: AgentContextProviderDescriptor`, derived `ScopeKind`, and `CollectAsync(AgentContextRequest): ValueTask<AgentContextContribution>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, MyContextSource>())`.
-- **Consumed by:** the single `CollectAgentContext` handler for `AgentContextCollecting`. Modules register sources rather than additional fan-in handlers.
+- **Consumed by:** the single `CollectAgentContext` handler for `AgentContextCollecting`. `CollectAgentTools` reads only public descriptor metadata to validate installed tool-to-source ownership. Modules register sources rather than additional fan-in handlers.
 - **Ownership:** descriptor declares module, supported context kinds/schema versions, resource types and scope. The module admits/minimizes caller material, authorizes its own reads, supplies installed guidance and returns typed diagnostics. Caller origin/scopes are reset before source admission; only the installed source can contribute admitted scopes. `Descriptor.ScopeKind = "*"` opts an installed source into ambient collection for every request; it does not admit arbitrary owners, kinds, versions or permissions.
-- **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — qualification fixture, not shipped)*.
+- **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetContextSource` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentCapabilityProvider` *(Core — `Elsa.Agent.Core`)*
 
 - **Kind:** Source. [Signature](../Core/Contracts/AgentContracts.cs): `GetCapabilitiesAsync(): ValueTask<IReadOnlyCollection<AgentCapability>>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, MyCapabilitySource>())`.
 - **Consumed by:** the single `CollectAgentCapabilities` handler for `AgentCapabilitiesCollecting`. Advertise demonstrated supported journeys and limitations; discovery is not a permission grant.
-- **Known implementations:** `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; private journey `NoteCapabilities` (`Weaver.Journey.Backend`) *(cross-domain — qualification fixture, not shipped)*.
+- **Known implementations:** `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetCapabilities` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteCapabilities` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentTool` *(Core — `Elsa.Agent.Core`)*
 
 - **Kind:** Installed-tool contribution. [Signature](../Core/Contracts/AgentToolContracts.cs): `Descriptor: AgentToolDescriptor`, `PrepareAsync(AgentToolInvocation): Task<AgentResult<AgentToolPreparation>>`, and `ExecuteAsync(AgentPreparedToolInvocation): Task<AgentResult<AgentToolResult>>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, MyTool>())`.
-- **Consumed by:** the single `CollectAgentTools` handler for `AgentToolsCollecting`, then the existing async `IAgentToolRegistry`. Duplicate names, missing owner/version and malformed input schemas fail discovery; per-turn context/current authority determine availability.
+- **Consumed by:** the single `CollectAgentTools` handler for `AgentToolsCollecting`, then the existing async `IAgentToolRegistry`. Duplicate names, missing owner/version, missing/ambiguous/foreign disclosure-source links and malformed input schemas fail discovery; per-turn context/current authority determine availability.
 - **Ownership:** the module validates canonical arguments, exact target/revision, required context and risk during side-effect-free preparation. It supplies versioned preview/result schemas and renderer identity, applies through its owning service/native transaction, rechecks resource constraints and returns actual read-back evidence. `AgentToolPreparation`, `AgentPreparedToolInvocation`, `AgentPayload`, `AgentResourceTarget` and `AgentEffectReceipt` are defined in [Core contribution models](../Core/Models/AgentContributionModels.cs); the generic engine freezes and binds preparation rather than defining module payload meaning. Both provider paths use the existing thin `AgentToolAIFunctions` bridge.
-- **Known implementations:** `WorkflowReadGraphTool` and `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — qualification fixture, not shipped)*. The fixture is not the independent #3438 package-consumer proof.
+- **Known implementations:** `WorkflowReadGraphTool` and `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `ReadWidgetTool` / `SetWidgetVisibilityTool` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
+
+### `IAgentToolAuthorization` *(Core — `Elsa.Agent.Core`)*
+
+- **Kind:** Optional owner-authority companion on the same installed tool. [Signature](../Core/Contracts/AgentToolContracts.cs): `AuthorizeAsync(actorId, tenantId, target, cancellationToken)` returns `ValueTask<AgentPolicyDecision>`.
+- **Register:** implement on the existing `IAgentTool`; no additional registry or fan-in. The shared engine requires host authority first, then this owner decision for advertisement, concrete dispatch, duplicate outcome delivery and reviewed execution/completion.
+- **Ownership:** use the owning resource's native authorization and current scope. A null target is an availability hint; concrete preparation is checked again. It cannot grant authority denied by the host. Context and historical-result disclosure still use the original installed source's admission hook.
+- **Known implementations:** workflow graph/read and layout tools delegate to the workflow domain's selected `IWorkflowDefinitionAuthorizer`. Other modules can contribute their own rules without changes to Weaver, hosts or provider adapters.
 
 ### `IAgentClientTool` *(Core — `Elsa.Agent.Core`)*
 
@@ -79,11 +88,13 @@ Known provider implementations:
 - **Ownership:** validate/redact the browser's observation against the exact preparation and return a typed local working-state receipt. Completion admits evidence; it never executes the operation again. The module's private browser binding owns current selection/revision/generation, native application, validation, rendering and undo semantics.
 - **Known implementation:** `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*. See the [Workflow Agent catalog](../Workflows/EXTENSION_POINTS.md) for its supported subset.
 
-The unrelated-resource examples above are the private [owned journey backend fixture](../../../../tools/studio/Composition.Probe/fixtures/WeaverJourney.Backend.cs.in), not a shipped resource module or completed independent-consumer qualification.
+The `Note*` examples refer to the private [source-composed journey fixture](../../../../tools/studio/Composition.Probe/fixtures/WeaverJourney.Backend.cs.in). The independent package example below has separate author/consumer evidence.
+
+The separately authored [Acme Home fixture](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/) adds `WidgetContextSource` (`IAgentContextProvider`), `WidgetCapabilities` (`IAgentCapabilityProvider`), and `ReadWidgetTool` / `SetWidgetVisibilityTool` (`IAgentTool`) through `AcmeHomeWidgetFeature` *(cross-domain — qualification package)*. Its [Studio companion](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/) contributes public SDK context, prompt actions and result rendering. The [76ec independent witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) qualifies the actual external consumer journeys, native add/remove/incompatible/restore controls and both provider adapters at that code baseline. [Final-head review/CI, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497). Durable shared lifecycle/recovery and broader Program M2–M5 coverage remain open. The [preview migration](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration) identifies removed exports and package/namespace changes.
 
 ## Events
 
-All three [Core events](../Core/AgentContributionsCollecting.cs) implement `IEvent`. Delivery is **Sequential** through `IInlineEventPublisher`: the publisher awaits contributions and unexpected exceptions/cancellation propagate. Expected source limitations use `AgentContributionDiagnostic`; a required diagnostic blocks context admission. Each output collection is initialized and get-only, with direct mutable collection access for its one aggregator.
+All three [Core events](../Core/AgentContributionsCollecting.cs) implement `IEvent`. Delivery is **Sequential** through `IInlineEventPublisher`: the publisher awaits its single aggregator and remains unshielded. The aggregator bounds individual sources and classifies their outcomes; cancellation and required unexpected failures propagate. Expected source limitations use `AgentContributionDiagnostic`; a required diagnostic blocks context admission. Each output collection is initialized and get-only, with direct mutable collection access for its one aggregator.
 
 | Event | Meaning and payload | Contributor / single aggregator | Publication site |
 |---|---|---|---|
@@ -91,12 +102,169 @@ All three [Core events](../Core/AgentContributionsCollecting.cs) implement `IEve
 | `AgentCapabilitiesCollecting` | Collect supported capability descriptors. `Capabilities: ICollection<AgentCapability>` | `IAgentCapabilityProvider.GetCapabilitiesAsync` / `CollectAgentCapabilities` | `DefaultAgentCapabilityCatalog.ListAsync` |
 | `AgentToolsCollecting` | Collect installed tools before per-turn admission. `Tools: ICollection<IAgentTool>` | Registered `IAgentTool` / `CollectAgentTools` | `DefaultAgentToolRegistry.ListAsync`, once per scoped registry |
 
-`AddFoundationAgentAbstractions()` registers those aggregators with `TryAddEventHandler<TEvent, THandler>()`. Modules add typed contributors, preserving one aggregator per contribution event. Duplicate context source/attachment and capability identities are diagnosed, as are duplicate tool identities by the registry. No background event or catch-and-ignore collection fallback is introduced.
+`AddFoundationAgentAbstractions()` registers those aggregators with `TryAddEventHandler<TEvent, THandler>()`. Modules add typed contributors, preserving one aggregator per contribution event. Duplicate context source/attachment and capability identities are diagnosed, as are duplicate tool identities by the registry. No background event or global catch-and-ignore delivery policy is introduced. Optional source faults and source deadlines become visible diagnostics; they do not change other Sequential handlers.
 
-## Current candidate limits
+<a id="current-candidate-limits"></a>
 
-The #3437 implementation admits at most one distinct mutating tool call per session/turn; identical delivery coalesces and conflicting delivery is rejected. One module-owned call can contain its native atomic batch. Server reads execute inline; reads that request review or client execution are explicitly unsupported. Server mutations, including FullAuto, share the same prepared proposal/effect pipeline. Every client working-state mutation requires explicit review, including FullAuto.
+## Accepted M1 bounds
+
+The M1 implementation admits at most one distinct mutating tool call per session/turn; identical delivery coalesces and conflicting delivery is rejected. One module-owned call can contain its native atomic batch. Server reads execute inline; reads that request review or client execution are explicitly unsupported. Server mutations, including FullAuto, share the same prepared proposal/effect pipeline. Every client working-state mutation requires explicit review, including FullAuto.
 
 Client execution returns HTTP 202 with `awaiting-client`, `executed: false` and the exact prepared request. Only a matching authenticated observation accepted by the same installed tool can mark it Executed. Receipt continuation receives the retained result with no available tools and cannot start another mutation or replay the original prompt. Before dispatch a refusal has no effect; after dispatch cancellation, missing/invalid receipt or lost delivery can mean uncertainty. Retained duplicates cannot rerun effects or replace accepted evidence.
 
-All lifecycle retention and deduplication here are in memory. Restart, cross-process coordination, durable history/approvals and broader recovery remain M2 work. This catalog describes the candidate surface; completed composed-host, package-consumer and live-provider evidence must be recorded on their owning issues and is not inferred from these registrations.
+All lifecycle retention and deduplication here are in memory. Restart/shell replacement, cross-process coordination, durable history/approvals and broader recovery remain M2 work. The [owning receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) records completed package-consumer and deterministic provider-protocol evidence for 76ec; [final-head integration and resulting-main gates completed](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143). Registrations alone establish no runtime evidence, and no live-provider success is claimed.
+
+## Session policy and owner-scoped audit (#3440, preview)
+
+These preview members are the #3440 contract, frozen after the normal composed Studio and complete
+package proofs passed. Pre-GA they may still change under ADR 0080. The [session policy contract](../../../../specs/1186-weaver-effects/contracts/session-policy.md)
+records the wire shape, refusal codes, lifecycle outcomes and constitution/SemVer classification;
+this section keeps only the extension rules.
+
+The default session row owns the policy, its revision and internal work claims for prompts,
+foreground turns, mutating-tool preparation, proposals and pauses. `IAgentSessionPolicyService`
+reads it back and changes only `AutonomyMode`, conditionally on the expected revision. Accepted
+messages (`AgentMessage.AcceptedPolicy`) and prepared proposals (`AgentActionProposal.PolicyRevision`)
+keep the revision that admitted them. `AgentMessageCreateRequest.ExpectedPolicyRevision` lets a
+custom admission path refuse an insertion whose authorized revision moved, with
+`AgentSessionPolicyChangedException`.
+
+**Participation.** Readback and the update are supported only when the resolved `IAgentSessionService`,
+`IAgentStreamingService`, `IAgentToolInvoker` and `IAgentProposalService` are the default
+participants of one owner instance. Any replacement, forwarding decorator or additive
+last-registered service of those four returns `Unsupported`, with no shadow default state; admission
+and turns keep their existing behavior. `IAgentTurnRegistry` and `IAgentTurnStateStore` replacements
+stay supported because the orchestrator holds the claims around their calls. Only the default
+registry's busy refusal is known to precede a write, so a replacement registry's refusal or
+registration failure leaves the foreground claim held: every current-revision autonomy change on that
+session, including a no-op, returns `agent.session.busy` until the session expires (then
+`agent.session.closed`) or the process restarts. Likewise, an accepted prompt that never reaches a
+terminal status (for example, a prompt whose stream is never opened) keeps its prompt claim; that
+prompt already blocked new prompts before #3440. `IAgentActionProposalExecutor` is not a participant.
+Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled; any
+failure a replacement returns, including the `agent.proposal.cancelled` code, is recorded as a Failed
+zero-effect refusal.
+
+**Lifecycle disclosure.** For the engine's receipt-less `agent.operation-outcome` envelope
+(`denied`, `refused` or `uncertain`) of a mutating invocation, the owning module's
+`IAgentContextProvider.AdmitDisclosureAsync` decision, not the tool's mutation authority, now
+governs whether the outcome continues the originating turn. Module disclosure sources should admit
+these envelopes for their own invocations and targets while read authority remains.
+
+**Owner-scoped audit.** `ListOwnedAsync` filters by the associated actor and tenant and the
+optional session, and orders newest first before the limit (1..`AgentAuditOwnerQuery.MaxTake`). It
+never returns a record without an ownership association. A custom session service must call
+`IAgentAuditOwnership.AssociateAsync` before emitting records, or its sessions stay ineligible.
+
+## Context and result disclosure (#3439, under qualification)
+
+The existing `AgentContextCollecting` fan-in also admits retained evidence through
+`AgentContextRequest.Disclosure`. The same installed `IAgentContextProvider` implements
+`AdmitDisclosureAsync(AgentContextDisclosureRequest, CancellationToken)`; no second registry is
+introduced. Its default returns a required unsupported-disclosure diagnostic. The host stamps
+`AgentContextAttachment.ContributorId`; callers cannot confer that provenance. Original source ID,
+module, context kind and schema must still match an installed contribution.
+
+A tool declares `AgentToolDescriptor.DisclosureSourceId`. Preparation freezes this ID into the
+reviewed invocation; the engine stamps the actual invocation, owner, contract and target onto each
+observed result's `Access`. Result disclosure must resolve that exact installed source, even when
+there are no retained context attachments. A module ID alone does not choose an arbitrary source.
+Missing support or changed ownership is an explicit limitation, not permission to send the result.
+
+The source owns current native resource authorization, guidance, minimization and the meaning of
+historical evidence. Successful disclosure authorizes the supplied historical evidence and original
+results unchanged; its returned attachments are the permitted current projection. It may withhold
+an obsolete snapshot during receipt continuation, without changing the receipt or treating it as a
+fresh read. Required authority failures block provider use. Source optionality never makes an
+unavailable disclosure gate permissive. Current host policy also governs original retained evidence,
+including history retained by a provider SDK, as well as the returned projection.
+Before each SDK callback or host batch operation, current admission and tools are rechecked. A
+projection that removes a scope cannot leave an older callback authorized. A changed owner resource
+identity or revision requires fresh intent rather than silently moving the accepted turn. Adding
+authorized detail targets while retaining the original binding is permitted.
+
+Generated transcript and paused state retain the complete disclosure history separately from the
+original request target and the current executable projection. The additive Core value
+`AgentDisclosureSnapshot(Context, ToolResults)` preserves each whole snapshot, including different
+versions with the same attachment ID. `AgentMessage`, `AgentMessageCreateRequest` and `AgentPausedTurn`
+add nullable `IReadOnlyList<AgentDisclosureSnapshot> DisclosureHistory`. Historical source hooks
+authorize those originals unchanged before later provider handoffs and callbacks; their returned
+historical projection never replaces retained dependencies. Inherited result dependencies do not
+become fresh execution results or change receipt-continuation semantics.
+
+Custom session stores must round-trip this field and existing provenance. Generated assistant
+`DeliveryFingerprint` covers content, original context, outcomes and disclosure history. Paused
+state also adds nullable `DisclosureHistoryFingerprint`, a canonical checksum of its complete state
+excluding the checksum itself. These checks detect incomplete or changed storage; they are not
+authorization, signatures or protection against a malicious store recomputing them. Missing legacy
+protected assistant/pause history refuses further provider use while accepted effect receipts remain
+retained. Empty unprotected legacy messages remain supported. A turn with resource evidence but no
+visible answer still retains a metadata-only journal, omitted from chat and provider message text.
+
+Disclosure history is a verified write-ahead checkpoint: the engine retains a metadata-only row
+before a provider handoff or a callback consumes newly admitted evidence, and retains an observed
+tool outcome before returning it to a provider. A foreground fingerprint cache avoids appending
+another checkpoint when its complete dependencies are unchanged; it does not use caller request
+identities for deduplication. Current authority is still checked before every handoff. A failed
+terminal answer insert therefore cannot erase the dependencies already exposed to an SDK session.
+Pending projections remain separate from the last verified checkpoint, so a known failed insert
+before any disclosure does not later journal that unexposed projection in cleanup.
+
+A successful checkpoint is followed by current owner/host admission of the exact retained
+dependencies before provider entry, callback dispatch or result delivery, including the UI result
+events. Persistence grants no authority. Tool admission uses a fresh ordinary source projection
+after the write, so withdrawn scopes remove tools while still-authorized explanation can continue.
+That projection determines the tool set without replacing the checkpointed provider context. Dispatch
+retains the checkpointed context and refuses changes to its generic ownership, schema, target,
+client, sensitivity or scope bindings; an authorized refresh of opaque content, summaries or
+references does not replace that frozen payload or require byte-for-byte equality. Canonical target
+identity is module, resource type, resource ID and revision, matching preparation/receipt checks;
+authorized display-name and route refreshes preserve the checkpointed presentation for dispatch.
+
+Pre-disclosure writes honor foreground cancellation. Terminal and accepted-effect journals retain
+their non-cancellable truth policy. Cleanup always releases the foreground lease, and does not
+retry a known failed terminal insert or replace a primary domain failure with another journal
+attempt. State removal, source status and lease release are each attempted even when another
+cleanup operation fails. Cleanup failures cross the same Core boundary with the original primary
+and cleanup causes retained in the inner exception chain. A store that commits and then reports failure has an uncertain write outcome; retaining
+its evidence conservatively does not authorize provider use. Cooperative cancellation is supported;
+durable recovery and uncooperative-store timeout policy remain outside this process-local contract.
+
+Unexpected disclosure infrastructure failures cross `IAgentStreamingService` as the existing Core
+`AgentContributionException`, retaining the original `InnerException` and localizing session and
+operation. This is distinct from expected authority refusals and missing-provenance outcomes.
+The API SSE endpoint is the higher transport caller: it logs the domain cause on the server and
+sends a fixed redacted error. Custom in-process stream callers must choose their own logging,
+retry or abort policy. SDK callbacks receive only safe cancellation when a disclosure fails; the
+original domain cause remains observable to the stream caller. No new public exception type,
+error payload or storage port is introduced.
+
+The foreground boundary invokes replaceable stores, catalogs, registration, provider enumeration
+and tool dispatch through delegates, covering synchronous throws as well as failed tasks. Distinct
+primary causes remain retained if provider disposal or terminal cleanup also fails. A receipt
+journal's known missing-metadata refusal remains bounded; an unexpected store failure crosses the
+Core exception boundary with its original cause, retaining the accepted receipt and pause for a
+supported retry. A failed read before source ownership is known does not guess a source to mutate.
+
+The generic engine bounds retained disclosure history to 64 distinct complete snapshots and 8 MiB
+of serialized evidence. It deep-copies snapshots and deduplicates by their complete canonical value,
+never by attachment ID. A bound refuses another disclosure before handoff; it never evicts a prior
+dependency to continue. These constants bound repeated SDK callbacks as well as host-driven turns;
+they do not introduce durable retention or recovery guarantees.
+
+`AgentContextOptions.SourceTimeout` defaults to10seconds and requires a positive finite supported
+timer interval. Backend descriptors default `Required=true`. Optional collection faults/deadlines
+produce bounded diagnostics; missing required evidence blocks use, and required unexpected faults
+are wrapped in `AgentContributionException`. Completed source data is snapshotted before the next
+source runs. Stop terminates waiting without requiring source cooperation; late results never
+rejoin admission. These source boundaries do not shield unrelated Sequential event handlers.
+
+The [owning feature](https://github.com/elsa-workflows/elsa-foundation/issues/3439) records runtime
+qualification and the [scoped contract changes](../../../../specs/1176-weaver-turn-context/contracts/context-lifecycle.md).
+The shared API additions also introduce a deliberate pre-GA behavior change: an older contribution
+without disclosure support fails closed before another provider disclosure. Module authors must add
+the source hook and explicit result link, and custom session stores must retain journal provenance.
+The public workflow context provider additionally has a source/binary constructor break: direct
+consumers must rebuild and supply `IAgentSessionService` and `IAgentToolAuthorizer`, or resolve the
+provider through the supported workflow feature registration. See the scoped contract for the exact
+old/new signatures. This is not an announcement of a release or a frozen full Program contract.

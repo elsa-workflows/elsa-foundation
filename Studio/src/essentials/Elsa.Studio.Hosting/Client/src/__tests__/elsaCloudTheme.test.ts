@@ -66,7 +66,7 @@ function parseRules(css: string) {
 }
 
 const cloudRules = parseRules(elsaCloudCss);
-const scope = 'html[data-theme="elsa-cloud"]';
+const scope = 'html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"]';
 const ruleFor = (selector: string) => cloudRules.find(rule => rule.selectors.includes(`${scope} ${selector}`));
 
 describe("Elsa Cloud chrome", () => {
@@ -97,19 +97,19 @@ describe("Elsa Cloud elevation and titles", () => {
   const block = (selector: string) => tokensCss.slice(tokensCss.indexOf(`${selector} {`)).split("}")[0];
 
   it("has its own subtle dark recipe instead of the shared heavy one", () => {
-    const shared = tokensCss.match(/html:is\(([^)]*)\)\[data-theme-mode="dark"\] \{/)![1];
+    const shared = tokensCss.match(/:is\(([^)]*)\)\[data-theme-mode="dark"\] \{/)![1];
 
     expect(shared).not.toContain("elsa-cloud");
-    expect(block('html[data-theme="elsa-cloud"][data-theme-mode="dark"]')).toContain("--shadow-lg:");
+    expect(block('html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"][data-theme-mode="dark"]')).toContain("--shadow-lg:");
   });
 
   it("outranks every per-theme dark block under High contrast, whatever the source order", () => {
     // Specificity, not position: `[data-theme]` and `[data-theme-mode]` lift High contrast above the
-    // `html[data-theme="…"][data-theme-mode="dark"]` blocks it also matches.
+    // `html:where(:not([data-workspace-style]))[data-theme="…"][data-theme-mode="dark"]` blocks it also matches.
     expect(tokensCss).toContain('html[data-theme][data-theme-mode][data-theme-appearance="high-contrast"] {');
   });
 
   it("sets titles at a medium weight rather than the shared bold", () => {
-    expect(block('html[data-theme="elsa-cloud"]')).toContain("--studio-title-weight: 600;");
+    expect(block('html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"]')).toContain("--studio-title-weight: 600;");
   });
 });

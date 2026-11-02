@@ -1,8 +1,17 @@
+import type { AuthSession } from "../auth/types";
+export * from "./backends";
+export * from "./backendConnection";
+export * from "./moduleHost";
+export * from "./notifications";
+import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
+import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
 import type { ComponentType } from "react";
 import type { StudioActivityIconComponent } from "./activityIcons";
+import type { StudioNotificationApi } from "./notifications";
 
 export * from "../auth";
 export * from "./themeLayout";
+export * from "./hosts";
 export * from "./activityIcons";
 export * from "./useDialogFocus";
 
@@ -14,6 +23,8 @@ export interface StudioModuleManifest {
   version: string;
   entry: string;
   styles: string[];
+  /** Explicit producer guarantee; omitted legacy/custom manifests retain version cache busting. */
+  stylesHaveContentHashes?: boolean;
   requiredHostVersion: string;
   requiredSdkVersion: string;
   capabilities: string[];
@@ -185,7 +196,7 @@ export interface StudioRouteComponentProps {
   navigate(path: string): void;
 }
 
-export interface StudioRouteContribution {
+export interface StudioRouteContribution extends StudioBackendAwareContribution {
   id: string;
   path: string;
   label: string;
@@ -211,7 +222,7 @@ export const defaultStudioNavigationOrder = 1000;
 
 export type StudioNavigationRequirement = string | readonly string[];
 
-export interface StudioNavigationContribution {
+export interface StudioNavigationContribution extends StudioBackendAwareContribution {
   id: string;
   label: string;
   path: string;
@@ -330,7 +341,7 @@ export interface StudioDashboardWidgetEmptyState {
   description?: string;
 }
 
-export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {
+export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> extends StudioBackendAwareContribution {
   id: string;
   moduleId: string;
   title: string;
@@ -400,7 +411,7 @@ export interface StudioDiagnosticsWidgetContribution<TSnapshot = unknown> {
   component: ComponentType<StudioDiagnosticsWidgetProps<TSnapshot>>;
 }
 
-export interface StudioPanelContribution {
+export interface StudioPanelContribution extends StudioBackendAwareContribution {
   id: string;
   title: string;
   order?: number;
@@ -434,7 +445,7 @@ export interface StudioWorkflowContextConnection {
   targetPort?: string;
 }
 
-export interface StudioFeatureAreaNavLeaf {
+export interface StudioFeatureAreaNavLeaf extends StudioBackendAwareContribution {
   id?: string;
   title: string;
   path: string;
@@ -447,7 +458,7 @@ export interface StudioFeatureAreaNavLeaf {
   requiresPermission?: StudioNavigationRequirement;
 }
 
-export interface StudioFeatureAreaNavParent {
+export interface StudioFeatureAreaNavParent extends StudioBackendAwareContribution {
   id?: string;
   title: string;
   path: string;
@@ -462,7 +473,7 @@ export interface StudioFeatureAreaNavParent {
 
 export type StudioFeatureAreaNavContribution = StudioFeatureAreaNavLeaf | StudioFeatureAreaNavParent;
 
-export interface StudioFeatureAreaRouteContribution {
+export interface StudioFeatureAreaRouteContribution extends StudioBackendAwareContribution {
   id: string;
   path: string;
   label: string;
@@ -690,7 +701,7 @@ export interface StudioActivityPropertyEditorProps {
   onValidationChange?: (hasError: boolean) => void;
 }
 
-export interface StudioActivityPropertyEditorContribution {
+export interface StudioActivityPropertyEditorContribution extends StudioBackendAwareContribution {
   id: string;
   order?: number;
   /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
@@ -1119,7 +1130,7 @@ export interface StudioExpressionSourceRenderer {
   expanded: ComponentType<StudioExpressionSourceRendererProps>;
 }
 
-export interface StudioExpressionEditorContribution {
+export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
   id: string;
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
@@ -1205,7 +1216,7 @@ export interface StudioAgentContextCollection {
   diagnostics: StudioAgentContributionDiagnostic[];
 }
 
-export interface StudioAgentContextProviderContribution {
+export interface StudioAgentContextProviderContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
@@ -1216,7 +1227,7 @@ export interface StudioAgentContextProviderContribution {
   collect(context: StudioAgentContextRequest): Promise<StudioAgentContextCollection | StudioAgentContextAttachment[]>;
 }
 
-export interface StudioAgentPromptStarterContribution {
+export interface StudioAgentPromptStarterContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   label: string;
@@ -1226,7 +1237,7 @@ export interface StudioAgentPromptStarterContribution {
   requiredCapabilities?: string[];
 }
 
-export interface StudioAgentCapabilityContribution {
+export interface StudioAgentCapabilityContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
@@ -1237,7 +1248,7 @@ export interface StudioAgentCapabilityContribution {
   requiredPermissions?: string[];
 }
 
-export interface StudioAgentActionContribution {
+export interface StudioAgentActionContribution extends StudioBackendAwareContribution {
   id: string;
   capabilityId: string;
   displayName: string;
@@ -1252,7 +1263,7 @@ export interface StudioAgentToolAvailability {
   reason?: string;
 }
 
-export interface StudioAgentToolSlotContribution {
+export interface StudioAgentToolSlotContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
@@ -1262,7 +1273,7 @@ export interface StudioAgentToolSlotContribution {
   invocationModes?: StudioAgentToolInvocationMode[];
 }
 
-export interface StudioAgentToolContractContribution {
+export interface StudioAgentToolContractContribution extends StudioBackendAwareContribution {
   id: string;
   slotId: string;
   moduleId?: string;
@@ -1355,7 +1366,7 @@ export interface StudioAgentResultRendererProps {
   toolResult?: StudioAgentToolResult;
 }
 
-export interface StudioAgentResultRendererContribution {
+export interface StudioAgentResultRendererContribution extends StudioBackendAwareContribution {
   id: string;
   moduleId?: string;
   displayName: string;
@@ -1415,7 +1426,7 @@ export interface StudioAgentPromptResult {
   autoApply?: boolean;
 }
 
-export interface StudioAgentPromptActionContribution<TContext = unknown> {
+export interface StudioAgentPromptActionContribution<TContext = unknown> extends StudioBackendAwareContribution {
   id: string;
   label: string;
   description?: string;
@@ -1483,6 +1494,7 @@ export interface StudioDialogController {
 }
 
 export const studioSlotIds = {
+  shell: "studio.shell",
   featureAreas: "studio.feature-areas",
   navigation: "studio.navigation",
   routes: "studio.routes",
@@ -1572,6 +1584,7 @@ export interface CreateStudioContributionRegistryOptions<T> {
 }
 
 export const studioSlots = {
+  shell: defineStudioSlot({id:studioSlotIds.shell,kind:"shell",title:"Shell",owner:hostSlotOwner()}),
   featureAreas: defineStudioSlot({ id: studioSlotIds.featureAreas, kind: "feature-area", title: "Feature areas", owner: hostSlotOwner() }),
   navigation: defineStudioSlot({ id: studioSlotIds.navigation, kind: "navigation", title: "Navigation", owner: hostSlotOwner() }),
   routes: defineStudioSlot({ id: studioSlotIds.routes, kind: "route", title: "Routes", owner: hostSlotOwner() }),
@@ -1679,6 +1692,13 @@ export interface StudioRuntimeSettings {
   };
   /** Loaded module ids and capabilities. Home widgets with `requiresFeature` consult this list. */
   enabledFeatures?: readonly string[];
+}
+
+export const studioNavigationGuardReleasedEvent = "elsa:studio-navigation-guard-released";
+
+/** Signal that a draft or write guard may have released a queued host lifecycle reset. */
+export function notifyStudioNavigationGuardReleased() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(studioNavigationGuardReleasedEvent));
 }
 
 export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
@@ -1801,7 +1821,7 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   onChange(value: StudioActivityDefinitionImplementationState): void;
 }
 
-export interface StudioActivityDefinitionImplementationEditorContribution {
+export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {
   id: string;
   providerKey: string;
   providerSchemaVersion: string;
@@ -1815,6 +1835,10 @@ export interface StudioActivityDefinitionImplementationEditorContribution {
 }
 
 export interface ElsaStudioModuleApi {
+  readonly connection?: StudioConnectionController;
+  readonly shell?: StudioContributionRegistry<StudioShellContribution>;
+  readonly backendSession?: StudioBackendSession;
+  readonly hostSession?: AuthSession;
   readonly host: ElsaStudioHostContext;
   readonly backend: ElsaStudioBackendContext;
   readonly runtime: StudioRuntimeSettings;
@@ -1845,12 +1869,13 @@ export interface ElsaStudioModuleApi {
   };
   readonly ai: StudioAiContributionApi;
   readonly dialogs: StudioDialogApi;
+  /** Host notification service. Optional for hosts built against older SDKs. */
+  readonly notifications?: StudioNotificationApi;
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;
 }
 
-export interface ElsaStudioModule {
-  register(api: ElsaStudioModuleApi): void | Promise<void>;
-}
+export type ElsaStudioModule = {register(api: ElsaStudioModuleApi): void | Promise<void>}
+  | {initialize(host: StudioModuleHostContext): StudioModuleInstance | Promise<StudioModuleInstance>};
 
 export function defineStudioSlot(definition: StudioSlotDefinition): StudioSlotDefinition {
   return definition;
@@ -1887,10 +1912,10 @@ export function createContributionRegistry<T>(options: CreateStudioContributionR
   };
 }
 
-export function createDashboardWidgetRegistry(): StudioDashboardWidgetRegistry {
+export function createDashboardWidgetRegistry(options: Pick<CreateStudioContributionRegistryOptions<unknown>, "hostPolicy"> = {}): StudioDashboardWidgetRegistry {
   // Widget snapshot/settings types are contribution-local. The registry stores them opaquely and the
   // Dashboard host invokes each contribution through its own paired loader/body contract.
-  return createContributionRegistry<StudioDashboardWidgetContribution>({ slot: studioSlots.dashboardWidgets }) as unknown as StudioDashboardWidgetRegistry;
+  return createContributionRegistry<StudioDashboardWidgetContribution>({ ...options, slot: studioSlots.dashboardWidgets }) as unknown as StudioDashboardWidgetRegistry;
 }
 
 /** Shared prompt transport while contribution producers migrate from the legacy AI facade. */
@@ -1905,7 +1930,7 @@ export function createAiContributionApi(): StudioAiContributionApi {
   };
 }
 
-export function createAgentRegistry(): StudioAgentRegistry {
+export function createAgentRegistry(options: Pick<CreateStudioContributionRegistryOptions<unknown>, "hostPolicy"> = {}): StudioAgentRegistry {
   const prompts = createAiContributionApi();
   const listeners = new Set<(available: boolean) => void>();
   let available = true;
@@ -1917,14 +1942,14 @@ export function createAgentRegistry(): StudioAgentRegistry {
       set(value) { if (value !== available) { available = value; for (const listener of listeners) listener(value); } },
       subscribe(listener) { listeners.add(listener); listener(available); return () => listeners.delete(listener); }
     },
-    contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
-    promptActions: createContributionRegistry({ slot: studioSlots.agentPromptActions }),
-    promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
-    capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
-    actions: createContributionRegistry({ slot: studioSlots.agentActions }),
-    toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
-    toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
-    resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
+    contextProviders: createContributionRegistry<StudioAgentContextProviderContribution>({ ...options, slot: studioSlots.agentContextProviders }),
+    promptActions: createContributionRegistry<StudioAgentPromptActionContribution>({ ...options, slot: studioSlots.agentPromptActions }),
+    promptStarters: createContributionRegistry<StudioAgentPromptStarterContribution>({ ...options, slot: studioSlots.agentPromptStarters }),
+    capabilities: createContributionRegistry<StudioAgentCapabilityContribution>({ ...options, slot: studioSlots.agentCapabilities }),
+    actions: createContributionRegistry<StudioAgentActionContribution>({ ...options, slot: studioSlots.agentActions }),
+    toolSlots: createContributionRegistry<StudioAgentToolSlotContribution>({ ...options, slot: studioSlots.agentToolSlots }),
+    toolContracts: createContributionRegistry<StudioAgentToolContractContribution>({ ...options, slot: studioSlots.agentToolContracts }),
+    resultRenderers: createContributionRegistry<StudioAgentResultRendererContribution>({ ...options, slot: studioSlots.agentResultRenderers })
   };
 }
 
@@ -2439,6 +2464,7 @@ function getProblemDetailsMessage(payload: Record<string, unknown>) {
     if (messages.length > 0) return messages.join(" ");
   }
 
+  if (typeof payload.error === "string" && payload.error.trim().length > 0) return payload.error;
   return null;
 }
 

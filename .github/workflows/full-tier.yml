@@ -29,7 +29,9 @@ jobs:
     name: Integration shard (${{ matrix.shard }})
     if: ${{ inputs.integration_count != '0' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The serial native-host cases in integration-other can take almost 40 minutes.
+    # Leave room for setup and artifact upload; run_shard.py still bounds each test.
+    timeout-minutes: ${{ matrix.shard == 'integration-other' && 60 || 45 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(inputs.integration_matrix) }}
@@ -57,6 +59,9 @@ jobs:
 
       # The whole solution, as in the PR shards: the integration projects launch hosts, probes and the CLI from
       # sibling build outputs that their own project references do not build (spec 263 research R4).
+      - name: Restore original BPMN test fixtures
+        run: python3 tools/bpmn/restore_evidence.py
+
       - name: Build (full solution)
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
@@ -130,6 +135,9 @@ jobs:
             fi
             sleep 1
           done
+
+      - name: Restore original BPMN test fixtures
+        run: python3 tools/bpmn/restore_evidence.py
 
       - name: Restore and build the shard's suites
         env:

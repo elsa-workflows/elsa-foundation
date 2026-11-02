@@ -3,6 +3,26 @@ import { applyWorkflowGraphOperationBatch } from "../workflowGraphOperationBatch
 import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
 
 describe("workflow graph operation batch", () => {
+  it("moving an existing activity preserves its authored layout metadata and row order", () => {
+    const draft = workflowDraft({
+      state: { variables: [], inputs: [], outputs: [], rootActivity: { nodeId: "move", activityVersionId: "activity-v1", inputs: [], outputs: [] } },
+      layout: [
+        { nodeId: "move", x: 120, y: 160, width: 260, height: 140, additionalProperties: { custom: { color: "blue", collapsed: false } } },
+        { nodeId: "other", x: 20, y: 40, width: 200 }
+      ]
+    });
+    const before = structuredClone(draft);
+    const result = applyWorkflowGraphOperationBatch(draft, {
+      schemaVersion: "1", workflowDefinitionId: draft.definitionId,
+      operations: [{ id: "move-exact", kind: "set-designer-position", parameters: { activityId: "move", x: 480, y: 320 } }]
+    }, []);
+    expect(result.draft.layout).toEqual([
+      { ...before.layout[0], x: 480, y: 320 }, before.layout[1]
+    ]);
+    expect(result.draft.state).toEqual(before.state);
+    expect(draft).toEqual(before);
+  });
+
   it("applies deterministic add root position and property operations to the working draft", () => {
     const draft = workflowDraft();
 

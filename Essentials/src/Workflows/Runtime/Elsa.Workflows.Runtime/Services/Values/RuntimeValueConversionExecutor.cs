@@ -1,4 +1,5 @@
 using System.Text;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
@@ -18,6 +19,10 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellKnownTypeRegistry = null) : IRuntimeValueConversionExecutor
 {
+    // Resolve aliases through the current registry on every call; only CLR member shape is invariant.
+    // Weak actual-Type keys distinguish module load contexts and permit collectible contracts to unload.
+    private static readonly ConditionalWeakTable<Type, Dictionary<string, TypeMember>> Members = new();
+
     public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -395,7 +400,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
     }
 
     private static IReadOnlyDictionary<string, TypeMember> GetTypeMembers(Type targetType) =>
-        targetType
+        Members.GetValue(targetType, static type => type
             .GetProperties()
             .Where(property => property.GetMethod is not null && property.GetMethod.IsPublic && property.GetIndexParameters().Length == 0)
             .Select(property => new TypeMember(
@@ -405,7 +410,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
                 property.PropertyType,
                 property.GetCustomAttributes(inherit: true).Any(attribute =>
                     attribute.GetType().FullName is "System.Runtime.CompilerServices.RequiredMemberAttribute" or "System.Text.Json.Serialization.JsonRequiredAttribute")))
-            .ToDictionary(property => property.JsonName, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(property => property.JsonName, StringComparer.OrdinalIgnoreCase));
 
     private static void WriteXmlAsJson(Utf8JsonWriter writer, XElement element, Type targetType, ValueConversionPlan plan, string path, int depth)
     {

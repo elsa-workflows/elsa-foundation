@@ -77,7 +77,14 @@ public sealed class AgentFeatureRegistrationTests
     public async Task Orchestrator_sends_latest_user_message_and_context_to_provider()
     {
         var provider = new CapturingAgentProvider();
-        using var sp = AgentTestServices.Create(services => services.AddSingleton<IAgentProvider>(provider));
+        var source = new AgentTestContextSource("feature.fixture.context", "feature.fixture",
+            [new("ctx-1", "feature.fixture", "resource-1", "Selected resource", "test.context", AgentContextSensitivity.Internal,
+                "selection", "Selected resource summary.", null, new Dictionary<string, string>()) { ModuleId = "feature.fixture" }]);
+        using var sp = AgentTestServices.Create(services =>
+        {
+            services.AddSingleton<IAgentProvider>(provider);
+            services.AddSingleton<IAgentContextProvider>(source);
+        });
         using var scope = sp.CreateScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
         var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
@@ -90,13 +97,17 @@ public sealed class AgentFeatureRegistrationTests
             "Test session",
             AgentPolicy.Default,
             new Dictionary<string, string>()));
+        var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
+            new(session.Id, source.ScopeKind, new Dictionary<string, string>()));
+        Assert.True(collected.Succeeded, collected.Error?.Message);
+        var context = collected.Value!.Attachments;
         await sessions.AddMessageAsync(session.Id, new(
             AgentRole.User,
             "Explain this workflow.",
             AgentMessageStatus.Pending,
             "workflow.explain",
-            ["ctx-1"],
-            [new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition", AgentContextSensitivity.Internal, "selection", "Workflow summary.", null, new Dictionary<string, string>())]));
+            context.Select(item => item.Id).ToArray(),
+            context));
 
         await foreach (var _ in streaming.StreamAsync(session.Id))
         {

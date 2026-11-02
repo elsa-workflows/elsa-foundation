@@ -60,13 +60,25 @@
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
-          "Microsoft.Extensions.AI.Abstractions": "[10.5.1, )"
+          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
+      "elsa.api.capabilities": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -96,9 +108,9 @@
       },
       "Microsoft.Extensions.AI.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[10.5.1, )",
-        "resolved": "10.5.1",
-        "contentHash": "nB0l3IlsVbNeUxsE7nZNb9GY8rP1OSeqpj0pseORPejt474HNKEauTWTLdSJPkSvPlRMxowZNMo6nyp7APAiSg=="
+        "requested": "[10.10.1, )",
+        "resolved": "10.10.1",
+        "contentHash": "Kz6ezQfRb9x2TkIWyaXkVAfpvyoAlEDfC59klPrdr2XD5WM4HNw+PREAZ+Fo43GPldtX+E0i1aYzMFQ/zXYMLg=="
       },
       "Microsoft.OpenApi": {
         "type": "CentralTransitive",

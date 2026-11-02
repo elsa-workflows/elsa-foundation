@@ -23,7 +23,7 @@ public sealed class ModulePayloadColumnTests
     {
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
-            ["ContentJson"] = 31,
+            ["ContentJson"] = 33, // Includes the model execution and accepted-input documents.
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,
             ["CleanupSafeFailureJson"] = 1
@@ -31,10 +31,14 @@ public sealed class ModulePayloadColumnTests
         ["ExecutionCommandTransportDbContext"] = new(StringComparer.Ordinal) { ["PayloadJson"] = 1 },
         ["WorkflowsDesignDbContext"] = new(StringComparer.Ordinal)
         {
+            ["ContentJson"] = 2,
             ["StateSource"] = 2,
             ["RecordsJson"] = 2,
             ["ActivityPresentationJson"] = 2,
-            ["ResultJson"] = 1
+            ["ResultJson"] = 1,
+            ["ValuesJson"] = 1,
+            ["BeforeJson"] = 1,
+            ["AfterJson"] = 1
         },
         ["EfOpenTelemetryDbContext"] = new(StringComparer.Ordinal)
         {

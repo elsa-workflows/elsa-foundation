@@ -22,7 +22,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Studio UI
 
 - **Inner loop:** use the Node.js and pinned pnpm versions in the Studio contribution guide. Run `pnpm install --frozen-lockfile`, then the affected package's existing test, typecheck, or build script; for example, `pnpm --filter @elsa-workflows/studio-workflows test`. See the [Studio guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md#local-checks-and-hosted-checks) for root checks and its linked [CI workflow](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/.github/workflows/ci.yml) for browser-test setup.
-- **Evidence:** Studio PR CI runs lint, typecheck, workspace tests, shuffled Workflows tests, bundle-budget checks, and Chromium tests. Its Docker PR job builds the image without publishing it. For a visible paired source change, use the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/docs/contributing/studio-source-quickstart.md) and record the exact pair and browser result when the claim depends on both repositories.
+- **Evidence:** Studio PR CI runs lint, typecheck, workspace tests, bundle-budget checks, and Chromium tests. The three extra shuffled Workflows test passes run nightly, on demand, and on PRs that change their workflow (`studio-order-check.yml`). Its Docker PR job builds the image without publishing it. For a visible paired source change, use the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/docs/contributing/studio-source-quickstart.md) and record the exact pair and browser result when the claim depends on both repositories.
 
 ### Persistence
 

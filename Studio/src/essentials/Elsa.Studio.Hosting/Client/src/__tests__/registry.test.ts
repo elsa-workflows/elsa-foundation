@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
 import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
+import { notificationController } from "../app/notifications";
 import {
   createContributionRegistry,
   createEndpointContext,
@@ -36,6 +37,20 @@ describe("studio registry", () => {
 
     expect(api.panels.slot.id).toBe(studioSlotIds.panels);
     expect(api.panels.list().map(panel => panel.id)).toEqual(["first", "second"]);
+  });
+
+  it("registry exposes the shared notification api", () => {
+    const options = {
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    };
+
+    const first = createStudioRegistry(options);
+    const second = createStudioRegistry(options);
+
+    expect(first.notifications).toBe(notificationController.api);
+    expect(second.notifications).toBe(first.notifications);
   });
 
   it("uses stable fallback ordering instead of module load order", () => {
@@ -538,6 +553,32 @@ describe("studio registry", () => {
       message: payload.reason,
       payload
     } satisfies Partial<StudioHttpError>);
+  });
+
+  it.each([
+    [{ error: "Use a name without spaces." }, "Use a name without spaces."],
+    [{ error: { message: "Unrecognized shape" } }, "Request failed with 400."],
+    [{ error: "  " }, "Request failed with 400."],
+    [{ detail: "Problem detail", error: "Legacy error" }, "Problem detail"],
+    [{ errors: { name: ["Invalid name."] } }, "Invalid name."]
+  ])("reads a useful message from an API rejection %j", async (payload, message) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), {
+      status: 400, headers: { "content-type": "application/json" }
+    })));
+    await expect(createEndpointContext("https://foundation.example/").http.postJson("/connections", {}))
+      .rejects.toMatchObject({ status: 400, message });
+  });
+
+  it.each([
+    ["", "application/json"],
+    ["{broken", "application/json"],
+    ["{}", "application/problem+json"]
+  ])("keeps a useful fallback for an unreadable or empty API error %j", async (body, contentType) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+      status: 400, headers: { "content-type": contentType }
+    })));
+    await expect(createEndpointContext("https://foundation.example/").http.postJson("/connections", {}))
+      .rejects.toMatchObject({ status: 400, message: "Request failed with 400." });
   });
 
   it("extracts validation errors from http failures", async () => {

@@ -1,5 +1,6 @@
+import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { studioNavigationRequestedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { updateDraft } from "../api/workflowDesign";
 import { autosaveDelayMs } from "./constants";
@@ -10,6 +11,7 @@ import type { WorkflowDraftRecipe } from "./workflowDocument";
 interface WorkflowPersistenceParams {
   context: StudioEndpointContext;
   draft: WorkflowDraft | null;
+  documentAdapter?: WorkflowEditorDocumentAdapter;
   autosaveEnabledByDefault?: boolean;
   editDraft(recipe: WorkflowDraftRecipe): void;
   setStatus(value: string): void;
@@ -20,7 +22,7 @@ interface WorkflowPersistenceParams {
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
+export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
   const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
   const [autosavePaused, setAutosavePaused] = useState(false);
   const reviewHoldRef = useRef(false);
@@ -29,17 +31,33 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
   const holdForReview = useCallback((hold: boolean) => { const previous = reviewHoldRef.current; reviewHoldGenerationRef.current++; reviewHoldRef.current = hold; setReviewHeld(hold); return previous; }, []);
   const [saving, setSaving] = useState(false);
   const lastSavedDraftSignatureRef = useRef("");
+  const [persistedDraft, setPersistedDraft] = useState<WorkflowDraft | null>(null);
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const inFlightSavesRef = useRef(0);
+  const queuedSavesRef = useRef(0);
   // Keep the latest draft addressable so flushPendingSave can persist unsaved edits without a stale closure.
   const latestDraftRef = useRef<WorkflowDraft | null>(draft);
   latestDraftRef.current = draft;
+
+  useEffect(() => {
+    const preventNavigation = (event: Event) => {
+      const current = latestDraftRef.current;
+      if (queuedSavesRef.current > 0 || current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current) event.preventDefault();
+    };
+    window.addEventListener(studioNavigationRequestedEvent, preventNavigation);
+    window.addEventListener("beforeunload", preventNavigation);
+    return () => {
+      window.removeEventListener(studioNavigationRequestedEvent, preventNavigation);
+      window.removeEventListener("beforeunload", preventNavigation);
+    };
+  }, []);
 
   const markSaved = useCallback((savedDraft: WorkflowDraft | null) => {
     reviewHoldGenerationRef.current++;
     reviewHoldRef.current = false; setReviewHeld(false);
     lastSavedDraftSignatureRef.current = savedDraft ? getDraftSignature(savedDraft) : "";
+    setPersistedDraft(savedDraft);
   }, []);
 
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
@@ -54,9 +72,10 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
       inFlightSavesRef.current += 1;
       setSaving(true);
       try {
-        const saved = await updateDraft(context, draftSnapshot);
+        const saved = await (documentAdapter?.save ?? updateDraft)(context, draftSnapshot);
         const savedSignature = getDraftSignature(saved);
         lastSavedDraftSignatureRef.current = savedSignature;
+        setPersistedDraft(saved);
         const live = latestDraftRef.current;
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
@@ -82,10 +101,11 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
         if (inFlightSavesRef.current === 0) setSaving(false);
       }
     };
-    const queued = saveQueueRef.current.then(queuedSave, queuedSave);
+    queuedSavesRef.current += 1;
+    const queued = saveQueueRef.current.then(queuedSave, queuedSave).finally(() => { queuedSavesRef.current -= 1; });
     saveQueueRef.current = queued.catch(() => undefined);
     return queued;
-  }, [context, editDraft, setStatus, setError]);
+  }, [context, documentAdapter, editDraft, setStatus, setError]);
 
   // Settles pending persistence before a publish review: persists the latest draft when it has unsaved
   // edits (so the review captures the same state that will be saved), then awaits the whole save queue.
@@ -113,5 +133,5 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
     return () => window.clearTimeout(timeoutId);
   }, [autosaveEnabled, autosavePaused, reviewHeld, draft, saveDraft, setStatus]);
 
-  return { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
+  return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

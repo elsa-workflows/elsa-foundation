@@ -5,7 +5,9 @@
   "type": "module",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css",
+    "./tokens.css": "./src/tokens.css"
   },
   "publishConfig": {
     "types": "./dist/index.d.ts",
@@ -13,7 +15,9 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
-      }
+      },
+      "./styles.css": "./dist/styles.css",
+      "./tokens.css": "./dist/tokens.css"
     }
   },
   "scripts": {
@@ -27,5 +31,8 @@
   "devDependencies": {
     "@types/react": "^19.2.17",
     "vite-plugin-dts": "^4.5.0"
+  },
+  "dependencies": {
+    "@elsa-workflows/studio-sdk": "workspace:*"
   }
 }

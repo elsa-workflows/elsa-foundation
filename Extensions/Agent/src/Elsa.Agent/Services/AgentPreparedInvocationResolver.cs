@@ -32,10 +32,23 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.forbidden", "The prepared session actor or tenant is no longer available.", 403));
         if (!(await policyEvaluator.EvaluateAvailabilityAsync(session.Policy, cancellationToken)).Allowed)
             return (null, new("agent.disabled", "Current host policy disables this operation.", 403));
-        if (session.Policy.RequiresApprovalForMutations && (proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
+        // The digest-bound RequiresApproval records the approval's origin. An automatic approval only records
+        // that the policy accepted at preparation allowed the operation without review; it is never a human
+        // decision, so current policy that requires review refuses it before dispatch.
+        if (session.Policy.RequiresApprovalForMutations
+            && (!proposal.RequiresApproval || proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
             return (null, new("agent.proposal.approval_required", "Current session policy requires approval of the exact operation.", 409));
-        var tool = await registry.FindAsync(prepared.ToolName, cancellationToken);
+        IAgentTool? tool;
+        try { tool = await registry.FindAsync(prepared.ToolName, cancellationToken); }
+        catch (AgentContributionException)
+        {
+            // Catalog validation precedes module dispatch. Losing a declared disclosure owner
+            // is a concrete refusal, not an uncertain effect reported by the executor catch.
+            return (null, new("agent.proposal.executor_unavailable",
+                $"The prepared tool '{prepared.ToolName}' or disclosure source '{prepared.DisclosureSourceId}' is unavailable with its reviewed contract.", 409));
+        }
         if (tool is null || tool.Descriptor.ModuleId != prepared.ModuleId || tool.Descriptor.ContractVersion != prepared.ToolContractVersion
+            || tool.Descriptor.DisclosureSourceId != prepared.DisclosureSourceId
             || tool.Descriptor.ExecutionLocation != prepared.ExecutionLocation || tool.Descriptor.Mutability != AgentToolMutability.Mutating)
             return (null, new("agent.proposal.executor_unavailable", "The prepared tool is no longer installed with its reviewed contract.", 409));
         if (prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState
@@ -45,7 +58,7 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.contract_changed", "The operation's current risk requires a new review.", 409));
         if (session.Policy.DeniedCapabilityIds.Contains(tool.Descriptor.Name, StringComparer.OrdinalIgnoreCase))
             return (null, new("agent.tool.denied", "Current host policy disables this tool.", 403));
-        if (!(await authorizer.AuthorizeAsync(tool.Descriptor, session.ActorId, session.TenantId, prepared.Target, cancellationToken)).Allowed)
+        if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, prepared.Target, cancellationToken)).Allowed)
             return (null, new("agent.proposal.forbidden", "Current server authority denies the prepared target.", 403));
         return (tool, null);
     }

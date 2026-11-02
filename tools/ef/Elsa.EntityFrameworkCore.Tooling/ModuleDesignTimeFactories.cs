@@ -2,6 +2,16 @@ namespace Elsa.EntityFrameworkCore.Tooling;
 
 // One design-time factory per provider-derived module context. Add a line when a module gains a context.
 
+public sealed class SpecialistsMySqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsMySqlDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+public sealed class SpecialistsPostgreSqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsPostgreSqlDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+public sealed class SpecialistsSqlServerDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqlServerDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+public sealed class SpecialistsSqliteDbContextFactory() : ModuleDesignTimeFactory<Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsSqliteDbContext>(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEfModule.HistoryTableName);
+
+public sealed class ConnectionsMySqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsMySqlDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);
+public sealed class ConnectionsPostgreSqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsPostgreSqlDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);
+public sealed class ConnectionsSqlServerDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqlServerDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);
+public sealed class ConnectionsSqliteDbContextFactory() : ModuleDesignTimeFactory<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqliteDbContext>(Elsa.Persistence.EntityFramework.EfModuleBinding.For(typeof(Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext)).HistoryTableName);
+
 public sealed class ActivitiesDesignMySqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignMySqlDbContext>(Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignEfModule.HistoryTableName);
 public sealed class ActivitiesDesignPostgreSqlDbContextFactory() : ModuleDesignTimeFactory<Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext>(Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignEfModule.HistoryTableName);
 public sealed class ActivitiesDesignSqlServerDbContextFactory() : ModuleDesignTimeFactory<Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignSqlServerDbContext>(Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignEfModule.HistoryTableName);

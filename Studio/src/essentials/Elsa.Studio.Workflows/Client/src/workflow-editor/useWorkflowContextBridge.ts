@@ -55,19 +55,33 @@ export function useWorkflowContextBridge({
   );
 
   const selectionKey = JSON.stringify([details?.definition?.id, selectedNodeId]);
-  const generation = useMemo(() => {
-    void selectionKey; // A new originating selection creates a new lifetime even when the draft is unchanged.
-    return globalThis.crypto?.randomUUID?.() ?? `generation-${Date.now()}-${Math.random()}`;
-  }, [selectionKey]);
+  const activeGeneration = useRef<string | null>(null);
   const authorized = useRef(true);
+  const committedBinding = useRef<{ controller: WorkflowAgentController | undefined; clientId: string } | null>(null);
   useEffect(() => {
+    const previous = committedBinding.current;
+    if (!previous || previous.controller !== controller || previous.clientId !== clientId) {
+      committedBinding.current = { controller, clientId };
+      authorized.current = true;
+    }
+    // A retained editor may lose its effects and auth listeners while hidden. Reactivating those
+    // effects creates a new origin even when its selection, controller and browser binding survive.
+    const generation = globalThis.crypto?.randomUUID?.() ?? `generation-${Date.now()}-${Math.random()}`;
+    activeGeneration.current = generation;
     const end = () => { authorized.current = false; if (controller) controller.snapshot = null; };
-    // A new authentication session requires a fresh editor lifetime; old prepared actions stay invalid.
+    // Authentication invalidates this binding. Only an explicitly new committed binding (or a new
+    // editor mount) restores it; effect replay and ordinary draft updates cannot restore authority.
     window.addEventListener(authSessionEndedEvent, end); window.addEventListener(authSessionStartedEvent, end);
-    return () => { window.removeEventListener(authSessionEndedEvent, end); window.removeEventListener(authSessionStartedEvent, end); };
-  }, [controller]);
+    return () => {
+      if (activeGeneration.current === generation) activeGeneration.current = null;
+      window.removeEventListener(authSessionEndedEvent, end); window.removeEventListener(authSessionStartedEvent, end);
+    };
+  }, [controller, clientId, selectionKey]);
   useEffect(() => {
-    if (!controller || !details?.definition || !draft || !authorized.current) return;
+    // Selection changes reactivate the lifetime effect; ordinary draft updates reuse its origin.
+    void selectionKey;
+    const generation = activeGeneration.current;
+    if (!controller || !details?.definition || !draft || !authorized.current || !generation) return;
     const target = { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-definition", resourceId: details.definition.id, revision: getDraftRevision(draft), displayName: details.definition.name };
     const attachment = {
       id: `workflow:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
@@ -81,5 +95,5 @@ export function useWorkflowContextBridge({
     };
     controller.snapshot = attachment;
     return () => { if (controller.snapshot === attachment) controller.snapshot = null; };
-  }, [activities, catalogByVersion, clientId, connections, controller, details, diagnostics, draft, generation, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, selectedDescriptor, selectedNode, selectedNodeId]);
+  }, [activities, catalogByVersion, clientId, connections, controller, details, diagnostics, draft, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, selectedDescriptor, selectedNode, selectedNodeId, selectionKey]);
 }

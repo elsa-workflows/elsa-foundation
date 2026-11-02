@@ -101,5 +101,5 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     };
   }, [draft, historyVersion]);
 
-  return { resetHistory, undo, redo, canUndoNow, canRedoNow };
+  return { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory };
 }

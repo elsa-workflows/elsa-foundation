@@ -102,10 +102,19 @@ public sealed class RuntimeCheckpointCommitter
         // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
+        if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
+        if (commit.ExpectedModelExecution is not null && !_checkpointCommitStore.SupportsModelAdmission)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically validate model-owned native worker admission.");
+        if (commit.ExpectedModelParentWait is not null && !_checkpointCommitStore.SupportsModelParentAdmission)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically validate a model child's native parent wait.");
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ExpectedBookmarkResume is not null)
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
+            decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
+                "Model decisions and native worker admission require an atomic physical checkpoint.");
+        else if (commit.ExpectedBookmarkResume is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Exact bookmark admission requires an atomic physical checkpoint.");
         else if (!commit.StateChanges.BackgroundActivityWork.IsEmpty)
@@ -208,22 +217,26 @@ public sealed class RuntimeCheckpointCommitter
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 
-    // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
+    // An active overlay records successful, explicitly non-delayed continuation provenance for clock-safe delivery.
+    // Otherwise, publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
     // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
     // execution (so the dispatcher will look here rather than deserialize); and the drain's session for the execution
     // has stopped folding (while it folds, its overlay is authoritative on continuation delivery). When any guard
     // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
     private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
     {
+        if (_coalescingSessionAccessor?.Current is { } active && active.AppliesTo(commit.WorkflowExecutionId))
+        {
+            active.RecordImmediateSchedulerIntents(commit);
+            return;
+        }
+
         if (!_inProcessHopFastPathOptions.Enabled)
             return;
         if (commit.PostCommitIntents.Count == 0)
             return;
         if (_liveDrainDeliveryAccessor?.Current is not { } scope || !scope.AppliesTo(commit.WorkflowExecutionId))
             return;
-        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
-            return;
-
         foreach (var intent in commit.PostCommitIntents)
         {
             // A delayed intent (R-7) is delivered by the outbox sweep once it is due, never by this drain.
@@ -260,6 +273,7 @@ public sealed class RuntimeCheckpointCommitter
         commit.PostCommitIntents.Any(intent => intent.IsDelayedPast(commit.Checkpoint.OccurredAt));
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpointCommit commit) =>
+        commit.ExpectedModelExecution is not null ||
         !commit.StateChanges.BackgroundActivityWork.IsEmpty ||
         HasDelayedIntent(commit) ||
         commit.Checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&

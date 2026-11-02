@@ -2,11 +2,13 @@ using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Workflows.Services;
+using Elsa.Workflows.Design.Core.Contracts;
 
 namespace Elsa.Agent.Workflows.Tools;
 
 /// <summary>Prepares one exact, reviewed change to the owning browser's unsaved workflow layout.</summary>
-internal sealed class WorkflowSetDesignerPositionTool(IAgentToolAuthorizer authorizer) : IAgentTool, IAgentClientTool
+internal sealed class WorkflowSetDesignerPositionTool(IAgentToolAuthorizer authorizer,
+    IEnumerable<IWorkflowDefinitionAuthorizer>? resourceAuthorizers = null) : IAgentTool, IAgentClientTool, IAgentToolAuthorization
 {
     public const string ToolName = "workflow_set_designer_position";
     public const string ResultType = "workflows.layout-change";
@@ -18,8 +20,13 @@ internal sealed class WorkflowSetDesignerPositionTool(IAgentToolAuthorizer autho
         ["workflows/design:manage"], ["/workflows"])
     {
         ModuleId = WorkflowAgentSnapshot.ModuleId, ContractVersion = "1", ExecutionLocation = AgentExecutionLocation.ClientWorkingState,
-        ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.agent.layout-result"
+        ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.agent.layout-result",
+        DisclosureSourceId = "workflows.context"
     };
+
+    public ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target,
+        CancellationToken cancellationToken = default)
+        => WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, actorId, tenantId, target, true, cancellationToken);
 
     public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {

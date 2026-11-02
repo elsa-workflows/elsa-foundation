@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, DatabaseZap, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -77,20 +78,13 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
   };
 
   return (
-    <section className="wf-page runtime-diagnostics-page">
-      <div className="wf-page-header">
-        <div>
-          <div className="wf-kicker">Workflows</div>
-          <h2><DatabaseZap size={18} /> Runtime evidence settings</h2>
-          <p className="wf-muted">Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</p>
-        </div>
-        <div className="wf-actions">
-          <button type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
+    <section className="studio-page wf-page runtime-diagnostics-page">
+      <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime evidence settings</>} description={<>Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</>} actions={<><div className="studio-page-actions">
+          <StudioButton variant="primary" type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
             {saving ? "Saving..." : "Save changes"}
-          </button>
-        </div>
-      </div>
+          </StudioButton>
+        </div></>} />
 
       <div className="runtime-diagnostics-body">
         {errorMessage && <div className="runtime-diagnostics-banner error">{errorMessage}</div>}

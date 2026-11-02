@@ -18,8 +18,7 @@
   --cs-danger: var(--studio-danger, var(--danger, #c13e3a));
 }
 
-.console-stream-panel,
-.console-stream-page {
+.console-stream-panel {
   height: 100%;
   min-height: 0;
   display: grid;
@@ -29,34 +28,15 @@
 }
 
 .console-stream-page {
-  border: 1px solid var(--cs-border);
-  border-radius: var(--radius, 6px);
-  overflow: hidden;
-}
-
-.console-stream-header {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid var(--cs-border);
-  padding: 8px 16px;
-}
-
-.console-stream-header h2 {
-  margin: 0;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   color: var(--cs-text);
-  font-size: 13px;
-  font-weight: 760;
-  line-height: 1.2;
 }
 
-.console-stream-header p {
-  margin: 2px 0 0;
-  color: var(--cs-text-muted);
-  font-size: 11px;
-  line-height: 1.25;
+.console-stream-page {
+  overflow: hidden;
 }
 
 .console-stream-tools {
@@ -395,11 +375,6 @@ html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-white {
 }
 
 @media (max-width: 720px) {
-  .console-stream-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
-  }
 
   .console-stream-tools {
     justify-content: flex-start;

@@ -160,6 +160,38 @@
 .weaver-status[data-tone="success"] { color: var(--studio-success); }
 .weaver-status[data-tone="warning"] { color: var(--studio-warning); }
 
+.weaver-mode-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--studio-border);
+  font-size: 0.75rem;
+  color: var(--studio-text-muted);
+}
+
+.weaver-mode-status[data-autonomy-state="unresolved"] { color: var(--studio-warning); }
+
+.weaver-mode-retry {
+  margin-left: auto;
+  background: var(--studio-surface-raised);
+  color: var(--studio-text);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.weaver-mode-option:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.weaver-message-policy {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--studio-text-muted);
+}
+
 .weaver-alert {
   margin: 0.5rem 1rem 0;
   padding: 0.5rem 0.75rem;

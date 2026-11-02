@@ -4,34 +4,6 @@
 
 /* Page header, inspector sections, metadata, lists and diagnostics: the module's own copies of the host Module
    Management page's look, so the module does not depend on that page's private classes. */
-.extension-builder-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0;
-}
-
-.extension-builder-header > div:first-child {
-  display: grid;
-  gap: 4px;
-}
-
-.extension-builder-header h2 {
-  margin: 0;
-  font-family: var(--studio-font-display);
-  font-size: var(--studio-page-title-size, 20px);
-  font-weight: var(--studio-title-weight, 720);
-  line-height: 1.2;
-  color: var(--studio-text);
-}
-
-.extension-builder-header p {
-  margin: 0;
-  color: var(--studio-text-muted);
-  line-height: 1.5;
-  font-size: 13px;
-}
 
 .extension-builder-muted {
   color: var(--studio-text-muted);
@@ -159,11 +131,6 @@
 }
 
 @media (max-width: 640px) {
-  .extension-builder-header {
-    flex-direction: column;
-    align-items: flex-start;
-    margin: 24px 0 16px 0;
-  }
 
   .extension-builder-operation-grid {
     grid-template-columns: 1fr;
@@ -578,7 +545,6 @@
 
 .extension-builder-page {
   display: grid;
-  gap: 12px;
 }
 
 .extension-builder-page-workspace {
@@ -591,34 +557,6 @@
 .extension-builder-home {
   display: grid;
   gap: 18px;
-}
-
-.extension-builder-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.extension-builder-hero-text h2 {
-  margin: 0;
-  font-size: var(--studio-page-title-size);
-  line-height: 1.2;
-}
-
-.extension-builder-hero-text p {
-  margin: 6px 0 0;
-  max-width: 640px;
-  color: var(--studio-text-muted);
-  font-size: var(--studio-body-size);
-  line-height: 1.5;
-}
-
-.extension-builder-hero-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
 }
 
 .extension-builder-stats {

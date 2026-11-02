@@ -1,3 +1,6 @@
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Models;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Agent.Api.Extensions;
@@ -16,7 +19,7 @@ namespace Elsa.Agent.Api;
     name: "FoundationAgentApi",
     DisplayName = "Foundation Agent API",
     Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints.",
-    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) }
+    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature), typeof(ApiCapabilitiesFeature) }
 )]
 public class FoundationAgentApiFeature : FoundationAgentAbstractionsFeature, IWebShellFeature
 {
@@ -24,6 +27,10 @@ public class FoundationAgentApiFeature : FoundationAgentAbstractionsFeature, IWe
     {
         base.ConfigureServices(services);
         services.AddElsaEndpoints();
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.api.agent", 1,
+            [new("agent-bootstrap", "_elsa/agent/bootstrap"), new("agent-sessions", "_elsa/agent/sessions")],
+            "FoundationAgentApi"));
         services.AddFoundationAgentApi();
         services.AddDynamicEndpointApiExplorerRefresh();
     }

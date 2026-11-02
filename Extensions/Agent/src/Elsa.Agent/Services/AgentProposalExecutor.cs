@@ -7,9 +7,30 @@ namespace Elsa.Agent.Services;
 /// <summary>Routes the stored preparation to the same installed module, with current server authorization.</summary>
 internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocationResolver resolver) : IAgentActionProposalExecutor
 {
+    /// <summary>A known zero-effect cancellation observed before the owning module or client was dispatched.</summary>
+    internal const string CancelledBeforeDispatchCode = "agent.proposal.cancelled";
+
+    /// <summary>
+    /// The engine-owned signal for <see cref="CancelledBeforeDispatchCode"/>. Classification compares this exact
+    /// instance, never the public code: a module can return any failure code after dispatch, but it cannot
+    /// produce this private instance, so a module-authored "cancelled" failure stays an ordinary refusal.
+    /// </summary>
+    private static readonly AgentError CancelledBeforeDispatch = new(CancelledBeforeDispatchCode,
+        "Execution was cancelled before dispatch to the owning module. No effect occurred.", 409);
+
+    /// <summary>True only for this executor's own pre-dispatch cancellation result.</summary>
+    internal static bool IsCancelledBeforeDispatch<T>(AgentResult<T> result) => ReferenceEquals(result.Error, CancelledBeforeDispatch);
+
     public async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
-        var resolved = await resolver.ResolveAsync(proposal, cancellationToken);
+        (IAgentTool? Tool, AgentError? Error) resolved;
+        // The current-authority recheck precedes any module or client dispatch, so cancellation here
+        // is a known zero-effect outcome rather than an uncertain one.
+        try { resolved = await resolver.ResolveAsync(proposal, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new(null, CancelledBeforeDispatch);
+        }
         if (resolved.Error is { } error)
             return AgentResult<AgentProposalExecutionResult>.Failure(error.Code, error.Message, error.StatusCode);
         var prepared = proposal.PreparedInvocation!;
@@ -70,9 +91,31 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
             ToolResult = proposal.PreparedInvocation is { } prepared ? LifecycleResult(prepared, "uncertain", summary) : null
         };
 
+    internal const string LifecycleOutcomeType = "agent.operation-outcome";
+    internal const string LifecycleOutcomeSchemaVersion = "1";
+
     internal static AgentToolResult LifecycleResult(AgentPreparedToolInvocation prepared, string status, string summary)
         => new(prepared.ToolCallId, prepared.ToolName, false, summary,
-            new("agent.operation-outcome", "1", JsonSerializer.SerializeToElement(new { status, prepared.InvocationId })));
+            new(LifecycleOutcomeType, LifecycleOutcomeSchemaVersion, JsonSerializer.SerializeToElement(new { status, prepared.InvocationId })));
+
+    /// <summary>
+    /// Recognizes the engine's own receipt-less lifecycle envelope (<see cref="LifecycleResult"/>) for the stamped
+    /// original invocation of a mutating tool. A module never authors such a result: proposal execution replaces a
+    /// module refusal or receipt-less return with this envelope, and the invoker refuses failed mutation dispatch.
+    /// A read tool's own result, any receipt or success, and any other status, schema or identity are not lifecycle outcomes.
+    /// </summary>
+    internal static bool IsLifecycleResult(AgentToolResult result, AgentToolDescriptor tool)
+    {
+        if (result.Succeeded || result.Receipt is not null || tool.Mutability != AgentToolMutability.Mutating || result.ToolName != tool.Name
+            || string.IsNullOrEmpty(result.ToolCallId) || result.Access is not { InvocationId.Length: > 0 } access
+            || result.Payload is not { TypeId: LifecycleOutcomeType, SchemaVersion: LifecycleOutcomeSchemaVersion, Data: var data }
+            || data.ValueKind != JsonValueKind.Object || data.EnumerateObject().Count() != 2)
+            return false;
+        return data.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String
+            && status.GetString() is "denied" or "refused" or "uncertain"
+            && data.TryGetProperty(nameof(AgentPreparedToolInvocation.InvocationId), out var identity)
+            && identity.ValueKind == JsonValueKind.String && identity.GetString() == access.InvocationId;
+    }
 
     private static AgentToolResult FreezeResult(AgentToolResult value) => value with
     {

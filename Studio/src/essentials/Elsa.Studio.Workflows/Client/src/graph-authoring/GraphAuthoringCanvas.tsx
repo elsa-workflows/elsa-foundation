@@ -3,12 +3,14 @@ import { Background, Controls, ReactFlow, type Node, type ReactFlowProps } from 
 import { GraphOverflowMiniMap } from "./GraphOverflowMiniMap";
 import type { WorkflowEdge, WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import type { WorkflowNodeData } from "../workflowAdapter";
-import type { WorkflowSlotNavigation } from "../workflow-editor/contexts";
+import type { CollectionSlotAction, WorkflowNodeResize, WorkflowSlotNavigation } from "../workflow-editor/contexts";
 import {
   WorkflowEdgeActionsContext,
   WorkflowNodeActionsContext,
   WorkflowNodeAvailabilityContext,
-  WorkflowSlotNavigationContext
+  WorkflowNodeResizeContext,
+  WorkflowSlotNavigationContext,
+  CollectionSlotActionsContext
 } from "../workflow-editor/contexts";
 import type { WorkflowEdgeActions, WorkflowNodeActions } from "../workflow-editor/contexts";
 import { edgeTypes, nodeTypes } from "../workflow-editor/graph";
@@ -20,8 +22,10 @@ export interface GraphAuthoringCanvasProps {
   reactFlowProps: ReactFlowProps<Node<WorkflowNodeData>, WorkflowEdge>;
   edgeActions?: WorkflowEdgeActions | null;
   nodeActions?: WorkflowNodeActions | null;
+  nodeResize?: WorkflowNodeResize | null;
   availabilityLookup?: WorkflowNodeAvailabilityLookup | null;
   slotNavigation?: WorkflowSlotNavigation | null;
+  collectionAction?: CollectionSlotAction | null;
   overlays?: ReactNode;
 }
 
@@ -35,8 +39,10 @@ export function GraphAuthoringCanvas({
   reactFlowProps,
   edgeActions = null,
   nodeActions = null,
+  nodeResize = null,
   availabilityLookup = null,
   slotNavigation = null,
+  collectionAction = null,
   overlays
 }: GraphAuthoringCanvasProps) {
   const className = ["wf-canvas", canvasProps?.className].filter(Boolean).join(" ");
@@ -44,8 +50,10 @@ export function GraphAuthoringCanvas({
     <div {...canvasProps} className={className} ref={canvasRef}>
       <WorkflowEdgeActionsContext.Provider value={edgeActions}>
         <WorkflowNodeActionsContext.Provider value={nodeActions}>
+          <WorkflowNodeResizeContext.Provider value={nodeResize}>
           <WorkflowNodeAvailabilityContext.Provider value={availabilityLookup}>
             <WorkflowSlotNavigationContext.Provider value={slotNavigation}>
+              <CollectionSlotActionsContext.Provider value={collectionAction}>
               <ReactFlow<Node<WorkflowNodeData>, WorkflowEdge>
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
@@ -63,8 +71,10 @@ export function GraphAuthoringCanvas({
                 <Controls />
                 <GraphOverflowMiniMap />
               </ReactFlow>
+              </CollectionSlotActionsContext.Provider>
             </WorkflowSlotNavigationContext.Provider>
           </WorkflowNodeAvailabilityContext.Provider>
+          </WorkflowNodeResizeContext.Provider>
         </WorkflowNodeActionsContext.Provider>
       </WorkflowEdgeActionsContext.Provider>
       {overlays}

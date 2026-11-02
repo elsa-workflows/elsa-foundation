@@ -11,6 +11,7 @@ import type {
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
@@ -41,6 +42,7 @@ import type { WorkflowEdge, WorkflowEditorPanelTab } from "./workflow-editor/edi
 import { GraphAuthoringWorkbench } from "./graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "./graph-authoring/AddStepButton";
 import { useGraphAuthoringCanvas } from "./graph-authoring/useGraphAuthoringCanvas";
+import { persistedNodeWidth } from "./graph-authoring/nodeWidth";
 import {
   useGraphCanvasInteractions,
   type GraphCanvasCommitOptions,
@@ -50,6 +52,8 @@ import {
 } from "./graph-authoring/useGraphCanvasInteractions";
 import {
   buildBpmnCanvas,
+  bindBpmnDecision,
+  bpmnGatewayConversionBlocker,
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
@@ -63,10 +67,10 @@ import {
   updateBpmnFlow,
   type BpmnNodeData
 } from "./bpmn/bpmnAdapter";
-import { BpmnElementInspector } from "./bpmn/BpmnElementInspector";
+import { BpmnElementInspector, BpmnElementConfiguration } from "./bpmn/BpmnElementInspector";
 import { bpmnPaletteElements } from "./bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "./graph-authoring/graphPaletteElements";
-import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
+import { bpmnElementTypeLabel, isBpmnDecisionType, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
 import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthoringContributions";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
@@ -92,6 +96,7 @@ import { compareWorkflowPanelTabs } from "./workflow-editor/PanelTabList";
 import { supportsScopedVariables, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import { getActivityGraphOutcomeMappingOptions, type ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 import { SequenceDesigner } from "./graph-authoring/SequenceDesigner";
+import { addCollectionItem, getCollectionSlots, type CollectionSlot } from "./collectionSlots";
 export { getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
 export type { ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 
@@ -202,10 +207,10 @@ export function ActivityGraphPublicInterfaceEditor({
 
   return (
     <div className="ad-graph-public-interface wf-tokens">
-      <header className="ad-interface-connections-header"><h2>Connect to the designer</h2><p>Choose the values and completion paths your activity returns.</p></header>
+      <header className="ad-interface-connections-header"><h2>Designer connections</h2><p>Connect designer results to the public interface.</p></header>
       <section className="ad-graph-output-mappings" aria-labelledby="activity-graph-output-mappings-title">
         <h3 id="activity-graph-output-mappings-title">Output values</h3>
-        <p>Choose where each output gets its value.</p>
+        {(contract?.outputs ?? []).length > 0 ? <p>Choose where each output gets its value.</p> : null}
         {(contract?.outputs ?? []).length === 0
           ? <p className="wf-muted">Add an output above to connect a value.</p>
           : <WorkflowReferenceAuthoringProvider
@@ -235,16 +240,16 @@ export function ActivityGraphPublicInterfaceEditor({
 
       {providerSchemaVersion === "2" ? <section className="ad-graph-outcome-mappings" aria-labelledby="activity-graph-outcome-mappings-title">
         <h3 id="activity-graph-outcome-mappings-title">Completion paths</h3>
-        <p>Choose the activity outcome for each way the designer can finish. Multiple designer outcomes can return the same activity outcome.</p>
+        <p>Choose an activity outcome for each designer path. Several paths can share an outcome.</p>
         {payload.outcomeMappings.length ? <ul>{payload.outcomeMappings.map(mapping => <li key={mapping.sourceOutcomeReferenceKey}>
           <span>{outcomeName(outcomeMappingOptions.sourceOutcomes, mapping.sourceOutcomeReferenceKey)} → {outcomeName(outcomeMappingOptions.boundaryOutcomes, mapping.boundaryOutcomeReferenceKey)}</span>
-          <button type="button" onClick={() => updateOutcomeMappings(payload.outcomeMappings.filter(item => item !== mapping))} disabled={readOnly}>Remove connection</button>
+          <StudioButton variant="ghost" size="sm" onClick={() => updateOutcomeMappings(payload.outcomeMappings.filter(item => item !== mapping))} disabled={readOnly}>Remove connection</StudioButton>
         </li>)}</ul> : <p>No completion paths connected yet.</p>}
         {unresolvedOutcomes.length > 0 ? <p role="alert">Outcomes still needing a connection: {unresolvedOutcomes.map(item => item.name).join(", ")}.</p> : null}
         {outcomeMappingOptions.sourceOutcomes.length === 0 ? <p role="status">This designer does not expose any connectable completion paths.</p> : outcomeMappingOptions.boundaryOutcomes.length === 0 ? <p role="status">Add an enabled outcome above before connecting a completion path.</p> : <div className="ad-graph-outcome-mapping-add">
           <label><span>When the designer finishes with</span><select aria-label="Designer outcome" value={sourceOutcomeReferenceKey} onChange={event => setSourceOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an outcome</option>{outcomeMappingOptions.sourceOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey} disabled={payload.outcomeMappings.some(mapping => mapping.sourceOutcomeReferenceKey === outcome.referenceKey)}>{outcome.name}</option>)}</select></label>
           <label><span>Return this activity outcome</span><select aria-label="Activity outcome" value={boundaryOutcomeReferenceKey} onChange={event => setBoundaryOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an emitted outcome</option>{outcomeMappingOptions.boundaryOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey}>{outcome.name}</option>)}</select></label>
-          <button type="button" onClick={addOutcomeMapping} disabled={readOnly || !sourceOutcomeReferenceKey || !boundaryOutcomeReferenceKey}>Connect</button>
+          <StudioButton size="sm" onClick={addOutcomeMapping} disabled={readOnly || !sourceOutcomeReferenceKey || !boundaryOutcomeReferenceKey}>Connect</StudioButton>
         </div>}
       </section> : <section className="ad-inline-status" role="status">
         <details><summary>Compatibility details</summary>Schema 1 retains its historical single <code>done</code> boundary. Migrate explicitly to schema 2 to author outcome mappings.</details>
@@ -317,7 +322,10 @@ export function ActivityGraphImplementationEditor({
           edges: Edge[];
         }
       : buildCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout);
-    return { nodes: model.nodes, edges: model.edges as WorkflowEdge[] };
+    return { nodes: model.nodes.map(node => {
+      const activity = documentSlot.activities.find(candidate => candidate.nodeId === (node.data.runtimeNodeId ?? node.id));
+      return activity ? { ...node, data: { ...node.data, collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)) } } : node;
+    }), edges: model.edges as WorkflowEdge[] };
   }, [catalog, catalogByVersion, scopePath]);
 
   const applyModel = useCallback((
@@ -570,6 +578,24 @@ export function ActivityGraphImplementationEditor({
     const target = findBpmnElement(owner, flow.targetRef);
     return target ? target.name?.trim() || bpmnElementTypeLabel(target) : flow.targetRef;
   }, [owner]);
+  const decisionCatalogItem = availableActivities.find(item => isBpmnDecisionType(item.activityTypeKey));
+  const addBpmnDecision = () => {
+    if (readOnly || !selectedBpmnElement || !decisionCatalogItem) return;
+    const decision = createActivityNode(decisionCatalogItem, createNodeId(decisionCatalogItem));
+    updateScopeOwnerBpmnPayload(current => bindBpmnDecision(current, selectedBpmnElement.elementId, decision));
+  };
+  const bpmnInspectorProps = selectedBpmnElement ? {
+    element: selectedBpmnElement,
+    outboundFlows: selectedBpmnElementFlows,
+    onChangeElement: changeBpmnElement,
+    onChangeFlow: changeBpmnFlow,
+    onSetDefaultFlow: setBpmnDefaultFlow,
+    targetLabelFor: bpmnFlowTargetLabel,
+    readOnly,
+    isDecision: isBpmnDecisionType(selected ? catalogByVersion.get(selected.activityVersionId)?.activityTypeKey : undefined),
+    conversionBlockedReason: bpmnGatewayConversionBlocker(owner, selectedBpmnElement),
+    onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
+  } : null;
 
   // The provider-owned diagnostic focus seam addresses canvas nodes by document node id, which React
   // Flow does not put on the DOM.
@@ -732,6 +758,17 @@ export function ActivityGraphImplementationEditor({
     const nextRoot = updateActivity(root, nextSelected.nodeId, () => nextSelected, catalogByVersion);
     commitRoot(nextRoot);
   };
+  const addCollectionSlotItem = (ownerNodeId: string, collection: CollectionSlot) => {
+    if (readOnly) return;
+    commitRoot(updateActivity(root, ownerNodeId, current => {
+      const live = getCollectionSlots(current, catalogByVersion.get(current.activityVersionId)).find(candidate => candidate.property === collection.property);
+      return live ? addCollectionItem(current, live) : current;
+    }, catalogByVersion));
+    setSelectedNodeId(nodes.find(node => node.id === ownerNodeId || (node.data as unknown as BpmnNodeData).boundActivity?.nodeId === ownerNodeId)?.id ?? ownerNodeId);
+    setActiveRightPanelId("inspector");
+    setActiveInspectorTabId("slots");
+    sidePanelLayout.setInspectorCollapsed(false);
+  };
   const inspectedNode = selected ?? owner;
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
@@ -823,15 +860,8 @@ export function ActivityGraphImplementationEditor({
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
-          {selectedBpmnElement && !selected ? <BpmnElementInspector
-            element={selectedBpmnElement}
-            outboundFlows={selectedBpmnElementFlows}
-            onChangeElement={changeBpmnElement}
-            onChangeFlow={changeBpmnFlow}
-            onSetDefaultFlow={setBpmnDefaultFlow}
-            targetLabelFor={bpmnFlowTargetLabel}
-            readOnly={readOnly}
-          /> : <InspectorPanel
+          {bpmnInspectorProps && !selected ? <BpmnElementInspector {...bpmnInspectorProps} /> : <InspectorPanel
+            bpmnRoutingPanel={bpmnInspectorProps && selected ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
             key={`${inspectedNode?.nodeId ?? "no-activity"}:${selected ? "selected" : "owner"}`}
             context={context}
             workflowState={workflowState}
@@ -912,7 +942,7 @@ export function ActivityGraphImplementationEditor({
         />
         <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
         {isSequenceSlot ? <SequenceDesigner
-          nodes={nodes}
+          nodes={nodes.filter(node => node.type !== "bpmnElement")}
           selectedNodeId={selectedNodeId}
           readOnly={readOnly}
           canvasRef={interactions.canvasRef}
@@ -925,6 +955,7 @@ export function ActivityGraphImplementationEditor({
           onMove={interactions.moveSequenceActivity}
           onDelete={deleteSequenceActivity}
           onDuplicate={duplicateSequenceActivity}
+          onAddCollectionItem={addCollectionSlotItem}
           onOpenSlot={(ownerNodeId, ownerLabel, childSlot) =>
             enterChildSlot(ownerNodeId, childSlot, slotCrumbLabel(ownerLabel, childSlot))}
         >
@@ -937,6 +968,8 @@ export function ActivityGraphImplementationEditor({
             onDrop: interactions.onCanvasDrop
           }}
           edgeActions={interactions.edgeActions}
+          nodeResize={slot.mode === "flowchart" && !readOnly ? interactions.resizeNode : null}
+          collectionAction={readOnly ? null : addCollectionSlotItem}
           slotNavigation={(ownerNodeId, ownerLabel, childSlot) =>
             enterChildSlot(ownerNodeId, childSlot, slotCrumbLabel(ownerLabel, childSlot))}
           reactFlowProps={{
@@ -1079,10 +1112,10 @@ function ActivityGraphOutputMappingEditor({
 
   return (
     <article className="ad-graph-output-mapping">
-      <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <button type="button" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</button> : null}</header>
+      <header><div><strong>{output.displayName || output.name}</strong><small>{output.isRequired ? "Required" : "Optional"}</small></div>{mapping ? <StudioButton variant="ghost" size="sm" onClick={() => onChange(null)} disabled={readOnly}>Remove connection</StudioButton> : null}</header>
       {!mapping ? <>
         {output.isRequired ? <span role="alert">Choose a value for this required output.</span> : <span className="wf-muted">No value is configured.</span>}
-        <button type="button" onClick={add} disabled={readOnly || available.length === 0}>Set value</button>
+        <StudioButton size="sm" onClick={add} disabled={readOnly || available.length === 0}>Set value</StudioButton>
       </> : <>
         <label><span>Value source</span><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></label>
         {Editor ? <Editor
@@ -1224,7 +1257,7 @@ function mergeCanvasLayout(
       nodeId: node.id,
       x: node.position.x,
       y: node.position.y,
-      width: previous?.width,
+      width: persistedNodeWidth(node, previous?.width),
       height: previous?.height,
       additionalProperties: previous?.additionalProperties
     });

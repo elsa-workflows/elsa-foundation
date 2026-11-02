@@ -10,7 +10,7 @@ internal sealed class EchoTool : IAgentTool
 {
     public AgentToolDescriptor Descriptor { get; } = new(DeterministicAgentProvider.ReadOnlyToolName, "Echo", "Echoes text.",
         AgentToolMutability.ReadOnly, AgentRisk.ReadOnly, """{"type":"object","properties":{"text":{"type":"string"}}}""", [], [])
-    { ModuleId = "test.module" };
+    { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId, ResultType = "test.echo", ResultSchemaVersion = "1" };
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor)));
     public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
@@ -26,7 +26,7 @@ internal sealed class ApplyChangeTool : IAgentTool
     public int Invocations { get; private set; }
     public AgentToolDescriptor Descriptor { get; } = new(DeterministicAgentProvider.MutatingToolName, "Apply change", "Applies a test resource change.",
         AgentToolMutability.Mutating, AgentRisk.ReviewRequired, """{"type":"object","properties":{"change":{"type":"string"}}}""", [], [])
-    { ModuleId = "test.module" };
+    { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId, ResultType = "test.change", ResultSchemaVersion = "1" };
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with
         { Target = new("test.module", "test.resource", "resource-1", "revision-1") }));
@@ -42,7 +42,7 @@ internal sealed class ApplyChangeTool : IAgentTool
 internal sealed class ThrowingTool : IAgentTool
 {
     public AgentToolDescriptor Descriptor { get; } = new("boom", "Boom", "Always throws.", AgentToolMutability.ReadOnly, AgentRisk.ReadOnly, "{}", [], [])
-    { ModuleId = "test.module" };
+    { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId };
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor)));
     public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
@@ -62,7 +62,8 @@ internal static class AgentTestToolHelpers
     public static AgentPreparedToolInvocation Prepared(AgentToolInvocation invocation, AgentToolDescriptor descriptor, AgentToolPreparation preparation) =>
         new("invocation-1", invocation.SessionId, invocation.TurnId, invocation.ToolCallId, descriptor.Name, descriptor.ContractVersion,
             descriptor.ModuleId, invocation.ActorId, invocation.TenantId, preparation.Target, preparation.Arguments, "test-digest", preparation.Risk,
-            preparation.Preview, descriptor.ExecutionLocation, preparation.RequiresApproval, preparation.Client, DateTimeOffset.UtcNow.AddMinutes(5));
+            preparation.Preview, descriptor.ExecutionLocation, preparation.RequiresApproval, preparation.Client, DateTimeOffset.UtcNow.AddMinutes(5))
+        { DisclosureSourceId = descriptor.DisclosureSourceId };
 }
 
 internal sealed class AgentTestToolsPublisher(params IAgentTool[] tools) : IInlineEventPublisher

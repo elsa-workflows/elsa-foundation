@@ -92,4 +92,13 @@ describe("compact workflow toolbar", () => {
     buttons.forEach(click);
     Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());
   });
+  it("explains unsupported publication and test-run operations",() => {
+    const {container,commands} = render({publicationUnavailableReason:"Publishing is not supported by this backend.",canRun:false,runTitle:"Test runs are not supported by this backend."});
+    const publish=container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
+    const run=container.querySelector<HTMLButtonElement>(".wf-run-button")!;
+    expect(publish.disabled).toBe(true);expect(publish.title).toContain("not supported");
+    expect(run.disabled).toBe(true);expect(run.title).toContain("not supported");
+    click(publish);click(run);expect(commands.onPublish).not.toHaveBeenCalled();expect(commands.onRun).not.toHaveBeenCalled();
+  });
+
 });

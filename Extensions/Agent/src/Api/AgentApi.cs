@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Security.Cryptography;
 
@@ -38,6 +39,8 @@ public static class AgentApi
             typeof(AgentCreateSessionRequest), typeof(AgentApiResponse<AgentCreateSessionResponse>), HandleCreateSessionAsync);
         Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}", "GetSession", AgentPermissionKeys.Use,
             typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<AgentSessionDetailsResponse>), HandleGetSessionAsync);
+        Map(api, "PUT", $"{RoutePrefix}/sessions/{{sessionId}}/autonomy", "ChangeAutonomy", AgentPermissionKeys.Use,
+            typeof(AgentSessionAutonomyRequest), typeof(AgentApiResponse<AgentSessionPolicyResponse>), HandleChangeAutonomyAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/messages", "PostMessage", AgentPermissionKeys.Use,
             typeof(AgentMessageRequest), typeof(AgentApiResponse<AgentMessageAcceptedResponse>), HandlePostMessageAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/turns/{{turnId}}/cancel", "CancelTurn", AgentPermissionKeys.Use,
@@ -158,7 +161,11 @@ public static class AgentApi
         await providers.Active.CreateSessionAsync(session, context.RequestAborted);
         // Routes and presentation metadata never establish an authoritative resource target.
         IReadOnlyCollection<AgentContextAttachment> attachments = [];
-        await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Success(new(session.Id, session.Status.ToContractString(), session.Title, attachments.Select(x => x.ToResponse()).ToList())), AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse);
+        var created = new AgentCreateSessionResponse(session.Id, session.Status.ToContractString(), session.Title, attachments.Select(x => x.ToResponse()).ToList())
+        {
+            Policy = await ReadPolicyAsync(context, session.Id, actorId, tenantId)
+        };
+        await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Success(created), AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse);
     }
 
     private static async Task HandleGetSessionAsync(HttpContext context)
@@ -173,8 +180,89 @@ public static class AgentApi
         var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
         var data = new AgentSessionDetailsResponse(session!.Id, session.Status.ToContractString(), session.Title,
             (await sessions.ListContextAsync(sessionId, context.RequestAborted)).Select(x => x.ToResponse()).ToList(),
-            (await sessions.ListMessagesAsync(sessionId, context.RequestAborted)).Select(x => x.ToViewModel()).ToList());
+            (await sessions.ListMessagesAsync(sessionId, context.RequestAborted))
+                .Where(x => x.Role != AgentRole.Assistant || x.Content.Length > 0 || x.DisclosureHistory is null)
+                .Select(x => x.ToViewModel()).ToList())
+        {
+            // Authorization above proved these resolve to the session owner.
+            Policy = await ReadPolicyAsync(context, session.Id, AgentEndpointActor.Resolve(context.User)!, AgentEndpointActor.ResolveTenant(context.User)!)
+        };
         await WriteAsync(context, AgentApiResponse<AgentSessionDetailsResponse>.Success(data), AgentJsonContext.Default.AgentApiResponseAgentSessionDetailsResponse);
+    }
+
+    /// <summary>
+    /// Preview: an autonomy-only conditional change through the session policy owner.
+    /// The owner is the authenticated actor and tenant; nothing in the request can select it.
+    /// </summary>
+    private static async Task HandleChangeAutonomyAsync(HttpContext context)
+    {
+        if (!context.Request.HasJsonContentType())
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return;
+        }
+        AgentSessionAutonomyRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync(AgentJsonContext.Default.AgentSessionAutonomyRequest, context.RequestAborted);
+        }
+        catch (NotSupportedException)
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return;
+        }
+        catch (JsonException)
+        {
+            request = null;
+        }
+        var requestedMode = AgentApiMapping.ParseAutonomyMode(request?.AutonomyMode);
+        if (request?.ExpectedRevision is not { } expectedRevision || requestedMode is not { } mode)
+        {
+            await WritePolicyFailureAsync(context, new(AutonomyInvalidCode, "Send a defined autonomy mode (manual, auto-read-only or full-auto) and the last acknowledged policy revision.", 400));
+            return;
+        }
+
+        var sessionId = RouteValue(context, "sessionId");
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
+        if (error is not null)
+        {
+            await WritePolicyFailureAsync(context, error);
+            return;
+        }
+        var policies = context.RequestServices.GetService<IAgentSessionPolicyService>();
+        var result = policies is null
+            ? new AgentSessionPolicyResult(AgentSessionPolicyOutcome.Unsupported, null)
+            : await policies.ChangeAutonomyAsync(new(session!.Id, AgentEndpointActor.Resolve(context.User)!, AgentEndpointActor.ResolveTenant(context.User)!,
+                mode, expectedRevision), context.RequestAborted);
+        if (result is { Outcome: AgentSessionPolicyOutcome.Succeeded, State: { } state })
+        {
+            await WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Success(state.ToResponse()), AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse);
+            return;
+        }
+        await WritePolicyFailureAsync(context, result.Outcome switch
+        {
+            AgentSessionPolicyOutcome.StaleRevision => new("agent.session.policy_stale", "The session policy changed since the expected revision. Read the session back before retrying.", 409),
+            AgentSessionPolicyOutcome.Busy => new("agent.session.busy", "Finish or resolve the current work before changing the session autonomy.", 409),
+            AgentSessionPolicyOutcome.SessionClosed => new("agent.session.closed", "The agent session is closed or expired.", 409),
+            AgentSessionPolicyOutcome.InvalidMode => new(AutonomyInvalidCode, "The requested autonomy mode is not defined.", 400),
+            AgentSessionPolicyOutcome.NotFound => new("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404),
+            _ => new("agent.session.autonomy_unsupported", "The installed agent session services cannot change the session autonomy.", 409)
+        });
+    }
+
+    private const string AutonomyInvalidCode = "agent.session.autonomy_invalid";
+
+    private static Task WritePolicyFailureAsync(HttpContext context, AgentError error) =>
+        WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse, error.StatusCode);
+
+    /// <summary>Reads the owner's acknowledged policy; null only when the installed composition cannot read it back.</summary>
+    private static async Task<AgentSessionPolicyResponse?> ReadPolicyAsync(HttpContext context, string sessionId, string actorId, string tenantId)
+    {
+        var policies = context.RequestServices.GetService<IAgentSessionPolicyService>();
+        if (policies is null)
+            return null;
+        var result = await policies.GetAsync(sessionId, actorId, tenantId, context.RequestAborted);
+        return result is { Outcome: AgentSessionPolicyOutcome.Succeeded, State: { } state } ? state.ToResponse() : null;
     }
 
     private static async Task HandlePostMessageAsync(HttpContext context)
@@ -206,7 +294,10 @@ public static class AgentApi
                     await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.message.delivery_conflict", "This prompt delivery identity was reused with different input.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
                     return;
                 }
-                await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(existing, [new("agent.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+                // A failure after accepted insertion can precede context retention. Recovery retains only the
+                // original accepted message's own context; the store deduplicates by attachment identity.
+                await sessions.AddContextAsync(sessionId, existing.Context, context.RequestAborted);
+                await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(existing.ToAcceptedResponse([new("agent.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
                 return;
             }
         }
@@ -251,10 +342,23 @@ public static class AgentApi
         var requestedStored = requestedContextIds.Count == 0 ? [] : stored.Where(x => requestedContextIds.Contains(x.Id)).ToList();
         var requestContext = requestedStored.Concat(contextAttachments.Select(x => x.ToDomain())).ToList();
         AgentResult<AgentContextContribution> collected;
+        var surface = request.ActiveSurface ?? new AgentSurfaceRequest
+        {
+            Route = session.Metadata.GetValueOrDefault("route", "/"),
+            ResourceType = session.Metadata.GetValueOrDefault("resourceType"),
+            ResourceId = session.Metadata.GetValueOrDefault("resourceId")
+        };
+        var surfaceInputs = new Dictionary<string, string>
+        {
+            ["route"] = surface.Route,
+            ["resourceType"] = surface.ResourceType ?? string.Empty,
+            ["resourceId"] = surface.ResourceId ?? string.Empty,
+            ["selection"] = JsonSerializer.Serialize(surface.Selection)
+        };
         try
         {
             collected = await context.RequestServices.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
-                new(sessionId, string.Empty, new Dictionary<string, string>()) { CallerAttachments = requestContext }, context.RequestAborted);
+                new(sessionId, surface.Route, surfaceInputs) { CallerAttachments = requestContext }, context.RequestAborted);
         }
         catch (AgentContributionException)
         {
@@ -275,10 +379,18 @@ public static class AgentApi
             Source = request.Source,
             Client = bindings.Count == 1 ? bindings[0] : null,
             PromptMode = request.PromptMode,
-            DeliveryFingerprint = fingerprint
+            DeliveryFingerprint = fingerprint,
+            HasDisclosureProvenance = true,
+            // Evaluators and collectors above authorized this delivery under the revision read at authorization.
+            ExpectedPolicyRevision = session.PolicyRevision
         };
         AgentMessage message;
         try { message = await sessions.AddMessageAsync(sessionId, messageRequest, context.RequestAborted); }
+        catch (AgentSessionPolicyChangedException)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new(AgentSessionPolicyChangedException.Code, "The session policy changed while this prompt was being authorized. Review the current policy and send it again.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
+            return;
+        }
         catch (AgentContributionException)
         {
             await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.message.delivery_conflict", "Another prompt is pending, or this delivery identity conflicts with an accepted prompt.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
@@ -286,7 +398,7 @@ public static class AgentApi
         }
         await sessions.AddContextAsync(sessionId, contextItems, context.RequestAborted);
         var warnings = collected.Value.Diagnostics.Select(x => new AgentViolation(x.Code, x.Message, x.ContributorId)).ToList();
-        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(message, warnings)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(message.ToAcceptedResponse(warnings)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
     }
 
     private static async Task HandleCancelTurnAsync(HttpContext context)
@@ -319,8 +431,20 @@ public static class AgentApi
             await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow));
             return;
         }
-        await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
-            await WriteEventAsync(context, item);
+        try
+        {
+            await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
+                await WriteEventAsync(context, item);
+        }
+        catch (AgentContributionException failure)
+        {
+            // The feature exposes its domain cause to this transport caller. Keep the causal
+            // exception on the server; the browser receives only the fixed recovery disposition.
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(OwnerId)
+                .LogError(failure, "Agent disclosure {Operation} failed for session {SessionId}.", "stream", sessionId);
+            await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null,
+                new("agent.history.provenance_unavailable", "Complete disclosure history could not be retained or authorized. Recorded effects remain unchanged; retry when storage and authority are available.", 503), DateTimeOffset.UtcNow));
+        }
     }
 
     private static async Task HandleFeedbackAsync(HttpContext context)
@@ -486,28 +610,35 @@ public static class AgentApi
             await WriteBindingErrorAsync(context, "take", bindingError);
             return;
         }
-        var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
         if (sessionId is not null)
         {
-            var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, context.User, sessionId, context.RequestAborted);
+            var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(),
+                context.User, sessionId, context.RequestAborted);
             if (error is not null)
             {
                 await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(error), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, error.StatusCode);
                 return;
             }
         }
-        var listed = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListAsync(sessionId, null, context.RequestAborted);
-        var owned = new List<AgentAuditEvent>();
-        foreach (var item in listed)
+        var actorId = AgentEndpointActor.Resolve(context.User);
+        var tenantId = AgentEndpointActor.ResolveTenant(context.User);
+        if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(tenantId))
         {
-            if (item.SessionId is null)
-                continue;
-            var session = await sessions.FindAsync(item.SessionId, context.RequestAborted);
-            if (session is not null && AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, context.User))
-                owned.Add(item);
+            var unresolved = new AgentError("agent.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403);
+            await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(unresolved), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, unresolved.StatusCode);
+            return;
         }
-        IReadOnlyCollection<AgentAuditEvent> events = owned.Take(Math.Clamp(take ?? 100, 1, 1000)).ToList();
-        await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Success(events), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent);
+        // The owning reader filters by ownership and orders before the limit. There is deliberately no
+        // global-read or per-event session lookup fallback when the installed reader lacks the query.
+        var result = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListOwnedAsync(
+            new(actorId, tenantId, sessionId, Math.Clamp(take ?? 100, 1, AgentAuditOwnerQuery.MaxTake)), context.RequestAborted);
+        if (!result.Succeeded)
+        {
+            var unsupported = new AgentError("agent.audit.query_unsupported", "The installed agent audit reader cannot answer owner-scoped audit queries.", 409);
+            await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(unsupported), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, unsupported.StatusCode);
+            return;
+        }
+        await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Success(result.Events), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent);
     }
 
     private static async Task WriteDeniedAsync(HttpContext context, string sessionId, AgentPolicyDecision decision)

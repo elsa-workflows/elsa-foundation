@@ -1,4 +1,5 @@
 using Elsa.Activities.Bpmn.Exceptions;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -28,15 +29,15 @@ namespace Elsa.Activities.Bpmn.Activities;
 [RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
 [Activity(Icon = "Workflow")]
 [TriggerActivity]
-[ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
-[ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
+[ActivityStructure(BpmnActivityIdentities.StructureKind, BpmnActivityIdentities.StructureSchemaVersion, Mode = "bpmn", SupportsScopedVariables = true)]
+[ActivityChildSlot(BpmnActivityIdentities.ActivitiesSlotName, "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
 [ActivityChildControlConsumer(BpmnControlProtocol.Key, BpmnControlProtocol.Version)]
 public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler, IRuntimeActivityChildNotificationHandler, IRuntimeActivityChildOutcomeHandler, IRuntimeLiveChildActivityConsumer, IRuntimeScopedVariableReader, IRuntimeActivityChildControlConsumer
 {
-    public const string ActivitiesSlotName = "Bpmn.Activities";
-    public const string StructureKind = "elsa.bpmn.structure";
-    public const string StructureSchemaVersion = "1.0.0";
+    public const string ActivitiesSlotName = BpmnActivityIdentities.ActivitiesSlotName;
+    public const string StructureKind = BpmnActivityIdentities.StructureKind;
+    public const string StructureSchemaVersion = BpmnActivityIdentities.StructureSchemaVersion;
 
     /// <summary>
     /// Whether this process may be started from an event-defined start element's stimulus. Defaults to

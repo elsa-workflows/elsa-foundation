@@ -102,4 +102,32 @@ public sealed class LoginPageTests
         Assert.Equal(expected, LocalUrl.IsTrustedAbsolute(url, allowed));
         Assert.Equal(expected ? url : "/", LocalUrl.Sanitize(url, allowed));
     }
+
+    [Theory]
+    [InlineData("split", "linen", "ember")]
+    [InlineData("reverse", "tidal", "tidal")]
+    [InlineData("immersive", "daybreak", "daybreak")]
+    [InlineData("editorial", "canopy", "canopy")]
+    public void Custom_presentation_keeps_form_security_and_encodes_branding(string layout, string palette, string artwork)
+    {
+        var html = LoginPage.Render("/studio?x=\"unsafe", true, "csrf\"token", new LoginPageOptions
+        {
+            Layout = layout, Palette = palette, Artwork = artwork,
+            ProductName = "<script>alert(1)</script>", Tagline = "Calm & clear",
+            LogoUrl = "javascript:alert(1)", ImageUrl = "data:text/html,unsafe", HelpUrl = "//unsafe.example", PrivacyUrl = "/privacy"
+        });
+        Assert.Contains($"data-layout=\"{layout}\"", html);
+        Assert.Contains($"data-palette=\"{palette}\"", html);
+        Assert.Contains($"/_elsa/identity/login-assets/{artwork}.jpg", html);
+        Assert.Contains("&lt;script&gt;", html);
+        Assert.Contains("Calm &amp; clear", html);
+        Assert.Contains("csrf&quot;token", html);
+        Assert.Contains("name=\"username\"", html);
+        Assert.Contains("name=\"password\"", html);
+        Assert.Contains("href=\"/privacy\"", html);
+        Assert.DoesNotContain("javascript:", html);
+        Assert.DoesNotContain("data:text/html", html);
+        Assert.DoesNotContain("//unsafe.example", html);
+        Assert.DoesNotContain("<script>", html);
+    }
 }

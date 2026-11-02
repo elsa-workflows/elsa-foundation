@@ -16,6 +16,7 @@
           "LiquidExpressionEditorStudio": {},
           "OpenTelemetryStudio": {},
           "SecretsStudio": {},
+          "AgentSpecialistsStudio": {},
           "ConnectionsStudio": {},
           "EtlStudio": {},
           "StructuredLogsStudio": {},
@@ -26,7 +27,8 @@
           "WeatherForecastSample": {},
           "WeaverWorkflowsStudio": {},
           "WorkflowsStudio": {},
-          "WorkflowsDashboardStudio": {}
+          "WorkflowsDashboardStudio": {},
+          "BackendsStudio": {}
         },
         "Configuration": {
           "WebRouting": {

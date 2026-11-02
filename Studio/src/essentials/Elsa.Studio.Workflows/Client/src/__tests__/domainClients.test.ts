@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import {
+  createDefinition,
   createWorkflowFolder,
   deleteEmptyWorkflowFolder,
   getWorkflowFolderMutationSupport,
@@ -22,6 +23,44 @@ import { parseWorkflowRunInputs } from "../workflowRunInputs";
 import type { WorkflowInput } from "../workflowTypes";
 
 afterEach(clearApiCapabilityCache);
+
+describe("workflow organization availability", () => {
+  it.each([{ publicationState: "published" }, { sort: "modified" as const }])("does not trust an older paged host to honor unsupported query options: %j", async options => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? pagedDefinitionCapabilities : { items: [{ id: "unpublished", publicationState: "draft" }] });
+    await expect(listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 25, ...options })).rejects.toThrow();
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+  it("refuses unsupported folder placement before creating a workflow", async () => {
+    const getJson = vi.fn(async () => pagedDefinitionCapabilities);
+    const postJson = vi.fn(async () => ({}));
+    await expect(createDefinition(createContext({ getJson, postJson }), { name: "Invoice", folderId: "finance" })).rejects.toThrow();
+    expect(postJson).not.toHaveBeenCalled();
+  });
+  it("keeps ordinary paged sort and publication filters when organization is disabled", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? { capabilities: [{ ...pagedDefinitionCapabilities.capabilities[0], links: [...pagedDefinitionCapabilities.capabilities[0].links, { rel: "workflow-definitions-query", href: "design/workflows/definition-pages" }] }] } : { items: [] });
+    await listDefinitions(createContext({ getJson }), { search: "invoice", page: 1, pageSize: 25, sort: "modified", publicationState: "published" });
+    const url = new URL(String(getJson.mock.lastCall?.[0]), "https://backend.test");
+    expect(url.pathname).toBe("/design/workflows/definition-pages");
+    expect(url.searchParams.get("sort")).toBe("modified");
+    expect(url.searchParams.get("publicationState")).toBe("published");
+  });
+
+  it("uses the independently advertised query endpoint for extended options", async () => {
+    const capabilities = { capabilities: [{ ...pagedDefinitionCapabilities.capabilities[0], links: [...pagedDefinitionCapabilities.capabilities[0].links,
+      { rel: "workflow-definitions-query", href: "custom/extended-query" }] }] };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
+    await listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 25, publicationState: "published" });
+    expect(getJson).toHaveBeenLastCalledWith("/custom/extended-query?state=active&pageSize=25&publicationState=published");
+  });
+
+  it.each([{ folderId: "finance" }, { unfiled: true }, { includeDescendants: true }, { favoritesOnly: true },
+    { tagFilters: [{ tagId: "critical", operator: "exists" as const }] }])("refuses unsupported predicates before any workflow query: %j", async predicate => {
+    const getJson = vi.fn(async () => pagedDefinitionCapabilities);
+    await expect(listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 25, ...predicate })).rejects.toThrow();
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(getJson).toHaveBeenCalledWith("/capabilities");
+  });
+});
 
 const capabilities = {
   capabilities: [
@@ -264,7 +303,7 @@ describe("canonical domain clients", () => {
 
   it("sends direct-folder and Unfiled selectors only through the paged relation", async () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities"
-      ? pagedDefinitionCapabilities
+      ? { capabilities: [{ ...pagedDefinitionCapabilities.capabilities[0], links: [...pagedDefinitionCapabilities.capabilities[0].links, { rel: "workflow-folders", href: "design/workflows/folders" }] }] }
       : { items: [], nextContinuationToken: null });
     const context = createContext({ getJson });
 

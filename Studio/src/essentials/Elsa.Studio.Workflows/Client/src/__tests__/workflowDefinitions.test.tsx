@@ -50,7 +50,8 @@ describe("workflow definition list", () => {
 
     await waitFor(() => expect(container.querySelector(".wf-definition-primary-identifier .studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition ID: ${definition.id}`));
     const row = container.querySelector<HTMLElement>(".wf-definition-grid .wf-grid-row")!;
-    expect(row.querySelector(".wf-definition-name")?.textContent).toBe(definition.name);
+    expect(row.querySelector(".wf-definition-name strong")?.textContent).toBe(definition.name);
+    expect(row.querySelector(".wf-definition-description")?.textContent).toBe(definition.description);
     expect(container.querySelector('[role="columnheader"].wf-definition-id-header')?.textContent).toBe("Definition ID");
     const disclosure = row.querySelector<HTMLButtonElement>('button[aria-label="Identifiers for Invoice evaluator"]')!;
     const copyDefinitionId = row.querySelector<HTMLButtonElement>('button[aria-label="Copy Definition ID"]')!;

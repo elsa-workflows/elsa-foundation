@@ -1124,7 +1124,7 @@ describe("workflow run workbench definition names", () => {
       .toBe("Order fulfillment"));
     expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("small")?.textContent)
       .toBe("definition-1 · version-1");
-    expect(container.querySelector(".wf-error-card")).toBeNull();
+    expect(container.querySelector(".studio-result-state[data-tone=\"danger\"]")).toBeNull();
   });
 
   it("keeps the inspector ready when the optional workflow-name lookup fails", async () => {
@@ -1136,7 +1136,7 @@ describe("workflow run workbench definition names", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
     expect(container.textContent).not.toContain("Loading workflow run...");
     expect(container.textContent).not.toContain("Design is unavailable");
-    expect(container.querySelector(".wf-error-card")).toBeNull();
+    expect(container.querySelector(".studio-result-state[data-tone=\"danger\"]")).toBeNull();
   });
 });
 

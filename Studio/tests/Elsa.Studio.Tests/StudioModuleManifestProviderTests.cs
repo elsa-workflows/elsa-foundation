@@ -132,6 +132,61 @@ public sealed class StudioModuleManifestProviderTests
             $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module3.css?v={module.Version}",
             $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module10.css?v={module.Version}"
         ], module.Styles);
+        Assert.False(module.StylesHaveContentHashes);
+    }
+
+    [Theory]
+    [InlineData("{\"version\":1,\"styles\":[\"module-entryHash.css\"]}", "module-entryHash.css")]
+    [InlineData("{\"version\":1,\"styles\":[]}", null)]
+    public async Task GetModules_UsesOnlyDeclaredEntryStylesIncludingExplicitEmptyList(string contract, string? entryStyle)
+    {
+        const string directory = "_content/Elsa.Studio.Workflows/studio/modules/workflows";
+        var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>(), fileContents: new Dictionary<string, string>
+        {
+            [$"{directory}/entry-styles.json"] = contract,
+            [$"{directory}/module-entryHash.css"] = "entry",
+            [$"{directory}/module-canvasHash.css"] = "deferred"
+        });
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Equal(entryStyle is null ? [] : new[] { $"/{directory}/{entryStyle}" }, module.Styles);
+        Assert.True(module.StylesHaveContentHashes);
+    }
+
+    [Theory]
+    [InlineData("{\"version\":2,\"styles\":[]}")]
+    [InlineData("{\"version\":1,\"styles\":[\"../outside.css\"]}")]
+    [InlineData("{\"version\":1,\"styles\":[\"https://example.com/style.css\"]}")]
+    [InlineData("{\"version\":1,\"styles\":[\"module-missing.css\"]}")]
+    [InlineData("{\"version\":1,\"styles\":[\"module-entryHash.css\",\"module-entryHash.css\"]}")]
+    [InlineData("{\"version\":1}")]
+    [InlineData("invalid json")]
+    public async Task GetModules_RejectsInvalidStyleContractWithoutBreakingOtherModules(string contract)
+    {
+        const string directory = "_content/Elsa.Studio.Workflows/studio/modules/workflows";
+        var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>(), fileContents: new Dictionary<string, string>
+        {
+            [$"{directory}/entry-styles.json"] = contract,
+            [$"{directory}/module-entryHash.css"] = "entry"
+        });
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Contains(response.Diagnostics, x => x.ModuleId == "Elsa.Studio.Workflows" && x.Status == StudioModuleDiagnosticStatuses.Failed);
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Dashboard");
+    }
+
+    [Fact]
+    public void CustomManifestStylesRetainVersioningWithoutAnExplicitContentHashGuarantee()
+    {
+        // The existing eight-argument public constructor remains supported; names are unrestricted.
+        var manifest = new StudioModuleManifest("custom", "Custom", "2.0.0", "/custom/module.js",
+            ["/custom/module-standard.css"], "*", "*", []);
+        Assert.False(manifest.StylesHaveContentHashes);
+        var json = System.Text.Json.JsonSerializer.Serialize(manifest,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("stylesHaveContentHashes", json);
+        Assert.Contains("/custom/module-standard.css", json);
+        var hashed = manifest with { StylesHaveContentHashes = true };
+        Assert.Contains("\"stylesHaveContentHashes\":true", System.Text.Json.JsonSerializer.Serialize(hashed,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
     }
 
     [Fact]
@@ -142,6 +197,7 @@ public sealed class StudioModuleManifestProviderTests
 
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal([$"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css?v={module.Version}"], module.Styles);
+        Assert.False(module.StylesHaveContentHashes);
     }
 
     [Fact]
@@ -256,9 +312,10 @@ public sealed class StudioModuleManifestProviderTests
         Action<StudioApiOptions>? configure = null,
         IReadOnlyList<string>? shellFeatures = null,
         IReadOnlyDictionary<string, string[]>? webAssets = null,
-        Type[]? extraFeatureTypes = null)
+        Type[]? extraFeatureTypes = null,
+        IReadOnlyDictionary<string, string>? fileContents = null)
     {
-        await using var provider = CreateProvider(configure, shellFeatures, webAssets, extraFeatureTypes);
+        await using var provider = CreateProvider(configure, shellFeatures, webAssets, extraFeatureTypes, fileContents);
         return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
     }
 
@@ -272,13 +329,14 @@ public sealed class StudioModuleManifestProviderTests
         Action<StudioApiOptions>? configure = null,
         IReadOnlyList<string>? shellFeatures = null,
         IReadOnlyDictionary<string, string[]>? webAssets = null,
-        Type[]? extraFeatureTypes = null)
+        Type[]? extraFeatureTypes = null,
+        IReadOnlyDictionary<string, string>? fileContents = null)
     {
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
 
         if (webAssets is not null)
-            services.AddSingleton<IWebHostEnvironment>(new FakeWebHostEnvironment(webAssets));
+            services.AddSingleton<IWebHostEnvironment>(new FakeWebHostEnvironment(webAssets, fileContents));
 
         // Register a fake runtime feature catalog that surfaces all feature types so the
         // StudioModuleManifestProvider discovers [StudioModule] attributes via reflection.
@@ -332,24 +390,27 @@ public sealed class StudioModuleManifestProviderTests
     /// Web host environment whose web root serves the supplied directory-path → file-names map,
     /// mimicking how static web assets expose module bundles under <c>_content/…</c>.
     /// </summary>
-    private sealed class FakeWebHostEnvironment(IReadOnlyDictionary<string, string[]> webAssets) : IWebHostEnvironment
+    private sealed class FakeWebHostEnvironment(IReadOnlyDictionary<string, string[]> webAssets, IReadOnlyDictionary<string, string>? contents) : IWebHostEnvironment
     {
         public string ApplicationName { get; set; } = "Tests";
         public string EnvironmentName { get; set; } = "Development";
         public string ContentRootPath { get; set; } = "/";
         public string WebRootPath { get; set; } = "/wwwroot";
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-        public IFileProvider WebRootFileProvider { get; set; } = new FakeFileProvider(webAssets);
+        public IFileProvider WebRootFileProvider { get; set; } = new FakeFileProvider(webAssets, contents);
     }
 
-    private sealed class FakeFileProvider(IReadOnlyDictionary<string, string[]> directories) : IFileProvider
+    private sealed class FakeFileProvider(IReadOnlyDictionary<string, string[]> directories, IReadOnlyDictionary<string, string>? contents) : IFileProvider
     {
         public IDirectoryContents GetDirectoryContents(string subpath) =>
             directories.TryGetValue(subpath.Trim('/'), out var files)
                 ? new FakeDirectoryContents(files)
                 : NotFoundDirectoryContents.Singleton;
 
-        public IFileInfo GetFileInfo(string subpath) => new NotFoundFileInfo(subpath);
+        public IFileInfo GetFileInfo(string subpath) =>
+            contents?.TryGetValue(subpath.Trim('/'), out var content) == true
+                ? new FakeFileInfo(subpath, content)
+                : new NotFoundFileInfo(subpath);
 
         public IChangeToken Watch(string filter) => NullChangeToken.Singleton;
     }
@@ -363,7 +424,7 @@ public sealed class StudioModuleManifestProviderTests
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    private sealed class FakeFileInfo(string name) : IFileInfo
+    private sealed class FakeFileInfo(string name, string content = "") : IFileInfo
     {
         public bool Exists => true;
         public long Length => 0;
@@ -372,6 +433,6 @@ public sealed class StudioModuleManifestProviderTests
         public DateTimeOffset LastModified => DateTimeOffset.UnixEpoch;
         public bool IsDirectory => false;
 
-        public Stream CreateReadStream() => Stream.Null;
+        public Stream CreateReadStream() => new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
     }
 }

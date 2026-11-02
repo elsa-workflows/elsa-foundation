@@ -9,6 +9,7 @@ import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/s
 import { WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
+import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 
 setDialogs(dialogs);
 

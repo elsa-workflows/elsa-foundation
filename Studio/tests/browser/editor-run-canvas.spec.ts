@@ -73,7 +73,9 @@ for (const theme of ["light", "dark"]) {
     await expect(inspector.locator("fieldset[disabled]")).toHaveCount(1);
     await page.getByRole("tab", { name: "Code", exact: true }).click();
     await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
-    await expect(page.locator('.studio-code-editor[data-readonly="true"]')).toHaveCount(1);
+    // The inspector can also contain a read-only expression editor for this snapshot.
+    await expect(page.locator('.wf-code-view .studio-code-editor[data-readonly="true"]')).toHaveCount(1);
+    await expect(inspector.locator('.studio-code-editor:not([data-readonly="true"])')).toHaveCount(0);
     await page.getByRole("tab", { name: "Designer", exact: true }).click();
     await page.getByRole("button", { name: "Return to editing", exact: true }).click();
     await expect(node).toHaveAccessibleName(/State: authoring/);

@@ -89,6 +89,8 @@ public sealed class ConnectionSecretField
 
 public sealed class ConnectionDefinition
 {
+    /// <summary>Opaque creation identity retained through saves; an empty value denotes legacy/unknown identity.</summary>
+    public string IncarnationId { get; set; } = "";
     public string TenantId { get; set; } = "";
     public string Name { get; set; } = "";
     public string DisplayName { get; set; } = "";

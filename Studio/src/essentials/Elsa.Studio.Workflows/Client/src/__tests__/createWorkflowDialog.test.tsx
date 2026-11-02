@@ -47,6 +47,17 @@ function tabFrom(element: HTMLElement, shiftKey = false) {
 }
 
 describe("Create Workflow keyboard behavior", () => {
+  it("uses StudioDialogFooter so Create is the filled primary and Cancel stays default", () => {
+    renderDialog();
+    const cancel = [...container.querySelectorAll("button")].find(button => button.textContent === "Cancel")!;
+    const submit = container.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(cancel.classList.contains("studio-button")).toBe(true);
+    expect(cancel.getAttribute("data-variant")).toBe("default");
+    expect(submit.classList.contains("studio-button")).toBe(true);
+    expect(submit.getAttribute("data-variant")).toBe("primary");
+    expect(submit.textContent).toBe("Create");
+  });
+
   it("contains forward and backward keyboard focus, closes on Escape and restores the opener", () => {
     const close = renderDialog();
     const name = container.querySelector<HTMLInputElement>('[aria-label="Display name"]')!;

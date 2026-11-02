@@ -16,6 +16,15 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     public DbSet<WorkflowDefinitionDraft> Drafts => Set<WorkflowDefinitionDraft>();
     public DbSet<WorkflowDefinitionDraftLayout> DraftLayouts => Set<WorkflowDefinitionDraftLayout>();
     public DbSet<WorkflowDefinitionVersionLayout> VersionLayouts => Set<WorkflowDefinitionVersionLayout>();
+    internal DbSet<WorkflowTemplateEntity> Templates => Set<WorkflowTemplateEntity>();
+    internal DbSet<WorkflowFolderEntity> Folders => Set<WorkflowFolderEntity>();
+    internal DbSet<WorkflowOrganizationEntity> Organizations => Set<WorkflowOrganizationEntity>();
+    internal DbSet<WorkflowTagEntity> Tags => Set<WorkflowTagEntity>();
+    internal DbSet<WorkflowTagAssignmentEntity> TagAssignments => Set<WorkflowTagAssignmentEntity>();
+    internal DbSet<WorkflowLibraryViewEntity> LibraryViews => Set<WorkflowLibraryViewEntity>();
+    internal DbSet<WorkflowFavoriteEntity> Favorites => Set<WorkflowFavoriteEntity>();
+    internal DbSet<WorkflowLibraryAuditEntity> LibraryAudit => Set<WorkflowLibraryAuditEntity>();
+    internal DbSet<WorkflowLibraryFenceEntity> LibraryFences => Set<WorkflowLibraryFenceEntity>();
     public DbSet<DesignOperationEntity> Operations => Set<DesignOperationEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -28,16 +37,19 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         DesignEntityConfigurations.ConfigureDraftLayout(modelBuilder.Entity<WorkflowDefinitionDraftLayout>());
         DesignEntityConfigurations.ConfigureVersionLayout(modelBuilder.Entity<WorkflowDefinitionVersionLayout>());
         DesignEntityConfigurations.ConfigureOperation(modelBuilder.Entity<DesignOperationEntity>());
+        DesignEntityConfigurations.ConfigureTemplate(modelBuilder.Entity<WorkflowTemplateEntity>());
+        WorkflowLibraryEntityConfigurations.Configure(modelBuilder);
         modelBuilder.MapSchemaFinalization(WorkflowsDesignEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.
         modelBuilder.UseElsaPayloadColumns(
             this,
+            "ContentJson",
             "StateSource",
             "RecordsJson",
             "ActivityPresentationJson",
-            "ResultJson");
+            "ResultJson", "ValuesJson", "BeforeJson", "AfterJson");
         modelBuilder.IndexSchemaVersionStamps();
     }
 
@@ -46,8 +58,11 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     EfSchemaChain IEfSchemaVersionedContext.SchemaChain => WorkflowsDesignEfModule.Chain;
 
     /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
         EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
+        EfMigrationsHistory.EnsureAdded(optionsBuilder);
+    }
 
     /// <summary>
     /// The string columns this module compares or orders in SQL beyond the ones a key or an index already
@@ -69,7 +84,8 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         "WorkflowDefinitionVersionId", "WorkflowDefinitionVersionIdLookupHash",
         "SourceVersionId", "Version", "SemVerSortKey",
         "OperationKind", "OperationKey", "OperationKindLookupHash", "OperationKeyLookupHash",
-        "RequestFingerprint", "ResultFingerprint"
+        "RequestFingerprint", "ResultFingerprint", "ParentId", "ParentKey", "NormalizedName", "NameHash", "Path",
+        "FolderId", "DefinitionHash", "TagId", "ValueKey", "OwnerId", "OwnerHash", "SubjectId", "SubjectHash", "Revision", "LibraryIdentitySortKey"
     ];
 
     /// <summary>Binds this module's ordinal columns to <paramref name="providerName"/>'s binary collation, per column.</summary>
@@ -105,7 +121,10 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinition>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+        {
             Stores.EfDesignSupport.SetDefinitionSearchKeys(this, entry.Entity);
+            entry.Property("LibraryModifiedTicks").CurrentValue = entry.Entity.LastModifiedAt.UtcTicks;
+        }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionVersion>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
         {
@@ -127,6 +146,9 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateOptionalIdentity(entry.Entity.SourceVersionId, nameof(WorkflowDefinitionDraft.SourceVersionId));
             entry.Entity.IdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.Id);
             entry.Entity.WorkflowDefinitionIdLookupHash = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.WorkflowDefinitionId));
+            entry.Property("LibraryModifiedTicks").CurrentValue = entry.Entity.LastModifiedAt.UtcTicks;
+            entry.Property("LibraryCreatedTicks").CurrentValue = entry.Entity.CreatedAt.UtcTicks;
+            entry.Property("LibraryIdentitySortKey").CurrentValue = string.Concat(entry.Entity.Id.Select(character => ((int)character).ToString("X4", System.Globalization.CultureInfo.InvariantCulture)));
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraftLayout>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))

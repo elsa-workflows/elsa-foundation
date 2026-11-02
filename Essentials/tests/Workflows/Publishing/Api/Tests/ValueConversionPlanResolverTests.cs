@@ -12,6 +12,20 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class ValueConversionPlanResolverTests
 {
+    [Theory]
+    [InlineData("String", CollectionKind.Single, "System.Text.Json.JsonElement")]
+    [InlineData("Int64", CollectionKind.Single, "System.Text.Json.JsonElement?")]
+    [InlineData("Object", CollectionKind.Single, "System.Text.Json.JsonElement")]
+    [InlineData("System.Text.Json.JsonElement?", CollectionKind.Single, "System.Text.Json.JsonElement")]
+    [InlineData("String", CollectionKind.Array, "System.Text.Json.JsonElement")]
+    public void Any_activity_can_bind_a_json_compatible_value_to_a_json_contract(string alias, CollectionKind collection, string target)
+    {
+        var sourceType = new ValueTypeDescriptor(alias, collection);
+        var plan = new ValueConversionPlanResolver().Resolve(sourceType, ValueRepresentationDefaults.Infer(sourceType), new ValueTypeDescriptor(target));
+
+        Assert.Equal(ValueConversionOperation.CanonicalAny, plan.Operation);
+    }
+
     private readonly ValueConversionPlanResolver resolver = new();
 
     [Fact]

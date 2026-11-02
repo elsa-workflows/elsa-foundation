@@ -101,8 +101,8 @@ export function EtlPartitionTable({ partitions, now = Date.now() }: {
 }) {
   if (!partitions.length) return <p role="status">No partitions on this page. Preparation may still be pending.</p>;
   return <section aria-label="Partition progress">
-    <div className="etl-table-scroll" tabIndex={0} role="region" aria-label="Partition progress table">
-      <table>
+    <div className="studio-table-container etl-table-scroll" tabIndex={0} role="region" aria-label="Partition progress table">
+      <table className="studio-table">
         <caption>Durable partition progress</caption>
         <thead><tr><th scope="col">Partition</th><th scope="col">Range</th><th scope="col">Next record</th>
           <th scope="col">Claim</th><th scope="col">Owed batch</th></tr></thead>
@@ -129,8 +129,8 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
 }) {
   if (!partitions.length) return <p role="status">No connector partitions on this page.</p>;
   return <section aria-label="Connector partition progress">
-    <div className="etl-table-scroll" tabIndex={0} role="region" aria-label="Connector partition progress table">
-      <table>
+    <div className="studio-table-container etl-table-scroll" tabIndex={0} role="region" aria-label="Connector partition progress table">
+      <table className="studio-table">
         <caption>Connector partition progress</caption>
         <thead><tr><th scope="col">Partition</th><th scope="col">Source position</th><th scope="col">Claim</th>
           <th scope="col">Fetch state</th><th scope="col">Owed output</th><th scope="col">Settled route bodies</th></tr></thead>

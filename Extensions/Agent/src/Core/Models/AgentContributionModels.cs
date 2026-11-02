@@ -12,6 +12,12 @@ public sealed record AgentResourceTarget(string ModuleId, string ResourceType, s
 /// <summary>A module-defined JSON payload. Shared orchestration and providers preserve its meaning opaquely.</summary>
 public sealed record AgentPayload(string TypeId, string SchemaVersion, JsonElement Data);
 
+/// <summary>One complete context/result disclosure whose originals remain dependencies of a provider transcript.</summary>
+/// <remarks>Snapshots preserve grouping and distinct versions of the same attachment identity. They do not authorize execution.</remarks>
+public sealed record AgentDisclosureSnapshot(
+    IReadOnlyCollection<AgentContextAttachment> Context,
+    IReadOnlyList<AgentToolResult> ToolResults);
+
 /// <summary>Caller attribution retained through admission; these fields never grant tool authority.</summary>
 public sealed record AgentPromptSource(string? ModuleId, string? ActionId, string? Label);
 
@@ -75,7 +81,11 @@ public sealed record AgentPreparedToolInvocation(
     AgentExecutionLocation ExecutionLocation,
     bool RequiresApproval,
     AgentClientBinding? Client,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt)
+{
+    /// <summary>Original module-declared result disclosure owner, frozen into preparation and its review digest.</summary>
+    public string? DisclosureSourceId { get; init; }
+}
 
 /// <summary>An owning module's observed effect; local working state does not imply durable save/publish.</summary>
 public sealed record AgentEffectReceipt(
@@ -101,14 +111,19 @@ public sealed record AgentContextProviderDescriptor(
     string ScopeKind,
     IReadOnlyCollection<string> ContextKinds,
     IReadOnlyCollection<string> SchemaVersions,
-    IReadOnlyCollection<string> ResourceTypes);
+    IReadOnlyCollection<string> ResourceTypes)
+{
+    /// <summary>Whether a missing, failed or timed-out source blocks provider use. Existing sources remain required by default.</summary>
+    public bool Required { get; init; } = true;
+}
 
-/// <summary>Expected source limitations are data. Required outcomes block this collection; unexpected exceptions retain Sequential failure semantics.</summary>
+/// <summary>Source limitations are data. Required outcomes block collection; unexpected required-source faults retain Sequential failure semantics.</summary>
 public sealed record AgentContributionDiagnostic(string ContributorId, string Code, string Message, bool Required);
 
 public sealed record AgentContextContribution(
     IReadOnlyCollection<AgentContextAttachment> Attachments,
     IReadOnlyCollection<AgentContributionDiagnostic> Diagnostics);
 
-/// <summary>Invalid installed contribution composition or a contribution contract violation.</summary>
+/// <summary>Invalid installed contribution composition, a contribution contract violation, or failure to establish retained disclosure provenance.</summary>
+/// <remarks>Infrastructure failures preserve the original cause as <see cref="Exception.InnerException"/>; transport callers redact its details.</remarks>
 public sealed class AgentContributionException(string message, Exception? innerException = null) : Exception(message, innerException);

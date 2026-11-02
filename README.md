@@ -80,6 +80,12 @@ See the [domain-owned API specification](specs/220-domain-owned-apis/spec.md),
 [OpenAPI contract](specs/220-domain-owned-apis/contracts/management-api.openapi.yaml), and
 [validation quickstart](specs/220-domain-owned-apis/quickstart.md) for composition and compatibility details.
 
+Opt-in [direct BPMN hosting](Essentials/src/Activities/Bpmn/Api/README.md) adds model publication,
+execution, human completion, cancellation and service-incident retry APIs. Native workflows can embed a
+published model with `RunBpmn`; the [host adapter](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md)
+describes its binding profiles, compatibility and recovery evidence. Existing Studio BPMN authoring is
+preserved; first-class direct-model Studio support remains tracked by the execution-model program.
+
 ## Run with Docker
 
 The fastest way to try the stack is to [run the published images with Docker Compose](docker/compose/README.md#with-docker-compose),

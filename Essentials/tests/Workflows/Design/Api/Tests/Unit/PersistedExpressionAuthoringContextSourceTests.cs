@@ -324,6 +324,26 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
         Assert.True(p95 < 250, $"Expected warm context p95 < 250 ms, measured {p95:F2} ms.");
     }
 
+    [Fact]
+    public async Task Resolves_projected_boolean_condition_and_declines_consumed_unused_value()
+    {
+        var node = new ActivityNode("target", "activity", [new("Value", new("old", "JavaScript"), null, null, null, null)], []);
+        var structure = new RankedStructureService(node, [], new Dictionary<string, string[]>())
+        {
+            InputProjection = new([
+                new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
+                    new("foreign-key", new("true", "JavaScript"), null, null, null, null))], ["Value"])
+        };
+        var source = SourceFor(node, structure);
+        var request = new ResolveExpressionAuthoringContextRequest(ExpressionToolingContractVersion.V1, "draft", "target", "Case:a:Condition", "JavaScript", "revision");
+        var context = await source.TryResolveAsync(request, new(true, "author"), CancellationToken.None);
+        Assert.NotNull(context);
+        Assert.Equal("Boolean", context.Document.ExpectedResultType);
+        Assert.Equal("Boolean", context.ExpectedResultType);
+        Assert.Null(await source.TryResolveAsync(request with { PropertyKey = "Value" }, new(true, "author"), CancellationToken.None));
+        Assert.Null(await source.TryResolveAsync(request with { PropertyKey = "Case:deleted:Condition" }, new(true, "author"), CancellationToken.None));
+    }
+
     private static PersistedExpressionAuthoringContextSource SourceFor(ActivityNode root, IActivityStructureService structure)
     {
         var draft = new WorkflowDefinitionDraft
@@ -348,6 +368,8 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
 
     private sealed class RankedStructureService(ActivityNode root, ActivityNode[] children, IReadOnlyDictionary<string, string[]> completedBefore) : IActivityStructureService
     {
+        public ActivityStructureInputProjection InputProjection { get; init; } = ActivityStructureInputProjection.Empty;
+        public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => InputProjection;
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
             activity.NodeId == root.NodeId ? [new("Children", children)] : [];
         public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>

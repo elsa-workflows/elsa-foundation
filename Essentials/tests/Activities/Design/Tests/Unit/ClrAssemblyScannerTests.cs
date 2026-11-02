@@ -35,6 +35,16 @@ public sealed class ClrAssemblyScannerTests
         new(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), logger);
 
     [Fact]
+    public void ImplementationOnlyActivity_IsExcludedWhileOrdinaryActivityRemainsDiscoverable()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ImplementationOnlyFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+        Assert.DoesNotContain(models, x => x.ActivityTypeKey == typeof(ImplementationOnlyFixtureActivity).FullName);
+        Assert.DoesNotContain(models, x => x.ActivityTypeKey == typeof(ImplementationOnlyDerivedFixtureActivity).FullName);
+        Assert.Contains(models, x => x.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName);
+    }
+
+    [Fact]
     public void ActivityAssembly_IsDiscovered_WithResolvedVersions()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);

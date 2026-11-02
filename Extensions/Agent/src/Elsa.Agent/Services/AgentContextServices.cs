@@ -73,6 +73,18 @@ internal sealed class DefaultAgentContextCollector(
         if (!availability.Allowed)
             return AgentResult<AgentContextContribution>.Failure("agent.disabled", "Assistant features are disabled by host policy.", 403);
 
+        if (request.Disclosure is { } disclosure)
+        {
+            // A provider SDK may retain the old transcript. Omitting an obsolete snapshot from
+            // today's projection cannot establish that the old disclosure is still permitted.
+            var original = await policyEvaluator.EvaluateContextAsync(policy, disclosure.Context, cancellationToken);
+            if (!original.Allowed)
+            {
+                var denied = original.Violations.Select(x => new AgentContributionDiagnostic("host", x.Code, x.Message, true)).ToArray();
+                return new(new([], denied), new("agent.context.incomplete", "Current host policy withholds retained resource evidence.", 403));
+            }
+        }
+
         var collecting = new AgentContextCollecting(request);
         await events.Publish(collecting, cancellationToken);
         var diagnostics = collecting.Diagnostics.ToList();

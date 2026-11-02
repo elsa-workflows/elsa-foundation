@@ -120,6 +120,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check evidence artifact sizes
+        run: |
+          python3 tools/ci/check_evidence_sizes.py --self-test
+          python3 tools/ci/check_evidence_sizes.py
+          python3 tools/bpmn/test_restore_evidence.py
+
       - name: Classify the change scope
         id: scope
         # Pull requests only; every other event is a full run. The classifier exits 0 whatever it finds, and a diff
@@ -143,6 +149,9 @@ jobs:
 
       - name: Check contributor checkpoint workflow guards
         run: python3 tools/contributor-checkpoints/test_workflow_guards.py
+
+      - name: Check retained migration generator guards
+        run: python3 tools/ef/test_generate_module_migrations.py
 
       - name: Check Studio asset gate
         run: python3 tools/ci/verify-studio-assets.py --self-test
@@ -188,10 +197,10 @@ jobs:
           DISPATCH_TIER: ${{ inputs.tier }}
         run: |
           case "$GITHUB_EVENT_NAME" in
-            pull_request) tier=pr ;;
-            schedule) tier=nightly ;;
-            workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier=pr || tier=nightly ;;
-            *) tier=push ;;
+            pull_request) tier="pr" ;;
+            schedule) tier="nightly" ;;
+            workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier="pr" || tier="nightly" ;;
+            *) tier="push" ;;
           esac
           python3 tools/ci/test_tiers.py select --tier "$tier" ${BASE_SHA:+--base "$BASE_SHA" --head "$GITHUB_SHA"} \
             --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
@@ -232,6 +241,9 @@ jobs:
 
       - name: Restore repository-local .NET tools
         run: dotnet tool restore
+
+      - name: Restore original BPMN test fixtures
+        run: python3 tools/bpmn/restore_evidence.py
 
       - name: Build (full solution, including test projects)
         # Building the whole solution -- test projects included -- is what catches

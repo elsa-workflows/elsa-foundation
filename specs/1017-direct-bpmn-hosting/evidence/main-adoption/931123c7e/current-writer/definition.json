@@ -1,0 +1,102 @@
+{
+  "definition": {
+    "id": "14mKh5quFos",
+    "name": "Actual template migration wait",
+    "description": null,
+    "createdAt": "2026-10-30T13:36:54.182513+00:00",
+    "lastModifiedAt": "2026-10-30T13:36:54.182513+00:00",
+    "deletedAt": null,
+    "draftId": null,
+    "latestVersionId": null,
+    "latestVersion": null,
+    "versionCount": 0
+  },
+  "draftId": "14mKh5qxGdQ",
+  "version": {
+    "id": "14mKh5qycNe",
+    "version": "1.0.0",
+    "definition": {
+      "id": "14mKh5quFos",
+      "name": "Actual template migration wait",
+      "description": null,
+      "createdAt": "2026-10-30T13:36:54.182513+00:00",
+      "lastModifiedAt": "2026-10-30T13:36:54.182513+00:00",
+      "deletedAt": null,
+      "draftId": null,
+      "latestVersionId": null,
+      "latestVersion": null,
+      "versionCount": 0
+    },
+    "state": {
+      "variables": [],
+      "rootActivity": {
+        "nodeId": "real-wait",
+        "activityVersionId": "actver_ILod5hH3FhaTJSfLVV8FFWr9RXB4yGwuNtVlwM-LiX4",
+        "inputs": [
+          {
+            "referenceKey": "EventName",
+            "value": {
+              "value": "template-baseline-real-wait",
+              "expressionType": "Literal"
+            },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null,
+            "conversion": null
+          },
+          {
+            "referenceKey": "CanStartWorkflow",
+            "value": {
+              "value": false,
+              "expressionType": "Literal"
+            },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null,
+            "conversion": null
+          },
+          {
+            "referenceKey": "CorrelationId",
+            "value": {
+              "value": {
+                "language": "JavaScript",
+                "source": "args.instance",
+                "capabilityProfile": "binding-pure-v1",
+                "resultType": {
+                  "alias": "String",
+                  "collectionKind": "single"
+                },
+                "parameters": {
+                  "instance": {
+                    "kind": "WorkflowInstance",
+                    "member": "instanceId"
+                  }
+                },
+                "options": {}
+              },
+              "expressionType": "JavaScript"
+            },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null,
+            "conversion": null
+          }
+        ],
+        "outputs": [],
+        "structure": null
+      },
+      "inputs": [],
+      "outputs": [],
+      "strategyOptions": {
+        "activationStrategyType": null,
+        "incidentStrategy": null,
+        "persistenceMode": "Durable"
+      }
+    },
+    "layout": [],
+    "activityPresentation": []
+  }
+}

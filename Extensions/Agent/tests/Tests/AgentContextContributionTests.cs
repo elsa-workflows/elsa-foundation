@@ -60,7 +60,7 @@ public sealed class AgentContextContributionTests
         var first = Healthy("first", "module.first");
         var interrupted = new Source(Descriptor("interrupted", "module.interrupted"), (_, token) =>
         {
-            Assert.Equal(cancellation.Token, token);
+            Assert.True(token.CanBeCanceled);
             if (cancelled)
             {
                 cancellation.Cancel();
@@ -80,8 +80,11 @@ public sealed class AgentContextContributionTests
             Assert.Equal(cancellation.Token, propagated.CancellationToken);
         }
         else
-            Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                collector.CollectAsync(AgentPolicy.Default, Request(), cancellation.Token)));
+        {
+            var propagated = await Assert.ThrowsAsync<AgentContributionException>(() =>
+                collector.CollectAsync(AgentPolicy.Default, Request(), cancellation.Token));
+            Assert.Same(failure, propagated.InnerException);
+        }
 
         Assert.Equal(1, first.Calls);
         Assert.Equal(1, interrupted.Calls);

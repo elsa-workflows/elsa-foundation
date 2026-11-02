@@ -9,7 +9,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using LibInterchange = global::Bpmn.Interchange;
 using LibModel = global::Bpmn.Model;
-using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
@@ -41,7 +41,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>Placeholder activity version id for nested BPMN process nodes; API hosts override via options later.</summary>
-    public const string DefaultBpmnProcessActivityVersionId = "Elsa.BpmnProcess";
+    public const string DefaultBpmnProcessActivityVersionId = BpmnProcessActivity.ProcessAlias;
 
     /// <summary>Placeholder activity version id for a timer catch event's synthesized <c>Delay</c> child (hosts resolve the real catalog row later).</summary>
     public const string DefaultDelayActivityVersionId = "Elsa.Delay";

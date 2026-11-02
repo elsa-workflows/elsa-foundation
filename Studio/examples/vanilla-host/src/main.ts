@@ -3,19 +3,10 @@ import { createRoot } from "react-dom/client";
 import { StudioCodeEditor, javaScriptLanguageAdapter, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import { StatusChip, StudioToolbar, StudioToolbarGroup, StudioDataGrid } from "@elsa-workflows/studio-ui";
 
-/*
- * NO JSX in this file — every widget is created with React.createElement. The page itself
- * (index.html) has zero React knowledge; React is just how these particular widgets happen to
- * render. Style imports mirror the react-host example:
- *
- *   External consumers write:
- *     import "@elsa-workflows/studio-ui/tokens.css";
- *   In-repo the published subpath does not resolve, so we reach the source directly.
- */
+// Public styles first; the consuming host can then override semantic tokens.
+import "@elsa-workflows/studio-ui/styles.css";
+import "@elsa-workflows/studio-code-editor/style.css";
 import "./theme.css";
-// External consumers: import "@elsa-workflows/studio-ui/tokens.css";
-import "../../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
-import "./studio-components.css";
 import "./page.css";
 
 function mount(id: string, element: ReturnType<typeof createElement>) {

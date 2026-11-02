@@ -5,7 +5,7 @@ const fixtureScope = " Org.Team-A/Case ";
 
 async function loadSecretsPage(page: import("@playwright/test").Page, scenario = "default") {
   await page.goto(`/secret-scopes.html?scenario=${scenario}`);
-  const opener = page.locator(".secrets-header").getByRole("button", { name: "Create secret", exact: true });
+  const opener = page.locator(".studio-page-header").getByRole("button", { name: "Create secret", exact: true });
   await expect(opener).toBeEnabled();
   return opener;
 }
@@ -188,7 +188,7 @@ test("partial-results explanation aligns with the list at desktop and narrow vie
       return {
         coverage: bounds(".secrets-coverage"),
         layout: bounds(".secrets-layout"),
-        table: bounds(".secrets-table-shell")
+        table: bounds(".studio-table-container")
       };
     });
     measured.push({ width: viewport.width, colorScheme: viewport.colorScheme, ...geometry });

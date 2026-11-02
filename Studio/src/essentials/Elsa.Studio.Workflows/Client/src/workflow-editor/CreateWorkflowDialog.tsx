@@ -1,3 +1,7 @@
+import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { StudioAgentRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
@@ -8,7 +12,10 @@ import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { useDialogFocus } from "./useDialogFocus";
 
-export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
+export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
+  context?: StudioEndpointContext;
+  title?: string;
+  submitLabel?: string;
   draft: CreateWorkflowDraft;
   catalog: ActivityCatalogItem[];
   catalogState?: "idle" | "loading" | "ready" | "failed";
@@ -22,6 +29,17 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
   onRetryCatalog?(): void;
   onSubmit(): void;
 }) {
+  const [templates, setTemplates] = useState<Array<{ template: WorkflowTemplate; reason?: string }>>([]);
+  const [templateError, setTemplateError] = useState("");
+  useEffect(() => {
+    if (!context) return;
+    let active = true;
+    void import("../workflowTemplates").then(async module => {
+      const values = await module.listWorkflowTemplates(context);
+      if (active) setTemplates((values ?? []).map(template => ({ template, reason: module.templateAvailabilityReason(template, catalog) })));
+    }).catch(() => { if (active) setTemplateError("Saved templates could not be loaded. Close and reopen this dialog to retry; built-in starters remain available."); });
+    return () => { active = false; };
+  }, [context, catalog]);
   const dialogRef = useRef<HTMLElement>(null);
   useDialogFocus(dialogRef, creating ? null : onClose);
   const submitErrorRef = useRef<HTMLDivElement>(null);
@@ -32,7 +50,7 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
   const httpStarterAvailabilityReason = getHttpStarterAvailabilityReason(catalog);
   const httpStarterAvailable = !httpStarterAvailabilityReason;
   const rootActivity = getCreateRootActivity(draft.rootActivityVersionId, catalog);
-  const starterReady = draft.starter === "http"
+  const starterReady = draft.templateId ? templates.some(item => item.template.id === draft.templateId && !item.reason) : draft.starter === "http"
     ? httpStarterAvailable
     : Boolean(rootActivity?.authoringTemplate);
   const canCreate = catalogState === "ready" && starterReady && !creating && Boolean(draft.name.trim());
@@ -109,7 +127,7 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
           }}
         >
           <div className="wf-dialog-heading">
-            <h3 id="workflow-create-title">Create Workflow</h3>
+            <h3 id="workflow-create-title">{title}</h3>
             {suggestMetadataAction ? (
               <button
                 type="button"
@@ -183,12 +201,15 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
             <select
               aria-label="Starting point"
               aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
-              value={draft.starter ?? "blank"}
+              value={draft.templateId ?? draft.starter ?? "blank"}
               disabled={creating}
-              onChange={event => onChange({ ...draft, starter: event.target.value === "http" ? "http" : undefined })}
+              onChange={event => {
+                const selected = templates.find(item => item.template.id === event.target.value)?.template;
+                onChange({ ...draft, starter: event.target.value === "http" ? "http" : undefined, templateId: selected?.id, templateContent: selected ? structuredClone(selected.content) : undefined });
+              }}
             >
-              <option value="blank">Blank workflow</option>
-              <option value="http" disabled={catalogState !== "ready" || !httpStarterAvailable}>HTTP request and response</option>
+              {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
+              {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
             </select>
             {draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}
             {catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}
@@ -201,7 +222,8 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
           ) : catalogState !== "ready" ? (
             <p className="wf-muted" id="wf-activity-catalog-loading" role="status">Loading available starting activities…</p>
           ) : null}
-          {draft.starter !== "http" ? <fieldset className="wf-form-field wf-root-field">
+          {templateError ? <p role="status" className="wf-muted">{templateError}</p> : null}
+          {draft.starter !== "http" && !draft.templateId ? <fieldset className="wf-form-field wf-root-field">
             <legend>Root activity</legend>
             <WorkflowRootRadioCards
               catalog={catalog}
@@ -214,10 +236,14 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
             <p className="wf-muted" id="wf-root-create-readiness">No compatible root activity is available. Each disabled choice explains why.</p>
           ) : null}
           {submitError ? <div ref={submitErrorRef} className="wf-alert" role="alert" tabIndex={-1}>{submitError}</div> : null}
-          <div className="wf-dialog-actions">
-            <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
-            <button type="submit" disabled={creating || !draft.name.trim()} aria-disabled={!canCreate} aria-describedby={createReadinessDescriptionId}>{creating ? "Creating..." : "Create"}</button>
-          </div>
+          <StudioDialogFooter
+            className="wf-dialog-actions"
+            onCancel={onClose}
+            cancelDisabled={creating}
+            confirmLabel={creating ? "Creating..." : submitLabel}
+            confirmDisabled={creating || !draft.name.trim()}
+            confirmProps={{ "aria-disabled": !canCreate, "aria-describedby": createReadinessDescriptionId }}
+          />
         </form>
       </section>
     </div>

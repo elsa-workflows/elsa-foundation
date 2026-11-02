@@ -44,6 +44,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Tasks\Testing\Elsa.Tasks.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Holds reconciliation passes at their race points; shared with the workflow design reconciliation tests. -->

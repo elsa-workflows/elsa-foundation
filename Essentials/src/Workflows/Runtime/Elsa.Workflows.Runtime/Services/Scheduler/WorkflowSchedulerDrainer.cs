@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
@@ -44,6 +45,8 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
+    internal DrainControlContext? DrainControls { private get; init; }
+    internal RuntimeExecutionProtocolSelector? ModelProtocols { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
@@ -153,10 +156,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // would re-load and deserialize the state document needlessly on durable providers. (#293)
         var stoppedOnTerminalStatus = await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken);
 
+        var yielded = false;
         while (remaining > 0 && !stoppedOnTerminalStatus)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (DrainControls?.ShouldYield(request.WorkflowExecutionId) == true)
+            {
+                yielded = true;
+                break;
+            }
             var delivery = await AcquireNextAsync(request.WorkflowExecutionId, cancellationToken);
             if (delivery is null)
                 break;
@@ -165,7 +174,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // A null decision here means this command kind has no pause boundary (the gate maps only StartActivity,
             // InvokeActivity, and GeneratedEvent), not that pausing is unavailable — the gate is required by
             // construction, so "no gate" is not a state this can be in. (#1277 R1)
-            var pauseDecision = await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
+            var pauseDecision = ModelProtocols?.IsSelectedModel(request.WorkflowExecutionId) == true
+                ? null : await _pauseGate.EvaluateAsync(nextWorkItem, cancellationToken);
             if (pauseDecision is { CanAdvance: false })
             {
                 await ReleaseAsync(delivery, cancellationToken);
@@ -194,7 +204,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // all-completed drain; flag it as the stop reason.
         var stopReason = stoppedOnTerminalStatus
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
-            : (RuntimeSchedulerDrainStopReason?)null;
+            : yielded ? RuntimeSchedulerDrainStopReason.Yielded : (RuntimeSchedulerDrainStopReason?)null;
 
         // Outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
         if (activity is not null)
@@ -214,6 +224,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
+        if (ModelProtocols?.IsSelectedModel(workflowExecutionId) == true) return false;
         // The terminal-status guard reads the state store injected by construction — no AsyncLocal
         // service-location in the drain path. The store is required, so there is no null fallback.
         var state = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
@@ -270,7 +281,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
             await DispatchWithClaimRenewalAsync(
                 renewal,
-                dispatchCancellationToken => _pipelineDispatcher is not null
+                dispatchCancellationToken => _pipelineDispatcher is not null && ModelProtocols?.IsSelectedModel(workItem.WorkflowExecutionId) != true
                     ? _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, dispatchCancellationToken)
                     : handler.HandleAsync(workItem, dispatchCancellationToken),
                 cancellationToken);
@@ -342,6 +353,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 startedAt: startedAt,
                 completedAt: _timeProvider.GetUtcNow(),
                 error: exception.SafeSummary);
+        }
+        catch (Exception) when (ModelProtocols?.IsSelectedModel(workItem.WorkflowExecutionId) == true)
+        {
+            // A model driver failure leaves its accepted input owed. Native poison/incident policy cannot decide
+            // the outcome of a different semantic engine or acknowledge an unavailable decision.
+            throw;
         }
         catch (Exception exception)
         {
@@ -541,21 +558,45 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        if (_schedulerWorkQueue.SupportsClaimTransitions && _schedulerWorkQueue.SupportsClaimValidation)
         {
             var claim = await _schedulerWorkQueue.ClaimAsync(
                 new RuntimeSchedulerWorkClaimRequest(
                     workflowExecutionId,
                     _claimOwnerId,
                     _timeProvider.GetUtcNow(),
-                    _claimOptions.VisibilityTimeout),
+                    _claimOptions.VisibilityTimeout) { ValidateBeforeClaim = ValidateProtocolBeforeClaimAsync },
                 cancellationToken);
             return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
         }
 
+        // Legacy providers cannot run operation-local validation on their claim path. Validate the observed
+        // head under the execution's single-writer lease before entering their unchanged claim/dequeue path.
         var page = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
         var item = page.Items.FirstOrDefault();
+        if (item is not null)
+            await ValidateProtocolBeforeClaimAsync(item, cancellationToken);
+        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        {
+            var claim = await _schedulerWorkQueue.ClaimAsync(new(workflowExecutionId, _claimOwnerId,
+                _timeProvider.GetUtcNow(), _claimOptions.VisibilityTimeout), cancellationToken);
+            return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
+        }
         return item is null ? null : new SchedulerWorkDelivery(item, null);
+    }
+
+    private async ValueTask ValidateProtocolBeforeClaimAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && ModelProtocols is not null)
+        {
+            await ModelProtocols.SelectAsync(item, cancellationToken);
+            return;
+        }
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel || !Enum.IsDefined(item.CommandKind) ||
+            ModelProtocols?.IsSelectedModel(item.WorkflowExecutionId) == true)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.protocol-unavailable",
+                "Scheduler work requires a verified execution protocol that this host has not selected.");
     }
 
     // Completes the current fenced claim when the provider supports claim transitions. For a legacy provider, consumes
@@ -762,6 +803,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private IWorkflowSchedulerWorkHandler FindHandler(RuntimeSchedulerWorkItem workItem)
     {
+        if (workItem.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && ModelProtocols is not null)
+            return new ModelProtocolWorkHandler(ModelProtocols);
         foreach (var handler in _customHandlers)
         {
             if (handler.CanHandle(workItem))

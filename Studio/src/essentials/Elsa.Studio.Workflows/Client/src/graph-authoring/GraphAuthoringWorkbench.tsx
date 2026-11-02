@@ -10,6 +10,7 @@ import { PanelTabList } from "../workflow-editor/PanelTabList";
 import type { useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 import { GraphAuthoringWorkspace } from "./GraphAuthoringWorkspace";
 import "./graphAuthoringLayouts.css";
+import "./workspaceAppearance.css";
 
 type SidePanelLayout = ReturnType<typeof useSidePanelLayout>;
 

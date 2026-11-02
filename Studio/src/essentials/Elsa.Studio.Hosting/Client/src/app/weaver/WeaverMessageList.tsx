@@ -3,6 +3,7 @@ import { Bot, ThumbsDown, ThumbsUp, User } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AgentMessageViewModel } from "../agent/agentTypes";
+import { WEAVER_AUTO_APPLY_LABELS } from "./useWeaverSession";
 
 const PLACEHOLDER = "Awaiting assistant response…";
 
@@ -58,12 +59,27 @@ export function WeaverMessageList({
   return (
     <ol className="weaver-messages" aria-live="polite">
       {messages.map(message => (
-        <li key={message.id} className="weaver-message" data-role={message.role} data-status={message.status}>
+        <li
+          key={message.id}
+          className="weaver-message"
+          data-role={message.role}
+          data-status={message.status}
+          data-accepted-policy-revision={message.acceptedPolicy?.revision}
+          data-accepted-autonomy-mode={message.acceptedPolicy?.autonomyMode}
+        >
           <span className="weaver-message-avatar" aria-hidden="true">
             {message.role === "user" ? <User size={15} /> : <Bot size={15} />}
           </span>
           <div className="weaver-message-body">
             <WeaverMessageContent message={message} streaming={streaming} />
+            {message.role === "assistant" && message.acceptedPolicy ? (
+              // Attributed to the policy that admitted the turn; a later selection never relabels it.
+              <small className="weaver-message-policy">
+                {message.acceptedPolicy.autonomyMode
+                  ? `Accepted under ${WEAVER_AUTO_APPLY_LABELS[message.acceptedPolicy.autonomyMode]}`
+                  : `Accepted under policy revision ${message.acceptedPolicy.revision}`}
+              </small>
+            ) : null}
             {message.role === "assistant" && message.status === "completed" && onFeedback ? (
               <div className="weaver-feedback" aria-label="Message feedback">
                 <button type="button" aria-label="Helpful response" onClick={() => onFeedback(message.id, "positive")}>

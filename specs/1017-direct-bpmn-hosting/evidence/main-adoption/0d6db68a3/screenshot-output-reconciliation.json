@@ -1,0 +1,67 @@
+{
+  "source": "6a99012a29f6b8bbb8682d4e971753d51a467c94",
+  "cause": "Persistent REPL helper retained older lexical output root despite current root assignment. Captured bytes were emitted and visually inspected during current UI operations.",
+  "files": [
+    {
+      "name": "open.png",
+      "sha256": "946580be18929969ed574556f9b6c87e18155911a1a26151e5bfa23ae0ff7b4e",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "open-dom.txt",
+      "sha256": "c26d8d4c84bbec4ca3258c54557bc3bb5a045a04e06b4fd61f8fc9b39445d362",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "published.png",
+      "sha256": "8fd873ad85bebd4ae9e10756d877e760d4b7a6ce0fafdd2101c985df5afec1f2",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "published-dom.txt",
+      "sha256": "b0f315b4ed2a1c461bbb0a5c6cfbafd46e08249cbb01af80f470cc88c60d5259",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "published-run.png",
+      "sha256": "6cd3b2daea78f4397d8b505263f1b80d8916e9f214d00d3877a124a8a148ff28",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "published-run-dom.txt",
+      "sha256": "f75e3cc1312fc106e52428820272604cf83a84c74ea2a0bb9f961823627ccdb7",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "test-run.png",
+      "sha256": "92207a3aa877398a80c11c927ce2e91fc0bc2bb9e7415d631bcd64a80167b272",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "test-run-dom.txt",
+      "sha256": "7b3e3caefcb9d847f98acac348b7c528395e398f7ee439ed6cd576a70bc4a000",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "legacy-run.png",
+      "sha256": "a3418bbb6ea26f91a931afe5c452653cd685aa2a509e4d8ba7536f365727d35a",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "legacy-run-dom.txt",
+      "sha256": "4ca60fda1a5d726dc8d8e0c100ebbe0b0c8a9623c553172eade39d3521ac5f28",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "restarted-test-run.png",
+      "sha256": "3d2712b9e5fc0cec10d4a097cfc70c04fce63ab9e8a6b904253eb89fb2406021",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    },
+    {
+      "name": "restarted-test-run-dom.txt",
+      "sha256": "55758a2ba9ee2153c5102b1b2e92f78e583dd8f1612fc88c856f494488c368a1",
+      "historicalBytesRestoredFromVerifiedArchive": true
+    }
+  ],
+  "all12HistoricalFilesRestored": true
+}

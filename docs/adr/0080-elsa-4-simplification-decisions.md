@@ -42,6 +42,14 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 ### D0 — Focus
 
+**Owner continuation, 1 November 2026:** the already active [Runtime Efficiency #2531](../program-goals/runtime-efficiency.md)
+collects the remaining improvements from the native performance assessment and PR #3545, and is authorized for
+end-to-end delivery by the [owner instruction recorded on the program](https://github.com/elsa-workflows/elsa-foundation/issues/2531#issuecomment-6554699791).
+Reuse this program and its matching leaves, reconcile older outstanding acceptance and deliver the M0–M5
+continuation. It runs beside the active programs, with one implementation leaf at a time; model/hosting feature
+delivery stays with Unified Execution #2892. Bounded owner-requested performance qualification is included;
+wall-clock CI gates, the low-priority proposed commit journal, releases and production deployments are not added.
+
 Two programs stay active: **Elsa 4 Simplification** (this ADR) and **Runtime Efficiency**, which merges the
 Runtime Database Access and Runtime Throughput goals. Every other program, including all delivery programs, is
 parked for six weeks from this ADR's date and reviewed at the end of that window. Goals whose remaining work
@@ -176,6 +184,32 @@ repository readiness cap. Keep one implementation leaf active with one integrati
 independent subagents may support investigation and review. Routine decisions and milestone
 transitions proceed without renewed permission. The module ownership, independent-package witness
 before contract freeze, sequencing and existing scope/credential/release boundaries remain.
+
+**Owner amendment, 31 October 2026:** [Workflow Library Organization #3499](../program-goals/workflow-library-organization.md)
+is authorized for program establishment and end-to-end delivery. After the folders/tags/saved-views proposal,
+the owner instructed: "Turn this into a Program, then deliver it end to end. Use a separate work tree."
+Sequencing: establish the reviewed requirements, restore folders and bounded browsing in the current EF host,
+deliver classification and private/shared views with Studio journeys, then qualify providers, packages and the
+normal composed host through review, required CI and resulting main. Run beside the active programs, displace
+none, preserve consolidation's first priority and coordinate shared Studio paths. This activates only the
+organization scope adopted from historical #790 and parked #792; other parked objectives remain parked.
+Timing benchmarks remain retired; deterministic bounded query work is the scale gate under D2. Releases and
+production deployment are not included. The remaining decisions in this ADR apply.
+
+**Owner amendment, 31 October 2026:** [Elsa Agents #3519](../program-goals/elsa-agents.md)
+is authorized for program establishment and end-to-end delivery. The owner selected reusable specialists
+with explicit inputs/outputs and optional conversation continuity, Microsoft Agent Framework reuse and
+Foundry-inspired authoring, then instructed: "make a complete end to end plan, including research spikes,
+designs, architecture and implementation, then turn that into a Program, then deliver that end to end".
+Sequencing: M0 executable research, M1 reviewed product/architecture design, M2 catalog/publication,
+M3 specialist execution, M4 native/BPMN integration, M5 Studio/evaluations, M6 tools/knowledge/bounded teams,
+then M7 integrated qualification. Run beside the active programs, displace none, preserve consolidation's
+first priority and reactivate no parked backlog. Existing #2892/#2912 retains production collaboration
+and recovery ownership; consume or deliver shared work through that owning hierarchy and its claims.
+Weaver #3428 retains Studio-assistant ownership and its provider defaults. One active implementation leaf
+for this Program; routine decisions, milestone transitions, tests, documentation, scoped PRs, authorized
+review/merge and resulting-main qualification proceed under this instruction. Releases, deployments,
+provider purchases and publisher activation are not included. The remaining decisions apply.
 
 ### D1 — Risk-based testing
 

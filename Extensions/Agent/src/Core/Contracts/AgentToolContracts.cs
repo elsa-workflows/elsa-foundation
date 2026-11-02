@@ -30,6 +30,8 @@ public sealed record AgentToolDescriptor(
 {
     public string ModuleId { get; init; } = string.Empty;
     public string ContractVersion { get; init; } = "1";
+    /// <summary>Installed context source owning disclosure of this tool's results. Missing support fails closed before provider use.</summary>
+    public string? DisclosureSourceId { get; init; }
     public AgentExecutionLocation ExecutionLocation { get; init; } = AgentExecutionLocation.Server;
     public string? ResultType { get; init; }
     public string? ResultSchemaVersion { get; init; }
@@ -74,6 +76,15 @@ public interface IAgentTool
     Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default);
 
     Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Optional owner-authority companion on the same installed tool; it adds domain checks to host authority.</summary>
+/// <remarks>Invoked for advertisement and concrete execution, including reviewed operations.
+/// A null target is an availability hint; a concrete preparation is checked again. Register only the tool, not a second authority registry.</remarks>
+public interface IAgentToolAuthorization
+{
+    ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Catalog of registered tools.</summary>

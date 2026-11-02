@@ -279,10 +279,10 @@ function getActivityArray(activity: ActivityNode) {
 }
 
 function upsertLayout(layout: DesignMetadataRecord[], nodeId: string, position: { x: number; y: number }) {
-  return [
-    ...layout.filter(record => record.nodeId !== nodeId),
-    { nodeId, x: position.x, y: position.y }
-  ];
+  if (layout.some(record => record.nodeId === nodeId)) {
+    return layout.map(record => record.nodeId === nodeId ? { ...record, x: position.x, y: position.y } : record);
+  }
+  return [...layout, { nodeId, x: position.x, y: position.y }];
 }
 
 function readPosition(value: unknown, fallback: { x: number; y: number }) {

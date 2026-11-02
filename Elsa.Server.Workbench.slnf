@@ -3,6 +3,9 @@
     "path": "Elsa.Server.slnx",
     "projects": [
       "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj",
+      "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
+      "Essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj",
       "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
       "Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj",
       "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
@@ -138,6 +141,8 @@
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
       "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
       "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj",
+      "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj",
       "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
       "Extensions/Etl/src/Api/Elsa.Etl.Api.csproj",
       "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj",

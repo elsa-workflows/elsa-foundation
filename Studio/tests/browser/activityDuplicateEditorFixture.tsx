@@ -13,8 +13,10 @@ import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Stu
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
+import { WorkflowExecutableInspectorWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutableInspector";
 import {
   bpmnActivity,
+  collectionActivity,
   flowchartActivity,
   flowchartNode,
   sequenceActivity,
@@ -30,12 +32,26 @@ import {
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
-import { createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { collectActivityNodeIds, createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
+const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
+function collectionFixtureCatalog(conditions = collectionSlotsFixture === "switch-conditions" || collectionSlotsFixture === "switch-ports") {
+  const catalog = collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch");
+  if (conditions) {
+    catalog.activityVersionId = "activity-switch-4.1";
+    const facet = catalog.designFacets![0] as { schemaVersion: string; payload: { slots: Record<string, unknown>[] } };
+    facet.schemaVersion = "2.0.0";
+    Object.assign(facet.payload.slots[0], { itemIdProperty: "caseId", conditionProperty: "condition" });
+  }
+  return catalog;
+}
+const staleValidationsFixture = new URLSearchParams(window.location.search).get("stale-validations");
+const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture || staleValidationsFixture);
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
 const writeLineCatalog: ActivityCatalogItem = {
@@ -61,6 +77,12 @@ const writeLineCatalog: ActivityCatalogItem = {
   ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
 };
+const runEtlCatalog: ActivityCatalogItem = {
+  ...writeLineCatalog, activityVersionId: "run-etl-v1", activityTypeKey: "Elsa.RunEtl", displayName: "Run Etl",
+  inputs: [{ referenceKey: "Pipeline", name: "Pipeline", displayName: "Pipeline", typeName: "System.String", isRequired: true }]
+};
+const missingPipeline = { type: "InputOutput/MissingRequired", path: "write-one/inputs/Pipeline", message: 'Required input "Pipeline" on Run Etl is empty.' };
+
 const denseOutcomeCatalog: ActivityCatalogItem = {
   ...writeLineCatalog,
   activityVersionId: "dense-outcomes-v1",
@@ -79,7 +101,7 @@ const httpEndpointCatalog: ActivityCatalogItem = {
   ]
 };
 
-const notifyBuyer: ActivityNode = workflowStartFixture ? {
+const notifyBuyer: ActivityNode = staleValidationsFixture ? { ...leafNode("write-one"), activityVersionId: runEtlCatalog.activityVersionId, inputs: [] } : workflowStartFixture ? {
   nodeId: "write-one", activityVersionId: "http-endpoint-v1", outputs: [],
   inputs: [
     { referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: "true" } },
@@ -121,11 +143,52 @@ function editorDraft(): WorkflowDraft {
       }));
     }
   }
+  if (collectionSlotsFixture) {
+    const activity = collectionFixtureCatalog();
+    const collectionOwner = createActivityNode(activity, "collection-owner");
+    if (collectionSlotsFixture === "switch-upgrade") collectionOwner.structure!.payload.cases = [{ match: "Approved", activity: null }];
+    if (collectionSlotsFixture === "switch-upgrade" && new URLSearchParams(window.location.search).has("secret-value"))
+      collectionOwner.inputs = [{ referenceKey: "Value", value: { expressionType: "Secret", value: { name: "preserved-secret" } } }];
+    if (collectionSlotsFixture === "switch-conditions" && new URLSearchParams(window.location.search).has("read-only"))
+      collectionOwner.structure!.payload.cases = [{ caseId: "readonly", match: "Approved", condition: { referenceKey: "Case:readonly:Condition", value: { expressionType: "JavaScript", value: "true" } }, activity: null }];
+    root.structure!.payload.activities = [collectionOwner];
+    if (collectionSlotsFixture === "switch-ports") {
+      collectionOwner.structure!.payload.cases = ["Approved", "Rejected"].map((match, index) => ({
+        match, caseId: `case-${index}`, activity: null,
+        condition: { referenceKey: `Case:case-${index}:Condition`, value: { expressionType: "Literal", value: index === 0 } }
+      }));
+      root.structure!.payload.activities.push(leafNode("write-one"), leafNode("write-two"));
+    }
+    if (!sequence) root.structure!.payload.connections = [];
+    if (composition === "bpmn") {
+      root.structure!.payload.elements = [{ elementId: "collection-element", elementType: "task", childNodeId: "collection-owner" }];
+      root.structure!.payload.sequenceFlows = [];
+    }
+  }
+  if (bpmnDecisionFixture) root.structure!.payload = {
+    activities: bpmnDecisionFixture === "unbound" ? [] : [{ nodeId: "decision", activityVersionId: "decision-v1", inputs: [], outputs: [], structure: null }],
+    elements: [
+      { elementId: "decision-element", elementType: bpmnDecisionFixture.startsWith("legacy") ? "task" : "exclusiveGateway",
+        ...(bpmnDecisionFixture !== "unbound" ? { childNodeId: "decision" } : {}),
+        ...(bpmnDecisionFixture === "legacy-loop" ? { loopCharacteristics: { kind: "standard" } } : {}) },
+      { elementId: "high-end", elementType: "endEvent", name: "High" },
+      { elementId: "low-end", elementType: "endEvent", name: "Low" }
+    ],
+    sequenceFlows: [
+      { flowId: "high-flow", sourceRef: "decision-element", targetRef: "high-end" },
+      { flowId: "low-flow", sourceRef: "decision-element", targetRef: "low-end" }
+    ]
+  };
   return {
     id: "draft-1",
     definitionId: "definition-1",
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
-    layout: adaptivePorts ? [
+    layout: bpmnDecisionFixture ? [
+      { nodeId: "decision-element", x: 220, y: 200 }, { nodeId: "high-end", x: 480, y: 80 }, { nodeId: "low-end", x: 480, y: 320 }
+    ] : collectionSlotsFixture === "switch-ports" ? [
+      { nodeId: "collection-owner", x: 120, y: 160 },
+      { nodeId: "write-one", x: 540, y: 40 }, { nodeId: "write-two", x: 540, y: 360 }
+    ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
       { nodeId: "write-three", x: 600, y: 80 }
@@ -133,8 +196,8 @@ function editorDraft(): WorkflowDraft {
       { nodeId: "write-one", x: 420, y: 180 },
       { nodeId: "write-two", x: 720, y: 180 }
     ],
-    activityPresentation: [{ nodeId: "write-one", displayName: workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
-    validationErrors: []
+    activityPresentation: [{ nodeId: "write-one", displayName: staleValidationsFixture ? "Run Etl" : workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
+    validationErrors: staleValidationsFixture ? [missingPipeline] : []
   };
 }
 
@@ -154,7 +217,7 @@ function sequenceRootActivity(): ActivityNode {
 }
 
 function activityGraphSequenceValue(): StudioActivityDefinitionImplementationEditorProps["value"] {
-  if (adaptivePorts) {
+  if (persistFixture) {
     const draft = editorDraft();
     return { payload: { rootActivity: draft.state.rootActivity, variables: [], outputMappings: [], outcomeMappings: [] }, layout: activityGraphLayoutFromDesign(draft.layout) };
   }
@@ -184,6 +247,7 @@ export function ActivityDuplicateEditorFixture() {
 
 function ActivityDuplicateEditorFixtureContent() {
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
+  const executableHost = new URLSearchParams(window.location.search).get("host") === "executable";
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const live = useRef({ status: "Running", disconnected: false });
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
@@ -195,11 +259,11 @@ function ActivityDuplicateEditorFixtureContent() {
   } as unknown as StudioAiContributionApi), []);
 
   return (
-    <div className={`activity-duplicate-editor${instanceHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
+    <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
-        {instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
+        {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
           ? <ControlledActivityGraphFixture context={context} />
           : <WorkflowEditor
               context={context}
@@ -209,7 +273,7 @@ function ActivityDuplicateEditorFixtureContent() {
               expressionEditors={expressionEditors}
               runInputEditors={[]}
               workflowDesignerPanels={[]}
-              autosaveEnabledByDefault={false}
+              autosaveEnabledByDefault={Boolean(staleValidationsFixture)}
               onBack={() => undefined}
             />}
       </QueryClientProvider>
@@ -218,7 +282,7 @@ function ActivityDuplicateEditorFixtureContent() {
 }
 
 function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
-  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => adaptivePorts && sessionStorage.getItem(adaptiveStorageKey)
+  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => persistFixture && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) : activityGraphSequenceValue());
   const readOnly = new URLSearchParams(window.location.search).has("read-only");
   const [diagnosticResult, setDiagnosticResult] = useState("");
@@ -237,23 +301,29 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     historyResetKey="draft-1:activity-sequence"
     value={value}
     readOnly={readOnly}
-    onChange={next => { setValue(next); if (adaptivePorts) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
+    onChange={next => { setValue(next); if (persistFixture) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
   />{rootSlots && readOnly ? <><button onClick={() => document.querySelector("[data-provider-diagnostic-focus-root]")!.dispatchEvent(new CustomEvent(activityGraphDiagnosticFocusEvent, {
     cancelable: true, detail: { location: { referenceKey: "else-leaf" }, complete: (result: { kind: string }) => setDiagnosticResult(result.kind) }
   }))}>Focus Else diagnostic</button><output data-testid="diagnostic-result">{diagnosticResult}</output></> : null}{slotAssignment || rootSlots ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
-function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
-  let draft = adaptivePorts && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
+export function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
+  let draft = persistFixture && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
-    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
+    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.Activities.Bpmn.Activities.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", inputs: [{
+      referenceKey: "Outcome", name: "Outcome", typeName: "System.String", displayName: "Outcome", order: 0,
+      isBrowsable: true, isWrapped: true, defaultSyntax: "Literal"
+    }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, ...(staleValidationsFixture ? [runEtlCatalog] : []), flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionFixtureCatalog(), ...(collectionSlotsFixture === "switch-upgrade" ? [collectionFixtureCatalog(true)] : [])] : [])];
+  const validationReads: boolean[] = [];
+  (window as Window & { staleValidationReads?: boolean[] }).staleValidationReads = validationReads;
+  const hasEtl = () => !!draft.state.rootActivity && collectActivityNodeIds(draft.state.rootActivity, catalog).has("write-one");
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
@@ -312,12 +382,14 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
                 id: "elsa.api.workflow-design",
                 contractVersion: "1",
                 links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" },
-                  ...(adaptivePorts ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
+                  ...(persistFixture ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : []),
+                  ...(staleValidationsFixture ? [{ rel: "workflow-draft-validations", href: "design/workflows/drafts/{draftId}/validations", templated: true }] : [])]
               },
               {
                 id: "elsa.api.activity-design",
                 contractVersion: "1",
-                links: [{ rel: "activity-catalog", href: "design/activities/catalog" }]
+                links: [{ rel: "activity-catalog", href: "design/activities/catalog" },
+                  ...(collectionSlotsFixture === "switch-upgrade" ? [{ rel: "recommended-activity-definitions", href: "design/activities/definitions/picker" }] : [])]
               },
               {
                 id: "elsa.api.expressions",
@@ -326,6 +398,10 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
               }
             ]
           };
+        }
+        if (staleValidationsFixture && url === "/design/workflows/drafts/draft-1/validations") {
+          const present = hasEtl(); validationReads.push(present);
+          return { errors: present ? [{ code: missingPipeline.type, message: missingPipeline.message, nodeId: "write-one", member: "inputs/Pipeline" }] : [] };
         }
         if (url === "/design/workflows/definitions/definition-1") {
           return {
@@ -345,6 +421,16 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
             versions: []
           };
         }
+        if (collectionSlotsFixture === "switch-upgrade" && url.startsWith("/design/activities/definitions/picker?")) {
+          return {
+            items: catalog.filter(item => item.activityVersionId !== "activity-switch-4.1").map(item => ({
+              definitionId: `recommended-${item.activityVersionId}`, activityTypeKey: item.activityTypeKey,
+              tenantId: null, category: item.category, displayName: item.displayName, description: null,
+              versionId: item.activityVersionId, version: "1.0.0", isAvailable: true, unavailableReason: null
+            })),
+            nextOffset: null
+          };
+        }
         if (url === "/design/activities/catalog") {
           return { activities: catalog };
         }
@@ -362,10 +448,13 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
           activities: [], incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
-          artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!),
-          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
+          artifactId: "editor-artifact", artifactHash: "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
+          rootActivityType: draft.state.rootActivity!.activityVersionId, rootActivityVersion: "1.0.0",
+          nodeCount: runtimeNodes.length, resumeTargetCount: 0, references: [], rootActivity: compiled(draft.state.rootActivity!),
+          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
+          if (new URLSearchParams(window.location.search).has("evidence-latency")) await new Promise(resolve => setTimeout(resolve, 400));
           const query = new URL(url, "http://fixture").searchParams;
           const node = query.get("executableNodeId"), parent = query.get("parentActivityExecutionId"), ancestor = query.get("ancestorActivityExecutionId");
           const filtered = observedRecords().filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)
@@ -398,8 +487,10 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
         return {};
       },
       putJson: async (_url: string, body: unknown) => {
-        if (adaptivePorts) {
+        if (persistFixture) {
+          if (staleValidationsFixture === "slow-save") await new Promise(resolve => setTimeout(resolve, 2200));
           draft = { ...draft, ...body as object };
+          if (staleValidationsFixture) draft.validationErrors = hasEtl() ? [missingPipeline] : [];
           sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(draft));
         }
         return draft;

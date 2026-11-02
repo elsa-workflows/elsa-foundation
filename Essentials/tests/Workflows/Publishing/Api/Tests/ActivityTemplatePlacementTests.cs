@@ -22,18 +22,24 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class ActivityTemplatePlacementTests
 {
-    [Fact]
-    public async Task Placement_materializes_occurrence_overlays_and_preserves_nested_background_execution_placement()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Placement_materializes_occurrence_overlays_and_preserves_nested_background_execution_placement(bool structureInputs)
     {
         // #1051: source-owned templates have bare roots. The occurrence overlay must restore the graph-authored
         // input and reconcile the compiled structure after placement gives child nodes their final identities.
+        var key = structureInputs ? "Case:a:Condition" : "condition";
         var sequenceOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
-            Json("""[{"referenceKey":"condition","value":{"value":true,"expressionType":"Literal"}}]"""),
+            JsonSerializer.SerializeToElement(new[] { new { referenceKey = key, value = new { value = true, expressionType = "Literal" } } }),
             new ExecutableActivityStructure(
                 "elsa.sequence.structure",
                 "1.0.0",
-                Json("""{"activities":["write"]}""")));
+                Json("""{"activities":["write"]}""")))
+        {
+            InputContracts = structureInputs ? [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(key, "Condition", new("Boolean"), false, false, false, null, ActivityValuePolicy.Default) { IsStructureInput = true }] : null
+        };
         var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null);
         var graphTemplate = Template(
             "template-graph",
@@ -80,7 +86,9 @@ public sealed class ActivityTemplatePlacementTests
 
         var sequence = Assert.Single(Assert.Single(placement.Root.ChildSlots, x => x.Name == "activity-graph").Activities);
         var condition = Assert.Single(sequence.InputBindings);
-        Assert.Equal("condition", condition.Key);
+        Assert.Equal(key, condition.Key);
+        Assert.Equal(structureInputs, sequence.ActivityContract!.Inputs[key].IsStructureInput);
+        Assert.Equal([key], sequence.ActivityContract.Inputs.Keys);
         Assert.Equal(RuntimeInputBindingSource.Literal, condition.Value.Source);
         Assert.True(condition.Value.LiteralValue!.Value.GetBoolean());
 

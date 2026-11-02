@@ -2,6 +2,7 @@ using System.Transactions;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -14,8 +15,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Opt-in EF Core checkpoint writer for bounded Runtime participant slices.</summary>
 /// <remarks>
 /// The durable replay marker, supported participant projections, and execution fence share one transaction.
-/// Workflow-execution writes also run inside the established root executable write-lease boundary; replay remains
-/// resolvable before a lease is required. Unsupported participants are rejected explicitly until their EF adapters
+/// Creating or changing an executable root runs inside its established write-lease boundary. An eligible unchanged
+/// native root can instead use an update-only check inside the fenced transaction; replay remains resolvable before
+/// a lease is required. Unsupported participants are rejected explicitly until their EF adapters
 /// can stage changes through this same context.
 /// </remarks>
 public sealed class EfRuntimeCheckpointCommitStore(
@@ -24,10 +26,32 @@ public sealed class EfRuntimeCheckpointCommitStore(
     TimeProvider? timeProvider = null,
     IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null) : IRuntimeCheckpointCommitStore
 {
+    internal IRuntimeCoalescingSessionAccessor? CoalescingSessions { private get; init; }
+
+    private const int MaxFenceRenewalAttempts = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;
+    bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => true;
+    bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => true;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) =>
+        reader is EfRuntimeModelExecutionReader selected && selected.Uses(context, accessContextAccessor);
+    bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => true;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox)
+    {
+        if (reader is not EfRuntimeModelExecutionReader selected || !selected.Uses(context, accessContextAccessor) ||
+            executions is not EfWorkflowExecutionStateStore native || activities is not EfActivityExecutionStateStore activity ||
+            outbox is not EfRuntimePostCommitOutboxStore source || !ReferenceEquals(native.Context, context) ||
+            !ReferenceEquals(activity.Context, context)) return false;
+        try
+        {
+            var scope = accessContextAccessor.Current.RequireScope();
+            return native.AccessContext.RequireScope() == scope && activity.AccessContext.RequireScope() == scope && source.Uses(context, scope);
+        }
+        catch (InvalidOperationException) { return false; }
+    }
 
     bool IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks,
         IWorkflowExecutionStateStore physicalExecutions, IActivityExecutionStateStore activities)
@@ -75,6 +99,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
         // Protect the exact generation and both live owner headers even when this checkpoint changes only
         // activity state. Normal participant staging reuses these tracked rows and their original CAS revisions.
+        workflowRow.SchemaVersion = ModelWorkWriteVersion.For(context, workflow, workflowRow.SchemaVersion);
         row.Revision = checked(row.Revision + 1);
         workflowRow.Revision = checked(workflowRow.Revision + 1);
         activityRow.Revision = checked(activityRow.Revision + 1);
@@ -82,10 +107,42 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
     private void EnsureExactBookmarkDeadline(RuntimeCheckpointCommit commit)
     {
-        if (commit.ExpectedBookmarkResume is not { } expected) return;
+        var expected = commit.ExpectedBookmarkResume ?? commit.ExpectedModelParentWait;
+        if (expected is null) return;
         var now = _timeProvider.GetUtcNow();
         if (expected.ExpiresAt <= now || expected.RegistrationCapture?.Scope.TestScope?.IsExpired(now) == true)
             throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+    }
+
+    private async ValueTask StageModelParentWaitAsync(RuntimeCheckpointCommit commit, string scope,
+        Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes, CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedModelParentWait is not { } expected) return;
+        commit.EnsureModelParentAdmissionShape();
+        var bookmarkId = EfBookmarkStateStore.CreateId(scope, expected.WorkflowExecutionId, expected.BookmarkId);
+        var bookmarkRow = await context.Bookmarks.SingleOrDefaultAsync(row => row.Id == bookmarkId, cancellationToken);
+        var workflowId = EfWorkflowExecutionStateStore.CreateId(scope, expected.WorkflowExecutionId);
+        var workflowRow = await context.WorkflowExecutionStates.SingleOrDefaultAsync(row => row.Id == workflowId, cancellationToken);
+        var activityId = ActivityExecutionEfSupport.CreateId("state", scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
+        var activityRow = await context.ActivityExecutionStates.SingleOrDefaultAsync(row => row.Id == activityId, cancellationToken);
+        if (bookmarkRow is null || workflowRow is null || activityRow is null)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.parent-wait-unavailable", "The native parent wait is no longer available for model admission.");
+        var workflow = EfWorkflowExecutionStateStore.ReadChecked(workflowRow, scope, expected.WorkflowExecutionId);
+        var activity = EfActivityExecutionStateStore.ReadChecked(activityRow, scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
+        var bookmark = EfBookmarkStateStore.MapChecked(bookmarkRow, scope, expected.WorkflowExecutionId, expected.BookmarkId, bookmarkId);
+        var state = commit.ModelState!.State;
+        if (!expected.MatchesAdmission(new(bookmark, bookmarkRow.Revision, new(scope)), workflow, activity, new(scope), _timeProvider.GetUtcNow()) ||
+            workflow.TenantId != state.TenantId || workflow.Authority is not { } authority ||
+            !WorkflowExecutionAuthoritySnapshot.Matches(state.Authority, authority.SystemIdentity, authority.RootInitiator, authority.Metadata))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.parent-wait-unavailable", "The native parent wait changed before model admission.");
+        if (workflow.TestScope is { } testScope)
+            await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(context, testScope,
+                _timeProvider.GetUtcNow(), scope, touchedTestScopes, cancellationToken);
+        // Order cancellation and child admission without consuming or changing the real parent wait's generation.
+        workflowRow.SchemaVersion = ModelWorkWriteVersion.For(context, workflow, workflowRow.SchemaVersion);
+        context.Entry(bookmarkRow).Property(row => row.Revision).IsModified = true;
+        context.Entry(workflowRow).Property(row => row.Revision).IsModified = true;
+        context.Entry(activityRow).Property(row => row.Revision).IsModified = true;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
@@ -95,6 +152,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
     {
         ArgumentNullException.ThrowIfNull(commit);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when ((commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null) &&
+            (exception is IOException or DbUpdateConcurrencyException or
+                WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+             exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+             EfRelationalExceptionClassifier.IsProviderFailure(exception)))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException(commit.ExpectedModelParentWait is null
+                    ? "runtime.model.native-admission-unavailable" : "runtime.model.parent-admission-unavailable",
+                "The authorizing execution changed or is unavailable; cross-model admission remains owed.", exception);
+        }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null &&
             (exception is IOException or DbUpdateConcurrencyException or
                 WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
@@ -103,6 +170,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
         {
             throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
                 "Exact bookmark admission is unavailable.", exception);
+        }
+        catch (Exception exception) when (commit.ModelState is not null && exception is not DbUpdateConcurrencyException &&
+            (exception is IOException or TimeoutException ||
+             exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+             EfRelationalExceptionClassifier.IsProviderFailure(exception)))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.checkpoint-unavailable",
+                $"Model checkpoint '{commit.CommitId}' for execution '{commit.WorkflowExecutionId}', input '{commit.ModelState.Input.InputId}' " +
+                $"in scope '{commit.ModelState.State.Scope.Value}' is unavailable.", exception);
         }
     }
 
@@ -114,6 +190,27 @@ public sealed class EfRuntimeCheckpointCommitStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
+
+        commit.EnsureModelStateShape();
+        commit.EnsureModelAdmissionShape();
+        commit.EnsureModelParentAdmissionShape();
+        if (commit.ExpectedModelExecution is { } expectedModel)
+        {
+            accessContextAccessor.Current.EnsureScope(expectedModel.Scope);
+            accessContextAccessor.Current.EnsureTenantScope(expectedModel.TenantId);
+            EfRuntimeOperationalStoreSupport.ValidateIdentity(expectedModel.ExecutionId, nameof(expectedModel.ExecutionId));
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model-owned native worker admission requires an immediate physical checkpoint.");
+        }
+        if (commit.ModelState is { } model)
+        {
+            accessContextAccessor.Current.EnsureScope(model.State.Scope);
+            accessContextAccessor.Current.EnsureTenantScope(model.State.TenantId);
+            EfRuntimeOperationalStoreSupport.ValidateIdentity(model.State.ExecutionId, nameof(model.State.ExecutionId));
+            EfRuntimeOperationalStoreSupport.ValidateIdentity(model.Input.InputId, nameof(model.Input.InputId));
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model decisions require an immediate physical checkpoint.");
+        }
 
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
@@ -147,24 +244,51 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return replay;
         }
 
-        if (commit.ExpectedBookmarkResume is not null && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+        if (commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is not null &&
+            commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted &&
+            commit.ExpectedModelExecution is null)
+            throw new NotSupportedException("Initial native model work requires its authorizing model checkpoint condition.");
+
+        if ((commit.ExpectedBookmarkResume is not null || commit.ModelState is not null || commit.ExpectedModelExecution is not null) && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
             throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
-        if (commit.StateChanges.WorkflowExecution is { } executionChange)
+        var pinned = commit.ModelState?.State.Executable ?? commit.StateChanges.WorkflowExecution?.State.PinnedExecutable;
+        if (pinned is not null)
         {
             if (rootWriteLeaseManager is null)
                 throw new InvalidOperationException(
                     "A workflow execution checkpoint write requires IWorkflowExecutableRootWriteLeaseManager.");
 
+            // The session only hints that a root was persisted. The actual row must still exist with the exact
+            // same pin inside the fenced transaction, and its revision CAS must succeed. Never turn this path
+            // into an unprotected insert if retention, alteration or another writer changed that row.
+            if (commit.ModelState is null && commit.ExpectedModelExecution is null && commit.ExpectedModelParentWait is null &&
+                commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is null && commit.ExpectedFence is not null &&
+                CoalescingSessions?.Current is { HasDurableRecord: true } session && session.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                !context.ChangeTracker.HasChanges() && context.Database.CurrentTransaction is null &&
+                context.Database.GetEnlistedTransaction() is null && Transaction.Current is null)
+            {
+                try
+                {
+                    var updated = await CommitFencedAsync(cancellationToken, pinned);
+                    EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
+                    return updated;
+                }
+                catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
+                {
+                    // No SaveChanges occurred. Rollback/disposal completed before entering the ordinary leased path.
+                }
+            }
+
             RuntimeCheckpointCommitStoreResult? result = null;
             async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
-                result = await CommitNewAsync(leaseCancellationToken);
+                result = await CommitFencedAsync(leaseCancellationToken);
 
             // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
             // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
             await rootWriteLeaseManager.ExecuteAsync(
-                executionChange.State.PinnedExecutable,
+                pinned,
                 $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
                 ExecuteCheckpointAsync,
                 cancellationToken);
@@ -173,11 +297,32 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return completed;
         }
 
-        var immediate = await CommitNewAsync(cancellationToken);
+        var immediate = await CommitFencedAsync(cancellationToken);
         EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
         return immediate;
 
-        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken)
+        // The drain's own lease heartbeat bumps the fence row's revision without changing the lease, so a checkpoint
+        // staged just before it would fail on a benign same-owner renewal. Retry only a conflict confined to that row,
+        // and only on a context with nothing else pending (rollback clears the tracker). Each attempt re-reads and
+        // revalidates the fence, so a real ownership transition still fails as stale.
+        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitFencedAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
+        {
+            var retryable = commit.ExpectedFence is not null && !context.ChangeTracker.HasChanges() &&
+                context.Database.CurrentTransaction is null && context.Database.GetEnlistedTransaction() is null && Transaction.Current is null;
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await CommitNewAsync(writeCancellationToken, requiredExistingRoot);
+                }
+                catch (DbUpdateConcurrencyException exception) when (retryable && attempt < MaxFenceRenewalAttempts &&
+                    exception.Entries.Count != 0 && exception.Entries.All(entry => entry.Entity is ExecutionLivenessStateEntity))
+                {
+                }
+            }
+        }
+
+        async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(CancellationToken writeCancellationToken, WorkflowExecutableIdentity? requiredExistingRoot = null)
         {
             var marker = ToEntity(commit, scope, id, fingerprint);
             var touchedTestScopes = new Dictionary<string, WorkflowTestScopeRecord>(StringComparer.Ordinal);
@@ -207,16 +352,30 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 }
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
+                await StageModelParentWaitAsync(commit, scope, touchedTestScopes, writeCancellationToken);
+
+                if (commit.ExpectedModelExecution is { } admission)
+                {
+                    var nativeId = EfWorkflowExecutionStateStore.CreateId(scope, commit.WorkflowExecutionId);
+                    if (await context.WorkflowExecutionStates.AnyAsync(row => row.Id == nativeId, writeCancellationToken))
+                        throw new InvalidOperationException("Model-owned native worker admission cannot replace an existing native execution.");
+                    await EfModelCheckpointStaging.StageAdmissionAsync(context, admission, scope, writeCancellationToken);
+                }
+
+                if (commit.ModelState is { } modelChange)
+                    await EfModelCheckpointStaging.StageAsync(context, modelChange, scope, writeCancellationToken);
 
                 if (commit.StateChanges.WorkflowExecution is { } workflowChange)
                 {
+                    await EnsureNativeModelResultAsync(commit, workflowChange.State, scope, writeCancellationToken);
                     await EfRuntimeCheckpointParticipantStaging.StageWorkflowExecutionAsync(
                         context,
                         workflowChange,
                         scope,
                         commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt,
                         touchedTestScopes,
-                        writeCancellationToken);
+                        writeCancellationToken,
+                        requiredExistingRoot);
                 }
 
                 if (commit.StateChanges.Scheduler is { } schedulerChange)
@@ -294,13 +453,18 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 await transaction.CommitAsync(writeCancellationToken);
                 return ResultFor(commit, marker);
             }
+            catch (EfRuntimeCheckpointParticipantStaging.ExistingRootLeaseRequiredException)
+            {
+                await RollbackAndRestoreAsync(transaction);
+                throw;
+            }
             catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {
                 await RollbackAndRestoreAsync(transaction);
                 var winner = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (winner is not null)
                     return ResolveReplay(commit, fingerprint, winner);
-                if (commit.ExpectedBookmarkResume is not null)
+                if (commit.ExpectedBookmarkResume is not null || commit.ExpectedModelParentWait is not null)
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission changed concurrently.", exception);
                 throw;
             }
@@ -367,6 +531,23 @@ public sealed class EfRuntimeCheckpointCommitStore(
         var row = await context.RuntimeCheckpointCommits.AsNoTracking()
             .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         return row is null ? null : ReadChecked(row, scope, commitId);
+    }
+
+    private async ValueTask EnsureNativeModelResultAsync(RuntimeCheckpointCommit commit, WorkflowExecutionState state,
+        string scope, CancellationToken cancellationToken)
+    {
+        if (state.ModelWorkOrigin is not { } origin || !state.Status.IsTerminal()) return;
+        var id = EfWorkflowExecutionStateStore.CreateId(scope, state.WorkflowExecutionId);
+        var prior = await context.WorkflowExecutionStates.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (prior is not null && EfWorkflowExecutionStateStore.ReadChecked(prior, scope, state.WorkflowExecutionId).Status.IsTerminal()) return;
+        // The committer materializes intents before this physical boundary. Balanced persistence can fold
+        // those outbox changes and clear their original intent list; only the applied changes prove delivery.
+        if (!commit.StateChanges.PostCommitOutbox.Any(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
+            change.State.Intent.Kind == origin.ResultIntentKind && change.State.Intent.WorkflowExecutionId == state.WorkflowExecutionId &&
+            change.State.Intent.Payload is { ValueKind: JsonValueKind.Object } &&
+            change.State.StimulusDeliverySourceScope == origin.Scope &&
+            change.State.Status is RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable))
+            throw new NotSupportedException("Native model work cannot become terminal without its atomic result-delivery responsibility.");
     }
 
     private static void ValidateThinSlice(RuntimeCheckpointCommit commit)

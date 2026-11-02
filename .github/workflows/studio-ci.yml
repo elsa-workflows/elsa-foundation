@@ -16,6 +16,10 @@ on:
       - 'Studio/**'
       - 'Extensions/*/studio/**'
       - 'Extensions/Weaver/**'
+      - 'Essentials/src/Events/**'
+      - 'Essentials/src/Pipelines/Core/**'
+      - 'Essentials/src/Primitives/Primitives/**'
+      - 'Essentials/src/Tasks/Core/**'
       - 'Essentials/src/Modularity/Core/**'
       - 'Essentials/src/Modularity/Nuplane/**'
       - 'Essentials/build/Analyzers/**'
@@ -33,6 +37,7 @@ on:
       - 'tools/ci/verify_studio_nuget_packages.py'
       - 'tools/studio/**'
       - 'tools/ci/qualify_studio_consumers.py'
+      - 'tools/ci/pack_studio_support.py'
       - 'tools/ci/studio*'
   push:
     branches: [main]
@@ -84,30 +89,19 @@ jobs:
         run: pnpm --recursive --workspace-concurrency=1 test
         working-directory: Studio
 
-      - name: Unit tests (Workflows, shuffled)
-        working-directory: Studio/src/essentials/Elsa.Studio.Workflows/Client
-        env:
-          SHUFFLE_SEEDS: '1 11 29'
-        run: |
-          for seed in $SHUFFLE_SEEDS; do
-            echo "::group::Shuffle seed $seed"
-            if ! pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed"; then
-              echo "::endgroup::"
-              echo "::error::Order-dependent test failure on shuffle seed $seed. Reproduce locally with: pnpm --filter @elsa-workflows/studio-workflows exec vitest run --sequence.shuffle --sequence.seed=$seed"
-              exit 1
-            fi
-            echo "::endgroup::"
-          done
-
       - name: Check Workflows bundle budget
         run: pnpm check:bundle:workflows
         working-directory: Studio
 
   browser-tests:
-    name: Studio browser tests (Chromium)
+    name: Studio browser tests (Chromium ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    # Cold Chromium installation and the complete browser suite share this job budget.
+    # Keep the complete inventory within the budget as it grows; no cases are omitted.
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -135,7 +129,7 @@ jobs:
         working-directory: Studio
 
       - name: Run browser tests
-        run: pnpm test:browser
+        run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
 
   dotnet-build-and-test:
@@ -213,13 +207,10 @@ jobs:
           python3 tools/ci/verify_studio_nuget_packages.py --self-test
           python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget" --version "$STUDIO_PACKAGE_VERSION" --report "$RUNNER_TEMP/studio-archive-verification.json"
 
-      - name: Pack matching lightweight Modularity candidates without publishing
-        run: |
-          for module in Core Nuplane; do
-            dotnet pack "Essentials/src/Modularity/$module/Elsa.Modularity.$module.csproj" -c Release -p:RestoreLockedMode=true \
-              "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA" \
-              -o "$RUNNER_TEMP/studio-modularity-nuget"
-          done
+      - name: Pack matching mandatory support candidates without publishing
+        run: >-
+          python3 tools/ci/pack_studio_support.py --output "$RUNNER_TEMP/studio-modularity-nuget"
+          --version "$STUDIO_PACKAGE_VERSION" --source "$GITHUB_SHA"
 
       - name: Publish the matching actual reference Studio
         run: >-

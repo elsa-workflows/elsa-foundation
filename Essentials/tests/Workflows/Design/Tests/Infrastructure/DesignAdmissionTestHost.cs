@@ -1,4 +1,5 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
@@ -17,8 +18,11 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NativeEndpoints;
+using System.Security.Claims;
 using AddDefinitionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Definitions.Add.Endpoint;
 using AddVersionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Versions.Add.Endpoint;
 using PromoteDraftEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote.Endpoint;
@@ -54,6 +58,11 @@ internal sealed class DesignAdmissionTestHost : IAsyncDisposable
         var directory = WorkflowsDesignTestHost.NewDirectory();
         var services = WorkflowsDesignTestHost.DesignStoreServices(directory);
         services.AddSingleton<IDistributedLockProvider>(new InMemoryDistributedLockProvider());
+        services.AddHttpContextAccessor();
+        // Admission is the subject of these tests. Resource authorization has its own
+        // native HTTP contract suite; supply an explicit grant rather than bypassing
+        // the callers' permission checks or leaving their request context uninitialized.
+        services.AddSingleton<IPermissionAuthorizationService, AdmissionPermissionAuthorization>();
         // Lifecycle events published after a write are not under test; capture them instead of starting the worker.
         services.AddSingleton<IDeferredEventPublisher>(new CapturingEventPublisher());
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
@@ -112,7 +121,36 @@ internal sealed class DesignAdmissionTestHost : IAsyncDisposable
     public async Task<TResult> CallAsync<TCaller, TResult>(Func<TCaller, Task<TResult>> call) where TCaller : class
     {
         await using var scope = _services.CreateAsyncScope();
-        return await call(ActivatorUtilities.CreateInstance<TCaller>(scope.ServiceProvider));
+        var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
+        var previous = accessor.HttpContext;
+        var context = new DefaultHttpContext
+        {
+            RequestServices = scope.ServiceProvider,
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, "admission-author"), new Claim(IdentityClaimTypes.TenantId, "admission-tenant")],
+                "admission-test"))
+        };
+        accessor.HttpContext = context;
+        try
+        {
+            var caller = ActivatorUtilities.CreateInstance<TCaller>(scope.ServiceProvider);
+            if (caller is ApiEndpointBase endpoint) endpoint.HttpContext = context;
+            return await call(caller);
+        }
+        finally
+        {
+            accessor.HttpContext = previous;
+        }
+    }
+
+    private sealed class AdmissionPermissionAuthorization : IPermissionAuthorizationService
+    {
+        public ValueTask<PermissionEvaluationResult> AuthorizeAsync(PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(PermissionEvaluationResult.Success);
+        }
     }
 
     /// <summary>Runs <paramref name="action"/> against the services of a fresh scope.</summary>

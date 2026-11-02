@@ -1,3 +1,4 @@
+import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioActivityDescriptor, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnostics, ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
@@ -14,6 +15,7 @@ import { describeWorkflowError } from "./editorHelpers";
 interface WorkflowEditorDataParams {
   context: StudioEndpointContext;
   definitionId: string;
+  documentAdapter?: WorkflowEditorDocumentAdapter;
   // Re-seed undo history and load the draft into the document reducer for a freshly fetched definition.
   resetHistory(draft: WorkflowDraft | null): void;
   loadDraft(draft: WorkflowDraft | null): void;
@@ -26,7 +28,7 @@ interface WorkflowEditorDataParams {
 // details, the normalized authoring catalog, and expression metadata. Activity descriptors and
 // availability are projected from that one catalog response. The draft itself
 // is handed to the document reducer via loadDraft; the rest is returned as local state.
-export function useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError }: WorkflowEditorDataParams) {
+export function useWorkflowEditorData({ context, definitionId, documentAdapter, resetHistory, loadDraft, markSaved, setError }: WorkflowEditorDataParams) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [paletteCatalog, setPaletteCatalog] = useState<ActivityCatalogItem[]>([]);
@@ -71,7 +73,7 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
   const reload = useCallback(async (options?: { shouldLoadDraft(): boolean }) => {
     setError("");
     const [nextDetails, nextCatalog, nextRecommendedDefinitions] = await Promise.all([
-      getDefinition(context, definitionId),
+      (documentAdapter?.load ?? getDefinition)(context, definitionId),
       listActivities(context),
       listRecommendedActivityDefinitions(context).catch(error => {
         // A backend that doesn't advertise the relation has no recommendation concept at all
@@ -112,7 +114,7 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     setActivityDescriptors(activities.map(toActivityDescriptor));
     setAvailabilityDiagnostics(null);
     setDescriptorStatus("ready");
-  }, [context, definitionId, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError]);
+  }, [context, definitionId, documentAdapter, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError]);
 
   useEffect(() => {
     void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));

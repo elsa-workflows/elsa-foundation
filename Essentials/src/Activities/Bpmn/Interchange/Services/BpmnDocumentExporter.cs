@@ -6,7 +6,7 @@ using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Models;
 using LibInterchange = global::Bpmn.Interchange;
 using LibModel = global::Bpmn.Model;
-using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Core.BpmnActivityIdentities;
 
 namespace Elsa.Activities.Bpmn.Interchange.Services;
 
@@ -24,7 +24,10 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// </summary>
 public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     public string Export(ActivityNode processNode, BpmnExportOptions? options = null)
     {

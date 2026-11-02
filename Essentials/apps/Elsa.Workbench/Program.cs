@@ -341,6 +341,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature).Assembly,
 
             // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so
             // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
@@ -391,6 +394,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ConnectionsApiFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
             typeof(ConnectionsWorkflowsFeature).Assembly,
+            // The generic human review wait for user-defined agents and its decision API.
+            typeof(Elsa.Agent.Specialists.Review.SpecialistsReviewFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature).Assembly,
             // Opt-in finite ETL authoring, native execution and independent runtime inspection.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,

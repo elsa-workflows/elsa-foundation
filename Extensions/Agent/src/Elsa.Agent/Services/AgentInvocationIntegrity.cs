@@ -33,7 +33,7 @@ internal static class AgentInvocationIntegrity
     {
         value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
         value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
-        value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client
+        value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
     });
 
     public static bool SameTarget(AgentResourceTarget? left, AgentResourceTarget? right) => left is null

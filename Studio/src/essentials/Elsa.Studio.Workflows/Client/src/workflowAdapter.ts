@@ -1,3 +1,4 @@
+import { reconcileSwitchOutcomeConnections, switchOutcomePorts, normalizeSwitchOutcome } from "./switchOutcomePorts";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord } from "./workflowTypes";
 import {
@@ -12,7 +13,9 @@ import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicAct
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
 import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
+import { persistedNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
+import type { CollectionSlot } from "./collectionSlots";
 
 export { getActivityDisplay } from "./activityDisplay";
 export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
@@ -45,6 +48,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   icon?: WorkflowNodeIcon;
   iconTone?: ActivityIconTone;
   childSlots: ChildSlot[];
+  collectionSlots?: CollectionSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
@@ -118,6 +122,8 @@ export interface ChildSlot {
   slotNameTemplate?: string;
   collectionIndex?: number;
   collectionItemLabel?: string;
+  collectionItemId?: string;
+  itemIdProperty?: string;
 }
 
 export interface StructureDesignFacet {
@@ -142,6 +148,8 @@ export interface StructureDesignSlotDescriptor {
   childProperty?: string;
   labelProperty?: string;
   slotNameTemplate?: string;
+  itemIdProperty?: string;
+  conditionProperty?: string;
 }
 
 export type ActivityCatalogLookup = ActivityCatalogItem | ActivityCatalogItem[] | Map<string, ActivityCatalogItem> | null | undefined;
@@ -371,7 +379,11 @@ export function planSlotNavigation(
   if (ownerIsRoot) {
     const slots = getChildSlots(scopeOwner, catalog);
     if (!slots.some(candidate => candidate.id === slot.id)) return null;
-    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
+    const facet = readStructureDesignFacet(resolveCatalogItem(scopeOwner, catalog));
+    // A v2 collection can insert a new primary slot before Default. Explicit navigation must pin
+    // fixed slots as well as cases, including while the collection is still empty.
+    const mutablePrimary = facet?.payload.slots.some(descriptor => descriptor.itemIdProperty) === true;
+    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id && slot.collectionItemId === undefined && !mutablePrimary ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
     if (descend) {
       return { frames: [...rootFrames, { ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
     }
@@ -428,9 +440,17 @@ export function resolveScopeFrames(root: ActivityNode | null | undefined, frames
     const path = frames.slice(0, length);
     const scope = resolveScope(root, path, catalog);
     if (!scope) continue;
-    if (!path.at(-1)!.label) {
+    if (scope.slot.collectionItemId !== undefined || !path.at(-1)!.label) {
       const item = resolveCatalogItem(scope.owner, catalog);
       path[length - 1] = { ...path[length - 1], label: slotCrumbLabel(item ? getActivityDisplay(item) : scope.owner.nodeId, scope.slot) };
+    }
+    for (let index = 0; index < path.length; index++) {
+      const current = resolveScope(root, path.slice(0, index + 1), catalog);
+      if (!current || current.slot.collectionItemId === undefined) continue;
+      const item = resolveCatalogItem(current.owner, catalog);
+      const label = slotCrumbLabel(item ? getActivityDisplay(item) : current.owner.nodeId, current.slot);
+      if (path[index].label === "" && path[index + 1]) path[index + 1] = { ...path[index + 1], label };
+      else path[index] = { ...path[index], label };
     }
     return path;
   }
@@ -543,11 +563,14 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
     collectionProperty: readOptionalString(value.collectionProperty),
     childProperty: readOptionalString(value.childProperty),
     labelProperty: readOptionalString(value.labelProperty),
+    itemIdProperty: readOptionalString(value.itemIdProperty),
+    conditionProperty: readOptionalString(value.conditionProperty),
     slotNameTemplate: readOptionalString(value.slotNameTemplate)
   };
 }
 
 function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+  const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
       // Capture the narrowed values into locals so the `string` narrowing survives into the
@@ -559,7 +582,7 @@ function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDe
       return collection.flatMap((item, index) => {
         if (!isRecord(item)) return [];
         const labelValue = descriptor.labelProperty ? item[descriptor.labelProperty] : undefined;
-        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined)];
+        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined, fixedLabels, descriptor.itemIdProperty && typeof item[descriptor.itemIdProperty] === "string" ? item[descriptor.itemIdProperty] as string : undefined)];
       });
     }
 
@@ -573,15 +596,17 @@ function createChildSlot(
   value: unknown,
   mode: ChildSlot["mode"],
   collectionIndex?: number,
-  collectionItemLabel?: string
+  collectionItemLabel?: string,
+  fixedLabels?: ReadonlySet<string>,
+  collectionItemId?: string
 ): ChildSlot {
   const collectionSuffix = collectionIndex === undefined
     ? ""
-    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionIndex}`;
+    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionItemId !== undefined ? `id:${encodeURIComponent(collectionItemId)}` : collectionIndex}`;
 
   return {
     id: `${structureKind}:${descriptor.property}${collectionSuffix}`,
-    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel),
+    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel, fixedLabels),
     property: descriptor.property,
     cardinality: descriptor.cardinality,
     mode,
@@ -591,6 +616,8 @@ function createChildSlot(
     labelProperty: descriptor.labelProperty,
     slotNameTemplate: descriptor.slotNameTemplate,
     collectionIndex,
+    itemIdProperty: descriptor.itemIdProperty,
+    collectionItemId,
     collectionItemLabel
   };
 }
@@ -600,20 +627,12 @@ function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"
   return isActivityNode(value) ? [value] : [];
 }
 
-function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
-  const ordinal = String(index + 1);
-  if (descriptor.slotNameTemplate) {
-    // One pass keeps authored braces and dollar replacement tokens literal.
-    return descriptor.slotNameTemplate.replace(/\{([^{}]+)\}/g, (token, key: string) => {
-      if (key === descriptor.labelProperty || key === "label") return labelValue ?? ordinal;
-      if (key === "name") return descriptor.name;
-      if (key === "displayName") return descriptor.displayName;
-      if (key === "index") return ordinal;
-      return token;
-    });
-  }
-
-  return labelValue ? `${descriptor.displayName}: ${labelValue}` : `${descriptor.displayName} ${ordinal}`;
+function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string, fixedLabels?: ReadonlySet<string>) {
+  // The slot-name template identifies the runtime contract; authoring surfaces show the authored name.
+  // Quote special values and fixed-slot collisions; escape literal quotes so the display stays unambiguous.
+  if (labelValue !== undefined) return labelValue === labelValue.trim() && labelValue.length > 0
+    && !labelValue.startsWith('"') && !fixedLabels?.has(labelValue) ? labelValue : JSON.stringify(labelValue);
+  return `${descriptor.displayName} ${index + 1}`;
 }
 
 function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
@@ -624,6 +643,10 @@ function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLook
 }
 
 function findCollectionItemIndex(collection: unknown[], slot: ChildSlot) {
+  if (slot.itemIdProperty && slot.collectionItemId !== undefined) {
+    const matches = collection.flatMap((item, index) => isRecord(item) && item[slot.itemIdProperty!] === slot.collectionItemId ? [index] : []);
+    return matches.length === 1 ? matches[0] : -1;
+  }
   if (slot.labelProperty && slot.collectionItemLabel !== undefined) {
     const matches = collection
       .map((item, index) => isRecord(item) && item[slot.labelProperty!] === slot.collectionItemLabel ? index : -1)
@@ -650,12 +673,13 @@ export function buildCanvas(
   const startNodeId = scope.slot.mode === "flowchart" ? readFlowchartStartNodeId(scope.owner) : null;
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
-    const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
+    const record = layoutByNodeId.get(activity.nodeId);
+    const position = record ?? defaultPosition(scope.slot.mode, index);
     return createWorkflowNode(
       activity,
       catalogItem,
       { x: position.x, y: position.y },
-      { isStartNode: activity.nodeId === startNodeId },
+      { isStartNode: activity.nodeId === startNodeId, width: readSavedNodeWidth(record?.width) },
       formatSummary,
       presentationByNodeId.get(activity.nodeId)
     );
@@ -675,14 +699,16 @@ export function buildUnsupportedActivityCanvas(
   activityPresentation?: ActivityPresentationRecord[]
 ) {
   const catalogItem = catalog.find(candidate => candidate.activityVersionId === activity.activityVersionId);
-  const position = layout.find(record => record.nodeId === activity.nodeId) ?? { x: 0, y: 0 };
+  const record = layout.find(candidate => candidate.nodeId === activity.nodeId);
+  const position = record ?? { x: 0, y: 0 };
 
   return {
     nodes: [createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y }, {
       connectable: false,
       deletable: false,
       draggable: false,
-      suppressFlowPorts: true
+      suppressFlowPorts: true,
+      width: readSavedNodeWidth(record?.width)
     }, formatSummary, indexActivityPresentation(activityPresentation).get(activity.nodeId))],
     edges: [] satisfies Edge[]
   };
@@ -764,10 +790,31 @@ export function updateActivity(root: ActivityNode, nodeId: string, update: (acti
       return updated;
     });
 
-    if (changed) next = replaceSlotActivities(next, slot, updatedActivities);
+    if (changed) next = reconcileSwitchOutcomeConnections(replaceSlotActivities(next, slot, updatedActivities), slot.activities, updatedActivities);
   }
 
   return changed ? next : root;
+}
+
+/** Only warn when removing this case actually removes an emitted outcome with authored wires. */
+export function hasSwitchCaseOutgoingConnections(root: ActivityNode, activity: ActivityNode, index: number, catalog?: ActivityCatalogLookup): boolean {
+  const entries = activity.structure?.payload.cases;
+  if (!Array.isArray(entries) || !isRecord(entries[index]) || typeof entries[index].match !== "string" || !switchOutcomePorts(activity)) return false;
+  const outcome = normalizeSwitchOutcome(entries[index].match);
+  const remaining = { ...activity, structure: { ...activity.structure!, payload: { ...activity.structure!.payload, cases: entries.filter((_, i) => i !== index) } } };
+  if (switchOutcomePorts(remaining)?.some(port => port.name === outcome)) return false;
+  const payload = root.structure?.payload;
+  if (root.structure?.kind === flowchartStructureKind && Array.isArray(payload?.connections)
+    && payload.connections.some(value => isRecord(value) && isRecord(value.source)
+      && value.source.nodeId === activity.nodeId && typeof value.source.port === "string" && normalizeSwitchOutcome(value.source.port) === outcome)) return true;
+  if (root.structure?.kind === bpmnStructureKind && Array.isArray(payload?.elements) && Array.isArray(payload?.sequenceFlows)) {
+    const ids = new Set(payload.elements.filter(value => isRecord(value) && value.childNodeId === activity.nodeId).map(value => (value as Record<string, unknown>).elementId));
+    const defaults = new Set<unknown>(payload.elements.filter(isRecord).map(value => value.defaultFlowId).filter(id => typeof id === "string"));
+    if (payload.sequenceFlows.some(value => isRecord(value) && ids.has(value.sourceRef)
+      && value.isDefault !== true && !defaults.has(value.flowId)
+      && typeof value.conditionOutcome === "string" && normalizeSwitchOutcome(value.conditionOutcome) === outcome)) return true;
+  }
+  return getChildSlots(root, catalog).some(slot => slot.activities.some(child => hasSwitchCaseOutgoingConnections(child, activity, index, catalog)));
 }
 
 export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
@@ -838,11 +885,14 @@ export function withFlowchartConnections(owner: ActivityNode, edges: Edge[]) {
 export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
   const byNodeId = new Map(layout.map(record => [record.nodeId, record]));
   for (const node of nodes) {
+    const previous = byNodeId.get(node.id);
+    const width = persistedNodeWidth(node, previous?.width);
     byNodeId.set(node.id, {
-      ...(byNodeId.get(node.id) ?? { nodeId: node.id }),
+      ...(previous ?? { nodeId: node.id }),
       nodeId: node.id,
       x: Math.round(node.position.x),
-      y: Math.round(node.position.y)
+      y: Math.round(node.position.y),
+      ...(width !== undefined ? { width } : {})
     });
   }
   return [...byNodeId.values()];
@@ -896,7 +946,7 @@ function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
   position: XYPosition,
-  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean } = {},
+  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean; width?: number } = {},
   formatSummary?: WorkflowNodeSummaryFormatter,
   presentation?: ActivityPresentationRecord
 ): Node<WorkflowNodeData> {
@@ -904,6 +954,7 @@ function createWorkflowNode(
     id: activity.nodeId,
     type: "workflowActivity",
     position,
+    ...(options.width !== undefined ? { width: options.width } : {}),
     connectable: options.connectable,
     deletable: options.deletable,
     draggable: options.draggable,
@@ -1065,7 +1116,9 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
         id: typeof (connection as { id?: unknown }).id === "string" ? String((connection as { id?: unknown }).id) : `flow-${index}-${source.nodeId}-${target.nodeId}`,
         source: source.nodeId,
         target: target.nodeId,
-        sourceHandle: source.port,
+        sourceHandle: Array.isArray(owner.structure?.payload.activities)
+          && owner.structure.payload.activities.some(item => isActivityNode(item) && item.nodeId === source.nodeId && switchOutcomePorts(item))
+          ? normalizeSwitchOutcome(source.port ?? "Done") : source.port,
         targetHandle: target.port && target.port !== "Done" ? target.port : undefined,
         type: "workflow",
         label: source.port && source.port !== "Done" ? source.port : undefined,
@@ -1076,6 +1129,8 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
 }
 
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  const structured = switchOutcomePorts(activity);
+  if (structured) return structured;
   const cases = readStringList((activity as { cases?: unknown }).cases);
   if (isFlowSwitch(activity, catalogItem) && cases.length > 0) {
     return [...cases.map(name => ({ name, displayName: name })), { name: "Default", displayName: "Default" }];

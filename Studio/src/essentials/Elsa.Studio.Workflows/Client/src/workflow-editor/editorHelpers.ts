@@ -1,7 +1,7 @@
 import type { Node } from "@xyflow/react";
 import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { CreateDefinitionRequest, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
 import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
@@ -690,4 +690,10 @@ function isNotFoundError(error: unknown, message: string) {
   } catch {
     return /not found/i.test(message);
   }
+}
+
+
+export function getCreateInitialDocument(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]): Pick<CreateDefinitionRequest, "initialState" | "layout" | "activityPresentation"> {
+  if (draft.templateContent) return { initialState: structuredClone(draft.templateContent.state), layout: structuredClone(draft.templateContent.layout), activityPresentation: structuredClone(draft.templateContent.activityPresentation ?? []) };
+  return { initialState: getCreateInitialState(draft, activities) };
 }

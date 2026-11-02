@@ -219,6 +219,18 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.api.capabilities": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
       "elsa.api.compatibility.testing": {
         "type": "Project",
         "dependencies": {
@@ -236,6 +248,7 @@
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Diagnostics.StructuredLogs.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
@@ -244,6 +257,12 @@
       },
       "elsa.diagnostics.structuredlogs.core": {
         "type": "Project"
+      },
+      "elsa.events.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.foundation.identity": {
         "type": "Project",
@@ -255,6 +274,9 @@
         }
       },
       "elsa.foundation.identity.core": {
+        "type": "Project"
+      },
+      "elsa.pipelines.core": {
         "type": "Project"
       },
       "elsa.primitives": {
