@@ -1,0 +1,20 @@
+{
+  "source": "5cf3ef4412ab408b2be23094b8b7e439a14d2950",
+  "containsMain": "e5896da5f5b93d9c302d67ca99d529f0d7e064b9",
+  "name": "elsa-bpmn-inspection-5cf3ef441.zip",
+  "sha256": "972ff6dab159bff4a3e576ca523a92ed252c991f2aca35e1b4c92070b864b9dd",
+  "bytes": 1426266,
+  "files": 47,
+  "assetId": 698452458,
+  "checksumAssetId": 698452546,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-inspection-5cf3ef441.zip",
+  "uploader": "elsa-workflows-codex[bot]",
+  "downloadVerified": true,
+  "allMembersVerified": true,
+  "extractedPhysicalVerifierPassed": true,
+  "extractedOldConsumerPassed": true,
+  "oldConsumerRecompiled": false,
+  "fullHostRerunByPortabilityCheck": false,
+  "newReleaseOrTag": false,
+  "releasePublishedAtUnchanged": "2026-10-07T15:44:19Z"
+}

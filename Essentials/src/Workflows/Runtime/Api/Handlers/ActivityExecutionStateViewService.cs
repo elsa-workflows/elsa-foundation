@@ -35,21 +35,23 @@ public sealed class ActivityExecutionStateViewService(
             return null;
 
         var canInspectValues = await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken);
-        if (activity.PrivateState is not { } privateState)
-            return Unavailable(activity, ActivityStateView.StateCleared, canInspectValues);
-
-        var projector = projectors.Find(privateState.Value.Type.Alias);
+        var privateState = activity.PrivateState;
+        var projector = privateState is not null ? projectors.Find(privateState.Value.Type.Alias)
+            : projectors.FindWithoutState(activity.Execution.ActivityType);
         if (projector is null)
-            return Unavailable(activity, ActivityStateView.NoProjector, canInspectValues);
+            return Unavailable(activity, privateState is null ? ActivityStateView.StateCleared : ActivityStateView.NoProjector, canInspectValues);
 
         var executable = await workflowExecutableStore.FindAsync(workflowExecution.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !executable.NodesById.TryGetValue(activity.Execution.ExecutableNodeId, out var node))
-            return null;
+            // A visible cleared activity keeps its StateCleared answer when retained references cannot be read.
+            return privateState is null ? Unavailable(activity, ActivityStateView.StateCleared, canInspectValues) : null;
 
         var incidents = await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken);
-        var view = await projector.ProjectAsync(
-            new ActivityStateViewContext(workflowExecution, activity, node, incidents, canInspectValues),
-            cancellationToken);
+        var context = new ActivityStateViewContext(workflowExecution, activity, node, incidents, canInspectValues);
+        var view = privateState is null ? await projector.ProjectWithoutStateAsync(context, cancellationToken)
+            : await projector.ProjectAsync(context, cancellationToken);
+        if (view is null)
+            return Unavailable(activity, ActivityStateView.StateCleared, canInspectValues);
         return new ActivityStateView(
             activity.Execution.WorkflowExecutionId,
             activity.Execution.ActivityExecutionId,

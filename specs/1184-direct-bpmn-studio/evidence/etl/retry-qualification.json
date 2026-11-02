@@ -1,0 +1,53 @@
+{
+  "productSource": "7a8cf8767ed00efe944998007882c87a217a25cf",
+  "tasks": [
+    "T025"
+  ],
+  "tests": {
+    "total": 68,
+    "passed": 68,
+    "failed": 0,
+    "skipped": 0,
+    "newPageControls": 25,
+    "existingPageControls": 22,
+    "runtimeClientControls": 21
+  },
+  "checks": [
+    {
+      "name": "Focused pages/runtime client",
+      "log": "retry-ui-final.log",
+      "sha256": "b4bdf58c8ccd29a3031f360bf669a5d829794fa54fca82b876738671b5913b92",
+      "outcome": "passed:68/68;0 failed,0 skipped"
+    },
+    {
+      "name": "Workflows typecheck",
+      "log": "retry-ui-typecheck-corrected.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "outcome": "passed"
+    },
+    {
+      "name": "Targeted lint",
+      "log": "retry-ui-lint-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "outcome": "passed:0 errors,0 warnings"
+    },
+    {
+      "name": "Positive control without implementation",
+      "log": "retry-ui-before.log",
+      "sha256": "7a4486988c30112fd8613ec6029604d441e078e08010c99bc2c0cb51614bbfd2",
+      "outcome": "expected failure:1 failed,22 unselected"
+    },
+    {
+      "name": "Initial fixture typecheck",
+      "log": "retry-ui-typecheck.log",
+      "sha256": "28af0fcc6d734a756629d363054bd61cf440fef11598660f5cb288adf19d71b0",
+      "outcome": "failed:nullable capabilities and readonly fixture property; corrected"
+    }
+  ],
+  "persistedRuntimeWriterChanged": false,
+  "legacyStartAndCompletionStorageKeysChanged": false,
+  "actualEtlHostRestart": false,
+  "actualStudioBrowserJourney": false,
+  "fullFinalReview": false,
+  "qualificationScope": "Rendered React components and mocked HTTP with the real scoped runtime client. No physical ETL acceptance is inferred. Raw logs retained for completed-journey archive. Product commit remains local until next journey milestone batch."
+}
