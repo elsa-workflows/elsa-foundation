@@ -263,7 +263,7 @@ public sealed class AgentCompositionTests
         var diagnostic = string.Join(" ", ExceptionChain(failure).Select(x => x.Message));
         Assert.Contains(contract.FullName!, diagnostic);
         Assert.Contains("at most one registration", diagnostic);
-        Assert.Contains("Replace", diagnostic);
+        Assert.Contains("services.SelectAgent", diagnostic);
     }
 
     [Theory]
