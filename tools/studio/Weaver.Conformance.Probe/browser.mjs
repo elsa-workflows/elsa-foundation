@@ -1292,7 +1292,7 @@ async function consumedIntentRemount() {
     realCapabilityRead: true, originalTimeOrigin, commandId: selected.commandId, providerCalls: callsFor(selected.commandId) }));
   // Native SPA navigation keeps that consumed-intent App state until Studio feature Apply retires the document.
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();
@@ -1342,7 +1342,7 @@ async function consumedIntentRemount() {
     configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
-  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   const bootstrap = page.waitForRequest(request => new URL(request.url()).origin === backend
