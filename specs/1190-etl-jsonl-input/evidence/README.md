@@ -107,7 +107,7 @@ Independent reviews ran before implementation. Each finding was adopted, and non
 - **Spec, against the code at `3adffdfe1`:** one blocker and ten other findings. The blocker was that header-only v2 CSV runs never settle (FR-011).
 - **Plan and tasks:** ten should-fix findings and three nits, among them the preparer gates, the shared reader's size check and ordinals, the settlement placement, replacement ordering, forged-hash index tests and the R4 exception.
 
-PR review round 1 used three independent lenses: correctness, standards and spec conformance. Their findings and outcomes are recorded in the PR's gate-evidence comment.
+PR review rounds 1–3 used three independent lenses: correctness, standards and spec conformance. They stopped at their cap unconverged; later rounds re-reviewed the round-3 fixes until a round left no findings. Findings and outcomes are recorded in the PR's gate-evidence comments. The round-3 effect-count assertion (`(AcceptedMainEffects, AcceptedErrorEffects) == (2, 1)`) is tested but not bite-proofed.
 
 ## Not covered here
 
