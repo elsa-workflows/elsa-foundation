@@ -86,6 +86,12 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
   padding: 0 14px 0 0;
 }
 
+.wf-definitions-list .wf-folder-nav[data-collapsed="true"] {
+  margin-inline-start: 12px;
+  padding: 0;
+  border: 0;
+}
+
 .wf-definitions-list .wf-definition-table-scroll {
   container-type: inline-size;
   overflow-x: auto;
