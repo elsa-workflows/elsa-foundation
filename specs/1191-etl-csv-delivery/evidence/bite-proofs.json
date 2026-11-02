@@ -100,7 +100,7 @@
       "restored": "Passed!  - Failed:     0, Passed:     1",
       "original": "var reserved = _count == 0 ? 1 : 0;",
       "mutated_text": "var reserved = 0;",
-      "note": "This test leaves the bracket's byte free, so it bites only through the byte accounting; http-bracket-unreserved-at-limit (round 3) reproduces the overrun itself."
+      "note": "This test leaves the bracket's byte free, so it bites only through the byte accounting; http-bracket-unreserved-at-limit (round 3) reproduces the overrun itself. Round 2 (7f3974f29) widened this test to a Theory over jsonlMain; the 1/1 result and the parameterless name were recorded at eb418a835."
     },
     {
       "mutation": "csv-row-bound-loose",
