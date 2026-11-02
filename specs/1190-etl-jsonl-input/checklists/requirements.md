@@ -25,3 +25,19 @@ An independent review against the code at `3adffdfe1` raised one blocker and ten
 - "Exactly once" wording is replaced.
 
 This passes specification quality only, not implementation acceptance.
+
+## Plan and tasks review
+
+An independent review of plan.md and tasks.md raised ten should-fix findings and three nits. All were adopted:
+
+- Gates: preparer gates listed one by one with tests; zero-byte, BOM-only and ceiling refusals.
+- The shared JSON reader's size check, ordinals and error codes made explicit.
+- Placement of the FR-011 settlement relative to the `Running` save and the lease check; stuck pre-existing runs declared out of scope.
+- Process-recovery replacement ordering by lease expiry.
+- Forged-hash index tests for R10.
+- `EXTENSION_POINTS.md` update.
+- The driver moved under `evidence/`.
+- Added coverage for the changed host file, partition-count and same-alias edge cases, and Studio inspection text.
+- The R4 naming exception recorded.
+- Bounded streaming for oversize lines.
+- The Studio picker label and fixture file named.
