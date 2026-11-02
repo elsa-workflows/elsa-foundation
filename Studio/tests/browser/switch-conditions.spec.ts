@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 test.setTimeout(60_000);
-const owner = (page: Page) => page.locator('.wf-sequence-step[data-id="collection-owner"], .react-flow__node[data-id="collection-owner"], .react-flow__node[data-id="collection-element"]');
+const owner = (page: Page) => page.locator('.wf-sequence-step[data-id="collection-owner"], .react-flow__node[data-id="collection-owner"] .wf-node-content, .react-flow__node[data-id="collection-element"]');
 const cases = (page: Page) => page.getByRole("region", { name: "Cases", exact: true });
 async function navigationAllowed(page: Page) {
   return page.evaluate(() => ({

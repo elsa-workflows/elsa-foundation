@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 test.setTimeout(60_000);
 
 const canvasAdd = (page: Page, item = "case") => page.locator(".wf-sequence-slots, .wf-node-slot-list").getByRole("button", { name: `Add ${item}`, exact: true });
-const ownerNode = (page: Page) => page.locator('.wf-sequence-step[data-id="collection-owner"], .react-flow__node[data-id="collection-owner"], .react-flow__node[data-id="collection-element"]');
+const ownerNode = (page: Page) => page.locator('.wf-sequence-step[data-id="collection-owner"], .react-flow__node[data-id="collection-owner"] .wf-node-content, .react-flow__node[data-id="collection-element"]');
 const cases = (page: Page) => page.getByRole("region", { name: "Cases", exact: true });
 
 async function returnToCases(page: Page) {

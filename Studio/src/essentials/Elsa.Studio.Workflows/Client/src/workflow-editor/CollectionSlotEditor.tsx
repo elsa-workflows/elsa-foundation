@@ -4,13 +4,14 @@ import type { ActivityNode } from "../workflowTypes";
 import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, moveCollectionItem, setCollectionCondition, type CollectionSlot } from "../collectionSlots";
 import "./collectionSlotEditor.css";
 
-export function CollectionSlotEditor({ activity, collection, readOnly, onChange, renderBranch, renderCondition }: {
+export function CollectionSlotEditor({ activity, collection, readOnly, onChange, renderBranch, renderCondition, hasOutgoingConnections }: {
   activity: ActivityNode;
   collection: CollectionSlot;
   readOnly?: boolean;
   onChange(activity: ActivityNode): void;
   renderBranch(index: number): ReactNode;
   renderCondition?(item: Record<string, unknown>): ReactNode;
+  hasOutgoingConnections?(index: number): boolean;
 }) {
   const items = collectionSlotItems(activity, collection);
   if (!items) return null;
@@ -33,11 +34,17 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
           duplicate={value => items.some((candidate, position) => position !== index && candidate[collection.labelProperty] === value)}
           onRename={value => onChange(renameCollectionItem(activity, collection, index, item[collection.labelProperty] as string, value))}
           onRemove={() => {
-            if (item[collection.childProperty] && !window.confirm(`Remove this ${collection.itemName} and its activity, including nested content?`)) return;
+            const connected = hasOutgoingConnections?.(index) === true;
+            const message = connected
+              ? `Remove this ${collection.itemName}, its outgoing connections, and any nested activity content?`
+              : `Remove this ${collection.itemName} and its activity, including nested content?`;
+            if ((item[collection.childProperty] || connected) && !window.confirm(message)) return;
             onChange(removeCollectionItem(activity, collection, index, item[collection.labelProperty] as string));
           }}
           removeLabel={`Remove ${collection.itemName} ${index + 1}`}
         >
+          {collection.itemName === "case" && !(item[collection.labelProperty] as string).trim()
+            ? <p className="wf-muted" role="note">A non-blank case label is needed to expose an outcome port.</p> : null}
           {collection.conditionProperty && collection.itemIdProperty ? <>
             {item[collection.conditionProperty] != null ? renderCondition?.(item) : <div className="wf-slot-collection-priority">
               <p className="wf-muted">Matches Value against this case label.</p>

@@ -12,7 +12,7 @@ import type {
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
-import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
+import { hasSwitchCaseOutgoingConnections, slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { canUpgradeSwitch, getCollectionSlots, isPredicateOnlySwitch, upgradeSwitch } from "../collectionSlots";
 import { CollectionSlotEditor } from "./CollectionSlotEditor";
 import { CaseConditionEditor } from "./CaseConditionEditor";
@@ -393,6 +393,7 @@ export function InspectorPanel({
           <StudioTabPanel {...tabPanelProps("slots")}>
             <div className="wf-slot-list">
               {collections.map(collection => <CollectionSlotEditor
+                hasOutgoingConnections={workflowState?.rootActivity ? index => hasSwitchCaseOutgoingConnections(workflowState.rootActivity!, selectedNode, index, catalogByVersion) : undefined}
                 key={collection.property} activity={selectedNode} collection={collection} readOnly={readOnly}
                 onChange={next => { setSlotPicker(null); (onSelectedStructureChange ?? onSelectedActivityChange)(next); }}
                 renderCondition={item => <CaseConditionEditor

@@ -1,3 +1,4 @@
+import { reconcileSwitchOutcomeConnections, switchOutcomePorts, normalizeSwitchOutcome } from "./switchOutcomePorts";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord } from "./workflowTypes";
 import {
@@ -789,10 +790,31 @@ export function updateActivity(root: ActivityNode, nodeId: string, update: (acti
       return updated;
     });
 
-    if (changed) next = replaceSlotActivities(next, slot, updatedActivities);
+    if (changed) next = reconcileSwitchOutcomeConnections(replaceSlotActivities(next, slot, updatedActivities), slot.activities, updatedActivities);
   }
 
   return changed ? next : root;
+}
+
+/** Only warn when removing this case actually removes an emitted outcome with authored wires. */
+export function hasSwitchCaseOutgoingConnections(root: ActivityNode, activity: ActivityNode, index: number, catalog?: ActivityCatalogLookup): boolean {
+  const entries = activity.structure?.payload.cases;
+  if (!Array.isArray(entries) || !isRecord(entries[index]) || typeof entries[index].match !== "string" || !switchOutcomePorts(activity)) return false;
+  const outcome = normalizeSwitchOutcome(entries[index].match);
+  const remaining = { ...activity, structure: { ...activity.structure!, payload: { ...activity.structure!.payload, cases: entries.filter((_, i) => i !== index) } } };
+  if (switchOutcomePorts(remaining)?.some(port => port.name === outcome)) return false;
+  const payload = root.structure?.payload;
+  if (root.structure?.kind === flowchartStructureKind && Array.isArray(payload?.connections)
+    && payload.connections.some(value => isRecord(value) && isRecord(value.source)
+      && value.source.nodeId === activity.nodeId && typeof value.source.port === "string" && normalizeSwitchOutcome(value.source.port) === outcome)) return true;
+  if (root.structure?.kind === bpmnStructureKind && Array.isArray(payload?.elements) && Array.isArray(payload?.sequenceFlows)) {
+    const ids = new Set(payload.elements.filter(value => isRecord(value) && value.childNodeId === activity.nodeId).map(value => (value as Record<string, unknown>).elementId));
+    const defaults = new Set(payload.elements.filter(isRecord).map(value => value.defaultFlowId).filter(id => typeof id === "string"));
+    if (payload.sequenceFlows.some(value => isRecord(value) && ids.has(value.sourceRef)
+      && value.isDefault !== true && !defaults.has(value.flowId)
+      && typeof value.conditionOutcome === "string" && normalizeSwitchOutcome(value.conditionOutcome) === outcome)) return true;
+  }
+  return getChildSlots(root, catalog).some(slot => slot.activities.some(child => hasSwitchCaseOutgoingConnections(child, activity, index, catalog)));
 }
 
 export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
@@ -1094,7 +1116,9 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
         id: typeof (connection as { id?: unknown }).id === "string" ? String((connection as { id?: unknown }).id) : `flow-${index}-${source.nodeId}-${target.nodeId}`,
         source: source.nodeId,
         target: target.nodeId,
-        sourceHandle: source.port,
+        sourceHandle: Array.isArray(owner.structure?.payload.activities)
+          && owner.structure.payload.activities.some(item => isActivityNode(item) && item.nodeId === source.nodeId && switchOutcomePorts(item))
+          ? normalizeSwitchOutcome(source.port ?? "Done") : source.port,
         targetHandle: target.port && target.port !== "Done" ? target.port : undefined,
         type: "workflow",
         label: source.port && source.port !== "Done" ? source.port : undefined,
@@ -1105,6 +1129,8 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
 }
 
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  const structured = switchOutcomePorts(activity);
+  if (structured) return structured;
   const cases = readStringList((activity as { cases?: unknown }).cases);
   if (isFlowSwitch(activity, catalogItem) && cases.length > 0) {
     return [...cases.map(name => ({ name, displayName: name })), { name: "Default", displayName: "Default" }];
