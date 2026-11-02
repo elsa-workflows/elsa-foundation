@@ -63,6 +63,13 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
 
     /// <summary>The Elsa extension attribute naming the workflow definition a bound call activity dispatches.</summary>
     private const string WorkflowDefinitionIdAttributeName = "workflowDefinitionId";
+    /// <summary>True for the standard BPMN binding profile, whose work the document already represents in BPMN terms.</summary>
+    internal static bool IsProfileActivityVersion(string activityVersionId) => activityVersionId is DefaultBpmnProcessActivityVersionId or
+        DefaultDelayActivityVersionId or DefaultEventActivityVersionId or DefaultDispatchWorkflowActivityVersionId or DefaultPublishEventActivityVersionId;
+
+    /// <summary>The vendor attribute carrying a task's exact bound <see cref="ActivityNode"/>.</summary>
+    internal const string BoundActivityAttributeName = "activity";
+    internal static readonly JsonSerializerOptions BoundActivitySerializerOptions = new(JsonSerializerDefaults.Web);
 
     public BpmnImportAnalysis Analyze(string xml, BpmnImportOptions? options = null) => Import(xml, options).Analysis;
 
@@ -187,7 +194,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 ReportUnrepresented(source.Extensions with
                 {
                     ForeignAttributes = source.Extensions.ForeignAttributes.Where(attribute =>
-                        source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute)).ToArray()
+                        (source.ElementType != BpmnElementTypes.CallActivity || !IsWorkflowDefinitionAttribute(attribute)) && !IsBoundActivityAttribute(attribute)).ToArray()
                 }, source.ElementId);
                 if (source.Script is not null)
                     Degraded(source.ElementId, "The script body and script format are not represented by the frozen Foundation authoring contract; bind an activity explicitly.");
@@ -306,7 +313,8 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 WorkflowDefinitionId: RetainedWorkflowDefinitionId(source), WaitForCompletion: call.WaitForCompletion),
             LibInterchange.BpmnWorkBinding.NestedProcess nested => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.NestedProcess,
                 NestedProcess: BuildProcessNode(nested.Definition, binding.BindingRef, diagram: null, collaboration: null)),
-            LibInterchange.BpmnWorkBinding.UnboundTask => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.UnboundTask),
+            LibInterchange.BpmnWorkBinding.UnboundTask => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.UnboundTask,
+                RetainedActivity: RetainedBoundActivity(source, binding.BindingRef)),
             _ => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.Unknown)
         };
 
@@ -358,6 +366,31 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                                 && !string.IsNullOrWhiteSpace(attribute.Value))
             .Select(attribute => attribute.Value.Trim())
             .FirstOrDefault();
+
+    /// <summary>
+    /// The exact bound activity a document exported, rebased onto the library's binding reference. A malformed value
+    /// is reported as unbound work rather than guessed.
+    /// </summary>
+    private static BpmnRetainedActivity? RetainedBoundActivity(LibModel.BpmnElement source, string bindingRef)
+    {
+        var attribute = source.Extensions.ForeignAttributes.FirstOrDefault(IsBoundActivityAttribute);
+        if (attribute is null || string.IsNullOrWhiteSpace(attribute.Value))
+            return null;
+        try
+        {
+            var node = JsonSerializer.Deserialize<ActivityNode>(attribute.Value, BoundActivitySerializerOptions);
+            return node is null || string.IsNullOrWhiteSpace(node.ActivityVersionId) || node.Structure is not null
+                ? new BpmnRetainedActivity(null, "The retained Elsa activity binding is incomplete.")
+                : new BpmnRetainedActivity(node with { NodeId = bindingRef }, null);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            return new BpmnRetainedActivity(null, "The retained Elsa activity binding is not readable.");
+        }
+    }
+
+    private static bool IsBoundActivityAttribute(LibModel.BpmnForeignAttribute attribute) =>
+        attribute.Name.Namespace == LibInterchange.BpmnXmlNames.VendorNamespaceName && attribute.Name.LocalName == BoundActivityAttributeName;
 
     private static bool IsWorkflowDefinitionAttribute(LibModel.BpmnForeignAttribute attribute) =>
         attribute.Name.Namespace == LibInterchange.BpmnXmlNames.VendorNamespaceName && attribute.Name.LocalName == WorkflowDefinitionIdAttributeName;

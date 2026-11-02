@@ -82,6 +82,19 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                             workflowDefinitionId!)
                     ]);
             }
+            else if (child is not null && !BpmnDocumentImporter.IsProfileActivityVersion(child.ActivityVersionId) &&
+                     (element.ElementType == BpmnElementTypes.Task || element.ElementType.EndsWith("Task", StringComparison.Ordinal)))
+            {
+                // Other bound work (a published reusable activity such as a user-defined agent, or a native activity
+                // outside the standard BPMN binding profile) rides the vendor namespace as its exact authored node, so import can rebind the same
+                // activity version and inputs or refuse it against the visible catalog.
+                extensions = new LibModel.BpmnExtensions(ForeignAttributes:
+                [
+                    new LibModel.BpmnForeignAttribute(
+                        new LibModel.BpmnQName(LibInterchange.BpmnXmlNames.VendorNamespaceName, BpmnDocumentImporter.BoundActivityAttributeName),
+                        JsonSerializer.Serialize(child, BpmnDocumentImporter.BoundActivitySerializerOptions))
+                ]);
+            }
 
             elements.Add(new LibModel.BpmnElement(
                 element.ElementId,
