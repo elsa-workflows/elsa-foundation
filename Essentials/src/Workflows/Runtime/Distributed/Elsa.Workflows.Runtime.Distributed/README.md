@@ -69,6 +69,25 @@ again, so the survivor that claims placement re-leases and re-drives it on failo
 and the ack-based hold-until-commit dequeue recorded in `docs/runtime-durable-resumption.md`. Re-driven commands are
 made safe — not merely deduplicated — by the fencing token described above.
 
+**A dispatch never holds the sweep** (#2831). A command can start a drain that runs as long as its workflow keeps making
+progress. The pump waits for each dispatch only up to `ExecutionPlacementPumpOptions.InlineDispatchWait` (default
+1 second, measured on the injected clock). A command still running after that finishes on its own and is acknowledged
+when it does, under the item's latest lease.
+
+All of one sweep's waits for local work, across every persistence scope, share a budget of a third of the placement
+lease. That includes passivating or handing off an execution whose drain is still running. Such a hand-off or
+passivation finishes on its own, and until it does, later sweeps neither hand the execution off again nor renew, claim
+or lease it. However many executions are busy, the sweep keeps renewing
+every placement the node holds. Without that, another node would claim a busy execution once its placement lease
+lapsed, take over its runtime ownership and run the same workflow (#3667 asks whether that takeover should wait).
+
+An execution whose drain is still running gets no inline wait:
+- A Cancel for it is delivered at once, reaches the drain's mailbox, and the drain yields to it.
+- Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
+  their leases are released and the next sweep dispatches them.
+
+An item whose transport lease lapses while its dispatch still runs is leased again but not dispatched twice.
+
 ## In-memory defaults and durable persistence stores
 
 The placement store and command transport in this unit are in-memory implementations, shared by every node container in
