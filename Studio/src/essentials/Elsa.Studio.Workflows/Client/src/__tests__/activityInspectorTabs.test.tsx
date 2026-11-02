@@ -8,9 +8,9 @@ import {
   resolveActivityInspectorTabId,
   type ActivityInspectorTabId
 } from "../workflow-editor/InspectorPanel";
-import type { ChildSlot } from "../workflowAdapter";
+import { createActivityNode, type ChildSlot } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
-import { setVariableActivity } from "./fixtures";
+import { collectionActivity, setVariableActivity } from "./fixtures";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
@@ -87,6 +87,8 @@ function Harness({
   activityDescriptor = descriptor,
   selectedNode = node,
   catalog = [],
+  knownCatalog = catalog,
+  onChange = vi.fn(),
   reusableDefinitionId = null
 }: {
   initialTab?: ActivityInspectorTabId;
@@ -95,6 +97,8 @@ function Harness({
   activityDescriptor?: StudioActivityDescriptor | null;
   selectedNode?: ActivityNode;
   catalog?: ActivityCatalogItem[];
+  knownCatalog?: ActivityCatalogItem[];
+  onChange?(activity: ActivityNode): void;
   reusableDefinitionId?: string | null;
 }) {
   const [activeTabId, setActiveTabId] = React.useState<ActivityInspectorTabId>(initialTab);
@@ -110,7 +114,7 @@ function Harness({
       selectedReusableSemanticVersion={reusableDefinitionId ? "1.0.0" : null}
       selectedSlots={slots}
       catalog={catalog}
-      catalogByVersion={new Map(catalog.map(item => [item.activityVersionId, item]))}
+      catalogByVersion={new Map(knownCatalog.map(item => [item.activityVersionId, item]))}
       selectedSupportsScopedVariables={supportsVariables}
       propertyEditors={[]}
       expressionEditors={[]}
@@ -125,7 +129,7 @@ function Harness({
       }}
       activeTabId={activeTabId}
       onActiveTabChange={setActiveTabId}
-      onSelectedActivityChange={vi.fn()}
+      onSelectedActivityChange={onChange}
       onEnterSlot={vi.fn()}
       onReplaceSlotActivity={vi.fn()}
     />
@@ -137,6 +141,59 @@ function tabs(container: HTMLElement) {
 }
 
 describe("activity Inspector tabs", () => {
+  it.each([
+    { available: true, offered: true },
+    { available: undefined, offered: true },
+    { available: false, offered: false }
+  ])("discovers Switch upgrades outside the recommended palette (target availability: $available)", ({ available, offered }) => {
+    const legacy = collectionActivity("switch");
+    const current = structuredClone(legacy);
+    current.activityVersionId = "switch-4.1";
+    current.available = available;
+    const facet = current.designFacets![0] as { schemaVersion: string; payload: { slots: Record<string, unknown>[] } };
+    facet.schemaVersion = "2.0.0";
+    Object.assign(facet.payload.slots[0], { itemIdProperty: "caseId", conditionProperty: "condition" });
+    const activity = createActivityNode(legacy, "switch");
+    activity.structure!.payload.cases = [{ match: "Approved", activity: null }];
+    const onChange = vi.fn();
+    const container = render(<Harness selectedNode={activity}
+      activityDescriptor={{ typeName: legacy.activityTypeKey, inputs: [], outputs: [], ports: [] }}
+      catalog={[legacy]} knownCatalog={[legacy, current]} onChange={onChange} />);
+
+    const upgrade = [...container.querySelectorAll("button")].find(button => button.textContent === "Upgrade to case conditions");
+    if (!offered) {
+      expect(upgrade).toBeUndefined();
+      expect(onChange).not.toHaveBeenCalled();
+      return;
+    }
+    expect(upgrade).toBeDefined();
+    click(upgrade!);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toMatchObject({
+      activityVersionId: "switch-4.1",
+      structure: { schemaVersion: "2.0.0", payload: { cases: [{ match: "Approved", activity: null }] } }
+    });
+    expect(activity.structure!.schemaVersion).toBe("1.0.0");
+  });
+
+  it("prefers the recommended condition version over another compatible catalog version", () => {
+    const legacy = collectionActivity("switch");
+    const current = structuredClone(legacy);
+    current.activityVersionId = "switch-4.1";
+    const facet = current.designFacets![0] as { schemaVersion: string; payload: { slots: Record<string, unknown>[] } };
+    facet.schemaVersion = "2.0.0";
+    Object.assign(facet.payload.slots[0], { itemIdProperty: "caseId", conditionProperty: "condition" });
+    const recommended = { ...current, activityVersionId: "switch-4.2" };
+    const onChange = vi.fn();
+    const container = render(<Harness selectedNode={createActivityNode(legacy, "switch")}
+      activityDescriptor={{ typeName: legacy.activityTypeKey, inputs: [], outputs: [], ports: [] }}
+      catalog={[legacy, recommended]} knownCatalog={[legacy, current, recommended]} onChange={onChange} />);
+
+    click([...container.querySelectorAll("button")].find(button => button.textContent === "Upgrade to case conditions")!);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].activityVersionId).toBe(recommended.activityVersionId);
+  });
+
   it("starts on Inputs and orders the complete conditional tab set", () => {
     const container = render(<Harness supportsVariables slots={[bodySlot]} />);
     const allTabs = tabs(container);

@@ -547,3 +547,20 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
     private static bool IsInternalIdentityClaim(string claimType) =>
         claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
 }
+
+/// <summary>
+/// Default for hosts whose identity provider cannot re-read a subject's current grants. It refuses every
+/// request, so deferred work that needs a fresh decision fails closed instead of trusting a saved grant.
+/// </summary>
+public sealed class UnsupportedCurrentSubjectPermissionAuthorizer : ICurrentSubjectPermissionAuthorizer
+{
+    public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(
+        CurrentSubjectPermissionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(CurrentSubjectPermissionResult.Unsupported(
+            "The configured identity provider cannot re-evaluate a subject's current permissions."));
+    }
+}
