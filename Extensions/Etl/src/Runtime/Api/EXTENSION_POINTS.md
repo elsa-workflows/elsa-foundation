@@ -39,7 +39,7 @@ override that method; unavailable support is not an empty successful page. A mal
 `CompleteAsync` serves `etl-run-complete` (`POST /etl/runs/{id}/complete`). Its default body reports HTTP 503 with
 `etl.provider-unavailable`, so existing replacements keep compiling. An unknown or foreign run is 404 through the same
 scoped lookup as cancellation; otherwise the 200 result is `accepted`, `alreadyRequested`, `terminal` or
-`notContinuous`. Connector run detail adds `mode` (`finite` or `continuous`) and `completionRequestedAt`; connector
+`notContinuous`, with `notContinuous` taking precedence so a finite run never answers `terminal`. Connector run detail adds `mode` (`finite` or `continuous`) and `completionRequestedAt`; connector
 partitions add `nextPollAt`, which a provider may set only for an idle shard (one that may still show a claim until its
 worker releases it) and only equal to `notBefore` ([spec 1192](../../../../../specs/1192-etl-continuous-http/spec.md)).
 `notBefore` keeps its meaning of next eligibility, so clients that predate `nextPollAt` show an idle shard's next poll

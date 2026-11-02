@@ -68,7 +68,7 @@ An operator ends a continuous run.
    - the run settles `Succeeded`, or `BusinessError` with `etl.rows-rejected` if any record was rejected.
 2. **Given** a caught-up response from an attempt started before the completion request, **When** the store records it, **Then** the shard is due again at once rather than ended, so that records appended in between are not lost.
 3. **Given** a completion request, **When** it is repeated, **Then** it is idempotent.
-4. **Given** a terminal run, **When** completion is requested, **Then** the result is `terminal`, and nothing changes.
+4. **Given** a terminal continuous run, **When** completion is requested, **Then** the result is `terminal`, and nothing changes.
 5. **Given** a finite run, **When** completion is requested, **Then** the result is `notContinuous`, and nothing changes.
 6. **Given** a continuous run with a completion request, **When** it is cancelled before it drains, **Then** it settles `Cancelled`, because the first terminal outcome wins.
 
@@ -170,7 +170,7 @@ A second run is cancelled and ends `Cancelled`.
     - sets the partition's next-eligible time to the store's time plus the interval.
 
     It adds no page, request or batch row.
-  - While an earlier attempt in the journal was superseded (closed uncertain by a successor's fence) and could still answer, the transition instead closes the live attempt as uncertain on the retry schedule and keeps the journal; the partition waits at least until the superseded attempt expires. A late page from that attempt then keeps its provenance and is captured. If the retry schedule cannot retry (attempts or deadline), the journal is cleared as above.
+  - Known limit: A superseded attempt that is still in flight when a successor records a caught-up response can later publish a page whose attempt is no longer in the cleared journal; the shard then fails closed with `etl.http.page-provenance-invalid` rather than accepting the page. This needs a worker stall longer than its lease while the feed serves the stalled request late, with records appended in between. A poll-generation page identity, planned with compaction, removes it.
   - The position is unchanged, so the execution's normal release frees the lease.
 - **FR-005** The audit invariants accept the idle state.
   - In a continuous run, a partition with no owed batch, no attached page, a cleared journal and a next-eligible time is idle, and that time is valid.
@@ -190,6 +190,7 @@ A second run is cancelled and ends `Cancelled`.
     - `terminal`;
     - `notContinuous`.
   - An unknown run, or one in another scope, is `404` through the same scoped lookup as cancellation.
+  - `notContinuous` takes precedence over `terminal`: a finite run answers `notContinuous` before or after it settles, so the answer does not race settlement.
   - On `accepted`, it clears the next-eligible time of every idle partition in the same transaction. Partitions waiting on a retry are left alone.
 - **FR-008** Once every partition is exhausted and nothing is outstanding, the existing completion rules settle the run: `Succeeded`, or `BusinessError` with `etl.rows-rejected`. The terminal result and outbox are written in the same transaction, as today.
 - **FR-009** Cancellation and fault settlement are unchanged, and the first terminal outcome wins over a pending completion request.
@@ -236,13 +237,13 @@ A second run is cancelled and ends `Cancelled`.
   - Completion of a finite or a terminal run is refused.
 - **SC-003** In real worker processes, a kill after capture replays the page from the cache, and a kill during an idle poll's attempt retries the poll. Accounting is exact in both cases.
 - **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof. The evidence README names the guards that are tested without a bite-proof, or not tested.
-- **SC-005** Studio authoring and inspection, including "Complete run", work in a real browser against owned hosts, with no axe violations at 320px and 1024px.
+- **SC-005** Studio authoring and inspection, including "Complete run", work in a real browser against owned hosts, with no axe violations at 320px and 1024px. Axe runs on the authoring page; inspection and Complete run are checked in a real browser without axe, as the evidence README states.
 - **SC-006** An actual Workbench journey shows continuous delivery, idle polling, completion and cancellation.
 - **SC-007** Finite pipelines keep their artifact bytes and identities. The whole ETL suite passes, changed only by intended additions.
 
 ## Assumptions and boundaries
 
-- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page is captured while that attempt can still answer (FR-004). A page published even later, after a stall between receiving and publishing that outlasts the attempt's expiry, finds no provenance in the cleared journal and fails the shard closed with `etl.http.page-provenance-invalid` rather than being accepted.
+- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page can fail a shard closed (FR-004, known limit).
 - **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime is unbounded and its idle-poll cost bounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
 - **Native completion.** No workflow activity requests completion in this slice; the runtime API and Studio do. Native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
 - **Other continuous sources.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.

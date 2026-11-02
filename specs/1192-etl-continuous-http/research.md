@@ -80,7 +80,7 @@ It adds no rows. The lease is not released here; the execution's `finally` relea
 - `SchemaVersion` stays `"1.0.0"`. The three earlier connector migrations (`20261021150000`–`170000`) added columns without changing it, so the module's rule is that additive migrations keep the version.
 
 *Store transition.* `RequestConnectorRunCompletionAsync(scope, runId)`, in one Serializable transaction:
-- it returns `NotFound`, `Terminal`, `NotContinuous` or `AlreadyRequested` without writing;
+- it returns `NotFound`, `NotContinuous` (checked before the terminal status, so a finite run never races its settlement), `Terminal` or `AlreadyRequested` without writing;
 - otherwise it sets the column to the store's time and clears `NotBeforeUtcTicks` on every partition with no owed batch, no attached page and a null request journal. Retry waits keep their time.
 
 *Drain.* When `RecordConnectorHttpCaughtUpAsync` returns `Final`, the acquirer publishes the response:
@@ -169,5 +169,5 @@ An independent plan review found no blockers. Its findings change the decisions 
 
   The migration is a raw `ALTER TABLE … ADD COLUMN … CHECK (…)`, following `20261021170000_ConnectorInspectionEffects`.
 - **R6.** A moving empty page always waits the interval (round 2 reversed an earlier skip during completion, which could spin).
-- **R3, superseded attempts (round 2).** A caught-up record keeps the journal while a superseded uncertain attempt can still answer: the live attempt closes as uncertain on the retry schedule and the partition waits until the superseded attempt expires. The audit accepts that later eligibility time for continuous runs.
+- **R3, superseded attempts (rounds 2–3).** Round 2 kept the journal while an earlier uncertain attempt could still answer. Round 3 reverted it: an uncertain record does not show whether a successor's fence closed it (the only case that can publish late) or whether the deferral itself or a transport failure did, so deferrals chained and could exhaust the retry budget. The race is a declared limit (spec FR-004) for a poll-generation page identity planned with compaction.
 - **Wrappers.** The new store members are forwarded in `tests/Shared/ForwardingEtlConnectorRuntimeStore.cs`. `ConnectorWorkerGateStore` inherits them.

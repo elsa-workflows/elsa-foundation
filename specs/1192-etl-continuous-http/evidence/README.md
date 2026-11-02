@@ -51,14 +51,14 @@ Real worker and store, against a loopback cursor feed (`EtlRuntimeJourneyTests.C
 - **Moving cursor.** A cursor that moves without records waits one interval: with a 2 s interval, consecutive requests on each shard were at least 1.5 s apart (a hot loop would be milliseconds apart), both before and after a completion request, which wakes each waiting shard once.
 - **Finite unchanged.** A finite run still fails `etl.http.pagination-cycle` on an empty page that repeats its cursor.
 
-`EtlContinuousRuntimeApiHttpTests` covers the completion endpoint:
+`EtlRuntimeApiHttpTests` (in `EtlContinuousRuntimeApiHttpTests.cs`) covers the completion endpoint:
 - `etl/runs:complete` is required; `etl/runs:cancel` is refused with 403;
 - a foreign scope gets 404;
 - the results are `accepted`, `alreadyRequested`, `notContinuous` and `terminal`;
 - only the idle shard is woken, and a 429 retry wait keeps its time;
 - `nextPollAt` appears only on the idle shard, including while its worker still holds the lease.
 
-`Caught_up_records_need_the_live_lease_and_a_continuous_run_and_preparing_runs_accept_completion` refuses a caught-up record under a stale fence, from another attempt, outside its receipt window or for a finite run, and accepts completion during preparation. `A_finite_partition_may_not_wait_without_a_retry_journal` shows the audit still refuses an idle-style wait in a finite run. `A_caught_up_record_keeps_the_journal_while_a_superseded_attempt_can_still_answer` supersedes a predecessor's attempt under a new fence, records the successor's caught-up response, and checks that the journal is kept and the shard waits until the superseded attempt has expired.
+`Caught_up_records_need_the_live_lease_and_a_continuous_run_and_preparing_runs_accept_completion` refuses a caught-up record under a stale fence, from another attempt, outside its receipt window or for a finite run, and accepts completion during preparation. `A_finite_partition_may_not_wait_without_a_retry_journal` shows the audit still refuses an idle-style wait in a finite run.
 
 ## Studio (SC-005, US4)
 
@@ -79,7 +79,7 @@ The driver ran again with `--keep-host`. The owned Workbench was on 127.0.0.1:53
 
 Both owned processes were stopped. The owner's Workbench on 5095 was not touched.
 
-This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from "Caught up; polls again at" (in these screenshots) to "Next poll at", relaxed the inspection contract check so an idle shard that still shows a claim is accepted, and added the superseded-attempt deferral; none of them changes what the receipt shows.
+This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from "Caught up; polls again at" (in these screenshots) to "Next poll at", and relaxed the inspection contract check so an idle shard that still shows a claim is accepted; neither changes what the receipt shows.
 
 ## Bite-proofs (SC-004)
 
@@ -104,11 +104,12 @@ This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from
 | A caught-up record ignores the lease fence | 1/1 |
 | A caught-up receipt before the attempt started is accepted | 1/1 |
 | Completion is accepted for a finite run | 1/1 |
-| A caught-up record clears the journal while a superseded attempt can still answer | 1/1 |
 | A retry wait reports a next poll | 1/1 |
 | Studio offers Complete run for every running run | 1/14 |
 
-**Not bite-proofed:** cancellation winning over a pending completion reuses the unchanged first-terminal settlement and is covered by a test only; the acquirer's cache re-read before recording a caught-up response and the publish-conflict recovery are implemented but not exercised by a test.
+**Tested without a bite-proof:** cancellation winning over a pending completion (it reuses the unchanged first-terminal settlement); the stale-attempt refusal of a caught-up record; the pagination and interval codes of the shared rule (the bite-proof covers the file-source code); completion accepted during preparation; the 404 for a foreign scope; the editor's visibility rule; `notContinuous` taking precedence for a settled finite run.
+
+**Not tested:** the acquirer's cache re-read before recording a caught-up response, and the publish-conflict recovery.
 
 ## Artifact reviews
 
@@ -141,7 +142,7 @@ It also found eight further issues, all adopted:
 
 - **Compaction** of accepted pages, requests, batches and retained bytes, which bounds a continuous run's lifetime. It is a follow-up slice, and criterion 1 stays unchecked until it lands.
 - **Publish-conflict recovery race.** The acquirer captures the winning manifest when a predecessor publishes a page under the same request identity after the successor's re-read. This path is implemented but not exercised by a test.
-- **Very late pages.** A superseded attempt's late page is captured while that attempt can still answer. A page published even later, after a stall between receiving and publishing that outlasts the attempt's expiry, finds no provenance in the cleared journal and fails the shard closed with `etl.http.page-provenance-invalid`.
+- **Superseded late pages.** A superseded attempt that is still in flight when a successor records a caught-up response can later publish a page whose attempt is no longer in the cleared journal; the shard then fails closed with `etl.http.page-provenance-invalid` rather than accepting the page. This needs a worker stall longer than its lease while the feed serves the stalled request late, with records appended in between. A poll-generation page identity, planned with compaction, removes it.
 - **Host clocks.** Whether a caught-up response ends a draining shard compares the completion host's clock with the worker's, so the hosts' clocks must agree, as leases already require.
 - **Native completion activity.** A native workflow cannot request completion itself.
 - **Other continuous sources:** RabbitMQ, SQL and file drops.

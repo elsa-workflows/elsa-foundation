@@ -98,7 +98,7 @@ A completion request causes each shard's next qualifying caught-up response to b
   - cache normalization.
 
 ### Docs and evidence
-- The ETL README gets a "Continuous runs" section and a feed contract.
+- The ETL README gets a "Continuous HTTP runs" section and a feed contract.
 - The Core README and the extension-point catalogues are updated.
 - `specs/1192-etl-continuous-http/evidence/` holds:
   - the feed server and journey driver;

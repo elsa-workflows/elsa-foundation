@@ -55,7 +55,8 @@ public interface IEtlConnectorRuntimeStore
         EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(new EtlHttpCaughtUpResult(EtlStoreStatus.Invalid, false));
     /// <summary>Durably requests completion of a continuous run and makes its idle partitions due at once.</summary>
-    /// <remarks>Retry waits keep their time. The first terminal outcome still wins. Providers without continuous support report NotContinuous.</remarks>
+    /// <remarks>Retry waits keep their time. The first terminal outcome still wins. A finite run reports NotContinuous whether or not
+    /// it has settled; Terminal is only for a settled continuous run. Providers without continuous support report NotContinuous.</remarks>
     ValueTask<EtlRunCompletionOutcome> RequestConnectorRunCompletionAsync(EtlScope scope, string runId,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(EtlRunCompletionOutcome.NotContinuous);

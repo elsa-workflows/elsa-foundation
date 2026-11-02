@@ -97,6 +97,9 @@ public sealed partial class EtlRuntimeJourneyTests
         var finite = ConnectorInvocation(files.Scope, "finite-complete", ContinuousPipeline(1) with { Continuous = null });
         await files.AdmitAsync(host, finite);
         Assert.Equal(EtlRunCompletionOutcome.NotContinuous, await RequestCompletionAsync(host.Services, files.Scope, finite.RunId));
+        // A finite run answers notContinuous after it settles too, so the answer does not race its settlement.
+        Assert.Equal(EtlRunStatus.Succeeded, (await files.WaitForTerminalAsync(host, finite.RunId)).Status);
+        Assert.Equal(EtlRunCompletionOutcome.NotContinuous, await RequestCompletionAsync(host.Services, files.Scope, finite.RunId));
         Assert.Equal(EtlRunCompletionOutcome.NotFound, await RequestCompletionAsync(host.Services, files.Scope, "missing"));
     }
 
@@ -116,15 +119,16 @@ public sealed partial class EtlRuntimeJourneyTests
         // Completion makes each waiting shard due once; a moving cursor then keeps its interval, since only a caught-up
         // response ends a shard.
         Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
-        await WaitUntilAsync(() => feed.RequestTimes("a").Count >= beforeCompletion["a"] + 3 &&
-                                   feed.RequestTimes("b").Count >= beforeCompletion["b"] + 3, TimeSpan.FromSeconds(60));
+        var afterCompletion = new[] { "a", "b" }.ToDictionary(shard => shard, shard => feed.RequestTimes(shard).Count);
+        await WaitUntilAsync(() => feed.RequestTimes("a").Count >= afterCompletion["a"] + 4 &&
+                                   feed.RequestTimes("b").Count >= afterCompletion["b"] + 4, TimeSpan.FromSeconds(60));
 
-        // Each shard waits its two-second interval between requests (a hot loop would be milliseconds apart).
+        // Each shard waits its two-second interval between requests (a hot loop would be milliseconds apart). Requests
+        // around the completion call, including the one wake-up, are excluded from the spacing check.
         foreach (var shard in new[] { "a", "b" })
         {
             var times = feed.RequestTimes(shard);
-            var woken = beforeCompletion[shard];
-            foreach (var window in new[] { times.Take(woken).ToArray(), times.Skip(woken).ToArray() })
+            foreach (var window in new[] { times.Take(beforeCompletion[shard]).ToArray(), times.Skip(afterCompletion[shard] + 1).ToArray() })
                 Assert.All(window.Zip(window.Skip(1)), pair => Assert.True(pair.Second - pair.First >= TimeSpan.FromSeconds(1.5)));
         }
         Assert.Equal(EtlRunStatus.Running, (await FindRunAsync(host.Services, files.Scope, invocation.RunId))!.Status);
