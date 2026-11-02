@@ -225,7 +225,8 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 2. Asks `IRuntimeDomainRetryPolicy` what to do, passing the prior failure count from the poison store.
    This read runs before step 3. If the poison store throws, the exception surfaces from the drain with
    the item still claimed and not acknowledged, and no record is written; the item is re-driven once its
-   claim lapses.
+   claim lapses (on a queue without claims, by the next drain). The exception is an item a checkpoint commit
+   of the same dispatch already consumed: no row is left, so nothing is recorded or re-driven, as on `main`.
 3. **Ack-deletes the work item** before any poison handling. A handler fault is a decided outcome,
    not a crash, so the source item must leave the queue or a deterministically-poisoning handler would
    be redelivered forever. (A process crash never reaches this line, which is exactly the redrive
