@@ -164,11 +164,10 @@ A second run is cancelled and ends `Cancelled`.
   - Then, in one transaction, it:
     - clears the request's poll journal;
     - releases the request's, partition's and connector run's input reservation, fetch metadata and source-metadata reserve;
-    - sets the partition's next-eligible time to the store's time plus the interval;
-    - releases the lease.
+    - sets the partition's next-eligible time to the store's time plus the interval.
 
     It adds no page, request or batch row.
-  - The execution's subsequent release then returns `LeaseLost`, which is expected and treated as a clean exit.
+  - The position is unchanged, so the execution's normal release frees the lease.
 - **FR-005** The audit invariants accept the idle state.
   - In a continuous run, a partition with no owed batch, no attached page, a cleared journal and a next-eligible time is idle, and that time is valid.
   - In a finite run, the existing invariant is unchanged: the next-eligible time equals the waiting journal's time, or is null.
