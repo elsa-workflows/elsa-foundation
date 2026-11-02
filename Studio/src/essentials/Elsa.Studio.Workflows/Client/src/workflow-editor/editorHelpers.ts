@@ -656,7 +656,7 @@ function hashString(value: string) {
 }
 
 export function isRejectedTestRun(testRun: WorkflowTestRunView) {
-  return testRun.status.toLowerCase() === "rejected";
+  return ["rejected", "dispatchrejected"].includes(testRun.status.toLowerCase());
 }
 
 export function formatWorkflowVersionLoadError(error: string) {

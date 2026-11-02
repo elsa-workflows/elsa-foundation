@@ -418,7 +418,7 @@ describe("accepted test runs with incidents", () => {
     expect(onOpenRun).toHaveBeenCalledWith("run-legacy", "issues");
   });
 
-  it("keeps the Run ID link on the default timeline destination", () => {
+  it("keeps Open run on the default timeline destination", () => {
     const onOpenRun = vi.fn();
     const testRun: WorkflowTestRunView = {
       testRunId: "test-run-generic",
@@ -431,7 +431,7 @@ describe("accepted test runs with incidents", () => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={testRun} onOpenRun={onOpenRun} />));
 
     const runLink = [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find(button => button.textContent === "run-generic");
+      .find(button => button.textContent === "Open run");
     flushSync(() => runLink?.click());
 
     expect(onOpenRun).toHaveBeenCalledWith("run-generic");

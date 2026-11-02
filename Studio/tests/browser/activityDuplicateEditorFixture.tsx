@@ -51,7 +51,8 @@ function collectionFixtureCatalog(conditions = collectionSlotsFixture === "switc
   return catalog;
 }
 const staleValidationsFixture = new URLSearchParams(window.location.search).get("stale-validations");
-const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture || staleValidationsFixture);
+const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture || staleValidationsFixture
+  || new URLSearchParams(window.location.search).has("runtime-summary"));
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
 const writeLineCatalog: ActivityCatalogItem = {
