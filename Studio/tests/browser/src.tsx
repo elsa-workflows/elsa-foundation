@@ -28,9 +28,14 @@ import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
+import { setNotifications } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/notifications";
+import { createLocalNotificationStorage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/notificationStorage";
+import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
+import { NotificationCenter } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/NotificationCenter";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import {
   createEndpointContext,
+  createNotificationController,
   type StudioActivityDescriptor,
   type StudioAiContributionApi,
   type StudioEndpointContext,
@@ -930,6 +935,15 @@ function LazyBoundaryFixture() {
 
 function MoveDefinitionsFixture() {
   const [moved, setMoved] = useState(false);
+  // The host owns notifications at runtime; the fixture stands in for it with a localStorage-backed
+  // controller so results survive a page reload the way they do in the real shell.
+  const [notifications] = useState(() => {
+    const controller = createNotificationController({ storage: createLocalNotificationStorage() });
+    controller.setScope("fixture");
+    setNotifications(controller.api);
+    return controller;
+  });
+  const navigateFixture = useCallback((path: string) => window.history.pushState({}, "", path), []);
   const movedRef = useRef(false);
   const destinationRef = useRef<string | null | undefined>(undefined);
   const movedDefinitionIdRef = useRef<string | undefined>(undefined);
@@ -997,7 +1011,9 @@ function MoveDefinitionsFixture() {
 
   return <main className="wf-editor browser-fixture" data-moved={moved}>
     <h1>Workflow definitions</h1>
+    <NotificationCenter controller={notifications} navigate={navigateFixture} />
     <DirectWorkflowDefinitions context={context} ai={ai} />
+    <ToastHost controller={notifications} navigate={navigateFixture} />
   </main>;
 }
 
@@ -1758,6 +1774,8 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  // Toast, bell and sheet styles live in the shared primitives sheet; load it only where they render.
+  if (moveDefinitionsFixture) await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
   if (searchParams.get("mode") === "intrinsic-labels") {
     const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
     root.render(<IntrinsicLabelsFixture />);
