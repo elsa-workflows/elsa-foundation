@@ -237,9 +237,10 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
        (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
        `DeliverChildControl`, `Checkpoint`), a live claim not yet consumed by a commit, and a queue
        that can persist the delay;
-     - no effect of this dispatch is waiting in an active coalescing segment. A non-retaining checkpoint
-       the segment buffered is committed by its flush, just as a commit outside a segment consumes the
-       claimed item, so releasing the step would run it again;
+     - no non-retaining checkpoint of this dispatch went to an active coalescing segment. Outside a
+       segment such a commit consumes the claimed item. Inside one it consumes nothing: the segment
+       buffers it for its flush, or commits it at once at its activity cap or at a boundary. Either way
+       the effect is durable, so releasing the step would run it again;
      - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
        `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
      - the fault was not caused by a checkpoint rule;
@@ -258,7 +259,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 | --- | --- | --- |
 | `RetryNow` | `RetryScheduled` | re-enqueued immediately through the queue contract |
 | `RetryAfter`, step released | `RetryScheduled` | the released step runs again once `NextRetryAt` passes, when the sweep re-drives it; each later failure asks the policy again with a higher failure count, so a policy can bound the retries |
-| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, a step whose effect is already committed or buffered in a coalescing segment, checkpoint-rule faults, a release the queue refuses, and a delay past `DateTimeOffset.MaxValue` ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
+| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, a step whose effect a commit or a coalescing segment already took, checkpoint-rule faults, a release the queue refuses, and a delay past `DateTimeOffset.MaxValue` ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
 | a policy that throws | `Poisoned` | none; treated as no decision, with retry mode `PolicyFailed` and the exception type in the record's metadata |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 

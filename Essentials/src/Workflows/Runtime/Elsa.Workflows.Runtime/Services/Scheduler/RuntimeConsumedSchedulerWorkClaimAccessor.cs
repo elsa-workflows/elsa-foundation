@@ -14,17 +14,21 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// volatile read and interlocked count. <see cref="_pending"/> is read on that same renewal task through
 /// <see cref="IsPending"/> but needs no synchronization of its own only because it is never written while the loop is
 /// live: the drainer calls <see cref="Begin"/> before creating the renewal task and disposes the frame after the loop
-/// has ended. Anything that starts writing it mid-dispatch has to revisit that.
+/// has ended. Anything that starts writing it mid-dispatch has to revisit that. <see cref="_effectCoalesced"/> is
+/// written and read only by the dispatch itself, never by the renewal loop, so it needs none either.
 /// </remarks>
 public sealed class RuntimeConsumedSchedulerWorkClaimAccessor : IRuntimeConsumedSchedulerWorkClaimAccessor
 {
     private ConsumedSchedulerWorkItem? _pending;
     private volatile bool _consumed;
+    private bool _effectCoalesced;
     private int _consumeAttempts;
 
     public ConsumedSchedulerWorkItem? PendingConsume => _pending;
 
     public bool WasConsumedDurably => _consumed;
+
+    public bool WasEffectCoalesced => _effectCoalesced;
 
     public IDisposable Begin(ConsumedSchedulerWorkItem consume)
     {
@@ -39,6 +43,13 @@ public sealed class RuntimeConsumedSchedulerWorkClaimAccessor : IRuntimeConsumed
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
         if (IsPending(workItemId))
             _consumed = true;
+    }
+
+    public void MarkEffectCoalesced(string workItemId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        if (IsPending(workItemId))
+            _effectCoalesced = true;
     }
 
     public IDisposable BeginConsumeAttempt(string workItemId)
@@ -62,6 +73,7 @@ public sealed class RuntimeConsumedSchedulerWorkClaimAccessor : IRuntimeConsumed
     private void Reset()
     {
         _consumed = false;
+        _effectCoalesced = false;
         Volatile.Write(ref _consumeAttempts, 0);
     }
 

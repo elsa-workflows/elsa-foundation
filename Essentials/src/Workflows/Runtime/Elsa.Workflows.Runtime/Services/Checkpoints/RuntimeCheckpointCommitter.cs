@@ -159,6 +159,7 @@ public sealed class RuntimeCheckpointCommitter
         // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
         // session's overlay queue + AdvanceInnerQueueAsync stay authoritative on durable queue advance in that mode.
         var consumedWorkItems = ResolveConsumedWorkItems(commit);
+        var coalescedWorkItemId = ResolveCoalescedEffectWorkItemId(commit);
 
         var stateChanges = commit.StateChanges;
         if (postCommitOutbox.Count > 0)
@@ -206,6 +207,8 @@ public sealed class RuntimeCheckpointCommitter
             // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
             foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
                 _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+            if (coalescedWorkItemId is not null)
+                _consumedWorkClaimAccessor?.MarkEffectCoalesced(coalescedWorkItemId);
         }
 
         // The durable outbox item is now committed and authoritative. If a
@@ -299,6 +302,20 @@ public sealed class RuntimeCheckpointCommitter
 
         return [pending];
     }
+
+    // The coalesced counterpart of the consume above. While a session owns the execution a non-retaining checkpoint
+    // consumes nothing itself: the session buffers it, or folds it into an immediate write at its activity cap or at a
+    // boundary, and advances the queue through its overlay. The work's effect is durable all the same, or becomes so at
+    // the flush, so the drainer must not release the item to run again (#3275). Resolved before the store call, which can
+    // end the session. An attempt claim, like a retaining checkpoint, comes before the work it guards and settles nothing.
+    private string? ResolveCoalescedEffectWorkItemId(RuntimeCheckpointCommit commit) =>
+        !commit.RetainSchedulerWork &&
+        !StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed) &&
+        _consumedWorkClaimAccessor?.PendingConsume is { } pending &&
+        StringComparer.Ordinal.Equals(pending.WorkflowExecutionId, commit.WorkflowExecutionId) &&
+        _coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId)
+            ? pending.WorkItemId
+            : null;
 
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {

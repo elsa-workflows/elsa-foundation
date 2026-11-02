@@ -1212,9 +1212,11 @@ Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAcces
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.BeginConsumeAttempt(string! workItemId) -> System.IDisposable!
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.IsConsumeInFlightOrDurable(string! workItemId) -> bool
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.MarkConsumedDurably(string! workItemId) -> void
+Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.MarkEffectCoalesced(string! workItemId) -> void
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.PendingConsume.get -> Elsa.Workflows.Runtime.Core.Models.ConsumedSchedulerWorkItem?
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.RuntimeConsumedSchedulerWorkClaimAccessor() -> void
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.WasConsumedDurably.get -> bool
+Elsa.Workflows.Runtime.Services.Scheduler.RuntimeConsumedSchedulerWorkClaimAccessor.WasEffectCoalesced.get -> bool
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeGeneratorEmissionScheduler
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeGeneratorEmissionScheduler.RuntimeGeneratorEmissionScheduler(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue! schedulerWorkQueue) -> void
 Elsa.Workflows.Runtime.Services.Scheduler.RuntimeGeneratorEmissionScheduler.RuntimeGeneratorEmissionScheduler(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue! schedulerWorkQueue, System.TimeProvider! timeProvider) -> void

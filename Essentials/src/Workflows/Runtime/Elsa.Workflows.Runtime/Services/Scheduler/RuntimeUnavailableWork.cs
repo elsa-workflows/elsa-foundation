@@ -15,11 +15,4 @@ internal static class RuntimeUnavailableWork
 internal interface IRuntimeSchedulerWorkDeferralCapability
 {
     bool CanDefer(RuntimeSchedulerWorkClaim claim);
-
-    /// <summary>
-    /// Whether a coalescing segment buffered a non-retaining checkpoint while this claim's item was in flight. That
-    /// checkpoint is the item's effect, which the segment's flush makes durable; outside a session it would have
-    /// consumed the item.
-    /// </summary>
-    bool HoldsBufferedEffect(RuntimeSchedulerWorkClaim claim);
 }

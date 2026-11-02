@@ -490,8 +490,10 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.BeginConsumeAttempt(string! workItemId) -> System.IDisposable!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.IsConsumeInFlightOrDurable(string! workItemId) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.MarkConsumedDurably(string! workItemId) -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.MarkEffectCoalesced(string! workItemId) -> void
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.PendingConsume.get -> Elsa.Workflows.Runtime.Core.Models.ConsumedSchedulerWorkItem?
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.WasConsumedDurably.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeConsumedSchedulerWorkClaimAccessor.WasEffectCoalesced.get -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDelayedScheduleCapability
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDiagnosticsSettingsAccessor
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDiagnosticsSettingsAccessor.Current.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDiagnosticsSettingsView!

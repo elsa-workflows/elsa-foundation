@@ -396,8 +396,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // RetryAfter (#3275) is the exception: where the claim can carry a delay and a resumption sweep is
             // composed to re-drive it, the item is released with the policy's delay instead, exactly like temporarily
             // unavailable work. It stays the only copy, becomes claimable when due, and the sweep's backlog discovery
-            // re-drives it. An item whose effect an active coalescing segment buffered is not released: the segment's
-            // flush commits that effect, as the atomic consume would have outside the session. A release the queue
+            // re-drives it. An item whose effect a coalescing session took is not released: the session buffered that
+            // non-retaining checkpoint or already committed it, where outside a session the commit would have consumed
+            // the item, so it is acknowledged through the overlay and poisoned like one. A release the queue
             // refuses (a coalescing segment that already consumed the item, or an inactive one whose durable head
             // moved, say) falls back to the acknowledgement; everything not released is poisoned. So is a delay that
             // ends past the last representable time: no queue can persist it, and releasing it anyway would park the
@@ -407,7 +408,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && HasResumptionRedriver &&
                 delay <= DateTimeOffset.MaxValue - retry.Now &&
                 !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal) &&
-                !HoldsBufferedEffect(renewal))
+                _consumedWorkClaimAccessor?.WasEffectCoalesced != true)
             {
                 var visibleAt = retry.Now + delay;
                 if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
@@ -465,12 +466,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         RuntimeDomainRetryDecision? Decision,
         string? PolicyFailure);
 
-    // The coalesced counterpart of WasConsumedDurably for a RetryAfter: an active segment buffered a non-retaining
-    // checkpoint of this dispatch, so the item's effect becomes durable at the flush and the item must not run again.
-    private bool HoldsBufferedEffect(ClaimRenewalState? renewal) =>
-        renewal is not null && _schedulerWorkQueue is IRuntimeSchedulerWorkDeferralCapability capability &&
-        capability.HoldsBufferedEffect(renewal.Current);
-
     // One delayed-release rule for temporarily unavailable work and for an honored RetryAfter.
     private bool CanReleaseWithDelay(RuntimeSchedulerWorkItem workItem, ClaimRenewalState? renewal) =>
         RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind) &&
@@ -485,7 +480,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // caller released the item (releasedUntil): the queue then holds its single copy until NextRetryAt, and the
     // resumption sweep re-drives it once claimable. A RetryAfter that was not released (no resumption sweep composed, a
     // kind without delayed release, a legacy provider, an item a commit already consumed or whose effect a coalescing
-    // segment buffered, a refused release, a delay past the last representable time, or a checkpoint-rule fault) is
+    // session took, a refused release, a delay past the last representable time, or a checkpoint-rule fault) is
     // Poisoned, so it surfaces as a blocking incident instead of waiting on a re-drive nothing performs (#3275). A
     // policy that throws counts as no decision. This lives entirely in the fault path — it does not change
     // claim/pause/dispatch ordering.
