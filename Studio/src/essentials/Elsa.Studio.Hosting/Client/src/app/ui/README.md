@@ -95,3 +95,10 @@ confirmation and `false` for cancel or dismissal. Only confirmation calls the
 mutation. Keep the action disabled while the dialog or mutation is pending.
 Modules must not import or mount `DialogHost`: the normal host mounts it once and
 owns the modal focus lifecycle.
+
+Use the injected `api.notifications` to publish action results. `notify({ level, title, message?,
+link?, action? })` shows a toast and records an entry in the Notification Center; `link.path` is a
+Studio route and `action` (for example Restore) is not persisted across a reload. It returns a
+handle with `update` and `dismiss`. `track(work, { progress, success, error })` wraps a long-running
+promise in one entry that updates in place. Load failures, stale data, validation errors and
+`Suspense` fallbacks stay inline; see the classification table in the module UI guide.

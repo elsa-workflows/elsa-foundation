@@ -11,7 +11,7 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
   context: StudioEndpointContext;
   definitionIds: string[];
   onClose(): void;
-  onMoved(): Promise<void> | void;
+  onMoved(folderId: string | null): Promise<void> | void;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -50,7 +50,7 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
     setMoveError(null);
     try {
       await moveWorkflowDefinitions(context, { definitionIds, folderId: destinationId });
-      await onMoved();
+      await onMoved(destinationId);
       onClose();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The server couldn't complete the move.";

@@ -1,6 +1,7 @@
 import { lazy, type ReactNode } from "react";
 import { authSessionEndedEvent, evaluateBackendRequirements, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
+import { setNotifications } from "./workflow-editor/notifications";
 import { createObjectExpressionEditorContribution } from "./objectExpressionEditor";
 import "./styles.css";
 import "./workspaceAppearance.css";
@@ -53,6 +54,7 @@ export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
+  setNotifications(api.notifications);
   const weaver = registerWorkflowAgent(api.agent);
   const operationAvailability = () => ({
     publishing: evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.publishing",contractVersion:"1",relations:["publication-snapshot-preflight","workflow-publish"]}]),
