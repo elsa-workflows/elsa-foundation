@@ -108,6 +108,8 @@ def main() -> int:
     parser.add_argument("--workbench-assembly", type=Path, default=DEFAULT_ASSEMBLY)
     parser.add_argument("--output", type=Path, required=True, help="A new directory for the derived summary and logs.")
     parser.add_argument("--keep-host", action="store_true", help="Leave the owned Workbench running for a browser observation.")
+    parser.add_argument("--port", type=int, default=0, help="A free loopback port; 0 lets the host choose. Never pass one you do not own.")
+    parser.add_argument("--studio-origin", help="An owned Studio origin allowed to call and sign in to this Workbench.")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -139,12 +141,18 @@ def main() -> int:
         "EtlRuntimeEntityFrameworkCore": {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-runtime.db;Pooling=False"},
         "EtlRuntimeApi": {"CursorSigningKey": "owned-etl-jsonl-runtime-cursor-signing-key"},
         "EtlWorkflowsDesign": {}, "EtlWorkflowsRuntime": {}})
+    if args.studio_origin:
+        identity = shells["CShells"]["Shells"]["default"]["Features"]["FoundationIdentityAspNetCoreIdentity"]
+        identity["AllowedReturnUrlOrigins"] = list(identity.get("AllowedReturnUrlOrigins") or []) + [args.studio_origin]
     (root / "shells.json").write_text(json.dumps(shells, indent=2))
 
     log_path = output / "workbench.log"
     log = log_path.open("w")
-    host = subprocess.Popen(["dotnet", str(assembly), "--contentRoot", str(root), "--urls", "http://127.0.0.1:0"],
-                            cwd=root, env={**os.environ, "ASPNETCORE_ENVIRONMENT": "Development"}, stdout=log, stderr=subprocess.STDOUT)
+    environment = {**os.environ, "ASPNETCORE_ENVIRONMENT": "Development"}
+    if args.studio_origin:
+        environment["Cors__AllowedOrigins__5"] = args.studio_origin
+    host = subprocess.Popen(["dotnet", str(assembly), "--contentRoot", str(root), "--urls", f"http://127.0.0.1:{args.port}"],
+                            cwd=root, env=environment, stdout=log, stderr=subprocess.STDOUT)
     summary = {"schemaVersion": 1, "spec": "1190-etl-jsonl-input", "sourceRevision": source, "workingTreeDirty": dirty,
                "workbenchAssemblySha256": sha256(assembly.read_bytes()), "hostProcessId": host.pid, "cases": {}}
     try:

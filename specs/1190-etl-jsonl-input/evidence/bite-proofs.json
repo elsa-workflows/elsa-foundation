@@ -1,0 +1,50 @@
+[
+  {
+    "mutation": "indexer-blank-line-skip",
+    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlJsonlLineIndexer.cs",
+    "filter": "FullyQualifiedName~EtlJsonlInputTests.Line_indexer",
+    "mutated": "Failed!  - Failed:     3, Passed:     8",
+    "failedTests": [],
+    "restored": "Passed!  - Failed:     0, Passed:    11"
+  },
+  {
+    "mutation": "line-error-routing",
+    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+    "filter": "FullyQualifiedName~EtlJsonlInputTests.Batch_routes",
+    "mutated": "Failed!  - Failed:     1, Passed:     0",
+    "failedTests": [],
+    "restored": "Passed!  - Failed:     0, Passed:     1"
+  },
+  {
+    "mutation": "zero-record-settlement",
+    "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeStore.cs",
+    "filter": "FullyQualifiedName~Empty_file_preparation_settles|FullyQualifiedName~Zero_record_file_runs",
+    "mutated": "Failed!  - Failed:     5, Passed:     0",
+    "failedTests": [],
+    "restored": "Passed!  - Failed:     0, Passed:     5"
+  },
+  {
+    "mutation": "r10-span-check",
+    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+    "filter": "FullyQualifiedName~Batch_building_refuses_a_hash_valid_index",
+    "mutated": "Failed!  - Failed:     2, Passed:     3",
+    "failedTests": [],
+    "restored": "Passed!  - Failed:     0, Passed:     5"
+  },
+  {
+    "mutation": "r10-gap-check",
+    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+    "filter": "FullyQualifiedName~Batch_building_refuses_a_hash_valid_index",
+    "mutated": "Failed!  - Failed:     1, Passed:     4",
+    "failedTests": [],
+    "restored": "Passed!  - Failed:     0, Passed:     5"
+  },
+  {
+    "mutation": "r10-line-start-check",
+    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+    "filter": "FullyQualifiedName~Batch_building_refuses_a_hash_valid_index",
+    "mutated": "Failed!  - Failed:     1, Passed:     4",
+    "failedTests": [],
+    "restored": "Passed!  - Failed:     0, Passed:     5"
+  }
+]
