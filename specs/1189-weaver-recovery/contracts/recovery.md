@@ -69,6 +69,7 @@ The stream route is unchanged. Opening it starts the latest Pending prompt or th
 | Approved, undispatched, deadline not passed, every story 2.3 check holds, explicit execute | Executes once | At most one |
 | Approved, undispatched, any check fails | Expired, or a zero-effect Failed refusal | Zero |
 | Executing at restart | Uncertain | Possible earlier effect; never replayed |
+| The store cannot record an outcome after dispatch | That operation alone is brought in line with its record and, while the record says Executing, settled Uncertain (`settledBy=recovery`); a failed settlement is retried on the operation's next access. The session, its running turn and other operations in flight are untouched | Possible earlier effect; never replayed |
 | A late truthful receipt after Uncertain or an owner statement | Reconciled; the receipt wins and the statement is kept | No re-execution |
 | The disclosure limit is reached (64 distinct snapshots or 8 MiB) | `agent.context.disclosure_budget_exceeded`, with `limit: snapshots \| bytes`; recorded on the session until a later turn completes | Zero |
 | One disclosure is larger than any session can record | `agent.context.disclosure_budget_exceeded`, with `limit: snapshot-too-large`; not recorded on the session, no continuation | Zero |

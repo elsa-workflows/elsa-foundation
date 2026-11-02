@@ -195,7 +195,8 @@ columns (`FindOwnerAsync`, `FindSessionIdAsync`) before anything decodes, hydrat
 anything acts on the session: a message that was streaming becomes Cancelled with `StatusReason`
 `interrupted`; a pending prompt keeps its Prompt claim until the owner starts or withdraws it; an approved or
 pending proposal past its deadline is Expired once with zero effect and `settledBy=recovery`; Executing, or a
-client request past its deadline, becomes Uncertain, never Expired; an approved proposal executes only on an
+client request past its deadline, becomes Uncertain, never Expired (an outcome the store could not record after
+dispatch settles that one operation the same way, without touching the session or other work in flight); an approved proposal executes only on an
 explicit execute after the story 2.3 rechecks (a stale policy revision answers 409
 `agent.proposal.policy_stale`); a paused turn with a receipt continues once. Recorded state that is
 unreadable, corrupt or fails verification answers 409 `agent.session.unavailable_state` with its reason and
