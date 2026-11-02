@@ -70,14 +70,15 @@ services.AddIdentityGenerator(IdentityGeneratorKind.Snowflake, options =>
 Workflow execution, command, envelope and activity execution ids come from a separate seam,
 `IRuntimeExecutionIdGenerator`, not from `IIdentityGenerator`. Since #3601 its default is a 32-character UUIDv7 hex
 id. Earlier preview builds used 11-character Base62 ids, which `ShortRuntimeExecutionIdGenerator` still produces
-when selected explicitly. Ownership lease, heartbeat and folded-checkpoint ids are always UUIDv7, whichever generator
+when selected explicitly. Ownership lease, heartbeat, folded-checkpoint and commit ids are always UUIDv7, whichever generator
 is selected. Already persisted ids are kept as they are.
 
 The two formats do not share an ordinal order: a UUIDv7 id and an older Base62 id do not sort by creation time
 against each other. The runtime uses id order only as a stable paging key or a tie-breaker, never as creation order,
-so correctness is unaffected. A runtime listing that pages by id, such as the workflow execution list, shows rows
-written before and after the upgrade in id order rather than creation order. If your own queries or tools sort
-runtime rows by id to mean "newest", sort by their timestamps instead.
+so correctness is unaffected. The workflow execution list sorts by timestamp and uses the id only to break ties. A
+page that walks rows by id, such as one execution's activity executions, returns rows from before and after the
+upgrade in id order rather than creation order. If your own queries or tools sort runtime rows by id to mean
+"newest", sort by their timestamps instead.
 
 ## Adding your own
 
