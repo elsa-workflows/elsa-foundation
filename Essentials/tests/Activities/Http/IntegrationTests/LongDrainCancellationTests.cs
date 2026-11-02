@@ -102,13 +102,19 @@ public sealed class LongDrainCancellationTests
     }
 
     [Theory]
-    [InlineData(PersistenceMode.Durable, false)]
-    [InlineData(PersistenceMode.Balanced, false)]
-    [InlineData(PersistenceMode.Ephemeral, false)]
-    [InlineData(PersistenceMode.Durable, true)]
-    [InlineData(PersistenceMode.Balanced, true)]
-    [InlineData(PersistenceMode.Ephemeral, true)]
-    public async Task A_drain_that_yielded_to_a_withdrawn_cancel_continues_without_a_sweep(PersistenceMode mode, bool replaySafe)
+    [InlineData(PersistenceMode.Durable, false, false)]
+    [InlineData(PersistenceMode.Balanced, false, false)]
+    [InlineData(PersistenceMode.Ephemeral, false, false)]
+    [InlineData(PersistenceMode.Durable, true, false)]
+    [InlineData(PersistenceMode.Balanced, true, false)]
+    [InlineData(PersistenceMode.Ephemeral, true, false)]
+    [InlineData(PersistenceMode.Durable, false, true)]
+    [InlineData(PersistenceMode.Balanced, false, true)]
+    [InlineData(PersistenceMode.Ephemeral, false, true)]
+    [InlineData(PersistenceMode.Durable, true, true)]
+    [InlineData(PersistenceMode.Balanced, true, true)]
+    [InlineData(PersistenceMode.Ephemeral, true, true)]
+    public async Task A_drain_that_yielded_to_a_cancel_that_did_not_run_continues_without_a_sweep(PersistenceMode mode, bool replaySafe, bool duplicate)
     {
         var probe = new LoopProbe { Continued = new(TaskCreationOptions.RunContinuationsAsynchronously) };
         var withdraw = new WithdrawCancelOnYield();
@@ -124,12 +130,14 @@ public sealed class LongDrainCancellationTests
             childSlots: [new ExecutableChildSlot(WhileActivity.BodySlotName, [body])],
             structure: new ExecutableActivityStructure(WhileActivity.StructureKind, WhileActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { body = "body" })));
-        var executable = ReferenceWorkflows.Executable("withdrawn-cancel", loop);
+        var executable = ReferenceWorkflows.Executable("unconsumed-yield", loop);
         await fixture.PublishAsync(executable);
-        const string executionId = "withdrawn-cancel";
+        const string executionId = "unconsumed-yield";
+        const string startKey = "unconsumed-yield-start";
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var start = fixture.Services.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(executable.Identity.ArtifactId, "test", workflowExecutionId: executionId), cancellationToken: timeout.Token).AsTask();
+            new WorkflowExecutionStartDispatchRequest(executable.Identity.ArtifactId, "test", workflowExecutionId: executionId,
+                idempotencyKey: duplicate ? startKey : null), cancellationToken: timeout.Token).AsTask();
         try
         {
             await probe.Entered.Task.WaitAsync(timeout.Token);
@@ -137,12 +145,23 @@ public sealed class LongDrainCancellationTests
                 new(executionId, WorkflowExecutionActorActivationReason.SchedulerWork, DateTimeOffset.UtcNow, "test",
                     WorkflowExecutionActorCapabilities.InProcessMailbox), timeout.Token);
 
-            // The drain yields to this Cancel, and the observer withdraws it before it reaches the mailbox.
-            using var waiter = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
-            withdraw.Waiter = waiter;
-            var withdrawn = actor.EnqueueAsync(NewCancel(executionId, "withdrawn"), waiter.Token).AsTask();
-            probe.Release.TrySetResult();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => withdrawn);
+            if (duplicate)
+            {
+                // The drain yields to this Cancel. It reuses the start's idempotency key, which the start's turn records
+                // as it ends, so the Cancel answers Duplicate without running.
+                var duplicated = actor.EnqueueAsync(NewCancel(executionId, startKey), timeout.Token).AsTask();
+                probe.Release.TrySetResult();
+                Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, (await duplicated.WaitAsync(timeout.Token)).Status);
+            }
+            else
+            {
+                // The drain yields to this Cancel, and the observer withdraws it before it reaches the mailbox.
+                using var waiter = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+                withdraw.Waiter = waiter;
+                var withdrawn = actor.EnqueueAsync(NewCancel(executionId, "withdrawn"), waiter.Token).AsTask();
+                probe.Release.TrySetResult();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => withdrawn);
+            }
             await start.WaitAsync(timeout.Token);
 
             // No sweep runs: the loop body is entered again only because the yielded drain was re-driven.

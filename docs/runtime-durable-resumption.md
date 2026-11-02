@@ -245,10 +245,13 @@ cooperate with its own cancellation policy before handoff; the signal does not i
 cancelled caller removes its waiting signal. The yielded segment flushes its next steps without delivering them, so the
 Cancel takes effect at that checkpoint. If that Cancel then does not run (its caller cancels before it acquires the
 mailbox, or its turn answers `Duplicate`), the mailbox re-drives the execution at once through its normal serialized
-dispatch path (#3647). That re-drive first delivers the flushed continuations into the queue, then drains them; it skips that delivery while another Cancel already waits, so no step is queued ahead of it. Only a
-passivated mailbox, which answers `Deferred`, leaves the work to the sweep. An idle drain adds no database read for this
-check. Distributed placement uses the configured local mailbox on the owning
-node; forwarding still has to deliver Cancel to that mailbox. The yield signal is internal to the default in-process
+dispatch path (#3647). That re-drive first delivers the flushed continuations into the queue, then drains them; it
+skips that delivery while another Cancel already waits, so no step is queued ahead of it. The sweep still picks up the
+work when the mailbox is passivated (it answers `Deferred`), when the provider has been disposed, when the re-drive
+fails or answers anything but `Accepted` (both are logged), and when the yielded drain throws after it yielded, for
+example from a drain observer or `CheckpointRuleViolationWorkflowFaulter`, so its turn never reports `Yielded`. An idle drain adds no
+database read for this check. Distributed placement uses the configured local mailbox on the owning node; forwarding
+still has to deliver Cancel to that mailbox. The yield signal is internal to the default in-process
 provider: a custom actor provider that wraps the registered `InProcessWorkflowExecutionActorProvider` keeps the handoff,
 and an independent provider does not get it.
 
