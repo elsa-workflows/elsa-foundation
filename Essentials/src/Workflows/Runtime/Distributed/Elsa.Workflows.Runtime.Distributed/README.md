@@ -91,9 +91,9 @@ execution until fencing stops the old drain.
 An execution with a drain this pump left running gets no inline wait:
 - A Cancel for it is dispatched without waiting, reaches the drain's mailbox, and the drain yields to it. A Cancel
   forwarded from another node waits in the transport until this node's next sweep that lists the execution delivers
-  it, usually within `SweepInterval` (default 10 seconds). A sweep lists a scope's pending work once, before its waits
-  for local work there (at most a third of the lease in all), so a Cancel sent during those waits goes to the sweep
-  after. Failure backoff (up to `MaxBackoffInterval`) or a hand-off or passivation still pending for the execution
+  it, usually within `SweepInterval` (default 10 seconds). A sweep lists a scope's pending work once, after renewing and
+  before dispatching there; a Cancel sent while that scope's dispatches are waited for (at most a third of the lease in
+  all) goes to the sweep after. Failure backoff (up to `MaxBackoffInterval`) or a hand-off or passivation still pending for the execution
   (#3678) can delay it further.
 - Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
   the pump releases the leases of exactly those commands and the next sweep dispatches them. A command dispatched
