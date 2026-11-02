@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
 import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
+import { notificationController } from "../app/notifications";
 import {
   createContributionRegistry,
   createEndpointContext,
@@ -36,6 +37,20 @@ describe("studio registry", () => {
 
     expect(api.panels.slot.id).toBe(studioSlotIds.panels);
     expect(api.panels.list().map(panel => panel.id)).toEqual(["first", "second"]);
+  });
+
+  it("registry exposes the shared notification api", () => {
+    const options = {
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    };
+
+    const first = createStudioRegistry(options);
+    const second = createStudioRegistry(options);
+
+    expect(first.notifications).toBe(notificationController.api);
+    expect(second.notifications).toBe(first.notifications);
   });
 
   it("uses stable fallback ordering instead of module load order", () => {

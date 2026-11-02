@@ -62,6 +62,10 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { NotificationCenter } from "./ui/feedback/NotificationCenter";
+import { ToastHost } from "./ui/feedback/ToastHost";
+import { notificationController, notificationStorage } from "./notifications";
+import { useNotificationScope } from "./useNotificationScope";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
 import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
@@ -185,6 +189,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  useNotificationScope(backendSession, notificationController, notificationStorage);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<(StudioAgentPromptRequest & { id: string }) | null>(null);
   const incomingPromptRef = useRef<(StudioAgentPromptRequest & { id: string }) | null>(null);
@@ -468,9 +473,11 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
         assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
+        notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
       >
+        <ToastHost navigate={navigateTo} />
         <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
         {settingsSurface ? (
           <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
@@ -520,6 +527,33 @@ function routeMatchesPath(routePath: string, path: string) {
     segment.startsWith(":") || segment === pathSegments[index]);
 }
 
+/**
+ * Publishes the top bar's bottom edge as `--studio-shell-header-bottom` on the document root, so host
+ * overlays anchored below the header (toasts, the Notification Center) follow theme layouts and the
+ * stacked narrow-viewport layout instead of assuming a fixed header height. The shell itself never
+ * scrolls, so the edge only moves when the header or the main frame around it resizes.
+ */
+function useShellHeaderBottom(headerRef: React.RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty("--studio-shell-header-bottom", `${Math.max(0, Math.round(header.getBoundingClientRect().bottom))}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(header);
+    if (header.parentElement) observer?.observe(header.parentElement);
+    window.addEventListener("resize", publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty("--studio-shell-header-bottom");
+    };
+  }, [headerRef]);
+}
+
 export function ShellFrame({
   navigation,
   panels,
@@ -527,6 +561,7 @@ export function ShellFrame({
   title,
   backendBaseUrl,
   assistantAction,
+  notificationAction,
   themeAction,
   accountAction,
   backendAction,
@@ -540,6 +575,7 @@ export function ShellFrame({
   title: string;
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
+  notificationAction?: React.ReactNode;
   themeAction?: React.ReactNode;
   accountAction?: React.ReactNode;
   backendAction?: React.ReactNode;
@@ -561,6 +597,8 @@ export function ShellFrame({
   const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
   const moreToolsSectionRef = useRef<HTMLElement>(null);
   const moreToolsButtonRef = useRef<HTMLButtonElement>(null);
+  const topbarRef = useRef<HTMLElement>(null);
+  useShellHeaderBottom(topbarRef);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
@@ -845,12 +883,13 @@ export function ShellFrame({
       </aside>
 
       <div className="main-frame">
-        <header className="topbar">
+        <header ref={topbarRef} className="topbar">
           <div>
             <span className="breadcrumb">Studio / {title}</span>
             <h1>{title}</h1>
           </div>
           <div className="topbar-actions">
+            {notificationAction}
             {assistantAction}
             {branding.showHelpLink ? <a href={branding.helpUrl ?? "https://github.com/elsa-workflows/elsa-foundation"} aria-label={branding.helpUrl ? "Help" : "GitHub"}>
               {branding.helpUrl ? <CircleHelp size={18} /> : <Github size={18} />}

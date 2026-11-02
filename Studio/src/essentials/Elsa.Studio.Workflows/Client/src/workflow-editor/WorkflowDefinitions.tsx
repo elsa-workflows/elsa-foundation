@@ -1,12 +1,14 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
-import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AlertCircle, Package, Plus, Search } from "lucide-react";
+import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { getDialogs } from "./dialogs";
+import { getNotifications } from "./notifications";
+import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpers";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
@@ -115,7 +117,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const { folderSelection, listState, search } = browseLocation;
   const [requestState, setRequestState] = useState<"loading" | "ready" | "failed">("loading");
   const [requestError, setRequestError] = useState<{ identity: BrowseIdentity; message: string } | null>(null);
-  const [status, setStatus] = useState("");
   const [lastSuccess, setLastSuccess] = useState<BrowseSnapshot | null>(null);
   const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<Set<string>>(() => new Set());
   const [selectionScopeRevision, setSelectionScopeRevision] = useState(scopeRevision);
@@ -351,7 +352,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     if (browseScopeBlocked) return;
     setRequestError(null);
     setCreateError("");
-    setStatus("");
     setCreateDraft({ name: "", description: "", rootActivityVersionId: null });
     void loadCatalog();
   }, [browseScopeBlocked, loadCatalog]);
@@ -368,7 +368,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     createInFlightRef.current = true;
     setCreating(true);
     setCreateError("");
-    setStatus("");
     try {
       const folderId = folderCapability === "available" ? selectedFolderId(folderSelection) : null;
       const { getCreateInitialDocument } = await import("./editorHelpers");
@@ -415,7 +414,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   const openMoveDialog = () => {
     setRequestError(null);
-    setStatus("");
     setMoveDialogOpen(true);
   };
 
@@ -427,11 +425,15 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   }, [focusRefreshAfterMove, moveDialogOpen]);
 
   const closeMoveDialog = () => { if (isCurrentGeneration()) setMoveDialogOpen(false); };
-  const movedDefinitions = async () => {
+  const movedDefinitions = async (folderId: string | null) => {
     if (!isCurrentGeneration()) return;
     rebase(true);
     const count = selectedDefinitionIds.size;
-    setStatus(`Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`);
+    getNotifications().notify({
+      level: "success",
+      title: `Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`,
+      link: { label: "Open folder", path: folderId ? `/workflows/definitions?folderId=${encodeURIComponent(folderId)}` : "/workflows/definitions?unfiled=true" }
+    });
     setFocusRefreshAfterMove(true);
   };
 
@@ -476,26 +478,30 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     if (renderGeneration !== workGenerationRef.current) return;
     navigateBrowseLocation(next, "push", true);
   }, [navigateBrowseLocation, renderGeneration]);
-  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); setStatus("Workflow organization updated"); } };
+  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); getNotifications().notify({ level: "success", title: "Workflow organization updated" }); } };
   const closeOrganization = () => {
     if (!isCurrentGeneration()) return;
     setOrganizationTarget(null); setBulkTagTargets(null);
     requestAnimationFrame(() => { if (isCurrentGeneration()) refreshButtonRef.current?.focus(); });
   };
   const changeFavorite = async (definition: WorkflowDefinitionSummary) => {
-    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); if (!isCurrentGeneration()) return; setStatus(definition.favorite ? "Removed from favorites" : "Added to favorites"); rebase(true); }
-    catch (caught) { if (isCurrentGeneration()) setStatus(caught instanceof Error ? caught.message : "Couldn't change this favorite."); }
+    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); if (!isCurrentGeneration()) return; getNotifications().notify({ level: "success", title: definition.favorite ? "Removed from favorites" : "Added to favorites" }); rebase(true); }
+    catch (caught) { if (isCurrentGeneration()) getNotifications().notify({ level: "error", title: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
     if (!(await getDialogs().confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`, confirmLabel: "Delete", tone: "danger" })) || !isCurrentGeneration()) return;
-    setStatus("");
     setRequestError(null);
     try {
       await deleteDefinition(context, definition.id);
       if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
-      setStatus(`Deleted ${definition.name}`);
+      getNotifications().notify({
+        level: "success",
+        title: `Deleted ${definition.name}`,
+        action: { label: "Restore", run: () => restoreFromNotification(definition) },
+        link: { label: "View deleted", path: "/workflows/definitions?state=deleted" }
+      });
       await refreshAfterMutation();
     } catch (e) {
       if (!isCurrentGeneration()) return;
@@ -503,14 +509,30 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     }
   };
 
+  const restoredNotification = (definition: WorkflowDefinitionDetails["definition"]): StudioNotificationInput => {
+    const definitionUrl = updateWorkflowDefinitionIdInUrl(new URL("/workflows/definitions", window.location.origin), definition.id);
+    return { level: "success", title: `Restored ${definition.name}`, link: { label: "Open", path: `${definitionUrl.pathname}${definitionUrl.search}` } };
+  };
+
+  // A Restore from the toast or Notification Center is a fresh user intent, possibly long after this
+  // page moved on: it always reports its own outcome (a rejection reaches the host as "Restore
+  // failed") and only refreshes the list while this page generation is still current.
+  const restoreFromNotification = async (definition: WorkflowDefinitionDetails["definition"]) => {
+    await restoreDefinition(context, definition.id);
+    getNotifications().notify(restoredNotification(definition));
+    if (isCurrentGeneration()) {
+      toggleDefinitionSelection(definition.id, false);
+      retry();
+    }
+  };
+
   const restore = async (definition: WorkflowDefinitionDetails["definition"]) => {
-    setStatus("");
     setRequestError(null);
     try {
       await restoreDefinition(context, definition.id);
       if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
-      setStatus(`Restored ${definition.name}`);
+      getNotifications().notify(restoredNotification(definition));
       await refreshAfterMutation();
     } catch (e) {
       if (!isCurrentGeneration()) return;
@@ -520,13 +542,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   const permanentDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
     if (!(await getDialogs().confirm({ message: `Permanently delete workflow definition "${definition.name}"? This removes its drafts, versions, layouts, and validations and cannot be undone.`, confirmLabel: "Delete permanently", tone: "danger" })) || !isCurrentGeneration()) return;
-    setStatus("");
     setRequestError(null);
     try {
       await deleteDefinitionPermanently(context, definition.id);
       if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
-      setStatus(`Permanently deleted ${definition.name}`);
+      getNotifications().notify({ level: "success", title: `Permanently deleted ${definition.name}` });
       await refreshAfterMutation();
     } catch (e) {
       if (!isCurrentGeneration()) return;
@@ -558,7 +579,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   useLayoutEffect(() => {
     workGenerationRef.current += 1;
-    setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false); setStatus("");
+    setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false);
     createInFlightRef.current = false; setCreating(false);
     setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
     setLastSuccess(null); setRequestError(null);
@@ -639,7 +660,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           />
         ) : null}
         {displayState !== "failed" && currentError ? <div className="wf-alert"><AlertCircle size={16} /> {currentError}</div> : null}
-        {status ? <div className="wf-status-line" role="status"><Check size={14} /> {status}</div> : null}
         {selectedCount > 0 && isCurrentData ? (
           <div className="wf-selection-bar" aria-live="polite">
             <span>{selectedCount} selected</span>

@@ -2,10 +2,12 @@ import type { AuthSession } from "../auth/types";
 export * from "./backends";
 export * from "./backendConnection";
 export * from "./moduleHost";
+export * from "./notifications";
 import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
 import type { ComponentType } from "react";
 import type { StudioActivityIconComponent } from "./activityIcons";
+import type { StudioNotificationApi } from "./notifications";
 
 export * from "../auth";
 export * from "./themeLayout";
@@ -1867,6 +1869,8 @@ export interface ElsaStudioModuleApi {
   };
   readonly ai: StudioAiContributionApi;
   readonly dialogs: StudioDialogApi;
+  /** Host notification service. Optional for hosts built against older SDKs. */
+  readonly notifications?: StudioNotificationApi;
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;
 }
 
