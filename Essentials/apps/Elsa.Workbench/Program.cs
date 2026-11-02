@@ -405,6 +405,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Agent.Specialists.Api.SpecialistsApiFeature).Assembly,
             typeof(Elsa.Agent.Specialists.Anthropic.AnthropicSpecialistsFeature).Assembly,
             typeof(Elsa.Agent.Specialists.AzureOpenAI.AzureOpenAISpecialistsFeature).Assembly,
+            // The specialist runtime and its durable turn journal.
+            typeof(Elsa.Agent.Specialists.SpecialistsRuntimeFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.SpecialistsEntityFrameworkCoreFeature).Assembly,
             // Opt-in finite ETL authoring, native execution and independent runtime inspection.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,
