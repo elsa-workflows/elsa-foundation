@@ -52,18 +52,40 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test("saves the live workflow as a template without creating a workflow publication", async ({ page }) => {
-  await page.goto("/?mode=workflow-templates&source-workflow=1&composition=sequence&theme=dark");
-  await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Save as template", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Save as template", exact: true });
-  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Saved live workflow");
-  await dialog.getByRole("button", { name: "Save template", exact: true }).click();
-  await expect(dialog.getByRole("status")).toContainText("Template saved");
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("workflow-template-fixture")!));
-  expect(saved[0].content.state.rootActivity.structure.kind).toBe("elsa.sequence.structure");
-  expect(saved[0].content.activityPresentation[0].displayName).toBe("Notify buyer");
-});
+for (const theme of ["light", "dark"]) {
+  test(`saves the live workflow as a template without creating a workflow publication (${theme})`, async ({ page }) => {
+    await page.goto(`/?mode=workflow-templates&source-workflow=1&composition=sequence&theme=${theme}`);
+    await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Save as template", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Save as template", exact: true });
+    await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Saved live workflow");
+    await dialog.getByRole("button", { name: "Save template", exact: true }).click();
+    await expect(dialog.getByRole("status")).toContainText("Template saved");
+    const done = dialog.getByRole("button", { name: "Done", exact: true });
+    const actionLayout = await done.evaluate(button => {
+      const actions = button.closest(".wf-dialog-actions");
+      if (!actions) return null;
+      const actionRect = actions.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const style = getComputedStyle(actions);
+      return {
+        display: style.display,
+        justifyContent: style.justifyContent,
+        actionWidth: actionRect.width,
+        buttonWidth: buttonRect.width,
+        rightGap: actionRect.right - buttonRect.right
+      };
+    });
+    expect(actionLayout).not.toBeNull();
+    expect(actionLayout?.display).toBe("flex");
+    expect(actionLayout?.justifyContent).toBe("flex-end");
+    expect(actionLayout?.buttonWidth).toBeLessThan(actionLayout?.actionWidth ?? 0);
+    expect(actionLayout?.rightGap).toBeLessThan(1);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("workflow-template-fixture")!));
+    expect(saved[0].content.state.rootActivity.structure.kind).toBe("elsa.sequence.structure");
+    expect(saved[0].content.activityPresentation[0].displayName).toBe("Notify buyer");
+  });
+}
 
 
 test("keeps a renamed template open when leaving would lose a failed metadata save", async ({ page }) => {
