@@ -1,6 +1,6 @@
 # Studio workspace tabs
 
-**Status**: Implemented — PR linked from [#3620](https://github.com/elsa-workflows/elsa-foundation/issues/3620)
+**Status**: Implemented — [#3639](https://github.com/elsa-workflows/elsa-foundation/pull/3639)
 **Issue**: [#3620](https://github.com/elsa-workflows/elsa-foundation/issues/3620)
 **Program bucket**: none/free-flow
 
