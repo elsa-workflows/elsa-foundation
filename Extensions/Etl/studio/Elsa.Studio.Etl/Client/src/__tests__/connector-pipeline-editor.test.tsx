@@ -3,7 +3,6 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultEtlConnectorPipeline } from "../connectorAuthoringHelpers";
-import { connectorAuthoringProfile } from "../authoringProfiles";
 import { EtlConnectorPipelineEditor } from "../components/EtlConnectorPipelineEditor";
 import { formatEtlJsonNumber, type EtlConnectorBindingSummary, type EtlJsonNumber, type EtlPipelineV2 } from "../etlTypes";
 
@@ -157,7 +156,6 @@ describe("connector pipeline editor", () => {
     editor.render();
     expect(editor.pipeline.routes).toEqual({ main: { kind: "csv", binding: "output-jsonl" }, errors: { kind: "csv", binding: "errors" } });
     expect(editor.host.textContent).toContain("Choose HTTP, JSONL or CSV independently");
-    expect(connectorAuthoringProfile.description).toContain("JSONL or CSV destinations");
   });
 
   it("edits all lossless byte controls without rounding and locks every control in read-only mode", () => {

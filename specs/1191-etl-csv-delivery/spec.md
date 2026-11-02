@@ -50,7 +50,7 @@ An operator loses a worker after it published a CSV file and before the batch wa
 
 ### User Story 3 — Author and inspect CSV delivery (Priority: P2)
 
-In Studio the author chooses CSV as a route's destination kind and picks an output folder approval. In run inspection the operator sees the route type `CSV`, the published route counts and partition progress.
+In Studio the author chooses CSV as a route's destination kind and picks an output folder approval. In run inspection the operator sees the route type "CSV file", the published route counts and partition progress.
 
 **Independent Test**: a component test and a browser test cover the destination choice; the runtime API and a real browser show a CSV run's inspection.
 

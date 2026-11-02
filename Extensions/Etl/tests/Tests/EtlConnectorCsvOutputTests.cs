@@ -130,6 +130,32 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(jsonlMain ? jsonlRow : "id,name\r\n2,Ada\r\n", await fixture.RetainedAsync(prepared.Output.Main!));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_file_row_that_would_take_the_http_error_arrays_closing_bracket_is_rejected_to_that_array(bool jsonlMain)
+    {
+        // Without the reservation the file row would fit, and the array's ']' would land one byte past the limit.
+        const string errorJson = "{\"recordOrdinal\":1,\"code\":\"etl.invalid-value\"}";
+        var wide = new string('w', 100);
+        var jsonlRow = "{\"id\":2,\"name\":\"" + wide + "\"}\n";
+        var mainBytes = jsonlMain ? jsonlRow.Length : EtlCsvRouteWriter.Header(CsvOutputFields).Length + CsvRow(2, wide).Length;
+        var limit = 1 + errorJson.Length + mainBytes;
+        await using var fixture = await CsvOutputFixture.StartAsync(this, limit, httpErrors: true,
+            mainKind: jsonlMain ? EtlConnectorKind.Jsonl : EtlConnectorKind.Csv, Error(1, "etl.invalid-value", null), Accepted(2, 2, wide));
+
+        var prepared = await fixture.TransformAsync();
+
+        Assert.True(prepared.Succeeded, prepared.FailureCode);
+        Assert.Equal(0, prepared.Output!.AcceptedRecords);
+        Assert.Null(prepared.Output.Main);
+        var errors = await fixture.RetainedAsync(prepared.Output.Errors!);
+        Assert.StartsWith("[" + errorJson + ",{\"recordOrdinal\":2,", errors);
+        Assert.Contains("\"etl.output-too-large\"", errors);
+        Assert.EndsWith("]", errors);
+        Assert.True(Encoding.UTF8.GetByteCount(errors) <= limit);
+    }
+
     [Fact]
     public async Task An_http_main_first_row_that_fills_the_allowance_is_rejected_not_the_batch()
     {
