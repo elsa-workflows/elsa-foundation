@@ -360,6 +360,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationAgentApiFeature).Assembly,
             typeof(FoundationWorkflowsAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
+            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists FoundationAgentEntityFrameworkCore.
+            typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
 
             // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
