@@ -357,9 +357,8 @@ public static class FoundationIdentityApi
         return null;
     }
 
-    // The canonical Elsa user ID wins over a provider subject, so an externally signed-in user's token names its Elsa user.
     private static string? Subject(ClaimsPrincipal principal) =>
-        principal.FindFirstValue(IdentityClaimTypes.UserId) ?? principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
+        principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
 
     private static string RouteValue(HttpContext context, string name) =>
         context.Request.RouteValues.TryGetValue(name, out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;

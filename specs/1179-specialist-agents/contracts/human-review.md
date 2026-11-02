@@ -27,6 +27,10 @@ wait. In M4 it is reachable by URL only; the link from a pending occurrence in r
 reading. The page shows the pinned content, title, notes and status. A reviewer chooses Approve or Deny and may
 add a comment; the page offers both on every pending review, and the server's permission check decides.
 
+The caller is the canonical Elsa user (`elsa.identity.user_id`, falling back to `NameIdentifier`/`sub`). A bearer
+minted from an external sign-in currently names the provider subject, so it is refused rather than misattributed;
+aligning external subjects is an M7 follow-up recorded in `tasks.md`.
+
 The decision endpoint rechecks two things:
 - the exact pending wait and content hash;
 - the subject's current permission, through `ICurrentSubjectPermissionAuthorizer`.

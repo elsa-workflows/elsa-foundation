@@ -153,6 +153,36 @@ describe("human review page", () => {
     expect(second).not.toBe(first);
   });
 
+  it("keeps a possibly queued decision's request ID when its retry is refused", async () => {
+    const fake = fakeContext(view(), ["Pending"]);
+    const container = await render(fake.context);
+    const approve = () => [...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Approve")!;
+
+    await click(approve());
+    fake.postJson.mockImplementationOnce(async () => { throw Object.assign(new Error("Forbidden"), { status: 403 }); });
+    await click(approve());
+    expect(container.querySelector("[data-receipt='Forbidden']")).not.toBeNull();
+    await click(approve());
+
+    const ids = fake.postJson.mock.calls.map(call => (call[1] as unknown as { requestId: string }).requestId);
+    expect(new Set(ids).size).toBe(1);
+  });
+
+  it("ignores a slower earlier read once a later one has answered", async () => {
+    let releaseSlow: (value: HumanReviewView) => void = () => {};
+    const fake = fakeContext(view(), ["Accepted"], view({ status: "Approved" }));
+    const container = await render(fake.context);
+    fake.getJson.mockImplementationOnce(() => new Promise<HumanReviewView>(resolve => { releaseSlow = resolve; }));
+    await click([...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Refresh")!);
+    await click([...container.querySelectorAll("button")].find(x => x.textContent?.trim() === "Approve")!);
+    expect(container.querySelector("[data-testid='review-status']")?.textContent).toBe("Approved");
+
+    releaseSlow(view());
+    await settle();
+
+    expect(container.querySelector("[data-testid='review-status']")?.textContent).toBe("Approved");
+  });
+
   it("keeps the recorded receipt and last review when the refresh after a decision fails", async () => {
     const fake = fakeContext(view(), ["Accepted"]);
     const container = await render(fake.context);

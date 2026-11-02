@@ -38,7 +38,7 @@ new model turn. An author may later start a distinct, explicitly requested revis
 ## Required implementation receipts
 
 In M4 the native and BPMN runs are composed executables over really published specialists, and the BPMN form also
-crosses export, an import that refuses unbound work, and exact rebinding. Saving, reloading and publishing the
+crosses export, an import that refuses unbound work, and a rebinding compiled through the BPMN structure handler. Saving, reloading and publishing the
 process as a workflow definition is proved in M5 (T036); binding-preserving interchange is T063. Both forms must force one rejected model review, carry the
 exact article/comments to a successful rewrite, and exercise three-round exhaustion. Pause human
 review, restart the host, then approve and deny in separate runs. Force acknowledgement loss, duplicate

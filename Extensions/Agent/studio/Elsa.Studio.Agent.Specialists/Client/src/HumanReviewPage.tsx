@@ -36,14 +36,20 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
   const [receipt, setReceipt] = useState<{ status: ReceiptStatus; reason?: string | null } | null>(null);
   const [stale, setStale] = useState(false);
   const pending = useRef<Pending | null>(null);
+  const loads = useRef(0);
   const commentId = useId();
 
   const refresh = useCallback(async () => {
     if (!reference) { setLoad({ kind: "missing" }); return; }
+    // Only the latest read may update the page, so a slow earlier read never reopens a resolved review.
+    const sequence = ++loads.current;
     try {
-      setLoad({ kind: "ready", review: await getReview(context, reference) });
+      const review = await getReview(context, reference);
+      if (sequence !== loads.current) return;
+      setLoad({ kind: "ready", review });
       setStale(false);
     } catch (error) {
+      if (sequence !== loads.current) return;
       const status = (error as { status?: number }).status;
       // A failed refresh keeps the last loaded review (and any receipt) on screen instead of hiding what was decided.
       setLoad(current => status === 404 ? { kind: "missing" }
@@ -72,7 +78,9 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
       // A permission, missing or malformed-request answer is final, so it releases the request ID; anything that may
       // still succeed keeps it for the retry.
       const status = receiptForError((error as { status?: number }).status);
-      if (status !== "Unavailable") pending.current = null;
+      // A refusal of a retry says nothing about the earlier send, which may already be queued; only a first send's
+      // final refusal frees its request ID.
+      if (status !== "Unavailable" && attempt !== previous) pending.current = null;
       setReceipt({ status, reason: error instanceof Error ? error.message : null });
     } finally {
       setBusy(false);

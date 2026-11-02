@@ -100,8 +100,8 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
 - [ ] T033 [US7] Implement module-owned playground with fresh/continue, capability diagnostics, partial-vs-accepted output and truthful stop/uncertainty in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistPlayground.tsx`.
 - [ ] T034 [US7] Reuse generic publication/history/lifecycle in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistHistory.tsx`; add exact occurrence links through the owning Studio SDK/shared inspector contribution with no hardcoded specialist branch.
 - [ ] T035 [US7] Implement permitted turn/process timeline/result/usage/approval/incident views in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistInvocationPage.tsx`, including completed/not-applied and unknown outcome.
-- [ ] T036 [US7] Prove real create/edit/test/publish/picker/use/inspect/history, conflict/save/undo, denied/read-only/source-owned, keyboard/narrow and runtime occurrence behavior, plus the native and BPMN editorial process saved, reloaded and published as a workflow definition and the browser-level BPMN import refusal, in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/__tests__/` and `Studio/tests/browser/specialist-agents.spec.ts`.
-- [ ] T063 [US7] Carry exact task bindings through BPMN export/import fail closed in `Essentials/src/Activities/Bpmn/Interchange/`: export resolves each bound version's input definitions through the catalog and omits any binding with a definition-sensitive, credential, non-literal or unresolvable input (reporting the omission per element); import proposes a retained binding with its activity version and input keys and keeps `CanExecute` false until the author confirms it; prove both in Interchange tests and the editorial interchange journey.
+- [ ] T036 [US7] Prove real create/edit/test/publish/picker/use/inspect/history, conflict/save/undo, denied/read-only/source-owned, keyboard/narrow and runtime occurrence behavior, plus the native and BPMN editorial process saved, reloaded and published as a workflow definition (including an imported BPMN process rebound and resolved through publication) and the browser-level BPMN import refusal, in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/__tests__/` and `Studio/tests/browser/specialist-agents.spec.ts`.
+- [ ] T063 [US2] (scheduled in M5) Carry exact task bindings through BPMN export/import fail closed in `Essentials/src/Activities/Bpmn/Interchange/`: export resolves each bound version's input definitions through the catalog and omits any binding with a definition-sensitive, credential, non-literal or unresolvable input (reporting the omission per element); import proposes a retained binding with its activity version and input keys and keeps `CanExecute` false until the author confirms it; prove both in Interchange tests and the editorial interchange journey.
 
 ## Phase 6 — Saved evaluations and comparison (US6; M5)
 
@@ -169,7 +169,7 @@ actual prerequisite contracts. M7 qualifies all earlier work and does not invent
 User-story order follows concrete infrastructure dependencies, not a promise that P2 value is needed
 before every P1 operator test. Each story's independent test can use seeded earlier capabilities.
 Deliver complete narrow leaves under the owning epics, one active implementation leaf plus review lane;
-do not open60 issues or promote the entire backlog to Ready.
+do not open 61 issues or promote the entire backlog to Ready.
 
 Independent-file opportunities within an authorized work unit: schema validation vs provider query
 tests (US1); durable Connections vs journal tests after Core settles (US3); native vs interchange
@@ -206,3 +206,12 @@ protected-content retention for terminal-owner OutcomeUnknown and abandoned Clai
 turns with a bounded resolution or retention ceiling. Preserve unknown/no-inference-retry semantics,
 conversation pins, diagnostic metadata and replay refusal. The current M3 sweep deliberately pins
 these states; documenting this limitation does not satisfy that M7 acceptance item.
+
+### M4 review follow-up owned by M7
+
+A cookie request from an externally signed-in user decides as its canonical Elsa user (`elsa.identity.user_id`), but
+a first-party bearer minted from that session names the provider subject and carries no user ID claim, so such a
+caller is refused (`Forbidden`) rather than misattributed. No production external sign-in path is wired today. M7
+#3527 must make the issued token, the session service and every subject-scoped store agree on one subject for
+external sign-ins (with migration for anything saved under the provider subject) before external deciders are
+supported.
