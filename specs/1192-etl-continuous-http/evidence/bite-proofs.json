@@ -153,6 +153,31 @@
       "restored": "Tests 14 passed (14)",
       "original": "  return run.connector?.mode === \"continuous\";",
       "mutated_text": "  return true;"
+    },
+    {
+      "mutation": "moving-empty-page-not-delayed-spacing",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHttpPageStore.cs",
+      "filter": "DisplayName~A_cursor_that_moves",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "checked(NowTicks() + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks)",
+      "mutated_text": "checked(NowTicks() + 0 * continuous.PollIntervalSeconds)",
+      "round": 1,
+      "sourceRevision": "1afbb01409673908ab29fe98e6bccb7f7b3a69a6",
+      "note": "Re-recorded against the round-1 test, which asserts per-shard request spacing instead of a request count."
+    },
+    {
+      "mutation": "claimed-idle-rejected",
+      "file": "Extensions/Etl/src/Runtime/Api/EtlRuntimeOperations.Connectors.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.OwedBatch is not null ||",
+      "mutated_text": "row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.IsClaimed || row.OwedBatch is not null ||",
+      "round": 1,
+      "sourceRevision": "1afbb01409673908ab29fe98e6bccb7f7b3a69a6"
     }
   ]
 }

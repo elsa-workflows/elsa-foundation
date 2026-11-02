@@ -81,7 +81,7 @@ Both owned processes were stopped. The owner's Workbench on 5095 was not touched
 
 ## Bite-proofs (SC-004)
 
-[`bite-proofs.json`](bite-proofs.json) records each mutation at `e3dcb4c63`. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
+[`bite-proofs.json`](bite-proofs.json) records each mutation at `e3dcb4c63`, plus two round-1 mutations at `1afbb0140`. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
 
 | Mutation | Failing tests |
 |---|---|
@@ -100,6 +100,8 @@ Both owned processes were stopped. The owner's Workbench on 5095 was not touched
 | Completion requires only the cancel permission | 1/1 |
 | A retry wait reports a next poll | 1/1 |
 | Studio offers Complete run for every running run | 1/14 |
+| A moving empty page is not delayed (round 1, request-spacing test) | 1/1 |
+| Inspection rejects an idle shard that still shows a claim (round-1 fix) | 1/1 |
 
 ## Artifact reviews
 
