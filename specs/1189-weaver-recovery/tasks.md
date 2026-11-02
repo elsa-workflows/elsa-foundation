@@ -152,16 +152,22 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   Add `[JsonSerializable]` entries for the new request and response types in `Extensions/Agent/src/Api/AgentJsonContext.cs`. Stamp `Workspace` and `ContinuedFrom` from the create request. Add API tests covering each refusal code and owner scoping with `take=1`.
 
   Verified: commit `efece695f`; `AgentRecoveryApiTests` (owner scoping with `take=1` across actor, tenant and workspace, the `before` cursor, every refusal code, idempotent resolution and a later superseding receipt, withdraw versus start in both orders behind a store-write barrier, user stop versus dropped stream); the user-stop, registered-turn and resolution-release tests are each red without their change. The complete Agent suite passes 855/855 in three runs (818 before this phase).
-- [ ] T019 [US1] Add the list, proposals, withdraw and resolution calls, plus `workspace` and `continuedFrom` on create, to `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` and `agentTypes.ts`, with Vitest coverage.
-- [ ] T020 [US1] In `weaver/useWeaverSession.ts` and `weaver/WeaverSurface.tsx`:
+- [x] T019 [US1] Add the list, proposals, withdraw and resolution calls, plus `workspace` and `continuedFrom` on create, to `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` and `agentTypes.ts`, with Vitest coverage.
+
+  Verified: commit `f8131f90c`; `agentRecoveryClient.test.ts` covers the routes, cursor and workspace, message reasons and the owner's statement, every new refusal code on HTTP and wrapped refusals, the shared 404/403 as one not-found, and the `owned_elsewhere` `Retry-After` hint through the public SDK's additive `StudioHttpError.retryAfterSeconds` (recorded in the contract's SemVer table).
+- [x] T020 [US1] In `weaver/useWeaverSession.ts` and `weaver/WeaverSurface.tsx`:
   - Remember `lastSessionId` under the user-and-backend scope key, inside try/catch.
   - Reopen from the server list or the details, and load proposals.
   - Render the recovery outcomes: Cancelled or interrupted, Uncertain, not started, Expired, refused, owner-resolved.
   - Offer explicit Start, withdraw, execute, decide and resolve actions. Never open the stream automatically.
 
   Add Vitest coverage for reload, dock reopen, the second tab and a foreign session.
-- [ ] T021 [US1] Make unsaved-target availability module-owned. The client tool contract in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts` (`executeClient`, around line 1295) and `app/agent/clientInvocationRunner.ts` report target availability. Record the public SDK change in the contract's SemVer table. Add Vitest coverage. An undispatched client operation whose target or adapter is gone is refused with zero effect, and a dispatched one stays Uncertain. Extend the probe fixture module `tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/Client/src/module.tsx`.
-- [ ] T022 [US1] Add Playwright journeys under `Studio/tests/browser/`:
+
+  Verified: commit `f40f97c54`; `WeaverRecovery.test.tsx` (reload, dock reopen, every recorded outcome with only its actions, explicit Start and Withdraw, the owner's resolution and a conflicting one, a second tab that neither refuses nor marks the first tab's delivery, a foreign session never listed or opened, retryable `owned_elsewhere`, scope and storage failures); no stream opens on reopen in any case. The hint's scope hashes the backend profile, not the per-connection key, whose nonce changes on every load.
+- [x] T021 [US1] Make unsaved-target availability module-owned. The client tool contract in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts` (`executeClient`, around line 1295) and `app/agent/clientInvocationRunner.ts` report target availability. Record the public SDK change in the contract's SemVer table. Add Vitest coverage. An undispatched client operation whose target or adapter is gone is refused with zero effect, and a dispatched one stays Uncertain. Extend the probe fixture module `tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/Client/src/module.tsx`.
+
+  Verified: commit `429303fba`; the SDK's optional `clientTargetAvailability` is asked before dispatch, and the runner tests (red on the previous runner) refuse a gone, disabled, unanswered or cancelled target with zero effect, report a missing adapter, and keep a dispatched failure uncertain once; the recovery tests refuse an approved client change after a reload or a closed editor. The probe's Acme module adds a client-working-state contract with its own availability adapter, typechecked against the SDK source; its backend counterpart and restart journeys belong to T031.
+- [x] T022 [US1] Add Playwright journeys under `Studio/tests/browser/`:
   - reload with a pending review;
   - dock reopen;
   - a dropped stream;
@@ -170,6 +176,8 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - a second tab;
   - limit continuation;
   - a foreign user's session list.
+
+  Verified: commit `11335b66e` (limit continuation in `043228b58`); `weaver-recovery.spec.ts` runs every journey over a durable fake backend shared by tabs, through the real Studio agent client, with the server's write and stream log asserted: 10/10, with `agent-review.spec.ts` 7/7.
 
 ## Phase 6: US3 — Bounded, continuable long sessions (P2, plan step 3)
 
@@ -181,7 +189,9 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 - [x] T024 [US3] Store snapshots by digest. Messages and the paused turn hold ordered digest references, with their fingerprints stored verbatim. Hydration re-verifies the digests and the history-match checks, and returns `unavailable_state` on mismatch. Changes go in `AgentDisclosureHistory.cs` and `AgentTurnServices.cs`. Add the `AdmissionPass` set from research R3, passed along explicitly, never stored on a field, and discarded at each write, provider call or tool execution. The baseline from T023 turns green, and re-admission after each write is kept.
 
   Verified: commit `0818f09ba`. The same scenario now records 21 snapshots for 21 distinct ones, stored copies 71 to 141 and the largest pass 12 to 22 (turn 20 to 40), with no repeated admission in any pass. Withdrawing owner authority right after a checkpoint write stops the provider call (red, with the existing R9 and R10 cumulative tests, when the step's pass is reused after the write). Repeated snapshots keep message digests, the pause fingerprint, an identical retry and the paused continuation stable across a restart, and the T013 tests pass unchanged. Five kinds of recorded state that fail verification answer 409 `agent.session.unavailable_state` with their reason and no effect (red without the verification). The limits count distinct identities and canonical bytes; their distinct `limit` detail stays with T025. The complete Agent suite passes 870/870 in three runs (load average up to 9.7), including the review fixes in `97aa7da3e` and the resolution audit in `6f837f8ad`.
-- [ ] T025 [US3] Run after T022, because it shares Studio files with T020 and T022. Give the two limits (64 distinct snapshots, 8 MiB) distinct `limit` details. Add Studio's "session limit reached" outcome and continuation, which creates a new session with `ContinuedFrom` and carries nothing else over. Cover the limit reached mid-turn (story 3.3) and prove that provenance is never erased, the budget never reset and nothing replayed (story 3.5). Add tests at the API, Studio and Playwright levels.
+- [x] T025 [US3] Run after T022, because it shares Studio files with T020 and T022. Give the two limits (64 distinct snapshots, 8 MiB) distinct `limit` details. Add Studio's "session limit reached" outcome and continuation, which creates a new session with `ContinuedFrom` and carries nothing else over. Cover the limit reached mid-turn (story 3.3) and prove that provenance is never erased, the budget never reset and nothing replayed (story 3.5). Add tests at the API, Studio and Playwright levels.
+
+  Verified: commits `9c776a5d1` (backend) and `043228b58` (Studio). `AgentError.Limit` names `snapshots` or `bytes`, and the turn passes refusals through whole so the stream and the API wire carry it; the tests were red before. A limit reached mid-turn after a read keeps the tool result's transcript record and the retained provenance, a later prompt is refused again before the provider, and the read ran once. A continuation links the original and carries nothing. Studio shows "Session limit reached" with the limit and creates the continuation with only `continuedFrom` and the workspace (Vitest and Playwright). The complete Agent suite passes 882/882 twice, including the review fixes in `8b6919c85`.
 
 ## Phase 7: Durable EF store (plan step 4)
 
