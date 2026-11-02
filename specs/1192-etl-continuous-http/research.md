@@ -133,3 +133,40 @@ It accepts only an `EtlHttpJsonSource` with token or next-link pagination, and a
 - **Feed server.** A local cursor-feed server, written in Python with only the standard library, serves two shards. Records can be appended over HTTP, and each shard's GET with `after=<cursor>` returns the records after that cursor.
 - **Journey driver.** The Workbench journey driver, derived from spec 1191's, drives the feed, the run, completion and cancellation, and reads the runtime API to count pages, requests and bytes across idle polls.
 - **Worker-process journeys** reuse `Elsa.Etl.WorkerHost` with the existing `AfterReservation` / `BeforeAcceptance` gates. They add a staging pause around an idle poll's attempt, either a transport delay or a new test gate.
+
+## R11. Plan review adoptions
+
+An independent plan review found no blockers. Its findings change the decisions above as follows.
+
+- **R3, attempt liveness.** The caught-up transition requires all of the following, the same gate `Complete` uses:
+  - `fetch.Phase == InFlight`;
+  - the latest attempt equals the given attempt and has `CompletedAt == null`;
+  - `attempt.Fence == lease.Fence`.
+
+  A closed-uncertain, `Captured` or `Failed` journal is refused, so a failed request is never revived and a capture receipt is never discarded. There is one refusal test per phase.
+- **R2, the cache's continuous flag.** `EtlHttpPageCache` keeps `pipeline.Continuous`, and the shared site that normalizes it is `NormalizeContinuation` (used by both read and publish). Constructing a cache for a continuous pipeline without a request builder is refused.
+- **Publish conflict.** In a continuous run the same `(pageSequence, request)` cache identity can legitimately receive different bodies over time. For example, a predecessor publishes its final empty page after a successor's re-read. When `PublishAsync` reports a conflict in a continuous run, the acquirer re-reads the winning manifest and passes it to `CaptureAsync`, where the store validates its provenance. A finite run still fails, as today. The race is tested.
+- **R8, inspection.**
+  - `NextPollAt` is set only for an idle partition, and equals its `NotBefore`.
+  - Studio shows "Eligible after" only when `nextPollAt` is null.
+  - The API provider-contract check in `ConnectorPartition` enforces that `nextPollAt` is null or equals `notBefore`, and is set only when there is no owed batch, no page and no journal.
+  - The new inspection members are init-only properties, not positional parameters, so third-party inspectors keep compiling. The Core `EXTENSION_POINTS.md` notes this.
+- **R8, completion semantics.**
+  - `IEtlRuntimeOperations.CompleteAsync` by default throws `EtlApiException(503, "etl.provider-unavailable")`, as the other members do.
+  - An unknown run, or one in another scope, returns 404 through `FindRunAsync`, as cancel does.
+  - The 200 response carries `accepted`, `alreadyRequested`, `terminal` or `notContinuous`.
+- **API surface.**
+  - `EtlRunCompletionView` is registered in `EtlRuntimeApiJsonContext`.
+  - The endpoint is `Endpoints/CompleteRun/Endpoint.cs`, with `[RequirePermission(EtlRuntimePermissions.CompleteRuns)]`.
+  - The resource entry goes in `EtlRuntimeApiFeature`, and the feature description no longer says "finite".
+  - Studio resolves `etl-run-complete` optionally, as it does `etl-run-connector-partitions`, so a Studio talking to an older host hides "Complete run" rather than failing.
+- **Migration test.** It follows `EtlConnectorSourceMigrationTests`:
+  1. migrate to `20261021170000_ConnectorInspectionEffects`;
+  2. insert prior-writer finite file and HTTP rows with raw SQL;
+  3. migrate to latest;
+  4. read the rows back through the store, unchanged, with a null column;
+  5. assert `HasPendingModelChanges()` is false.
+
+  The migration is a raw `ALTER TABLE … ADD COLUMN … CHECK (…)`, following `20261021170000_ConnectorInspectionEffects`.
+- **R6.** If completion has been requested, a moving empty page does not wait. Its `NotBefore` stays null.
+- **Wrappers.** The new store members are forwarded in `tests/Shared/ForwardingEtlConnectorRuntimeStore.cs`. `ConnectorWorkerGateStore` inherits them.
