@@ -71,9 +71,9 @@ internal sealed class AgentDisclosureHistory
     internal const string SnapshotDoesNotFit = "snapshot-does-not-fit";
 
     /// <summary>
-    /// A session is genuinely full of recorded disclosure, and reports the <c>bytes</c> session limit, only when less than this
-    /// much room is left: no admissible context snapshot fits any more. Otherwise a snapshot that does not fit is refused on
-    /// its own (<see cref="SnapshotDoesNotFit"/>).
+    /// A session reports the <c>bytes</c> session limit only when less than this much room is left, and is then treated as
+    /// full (a small, bounded snapshot could still fit, but the session no longer has useful room). Otherwise a snapshot that
+    /// does not fit is refused on its own (<see cref="SnapshotDoesNotFit"/>).
     /// </summary>
     internal const int MinimumRoom = 64 * 1024;
 

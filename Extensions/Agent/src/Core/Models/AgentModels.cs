@@ -167,8 +167,11 @@ public enum AgentProviderRiskProfile
 public sealed record AgentError(string Code, string Message, int StatusCode = 400)
 {
     /// <summary>
-    /// Preview: which documented session limit an <c>agent.context.disclosure_budget_exceeded</c> refusal reached,
-    /// <c>snapshots</c> (64 distinct snapshots) or <c>bytes</c> (8 MiB of recorded disclosure); null for every other error.
+    /// Preview: what an <c>agent.context.disclosure_budget_exceeded</c> refusal reached. The session limits, recorded on the
+    /// session and offered a continuation: <c>snapshots</c> (64 distinct snapshots) and <c>bytes</c> (8 MiB of recorded
+    /// disclosure, with less than 64 KiB left, so the session is treated as full). Refusals of one disclosure, never recorded:
+    /// <c>snapshot-too-large</c> (larger than any session can record) and <c>snapshot-does-not-fit</c> (larger than the room
+    /// left in a session that is not full). Null for every other error.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Limit { get; init; }
