@@ -526,6 +526,55 @@ describe("Weaver recovery through the real agent client", () => {
     flushSync(() => root.unmount());
     container.remove();
   });
+
+  it("reopens a session the server records as limited and offers its continuation before any prompt", async () => {
+    const requests: string[] = [];
+    const id = "agt_limited";
+    const policy = { autonomyMode: "manual", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"], revision: 1 };
+    const http = {
+      async getJson(path: string) {
+        requests.push(`GET ${path}`);
+        if (path === "/_elsa/agent/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"],
+          capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
+          provider: { providerId: "wire", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
+          policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "fullAuto", allowedAutonomyModes: ["manual", "autoReadOnly", "fullAuto"] } } };
+        if (path.startsWith("/_elsa/agent/sessions?")) return { data: { items: [{ id, title: "Limited session", status: "active", updatedAt: "2026-11-02T10:00:00Z", expiresAt: null, pendingReviewCount: 0, recoveryState: "limit-reached:snapshots" }], next: null } };
+        if (path === `/_elsa/agent/sessions/${id}`) return { data: { sessionId: id, status: "active", title: "Limited session", policy, limitReached: "snapshots",
+          messages: [{ id: "l1", role: "user", content: "A long conversation", status: "completed", acceptedPolicyRevision: 1 }] } };
+        if (path === `/_elsa/agent/sessions/${id}/proposals`) return { data: [] };
+        throw new Error(`Unexpected GET ${path}`);
+      },
+      async postJson(path: string) { throw new Error(`Unexpected POST ${path}`); },
+      async putJson(path: string) { throw new Error(`Unexpected PUT ${path}`); }
+    };
+    const fetch = vi.fn(async () => new Response(null, { status: 500 }));
+    const client = createAgentClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
+    const subscribe: typeof subscribeAgentSessionStream = (context, url, onEvent, onError, options) => subscribeAgentSessionStream(context, url, onEvent, onError, { ...options, fetch: fetch as typeof globalThis.fetch });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => root.render(<WeaverSurface api={readyApi("ada")} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribe} />));
+
+    await settle(() => expect(container.querySelector(`[data-session-id="${id}"]`)?.textContent).toContain("session limit reached"));
+    click(container.querySelector(`[data-session-id="${id}"]`));
+
+    // The recorded limit alone shows the notice and its continuation; no prompt is sent and no stream opens.
+    await settle(() => expect(container.querySelector('[data-kind="limit"]')).not.toBeNull());
+    const notice = container.querySelector('[data-kind="limit"]');
+    expect(notice?.getAttribute("data-limit")).toBe("snapshots");
+    expect(notice?.textContent).toContain("Session limit reached");
+    expect(buttonIn(notice, "Continue in a new session")).not.toBeNull();
+    expect(container.textContent).toContain("A long conversation");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(requests).toEqual([
+      "GET /_elsa/agent/bootstrap",
+      "GET /_elsa/agent/sessions?workspace=studio%3Aprimary&take=20",
+      `GET /_elsa/agent/sessions/${id}`,
+      `GET /_elsa/agent/sessions/${id}/proposals`
+    ]);
+    flushSync(() => root.unmount());
+    container.remove();
+  });
 });
 
 type Recorded = { owner: string; detail: AgentSessionDetailResponse; proposals: AgentRecordedProposal[] };

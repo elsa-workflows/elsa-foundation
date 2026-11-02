@@ -23,6 +23,7 @@ import type {
   AgentRecordedMessage,
   AgentRecordedProposal,
   AgentSessionDetailResponse,
+  AgentSessionLimit,
   AgentSessionListQuery,
   AgentSessionListResponse,
   AgentSessionPolicy,
@@ -223,12 +224,14 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       } catch (error) { throw toAgentApiError(error); }
       const detail = unwrapCoded(envelope);
       const title = readString(detail, "title");
+      const limit = readSessionLimit(readString(detail, "limitReached"));
       return {
         sessionId: readString(detail, "sessionId") ?? readString(detail, "id") ?? sessionId,
         status: mapSessionStatus(readField(detail, "status")),
         ...(title ? { title } : {}),
         policy: mapSessionPolicy(readRecord(detail, "policy")),
-        messages: readRecordArray(detail, "messages").map(mapRecordedMessage)
+        messages: readRecordArray(detail, "messages").map(mapRecordedMessage),
+        ...(limit ? { limit } : {})
       };
     },
     async updateAutonomy(sessionId, request) {
@@ -765,6 +768,11 @@ function getAcceptedMessageId(accepted: BackendAgentMessageAcceptedResponse) {
   }
 
   return messageId;
+}
+
+/** Preview (#3441): only the documented limits are kept; anything else is dropped. */
+function readSessionLimit(value: string | undefined): AgentSessionLimit | undefined {
+  return value === "snapshots" || value === "bytes" ? value : undefined;
 }
 
 function mapSessionStatus(status: unknown): AgentCreateSessionResponse["status"] {

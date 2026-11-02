@@ -118,6 +118,8 @@ export interface AgentSessionDetailResponse {
   title?: string;
   policy?: AgentSessionPolicy;
   messages: AgentRecordedMessage[];
+  /** Preview (#3441): the documented session limit this session reached; a reopened session offers its continuation. */
+  limit?: AgentSessionLimit;
 }
 
 /** Preview (#3441): which documented session limit a disclosure-budget refusal reached. */

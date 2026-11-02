@@ -211,7 +211,9 @@ function describeSessionSummary(summary: AgentSessionSummary) {
   const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? new Date(summary.updatedAt).toLocaleString() : summary.updatedAt;
   const reviews = summary.pendingReviewCount > 0 ? ` · ${summary.pendingReviewCount} awaiting review` : "";
   const status = summary.status === "active" ? "" : ` · ${summary.status}`;
-  return `${summary.title ?? "Conversation"} · ${updated}${reviews}${status}`;
+  // Preview (#3441): a session at its documented limit is offered with that outcome, so reopening it is not a surprise.
+  const limited = summary.recoveryState?.startsWith("limit-reached:") ? " · session limit reached" : "";
+  return `${summary.title ?? "Conversation"} · ${updated}${reviews}${status}${limited}`;
 }
 
 function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {

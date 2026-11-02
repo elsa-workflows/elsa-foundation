@@ -983,7 +983,10 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     setProposals(proposals);
     setTimeline([]); setPlan([]); setToolResults([]); setAttachments([]); setFollowups([]); clearContextDiagnostics(); setError(null);
     setChatState(!closed && proposals.some(item => BUSY_PROPOSAL_STATUSES.includes(item.status)) ? "awaiting-review" : "idle");
-    setRecoveryNotice(closed ? { kind: "closed", sessionId, status: detail.status } : null);
+    // A session that reached its documented limit shows the limit and its continuation at once, before another prompt
+    // would be refused; the server's stream message is not available here, so the notice names only the limit.
+    setRecoveryNotice(closed ? { kind: "closed", sessionId, status: detail.status }
+      : detail.limit ? { kind: "limit", sessionId, limit: detail.limit } : null);
   }, [acceptPolicy, agentClient, clearContextDiagnostics, reconcileAutonomy, revisionModesOf, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
 
   const reopenSession = useCallback(async (sessionId: string, options: { automatic?: boolean; notice?: WeaverRecoveryNotice } = {}) => {
