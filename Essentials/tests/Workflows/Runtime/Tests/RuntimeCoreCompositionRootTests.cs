@@ -439,6 +439,44 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddWorkflowRuntime_HoldsARetryAfterOnlyWhenAResumptionRedriverIsComposed(bool composeResumption)
+    {
+        // #3275 through the container. The drainer's factory derives HasResumptionRedriver from the same evidence the
+        // router reads above; every drainer test sets the flag by hand, so dropping it from the factory would poison
+        // every RetryAfter on a host that runs the sweep while the suite stayed green. Driven both ways from one
+        // composition, with a durable provider's other evidence present on both sides, so the assertion is the
+        // difference the resumption entry makes.
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(TimeSpan.FromMinutes(5)));
+        services.AddSingleton<IWorkflowSchedulerWorkHandler, FaultingInvokeActivityHandler>();
+        services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(
+            new WorkflowDispatchDurabilityEvidence(WorkflowDispatchDurabilityComponents.Scheduler, WorkflowDispatchDurabilityLevel.Durable));
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        if (composeResumption)
+            new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new RuntimeSchedulerWorkItem(
+            "work-1", "wfexec-retry", "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now));
+        using var scope = provider.CreateScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerDrainer>()
+            .DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-retry"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-retry"));
+        Assert.Equal(
+            composeResumption ? RuntimeSchedulerPoisonDisposition.RetryScheduled : RuntimeSchedulerPoisonDisposition.Poisoned,
+            record.Disposition);
+        var queued = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAsync(new RuntimeSchedulerWorkQuery("wfexec-retry"));
+        Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
+    }
+
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
         WorkflowExecutionPartition? partition = null,
@@ -489,6 +527,20 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         services.AddScoped<IPortableExpressionEvaluator, StubPortableExpressionEvaluator>();
         services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
         services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
+    }
+
+    private sealed class RetryAfterPolicy(TimeSpan delay) : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            new(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after");
+    }
+
+    private sealed class FaultingInvokeActivityHandler : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(FaultingInvokeActivityHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
     }
 
     private sealed class ReplacementStartPolicy : IWorkflowExecutableStartPolicy

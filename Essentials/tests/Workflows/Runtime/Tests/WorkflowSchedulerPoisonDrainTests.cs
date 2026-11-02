@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -369,16 +370,20 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     [InlineData("policy-throws")]
     [InlineData("checkpoint-rule")]
     [InlineData("release-refused")]
+    [InlineData("delay-unrepresentable")]
     public async Task DrainAsync_WithRetryAfterPolicy_WhenTheRetryCannotBeHeld_PoisonsTheDelayableItem(string reason)
     {
         // Each case would otherwise leave a released item nothing re-drives, an item claimed to loop on every lapse, a
-        // retry of a run the faulter terminates, or a claim-lost throw with no record. All are poisoned and acked.
+        // retry of a run the faulter terminates, or a claim-lost throw with no record. A delay that ends past the last
+        // representable time used to throw before the ack, so the item stayed claimed to fault again on every lapse.
+        // All are poisoned and acked.
         var inner = new InMemoryWorkflowSchedulerWorkQueue();
         IWorkflowSchedulerWorkQueue queue = reason == "release-refused" ? new RefusingReleaseWorkQueue(inner) : inner;
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var delay = reason == "delay-unrepresentable" ? TimeSpan.MaxValue : TimeSpan.FromMinutes(5);
         IRuntimeDomainRetryPolicy policy = reason == "policy-throws"
             ? new ThrowingRetryPolicy()
-            : new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, TimeSpan.FromMinutes(5), "retry-after"));
+            : new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after"));
         Func<RuntimeSchedulerWorkItem, Exception>? checkpointRuleFault = reason == "checkpoint-rule"
             ? item => new RuntimeCheckpointCommitValidationException($"A checkpoint rule refused {item.WorkItemId}.")
             : null;
@@ -410,12 +415,14 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     [Fact]
     public async Task DrainAsync_WithRetryAfterPolicy_ForWorkThatCannotBeDelayed_PoisonsInsteadOfParkingSilently()
     {
-        // RunSchedulerWork has no delayed release, so the queue cannot hold the retry. #3275: it is poisoned (projected
-        // as a blocking incident) rather than recorded as RetryScheduled with a NextRetryAt that nothing would act on.
+        // RunSchedulerWork has no delayed release, so the queue cannot hold the retry even where a resumption sweep is
+        // composed. #3275: it is poisoned (projected as a blocking incident) rather than recorded as RetryScheduled with
+        // a NextRetryAt that nothing would act on.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
         var delay = TimeSpan.FromMinutes(5);
-        var drainer = NewDrainer(queue, poisonStore, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")));
+        var drainer = NewDrainer(queue, poisonStore, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")),
+            hasResumptionRedriver: true);
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -426,6 +433,49 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Null(record.NextRetryAt);
         Assert.Equal(nameof(RuntimeDomainRetryMode.RetryAfter), record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode]);
         Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task DrainAsync_WithRetryAfterPolicy_WhenAnInactiveCoalescingSegmentRefusesTheRelease_AcksAndPoisonsTheItem()
+    {
+        // A handler crosses a durable boundary that deactivates the coalescing overlay, and the durable head then moves.
+        // The release must persist at once, and cannot, because the head is no longer this item. The session used to
+        // drop the overlay claim and then throw, so the fallback ack failed as claim-lost: no record, and the durable
+        // copy stayed queued to fault again. The real session now refuses while the claim still owns the item, so the
+        // item ends acknowledged (its exact durable copy removed) and Poisoned.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner), accessor);
+        var session = new RuntimeCoalescingSession("wfexec-1", inner, new PersistenceModeOptions());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var workItem = NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity);
+        var handler = new AlwaysFaultingSchedulerWorkHandler(beforeFault: async item =>
+        {
+            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+            session.Deactivate();
+            Assert.True(await inner.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId));
+            await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
+            await inner.EnqueueAsync(item);
+        });
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            poisonStore: poisonStore,
+            retryPolicy: new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, TimeSpan.FromMinutes(5), "retry-after")),
+            hasResumptionRedriver: true);
+        await inner.EnqueueAsync(workItem);
+
+        RuntimeSchedulerDrainResult result;
+        using (accessor.Push(session))
+            result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+
+        Assert.True(result.StoppedOnFault);
+        Assert.Equal(1, handler.InvocationCount);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Null(record.NextRetryAt);
+        Assert.Equal(["work-2"], (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId));
     }
 
     [Fact]
@@ -669,15 +719,19 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         InMemoryWorkflowSchedulerPoisonStore PoisonStore,
         WorkflowSchedulerDrainer Drainer);
 
-    private sealed class AlwaysFaultingSchedulerWorkHandler(Func<RuntimeSchedulerWorkItem, Exception>? exceptionFactory = null) : IWorkflowSchedulerWorkHandler
+    private sealed class AlwaysFaultingSchedulerWorkHandler(
+        Func<RuntimeSchedulerWorkItem, Exception>? exceptionFactory = null,
+        Func<RuntimeSchedulerWorkItem, ValueTask>? beforeFault = null) : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(AlwaysFaultingSchedulerWorkHandler);
         public int InvocationCount { get; private set; }
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
 
-        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
         {
             InvocationCount++;
+            if (beforeFault is not null)
+                await beforeFault(workItem);
             throw exceptionFactory?.Invoke(workItem) ?? new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
         }
     }

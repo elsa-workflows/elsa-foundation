@@ -233,13 +233,15 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
        that can persist the delay;
      - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
        `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
-     - the fault was not caused by a checkpoint rule.
+     - the fault was not caused by a checkpoint rule;
+     - the delay ends no later than the last representable time, `DateTimeOffset.MaxValue`.
 
      The step stays the only queued copy. It is not claimable before the delay ends, and the
      resumption sweep's backlog discovery then re-drives it. While it waits, the execution's later
      queued steps wait behind it, because the queue serves each execution in order. If the queue
      refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,
-     which throws claim-lost and records nothing, as for any lost claim.
+     which throws claim-lost and records nothing, as for any lost claim. A coalescing segment that a boundary
+     deactivated, and whose durable head has since moved, refuses this way while the drain still owns the item.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 
@@ -247,7 +249,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 | --- | --- | --- |
 | `RetryNow` | `RetryScheduled` | re-enqueued immediately through the queue contract |
 | `RetryAfter`, step released | `RetryScheduled` | the released step runs again once `NextRetryAt` passes, when the sweep re-drives it; each later failure asks the policy again with a higher failure count, so a policy can bound the retries |
-| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, and checkpoint-rule faults ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
+| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, checkpoint-rule faults, a release the queue refuses, and a delay past `DateTimeOffset.MaxValue` ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
 | a policy that throws | `Poisoned` | none; treated as no decision, with retry mode `PolicyFailed` and the exception type in the record's metadata |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
@@ -259,11 +261,12 @@ decision (not a null, not a no-op): a handler fault parks as `Poisoned` on the f
 default poison store is `InMemoryWorkflowSchedulerPoisonStore`, so poison records are process-local
 until a durable provider is composed.
 
-There is no composition in which step 3 is skipped. The poison store is a **required constructor
-parameter** on `WorkflowSchedulerDrainer` (#1271); passing null throws. This matters because step 2 has
-already ack-deleted the work item by the time poison handling runs, so a drainer that could be built
-without a store would drop the item with no trace: nothing recorded, no incident ever projected, and
-the retry policy never consulted, which means even a `RetryNow` decision would not re-enqueue. That
+There is no composition in which step 4 is skipped. The poison store is a **required constructor
+parameter** on `WorkflowSchedulerDrainer` (#1271); passing null throws. This matters because step 3 has
+already ack-deleted the work item by the time poison handling runs, unless it released an honored
+`RetryAfter` instead, so a drainer that could be built without a store would drop the item with no
+trace: nothing recorded, no incident ever projected, and the retry decision never acted on, which
+means even a `RetryNow` decision would not re-enqueue. That
 configuration used to be reachable by constructing the drainer directly, which tests and custom
 compositions do; it is now a construction-time failure. The retry policy stays optional by contrast,
 because its absence is indistinguishable from the registered default answering `DoNotRetry`, which is
@@ -446,7 +449,9 @@ Changing the catalog default only affects workflows published afterwards.
 | the default strategy is `Fault/1` | `Essentials/src/Workflows/Runtime/Core/Models/IncidentStrategyCatalogOptions.cs`, `Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/WorkflowExecutableCompiler.cs` (`ResolveIncidentStrategy`), `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/FaultIncidentStrategy.cs` |
 | the fault observer skips terminal workflows, decided incidents, and activation failures; it faults non-terminal ancestors | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/BlockingIncidentWorkflowFaultObserver.cs` |
 | handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / stale-fence / cancellation excluded | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
-| ack-before-poison, and the retry-mode ladder | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
+| the retry decision is read before the ack, and a policy that throws counts as no decision | `WorkflowSchedulerDrainer.DecideRetryAsync` |
+| ack-before-poison, and the release of an honored `RetryAfter` in its place | `WorkflowSchedulerDrainer.DispatchAsync` (fault arm), `CanReleaseWithDelay` |
+| the retry-mode ladder that turns the decision into a record | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
 | the default retry policy returns an explicit `DoNotRetry` | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs` |
