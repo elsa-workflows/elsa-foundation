@@ -68,7 +68,55 @@ The stream route is unchanged. Opening it starts the latest Pending prompt or th
 
 **Authorization pass.** A pass is one admission sequence. It ends at the next write, provider call or tool execution. Awaits for owner admission and tool discovery belong to the pass, as in spec FR-015. Within a pass, each disclosure source admits each distinct snapshot at most once.
 
-## 4. SemVer (ADR 0080, pre-GA)
+## 4. Mandatory native restart inventory
+
+The complete package witness (`tools/studio/Weaver.Conformance.Probe/qualify.py`) requires each case below
+exactly once **on each actual adapter**: Copilot's delegated loop and Anthropic's host-driven loop, each
+through its deterministic protocol factory, in addition to the unchanged original 38, the four
+current-authority and the 26 autonomy and lifecycle cases. The packaged backend consumer enables
+`FoundationAgentEntityFrameworkCore` (with `Secrets`) on SQLite, over a new database file under the run's
+owned output root, and the driver restarts that same owned host process between phases. Consumers keep the
+no-source-reference and no-frontend-invocation rules; every host generation keeps its own receipt and log,
+new empty runtime caches and the same owned origin. Each record names the actual adapter and its observed
+outcome; omissions, duplicates, a wrong adapter, a wrong-cause outcome, a missing restart between the
+prepared and recovered observations, or absent or changed owner, correlation or restart evidence fail the
+qualifier. Every case asserts three things against retained native bytes:
+
+- the recovered outcome, read from session detail, the proposal list and the owner routes after the restart;
+- the execution count at the fixture's independent native owner: the Preferences size owner, which must be
+  unchanged or equal to exactly the one recorded receipt, or the workflow draft read through its owning API;
+- the audit `settledBy` values for the case's proposal or session: `["recovery"]` for a recovery
+  settlement with no actor, and `[]` otherwise.
+
+| Case key | Restart | Native observation and owner |
+| --- | --- | --- |
+| `idle` | graceful | A completed automatic size effect, then a restart. The same session, history, acknowledged policy and revision and the stored receipt read back, and a new prompt completes. One execution, no settlement. |
+| `pending-review-before-deadline` | graceful | A pending review stays decidable against the same prepared operation before its deadline. Explicit approve and execute apply it once, and the originating turn continues once with the receipt. |
+| `pending-review-after-deadline` | after-deadline | The host is stopped before and started after the prepared deadline on the real clock. The review is recorded Expired once with `settledBy=recovery`, execute answers `agent.proposal.expired`, and the owner is unchanged. |
+| `approved-before-dispatch-before-deadline` | graceful | Recovery does not execute an approved operation (the owner is unchanged at recovery). An explicit execute applies it once and continues the turn. |
+| `approved-before-dispatch-after-deadline` | after-deadline | Expired once with `settledBy=recovery`, refused on execute, and zero effect. |
+| `dispatched-without-receipt` | abrupt | The approved server write is dispatched and held at the module's native write rendezvous; the owned process group is killed. The execute request receives no response. After the restart the operation is Uncertain with `settledBy=recovery`, a repeated execute returns the retained uncertainty, and the owner is unchanged: it is never replayed. |
+| `receipt-recorded-paused` | graceful | Approve and execute record the receipt while the turn stays paused. After the restart the owner still holds exactly that receipt, the stream continues the turn once and reports the recorded receipt to the provider, and a repeated delivery answers `agent.message.no_pending`. |
+| `provider-turn-in-progress` | abrupt | A provider turn is held at the protocol fixture's pre-call gate when the process group is killed. The prompt is Cancelled with `statusReason=interrupted`, no proposal exists, the owner is unchanged and the session continues with a new prompt. |
+| `owner-resolution` | after-deadline | A reviewed client working-state change (`workflow_set_designer_position`) is dispatched (202) to an HTTP client that disappears with the host and applies nothing. Past its deadline it is Uncertain with `settledBy=recovery`. The owner's `notApplied` statement is recorded, a repeat is idempotent, a different statement answers `agent.invocation.resolution_conflict`, one `proposalResolved` audit record carries the claim, execute does not dispatch it again, and the workflow draft is unchanged. |
+| `second-client` | graceful | After the restart a foreign actor of the same tenant receives only the shared 404 or 403 on the session, its proposals and execute, with no owner change. Two separately signed-in clients of the owner see the same pending review; both approvals return the one recorded decision, concurrent executions return one identical receipt, and the turn continues once. |
+
+**Negative and oracle controls.** Before the store is configured, `restart-without-durable-store` restarts
+the same host on the in-memory default: the pending review must be lost (`proposal-lookup`,
+`agent.proposal.not_found`) with an unchanged owner. That proves the durable store is what carries every
+case above. The probe's unit tests hold each verifier to the driver-owned outcome and refuse a skipped
+settlement write, a replayed effect, a second continuation or an admitted repeated delivery, a recovery
+observed outside its deadline window, a missing restart between observations, a wrong stop kind, a
+populated runtime cache, a dispatch that was answered instead of interrupted, and a replayed uncertain
+operation.
+
+`restart_journeys.py` owns the inventory, the phases and the gates. The real host restart is
+`runtime.RestartableServer`, and `consumers.enable_durable_agent_store` configures the store in the
+consumer's runtime JSON while no generation runs. The fixture's pre-call gate and write rendezvous only
+hold real paths. They never replace the engine, the store or the owner. The restart inventory is
+deterministic provider-protocol evidence, and live-provider recovery is not claimed.
+
+## 5. SemVer (ADR 0080, pre-GA)
 
 | Change | Class |
 | --- | --- |

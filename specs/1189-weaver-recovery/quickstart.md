@@ -85,7 +85,7 @@ Configure the Workbench with the EF store on SQLite. Run the complete Studio bro
 
 ## Final independent package witness
 
-Use committed source and a new absolute output directory outside the checkout. Run the complete witness: the existing original 38, the 4 current-authority cases and the 26 autonomy and lifecycle cases. Add the new restart inventory on each actual adapter. The restart inventory is defined in the contract when it freezes. Consumers configure the packaged EF store on SQLite and restart their own host processes between phases.
+Use committed source and a new absolute output directory outside the checkout. Run the complete witness: the existing original 38, the 4 current-authority cases, the 26 autonomy and lifecycle cases and the [restart inventory](contracts/recovery.md#4-mandatory-native-restart-inventory), ten cases on each actual adapter plus its in-memory negative control: 89 in all. The backend consumer configures the packaged EF store on SQLite and the driver restarts that host process itself between phases; the after-deadline phase waits out the real five-minute prepared lifetime once per adapter.
 
 ```sh
 python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
