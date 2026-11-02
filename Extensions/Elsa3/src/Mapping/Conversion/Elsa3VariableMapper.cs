@@ -66,8 +66,7 @@ internal static class Elsa3VariableMapper
     internal static bool IsDefaultStorageDriver(string storageDriverTypeName)
     {
         var typeName = storageDriverTypeName.Split(',')[0].Trim();
-        return typeName.EndsWith(".WorkflowInstanceStorageDriver", StringComparison.Ordinal) ||
-               string.Equals(typeName, "WorkflowInstanceStorageDriver", StringComparison.Ordinal);
+        return typeName is "Elsa.Workflows.WorkflowInstanceStorageDriver" or "WorkflowInstanceStorageDriver";
     }
 
     /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when its starting value cannot start as it did in Elsa 3.</summary>
