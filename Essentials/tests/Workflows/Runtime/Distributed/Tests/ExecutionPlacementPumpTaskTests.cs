@@ -330,6 +330,37 @@ public sealed class ExecutionPlacementPumpTaskTests
     }
 
     /// <summary>
+    /// A hand-off that runs once a detached dispatch was delivered, but before its ack, leaves that item to the dispatch.
+    /// Released instead, the ack would fail and another member would run the delivered command again.
+    /// </summary>
+    [Fact]
+    public async Task A_hand_off_leaves_a_delivered_detached_dispatch_to_acknowledge_its_command()
+    {
+        var store = new InMemoryExecutionPlacementStore();
+        var transport = new AckGatingTransport(new InMemoryExecutionCommandTransport(), gatedAcks: 1);
+        var clock = new FakeTimeProvider(_now);
+        var executor = new HoldingCommandExecutor("env-1");
+        var node = new NodeHarness(NodeA, store, transport, clock, executor, LeaseDuration);
+        var executorB = new RecordingCommandExecutor();
+        var nodeB = new NodeHarness(NodeB, store, transport, clock, executorB, LeaseDuration);
+        await transport.SendAsync(ExecutionId, NodeHarness.Envelope(ExecutionId, "env-1", _now), _now);
+        await SweepAdvancingAsync(node, clock);
+
+        // The drain ends and its ack is held while node A hands the execution off.
+        executor.Release.SetResult();
+        var ack = await transport.NextGatedAckAsync();
+        Assert.Equal(1, await node.Pump.HandOffAllAsync("the test hands it off"));
+        Assert.Null(await store.FindAsync(ExecutionId));
+
+        ack.SetResult();
+        await WaitUntilAsync(async () => (await transport.ListLeasedAsync(NodeA, clock.GetUtcNow(), 10)).Count == 0);
+        Assert.Equal(0, await transport.CountPendingAsync(ExecutionId));
+        Assert.Equal(0, (await SweepAdvancingAsync(nodeB, clock)).DispatchedCommandCount);
+        Assert.Empty(executorB.Processed);
+        Assert.Equal(["env-1"], executor.Processed);
+    }
+
+    /// <summary>
     /// Through the composition the feature uses, the waits of every persistence scope come out of one budget per sweep,
     /// a third of the placement lease. Once it is spent, a busy execution, here in the next scope, is detached without a
     /// wait (#2831). A detached dispatch acknowledges through an operation scope of its own, the sweep's having ended.

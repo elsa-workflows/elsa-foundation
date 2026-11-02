@@ -19,9 +19,9 @@ using WhileActivity = Elsa.Activities.While.Activities.While;
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
 /// <summary>
-/// A Cancel sent through another node stops a drain that keeps making progress (#2831). Node A runs a real workflow
-/// runtime behind its distributed provider; node B only routes. Both share the in-memory placement store, command
-/// transport and clock, and each pump is driven by hand.
+/// A drain that keeps making progress keeps its placement past a lease, and a Cancel sent through another node stops
+/// it (#2831). Node A runs a real workflow runtime behind its distributed provider; node B only routes. Both share the
+/// in-memory placement store, command transport and clock, and each pump is driven by hand.
 /// </summary>
 public sealed class CrossNodeCancelTests
 {
@@ -60,6 +60,23 @@ public sealed class CrossNodeCancelTests
             Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, (await nodeB.DispatchAsync(executionId, Start(executable.Identity, executionId, clock.GetUtcNow()))).Status);
             await PumpSweeps.AdvancingAsync(nodeA.Pump, clock);
             await PumpSweeps.UntilAsync(() => Task.FromResult(loop.Steps >= 3), "The loop did not keep running after the sweep moved on.");
+
+            // For longer than a placement lease, node A's sweeps keep renewing the drain's placement. Node B, sweeping
+            // first each time, sees the start once its transport lease lapses, and may neither claim nor run it.
+            var sawStart = false;
+            for (var elapsed = TimeSpan.Zero; elapsed <= LeaseDuration; elapsed += TimeSpan.FromSeconds(10))
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                sawStart |= (await transport.PeekAsync(executionId, clock.GetUtcNow(), 10)).Count > 0;
+                Assert.Equal(0, (await PumpSweeps.AdvancingAsync(nodeB.Pump, clock)).ClaimedCount);
+                await PumpSweeps.AdvancingAsync(nodeA.Pump, clock);
+                Assert.Equal(NodeA, (await nodeA.PlacementService.FindOwnerAsync(executionId))!.OwnerId);
+            }
+
+            Assert.True(sawStart, "The start's transport lease did not lapse while the drain ran.");
+            Assert.Empty(executorB.Processed);
+            var steps = loop.Steps;
+            await PumpSweeps.UntilAsync(() => Task.FromResult(loop.Steps > steps), "The drain stopped before the Cancel.");
 
             // A Cancel through node B waits in the transport for node A's next sweep, which delivers it without waiting
             // for the drain and renews the placement.

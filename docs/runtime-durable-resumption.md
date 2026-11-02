@@ -246,8 +246,10 @@ cancelled caller removes its waiting signal. If the drain had already yielded an
 caller cancels before it acquires the mailbox, or its turn answers `Duplicate`, `Rejected` or `Deferred`), the remaining
 scheduler work stays durably queued and continues when the sweep's backlog discovery re-drives it, not immediately. An
 idle drain adds no database read for this check. Distributed placement uses the configured local mailbox on the owning
-node. A Cancel sent through another node takes effect once the owner's next placement pump sweep delivers it to that
-mailbox, up to `SweepInterval` later; the sweep does not wait for the running drain (see the
+node. A Cancel sent through another node takes effect once the owner's next placement pump sweep that lists the
+execution delivers it to that mailbox, usually within `SweepInterval` (default 10 seconds). The sweep's own waits for
+local work, failure backoff, or a hand-off or passivation still pending for the execution (#3678) can make it later.
+The sweep does not wait for the running drain (see the
 [distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
 The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
 `InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.

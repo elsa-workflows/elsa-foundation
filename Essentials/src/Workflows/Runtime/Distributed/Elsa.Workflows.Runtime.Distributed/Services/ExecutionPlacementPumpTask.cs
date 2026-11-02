@@ -628,7 +628,8 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
     /// <summary>
     /// Hands one execution off: passivates the local actor at the drain's next boundary, which releases the
     /// placement lease still held under this host id and its placement token, then makes visible every transport item
-    /// this member leased for the execution and has not acknowledged, so an active member can claim and lease them.
+    /// this member leased for the execution and has not acknowledged, except one a detached dispatch still owns, so an
+    /// active member can claim and lease them.
     /// </summary>
     private async ValueTask HandOffAsync(
         string workflowExecutionId,
@@ -651,7 +652,15 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         {
             var now = _timeProvider.GetUtcNow();
             foreach (var item in await leases.ListLeasedAsync(nodeId, now, _pumpOptions.Value.TransportLeaseBatchSize, workflowExecutionId, cancellationToken))
+            {
+                // A dispatch the sweep detached owns its item: released here, a command its drain delivered would fail
+                // its ack and run again on another member. It acks a delivered command; an undelivered one keeps its
+                // lease until the lease lapses, as it would in the sweep.
+                if (_detached.ContainsKey(DetachedKey(partition, item.TransportItemId)))
+                    continue;
                 await leases.ReleaseLeaseAsync(workflowExecutionId, item.TransportItemId, nodeId, item.LeaseToken!.Value, now, cancellationToken);
+            }
+
             return true;
         });
     }
