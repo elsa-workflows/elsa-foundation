@@ -25,6 +25,8 @@ the complete package proof pass with durable recovery configured, as the prior l
 | `AgentAuditEventKind.ProposalResolved` | Additive, Preview | The owner's resolution of an uncertain client operation, correlated like every proposal audit record, with its `claim` |
 | Audit sink, reader and ownership | Existing contracts, replaced together by the EF feature | A duplicate of the trio fails the registration validator. `settledBy` is a metadata key |
 
+**Reporting support.** `GET /_elsa/agent/bootstrap` carries `recovery` (`AgentBootstrapResponse.Recovery`, Additive, Preview): `durable` when a store other than the in-memory default backs a supported composition, `processLifetime` for the in-memory default (sessions survive reloads while the process lives; a restart ends them) and `unsupported` for a composition that cannot recover. Studio states the restart limit when it is not `durable`. At shell activation, a durable store configured into an Unsupported composition logs a warning (`AgentRecoverySupportReporter`).
+
 **Participation.** Session policy remains supported only when session, streaming, invoker and proposal services are the default participants of one owner, as in #3440. Configuring durable recovery gives that owner a record store and does not replace it. A replaced `IAgentTurnStateStore` or a replaced `IAgentSessionRecordStore` that cannot fence makes durable recovery report Unsupported.
 
 ## 2. Wire
@@ -139,3 +141,13 @@ deterministic provider-protocol evidence, and live-provider recovery is not clai
 | Studio SDK `StudioAgentToolContractContribution.clientTargetAvailability` (optional; the owning module reports before dispatch whether a client invocation's unsaved target still exists, and anything else refuses with zero effect) | Minor (additive), public SDK |
 | Studio client runner reports a missing module adapter as "The owning module's client adapter for this change is not present. Nothing was applied." | Behaviour change (refusal text only), recorded |
 | Studio SDK `StudioHttpError.retryAfterSeconds` (the response's `Retry-After` hint; a trailing optional constructor parameter) | Minor (additive), public SDK |
+| `Elsa.Agent.Extensions.AgentPersistenceSelection` (`SelectAgentSessionRecordStore`, `SelectAgentAuditStore<TStore>`) | Minor (additive), Preview |
+| New package `Elsa.Agent.Persistence.EntityFrameworkCore`: feature `FoundationAgentEntityFrameworkCore`, `AgentEntityFrameworkCoreRegistration` (`AddAgentEntityFrameworkCore`, `AddAgentStores<TContext>`), `AgentEntityFrameworkCoreOptions`, `AgentEfModule`, `AgentDbContext` and its four provider contexts, `AgentModelBuilderExtensions.AddAgentModel`, and the per-provider `Initial` migrations | Minor (new package), Preview |
+| `GitHubCopilotAgentProvider.ConversationResetCode` | Minor (additive) |
+| `AgentRegistrationValidator` refuses a second `IAgentAuditSink`, `IAgentAuditReader` or `IAgentAuditOwnership` registration (as it does a second `IAgentSessionRecordStore`) | Behaviour change, recorded; Major-class, accepted pre-GA under ADR 0080 D4 |
+| `AgentSession.LimitReached`, `AgentSessionRecoveryStates`, `AgentSessionDetailsResponse.LimitReached` (`limitReached`), and `recoveryState` = `limit-reached:<limit>` | Minor (additive), Preview |
+| `AgentBootstrapResponse.Recovery` (`recovery`: `durable`, `processLifetime` or `unsupported`) and the activation warning for a durable store in an Unsupported composition | Minor (additive), Preview |
+| `AgentSessionRecord.PendingAudits`, `AgentSessionRecordWrite.PendingAudits` (record-store port) | Minor (additive), Preview; a store that ignores them keeps the earlier delivery |
+| `AgentSessionCreateRequest.MaxWorkspaceLength` and `MaxContinuedFromLength`; create refuses longer values with 400 `agent.session.invalid_request` (the owner throws `ArgumentException`) | Minor (additive), Preview; refusing over-long values is a behaviour change, recorded |
+| The owner list counts only reviews before their prepared deadline and lists an active session past its expiry as `expired` | Behaviour change, recorded |
+| A lease is renewed only while a turn runs or an executor is still running (no longer for an operation that only waits on a client or its owner) | Behaviour change, recorded |

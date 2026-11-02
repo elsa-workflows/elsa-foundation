@@ -78,7 +78,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
   Own the SC-001 matrix: the six boundaries, before and after each deadline, with execution counts. That includes story 2.1 (idle restart) and story 2.2 (a review stays decidable before its deadline).
 
-  Verified: commit `1bb7ac936`; `AgentRestartHarness` plus `AgentRecoveryRestartTests`. The pending-review control was red on the pre-T010 code (`agent.proposal.not_found`). A skipped approval write makes the approved-before-dispatch scenario fail. The matrix covers 6 boundaries × before/after deadline with module dispatch counts on the host-driven loop; the delegated (Copilot) adapter is exercised by T015's tests and is qualified against actual adapters in T031.
+  Verified: commit `1bb7ac936`; `AgentRestartHarness` plus `AgentRecoveryRestartTests`. The pending-review control was red on the pre-T010 code (`agent.proposal.not_found`). A skipped approval write makes the approved-before-dispatch scenario fail. The matrix covers 6 boundaries × before/after deadline with module dispatch counts on the host-driven loop; the delegated (Copilot) adapter is exercised by T015's tests and is qualified against actual adapters in T031. Self-review round 1 (S3) runs the six boundary theories on a deterministic delegated loop too (`HeldDelegatedProvider`, dispatching through the server's tool invoker as the Copilot adapter does), before and after each deadline, on both stores.
 - [x] T010 [US2] Rebuild claims at hydrate (research R4) in `DefaultAgentServices.cs`:
   - Prompt, from a Pending message;
   - Pause, from the paused turn;
