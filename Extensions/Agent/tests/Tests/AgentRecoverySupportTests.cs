@@ -9,8 +9,8 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Agent.Tests;
 
 /// <summary>
-/// #3441 self-review round 1 (S2): a composition reports what a restart does to its sessions. Bootstrap names it, and a
-/// durable store configured into a composition that cannot use it warns at activation instead of failing silently.
+/// #3441 self-review rounds 1 and 2 (S2, P3-1): a composition reports what a restart does to its sessions. Bootstrap names
+/// it, and a durable store configured into a composition that cannot use it fails activation instead of running partly durable.
 /// </summary>
 public sealed class AgentRecoverySupportTests
 {
@@ -50,20 +50,26 @@ public sealed class AgentRecoverySupportTests
     [InlineData("durable-replaced-pauses", true)]
     [InlineData("durable", false)]
     [InlineData("default-replaced-pauses", false)]
-    public async Task Activation_warns_only_when_a_configured_durable_store_cannot_be_used_for_recovery(string composition, bool warns)
+    public async Task Activation_refuses_a_configured_durable_store_that_the_composition_cannot_use_for_recovery(string composition, bool refused)
     {
         using var harness = Harness(composition);
-        var logger = new ListLogger();
-        var reporter = new AgentRecoverySupportReporter(harness.Host.Services.GetRequiredService<IServiceScopeFactory>(), logger);
+        var validator = new AgentDurableRecoveryValidator(harness.Host.Services.GetRequiredService<IServiceScopeFactory>(), new ListLogger());
 
-        await reporter.InitializeAsync(CancellationToken.None);
+        var failure = await Record.ExceptionAsync(() => validator.InitializeAsync(CancellationToken.None));
 
-        Assert.Equal(warns, logger.Entries.Any(x => x.Level == LogLevel.Warning && x.Message.Contains("durable recovery", StringComparison.Ordinal)));
+        if (!refused)
+        {
+            Assert.Null(failure);
+            return;
+        }
+        var diagnostic = Assert.IsType<InvalidOperationException>(failure).Message;
+        Assert.Contains("durable", diagnostic, StringComparison.Ordinal);
+        Assert.Contains(typeof(IAgentTurnStateStore).Name, diagnostic, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void The_default_composition_registers_the_activation_report()
-        => Assert.Contains(AgentTestServices.Create().GetServices<CShells.Lifecycle.IShellInitializer>(), x => x is AgentRecoverySupportReporter);
+    public void The_default_composition_registers_the_activation_validator()
+        => Assert.Contains(AgentTestServices.Create().GetServices<CShells.Lifecycle.IShellInitializer>(), x => x is AgentDurableRecoveryValidator);
 
     private static AgentRestartHarness Harness(string composition)
     {
@@ -79,7 +85,7 @@ public sealed class AgentRecoverySupportTests
         });
     }
 
-    private sealed class ListLogger : ILogger<AgentRecoverySupportReporter>
+    private sealed class ListLogger : ILogger<AgentDurableRecoveryValidator>
     {
         public List<(LogLevel Level, string Message)> Entries { get; } = [];
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;

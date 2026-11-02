@@ -142,29 +142,35 @@ internal static class AgentRecoveryModes
 }
 
 /// <summary>
-/// At shell activation, warns when a durable record store is selected but the composition cannot use it for recovery (a
-/// replaced session, streaming, invoker, proposal or turn-state service, or a store that cannot fence): sessions then
-/// behave as in-process ones. Reporting never blocks activation.
+/// At shell activation, refuses a durable record store configured into a composition that cannot use it for recovery (a
+/// replaced session, streaming, invoker, proposal or paused-turn service, or a store that cannot fence). Such a composition
+/// would rehydrate sessions from the durable store while losing paused turns and claims, so it fails activation with a
+/// clear diagnostic instead of running partly durable. A composition whose lifecycle services cannot be resolved here is
+/// reported by its own consumer.
 /// </summary>
-internal sealed class AgentRecoverySupportReporter(IServiceScopeFactory scopes, ILogger<AgentRecoverySupportReporter>? logger = null) : IShellInitializer
+internal sealed class AgentDurableRecoveryValidator(IServiceScopeFactory scopes, ILogger<AgentDurableRecoveryValidator>? logger = null) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        bool refused;
         try
         {
             using var scope = scopes.CreateScope();
             var recovery = scope.ServiceProvider.GetRequiredService<AgentDurableRecovery>();
-            if (recovery.DurableStoreSelected && recovery.Evaluate() == AgentDurableRecoverySupport.Unsupported)
-                logger?.LogWarning("A durable agent session record store is configured, but this composition does not support durable recovery " +
-                    "(a session, streaming, invoker, proposal or paused-turn service is replaced, or the store cannot fence). " +
-                    "Weaver sessions are not recovered after a restart.");
+            refused = recovery.DurableStoreSelected && recovery.Evaluate() == AgentDurableRecoverySupport.Unsupported;
         }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
-            // A composition that cannot resolve its lifecycle services reports that from its own consumer.
             logger?.LogDebug("Durable agent recovery support could not be evaluated at activation ({FailureType}).", failure.GetType().Name);
+            return Task.CompletedTask;
         }
+        if (refused)
+            throw new InvalidOperationException(
+                $"A durable '{nameof(IAgentSessionRecordStore)}' is selected, but this composition cannot use it for durable recovery: the " +
+                $"session, streaming, invoker and proposal services must be the default participants of one session owner, " +
+                $"'{nameof(IAgentTurnStateStore)}' must be the default, and the store must fence its writes. Remove the replacement, or do not " +
+                "select a durable store.");
         return Task.CompletedTask;
     }
 }
