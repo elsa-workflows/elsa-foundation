@@ -75,7 +75,7 @@ Extract shared semantic graph models/identities into Elsa.Activities.Bpmn.Core. 
 
 ### D8 — Native tools, approval and teams
 
-Separate model turns, human approval waits and protected effects into native operations. M4 delivers the finite [editorial revision/review example](contracts/editorial.md), including a real exact-wait human decision path, before M6 reusable teams/tools. SDK approval objects are not durable permission. Coordinate #2912's decision/approval/effect/budget work; use native complete-cohort barriers, bounded feedback and cancellation. Do not adopt MAF Workflows checkpoints as a second owner for the initial patterns. [Execution contract](contracts/execution.md) and [team contract](contracts/teams.md).
+Separate model turns, human approval waits and protected effects into native operations. M4 delivers the generic [human review](contracts/human-review.md) wait and decision path, shown by the [editorial sample](contracts/editorial.md), before M6 reusable teams/tools. SDK approval objects are not durable permission. Coordinate #2912's decision/approval/effect/budget work; use native complete-cohort barriers, bounded feedback and cancellation. Do not adopt MAF Workflows checkpoints as a second owner for the initial patterns. [Execution contract](contracts/execution.md) and [team contract](contracts/teams.md).
 
 ### D9 — Module-owned Studio experience
 

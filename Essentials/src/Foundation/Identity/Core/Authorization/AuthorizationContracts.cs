@@ -168,6 +168,13 @@ public static class IdentityClaimTypes
 {
     public const string Normalized = "elsa.identity.normalized";
 
+    /// <summary>
+    /// The Elsa user ID of the subject, set by the projection that owns the persisted user record. Unlike
+    /// <c>NameIdentifier</c> or <c>sub</c>, it never carries an external provider's subject, so deferred work that
+    /// binds an actor (for example a review decision) uses it.
+    /// </summary>
+    public const string UserId = "elsa.identity.user_id";
+
     public const string TenantId = "elsa.identity.tenant_id";
 
     public const string Provider = "elsa.identity.provider";

@@ -34,7 +34,7 @@ public sealed class HumanReview(IWorkflowExecutionStateStore workflows, IPersist
 
     protected override async ValueTask<ActivityTransition<HumanReviewResult, HumanReviewState>> ExecuteAsync(ActivityExecutionContext context)
     {
-        if (Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null || ReviewDecisionCodec.CanonicalBytes(Content).Length > HumanReviewIds.MaximumContentBytes ||
+        if (!ContentFits(Content) ||
             Title?.Length > HumanReviewIds.MaximumTextCharacters || Notes?.Length > HumanReviewIds.MaximumTextCharacters)
             return Fault(new("agent.review.input-invalid", "The content, title or notes are outside the human review bounds."));
         var parent = await workflows.FindAsync(context.WorkflowExecutionId, context.CancellationToken);
@@ -68,6 +68,11 @@ public sealed class HumanReview(IWorkflowExecutionStateStore workflows, IPersist
             claims.ActorId, claims.Comment, claims.IssuedAt, claims.RequestId);
         return ValueTask.FromResult(Complete(result, claims.Decision == ReviewDecision.Approve ? "Approved" : "Rejected"));
     }
+
+    /// <summary>Present and at most 64 KiB in the canonical encoding that also identifies the content.</summary>
+    internal static bool ContentFits(JsonElement content) =>
+        content.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null) &&
+        ReviewDecisionCodec.CanonicalBytes(content).Length <= HumanReviewIds.MaximumContentBytes;
 
     internal static ActivityTriggerRegistration<ReviewDecisionDelivery> Registration(string waitId) =>
         new(HumanReviewIds.ResumeTargetKey, HumanReviewIds.StimulusType, waitId, ActivityTriggerDeduplicationMode.Once);

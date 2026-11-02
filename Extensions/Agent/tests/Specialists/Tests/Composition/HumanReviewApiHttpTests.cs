@@ -77,6 +77,20 @@ public sealed class HumanReviewApiHttpTests : IAsyncLifetime
         Assert.Equal(new ReviewDecisionCommand("run-1", "review-1", "hash", ReviewDecision.Approve, "Ship it.", "request-0001"), command);
     }
 
+    [Fact]
+    public async Task An_external_sign_in_decides_as_its_canonical_Elsa_user_not_the_provider_subject()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, Route + "/decision")
+        {
+            Content = new StringContent("""{"contentHash":"hash","decision":"Approve","requestId":"request-0009"}""", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Permissions", HumanReviewIds.DecidePermission);
+        request.Headers.Add("X-External", "true");
+
+        Assert.Equal(HttpStatusCode.OK, (await host.GetTestClient().SendAsync(request)).StatusCode);
+        Assert.Equal(new ReviewDecider("tenant-a", "elsa-user-ada"), Assert.Single(reviews.Decisions).Decider);
+    }
+
     [Theory]
     [InlineData("""{"contentHash":"hash","decision":"Approve","requestId":"request-0002","actorId":"someone-else"}""")]
     [InlineData("""{"contentHash":"hash","decision":"Approve","requestId":"request-0003","requestedBy":"admin"}""")]
@@ -150,10 +164,11 @@ public sealed class HumanReviewApiHttpTests : IAsyncLifetime
                 return Task.FromResult(AuthenticateResult.NoResult());
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, "subject-ada"),
+                new(ClaimTypes.NameIdentifier, Request.Headers.ContainsKey("X-External") ? "provider-subject" : "subject-ada"),
                 new(IdentityClaimTypes.TenantId, "tenant-a"),
                 new(IdentityClaimTypes.Normalized, "v1")
             };
+            if (Request.Headers.ContainsKey("X-External")) claims.Add(new(IdentityClaimTypes.UserId, "elsa-user-ada"));
             claims.AddRange(permissions.ToString().Split(',').Select(permission => new Claim(IdentityClaimTypes.Permission, permission)));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, HumanReviewApiHttpTests.Scheme)), HumanReviewApiHttpTests.Scheme)));
         }

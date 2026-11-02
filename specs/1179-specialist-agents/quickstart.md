@@ -57,7 +57,7 @@ the tabs and test 320px page overflow. This is design verification, not producti
 ## Run equivalent native and BPMN editorial processes
 
 Native: Copywriter → Proofreader → structured-verdict branch → bounded rewrite or human review.
-Use [the editorial contract](contracts/editorial.md): feed the rejected article/comments into the
+Use [the editorial contract](contracts/editorial.md), built on the [human review contract](contracts/human-review.md): feed the rejected article/comments into the
 next writer call, maximum three total rounds; exhaustion takes an explicit process branch. Restart
 at the exact human wait, approve/deny in separate runs, and replay/alter/late-deliver decisions to
 prove one continuation and no approval after denial. BPMN executes these same cases.
