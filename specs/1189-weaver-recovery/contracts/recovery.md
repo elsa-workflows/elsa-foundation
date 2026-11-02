@@ -7,11 +7,12 @@ the complete package proof pass with durable recovery configured, as the prior l
 
 | Member | Kind | Notes |
 | --- | --- | --- |
-| `IAgentSessionRecordStore` | Replacement contract, at most one, Preview | Aggregate reads and writes for one session: hydrate, write a transition with a fence check, take ownership, renew and release the lease, insert unique keys, list owned sessions. The default in-memory implementation matches today's behaviour. A second registration fails `AgentRegistrationValidator` |
+| `IAgentSessionRecordStore` | Replacement contract, at most one, Preview | Aggregate reads and writes for one session: hydrate, write a transition with an owner and fence check that also extends the lease, take ownership, release the lease, insert unique keys, resolve a proposal to its session, list owned sessions. The default in-memory implementation matches today's behaviour. A second registration fails `AgentRegistrationValidator` |
 | `IAgentTurnStateStore` | Existing contract, **changed** | Becomes `SaveAsync`, `FindAsync` and `RemoveAsync`. A Major change, accepted pre-GA under ADR 0080 D4. A replacement keeps autonomy support, but durable recovery is Unsupported for that composition |
 | `IAgentSessionService.ListOwnedAsync(AgentSessionOwnerQuery)` | Additive, Preview | Defaults to Unsupported. Filters by actor and tenant, then workspace, then orders and limits |
 | `AgentSessionOwnerQuery`, `AgentSessionSummary` | Additive models | Actor, tenant, workspace, take (at most 100) and a `before` cursor. The summary holds id, title, status, updatedAt, expiresAt, pendingReviewCount and recoveryState |
 | `AgentMessage.StatusReason` | Additive | `interrupted`, `withdrawn` or `user-stop` for Cancelled |
+| Audit sink, reader and ownership | Existing contracts, replaced together by the EF feature | A duplicate of the trio fails the registration validator. `settledBy` is a metadata key |
 
 **Participation.** Session policy remains supported only when session, streaming, invoker and proposal services are the default participants of one owner, as in #3440. Configuring durable recovery gives that owner a record store and does not replace it. A replaced `IAgentTurnStateStore` or a replaced `IAgentSessionRecordStore` that cannot fence makes durable recovery report Unsupported.
 
@@ -24,8 +25,16 @@ the complete package proof pass with durable recovery configured, as the prior l
 | `POST /_elsa/agent/sessions/{id}/messages/{messageId}/withdraw` | 200 message, Cancelled with reason `withdrawn` | 404 and 403; 409 `agent.message.not_pending` |
 | `POST /_elsa/agent/sessions/{id}/client-invocations/{invocationId}/resolution` `{ claim: applied \| notApplied \| unknown }` | 200 proposal with `ownerResolution`; the claim is released | 404 and 403; 409 `agent.invocation.not_uncertain` |
 | `POST /_elsa/agent/proposals/{id}/execute` (existing) | As today | Adds 409 `agent.proposal.policy_stale` when the stamped revision differs; Expired once the deadline has passed |
-| Any route on a session this process no longer owns | n/a | 409 `agent.session.ownership_lost` |
+| Any route on a session another process holds a live lease on | n/a | 409 `agent.session.owned_elsewhere`, retryable, with a retry hint |
+| Any route on a session this process lost during the call | n/a | 409 `agent.session.ownership_lost` |
 | Any route on unreadable recorded state | n/a | 409 `agent.session.unavailable_state` with a reason |
+
+Authorization runs on the plain owner columns first. A foreign or missing caller receives only the
+shared 404 or 403 and causes no hydration, takeover or settlement. Ownership and unavailable-state
+outcomes are reported only to the owner. Withdraw is a compare-and-set from Pending, and is refused
+while a turn is registered. Acknowledgement and resolution are idempotent on retry. Resolution
+releases the operation's own claim. A paused turn that awaits it stays busy until the owner continues
+it.
 
 The stream route is unchanged. Opening it starts the latest Pending prompt or the paused continuation; Studio opens it only on an explicit Start.
 
@@ -41,7 +50,7 @@ The stream route is unchanged. Opening it starts the latest Pending prompt or th
 | The disclosure limit is reached (64 distinct snapshots or 8 MiB) | `agent.context.disclosure_budget_exceeded`, with `limit: snapshots \| bytes` | Zero |
 | The Copilot resume falls back to a new SDK session | Stream event `agent.provider.github_copilot.conversation_reset`, recorded on the turn | n/a |
 
-**Authorization pass.** A pass is one admission sequence that ends at the next store, provider or tool await. Awaits inside admission do not end it. Within a pass, each disclosure source admits each distinct snapshot at most once.
+**Authorization pass.** A pass is one admission sequence. It ends at the next write, provider call or tool execution. Awaits for owner admission and tool discovery belong to the pass, as in spec FR-015. Within a pass, each disclosure source admits each distinct snapshot at most once.
 
 ## 4. SemVer (ADR 0080, pre-GA)
 

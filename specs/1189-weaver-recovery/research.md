@@ -37,6 +37,23 @@ Two changes in the existing code:
 - The three steps `TurnMutations.GetOrAdd` → `AddAsync` → `CallInputs.TryAdd` (`AgentToolInvoker.cs:175-178`) become one insert.
 - Every internal owner method hydrates its row first. Today `MarkProposalDispatched` returns `true` when no row is loaded (`DefaultAgentServices.cs:255`).
 
+**Ordering rules (planning review):**
+- **Claims and policy changes serialize on the session write gate.**
+  - Acquiring a Prompt, Foreground, Preparation, Proposal or Pause claim takes the gate asynchronously, the same way `ChangeAutonomy` does.
+  - This keeps today's atomic order of busy check, revision write and claim admission (`DefaultAgentServices.cs:323-350`) across the awaited write.
+  - A claim acquired while a policy write is in flight waits, then reads the new revision.
+- **Hydration is single-flight under the session write gate.** It never takes proposal gates.
+  - Settlement during hydration changes proposal status by compare-and-set on status and version.
+  - The declared order (proposal gate → session gate) therefore cannot invert.
+  - Concurrent first hydrations do not record Expired twice.
+- **The record store resolves a proposal to its owning session.** The approve, deny and execute routes address proposals by id (`Api/AgentApi.cs:53-58`), and `FindAsync`/`AccessAsync` read by id before any session lookup (`AgentProposalServices.cs:97,329`). After a restart or eviction, a proposal lookup hydrates its session first.
+- **Authorization uses the plain owner columns before any payload is decoded or ownership is taken.**
+  - A foreign actor receives the shared 404 or 403 and triggers no hydrate, takeover or settlement.
+  - `agent.session.unavailable_state` and ownership outcomes are reported only to the owner.
+- **Message status changes become compare-and-set on the expected status.**
+  - Start moves Pending to Streaming.
+  - Withdraw moves Pending to Cancelled and is refused while a turn is registered, so a withdraw cannot lose to a concurrent Start (`DefaultAgentServices.cs:164-182`, `AgentTurnServices.cs:199`).
+
 **Rationale:**
 - Replacing the owner would make policy Unsupported, which violates FR-004.
 - One store keeps fence checks coherent and follows the "replace together" rule.
@@ -112,7 +129,9 @@ Claims are rebuilt under the row monitor:
 | A Streaming source message with no pause (`AgentTurnServices.cs:199`) | Interrupted: Cancelled with a reason distinct from a user stop. No Foreground claim is rebuilt |
 | Preparation claims | Not rebuilt: preparation never survives a process |
 
-The existing keyed releases (`:177`, `:269-275`) work unchanged. `ExecuteAsync` gains an explicit check that the proposal's `PolicyRevision` equals the current revision (story 2.3).
+The existing keyed releases (`:177`, `:269-275`) work unchanged.
+
+Owner resolution of an uncertain client operation releases only that proposal's claim. A Pause claim always counts as busy (`DefaultAgentServices.cs:403-404`) and is removed only when the continuation runs (`AgentTurnServices.cs:578-582`). So a resolved operation inside a paused turn keeps the session busy until the owner starts the continuation. The continuation then reports the owner's statement to the provider as an uncertain outcome, not as a receipt. `ExecuteAsync` gains an explicit check that the proposal's `PolicyRevision` equals the current revision (story 2.3).
 
 **Alternatives considered:**
 - *Sweep only:* rejected; reads would still have to handle the gap until the sweep runs.
@@ -126,8 +145,10 @@ The existing keyed releases (`:177`, `:269-275`) work unchanged. `ExecuteAsync` 
 
 **Decision:** The session record carries `OwnerToken` (one per process), `Fence` (incremented on every takeover), `LeaseExpiresAt` (in database time) and a concurrency token.
 - Ownership is acquired at hydrate, when the owner is empty or its lease has expired, or when this process already owns it.
-- Every write is guarded on the current fence, the current owner and an unexpired lease.
-- The lease is renewed while a Foreground claim is held or an execution is dispatched. The default is 30 seconds, configurable.
+- Every write is guarded on the current owner and fence only. The same conditional update extends the lease, or re-acquires an expired lease that no other process took over. An idle session that one host revisits after the lease has lapsed therefore never fails. The Rules precedent, by contrast, requires an unexpired lease (`EfRuleRunStore.Leases.cs:136`).
+- While a Foreground claim is held or an execution is dispatched, the lease is also renewed in the background. The default is 30 seconds, configurable.
+- A process that finds another process's live lease returns a retryable 409 `agent.session.owned_elsewhere` with a retry hint. It does not take over.
+- Acknowledgements and owner resolutions are idempotent on retry. A retry after a takeover returns the retained outcome.
 
 When ownership is lost:
 - The row is evicted. Existing tokens become no-ops; `Release` already tolerates a missing row (`DefaultAgentServices.cs:300`).
@@ -145,6 +166,14 @@ When ownership is lost:
 
 The EF feature registers its store through an explicit selection that throws when a second selection is made, modelled on `Specialists/Core/DependencyInjection/SpecialistTurnStoreRegistration.cs:10-42`. The Agent-wide gap for existing contracts stays with #3633.
 
+## R10. Durable owner-scoped audit
+
+**Decision:** The EF feature replaces the audit sink, reader and ownership together. They are three `TryAdd` contracts implemented by one class (`Elsa.Agent/Extensions/AgentServiceCollectionExtensions.cs:44-47`). The registration validator detects a duplicate of the trio.
+- Ownership association is persisted, so `ListOwnedAsync` still scopes recovered sessions after a restart. Today the in-memory `_owners` map is empty after a restart, and `AssociateAsync` runs only in `CreateAsync`.
+- `settledBy` is an audit metadata key (`recovery` or `user`), so `AgentAuditEvent` keeps its shape.
+
+**Alternatives considered:** Keeping audit in memory beside a durable session store was rejected. FR-013 audit queries would return nothing for recovered sessions.
+
 ## R7. EF Core persistence feature (ADR 0073)
 
 **Decision:** One project, `Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj`, modelled on Specialists (`SpecialistsEntityFrameworkCoreFeature.cs:12-26`, `SpecialistsEntityFrameworkCoreRegistration.cs:15-36`).
@@ -160,6 +189,8 @@ The EF feature registers its store through an explicit selection that throws whe
 - Migrations live under `Migrations/Agent/<Provider>/` and are generated with `tools/ef/generate-module-migrations.sh`.
 - Each context is registered in `tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs`.
 - Tables are `elsa_agent_*`, with per-provider payload column types (`SpecialistsModelBuilderExtensions.cs:17-25`).
+
+**Project files:** following the Specialists project, the project also carries `PublicAPI.Shipped.txt`/`PublicAPI.Unshipped.txt`, `nuplane.json` (`ef-provider` capability), a README, an `EXTENSION_POINTS.md` and an `EfModule` `AssemblyInfo`.
 
 **Payload protection:** `ISecretValueProtector` protects payloads in a codec owned by the feature, as Specialists does (`SpecialistTurnJournal.cs:13,30`).
 
@@ -219,6 +250,7 @@ Two existing routes cover the remaining actions:
 **Decision for Anthropic:**
 - Exclude Cancelled, interrupted and withdrawn user prompts from the provider history, together with the Failed partial assistant text that belongs to them.
 - Keep them in the Elsa transcript, marked as not accepted.
+- Tool receipt messages that an interrupted turn already recorded stay in provider history. They are real accepted outcomes.
 
 **Rationale:** FR-021 requires every reset to be explicit and forbids counting interrupted content as accepted.
 

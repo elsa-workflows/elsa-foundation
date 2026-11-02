@@ -12,12 +12,18 @@ This document describes logical records. EF column types follow per-provider con
 | `Status`, `CreatedAt`, `UpdatedAt`, `ExpiresAt` | Existing lifecycle. Expiry is evaluated when the session is hydrated |
 | `Policy` (protected), `PolicyRevision` | Acknowledged policy and revision. Changes only through the owner (#3440 contract) |
 | `Context` (protected) | The session context |
-| `OwnerToken`, `Fence`, `LeaseExpiresAt` | Work ownership. `Fence` increases monotonically on every takeover. The lease uses database time |
+| `OwnerToken`, `Fence`, `LeaseExpiresAt` | Work ownership. `Fence` increases monotonically on every takeover. Writes are guarded on owner and fence. The same update extends the lease, which uses database time (research R5) |
 | `Version` | Optimistic concurrency token |
 | `PausedTurn` (protected, nullable) | Paused transcript plus an ordered list of snapshot digests, and the stored `PauseFingerprint` kept verbatim. Saving it records the Pause claim |
 | `ContinuedFrom` (nullable) | A link to the original session when this session was created to continue past a limit |
 
 ## Message record (`elsa_agent_messages`)
+
+Every existing `AgentMessage` member is persisted. The full model is stored as one protected
+serialized payload, which includes `HasDisclosureProvenance`, the `AcceptedPolicy` snapshot,
+`CreatedAt`, `CompletedAt`, `Source`, `PromptMode`, `CapabilityId` and `ContextAttachmentIds`. The
+only change to the model is that the inline cumulative disclosure list is replaced by digest
+references. The columns below are the indexed or derived ones.
 
 | Field | Notes |
 | --- | --- |
@@ -38,6 +44,11 @@ This document describes logical records. EF column types follow per-provider con
 
 ## Proposal record (`elsa_agent_proposals`)
 
+Every existing `AgentActionProposal` member is persisted as one protected serialized payload. That
+includes `ApprovedBy`, `ApprovedAt`, `RequiresApproval` and `BaseRevision`, which approval
+idempotency and `RevisionMatches` use. The columns below are the indexed or derived ones. A
+`ProposalId → SessionId` index, scoped by owner, lets a proposal route hydrate its session first.
+
 | Field | Notes |
 | --- | --- |
 | `ProposalId` | Key. Belongs to `SessionId` and `TurnId` |
@@ -49,11 +60,16 @@ This document describes logical records. EF column types follow per-provider con
 
 ### Unique keys (`elsa_agent_call_keys`)
 
-`(SessionId, Kind, Key) → ProposalId`, where `Kind` is one of `call`, `invocation`, `turn-mutation` or `call-input`. All the keys for one preparation are inserted in one transaction.
+`(SessionId, Kind, Key) → Value`, where `Kind` is one of the following:
+- `call` and `invocation`: the value is a ProposalId.
+- `turn-mutation`: the value is the call key.
+- `call-input`: the value is the input digest (`AgentToolInvoker.cs:175-178`).
+
+ All the keys for one preparation are inserted in one transaction.
 
 ## Audit record (`elsa_agent_audit`)
 
-This is the existing audit event plus the owner (`ActorId`, `TenantId`) and `SettledBy` (`user` or `recovery`). It is read through `ListOwnedAsync` with owner, order and take.
+This is the existing audit event plus a persisted owner association (`SessionId → ActorId, TenantId`). `settledBy` (`user` or `recovery`) is a metadata key. Audit is read through `ListOwnedAsync` with owner, order and take. The EF feature replaces the sink, the reader and ownership together (research R10).
 
 ## In-memory only (rebuilt, never stored)
 

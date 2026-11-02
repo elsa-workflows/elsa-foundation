@@ -2,7 +2,19 @@
 
 **Branch**: `agent/claude/3441-weaver-recovery` | **Date**: 2026-11-02 | **Spec**: [spec.md](spec.md)
 
-**Status**: Draft, pending independent planning review. No shared contract is frozen.
+**Status**: Approved for task generation after an independent planning review on 2026-11-02. Its verified findings are incorporated:
+- lease extension on write, and a retryable owned-elsewhere outcome;
+- claims serialized with policy writes on the session write gate;
+- single-flight hydrate with compare-and-set settlement;
+- proposal-to-session resolution;
+- durable audit as a trio;
+- the complete persisted models;
+- compare-and-set for withdraw;
+- authorization before hydration;
+- one definition of the authorization pass;
+- Pause-claim busy semantics.
+
+No shared contract is frozen.
 
 **Implementation base**: main `8da103a38`, which contains #3440 (`95e4e9610`) and its documentation follow-up #3638.
 
@@ -98,7 +110,8 @@ specs/1189-weaver-recovery/
 ```text
 Extensions/Agent/src/
   Core/Contracts/AgentContracts.cs, AgentTurnContracts.cs        # record-store port, async turn state, list query
-  Core/Models/AgentModels.cs, Core/PublicAPI.Unshipped.txt
+  Core/Models/AgentModels.cs
+  Elsa.Agent/PublicAPI.Unshipped.txt
   Elsa.Agent/Services/DefaultAgentServices.cs                     # owner write-through, hydrate, fence, rebuild
   Elsa.Agent/Services/AgentTurnServices.cs                        # async pause, admission pass, interruption
   Elsa.Agent/Services/AgentProposalServices.cs                    # durable transitions, revision recheck
@@ -128,6 +141,7 @@ tools/ef/, tools/ci/test-tiers.json, Elsa.Server.slnx             # EF tooling, 
    - Make `IAgentTurnStateStore` async.
    - Route every owner transition through hydrate and an awaited write, then the monitor.
    - Fix the three-step call-key insert and the unloaded-row hazard.
+   - Serialize claim acquisition and policy writes on the session write gate. Make hydration single-flight, with compare-and-set settlement. Resolve proposals to their session. Make message status changes compare-and-set.
    - Behaviour is unchanged, so all 737 existing Agent tests must still pass.
 2. **Restart semantics.**
    - Rebuild claims at hydrate.
@@ -144,6 +158,8 @@ tools/ef/, tools/ci/test-tiers.json, Elsa.Server.slnx             # EF tooling, 
    - Causal tests: quadratic growth fails before the change and passes after it; fingerprint and pause stability across a restart.
 4. **EF feature.**
    - Project, contexts, migrations for the four engines, codec with Secrets.
+   - Durable audit: sink, reader and ownership replaced together.
+   - PublicAPI files, `nuplane.json`, a README, `EXTENSION_POINTS.md` and an `EfModule` AssemblyInfo.
    - Registration and duplicate detection.
    - Provider-contract tests and the tier, tooling, solution and maps updates.
 5. **API and Studio.**
