@@ -1226,8 +1226,9 @@ def _run_restart_inventory(runtime, host, scope):
                 run.assert_immutable_inputs()
         database = Path(section["durableStore"]["database"])
         section["durableStore"]["databaseObserved"] = database.is_file() and database.stat().st_size > 0
-        require_restart_inventory(section, run.root, source=run.source)
+        # The final gate reads the finished section; a failing gate turns it back to failed below.
         section["status"] = "passed"
+        require_restart_inventory(section, run.root, source=run.source)
     except BaseException as error:
         section.update(status="failed", failure={"type": type(error).__name__, "message": str(error)[:1000]})
         raise

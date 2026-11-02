@@ -387,6 +387,27 @@ class RestartManifestTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             require_restart_inventory(complete_restart_section({"path": "/elsewhere/owner.json", "sha256": "0" * 64}), self.root, source="frozen")
 
+    def test_a_complete_inventory_run_passes_its_own_final_gate(self):
+        # T033 attempt 2 passed all 20 cases and the control, then failed because the gate saw status 'running'.
+        complete = complete_restart_section(self.ref, source=None)
+        database = self.root / "agent-records.db"
+        database.write_bytes(b"sqlite")
+        store = dict(complete["durableStore"], database=str(database))
+        run = SimpleNamespace(root=self.root, report={"independentPackageWitness": False}, source=None, save=lambda: None, assert_immutable_inputs=lambda: None)
+        runtime = SimpleNamespace(run=run, select_provider=lambda provider: None)
+
+        def phase(_runtime, _host, provider, _phase, keys):
+            return [row for row in complete["cases"] if row["provider"] == provider and row["caseKey"] in keys], {"ref": self.ref}
+
+        originals = rj._control, rj._enable_store, rj._run_phase
+        rj._control, rj._enable_store, rj._run_phase = lambda *_: complete["control"], lambda *_: store, phase
+        try:
+            section = rj._run_restart_inventory(runtime, Mock(), "complete-package-witness-restarts")
+        finally:
+            rj._control, rj._enable_store, rj._run_phase = originals
+        self.assertEqual("passed", section["status"])
+        self.assertEqual("passed", json.loads((self.root / "restart-recovery-qualification.json").read_text())["status"])
+
     def test_the_inventory_runs_only_inside_a_running_witness_after_the_autonomy_matrix(self):
         for report in ({"status": "running", "witnessManifest": {}}, {"status": "passed", "witnessManifest": {}, "autonomyLifecycleQualification": {"status": "passed"}},
                        {"status": "running", "autonomyLifecycleQualification": {"status": "passed"}}):
