@@ -11,7 +11,7 @@ public sealed class AgentHarnessConflictException(IReadOnlyCollection<string> pr
 }
 
 /// <summary>
-/// Experimental: the owning session store refused an insertion because the session policy revision moved after
+/// Preview: the owning session store refused an insertion because the session policy revision moved after
 /// the delivery was authorized. Nothing was inserted; the caller may re-authorize under the current policy.
 /// </summary>
 public sealed class AgentSessionPolicyChangedException(string sessionId, long expectedRevision, long currentRevision)

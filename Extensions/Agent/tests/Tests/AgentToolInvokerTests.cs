@@ -379,7 +379,7 @@ public sealed class AgentToolInvokerTests
         var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
         var proposals = scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
         var policy = scope.ServiceProvider.GetRequiredService<IAgentSessionPolicyService>();
-        var owner = (IAgentSessionPolicyOwner)sessions;
+        var owner = (InMemoryAgentSessionService)sessions;
         var session = await sessions.CreateAsync(new("tenant-1", "actor-1", "conversation-1", DeterministicAgentProvider.Id, "explain", null, FullAuto, new Dictionary<string, string>()));
         var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
             new(session.Id, source.ScopeKind, new Dictionary<string, string>()) { CallerAttachments = [snapshot] });

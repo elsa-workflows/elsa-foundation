@@ -200,7 +200,7 @@ public sealed class AgentSessionAutonomyApiTests
     {
         using var fixture = new Fixture();
         var session = await fixture.CreateAsync();
-        var owner = (IAgentSessionPolicyOwner)fixture.Sessions;
+        var owner = (InMemoryAgentSessionService)fixture.Sessions;
         // The orchestrator holds exactly this claim from before it reads policy until Unregister completes.
         var foreground = owner.Acquire(session.Id, AgentSessionClaimKind.Foreground)!;
 

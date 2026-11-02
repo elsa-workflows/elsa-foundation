@@ -82,9 +82,9 @@ internal sealed class DefaultAgentTurnOrchestrator(
     IOptions<AgentTurnOptions> options) : IAgentStreamingService, IAgentSessionPolicyParticipant
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly IAgentSessionPolicyOwner? _owner = sessions as IAgentSessionPolicyOwner;
+    private readonly InMemoryAgentSessionService? _owner = sessions as InMemoryAgentSessionService;
 
-    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => AgentSessionPolicyParticipation.SameOwner(_owner, toolInvoker, proposals);
+    InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => AgentSessionPolicyParticipation.SameOwner(_owner, toolInvoker, proposals);
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {

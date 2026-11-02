@@ -494,7 +494,7 @@ public sealed class AgentTurnOrchestratorTests
         public IAgentStreamingService Streaming => _scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
         public IAgentProposalService Proposals => _scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
         public InMemoryAgentProposalStore ProposalStore => _scope.ServiceProvider.GetRequiredService<InMemoryAgentProposalStore>();
-        internal IAgentSessionPolicyOwner Owner => (IAgentSessionPolicyOwner)Sessions;
+        internal InMemoryAgentSessionService Owner => (InMemoryAgentSessionService)Sessions;
         private IAgentSessionPolicyService Policy => _scope.ServiceProvider.GetRequiredService<IAgentSessionPolicyService>();
 
         public Task<AgentSession> CreateAsync() => CreateSessionAsync(Sessions, DeterministicAgentProvider.Id);

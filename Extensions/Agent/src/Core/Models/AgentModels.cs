@@ -238,7 +238,7 @@ public sealed record AgentSession(
     IReadOnlyDictionary<string, string> Metadata)
 {
     /// <summary>
-    /// Preview (#3440): the owning session store's revision of <see cref="Policy"/>, or null when the installed
+    /// Preview: the owning session store's revision of <see cref="Policy"/>, or null when the installed
     /// store does not own conditional policy updates.
     /// </summary>
     public long? PolicyRevision { get; init; }
@@ -270,7 +270,7 @@ public sealed record AgentMessage(
     /// <summary>Complete immutable disclosure snapshots behind generated transcript content; null denotes an older/incomplete journal.</summary>
     public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
     /// <summary>
-    /// Experimental: the frozen session policy and revision current when the owning store accepted this message.
+    /// Preview: the frozen session policy and revision current when the owning store accepted this message.
     /// A later policy change never relabels it; null when the installed store does not own policy revisions.
     /// </summary>
     public AgentSessionPolicyState? AcceptedPolicy { get; init; }
@@ -333,7 +333,7 @@ public sealed record AgentActionProposal(
     public AgentPayload? Result { get; init; }
     public string? ResultType => Result?.TypeId ?? PreparedInvocation?.Preview.TypeId;
     /// <summary>
-    /// Experimental: the session policy revision that was the approval basis when this operation was prepared,
+    /// Preview: the session policy revision that was the approval basis when this operation was prepared,
     /// or null when the installed services do not own policy revisions.
     /// </summary>
     public long? PolicyRevision { get; init; }
@@ -361,13 +361,13 @@ public sealed record AgentAuditEvent(
     DateTimeOffset CreatedAt,
     IReadOnlyDictionary<string, string> Metadata);
 
-/// <summary>Preview (#3440): an owner-bounded audit query; <see cref="Take"/> must be within 1..<see cref="MaxTake"/>.</summary>
+/// <summary>Preview: an owner-bounded audit query; <see cref="Take"/> must be within 1..<see cref="MaxTake"/>.</summary>
 public sealed record AgentAuditOwnerQuery(string ActorId, string TenantId, string? SessionId, int Take)
 {
     public const int MaxTake = 1000;
 }
 
-/// <summary>Preview (#3440).</summary>
+/// <summary>Preview.</summary>
 public enum AgentAuditQueryOutcome
 {
     /// <summary>The events are the eligible records, already filtered, ordered and limited by the owning reader.</summary>
@@ -376,7 +376,7 @@ public enum AgentAuditQueryOutcome
     Unsupported
 }
 
-/// <summary>Preview (#3440).</summary>
+/// <summary>Preview.</summary>
 public sealed record AgentAuditQueryResult(AgentAuditQueryOutcome Outcome, IReadOnlyList<AgentAuditEvent> Events)
 {
     public static AgentAuditQueryResult Unsupported { get; } = new(AgentAuditQueryOutcome.Unsupported, []);
@@ -425,7 +425,7 @@ public sealed record AgentMessageCreateRequest(
     /// <summary>Complete disclosure dependencies for generated content, preserved unchanged by the owning session store.</summary>
     public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
     /// <summary>
-    /// Experimental: the policy revision read when this delivery was authorized. An owning store refuses the
+    /// Preview: the policy revision read when this delivery was authorized. An owning store refuses the
     /// insertion with <see cref="AgentSessionPolicyChangedException"/> when the revision moved meanwhile.
     /// </summary>
     public long? ExpectedPolicyRevision { get; init; }
@@ -512,13 +512,13 @@ public sealed record AgentProviderDiagnostics(
     IReadOnlyDictionary<string, string> Metadata);
 
 /// <summary>
-/// Preview (#3440): a session's acknowledged policy and the owner's monotonically increasing revision of it.
+/// Preview: a session's acknowledged policy and the owner's monotonically increasing revision of it.
 /// The public wire shape is the session-policy response, never this domain record.
 /// </summary>
 public sealed record AgentSessionPolicyState(AgentPolicy Policy, long Revision);
 
 /// <summary>
-/// Experimental: an autonomy-only conditional change. Only <see cref="AgentPolicy.AutonomyMode"/> can change;
+/// Preview: an autonomy-only conditional change. Only <see cref="AgentPolicy.AutonomyMode"/> can change;
 /// the requested mode is clamped to the current ceiling and every other policy field survives.
 /// </summary>
 /// <param name="ExpectedRevision">The policy revision the caller last observed; a different current revision is a conflict.</param>
@@ -529,7 +529,7 @@ public sealed record AgentSessionAutonomyChangeRequest(
     AgentAutonomyMode RequestedMode,
     long ExpectedRevision);
 
-/// <summary>Experimental: the explicit disposition of a session policy read or conditional change.</summary>
+/// <summary>Preview: the explicit disposition of a session policy read or conditional change.</summary>
 public enum AgentSessionPolicyOutcome
 {
     /// <summary>The returned state is authoritative. An unchanged idle request acknowledges the current revision.</summary>
@@ -548,7 +548,7 @@ public enum AgentSessionPolicyOutcome
     Unsupported
 }
 
-/// <summary>Experimental: the outcome of a session policy operation and, when known to the caller, the current state.</summary>
+/// <summary>Preview: the outcome of a session policy operation and, when known to the caller, the current state.</summary>
 public sealed record AgentSessionPolicyResult(AgentSessionPolicyOutcome Outcome, AgentSessionPolicyState? State)
 {
     public bool Succeeded => Outcome == AgentSessionPolicyOutcome.Succeeded;

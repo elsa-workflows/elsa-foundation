@@ -91,7 +91,7 @@ public sealed record AgentCreateSessionResponse(
     string? Title,
     IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments)
 {
-    /// <summary>Preview (#3440): the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AgentSessionPolicyResponse? Policy { get; init; }
 }
@@ -103,13 +103,13 @@ public sealed record AgentSessionDetailsResponse(
     IReadOnlyCollection<AgentContextAttachmentResponse> ContextAttachments,
     IReadOnlyCollection<AgentMessageViewModelResponse> Messages)
 {
-    /// <summary>Preview (#3440): the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
+    /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AgentSessionPolicyResponse? Policy { get; init; }
 }
 
 /// <summary>
-/// Preview (#3440): a session's effective autonomy, its ceiling, the modes a client may request
+/// Preview: a session's effective autonomy, its ceiling, the modes a client may request
 /// and the owner's policy revision.
 /// </summary>
 public sealed record AgentSessionPolicyResponse(
@@ -119,7 +119,7 @@ public sealed record AgentSessionPolicyResponse(
     long Revision);
 
 /// <summary>
-/// Preview (#3440): an autonomy-only conditional change. Both members are required; the caller
+/// Preview: an autonomy-only conditional change. Both members are required; the caller
 /// cannot name an owner, actor or tenant.
 /// </summary>
 public sealed class AgentSessionAutonomyRequest
@@ -157,7 +157,7 @@ public sealed record AgentMessageViewModelResponse(
     string Content,
     string Status)
 {
-    /// <summary>Preview (#3440): the policy revision the owner accepted this message under, when it owns revisions.</summary>
+    /// <summary>Preview: the policy revision the owner accepted this message under, when it owns revisions.</summary>
     public long? AcceptedPolicyRevision { get; init; }
 }
 
@@ -168,7 +168,7 @@ public sealed record AgentMessageAcceptedResponse(
 /// <summary>
 /// The accepted message as the client sees it: the members the domain <see cref="AgentMessage"/> has always
 /// serialized, with the frozen accepted policy projected to its public session-policy shape. The client never
-/// receives denied capabilities, admitted context kinds, sensitivity ceilings or retention labels (#3440).
+/// receives denied capabilities, admitted context kinds, sensitivity ceilings or retention labels.
 /// </summary>
 public sealed record AgentAcceptedMessageResponse(
     string Id,
@@ -193,7 +193,7 @@ public sealed record AgentAcceptedMessageResponse(
     public bool HasDisclosureProvenance { get; init; }
     public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
 
-    /// <summary>Preview (#3440): the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
+    /// <summary>Preview: the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
     public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
 }
 

@@ -24,7 +24,7 @@ public interface IAgentSessionService
 }
 
 /// <summary>
-/// Preview (#3440): reads and conditionally changes a session's acknowledged autonomy policy.
+/// Preview: reads and conditionally changes a session's acknowledged autonomy policy.
 /// </summary>
 /// <remarks>
 /// The update is supported only when the installed session store owns the policy revision and the lifecycle
@@ -136,7 +136,7 @@ public interface IAgentAuditReader
     Task<IReadOnlyCollection<AgentAuditEvent>> ListAsync(string? sessionId = null, int? take = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Preview (#3440): the records of sessions associated with the query's actor and tenant,
+    /// Preview: the records of sessions associated with the query's actor and tenant,
     /// optionally narrowed to one session, newest first (ties: latest append first), at most
     /// <see cref="AgentAuditOwnerQuery.Take"/>. Ownership filtering and ordering happen in the reader before the
     /// limit. A record whose session has no ownership association, or no session, is never returned.
@@ -151,7 +151,7 @@ public interface IAgentAuditReader
 }
 
 /// <summary>
-/// Preview (#3440): the session owner's authoritative actor/tenant association for a session's
+/// Preview: the session owner's authoritative actor/tenant association for a session's
 /// audit records. The session owner associates a session before it emits any record for it.
 /// </summary>
 public interface IAgentAuditOwnership

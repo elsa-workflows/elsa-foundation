@@ -191,7 +191,7 @@ public static class AgentApi
     }
 
     /// <summary>
-    /// Preview (#3440): an autonomy-only conditional change through the session policy owner.
+    /// Preview: an autonomy-only conditional change through the session policy owner.
     /// The owner is the authenticated actor and tenant; nothing in the request can select it.
     /// </summary>
     private static async Task HandleChangeAutonomyAsync(HttpContext context)

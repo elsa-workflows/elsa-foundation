@@ -564,7 +564,7 @@ public sealed class AgentSessionPolicyTests
         public IAgentSessionPolicyService Policy => Scope.ServiceProvider.GetRequiredService<IAgentSessionPolicyService>();
         public IAgentProposalService Proposals => Scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
         public IAgentToolInvoker Invoker => Scope.ServiceProvider.GetRequiredService<IAgentToolInvoker>();
-        public IAgentSessionPolicyOwner Owner => (IAgentSessionPolicyOwner)Sessions;
+        public InMemoryAgentSessionService Owner => (InMemoryAgentSessionService)Sessions;
 
         public Task<AgentSession> CreateAsync(AgentPolicy? policy = null) => Sessions.CreateAsync(new(
             "tenant-1", "actor-1", "conversation-1", DeterministicAgentProvider.Id, "explain", "Policy session", policy ?? AgentPolicy.Default,

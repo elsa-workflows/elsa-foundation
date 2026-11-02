@@ -117,7 +117,7 @@ All lifecycle retention and deduplication here are in memory. Restart/shell repl
 ## Session policy and owner-scoped audit (#3440, preview)
 
 These preview members are the #3440 contract, frozen after the normal composed Studio and complete
-package proofs passed. Pre-GA they may still change under ADR 0080. The [candidate contract](../../../../specs/1186-weaver-effects/contracts/session-policy.md)
+package proofs passed. Pre-GA they may still change under ADR 0080. The [session policy contract](../../../../specs/1186-weaver-effects/contracts/session-policy.md)
 records the wire shape, refusal codes, lifecycle outcomes and constitution/SemVer classification;
 this section keeps only the extension rules.
 

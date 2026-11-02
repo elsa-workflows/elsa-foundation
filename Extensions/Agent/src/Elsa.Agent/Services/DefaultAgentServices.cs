@@ -10,14 +10,14 @@ namespace Elsa.Agent.Services;
 
 /// <summary>
 /// Process-lifetime session rows. Each row's monitor orders message insertion, the session's policy and
-/// policy revision, and the claims of work admitted under that policy (#3440).
+/// policy revision, and the claims of work admitted under that policy.
 /// </summary>
 /// <remarks>
 /// When an audit ownership association is installed, each new session is associated with its actor and tenant
 /// before the row exists or any record for it is emitted. The association has no dependency on this service.
 /// </remarks>
 internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null)
-    : IAgentSessionService, IAgentSessionPolicyOwner, IAgentSessionPolicyParticipant
+    : IAgentSessionService, IAgentSessionPolicyParticipant
 {
     private const long InitialPolicyRevision = 1;
     private const string PauseKey = "pause";
@@ -25,7 +25,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     private readonly ConcurrentDictionary<string, SessionRow> _rows = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, List<AgentContextAttachment>> _contexts = new(StringComparer.Ordinal);
 
-    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => this;
+    InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => this;
 
     public async Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default)
     {
@@ -227,7 +227,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             return Task.FromResult<IReadOnlyCollection<AgentContextAttachment>>(contexts.ToList());
     }
 
-    AgentSessionClaim? IAgentSessionPolicyOwner.Acquire(string sessionId, AgentSessionClaimKind kind)
+    /// <summary>Acquires an unkeyed claim; null when this owner has no row for the session.</summary>
+    internal AgentSessionClaim? Acquire(string sessionId, AgentSessionClaimKind kind)
     {
         if (kind is AgentSessionClaimKind.Prompt or AgentSessionClaimKind.Proposal or AgentSessionClaimKind.Pause)
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "Keyed claims are acquired through their owning transition.");
@@ -235,19 +236,22 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         lock (row) return row.NewClaim(kind, null);
     }
 
-    AgentSessionClaim? IAgentSessionPolicyOwner.AcquireProposal(string sessionId, DateTimeOffset? deadline)
+    /// <summary>Acquires a provisional proposal claim before store insertion; it records the prepared deadline.</summary>
+    internal AgentSessionClaim? AcquireProposal(string sessionId, DateTimeOffset? deadline)
     {
         if (!_rows.TryGetValue(sessionId, out var row)) return null;
         lock (row) return row.NewClaim(AgentSessionClaimKind.Proposal, deadline);
     }
 
-    bool IAgentSessionPolicyOwner.BindProposal(AgentSessionClaim claim, string proposalId)
+    /// <summary>Binds a provisional proposal claim to its inserted proposal identity.</summary>
+    internal bool BindProposal(AgentSessionClaim claim, string proposalId)
     {
         if (claim.Kind != AgentSessionClaimKind.Proposal || !_rows.TryGetValue(claim.SessionId, out var row)) return false;
         lock (row) return row.Bind(claim, ProposalKey(proposalId));
     }
 
-    bool IAgentSessionPolicyOwner.MarkProposalDispatched(string sessionId, string proposalId)
+    /// <summary>Marks the proposal's claim dispatched; false refuses a pre-dispatch claim past its deadline.</summary>
+    internal bool MarkProposalDispatched(string sessionId, string proposalId)
     {
         if (!_rows.TryGetValue(sessionId, out var row)) return true;
         lock (row)
@@ -261,7 +265,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         }
     }
 
-    void IAgentSessionPolicyOwner.ReleaseProposal(string sessionId, string proposalId)
+    /// <summary>Releases the claim bound to this proposal identity, if any.</summary>
+    internal void ReleaseProposal(string sessionId, string proposalId)
     {
         if (!_rows.TryGetValue(sessionId, out var row)) return;
         lock (row)
@@ -269,7 +274,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 row.Release(claim);
     }
 
-    AgentSessionClaim? IAgentSessionPolicyOwner.EnsurePause(string sessionId)
+    /// <summary>Returns the retained pause claim, acquiring it when absent.</summary>
+    internal AgentSessionClaim? EnsurePause(string sessionId)
     {
         if (!_rows.TryGetValue(sessionId, out var row)) return null;
         lock (row)
@@ -281,19 +287,22 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         }
     }
 
-    AgentSessionClaim? IAgentSessionPolicyOwner.FindPause(string sessionId)
+    /// <summary>The currently retained pause claim, if any.</summary>
+    internal AgentSessionClaim? FindPause(string sessionId)
     {
         if (!_rows.TryGetValue(sessionId, out var row)) return null;
         lock (row) return row.Find(PauseKey);
     }
 
-    void IAgentSessionPolicyOwner.Release(AgentSessionClaim claim)
+    /// <summary>Releases exactly this token. A released or superseded token is a no-op.</summary>
+    internal void Release(AgentSessionClaim claim)
     {
         if (!_rows.TryGetValue(claim.SessionId, out var row)) return;
         lock (row) row.Release(claim);
     }
 
-    AgentSessionPolicyResult IAgentSessionPolicyOwner.GetPolicy(string sessionId, string actorId, string tenantId)
+    /// <summary>Reads the session's current policy state for its owning actor and tenant.</summary>
+    internal AgentSessionPolicyResult GetPolicy(string sessionId, string actorId, string tenantId)
     {
         if (!_rows.TryGetValue(sessionId, out var row))
             return new(AgentSessionPolicyOutcome.NotFound, null);
@@ -303,7 +312,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 : new(AgentSessionPolicyOutcome.NotFound, null);
     }
 
-    AgentSessionPolicyResult IAgentSessionPolicyOwner.ChangeAutonomy(AgentSessionAutonomyChangeRequest request)
+    /// <summary>Applies one conditional autonomy change under the session row monitor.</summary>
+    internal AgentSessionPolicyResult ChangeAutonomy(AgentSessionAutonomyChangeRequest request)
     {
         // 1. An undefined mode is refused before any session state is consulted.
         if (!Enum.IsDefined(request.RequestedMode))

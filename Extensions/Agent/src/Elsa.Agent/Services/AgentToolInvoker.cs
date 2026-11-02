@@ -14,9 +14,9 @@ internal sealed class DefaultAgentToolInvoker(
     InMemoryAgentProposalStore proposalStore,
     TimeProvider clock) : IAgentToolInvoker, IAgentSessionPolicyParticipant
 {
-    private readonly IAgentSessionPolicyOwner? _owner = sessions as IAgentSessionPolicyOwner;
+    private readonly InMemoryAgentSessionService? _owner = sessions as InMemoryAgentSessionService;
 
-    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => AgentSessionPolicyParticipation.SameOwner(_owner, proposals);
+    InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => AgentSessionPolicyParticipation.SameOwner(_owner, proposals);
 
     public async Task<AgentToolDispatch> DispatchAsync(AgentToolInvocation invocation, AgentPolicy policy, CancellationToken cancellationToken = default)
     {

@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Services;
 
-/// <summary>The kinds of admitted work that own a session's current policy (#3440).</summary>
+/// <summary>The kinds of admitted work that own a session's current policy.</summary>
 internal enum AgentSessionClaimKind
 {
     Prompt,
@@ -41,56 +41,24 @@ internal sealed class AgentSessionClaim
 }
 
 /// <summary>
-/// The session row owner of policy, policy revision and claims. Every member is a short transition under
-/// the per-session monitor; none awaits, performs I/O or invokes callbacks.
+/// A default lifecycle service that acquires its claims from <see cref="PolicyOwner"/>. The owner is the concrete
+/// default session service: it owns the session rows, so it is never replaced independently of them.
 /// </summary>
-internal interface IAgentSessionPolicyOwner
-{
-    /// <summary>Acquires an unkeyed claim; null when this owner has no row for the session.</summary>
-    AgentSessionClaim? Acquire(string sessionId, AgentSessionClaimKind kind);
-
-    /// <summary>Acquires a provisional proposal claim before store insertion; it records the prepared deadline.</summary>
-    AgentSessionClaim? AcquireProposal(string sessionId, DateTimeOffset? deadline);
-
-    /// <summary>Binds a provisional proposal claim to its inserted proposal identity.</summary>
-    bool BindProposal(AgentSessionClaim claim, string proposalId);
-
-    /// <summary>Marks the proposal's claim dispatched; false refuses a pre-dispatch claim past its deadline.</summary>
-    bool MarkProposalDispatched(string sessionId, string proposalId);
-
-    /// <summary>Releases the claim bound to this proposal identity, if any.</summary>
-    void ReleaseProposal(string sessionId, string proposalId);
-
-    /// <summary>Returns the retained pause claim, acquiring it when absent.</summary>
-    AgentSessionClaim? EnsurePause(string sessionId);
-
-    /// <summary>The currently retained pause claim, if any.</summary>
-    AgentSessionClaim? FindPause(string sessionId);
-
-    /// <summary>Releases exactly this token. A released or superseded token is a no-op.</summary>
-    void Release(AgentSessionClaim claim);
-
-    AgentSessionPolicyResult GetPolicy(string sessionId, string actorId, string tenantId);
-
-    AgentSessionPolicyResult ChangeAutonomy(AgentSessionAutonomyChangeRequest request);
-}
-
-/// <summary>A default lifecycle service that acquires its claims from <see cref="PolicyOwner"/>.</summary>
 internal interface IAgentSessionPolicyParticipant
 {
     /// <summary>The owner this instance and its claim-holding collaborators participate with, or null.</summary>
-    IAgentSessionPolicyOwner? PolicyOwner { get; }
+    InMemoryAgentSessionService? PolicyOwner { get; }
 }
 
 internal static class AgentSessionPolicyParticipation
 {
-    internal static IAgentSessionPolicyOwner? SameOwner(IAgentSessionPolicyOwner? owner, params object[] participants)
+    internal static InMemoryAgentSessionService? SameOwner(InMemoryAgentSessionService? owner, params object[] participants)
         => owner is not null && participants.All(participant => participant is IAgentSessionPolicyParticipant candidate
             && ReferenceEquals(candidate.PolicyOwner, owner)) ? owner : null;
 }
 
 /// <summary>
-/// Experimental policy readback and conditional autonomy update. Supported only when the resolved session
+/// Preview policy readback and conditional autonomy update. Supported only when the resolved session
 /// service, orchestrator, invoker and proposal service are default participants of one owner instance.
 /// </summary>
 internal sealed class DefaultAgentSessionPolicyService(IServiceProvider services) : IAgentSessionPolicyService
@@ -111,10 +79,10 @@ internal sealed class DefaultAgentSessionPolicyService(IServiceProvider services
     }
 
     // Participants are resolved lazily so that an unrelated provider conflict surfaces from its own consumer.
-    private IAgentSessionPolicyOwner? Owner()
+    private InMemoryAgentSessionService? Owner()
     {
         var sessions = services.GetRequiredService<IAgentSessionService>();
-        var owner = sessions as IAgentSessionPolicyOwner;
+        var owner = sessions as InMemoryAgentSessionService;
         return AgentSessionPolicyParticipation.SameOwner(owner, sessions,
             services.GetRequiredService<IAgentStreamingService>(),
             services.GetRequiredService<IAgentToolInvoker>(),

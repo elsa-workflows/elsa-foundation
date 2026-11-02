@@ -30,9 +30,9 @@ internal sealed class InMemoryAgentProposalService(
     TimeProvider clock,
     ILogger<InMemoryAgentProposalService>? logger = null) : IAgentProposalService, IAgentSessionPolicyParticipant
 {
-    private readonly IAgentSessionPolicyOwner? _owner = sessions as IAgentSessionPolicyOwner;
+    private readonly InMemoryAgentSessionService? _owner = sessions as InMemoryAgentSessionService;
 
-    IAgentSessionPolicyOwner? IAgentSessionPolicyParticipant.PolicyOwner => _owner;
+    InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => _owner;
 
     public async Task<AgentActionProposal> AddAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
