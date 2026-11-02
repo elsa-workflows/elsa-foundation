@@ -300,7 +300,8 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   }, [accept, findShowing, switchTo, writeAddress]);
 
   // Tabs are restored before routes are registered, so a deep link or the restored set can hold two tabs
-  // for one resource. Fold them as soon as routes can name resources, before the duplicate mounts.
+  // for one resource. Fold them as soon as routes can name resources, before the duplicate mounts. This
+  // runs again whenever routes change; that is safe because only unmounted tabs are ever dropped.
   useLayoutEffect(() => {
     const next = mergeDuplicateResources(stateRef.current, resourceKeyOf);
     if (next !== stateRef.current) commit(next);

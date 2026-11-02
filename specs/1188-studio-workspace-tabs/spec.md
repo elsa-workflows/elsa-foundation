@@ -50,9 +50,10 @@ Resource bounds:
 Because effects mount again when a tab returns, screens that seed editable state from a load-on-mount
 effect must load once per resource. The workflow editor's data hook, Feature Management's catalog
 refresh, Theme Builder's store load and the Activity Definition upgrade workbench's plan load now do.
-Audited and unaffected: the Activity Definitions pages (TanStack queries; drafts seed `useState` once),
-the Backends form (local state only), Appearance, Modules and Package feeds (no editable server draft); without that, returning to a tab replaced the unsaved draft and its undo history with
-the server copy (found during live qualification). React Flow also rebuilds its pan-zoom from
+Without that, returning to a tab replaced the unsaved draft and its undo history with the server copy
+(found during live qualification). Audited and unaffected: the Activity Definitions pages (TanStack
+queries; drafts seed `useState` once), the Backends form (local state only), and Appearance, Modules
+and Package feeds (no editable server draft). React Flow also rebuilds its pan-zoom from
 `defaultViewport` and resets its store on effect teardown, so every Workflows canvas renders
 `RetainFlowViewport`, which records each settled pan/zoom and restores it when the canvas returns.
 

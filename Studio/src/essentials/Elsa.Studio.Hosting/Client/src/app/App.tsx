@@ -580,7 +580,7 @@ export function describeScreen(
   if (route && route.path.includes(":")) {
     const segments = path.split("/").filter(Boolean);
     const parameter = route.path.split("/").filter(Boolean).map((segment, index) => segment.startsWith(":") ? segments[index] : null).filter(Boolean).pop();
-    const value = parameter ? decodeURIComponent(parameter) : undefined;
+    const value = parameter ? safeDecodeSegment(parameter) : undefined;
     return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
   }
   return {
@@ -589,6 +589,15 @@ export function describeScreen(
       ?? findFeatureAreaForPath(featureAreas, path)?.title
       ?? (path === "/" ? "Home" : "Studio")
   };
+}
+
+/** Shell rendering must survive a malformed restored address; fall back to the raw segment. */
+function safeDecodeSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }
 
 function ScreenIcon({ path, navigation }: { path: string; navigation: StudioNavigationContribution[] }) {
