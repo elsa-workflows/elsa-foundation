@@ -195,6 +195,111 @@ describe("ToastHost", () => {
     expect(host.querySelector("[aria-live='polite']")!.textContent).not.toContain("Broke");
   });
 
+  it("prefixes warning and error announcements with the level", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const host = mount(controller);
+    run(() => { controller.api.notify({ level: "error", title: "Broke", message: "Details" }); });
+    expect(host.querySelector("[aria-live='assertive']")!.textContent).toBe("Error: Broke. Details");
+
+    run(() => { controller.api.notify({ level: "warning", title: "Slow" }); });
+    expect(host.querySelector("[aria-live='polite']")!.textContent).toBe("Warning: Slow");
+
+    run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+    expect(host.querySelector("[aria-live='polite']")!.textContent).toBe("Saved");
+  });
+
+  it("announces an identical notification again", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const host = mount(controller);
+    const polite = () => host.querySelector("[aria-live='polite']")!.textContent;
+    run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+    const first = polite();
+
+    run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+    const second = polite();
+    run(() => { controller.api.notify({ level: "success", title: "Saved" }); });
+
+    expect(first).toBe("Saved");
+    expect(second).not.toBe(first);
+    expect(second!.replace("\u200B", "")).toBe("Saved");
+    expect(polite()).toBe("Saved");
+  });
+
+  it("labels the stack as a region and each toast by its title", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const host = mount(controller);
+    expect(host.querySelector(".studio-toast-host")).toBeNull();
+
+    run(() => { controller.api.notify({ level: "info", title: "Hello" }); });
+    const region = host.querySelector<HTMLElement>(".studio-toast-host")!;
+    expect(region.getAttribute("role")).toBe("region");
+    expect(region.getAttribute("aria-label")).toBe("Notifications");
+    const [toast] = toasts(host);
+    expect(toast.getAttribute("role")).toBe("group");
+    expect(document.getElementById(toast.getAttribute("aria-labelledby")!)!.textContent).toBe("Hello");
+  });
+
+  it("moves focus to the next toast, then the bell, when a focused toast closes", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const bell = document.createElement("button");
+    bell.className = "studio-notification-bell";
+    document.body.appendChild(bell);
+    try {
+      const host = mount(controller);
+      run(() => {
+        controller.api.notify({ level: "error", title: "older" });
+        controller.api.notify({ level: "error", title: "newer" });
+      });
+      const dismiss = (toast: HTMLElement) => toast.querySelector<HTMLButtonElement>("button[aria-label='Dismiss notification']")!;
+
+      dismiss(toasts(host)[0]).focus();
+      run(() => dismiss(toasts(host)[0]).click());
+      expect(toasts(host)).toHaveLength(1);
+      expect(document.activeElement).toBe(toasts(host)[0]);
+
+      dismiss(toasts(host)[0]).focus();
+      run(() => dismiss(toasts(host)[0]).click());
+      expect(toasts(host)).toHaveLength(0);
+      expect(document.activeElement).toBe(bell);
+    } finally {
+      bell.remove();
+    }
+  });
+
+  it("marks a link read and closes the toast before navigating", () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    let stateAtNavigate: { read: boolean; toasting: boolean } | undefined;
+    const navigate = vi.fn(() => {
+      const [entry] = controller.getEntries();
+      stateAtNavigate = { read: entry.read, toasting: entry.toasting };
+    });
+    const host = mount(controller, navigate);
+    run(() => { controller.api.notify({ level: "success", title: "Moved", link: { label: "Open folder", path: "/workflows" } }); });
+
+    run(() => Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Open folder")!.click());
+
+    expect(stateAtNavigate).toEqual({ read: true, toasting: false });
+  });
+
+  it("an action runs once and is gone from the entry afterwards", async () => {
+    vi.useFakeTimers();
+    const controller = createNotificationController();
+    const restore = vi.fn();
+    const host = mount(controller);
+    run(() => { controller.api.notify({ level: "success", title: "Deleted", action: { label: "Restore", run: restore } }); });
+
+    run(() => Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Restore")!.click());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(controller.getEntries()[0].action).toBeUndefined();
+  });
+
   it("announces in-place updates", () => {
     vi.useFakeTimers();
     const controller = createNotificationController();

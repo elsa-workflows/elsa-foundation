@@ -529,6 +529,33 @@ function routeMatchesPath(routePath: string, path: string) {
     segment.startsWith(":") || segment === pathSegments[index]);
 }
 
+/**
+ * Publishes the top bar's bottom edge as `--studio-shell-header-bottom` on the document root, so host
+ * overlays anchored below the header (toasts, the Notification Center) follow theme layouts and the
+ * stacked narrow-viewport layout instead of assuming a fixed header height. The shell itself never
+ * scrolls, so the edge only moves when the header or the main frame around it resizes.
+ */
+function useShellHeaderBottom(headerRef: React.RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty("--studio-shell-header-bottom", `${Math.max(0, Math.round(header.getBoundingClientRect().bottom))}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(header);
+    if (header.parentElement) observer?.observe(header.parentElement);
+    window.addEventListener("resize", publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty("--studio-shell-header-bottom");
+    };
+  }, [headerRef]);
+}
+
 export function ShellFrame({
   navigation,
   panels,
@@ -572,6 +599,8 @@ export function ShellFrame({
   const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
   const moreToolsSectionRef = useRef<HTMLElement>(null);
   const moreToolsButtonRef = useRef<HTMLButtonElement>(null);
+  const topbarRef = useRef<HTMLElement>(null);
+  useShellHeaderBottom(topbarRef);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
@@ -856,7 +885,7 @@ export function ShellFrame({
       </aside>
 
       <div className="main-frame">
-        <header className="topbar">
+        <header ref={topbarRef} className="topbar">
           <div>
             <span className="breadcrumb">Studio / {title}</span>
             <h1>{title}</h1>

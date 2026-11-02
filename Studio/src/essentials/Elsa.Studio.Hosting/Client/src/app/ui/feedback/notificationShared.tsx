@@ -2,6 +2,15 @@ import React from "react";
 import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-react";
 import type { StudioNotificationAction, StudioNotificationController, StudioNotificationLevel } from "../../../sdk";
 
+/** Level names for assistive technology, which cannot see the icon colour. */
+export const notificationLevelLabel: Record<StudioNotificationLevel, string> = {
+  info: "Info",
+  success: "Success",
+  warning: "Warning",
+  error: "Error",
+  progress: "In progress"
+};
+
 /** Level icon shared by toasts and the Notification Center. */
 export function NotificationLevelIcon({ level }: { level: StudioNotificationLevel }) {
   switch (level) {
@@ -13,8 +22,12 @@ export function NotificationLevelIcon({ level }: { level: StudioNotificationLeve
   }
 }
 
-/** Runs a notification action; a throw or rejection surfaces as an error notification, never unhandled. */
-export function runNotificationAction(controller: StudioNotificationController, action: StudioNotificationAction) {
+/**
+ * Runs a notification action once: the action is removed from the entry first, so a second click (in
+ * the toast or the Center) cannot repeat it. A throw or rejection surfaces as an error notification,
+ * never as an unhandled rejection.
+ */
+export function runNotificationAction(controller: StudioNotificationController, entryId: string, action: StudioNotificationAction) {
   const reportFailure = (error: unknown) => {
     controller.api.notify({
       level: "error",
@@ -22,9 +35,17 @@ export function runNotificationAction(controller: StudioNotificationController, 
       message: error instanceof Error ? error.message : String(error)
     });
   };
+  controller.clearAction(entryId);
   try {
     void Promise.resolve(action.run()).catch(reportFailure);
   } catch (error) {
     reportFailure(error);
   }
+}
+
+/** Moves focus to an element if it is still in the document; returns whether it did. */
+export function focusIfConnected(element: HTMLElement | null | undefined): boolean {
+  if (!element?.isConnected) return false;
+  element.focus();
+  return true;
 }

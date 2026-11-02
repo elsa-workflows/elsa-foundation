@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNotificationController, type StudioNotificationController } from "../../../sdk";
 import { NotificationCenter } from "../feedback/NotificationCenter";
+import { ToastHost } from "../feedback/ToastHost";
 
 let cleanup: (() => void) | null = null;
 
@@ -13,11 +14,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mount(controller: StudioNotificationController, props: { navigate?: (path: string) => void; now?: () => number } = {}): HTMLElement {
+function mount(controller: StudioNotificationController, props: { navigate?: (path: string) => void; now?: () => number; withToasts?: boolean } = {}): HTMLElement {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  flushSync(() => root.render(<NotificationCenter controller={controller} navigate={props.navigate ?? (() => {})} now={props.now} />));
+  const navigate = props.navigate ?? (() => {});
+  flushSync(() => root.render(<>
+    <NotificationCenter controller={controller} navigate={navigate} now={props.now} />
+    {props.withToasts ? <ToastHost controller={controller} navigate={navigate} /> : null}
+  </>));
   cleanup = () => {
     flushSync(() => root.unmount());
     host.remove();
@@ -225,5 +230,145 @@ describe("NotificationCenter sheet", () => {
     const time = document.querySelector<HTMLElement>(".studio-notification-time")!;
     expect(time.textContent).toBe("5 minutes ago");
     expect(time.title).toBe(new Date(1_000_000).toLocaleString());
+  });
+
+  it("the Close button closes the center", () => {
+    const controller = createNotificationController();
+    mount(controller);
+    openCenter();
+    flushSync(() => document.querySelector<HTMLButtonElement>("button[aria-label='Close notifications']")!.click());
+    expect(sheet()).toBeNull();
+  });
+
+  it("announces the level and unread state of each entry", () => {
+    const controller = createNotificationController();
+    mount(controller);
+    flushSync(() => {
+      controller.api.notify({ level: "error", title: "Broke" });
+      controller.api.notify({ level: "success", title: "Saved" });
+    });
+    openCenter();
+    flushSync(() => controller.markRead(controller.getEntries()[0].id));
+
+    const prefixes = entries().map(entry => entry.querySelector(".studio-notification-sr-only")!.textContent);
+    expect(prefixes).toEqual(["Success: ", "Unread, Error: "]);
+    expect(entries()[1].querySelector(".studio-notification-entry-main")!.textContent).toMatch(/^Unread, Error: Broke/);
+  });
+
+  it("dismissing a focused entry moves focus to the next entry, then the heading", () => {
+    const controller = createNotificationController();
+    mount(controller);
+    notifyMany(controller, 2);
+    openCenter();
+    const dismissButton = () => entries()[0].querySelector<HTMLButtonElement>("button[aria-label='Dismiss notification']")!;
+
+    dismissButton().focus();
+    flushSync(() => dismissButton().click());
+    expect(document.activeElement).toBe(entries()[0].querySelector(".studio-notification-entry-main"));
+
+    dismissButton().focus();
+    flushSync(() => dismissButton().click());
+    expect(document.activeElement).toBe(document.querySelector(".studio-notification-title"));
+  });
+
+  it("Dismiss all and Mark all read keep focus in the sheet", () => {
+    const controller = createNotificationController();
+    mount(controller);
+    notifyMany(controller, 2);
+    openCenter();
+
+    buttonNamed("Mark all read").focus();
+    flushSync(() => buttonNamed("Mark all read").click());
+    expect(document.activeElement).toBe(document.querySelector(".studio-notification-title"));
+
+    buttonNamed("Dismiss all").focus();
+    flushSync(() => buttonNamed("Dismiss all").click());
+    expect(document.activeElement).toBe(document.querySelector(".studio-notification-title"));
+  });
+
+  it("marks a link read before navigating", () => {
+    const controller = createNotificationController();
+    let readAtNavigate: boolean | undefined;
+    mount(controller, { navigate: () => { readAtNavigate = controller.getEntries()[0].read; } });
+    flushSync(() => { controller.api.notify({ level: "success", title: "Restored", link: { label: "Open workflow", path: "/workflows/abc" } }); });
+    openCenter();
+    flushSync(() => buttonNamed("Open workflow").click());
+    expect(readAtNavigate).toBe(true);
+  });
+
+  it("an action run from the center is not offered again", async () => {
+    const controller = createNotificationController();
+    mount(controller);
+    const run = vi.fn();
+    flushSync(() => { controller.api.notify({ level: "success", title: "Deleted", action: { label: "Restore", run } }); });
+    openCenter();
+    flushSync(() => buttonNamed("Restore").click());
+    await Promise.resolve();
+    flushSync(() => {});
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".studio-notification-action")).toBeNull();
+  });
+});
+
+describe("NotificationCenter with toasts", () => {
+  const toasts = () => document.querySelectorAll(".studio-toast");
+  const live = (politeness: "polite" | "assertive") => document.querySelector(`[aria-live='${politeness}']`)!.textContent;
+
+  it("opening the center hides toasts and they stay hidden after closing", () => {
+    const controller = createNotificationController();
+    mount(controller, { withToasts: true });
+    flushSync(() => { controller.api.notify({ level: "error", title: "Broke" }); });
+    expect(toasts()).toHaveLength(1);
+
+    openCenter();
+    expect(toasts()).toHaveLength(0);
+    flushSync(() => bell().click());
+    expect(sheet()).toBeNull();
+    expect(toasts()).toHaveLength(0);
+  });
+
+  it("a notification while the center is open shows no toast but is listed and announced", () => {
+    const controller = createNotificationController();
+    mount(controller, { withToasts: true });
+    openCenter();
+    const politeBefore = live("polite");
+
+    flushSync(() => { controller.api.notify({ level: "success", title: "Moved 1 workflow definition" }); });
+
+    expect(toasts()).toHaveLength(0);
+    expect(entries()[0].textContent).toContain("Moved 1 workflow definition");
+    expect(live("polite")).toBe("Moved 1 workflow definition");
+    expect(politeBefore).toBe("");
+
+    flushSync(() => bell().click());
+    flushSync(() => { controller.api.notify({ level: "info", title: "After close" }); });
+    expect(toasts()).toHaveLength(1);
+    expect(toasts()[0].textContent).toContain("After close");
+  });
+
+  it("opening and closing the center announces nothing by itself", () => {
+    const controller = createNotificationController();
+    mount(controller, { withToasts: true });
+    flushSync(() => { controller.api.notify({ level: "error", title: "Broke" }); });
+    expect(live("assertive")).toBe("Error: Broke");
+
+    openCenter();
+    flushSync(() => bell().click());
+
+    expect(live("assertive")).toBe("Error: Broke");
+    expect(live("polite")).toBe("");
+  });
+
+  it("unmounting the center lifts the suppression", () => {
+    const controller = createNotificationController();
+    mount(controller);
+    openCenter();
+    expect(controller.getToastsSuppressed()).toBe(true);
+
+    cleanup?.();
+    cleanup = null;
+
+    expect(controller.getToastsSuppressed()).toBe(false);
   });
 });

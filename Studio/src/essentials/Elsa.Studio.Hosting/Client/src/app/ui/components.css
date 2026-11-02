@@ -543,11 +543,16 @@ html[data-theme-material] .studio-action-notice {
   box-shadow: var(--studio-material-shadow);
 }
 
+/*
+ * --studio-shell-header-bottom is published by the shell (ShellFrame) from the live top bar, whose
+ * height and position change with the theme layout and the narrow-viewport stacked sidebar.
+ * Toasts sit below dialogs (1200) and level with header menus, which portal later and so stay on top.
+ */
 .studio-toast-host {
   position: fixed;
-  top: 64px;
+  top: calc(var(--studio-shell-header-bottom, 54px) + 10px);
   right: 16px;
-  z-index: 1100;
+  z-index: 1000;
   display: flex;
   width: min(360px, calc(100vw - 32px));
   flex-direction: column;
@@ -641,6 +646,7 @@ html[data-theme-material] .studio-action-notice {
   color: var(--studio-accent);
 }
 
+.studio-toast:focus-visible,
 .studio-toast-button:focus-visible,
 .studio-toast-dismiss:focus-visible {
   outline: 2px solid var(--studio-focus);
@@ -678,8 +684,9 @@ html[data-theme-material] .studio-toast {
   }
 }
 
-/* Visually hidden live regions that announce toasts to assistive technology. */
-.studio-toast-live {
+/* Visually hidden live regions that announce toasts, and level/read prefixes for assistive technology. */
+.studio-toast-live,
+.studio-notification-sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -715,7 +722,7 @@ html[data-theme-material] .studio-toast {
 
 .studio-notification-center {
   position: fixed;
-  top: 54px;
+  top: var(--studio-shell-header-bottom, 54px);
   right: 0;
   bottom: 0;
   z-index: 1050;
@@ -746,6 +753,7 @@ html[data-theme-material] .studio-toast {
 }
 
 .studio-notification-header-button,
+.studio-notification-close,
 .studio-notification-link,
 .studio-notification-action,
 .studio-notification-dismiss {
@@ -871,6 +879,7 @@ html[data-theme-material] .studio-toast {
   margin-left: -8px;
 }
 
+.studio-notification-close,
 .studio-notification-dismiss {
   display: inline-flex;
   width: 28px;
@@ -883,6 +892,7 @@ html[data-theme-material] .studio-toast {
 }
 
 .studio-notification-header-button:hover:not(:disabled),
+.studio-notification-close:hover,
 .studio-notification-link:hover,
 .studio-notification-action:hover,
 .studio-notification-dismiss:hover {
@@ -890,7 +900,9 @@ html[data-theme-material] .studio-toast {
   color: var(--studio-accent);
 }
 
+.studio-notification-title:focus-visible,
 .studio-notification-header-button:focus-visible,
+.studio-notification-close:focus-visible,
 .studio-notification-entry-main:focus-visible,
 .studio-notification-link:focus-visible,
 .studio-notification-action:focus-visible,
