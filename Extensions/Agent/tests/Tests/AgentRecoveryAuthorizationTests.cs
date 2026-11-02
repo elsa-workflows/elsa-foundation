@@ -245,6 +245,9 @@ internal static class AgentRecoveryApi
         var endpoint = Assert.Single(app.DataSources.SelectMany(source => source.Endpoints), item =>
             item.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName == "ElsaAgentApiEndpoints" + operation);
         var context = new DefaultHttpContext { RequestServices = host.Services, User = user, RequestAborted = aborted };
+        // A composition with the HTTP tool authorizer reads the current request through the accessor, as in a host.
+        if (host.Services.GetService<IHttpContextAccessor>() is { } accessor)
+            accessor.HttpContext = context;
         foreach (var (name, value) in route ?? new Dictionary<string, string>())
             context.Request.RouteValues[name] = value;
         if (query is not null)

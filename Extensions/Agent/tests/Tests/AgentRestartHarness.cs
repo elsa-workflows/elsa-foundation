@@ -132,9 +132,11 @@ internal sealed class RecoveryModuleTool : IAgentTool
     public string Revision { get; private set; } = "revision-1";
     /// <summary>The installed tool's current risk; raising it requires a new review.</summary>
     public AgentRisk Risk { get; set; } = AgentRisk.ReviewRequired;
+    /// <summary>The permissions the current principal needs to apply the change; none by default.</summary>
+    public IReadOnlyCollection<string> RequiredPermissions { get; set; } = [];
 
     public AgentToolDescriptor Descriptor => new(DeterministicAgentProvider.MutatingToolName, "Apply change", "Applies a test resource change.",
-        AgentToolMutability.Mutating, Risk, """{"type":"object","properties":{"change":{"type":"string"}}}""", [], [])
+        AgentToolMutability.Mutating, Risk, """{"type":"object","properties":{"change":{"type":"string"}}}""", RequiredPermissions, [])
     { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId, ResultType = "test.change", ResultSchemaVersion = "1" };
 
     /// <summary>A user edit in the owning module moves the resource to a new revision.</summary>
