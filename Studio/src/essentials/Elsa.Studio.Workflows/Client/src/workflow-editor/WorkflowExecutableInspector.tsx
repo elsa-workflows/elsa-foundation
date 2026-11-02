@@ -60,6 +60,7 @@ import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
+import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -367,6 +368,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             <FitReadOnlyFlowView nodeCount={flowNodes.length} />
             <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
             <Controls />
+            <RetainFlowViewport />
           </ReactFlow>
         )}
       </div>

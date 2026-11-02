@@ -14,6 +14,8 @@ export * from "./themeLayout";
 export * from "./hosts";
 export * from "./activityIcons";
 export * from "./useDialogFocus";
+export * from "./workspaceTabs";
+import type { StudioRouteWorkspaceOptions } from "./workspaceTabs";
 
 export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
 
@@ -201,6 +203,8 @@ export interface StudioRouteContribution extends StudioBackendAwareContribution 
   path: string;
   label: string;
   component: ComponentType<StudioRouteComponentProps>;
+  /** How the route's screens take part in Studio workspace tabs. */
+  workspace?: StudioRouteWorkspaceOptions;
 }
 
 /** The sidebar sections the Studio host groups navigation into. */
@@ -478,6 +482,7 @@ export interface StudioFeatureAreaRouteContribution extends StudioBackendAwareCo
   path: string;
   label: string;
   component: ComponentType<StudioRouteComponentProps>;
+  workspace?: StudioRouteWorkspaceOptions;
 }
 
 export interface StudioFeatureAreaContribution {
@@ -1703,16 +1708,25 @@ export function notifyStudioNavigationGuardReleased() {
 
 export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
 
+/**
+ * Why the host asks a navigation guard. `navigate` replaces the current screen, `close` closes the
+ * workspace tab that shows it, and `probe` only asks whether the screen holds unsaved or pending work:
+ * a guard prevents default to report it and must not show UI or change state for a probe.
+ */
+export type StudioNavigationIntent = "navigate" | "close" | "probe";
+
 export interface StudioNavigationRequest {
   fromPath: string;
   toPath: string;
+  /** Absent on requests from hosts that predate workspace tabs; treat it as `navigate`. */
+  intent?: StudioNavigationIntent;
 }
 
-export function requestStudioNavigation(fromPath: string, toPath: string) {
+export function requestStudioNavigation(fromPath: string, toPath: string, intent: StudioNavigationIntent = "navigate") {
   if (typeof window === "undefined") return true;
   return window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
     cancelable: true,
-    detail: { fromPath, toPath }
+    detail: { fromPath, toPath, intent }
   }));
 }
 
