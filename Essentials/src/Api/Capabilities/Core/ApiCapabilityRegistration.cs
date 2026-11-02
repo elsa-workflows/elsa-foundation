@@ -1,24 +1,16 @@
-using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Exceptions;
 using Elsa.Api.Capabilities.Models;
-using Elsa.Api.Capabilities.Services;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Api.Capabilities.Extensions;
+namespace Elsa.Api.Capabilities;
 
-public static class ServiceCollectionExtensions
+/// <summary>Registers an immutable declaration without depending on the capability API implementation.</summary>
+public static class ApiCapabilityRegistration
 {
-    public static IServiceCollection AddApiCapabilities(this IServiceCollection services)
+    public static IServiceCollection Add(IServiceCollection services, ApiCapabilityDeclaration declaration)
     {
-        services.TryAddScoped<IApiCapabilityCatalog, ApiCapabilityCatalog>();
-        return services;
-    }
-
-    public static IServiceCollection AddApiCapability(
-        this IServiceCollection services,
-        ApiCapabilityDeclaration declaration)
-    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(declaration);
         var existing = services
             .Where(descriptor => descriptor.ServiceType == typeof(ApiCapabilityDeclaration))
             .Select(descriptor => descriptor.ImplementationInstance)
@@ -32,15 +24,7 @@ public static class ServiceCollectionExtensions
                 $"'{conflicting.SourceFeatureId}' and '{declaration.SourceFeatureId}'.");
         if (existing.Length > 0)
             return services;
-
         services.AddSingleton(declaration);
-        return services;
-    }
-
-    public static IServiceCollection AddApiCapabilitySource<TSource>(this IServiceCollection services)
-        where TSource : class, IApiCapabilitySource
-    {
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IApiCapabilitySource, TSource>());
         return services;
     }
 }

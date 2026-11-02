@@ -93,7 +93,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
       ) : (
         <span className="wf-bpmn-task-copy">
           <strong>{element.name?.trim() || bpmnElementTypeLabel(element)}</strong>
-          <small>No activity bound</small>
+          <small>{nodeData.bindingLabel ?? "No activity bound"}</small>
         </span>
       )}
       {element.elementType === bpmnElementTypes.subProcess ? <span className="wf-bpmn-subprocess-marker" aria-hidden="true">⊞</span> : null}
