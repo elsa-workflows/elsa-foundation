@@ -41,14 +41,14 @@ public sealed partial class EtlRuntimeJourneyTests
         feed.Append("b", 2, "Bram");
         feed.Append("a", 3, "Cleo");
         await WaitForIdleAsync(host.Services, files.Scope, invocation.RunId, accepted: 3);
-        Assert.Equal(EtlConnectorRunCompletionStatus.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
-        Assert.Equal(EtlConnectorRunCompletionStatus.AlreadyRequested, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.AlreadyRequested, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
         var run = await files.WaitForTerminalAsync(host, invocation.RunId);
 
         Assert.Equal(EtlRunStatus.Succeeded, run.Status);
         Assert.Equal((3, 0, 0, 0), (run.AcceptedRecords, run.RejectedRecords, run.OutstandingRecords, run.OutstandingBytes));
         Assert.Equal(["Ada", "Bram", "Cleo"], ReadJsonlNames(files.OutputRoot));
-        Assert.Equal(EtlConnectorRunCompletionStatus.Terminal, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.Terminal, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed partial class EtlRuntimeJourneyTests
         await WaitUntilAsync(async () => (await FindRunAsync(host.Services, files.Scope, invocation.RunId))?.AcceptedRecords == 1,
             TimeSpan.FromSeconds(30));
 
-        Assert.Equal(EtlConnectorRunCompletionStatus.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
         // Appended after b's held poll read the feed: only a poll started after the request can see it.
         feed.Append("b", 2, "Bram");
         held.Release.SetResult();
@@ -94,12 +94,12 @@ public sealed partial class EtlRuntimeJourneyTests
         await using (var operation = host.Services.CreateAsyncScope())
             Assert.Equal(EtlStoreStatus.Applied, (await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>().CancelAsync(continuous)).Status);
         Assert.Equal(EtlRunStatus.Cancelled, (await files.WaitForTerminalAsync(host, continuous.RunId)).Status);
-        Assert.Equal(EtlConnectorRunCompletionStatus.Terminal, await RequestCompletionAsync(host.Services, files.Scope, continuous.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.Terminal, await RequestCompletionAsync(host.Services, files.Scope, continuous.RunId));
 
         var finite = ConnectorInvocation(files.Scope, "finite-complete", ContinuousPipeline(1) with { Continuous = null });
         await files.AdmitAsync(host, finite);
-        Assert.Equal(EtlConnectorRunCompletionStatus.NotContinuous, await RequestCompletionAsync(host.Services, files.Scope, finite.RunId));
-        Assert.Equal(EtlConnectorRunCompletionStatus.NotFound, await RequestCompletionAsync(host.Services, files.Scope, "missing"));
+        Assert.Equal(EtlRunCompletionOutcome.NotContinuous, await RequestCompletionAsync(host.Services, files.Scope, finite.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.NotFound, await RequestCompletionAsync(host.Services, files.Scope, "missing"));
     }
 
     [Fact]
@@ -113,10 +113,14 @@ public sealed partial class EtlRuntimeJourneyTests
         var invocation = ConnectorInvocation(files.Scope, "continuous-moving", ContinuousPipeline(pollIntervalSeconds: 2));
         await files.AdmitAsync(host, invocation);
 
-        await Task.Delay(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(() => feed.RequestTimes("a").Count >= 3 && feed.RequestTimes("b").Count >= 3, TimeSpan.FromSeconds(60));
 
-        // Two shards, each at most one request per two-second interval plus its first: no hot loop.
-        Assert.InRange(feed.Requests, 2, 8);
+        // Each shard waits its two-second interval between requests (a hot loop would be milliseconds apart).
+        foreach (var shard in new[] { "a", "b" })
+        {
+            var times = feed.RequestTimes(shard);
+            Assert.All(times.Zip(times.Skip(1)), pair => Assert.True(pair.Second - pair.First >= TimeSpan.FromSeconds(1.5)));
+        }
         Assert.Equal(EtlRunStatus.Running, (await FindRunAsync(host.Services, files.Scope, invocation.RunId))!.Status);
     }
 
@@ -139,6 +143,50 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Equal("etl.http.pagination-cycle", run.TerminalResult!.Diagnostic!.Code);
     }
 
+    [Fact]
+    public async Task A_drained_run_with_a_rejected_record_settles_business_error()
+    {
+        await using var files = new RuntimeFiles(CsvJourneySource);
+        var feed = new CursorFeed();
+        feed.Append("a", 1, "Ada");
+        feed.Append("a", 2, null);
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync(feed.RespondAsync);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, configureRuntime: runtime =>
+            ConfigureConnectorBindings(runtime, files.Scope, endpoint, csvSource: false, httpMain: false, httpErrors: false));
+        var invocation = ConnectorInvocation(files.Scope, "continuous-business-error", ContinuousPipeline(pollIntervalSeconds: 1));
+        await files.AdmitAsync(host, invocation);
+        await WaitForIdleAsync(host.Services, files.Scope, invocation.RunId, accepted: 1);
+
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        var run = await files.WaitForTerminalAsync(host, invocation.RunId);
+
+        Assert.Equal(EtlRunStatus.BusinessError, run.Status);
+        Assert.Equal((1, 1), (run.AcceptedRecords, run.RejectedRecords));
+        Assert.Equal("etl.rows-rejected", run.TerminalResult!.Diagnostic!.Code);
+    }
+
+    [Fact]
+    public async Task Cancellation_wins_over_a_completion_that_has_not_drained()
+    {
+        await using var files = new RuntimeFiles(CsvJourneySource);
+        var feed = new CursorFeed();
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync(feed.RespondAsync);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, configureRuntime: runtime =>
+            ConfigureConnectorBindings(runtime, files.Scope, endpoint, csvSource: false, httpMain: false, httpErrors: false));
+        var invocation = ConnectorInvocation(files.Scope, "continuous-cancel-pending", ContinuousPipeline(pollIntervalSeconds: 1));
+        // Shard b's poll is held, so the requested completion cannot drain before the cancellation.
+        var held = feed.Hold("b");
+        await files.AdmitAsync(host, invocation);
+        await held.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        await using (var operation = host.Services.CreateAsyncScope())
+            Assert.Equal(EtlStoreStatus.Applied, (await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>().CancelAsync(invocation)).Status);
+        held.Release.SetResult();
+
+        Assert.Equal(EtlRunStatus.Cancelled, (await files.WaitForTerminalAsync(host, invocation.RunId)).Status);
+    }
+
     private static EtlPipelineV2 ContinuousPipeline(int pollIntervalSeconds)
     {
         var baseline = EtlV2TestPipelines.Create();
@@ -155,7 +203,7 @@ public sealed partial class EtlRuntimeJourneyTests
         return await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>().FindRunAsync(scope, runId);
     }
 
-    private static async Task<EtlConnectorRunCompletionStatus> RequestCompletionAsync(IServiceProvider services, EtlScope scope, string runId)
+    private static async Task<EtlRunCompletionOutcome> RequestCompletionAsync(IServiceProvider services, EtlScope scope, string runId)
     {
         await using var operation = services.CreateAsyncScope();
         return await operation.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>().RequestConnectorRunCompletionAsync(scope, runId);
@@ -217,7 +265,8 @@ public sealed partial class EtlRuntimeJourneyTests
     /// <summary>A loopback cursor feed: <c>?cursor=n</c> returns the shard's records after position n.</summary>
     private sealed class CursorFeed
     {
-        private readonly ConcurrentDictionary<string, List<(long Id, string Name)>> _shards = new();
+        private readonly ConcurrentDictionary<string, List<(long Id, string? Name)>> _shards = new();
+        private readonly ConcurrentDictionary<string, List<DateTimeOffset>> _requestTimes = new();
         private readonly ConcurrentDictionary<string, HeldPoll> _held = new();
         private int _caughtUp;
         private int _requests;
@@ -226,7 +275,13 @@ public sealed partial class EtlRuntimeJourneyTests
         public int CaughtUpResponses => Volatile.Read(ref _caughtUp);
         public int Requests => Volatile.Read(ref _requests);
 
-        public void Append(string shard, long id, string name)
+        public IReadOnlyList<DateTimeOffset> RequestTimes(string shard)
+        {
+            var times = _requestTimes.GetOrAdd(shard, _ => []);
+            lock (times) return times.ToArray();
+        }
+
+        public void Append(string shard, long id, string? name)
         {
             var records = _shards.GetOrAdd(shard, _ => []);
             lock (records) records.Add((id, name));
@@ -239,10 +294,12 @@ public sealed partial class EtlRuntimeJourneyTests
             Interlocked.Increment(ref _requests);
             var target = new Uri(new Uri("http://feed"), request.RawTarget);
             var shard = target.AbsolutePath.TrimStart('/');
+            var times = _requestTimes.GetOrAdd(shard, _ => []);
+            lock (times) times.Add(DateTimeOffset.UtcNow);
             var query = System.Web.HttpUtility.ParseQueryString(target.Query);
             var cursor = long.TryParse(query["cursor"], out var parsed) ? parsed : 0;
             var records = _shards.GetOrAdd(shard, _ => []);
-            (long Id, string Name)[] page;
+            (long Id, string? Name)[] page;
             lock (records) page = records.Skip((int)Math.Min(cursor, records.Count)).ToArray();
             var response = Page(page, cursor);
             // The answer is fixed before a held poll waits, as a real request reads the feed before replying.
@@ -254,7 +311,7 @@ public sealed partial class EtlRuntimeJourneyTests
             return response;
         }
 
-        private EtlHttpLoopbackResponse Page((long Id, string Name)[] page, long cursor)
+        private EtlHttpLoopbackResponse Page((long Id, string? Name)[] page, long cursor)
         {
             if (page.Length == 0)
             {
@@ -263,7 +320,8 @@ public sealed partial class EtlRuntimeJourneyTests
                 Interlocked.Increment(ref _caughtUp);
                 return new(200, $"{{\"records\":[],\"next\":{(cursor == 0 ? "null" : $"\"{cursor}\"")}}}");
             }
-            var body = string.Join(',', page.Select(record => $"{{\"id\":{record.Id},\"name\":\"{record.Name}\"}}"));
+            var body = string.Join(',', page.Select(record =>
+                $"{{\"id\":{record.Id},\"name\":{(record.Name is null ? "null" : $"\"{record.Name}\"")}}}"));
             return new(200, $"{{\"records\":[{body}],\"next\":\"{cursor + page.Length}\"}}");
         }
     }

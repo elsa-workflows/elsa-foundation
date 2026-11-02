@@ -2,7 +2,9 @@ using System.Net;
 using System.Text.Json;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
+using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Runtime.Api;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
@@ -25,8 +27,16 @@ public sealed partial class EtlRuntimeApiHttpTests
             // Shard 0 catches up and idles; shard 1 waits on a 429 retry.
             var idle = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "worker"));
             var begin = await store.BeginConnectorHttpSourceAsync(idle, Guid.NewGuid().ToString("N"));
-            Assert.Equal(new EtlConnectorHttpCaughtUpResult(EtlStoreStatus.Applied, false),
+            Assert.Equal(new EtlHttpCaughtUpResult(EtlStoreStatus.Applied, false),
                 await store.RecordConnectorHttpCaughtUpAsync(idle, begin.Permit!, DateTimeOffset.UtcNow));
+            // Before the worker releases its lease, the idle shard is still claimed and inspection must accept that.
+            using (var claimed = await ReadJsonAsync(await host.SendAsync(HttpMethod.Get,
+                       "/etl/runs/continuous-api/connector-partitions?limit=10", permissions: ReadPermissions)))
+            {
+                var row = claimed.RootElement.GetProperty("items").EnumerateArray().Single(item => item.GetProperty("partitionOrdinal").GetInt32() == idle.PartitionOrdinal);
+                Assert.True(row.GetProperty("isClaimed").GetBoolean());
+                Assert.Equal(row.GetProperty("notBefore").GetString(), row.GetProperty("nextPollAt").GetString());
+            }
             Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(idle));
             var waiting = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "worker"));
             var retry = await store.BeginConnectorHttpSourceAsync(waiting, Guid.NewGuid().ToString("N"));
@@ -71,6 +81,48 @@ public sealed partial class EtlRuntimeApiHttpTests
         Assert.Equal("terminal", await CompleteResultAsync(host, "continuous-api"));
         using var missing = await host.SendAsync(HttpMethod.Post, "/etl/runs/not-found/complete", permissions: CompletePermissions);
         await AssertProblemAsync(missing, HttpStatusCode.NotFound, "etl.run-not-found");
+    }
+
+    [Fact]
+    public async Task Caught_up_records_need_the_live_lease_and_a_continuous_run_and_preparing_runs_accept_completion()
+    {
+        await using var host = await EtlDesignApiTestHost.StartRuntimeAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var continuous = EtlV2TestPipelines.Create() with { Continuous = new EtlContinuousRunPolicy(600) };
+        var admission = await SeedConnectorAsync(host, "continuous-store", scope, continuous);
+        var finite = await SeedConnectorAsync(host, "finite-store", scope);
+        await using var services = host.Host.Services.CreateAsyncScope();
+        var store = services.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>();
+
+        var lease = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "worker"));
+        var permit = (await store.BeginConnectorHttpSourceAsync(lease, Guid.NewGuid().ToString("N"))).Permit!;
+        Assert.Equal(EtlStoreStatus.LeaseLost, (await store.RecordConnectorHttpCaughtUpAsync(lease with { Fence = lease.Fence + 1 }, permit, DateTimeOffset.UtcNow)).Status);
+        Assert.Equal(EtlStoreStatus.Conflict, (await store.RecordConnectorHttpCaughtUpAsync(lease, permit with { RequestId = Guid.NewGuid().ToString("N") }, DateTimeOffset.UtcNow)).Status);
+        Assert.Equal(EtlStoreStatus.Invalid, (await store.RecordConnectorHttpCaughtUpAsync(lease, permit, permit.StartedAt.AddSeconds(-1))).Status);
+
+        var finiteLease = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(scope, finite.Invocation.RunId, "worker"));
+        var finitePermit = (await store.BeginConnectorHttpSourceAsync(finiteLease, Guid.NewGuid().ToString("N"))).Permit!;
+        Assert.Equal(EtlStoreStatus.Invalid, (await store.RecordConnectorHttpCaughtUpAsync(finiteLease, finitePermit, DateTimeOffset.UtcNow)).Status);
+
+        // Completion is recorded during preparation; the shards it creates then drain as usual.
+        var preparing = EtlRuntimeFixtures.ConnectorAdmission("continuous-preparing", scope, continuous, ["private-shard-one"]);
+        Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(preparing)).Status);
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await store.RequestConnectorRunCompletionAsync(scope, preparing.Invocation.RunId));
+    }
+
+    [Fact]
+    public async Task A_finite_partition_may_not_wait_without_a_retry_journal()
+    {
+        await using var host = await EtlDesignApiTestHost.StartRuntimeAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var finite = await SeedConnectorAsync(host, "finite-wait", scope);
+        await using var services = host.Host.Services.CreateAsyncScope();
+        // Only a continuous run's caught-up shard may carry an eligibility time with a cleared journal.
+        await services.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().Database.ExecuteSqlRawAsync(
+            "UPDATE elsa_etl_connector_partitions SET NotBeforeUtcTicks = 1 WHERE PartitionOrdinal = 0;");
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () => await services.ServiceProvider
+            .GetRequiredService<IEtlConnectorRuntimeInspector>().ListConnectorPartitionsAsync(scope, finite.Invocation.RunId, -1, 10));
     }
 
     private static async Task<string> CompleteResultAsync(EtlDesignApiTestHost host, string runId)

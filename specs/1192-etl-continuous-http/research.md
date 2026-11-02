@@ -34,7 +34,7 @@ Each decision below comes from the current code at the branch base (`ffd7e1d7e`,
 
 ## R3. Recording a caught-up response without growth
 
-**Decision.** Add a new store transition, `RecordConnectorHttpCaughtUpAsync(lease, attempt, responseReceivedAtUtc)`. It returns `EtlConnectorHttpCaughtUpResult(EtlStoreStatus Status, bool Final)` and runs in one Serializable transaction.
+**Decision.** Add a new store transition, `RecordConnectorHttpCaughtUpAsync(lease, attempt, responseReceivedAtUtc)`. It returns `EtlHttpCaughtUpResult(EtlStoreStatus Status, bool Final)` and runs in one Serializable transaction.
 
 1. It applies the same run, partition, authority, position and owed-batch preconditions as `MutateConnectorHttpSourceAsync`.
 2. It requires the pipeline to be continuous and the journal to be non-null.
@@ -100,7 +100,7 @@ It adds no rows. The lease is not released here; the execution's `finally` relea
 
 ## R7. Validation sites
 
-**Decision.** A shared validator, `EtlContinuousRunPolicyRules.Validate(EtlPipelineV2)` in Core, returns the first error code. It is called from:
+**Decision.** A shared validator, `EtlContinuousRunPolicy.FindViolation(EtlPipelineV2)` in Core, returns the first error code. It is called from:
 - the design compiler (`EtlArtifactCompilerV2`);
 - `EtlConnectorExecutableReader.ValidateLimits`;
 - `EtlConnectorRecordCodec.ValidateBindings`, at runtime admission.
@@ -112,8 +112,8 @@ It accepts only an `EtlHttpJsonSource` with token or next-link pagination, and a
 **Endpoint.**
 - `POST /etl/runs/{id}/complete` is guarded by a new permission, `EtlRuntimePermissions.CompleteRuns = "etl/runs:complete"`, contributed alongside cancel.
 - The resource entry is `etl-run-complete`.
-- `IEtlRuntimeOperations.CompleteAsync` has a default body that returns `notFound`, following `EtlRuntimeApiModels.cs:98-102`.
-- The response is an `EtlRunCompletionView(string RunId, string Result)` with status 200.
+- `IEtlRuntimeOperations.CompleteAsync` has a default body, following `EtlRuntimeApiModels.cs:98-102`; R11 settles it as a 503.
+- The response is an `EtlRunCompletionView(string Result)` with status 200.
 
 **Inspection.**
 - The connector run view gains `Mode`, `finite` or `continuous`, and `CompletionRequestedAt`.
@@ -159,7 +159,7 @@ An independent plan review found no blockers. Its findings change the decisions 
   - `EtlRunCompletionView` is registered in `EtlRuntimeApiJsonContext`.
   - The endpoint is `Endpoints/CompleteRun/Endpoint.cs`, with `[RequirePermission(EtlRuntimePermissions.CompleteRuns)]`.
   - The resource entry goes in `EtlRuntimeApiFeature`, and the feature description no longer says "finite".
-  - Studio resolves `etl-run-complete` optionally, as it does `etl-run-connector-partitions`, so a Studio talking to an older host hides "Complete run" rather than failing.
+  - Studio shows "Complete run" only when the host reports a continuous run, and resolves `etl-run-complete` only when the action is used, so a Studio talking to an older host never needs the relation.
 - **Migration test.** It follows `EtlConnectorSourceMigrationTests`:
   1. migrate to `20261021170000_ConnectorInspectionEffects`;
   2. insert prior-writer finite file and HTTP rows with raw SQL;

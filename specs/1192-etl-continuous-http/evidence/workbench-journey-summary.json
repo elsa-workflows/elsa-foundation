@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "spec": "1192-etl-continuous-http",
+  "sourceRevision": "e3dcb4c63a56a73c4cd5a60d5004b234fba3f42c",
+  "workingTreeDirty": false,
+  "workbenchAssemblySha256": "98ea64a11041443247f6a164f7d2ee743920e8f501d9bce1fe21715d061d6d61",
+  "cases": {
+    "complete": {
+      "definition": "continuous-complete-2cb42c47",
+      "selection": "etl1:continuous-complete-2cb42c47:1:a31ffdb0c3fbe5ddf51f19409de67f12212cc76df1e96d332b8f50099e304192",
+      "workflowStatus": "Completed",
+      "executedNodes": [
+        "after-done",
+        "etl",
+        "root"
+      ],
+      "statusWhileLive": "running",
+      "connectorWhileLive": {
+        "sourceKind": "http",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 3,
+        "acceptedErrorEffects": 0,
+        "mode": "continuous",
+        "completionRequestedAt": null
+      },
+      "pageSequencesAfterFirstIdle": [
+        1,
+        0
+      ],
+      "pageSequencesAfterTwentyPolls": [
+        1,
+        0
+      ],
+      "caughtUpResponses": 27,
+      "completion": {
+        "result": "accepted"
+      },
+      "repeat": {
+        "result": "alreadyRequested"
+      },
+      "run": {
+        "status": "succeeded",
+        "acceptedRecords": 3,
+        "rejectedRecords": 0,
+        "outstandingRecords": 0,
+        "outstandingBytes": 0
+      },
+      "connector": {
+        "sourceKind": "http",
+        "mainKind": "jsonl",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 3,
+        "acceptedErrorEffects": 0,
+        "mode": "continuous",
+        "completionRequestedAt": "2026-11-02T17:26:17.906216+00:00"
+      },
+      "mainNames": [
+        "Ada",
+        "Bram",
+        "Cleo"
+      ],
+      "hostPathInInspection": false
+    },
+    "cancel": {
+      "definition": "continuous-cancel-be004e99",
+      "workflowStatus": "Cancelled",
+      "cancellation": "cancelled",
+      "completionAfterCancel": {
+        "result": "terminal"
+      },
+      "runStatus": "cancelled"
+    }
+  },
+  "checks": {
+    "liveRunIsContinuousAndRunning": true,
+    "twentyCaughtUpPollsRetainedNoPage": true,
+    "appendedRecordsDeliveredOnce": true,
+    "completionAcceptedThenIdempotent": true,
+    "completedRunSucceededThroughDone": true,
+    "noAccountingLeft": true,
+    "cancelledRunSettledCancelled": true,
+    "noHostPathOrFeedUrlInInspection": true
+  },
+  "passed": true
+}

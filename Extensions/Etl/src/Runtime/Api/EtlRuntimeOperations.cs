@@ -136,11 +136,11 @@ internal sealed partial class EtlRuntimeOperations(
         var status = await Required<IEtlConnectorRuntimeStore>().RequestConnectorRunCompletionAsync(scope, run.Invocation.RunId, cancellationToken);
         return status switch
         {
-            EtlConnectorRunCompletionStatus.Accepted => new("accepted"),
-            EtlConnectorRunCompletionStatus.AlreadyRequested => new("alreadyRequested"),
-            EtlConnectorRunCompletionStatus.Terminal => new("terminal"),
-            EtlConnectorRunCompletionStatus.NotContinuous => new("notContinuous"),
-            EtlConnectorRunCompletionStatus.NotFound => throw NotFound(),
+            EtlRunCompletionOutcome.Accepted => new("accepted"),
+            EtlRunCompletionOutcome.AlreadyRequested => new("alreadyRequested"),
+            EtlRunCompletionOutcome.Terminal => new("terminal"),
+            EtlRunCompletionOutcome.NotContinuous => new("notContinuous"),
+            EtlRunCompletionOutcome.NotFound => throw NotFound(),
             _ => throw ProviderContractError()
         };
     }

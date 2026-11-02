@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: Draft
+**Status**: Implemented — [PR #3670](https://github.com/elsa-workflows/elsa-foundation/pull/3670); [evidence](evidence/README.md)
 
 **Input**: The continuous half of the first criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): "Finite and continuous runs process two or more independently leased partitions with resumable cursors and model-owned completion/cancellation. Coordinator execution does not process one workflow per record." It belongs to [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892) ("finite batches and continuous event integration"). [Claim](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6582649901).
 
@@ -187,8 +187,8 @@ A second run is cancelled and ends `Cancelled`.
     - `accepted`: the run is preparing or running;
     - `alreadyRequested`;
     - `terminal`;
-    - `notContinuous`;
-    - `notFound`.
+    - `notContinuous`.
+  - An unknown run, or one in another scope, is `404` through the same scoped lookup as cancellation.
   - On `accepted`, it clears the next-eligible time of every idle partition in the same transaction. Partitions waiting on a retry are left alone.
 - **FR-008** Once every partition is exhausted and nothing is outstanding, the existing completion rules settle the run: `Succeeded`, or `BusinessError` with `etl.rows-rejected`. The terminal result and outbox are written in the same transaction, as today.
 - **FR-009** Cancellation and fault settlement are unchanged, and the first terminal outcome wins over a pending completion request.
@@ -208,7 +208,7 @@ A second run is cancelled and ends `Cancelled`.
   - The completion-request time is a new nullable column on `elsa_etl_connector_runs`, added by a new SQLite runtime migration and model snapshot. Prior rows read it as null.
   - Before the column is added, rows from the prior writers (finite file and HTTP runs) are captured and read back unchanged.
   - The run status, terminal outcome, fetch phase and position enumerations gain no members. Position and fetch JSON shapes are unchanged.
-  - The module `SchemaVersion` changes only if the repository's migration rules require it for an additive nullable column. The plan records which rule applies.
+  - The module `SchemaVersion` changes only if the repository's migration rules require it for an additive nullable column. Research R5 records the rule that applies: additive migrations keep `"1.0.0"`.
 - **FR-014** The ETL README, the Core README and the affected `EXTENSION_POINTS.md` files describe:
   - continuous mode;
   - completion;
@@ -241,8 +241,8 @@ A second run is cancelled and ends `Cancelled`.
 
 ## Assumptions and boundaries
 
-- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source.
-- **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime and idle-poll cost are unbounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
+- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A feed that returns records for a cursor and later none for the same cursor also breaks the contract: if a superseded attempt then publishes its earlier page late, the shard fails closed with `etl.http.page-provenance-invalid` rather than accepting it.
+- **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime is unbounded and its idle-poll cost bounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
 - **Native completion.** No workflow activity requests completion in this slice; the runtime API and Studio do. Native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
 - **Other continuous sources.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.
 - **Deferred.** Orleans, the task-runner host, log CDC, distributed shuffle, windows and stream joins remain deferred.

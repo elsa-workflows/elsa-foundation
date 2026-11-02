@@ -7,19 +7,19 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfEtlRuntimeStore
 {
-    public async ValueTask<EtlConnectorRunCompletionStatus> RequestConnectorRunCompletionAsync(EtlScope scope, string runId,
+    public async ValueTask<EtlRunCompletionOutcome> RequestConnectorRunCompletionAsync(EtlScope scope, string runId,
         CancellationToken cancellationToken = default)
     {
         db.ChangeTracker.Clear();
         var key = RunKey(scope, runId);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var run = await FindRunRowAsync(scope, runId, cancellationToken);
-        if (run is null) return EtlConnectorRunCompletionStatus.NotFound;
-        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlConnectorRunCompletionStatus.Terminal;
+        if (run is null) return EtlRunCompletionOutcome.NotFound;
+        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlRunCompletionOutcome.Terminal;
         var connector = await ConnectorRowAsync(key, cancellationToken);
         if (connector is null || EtlConnectorRecordCodec.Pipeline(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson)).Continuous is null)
-            return EtlConnectorRunCompletionStatus.NotContinuous;
-        if (connector.CompletionRequestedAtUtcTicks is not null) return EtlConnectorRunCompletionStatus.AlreadyRequested;
+            return EtlRunCompletionOutcome.NotContinuous;
+        if (connector.CompletionRequestedAtUtcTicks is not null) return EtlRunCompletionOutcome.AlreadyRequested;
 
         var now = NowTicks();
         connector.CompletionRequestedAtUtcTicks = now;
@@ -39,6 +39,6 @@ internal sealed partial class EfEtlRuntimeStore
         run.Revision = checked(run.Revision + 1);
         await db.SaveChangesAsync(cancellationToken);
         await tx.CommitAsync(cancellationToken);
-        return EtlConnectorRunCompletionStatus.Accepted;
+        return EtlRunCompletionOutcome.Accepted;
     }
 }

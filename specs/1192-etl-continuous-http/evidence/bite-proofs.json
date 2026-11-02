@@ -1,0 +1,158 @@
+{
+  "sourceRevision": "e3dcb4c63a56a73c4cd5a60d5004b234fba3f42c",
+  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter.",
+  "mutations": [
+    {
+      "mutation": "validator-guard",
+      "file": "Extensions/Etl/src/Core/EtlPipelineV2.cs",
+      "filter": "FullyQualifiedName~EtlContinuousRunPolicyTests",
+      "mutated": "Failed!  - Failed:     2, Passed:    11",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:    13",
+      "original": "return \"etl.continuous-source-unsupported\";",
+      "mutated_text": "return null;"
+    },
+    {
+      "mutation": "null-policy-serialized",
+      "file": "Extensions/Etl/src/Core/EtlArtifactV2Json.cs",
+      "filter": "FullyQualifiedName~EtlContinuousRunPolicyTests",
+      "mutated": "Failed!  - Failed:     2, Passed:    11",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:    13",
+      "original": "continuous.ShouldSerialize = static (_, value) => value is not null;",
+      "mutated_text": "continuous.ShouldSerialize = static (_, _) => true;"
+    },
+    {
+      "mutation": "caught-up-unclassified",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/EtlHttpRequestBuilder.cs",
+      "filter": "DisplayName~Continuous_run_delivers",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (string.IsNullOrEmpty(decodedContinuation))\n            return true;",
+      "mutated_text": "        if (string.IsNullOrEmpty(decodedContinuation))\n            return false;"
+    },
+    {
+      "mutation": "input-reservation-kept",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        partition.SourceInputReservedBytes = checked(partition.SourceInputReservedBytes - inputRelease);\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "idle-invariant-refused",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHistory.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (row.NotBeforeUtcTicks != sourceNotBefore && !idle)",
+      "mutated_text": "if (row.NotBeforeUtcTicks != sourceNotBefore)"
+    },
+    {
+      "mutation": "final-ignores-attempt-start",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs",
+      "filter": "DisplayName~Completion_wakes",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (connector.CompletionRequestedAtUtcTicks is { } requested && requested <= attempt.StartedAt.UtcTicks)",
+      "mutated_text": "if (connector.CompletionRequestedAtUtcTicks is { } requested)"
+    },
+    {
+      "mutation": "completion-wakes-retry-waits",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "            if (journal is not null) continue;\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "moving-empty-page-not-delayed",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHttpPageStore.cs",
+      "filter": "DisplayName~A_cursor_that_moves",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "checked(NowTicks() + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks)",
+      "mutated_text": "checked(NowTicks() + 0 * continuous.PollIntervalSeconds)"
+    },
+    {
+      "mutation": "final-page-not-normalized",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/EtlHttpPageCache.cs",
+      "filter": "DisplayName~Continuous_run_delivers",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "if (_continuous && _requestBuilder.IsCaughtUp(",
+      "mutated_text": "if (!_continuous && _requestBuilder.IsCaughtUp("
+    },
+    {
+      "mutation": "closed-journal-accepted",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlHttpSourceFetchTransitions.cs",
+      "filter": "DisplayName~caught_up",
+      "mutated": "Failed!  - Failed:     1, Passed:     4",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     5",
+      "original": "            fetch.Phase != EtlConnectorHttpSourceFetchPhase.InFlight || latest.Attempt != attempt ||\n            latest.CompletedAt is not null",
+      "mutated_text": "            latest.Attempt != attempt ||\n            latest.CompletedAt is not null"
+    },
+    {
+      "mutation": "completion-request-repeated",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (connector.CompletionRequestedAtUtcTicks is not null) return EtlConnectorRunCompletionStatus.AlreadyRequested;\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "completion-after-terminal",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs",
+      "filter": "DisplayName~Cancellation_ends_a_continuous",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlConnectorRunCompletionStatus.Terminal;\n",
+      "mutated_text": ""
+    },
+    {
+      "mutation": "complete-under-cancel-permission",
+      "file": "Extensions/Etl/src/Runtime/Api/Endpoints/CompleteRun/Endpoint.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "[RequirePermission(EtlRuntimePermissions.CompleteRuns)]",
+      "mutated_text": "[RequirePermission(EtlRuntimePermissions.CancelRuns)]"
+    },
+    {
+      "mutation": "next-poll-on-retry-wait",
+      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeInspector.cs",
+      "filter": "DisplayName~Runtime_http_complete",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "idle = pipeline.Continuous is not null && fetch is null && owed is null",
+      "mutated_text": "idle = pipeline.Continuous is not null && owed is null"
+    },
+    {
+      "mutation": "complete-offered-for-every-run",
+      "file": "Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlRunsPage.tsx",
+      "filter": "vitest src/__tests__/runsPage.test.tsx",
+      "mutated": "Tests 1 failed | 13 passed (14)",
+      "failedTests": [
+        "ETL runs page > does not offer completion for a finite run or a host that predates continuous runs"
+      ],
+      "restored": "Tests 14 passed (14)",
+      "original": "  return run.connector?.mode === \"continuous\";",
+      "mutated_text": "  return true;"
+    }
+  ]
+}

@@ -39,10 +39,10 @@ internal abstract class ForwardingEtlConnectorRuntimeStore(IEtlRuntimeStore runt
     public virtual ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
         Connector.AdvanceEmptyHttpPageAsync(lease, cancellationToken);
 
-    public virtual ValueTask<EtlConnectorHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease, EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default) =>
+    public virtual ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease, EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default) =>
         Connector.RecordConnectorHttpCaughtUpAsync(lease, attempt, responseReceivedAtUtc, cancellationToken);
 
-    public virtual ValueTask<EtlConnectorRunCompletionStatus> RequestConnectorRunCompletionAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default) =>
+    public virtual ValueTask<EtlRunCompletionOutcome> RequestConnectorRunCompletionAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default) =>
         Connector.RequestConnectorRunCompletionAsync(scope, runId, cancellationToken);
 
     public virtual ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(EtlConnectorPartitionLease lease, EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default) =>

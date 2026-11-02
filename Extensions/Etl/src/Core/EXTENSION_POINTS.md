@@ -84,6 +84,8 @@ was requested at or before the attempt started it changes nothing and returns `F
 response as a final page whose unmoved cursor is normalized away. `RequestConnectorRunCompletionAsync` records a durable
 request and makes only idle partitions (cleared journal, no owed batch) due at once; retry waits keep their schedule.
 A provider's audits must accept an idle partition's eligibility time without a waiting journal for continuous runs only.
+A provider that keeps the refusing defaults still admits a continuous artifact, whose first caught-up response then
+fails the run with `etl.http.source-transition-refused`; such a provider should not be offered continuous pipelines.
 `AdvanceEmptyHttpPageAsync` delays a continuous shard's next request by one interval after a moving empty page unless
 completion was requested. `EtlConnectorRunInspection.Continuous` / `CompletionRequestedAt` and
 `EtlConnectorPartitionInspection.NextPollAt` are init-only, so existing inspector implementations keep compiling;

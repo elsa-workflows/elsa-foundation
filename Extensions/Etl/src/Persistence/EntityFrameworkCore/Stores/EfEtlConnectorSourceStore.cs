@@ -26,7 +26,7 @@ internal sealed partial class EfEtlRuntimeStore
             ? new(EtlStoreStatus.Conflict, null, null)
             : EtlHttpSourceFetchTransitions.Capture(fetch, attempt, page, responseReceivedAtUtc, now, policy), cancellationToken);
 
-    public async ValueTask<EtlConnectorHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease,
+    public async ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);

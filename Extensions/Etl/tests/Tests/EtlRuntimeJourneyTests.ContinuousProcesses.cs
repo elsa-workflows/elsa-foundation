@@ -81,7 +81,7 @@ public sealed partial class EtlRuntimeJourneyTests
             await WaitForIdleAsync(host.Services, files.Scope, invocation.RunId, accepted: 1);
         }
 
-        Assert.Equal(EtlConnectorRunCompletionStatus.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
         var run = await files.WaitForTerminalAsync(host.Services, invocation.RunId);
 
         Assert.Equal(EtlRunStatus.Succeeded, run.Status);

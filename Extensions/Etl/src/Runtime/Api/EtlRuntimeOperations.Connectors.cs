@@ -51,8 +51,9 @@ internal sealed partial class EtlRuntimeOperations
             !row.IsClaimed && (row.ClaimFence is not null || row.ClaimExpiresAt is not null) ||
             row.File is { } range && (range.StartOrdinal < 0 || range.NextOrdinal < range.StartOrdinal || range.NextOrdinal > range.EndOrdinalExclusive) ||
             row.Http is { } progress && (progress.PageSequence < 0 || progress.NextItem < 0 || progress.PageRecordCount < progress.NextItem || progress.PageRecordCount is null && progress.NextItem != 0) ||
-            // A next poll belongs only to an idle shard: unclaimed HTTP progress with no page, journal or owed batch.
-            row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.IsClaimed || row.OwedBatch is not null ||
+            // A next poll belongs only to an idle shard: HTTP progress with no page, journal or owed batch.
+            // Claim metadata may remain until release or the next claim, so an idle shard can still show a claim.
+            row.NextPollAt is { } nextPoll && (nextPoll != row.NotBefore || row.OwedBatch is not null ||
                 row.Http is not { PageRecordCount: null, Exhausted: false, Fetch: null }))
             throw ProviderContractError();
         return new(row.PartitionOrdinal,

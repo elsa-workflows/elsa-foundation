@@ -29,19 +29,19 @@ A completion request causes each shard's next qualifying caught-up response to b
   - The Core `EXTENSION_POINTS.md` gains the provider obligations for the two new store members, `RecordConnectorHttpCaughtUpAsync` and `RequestConnectorRunCompletionAsync`.
   - The Runtime/Api `EXTENSION_POINTS.md` gains the new operations member and the permission.
 - **Tests.** No test asserts on source or markdown text. Every changed existing test states its reason (§2.21.1).
-- **Naming.** The new names (`EtlContinuousRunPolicy`, `EtlConnectorHttpCaughtUpResult`, `EtlRunCompletionView`) follow the existing `Etl…` families, use four components or fewer, and avoid banned words.
+- **Naming.** The new names (`EtlContinuousRunPolicy`, `EtlHttpCaughtUpResult`, `EtlRunCompletionView`) follow the existing `Etl…` families, use four components or fewer, and avoid banned words.
 
 ## Changes by project
 
 ### Core (`src/Core`)
-- `EtlPipelineV2.Continuous`, `EtlContinuousRunPolicy` and `EtlContinuousRunPolicyRules` (R1, R7).
+- `EtlPipelineV2.Continuous`, `EtlContinuousRunPolicy` and its `FindViolation` rule (R1, R7).
 - `EtlArtifactV2Json`: `ShouldSerialize` for `continuous`.
 - `IEtlConnectorRuntimeStore`:
-  - `RecordConnectorHttpCaughtUpAsync` and `EtlConnectorHttpCaughtUpResult`;
-  - `RequestConnectorRunCompletionAsync` and `EtlConnectorRunCompletionStatus`.
+  - `RecordConnectorHttpCaughtUpAsync` and `EtlHttpCaughtUpResult`;
+  - `RequestConnectorRunCompletionAsync` and `EtlRunCompletionOutcome`.
 
   Both are new interface members. The only implementation is the EF store; test wrappers such as `ConnectorGateStore` delegate.
-- Connector inspection records: `Mode`, `CompletionRequestedAt` and `NextPollAt` (R8).
+- Connector inspection records: `Continuous`, `CompletionRequestedAt` and `NextPollAt`; the API projects `Continuous` as `mode` (R8).
 - `PublicAPI.Unshipped.txt`, `README.md` and `EXTENSION_POINTS.md`.
 
 ### Design and compiler
