@@ -11,6 +11,7 @@ Elsa.Agent.Specialists.Connections.SpecialistConnectionModelProvider.SupportsRes
 Elsa.Agent.Specialists.Connections.SpecialistConnectionModelProvider.OpenAsync(Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease!>
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.SpecialistModelConnectionTypeProvider(string! providerKey, string! connectionTypeName) -> void
+Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.ProviderKey.get -> string!
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.Descriptor.get -> Elsa.Connections.Core.Models.ConnectionTypeDescriptor!
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.ResolveHosts(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! settings) -> Elsa.Connections.Core.Models.AllowedHostsPolicy!
 Elsa.Agent.Specialists.Connections.SpecialistModelConnectionTypeProvider.TestAsync(Elsa.Connections.Core.Contracts.IResolvedConnection! connection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Connections.Core.Models.ConnectionTestResult!>!

@@ -22,7 +22,7 @@ export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed"
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
 export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
-export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "context-admitted" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+export type AgentStreamEventType = "provider-notice" | "turn-started" | "message-started" | "message-delta" | "context-used" | "context-admitted" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
 
 export interface AgentPlanStep {
   id: string;
@@ -30,8 +30,17 @@ export interface AgentPlanStep {
   status: string;
 }
 
+/**
+ * Preview (#3441): what a server restart does to this backend's sessions. `durable`: they are recovered;
+ * `processLifetime`: they survive reloads while the server runs, and a restart ends them; `unsupported`: this
+ * composition cannot recover them.
+ */
+export type AgentRecoveryMode = "durable" | "processLifetime" | "unsupported";
+
 export interface AgentBootstrapResponse {
   enabled: boolean;
+  /** Preview (#3441): absent from a server that does not report it. */
+  recovery?: AgentRecoveryMode;
   providerStatus: AgentProviderStatus;
   modes: StudioAgentMode[];
   capabilities: StudioAgentCapabilityContribution[];
@@ -66,6 +75,10 @@ export interface AgentProviderDiagnostics {
 
 export interface AgentCreateSessionRequest {
   mode: StudioAgentMode;
+  /** Preview (#3441): the Studio backend workspace; it only narrows the owner's session list. */
+  workspace?: string;
+  /** Preview (#3441): the session this one continues after a limit. Only the link is carried over. */
+  continuedFrom?: string;
   /** The autonomy mode to request; the server clamps it to the deployment ceiling. Omit to take the default. */
   autonomyMode?: AgentAutonomyMode;
   activeSurface: StudioAgentSurface;
@@ -111,8 +124,65 @@ export interface AgentAcceptedPolicy {
 export interface AgentSessionDetailResponse {
   sessionId: string;
   status: AgentSessionStatus;
+  title?: string;
   policy?: AgentSessionPolicy;
-  messages: { id: string; role: string; status: string; acceptedPolicyRevision?: number }[];
+  messages: AgentRecordedMessage[];
+  /** Preview (#3441): the documented session limit this session reached; a reopened session offers its continuation. */
+  limit?: AgentSessionLimit;
+}
+
+/** Preview (#3441): which documented session limit a disclosure-budget refusal reached. */
+export type AgentSessionLimit = "snapshots" | "bytes";
+
+/** Preview (#3441): the code of the documented session limit outcome. */
+export const SESSION_LIMIT_REACHED = "agent.context.disclosure_budget_exceeded";
+
+/** Preview (#3441): why a cancelled message stopped. A dropped stream records no reason. */
+export type AgentMessageStatusReason = "interrupted" | "withdrawn" | "user-stop";
+
+/** A message as the session owner recorded it. */
+export interface AgentRecordedMessage {
+  id: string;
+  role: string;
+  status: string;
+  content?: string;
+  statusReason?: AgentMessageStatusReason;
+  acceptedPolicyRevision?: number;
+  /** Preview (#3441): the public policy the owner recorded this message as accepted under, when the server sends it. */
+  acceptedPolicy?: AgentAcceptedPolicy;
+}
+
+/** Preview (#3441): an owner-scoped session list query; actor and tenant come from the authenticated caller. */
+export interface AgentSessionListQuery {
+  workspace?: string;
+  take?: number;
+  before?: string;
+}
+
+/** Preview (#3441): one of the caller's own sessions. */
+export interface AgentSessionSummary {
+  id: string;
+  title?: string;
+  status: AgentSessionStatus;
+  updatedAt: string;
+  expiresAt?: string;
+  pendingReviewCount: number;
+  recoveryState?: string;
+}
+
+export interface AgentSessionListResponse {
+  items: AgentSessionSummary[];
+  /** The cursor of the next older page, absent on the last page. */
+  next?: string;
+}
+
+/** Preview (#3441): the owner's statement about an uncertain client operation. It is never a receipt. */
+export type AgentOwnerResolutionClaim = "applied" | "not-applied" | "unknown";
+
+export interface AgentOwnerResolution {
+  claim: AgentOwnerResolutionClaim;
+  actorId?: string;
+  resolvedAt?: string;
 }
 
 export interface AgentMessageRequest {
@@ -142,6 +212,10 @@ export interface AgentMessageViewModel {
   role: AgentMessageRole;
   content: string;
   status: AgentMessageStatus;
+  /** Preview (#3441): why a recorded cancelled message stopped. */
+  statusReason?: AgentMessageStatusReason;
+  /** Preview (#3441): the code of a provider or session notice this entry shows. */
+  noticeCode?: string;
   /** The acknowledged policy that admitted the turn this message belongs to, when known. */
   acceptedPolicy?: AgentAcceptedPolicy;
 }
@@ -173,6 +247,10 @@ export interface AgentActionProposal {
   operations?: AgentProposalOperation[];
   risks?: string[];
   rollback?: string;
+  /** Preview (#3441): the owner's recorded statement about this uncertain client operation. */
+  ownerResolution?: AgentOwnerResolution;
+  /** Preview (#3441): when the prepared operation's lifetime ends. */
+  expiresAt?: string;
 }
 
 export type AgentResourceTarget = StudioAgentResourceTarget;
@@ -208,6 +286,9 @@ export type AgentActionProposalPayload = Partial<AgentActionProposal> & {
   baseRevision?: string;
 };
 
+/** Preview (#3441): a session's recorded proposal; its status is the owner's, normalized. */
+export type AgentRecordedProposal = AgentActionProposalPayload & { id: string; status: AgentProposalStatus };
+
 export interface AgentClarificationRequest {
   id: string;
   prompt: string;
@@ -234,7 +315,8 @@ export type AgentStreamEvent =
   | { type: "plan-updated"; steps: AgentPlanStep[] }
   | { type: "message-completed"; messageId: string }
   | { type: "turn-cancelled"; turnId: string }
-  | { type: "error"; message: string };
+  | { type: "provider-notice"; code: string; message: string }
+  | { type: "error"; message: string; code?: string; limit?: AgentSessionLimit };
 
 export interface AgentFeedbackRequest {
   rating: "positive" | "negative";

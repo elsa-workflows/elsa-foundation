@@ -1298,6 +1298,13 @@ export interface StudioAgentToolContractContribution extends StudioBackendAwareC
   executionLocation?: StudioAgentExecutionLocation;
   /** Invoked only for a matching backend-prepared, explicitly reviewed client request. */
   executeClient?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult>;
+  /**
+   * Preview (#3441): the owning module's report, before anything is dispatched, of whether the invocation's exact
+   * unsaved target (for example its editor and working generation) still exists in this page. Anything other than
+   * `available`, or a failure to answer, refuses the operation with zero effect and the module's reason; nothing is
+   * reconstructed. A module that omits it is dispatched as before, and its `executeClient` may still refuse.
+   */
+  clientTargetAvailability?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): StudioAgentToolAvailability | Promise<StudioAgentToolAvailability>;
 }
 
 export interface StudioAgentResourceTarget {
@@ -1511,6 +1518,7 @@ export const studioSlotIds = {
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
+  workflowRunRelatedLinks: "workflow.run.related-links",
   settingEditors: "studio.setting-editors",
   agentContextProviders: "studio.weaver.context-providers",
   agentPromptStarters: "studio.weaver.prompt-starters",
@@ -1601,6 +1609,7 @@ export const studioSlots = {
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
+  workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1848,6 +1857,33 @@ export interface StudioActivityDefinitionImplementationEditorContribution extend
   publicInterfaceComponent?: ComponentType<StudioActivityDefinitionImplementationEditorProps>;
 }
 
+/** An authorized, public activity-state projection for the exact selected native occurrence. */
+export interface StudioWorkflowRunRelatedLinkContext {
+  workflowExecutionId: string;
+  activityExecutionId: string;
+  executableNodeId: string;
+  stateView: { kind: string; version: number; data: unknown };
+  /** Canonical native run/occurrence route in the selected backend; safe to retain in a related-run URL. */
+  returnTo: string;
+}
+
+export interface StudioWorkflowRunRelatedLink {
+  id: string;
+  label: string;
+  /** A Studio-relative route. The host rejects foreign origins/backends and preserves the selected backend. */
+  path: string;
+}
+
+export interface StudioWorkflowRunRelatedLinkContribution extends StudioBackendAwareContribution {
+  id: string;
+  order?: number;
+  activityTypes: readonly string[];
+  viewKind: string;
+  viewVersion: number;
+  /** Pure synchronous projection of public reference data; the target route reauthorizes its reads. */
+  getLinks(context: StudioWorkflowRunRelatedLinkContext): readonly StudioWorkflowRunRelatedLink[];
+}
+
 export interface ElsaStudioModuleApi {
   readonly connection?: StudioConnectionController;
   readonly shell?: StudioContributionRegistry<StudioShellContribution>;
@@ -1872,6 +1908,8 @@ export interface ElsaStudioModuleApi {
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
   /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
+  /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */
+  readonly workflowRunRelatedLinks?: StudioContributionRegistry<StudioWorkflowRunRelatedLinkContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {
@@ -2402,7 +2440,16 @@ export async function readStudioHttpErrorMessage(response: Response) {
 
 export async function createStudioHttpError(response: Response) {
   const error = await readStudioHttpError(response);
-  return new StudioHttpError(response.status, error.message, error.validationErrors, error.payload);
+  return new StudioHttpError(response.status, error.message, error.validationErrors, error.payload, readRetryAfterSeconds(response.headers.get("retry-after")));
+}
+
+/** A `Retry-After` value (delta seconds or an HTTP date) as whole seconds from now; null when absent or unreadable. */
+function readRetryAfterSeconds(value: string | null, now = Date.now()): number | null {
+  const text = value?.trim();
+  if (!text) return null;
+  if (/^\d+$/.test(text)) return Number(text);
+  const at = Date.parse(text);
+  return Number.isFinite(at) ? Math.max(0, Math.ceil((at - now) / 1000)) : null;
 }
 
 async function readStudioHttpError(response: Response): Promise<{ message: string; validationErrors: StudioValidationErrors | null; payload: unknown | null }> {
@@ -2552,7 +2599,9 @@ export class StudioHttpError extends Error {
     public readonly status: number,
     message: string,
     public readonly validationErrors: StudioValidationErrors | null = null,
-    public readonly payload: unknown | null = null
+    public readonly payload: unknown | null = null,
+    /** The response's `Retry-After` hint in whole seconds, when it sent a readable one. */
+    public readonly retryAfterSeconds: number | null = null
   ) {
     super(message);
     this.name = "StudioHttpError";

@@ -13,7 +13,7 @@
 	<ItemGroup>
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />

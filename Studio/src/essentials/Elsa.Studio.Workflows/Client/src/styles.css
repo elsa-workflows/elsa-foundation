@@ -384,10 +384,11 @@
   padding: 0 10px;
 }
 
-.wf-actions button:hover,
-.wf-toolbar button:hover,
-.wf-editor-actions button:hover,
-.wf-link-button:hover {
+/* Shared buttons own their hover recipe, including the primary foreground/background pair. */
+.wf-actions button:where(:not(.studio-button)):hover,
+.wf-toolbar button:where(:not(.studio-button)):hover,
+.wf-editor-actions button:where(:not(.studio-button)):hover,
+.wf-link-button:where(:not(.studio-button)):hover {
   background: var(--wf-panel-muted);
 }
 
@@ -7489,6 +7490,14 @@ html[data-theme-material] .availability-search .wf-search {
   align-items: center;
   font-size: 12px;
   gap: 4px;
+}
+
+.wf-bpmn-claim-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-block: 4px;
+  font-size: 13px;
 }
 
 /* --- Binding conversion controls (issue #449) ------------------------------------------------- */

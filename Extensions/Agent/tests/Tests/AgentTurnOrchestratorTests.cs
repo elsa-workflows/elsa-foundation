@@ -73,23 +73,23 @@ public sealed class AgentTurnOrchestratorTests
         var alias = SwapCase(session.Id);
         Assert.NotEqual(session.Id, alias);
         Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
-        Assert.Null(states.Find(session.Id));
+        Assert.Null(await states.FindAsync(session.Id));
         var first = await Collect(streaming.StreamAsync(session.Id));
         var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
-        var pause = Assert.IsType<AgentPausedTurn>(states.Find(session.Id));
-        Assert.Null(states.Find(alias));
+        var pause = Assert.IsType<AgentPausedTurn>(await states.FindAsync(session.Id));
+        Assert.Null(await states.FindAsync(alias));
         Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
-        Assert.Same(pause, states.Find(session.Id));
+        Assert.Same(pause, await states.FindAsync(session.Id));
         Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
         var result = await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
         Assert.True(result.Succeeded);
         Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
-        Assert.Same(pause, states.Find(session.Id));
+        Assert.Same(pause, await states.FindAsync(session.Id));
 
         var resumed = await Collect(streaming.StreamAsync(session.Id));
         Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains(result.Value!.ToolResult!.Content));
         Assert.Equal(AgentStreamEventKind.Completed, resumed[^1].Kind);
-        Assert.Null(states.Find(session.Id));
+        Assert.Null(await states.FindAsync(session.Id));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class AgentTurnOrchestratorTests
         Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains("Expired", StringComparison.Ordinal));
         Assert.DoesNotContain(resumed, x => x.Kind == AgentStreamEventKind.ToolCallRequested);
         Assert.Equal(AgentStreamEventKind.Completed, resumed[^1].Kind);
-        Assert.Null(states.Find(session.Id));
+        Assert.Null(await states.FindAsync(session.Id));
         Assert.Equal(0, tool.Invocations);
         await PostAsync(sessions, session.Id, "a new explicit request");
     }
@@ -170,7 +170,7 @@ public sealed class AgentTurnOrchestratorTests
         Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains("uncertain", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(resumed, x => x.Error?.Code == "agent.turn.awaiting_review");
         Assert.Equal(AgentActionProposalStatus.Uncertain, (await proposals.FindAsync(proposal.Id))!.Status);
-        Assert.Null(states.Find(session.Id));
+        Assert.Null(await states.FindAsync(session.Id));
         Assert.Equal(0, tool.ServerExecutions);
         await PostAsync(sessions, session.Id, "a new explicit request");
     }
@@ -426,7 +426,7 @@ public sealed class AgentTurnOrchestratorTests
         var continuation = Task.Run(() => Collect(fixture.Streaming.StreamAsync(session.Id)));
         await continuationUnregister.Entered.Task.WaitAsync(HandoffTimeout);
         // The continuation removed and released exactly the pause it observed, while its own foreground claim remains.
-        Assert.Null(fixture.States.Find(session.Id));
+        Assert.Null(await fixture.States.FindAsync(session.Id));
         Assert.Null(fixture.Owner.FindPause(session.Id));
         Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
         continuationUnregister.Release.SetResult();
@@ -565,10 +565,10 @@ public sealed class AgentTurnOrchestratorTests
             return hold;
         }
 
-        public void Save(AgentPausedTurn state) => inner.Save(state);
-        public void Remove(string sessionId) => inner.Remove(sessionId);
+        public Task SaveAsync(AgentPausedTurn state, CancellationToken cancellationToken = default) => inner.SaveAsync(state, cancellationToken);
+        public Task RemoveAsync(string sessionId, CancellationToken cancellationToken = default) => inner.RemoveAsync(sessionId, cancellationToken);
 
-        public AgentPausedTurn? Find(string sessionId)
+        public Task<AgentPausedTurn?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
         {
             (TaskCompletionSource Entered, TaskCompletionSource Release)? hold;
             lock (inner)
@@ -581,7 +581,7 @@ public sealed class AgentTurnOrchestratorTests
                 held.Entered.TrySetResult();
                 Assert.True(held.Release.Task.Wait(HandoffTimeout));
             }
-            return inner.Find(sessionId);
+            return inner.FindAsync(sessionId, cancellationToken);
         }
     }
 

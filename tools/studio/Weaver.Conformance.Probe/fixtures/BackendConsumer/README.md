@@ -30,3 +30,9 @@ Private `Qualification:GrantProfiles` maps predeclared profile names to arrays o
 The optional `Qualification:DiagnosticGateDirectory` pauses immediately before startup and on a startup exception, before application disposal. It must be a fresh absolute directory below the owned content root. Each stage writes `<stage>.ready.json` and waits for `<stage>.release`, for at most 60 seconds. It records a typed admission failure without touching native locks; backend enrollment observation is absent for this ordinary profile. `configure_runtime` clears this setting; ordinary qualification runs with the gate off.
 
 `run.profiles["backend"]` exposes `published`, `assembly`, `env`, `audit`, `runtimeFeed`, `nativeStore`, `appsettings`, `shells`, `commandFile` and `traceFiles` to the integration driver. `freeze_consumer_baseline` runs after real startup and before resource installation. `capture_consumer_after` runs after final restored observations; it refuses changed/missing common DLL/browser files. Build/lock/asset/audit receipts remain separate from runtime case acceptance.
+
+The application also discovers `FoundationAgentEntityFrameworkCore` and `Secrets` from their packages; the baseline shell
+does not select them. For the #3441 restart inventory, `consumers.enable_durable_agent_store(run, database, key)` adds both to
+the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
+root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
+starts a new generation of the same published application through `runtime.RestartableServer`.
