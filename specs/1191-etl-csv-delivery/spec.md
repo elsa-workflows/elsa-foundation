@@ -57,7 +57,7 @@ In Studio the author chooses CSV as a route's destination kind and picks an outp
 **Acceptance Scenarios**:
 
 1. **Given** the connector editor, **When** the author picks CSV for a route, **Then** the binding picker lists the host's output folder approvals for that role, and the saved draft holds `{"kind":"csv","binding":…}`.
-2. **Given** a CSV run, **When** it is inspected, **Then** the main or error output type reads CSV and published effects count as published.
+2. **Given** a CSV run, **When** it is inspected, **Then** the main or error output type reads "CSV file" and published effects count as published.
 
 ---
 
@@ -73,8 +73,9 @@ On an actual Workbench, a native workflow runs a published JSON Lines → CSV pi
 - A mapped string field whose value is only spaces, starts with `=`, `+`, `-` or `@`, or holds a lone CR: written verbatim with RFC 4180 quoting only. Spreadsheet formula escaping is not applied, because it would change the data.
 - A mapped field name containing a comma, quote or line break: the header cell is quoted like any value. The same holds for an error row's field name.
 - A mapping with a single output field whose value is null writes an empty line. Elsa's CSV reader reads it as one null field, but many general-purpose readers skip blank lines; this is a stated limitation of single-column CSV.
-- A row that would fit as CSV but whose intermediate JSON object is larger: it is accepted, because the CSV bytes are what is bounded (FR-007). The only exception is a row whose JSON object passes the transformer's memory bound of eight times the batch output limit; this needs mapped field names far larger than that limit.
-- Output exactly at, and one byte over, the batch output byte limit, counting the header row: at the limit the row is written; one byte over, that row is rejected to the error route as `etl.output-too-large`, as for JSON Lines. If the header plus the first row do not fit, that row is rejected and the header is not written.
+- A row that would fit as CSV but whose intermediate JSON object is larger: it is accepted, because the CSV bytes are what is bounded (FR-007). The transformer's memory-only bound of eight times the batch output limit can never reject such a row (research R2).
+- Output exactly at, and one byte over, the batch output byte limit, counting the header row: at the limit the row is written; one byte over, that row is rejected to the error route as `etl.output-too-large`, as for JSON Lines. If the header plus the first row do not fit, that row is rejected and the header is not written; the next row that fits carries it. A CSV row rejected for size carries no field name. If the rejection's own error row cannot fit either, the batch fails with `etl.output-too-large`, as it does for JSON Lines.
+- An HTTP route in the same pipeline: the closing `]` of its JSON array is reserved when its first element is appended, so a CSV (or JSON Lines) route that fills the allowance exactly cannot leave the array unclosable. This fixes the existing JSON Lines + HTTP behaviour, where that case failed the batch.
 - Many batches: each file repeats the header, so every file can be read on its own.
 - Main route CSV and error route JSON Lines, or the reverse, in one pipeline.
 - The same output folder approval used by a JSON Lines route in one pipeline and a CSV route in another: files differ by extension and effect identity, so they never collide.
@@ -92,7 +93,7 @@ On an actual Workbench, a native workflow runs a published JSON Lines → CSV pi
 - **FR-007** The CSV route body counts against the existing batch output byte limit and the run's retained output budget, header rows included. For a CSV route the bound that decides a row is the CSV bytes it adds (with the header when it is the route's first row), not the size of the transformer's intermediate JSON. A row that does not fit is rejected to the error route as `etl.output-too-large`, as a JSON Lines row is.
 - **FR-008** Retention, effect identity, create-only publication to a key derived from the effect identity (with a `.csv` extension), post-publication verification, recording and fenced acceptance follow the existing file route path. A conflicting existing file is refused. Republishing the same effect is idempotent.
 - **FR-009** Existing persisted rows keep their meaning: the per-batch effect-kind column records the delivery mechanism (HTTP delivery or file publication), so a CSV file effect takes the existing file-publication value and no migration is needed. Existing JSON Lines and HTTP effect keys, identities and stored values are unchanged.
-- **FR-010** Studio offers "CSV file" as a destination kind for each route in the connector editor, lists output folder approvals for it under a "file" label (not "JSONL output"), and names CSV in the pipeline stage text and the connector authoring profile text. Run inspection reports the CSV output type as a CSV file and counts published CSV effects as published.
+- **FR-010** Studio offers "CSV file" as a destination kind for each route in the connector editor, lists output folder approvals for it under a "file" label (not "JSONL output"), and names CSV in the pipeline stage text and the connector authoring profile text. Run inspection reports the CSV output type as "CSV file" (a CSV source still reads "CSV") and counts published CSV effects as published.
 - **FR-011** The ETL README, the Core README and the Design and Studio extension-point catalogs list the CSV destination.
 
 ### Key Entities

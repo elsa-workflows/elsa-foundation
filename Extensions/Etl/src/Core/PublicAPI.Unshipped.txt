@@ -1891,3 +1891,17 @@ override Elsa.Etl.Core.EtlJsonlSource.ToString() -> string!
 override sealed Elsa.Etl.Core.EtlJsonlSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
 static Elsa.Etl.Core.EtlJsonlSource.operator !=(Elsa.Etl.Core.EtlJsonlSource? left, Elsa.Etl.Core.EtlJsonlSource? right) -> bool
 static Elsa.Etl.Core.EtlJsonlSource.operator ==(Elsa.Etl.Core.EtlJsonlSource? left, Elsa.Etl.Core.EtlJsonlSource? right) -> bool
+Elsa.Etl.Core.EtlCsvDestination
+Elsa.Etl.Core.EtlCsvDestination.Binding.get -> string!
+Elsa.Etl.Core.EtlCsvDestination.Binding.init -> void
+Elsa.Etl.Core.EtlCsvDestination.Deconstruct(out string! Binding) -> void
+Elsa.Etl.Core.EtlCsvDestination.Equals(Elsa.Etl.Core.EtlCsvDestination? other) -> bool
+Elsa.Etl.Core.EtlCsvDestination.EtlCsvDestination(string! Binding) -> void
+override Elsa.Etl.Core.EtlCsvDestination.<Clone>$() -> Elsa.Etl.Core.EtlCsvDestination!
+override Elsa.Etl.Core.EtlCsvDestination.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlCsvDestination.GetHashCode() -> int
+override Elsa.Etl.Core.EtlCsvDestination.ToString() -> string!
+override sealed Elsa.Etl.Core.EtlCsvDestination.Equals(Elsa.Etl.Core.EtlDestination? other) -> bool
+static Elsa.Etl.Core.EtlCsvDestination.operator !=(Elsa.Etl.Core.EtlCsvDestination? left, Elsa.Etl.Core.EtlCsvDestination? right) -> bool
+static Elsa.Etl.Core.EtlCsvDestination.operator ==(Elsa.Etl.Core.EtlCsvDestination? left, Elsa.Etl.Core.EtlCsvDestination? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorFileOutputKey(string! effectId, Elsa.Etl.Core.Runtime.EtlConnectorKind kind) -> string!

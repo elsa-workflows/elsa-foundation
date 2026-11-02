@@ -15,7 +15,7 @@ Source snapshot: `agent/claude/2908-jsonl-input` at `f1b85fa0c` (spec 1190, PR #
 **Why.** No transformer change. Exactness is inherited from the transformer's JSON writer, which already writes `decimal` with its scale and never in exponent form. Re-deriving values would duplicate the formatting.
 
 **Byte bound (spec review blocker).** The transformer bounds each accepted row's JSON object by the remaining output allowance and rejects an overflowing row as `etl.output-too-large`. The JSON object is always at least as large as its CSV row: it adds property names, writes null as `null`, and escapes non-ASCII as `\uXXXX`. Passing the CSV allowance to the transformer would therefore reject rows that fit as CSV, and it would never count the header. So, for a CSV route:
-- the transformer is given a memory-only bound of eight times the batch output limit, saturating. That covers the worst-case escaping growth of any value the CSV row could hold. Property names are not bounded by that ratio, so a row is still rejected when its JSON object passes the memory bound even though its CSV row would fit. That can only happen when the mapped field names are several times larger than the whole batch output limit, and the spec's edge case states it;
+- the transformer is given a memory-only bound of eight times the batch output limit, saturating. No CSV row that fits can exceed it. JSON escaping adds at most 6 bytes per UTF-8 byte of a value. Each field adds at most its name length plus 4 bytes of name and structure, and the header already pays the name length plus 1 for that field. So the JSON object of any CSV row that fits after its header is at most 8 × (header + row) ≤ 8 × the limit. The per-row allocation is transient and can exceed the attempt's charge of one batch output limit (`EtlConnectorExecution.cs:196`); it is not retained;
 - the CSV writer applies the real bound. It measures the row, adding the header if this is the route's first row, against the remaining allowance. If the row does not fit, it rejects that row to the error route as `etl.output-too-large` with the record's ordinal, exactly as the JSON Lines path does. When the first row does not fit, the header is not written either.
 
 JSON Lines and HTTP routes keep today's transformer bound.
@@ -54,9 +54,11 @@ A string is quoted when it is empty or holds a comma, a quote, CR, LF, or leadin
 
 **Prior writers.** Every writer since the column's migration (`20261021170000_ConnectorInspectionEffects`) has written 1 for HTTP and 2 for JSONL, and nothing else, through `EfEtlConnectorOutputStore`. The only readers are:
 - the inspector, which tests the column for null;
-- the output store's replay check, which compares it with the retained output plan.
+- `ReadConnectorBatchOutput` in the output store, which compares it with the retained output plan. It is reached from the batch store, acceptance and the inspector.
 
 **Decision.** Define the column as the delivery mechanism: 1 is an HTTP delivery and 2 is a file publication. The store maps JSON Lines and CSV route kinds to 2 through one function, used both when it writes the column and when its replay check compares the stored value with the retained plan (`EfEtlConnectorOutputStore.cs:123-124`). With a raw `(int)Kind` comparison, every CSV row would fail its replay read. Tests cover a CSV row on write and on replay read. The exact route kind stays in the retained output plan JSON (`"kind":"csv"`), which is what acceptance and inspection already read. Existing rows keep both their values and their meaning. A test seeds rows written by the prior writer and checks that they read back unchanged. Another test shows a CSV effect stored as 2.
+
+The migration backfill (`20261021170000`, http→1, jsonl→2) already matches the mechanism meaning, and no CSV row predates this change. Two existing inspector tests assert the column as `(int)EtlConnectorKind`. They pass only because JSON Lines is 2, so they are rewritten against the mechanism constants, with the reason recorded.
 
 **Rejected.** A migration that rebuilds the batch table to allow 0: it carries risk to the foreign keys and indexes for no information the plan JSON does not already hold.
 

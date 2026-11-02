@@ -28,9 +28,9 @@ Both constitutions and the review checklist were loaded.
 |---|---|
 | §E2.2/§E2.6 | Pass. The runtime gains no design reference, and runs need only artifact plus pins. |
 | §E6 naming | `EtlCsvDestination`, `EtlCsvRouteWriter` (internal) and `EtlFileChunkFormat.CsvOutput`. All are within four components and need no exception. |
-| §2.21.1 | No existing test changes meaning. Where a test asserted the JSONL-only file-route gate, it is widened and the reason is recorded. |
+| §2.21.1 | `EtlConnectorRuntimeInspectorTests` asserts the effect-kind column as `(int)EtlConnectorKind`. Those assertions are rewritten against the mechanism constants (1 HTTP, 2 file), and the reason is recorded. Any test of the JSONL-only file-route gate is widened, with its reason. |
 | §2.22.1 | `Core/EXTENSION_POINTS.md` already describes the connector store. The effect-kind redefinition is an internal persistence detail and is documented in the EF store and DbContext. The Studio and Design catalogs name the new destination. |
-| §2.23.3 / §4.1 | Additive public surface: `EtlCsvDestination` and its members, in `Core/PublicAPI.Unshipped.txt`, plus a public `ConnectorFileOutputKey(string, EtlConnectorKind)` overload on `EtlRuntimeIdentity`. |
+| §2.23.3 / §4.1 / §E5 | Additive public surface, a minor change by SemVer class: `EtlCsvDestination` and its members, plus a public `ConnectorFileOutputKey(string, EtlConnectorKind)` overload that throws for non-file kinds. Both are recorded in `Core/PublicAPI.Unshipped.txt`. Compared by hand with the shipped baseline: no member is removed or changed. Versions are computed. |
 | §E7 | No new test project. |
 
 No violations.
@@ -53,9 +53,10 @@ No violations.
 - `Bindings/HostConnectorBindings.cs`: `DestinationAsync` resolves `EtlCsvDestination` through the role's file approval with `Kind = Csv`.
 - `Output/IFileChunkPublisher.cs` and `FileChunkPublisherFactory.cs`: `CsvOutput`, a `.csv` store.
 - `Output/EtlCsvRouteWriter.cs` (new, internal): writes the header and record rows from the transformer's JSON objects (R2, FR-004 and FR-005), and error rows (FR-006) with every cell under the string rule. It measures each row, with the header when it is the route's first row, before appending it.
-- `Execution/EtlConnectorOutputProcessor.cs`:
+- `Execution/EtlConnectorOutputProcessor.cs` (a CSV row rejected for size carries a null field):
   - `RouteBodyBuilder` takes the destination kind. For a CSV main route, `BuildOutputAsync` calls the transformer with the memory-only bound (R2). If the measured CSV row, with the header if first, does not fit the remaining allowance, the row is rejected to the error route as `etl.output-too-large` with the record's ordinal. JSON Lines and HTTP keep the transformer's bound.
   - `EtlConnectorKindFor`, `BodyStore` and `RetainedBodyIdentity` gain CSV entries (`etl-connector-csv-route-body-v1:`, `.csv` store).
+  - `RouteBodyBuilder` for an HTTP array reserves its closing `]` when it appends the first element, and `Finish` adds no unreserved byte. This fixes the existing JSON Lines + HTTP limit case.
   - `DispatchAsync` sends JSON Lines and CSV to `PublishFileRouteAsync`. That method takes its publisher, its verification store (not the fixed `_jsonlStore`) and its key from the route kind.
 - Every gate in research R7a is updated, including the `StagingPausePublisherFactory` test host mapping.
 
@@ -82,6 +83,7 @@ No violations.
   - the stage text "Choose HTTP, JSONL or CSV independently";
   - the connector profile text in `authoringProfiles.tsx` names CSV.
 - `EtlRunInspection.tsx`: `kindLabel` gives "CSV file" for output types, so a CSV source still reads "CSV".
+- Doc comments that name only JSONL for file routes are widened: `Core/Runtime/EtlConnectorBatch.cs:30` and `:39`, `IEtlConnectorRuntimeInspector.cs:40`, `EtlRuntimeIdentity.cs:87` and `Runtime/Api/EXTENSION_POINTS.md:38`.
 
 ## Verification plan
 
