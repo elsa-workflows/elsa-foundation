@@ -193,6 +193,7 @@ test("reader permissions preserve browsing and private views while withholding m
   await expect(page.getByRole("button", { name: "Save view", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Manage tags", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create folder", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Manage folders", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
   await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Organize Collect overdue payment" });
@@ -288,4 +289,80 @@ test("Enter in tag search searches without saving pending organization changes",
   await expect(dialog.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(dialog).toBeHidden();
+});
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1920]) {
+  test(`workflow toolbar groups controls and gives versions room (${theme}, ${width}px)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=workflow-library&palette=classic&theme=${theme}`);
+    const favorite = page.getByRole("button", { name: "Favorites", exact: true });
+    await expect(favorite).toBeVisible();
+    await expect(favorite.locator("svg")).toBeVisible();
+    await expect(favorite).toHaveText("");
+    await expect(favorite).toHaveAttribute("aria-pressed", "false");
+    await favorite.click();
+    await expect(favorite).toHaveAttribute("aria-pressed", "true");
+    await favorite.click();
+    await page.getByRole("combobox", { name: "Sort workflows" }).selectOption("name-desc");
+    await expect(page).toHaveURL(/sort=name-desc/);
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Publication filter" })).toBeVisible();
+    await page.getByRole("combobox", { name: "Publication filter" }).selectOption("published");
+    await expect(page.getByRole("button", { name: "Filters (1)", exact: true })).toHaveAttribute("aria-expanded", "true");
+    await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Manage folders", exact: true })).toBeVisible();
+    if (width > 700) {
+      const version = page.getByRole("row", { name: "Open workflow definition Collect overdue payment" }).locator(".wf-definition-version").first();
+      expect((await version.boundingBox())!.width).toBeGreaterThanOrEqual(176);
+      const number = await version.locator(".wf-definition-version-number").boundingBox();
+      const draft = await version.getByText("Draft", { exact: true }).boundingBox();
+      expect(Math.abs(number!.y - draft!.y)).toBeLessThan(2);
+      expect(draft!.x - number!.x - number!.width).toBeGreaterThanOrEqual(9);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`workflow-library-${theme}-${width}.png`), fullPage: true });
+  });
+}
+
+test("bulk delete confirms recoverable deletion and keeps partial failures selected", async ({ page }) => {
+  await page.goto("/?mode=workflow-library&palette=classic&theme=light&delete=partial");
+  await page.getByRole("checkbox", { name: "Select visible workflow definitions" }).check();
+  await page.getByRole("button", { name: "Delete selected", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Delete selected workflows" });
+  await expect(confirmation).toContainText("Delete 2 selected workflow definitions?");
+  await expect(confirmation).toContainText("restore");
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Delete selected", exact: true })).toBeFocused();
+  expect(await page.evaluate(() => (window as unknown as { workflowLibraryRequests: { method: string }[] }).workflowLibraryRequests.filter(request => request.method === "DELETE"))).toHaveLength(0);
+  await page.getByRole("button", { name: "Delete selected", exact: true }).click();
+  await confirmation.getByRole("button", { name: "Delete selected", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("1 couldn't be deleted");
+  await expect(page.getByRole("alert")).toContainText("welcome: Permission denied");
+  await expect(page.getByRole("alert")).toBeFocused();
+  await expect(page.getByRole("checkbox", { name: "Select workflow definition Welcome new customer" })).toBeChecked();
+  await expect(page.getByRole("row", { name: "Open workflow definition Collect overdue payment" })).toHaveCount(0);
+});
+
+
+test("successful bulk deletion focuses its result when the selection bar disappears", async ({ page }) => {
+  await page.goto("/?mode=workflow-library&palette=classic&theme=light");
+  await page.getByRole("checkbox", { name: "Select visible workflow definitions" }).check();
+  await page.getByRole("button", { name: "Delete selected", exact: true }).click();
+  await page.getByRole("dialog", { name: "Delete selected workflows" }).getByRole("button", { name: "Delete selected", exact: true }).click();
+  const result = page.getByRole("status").filter({ hasText: "2 workflow definitions deleted." });
+  await expect(result).toBeFocused();
+  await expect(page.getByRole("button", { name: "Delete selected", exact: true })).toHaveCount(0);
+});
+
+
+test("bulk deletion from a later page focuses the result after returning to the previous page", async ({ page }) => {
+  await page.goto("/?mode=workflow-library&palette=classic&theme=light&paging=delete");
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(page.getByRole("row", { name: "Open workflow definition Welcome new customer" })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Select visible workflow definitions" }).check();
+  await page.getByRole("button", { name: "Delete selected", exact: true }).click();
+  await page.getByRole("dialog", { name: "Delete selected workflows" }).getByRole("button", { name: "Delete selected", exact: true }).click();
+  await expect(page.getByText("Page 1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "1 workflow definition deleted." })).toBeFocused();
 });
