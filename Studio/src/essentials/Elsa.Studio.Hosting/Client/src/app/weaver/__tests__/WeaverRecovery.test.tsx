@@ -345,6 +345,20 @@ describe("Weaver session recovery", () => {
     view.unmount();
   });
 
+  it("treats a refusal that names no session limit as an ordinary error, without offering a continuation", async () => {
+    const server = fakeServer();
+    const view = mount(server, "ada");
+    await composerReady(view.container);
+    typeAndSend(view.container, "Attach the whole export");
+    await settle(() => expect(view.subscribe).toHaveBeenCalledTimes(1));
+    // A single disclosure larger than any session can record: the stream parser keeps only the session limits.
+    view.emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", message: "This context is larger than one session can record." });
+    await settle(() => expect(view.container.textContent).toContain("This context is larger than one session can record."));
+    expect(view.container.querySelector('[data-kind="limit"]')).toBeNull();
+    expect(buttonIn(view.container, "Continue in a new session")).toBeNull();
+    view.unmount();
+  });
+
   it("keeps working when browser storage throws", async () => {
     const server = fakeServer();
     const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });

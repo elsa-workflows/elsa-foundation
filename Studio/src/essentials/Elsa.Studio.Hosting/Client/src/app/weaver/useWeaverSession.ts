@@ -569,8 +569,9 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         finishTurn();
         break;
       case "error":
-        // A session limit is a documented outcome with its own continuation, not a failure of this turn's work.
-        if (event.code === SESSION_LIMIT_REACHED && sessionIdRef.current) setRecoveryNotice({ kind: "limit", sessionId: sessionIdRef.current, ...(event.limit ? { limit: event.limit } : {}), ...(event.message ? { message: event.message } : {}) });
+        // A session limit is a documented outcome with its own continuation, not a failure of this turn's work. Only a
+        // refusal that names a session limit offers it; one disclosure too large for any session is an ordinary error.
+        if (event.code === SESSION_LIMIT_REACHED && event.limit && sessionIdRef.current) setRecoveryNotice({ kind: "limit", sessionId: sessionIdRef.current, ...(event.limit ? { limit: event.limit } : {}), ...(event.message ? { message: event.message } : {}) });
         // A disclosure refusal must never leave an earlier admission displayed as current.
         setAttachments([]);
         clearContextDiagnostics();
