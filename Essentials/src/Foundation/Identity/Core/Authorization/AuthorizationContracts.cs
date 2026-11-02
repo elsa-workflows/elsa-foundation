@@ -53,6 +53,39 @@ public interface IPermissionAuthorizationService
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Re-evaluates one permission for a persisted subject from the identity provider's current state,
+/// for deferred work that has no incoming principal. It never trusts a saved permission snapshot.
+/// The default refuses as <see cref="CurrentSubjectPermissionStatus.Unsupported"/>; only a provider
+/// that owns the subject's current users, memberships and roles replaces it. A store read failure
+/// propagates so callers can keep their work owed instead of treating it as a denial.
+/// </summary>
+[ReplacementContract]
+public interface ICurrentSubjectPermissionAuthorizer
+{
+    ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(
+        CurrentSubjectPermissionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record CurrentSubjectPermissionRequest(string TenantId, string SubjectId, string Permission, object? Resource = null);
+
+public enum CurrentSubjectPermissionStatus
+{
+    Granted,
+    Denied,
+    Unsupported
+}
+
+public sealed record CurrentSubjectPermissionResult(CurrentSubjectPermissionStatus Status, string? Failure = null)
+{
+    public static CurrentSubjectPermissionResult Granted { get; } = new(CurrentSubjectPermissionStatus.Granted);
+
+    public static CurrentSubjectPermissionResult Denied(string failure) => new(CurrentSubjectPermissionStatus.Denied, failure);
+
+    public static CurrentSubjectPermissionResult Unsupported(string failure) => new(CurrentSubjectPermissionStatus.Unsupported, failure);
+}
+
 public interface IPermissionResourceHandler
 {
     ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default);
