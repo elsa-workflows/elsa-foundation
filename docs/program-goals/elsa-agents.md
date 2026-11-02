@@ -53,7 +53,7 @@ are the roadmap; each next implementation leaf is elaborated when its inputs are
 | [M2 #3522](https://github.com/elsa-workflows/elsa-foundation/issues/3522) | Catalog and immutable publication | Authorized drafts/versions, generated activity contracts and packaged-consumer proof |
 | [M3 #3523](https://github.com/elsa-workflows/elsa-foundation/issues/3523) | Specialist execution | Validated results, capability-aware model connections, optional continuity and recovery |
 | [M4 #3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524) | Native and BPMN composition | Editorial process on both surfaces, exact references and correct parent continuation |
-| [M5 #3525](https://github.com/elsa-workflows/elsa-foundation/issues/3525) | Studio and evaluations | Real create/test/publish/use/inspect journeys, saved cases and version comparison |
+| [M5 #3525](https://github.com/elsa-workflows/elsa-foundation/issues/3525) | Studio, configuration and evaluations | Real create/test/publish/use/inspect journeys for Studio-authored and configuration-defined specialists (FR-027; the #3519 A1 and #3525 exit amendments are recorded as issue comments), saved cases and version comparison |
 | [M6 #3526](https://github.com/elsa-workflows/elsa-foundation/issues/3526) | Tools, knowledge and bounded teams | Authorized tool effects, scoped context, exact approvals, budgets and team lifecycle |
 | [M7 #3527](https://github.com/elsa-workflows/elsa-foundation/issues/3527) | Integrated qualification | Complete acceptance, supported provider/store/host evidence, docs, reviewed CI and resulting main |
 
