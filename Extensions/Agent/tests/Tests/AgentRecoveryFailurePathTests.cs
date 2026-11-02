@@ -64,6 +64,64 @@ public sealed class AgentRecoveryFailurePathTests
     }
 
     [Fact]
+    public async Task An_unrecorded_outcome_that_cannot_be_settled_yet_is_settled_on_its_next_access()
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        // Both the outcome write and the settlement attempted right after it fail.
+        store.FailNextWrites(write => write.Proposals.Any(x => x.Proposal.Status is AgentActionProposalStatus.Executed or AgentActionProposalStatus.Uncertain), 2);
+
+        Assert.Equal("uncertain", (await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Status);
+        Assert.Equal(AgentActionProposalStatus.Executing, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await host.Proposals.FindAsync(proposal.Id))!.Status);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, (await host.ProbeAsync(session)).Outcome);
+        Assert.Equal(1, harness.Module.Dispatches);
+    }
+
+    [Fact]
+    public async Task An_unrecorded_outcome_settles_only_its_own_operation_and_leaves_other_live_work_running()
+    {
+        var client = new ProposalClientTool();
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)),
+            services => services.AddSingleton<IAgentTool>(client));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var first = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.ClientCall(session, client), session.Policy)).Proposal!;
+        var second = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session, "call-2", "turn-2"), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(first.Id, session.ActorId, first.BaseRevision)).Succeeded);
+        Assert.True((await host.Proposals.ApproveAsync(second.Id, session.ActorId, second.BaseRevision)).Succeeded);
+        // A foreground turn runs, and the second operation's executor is in flight, while the first one's outcome cannot be recorded.
+        await host.PostAsync(session, "hello");
+        var turn = harness.Provider.HoldNext();
+        var running = Task.Run(() => host.StreamAsync(session));
+        await turn.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var held = harness.Module.HoldNextDispatch();
+        var inFlight = Task.Run(() => host.Proposals.ExecuteAsync(second.Id, session.ActorId, second.BaseRevision));
+        await held.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        store.FailNextWrite(write => write.Proposals.Any(x => x.Proposal.Id == first.Id && x.Proposal.Status == AgentActionProposalStatus.AwaitingClient));
+
+        Assert.Equal("uncertain", (await host.Proposals.ExecuteAsync(first.Id, session.ActorId, first.BaseRevision)).Value?.Status);
+
+        // Only the first operation is settled from its record; the second records its real receipt and the turn completes.
+        held.Release.SetResult();
+        Assert.True((await inFlight.WaitAsync(TimeSpan.FromSeconds(30))).Value?.Executed);
+        turn.Release.SetResult();
+        Assert.Equal(AgentStreamEventKind.Completed, (await running.WaitAsync(TimeSpan.FromSeconds(30)))[^1].Kind);
+        var recorded = (await harness.Store.LoadAsync(session.Id))!.Proposals.ToDictionary(x => x.Proposal.Id, x => x.Proposal.Status);
+        Assert.Equal((AgentActionProposalStatus.Uncertain, AgentActionProposalStatus.Executed), (recorded[first.Id], recorded[second.Id]));
+        var settled = Assert.Single(await host.AuditAsync(session), x => x.Metadata.GetValueOrDefault(AgentProposalRecovery.SettledBy) == AgentProposalRecovery.Recovery);
+        Assert.Equal(first.Id, settled.Metadata["proposalId"]);
+        Assert.Equal((1, 0), (harness.Module.Effects, client.ExecuteCalls));
+    }
+
+    [Fact]
     public async Task A_recovered_uncertain_client_operation_keeps_the_session_busy_but_not_its_lease()
     {
         var client = new ProposalClientTool();
@@ -152,7 +210,16 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
     public bool SupportsFencing => inner.SupportsFencing;
 
     /// <summary>The next write matching <paramref name="condition"/> throws and records nothing.</summary>
-    public void FailNextWrite(Func<AgentSessionRecordWrite, bool> condition) => Volatile.Write(ref _failWrite, condition);
+    public void FailNextWrite(Func<AgentSessionRecordWrite, bool> condition) => FailNextWrites(condition, 1);
+
+    private int _failures;
+
+    /// <summary>The next <paramref name="count"/> writes matching <paramref name="condition"/> throw and record nothing.</summary>
+    public void FailNextWrites(Func<AgentSessionRecordWrite, bool> condition, int count)
+    {
+        Volatile.Write(ref _failures, count);
+        Volatile.Write(ref _failWrite, condition);
+    }
 
     /// <summary>The next ownership acquisition throws.</summary>
     public void FailNextAcquire() => Volatile.Write(ref _failAcquire, 1);
@@ -182,8 +249,11 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
                 _refuseWrite = null;
                 return Task.FromResult(new AgentSessionRecordResult(refuse.Outcome));
             }
-        if (Volatile.Read(ref _failWrite) is { } condition && condition(write) && Interlocked.CompareExchange(ref _failWrite, null, condition) == condition)
+        if (Volatile.Read(ref _failWrite) is { } condition && condition(write) && Interlocked.Decrement(ref _failures) >= 0)
+        {
+            if (Volatile.Read(ref _failures) <= 0) Interlocked.CompareExchange(ref _failWrite, null, condition);
             throw new InvalidOperationException("The record store is unavailable for this write.");
+        }
         return inner.WriteAsync(write, cancellationToken);
     }
 

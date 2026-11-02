@@ -21,6 +21,11 @@ internal sealed class InMemoryAgentProposalStore
     public ConcurrentDictionary<string, SemaphoreSlim> Gates { get; } = new(StringComparer.Ordinal);
     /// <summary>The recorded version of each proposal record this process read or wrote (<see cref="AgentProposalRecord.Version"/>).</summary>
     public ConcurrentDictionary<string, long> Versions { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Dispatched operations whose outcome this process could not record, by proposal id (value: session id). Each is brought
+    /// in line with its record, and settled Uncertain when the record still says Executing, before anything acts on it again.
+    /// </summary>
+    public ConcurrentDictionary<string, string> Unsettled { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Forgets everything this process loaded for a session it no longer owns, so nothing read before the loss is acted on;
@@ -37,6 +42,7 @@ internal sealed class InMemoryAgentProposalStore
             Executions.TryRemove(proposal.Id, out _);
             Results.TryRemove(proposal.Id, out _);
             Versions.TryRemove(proposal.Id, out _);
+            Unsettled.TryRemove(proposal.Id, out _);
             if (proposal.PreparedInvocation is { } prepared) Acknowledgements.TryRemove(prepared.InvocationId, out _);
         }
         foreach (var (invocationId, _) in InvocationProposals.Where(x => ids.Contains(x.Value)).ToArray()) InvocationProposals.TryRemove(invocationId, out _);
@@ -181,10 +187,63 @@ internal sealed class InMemoryAgentProposalService(
         return new(proposal, true);
     }
 
-    public Task<AgentActionProposal?> FindAsync(string proposalId, CancellationToken cancellationToken = default)
+    public async Task<AgentActionProposal?> FindAsync(string proposalId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return LookupAsync(proposalId, cancellationToken);
+        await ReconcileGatedAsync(proposalId, cancellationToken);
+        return await LookupAsync(proposalId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Under the proposal gate: brings an operation whose outcome this process could not record in line with its record. The
+    /// recorded proposal, version and outcome replace what this process holds; a record still Executing is settled Uncertain
+    /// once (zero new effect, attributed to recovery). A no-op for any other proposal.
+    /// </summary>
+    private async Task ReconcileAsync(string proposalId)
+    {
+        if (_owner is null || !store.Unsettled.TryGetValue(proposalId, out var sessionId)) return;
+        if (await _owner.LoadProposalRecordAsync(sessionId, proposalId) is not { } recorded)
+        {
+            store.Unsettled.TryRemove(proposalId, out _);
+            return;
+        }
+        var proposal = recorded.Proposal;
+        lock (store.Mutation)
+        {
+            store.Proposals[proposalId] = proposal;
+            store.Versions[proposalId] = recorded.Version;
+            if (recorded.Execution is { } execution) store.Executions[proposalId] = execution; else store.Executions.TryRemove(proposalId, out _);
+            if (recorded.Result is { } result) store.Results[proposalId] = result; else store.Results.TryRemove(proposalId, out _);
+            if (proposal.PreparedInvocation is { } invocation)
+            {
+                if (recorded.AcknowledgementDigest is { } digest) store.Acknowledgements[invocation.InvocationId] = digest;
+                else store.Acknowledgements.TryRemove(invocation.InvocationId, out _);
+            }
+        }
+        if (proposal.Status == AgentActionProposalStatus.Executing && proposal.PreparedInvocation is { } prepared)
+        {
+            await StoreOutcomeAsync(proposal, recorded.Version, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
+                "The operation was dispatched, but its outcome could not be recorded. Its effect is uncertain and will not be replayed.")));
+            await AuditAsync(store.Proposals[proposalId], AgentAuditEventKind.ProposalFailed, null,
+                "The outcome of the dispatched operation could not be recorded; its effect is uncertain.", CancellationToken.None,
+                new Dictionary<string, string>
+                {
+                    ["dispatch"] = prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState ? "client" : "server", ["effect"] = "possible",
+                    [AgentProposalRecovery.SettledBy] = AgentProposalRecovery.Recovery
+                });
+        }
+        else if (Settled(proposal)) _owner.ReleaseProposal(sessionId, proposalId);
+        store.Unsettled.TryRemove(proposalId, out _);
+    }
+
+    /// <summary><see cref="ReconcileAsync"/> for a caller that does not hold the proposal gate.</summary>
+    private async Task ReconcileGatedAsync(string proposalId, CancellationToken cancellationToken)
+    {
+        if (!store.Unsettled.ContainsKey(proposalId)) return;
+        var gate = Gate(proposalId);
+        await gate.WaitAsync(cancellationToken);
+        try { await ReconcileAsync(proposalId); }
+        finally { gate.Release(); }
     }
 
     /// <summary>The owning session from the process-local store, or else from the record store; nothing is hydrated.</summary>
@@ -370,12 +429,19 @@ internal sealed class InMemoryAgentProposalService(
             }
             catch (Exception failure) when (_owner is not null && failure is not AgentSessionOwnershipException)
             {
-                // The executor ran, but the store could not record its outcome. What this process holds in memory (Executing,
-                // with no settlement) is no longer the record, so the session is forgotten: its next access hydrates the
-                // recorded Executing status, and recovery settles it Uncertain once. It is never replayed.
-                logger?.LogError("The outcome of prepared operation {InvocationId} could not be recorded ({FailureType}); its session is reloaded from the record.",
+                // The executor ran, but the store could not record its outcome. Only this operation is brought in line with
+                // its record (settled Uncertain while the record still says Executing); the session, its running turn and
+                // any other operation in flight are left alone. If that fails too, the next access to it retries. It is
+                // never replayed.
+                logger?.LogError("The outcome of prepared operation {InvocationId} could not be recorded ({FailureType}); it is settled from its record.",
                     proposal.PreparedInvocation.InvocationId, failure.GetType().Name);
-                _owner.Evict(proposal.SessionId);
+                store.Unsettled[proposalId] = proposal.SessionId;
+                try { await ReconcileAsync(proposalId); }
+                catch (Exception retry) when (retry is not OperationCanceledException)
+                {
+                    logger?.LogError("Prepared operation {InvocationId} could not be settled yet ({FailureType}); its next access retries.",
+                        proposal.PreparedInvocation.InvocationId, retry.GetType().Name);
+                }
                 return AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The operation was dispatched, but its outcome could not be recorded. Its effect is uncertain and will not be replayed; read its current state."));
             }
@@ -459,6 +525,8 @@ internal sealed class InMemoryAgentProposalService(
     {
         if (_owner is not null && !await _owner.HydrateSessionAsync(sessionId, cancellationToken))
             return AgentResult<IReadOnlyList<AgentActionProposal>>.Failure("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+        foreach (var unsettled in store.Unsettled.Where(x => x.Value == sessionId).Select(x => x.Key).ToArray())
+            await ReconcileGatedAsync(unsettled, cancellationToken);
         var now = clock.GetUtcNow();
         foreach (var overdue in store.Proposals.Values.Where(x => x.SessionId == sessionId && x.Status == AgentActionProposalStatus.AwaitingClient
                      && x.PreparedInvocation?.ExpiresAt <= now).Select(x => x.Id).ToArray())
@@ -522,6 +590,7 @@ internal sealed class InMemoryAgentProposalService(
 
     public async Task<AgentToolResult?> FindResultAsync(string proposalId, CancellationToken cancellationToken = default)
     {
+        await ReconcileGatedAsync(proposalId, cancellationToken);
         if (store.Results.TryGetValue(proposalId, out var available))
             return available;
         if (await LookupAsync(proposalId, cancellationToken) is not { Status: AgentActionProposalStatus.AwaitingClient })
@@ -554,6 +623,8 @@ internal sealed class InMemoryAgentProposalService(
     /// </summary>
     private async Task<(AgentActionProposal? Proposal, long Version, AgentError? Error)> AccessAsync(string proposalId, string actorId, CancellationToken cancellationToken)
     {
+        // An operation whose outcome this process could not record is brought in line with its record before any decision.
+        await ReconcileAsync(proposalId);
         if (await LookupAsync(proposalId, cancellationToken) is not { } found)
             return (null, 0, new("agent.proposal.not_found", "The proposal was not found.", 404));
         var session = await sessions.FindAsync(found.SessionId, cancellationToken);

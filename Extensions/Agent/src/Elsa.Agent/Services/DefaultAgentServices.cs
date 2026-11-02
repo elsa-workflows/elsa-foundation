@@ -406,15 +406,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 claim.Executing = false;
     }
 
-    /// <summary>
-    /// Forgets a loaded session whose recorded state this process can no longer vouch for (an outcome it could not
-    /// record), exactly as a lost ownership does: the next access hydrates the recorded facts again, and recovery settles
-    /// them.
-    /// </summary>
-    internal void Evict(string sessionId)
-    {
-        if (_rows.TryGetValue(sessionId, out var row)) LoseOwnership(sessionId, row);
-    }
+    /// <summary>One proposal's current record, read from the record store without hydrating or changing anything; null when it is not recorded.</summary>
+    internal async Task<AgentProposalRecord?> LoadProposalRecordAsync(string sessionId, string proposalId, CancellationToken cancellationToken = default)
+        => (await _store.LoadAsync(sessionId, cancellationToken))?.Proposals.FirstOrDefault(x => string.Equals(x.Proposal.Id, proposalId, StringComparison.Ordinal));
 
     /// <summary>Releases the claim bound to this proposal identity, if any.</summary>
     internal void ReleaseProposal(string sessionId, string proposalId)
