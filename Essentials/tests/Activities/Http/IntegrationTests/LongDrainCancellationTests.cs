@@ -101,10 +101,94 @@ public sealed class LongDrainCancellationTests
         }
     }
 
+    [Theory]
+    [InlineData(PersistenceMode.Durable, false)]
+    [InlineData(PersistenceMode.Balanced, false)]
+    [InlineData(PersistenceMode.Ephemeral, false)]
+    [InlineData(PersistenceMode.Durable, true)]
+    [InlineData(PersistenceMode.Balanced, true)]
+    [InlineData(PersistenceMode.Ephemeral, true)]
+    public async Task A_drain_that_yielded_to_a_withdrawn_cancel_continues_without_a_sweep(PersistenceMode mode, bool replaySafe)
+    {
+        var probe = new LoopProbe { Continued = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var withdraw = new WithdrawCancelOnYield();
+        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, 50, services =>
+        {
+            ReferenceWorkflowRuns.ComposeHost(services);
+            services.AddSingleton(probe);
+            services.AddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+            services.AddSingleton<IWorkflowSchedulerDrainObserver>(withdraw);
+        });
+        var body = ReferenceWorkflows.Clr("body", replaySafe ? typeof(ReplaySafeBody) : typeof(ProgressingBody), []);
+        var loop = ReferenceWorkflows.Clr("loop", typeof(WhileActivity), [("Condition", true)],
+            childSlots: [new ExecutableChildSlot(WhileActivity.BodySlotName, [body])],
+            structure: new ExecutableActivityStructure(WhileActivity.StructureKind, WhileActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { body = "body" })));
+        var executable = ReferenceWorkflows.Executable("withdrawn-cancel", loop);
+        await fixture.PublishAsync(executable);
+        const string executionId = "withdrawn-cancel";
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var start = fixture.Services.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(executable.Identity.ArtifactId, "test", workflowExecutionId: executionId), cancellationToken: timeout.Token).AsTask();
+        try
+        {
+            await probe.Entered.Task.WaitAsync(timeout.Token);
+            var actor = await fixture.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
+                new(executionId, WorkflowExecutionActorActivationReason.SchedulerWork, DateTimeOffset.UtcNow, "test",
+                    WorkflowExecutionActorCapabilities.InProcessMailbox), timeout.Token);
+
+            // The drain yields to this Cancel, and the observer withdraws it before it reaches the mailbox.
+            using var waiter = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+            withdraw.Waiter = waiter;
+            var withdrawn = actor.EnqueueAsync(NewCancel(executionId, "withdrawn"), waiter.Token).AsTask();
+            probe.Release.TrySetResult();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => withdrawn);
+            await start.WaitAsync(timeout.Token);
+
+            // No sweep runs: the loop body is entered again only because the yielded drain was re-driven.
+            await probe.Continued.Task.WaitAsync(TimeSpan.FromSeconds(5), timeout.Token);
+            Assert.Contains(withdraw.Results, result => result.StopReason == RuntimeSchedulerDrainStopReason.Yielded);
+
+            var cancel = actor.EnqueueAsync(NewCancel(executionId, "cancel"), timeout.Token).AsTask();
+            probe.Stop.TrySetResult();
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await cancel.WaitAsync(timeout.Token)).Status);
+            Assert.Equal(WorkflowExecutionStatus.Cancelled, (await fixture.WorkflowExecutionAsync(executionId)).Status);
+            Assert.False(probe.SafetyLimitReached);
+            Assert.Equal(2, probe.Calls);
+
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var resumption = scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>();
+            var sweep = await resumption.SweepAsync(new(maxExecutionsPerSweep: 10), timeout.Token);
+            Assert.Equal(0, sweep.OutboxFailedCount);
+            Assert.All(sweep.Dispatches, dispatch => Assert.True(dispatch.Outcome is RuntimeResumptionDispatchOutcome.Accepted or RuntimeResumptionDispatchOutcome.Duplicate));
+            await ReferenceWorkflowRuns.AssertNothingLeftToDrainAsync(fixture);
+            Assert.Equal(WorkflowExecutionStatus.Cancelled, (await fixture.WorkflowExecutionAsync(executionId)).Status);
+            Assert.Equal(2, probe.Calls);
+        }
+        finally
+        {
+            probe.Release.TrySetResult();
+            probe.Stop.TrySetResult();
+            await timeout.CancelAsync();
+            try { await start; } catch (OperationCanceledException) { }
+        }
+    }
+
+    private static WorkflowExecutionCommandEnvelope NewCancel(string executionId, string key)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new($"{key}-envelope", executionId,
+            new(key, executionId, WorkflowExecutionCommandKind.Cancel, now, null, new Dictionary<string, string>()),
+            key, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now);
+    }
+
     public sealed class LoopProbe
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        // When set, the second body call reports itself and holds until Stop.
+        public TaskCompletionSource? Continued { get; init; }
+        public TaskCompletionSource Stop { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Calls;
         public bool SafetyLimitReached;
     }
@@ -114,10 +198,17 @@ public sealed class LongDrainCancellationTests
     {
         protected override async ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
         {
-            if (Interlocked.Increment(ref probe.Calls) > 32)
+            var call = Interlocked.Increment(ref probe.Calls);
+            if (call > 32)
             {
                 probe.SafetyLimitReached = true;
                 throw new InvalidOperationException("The test's runaway guard was reached before cancellation took effect.");
+            }
+            if (call > 1 && probe.Continued is { } continued)
+            {
+                continued.TrySetResult();
+                await probe.Stop.Task.WaitAsync(context.CancellationToken);
+                return ActivityTransition.Complete(ActivityUnit.Value);
             }
             probe.Entered.TrySetResult();
             await probe.Release.Task.WaitAsync(context.CancellationToken);
@@ -127,6 +218,20 @@ public sealed class LongDrainCancellationTests
 
     [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
     public sealed class ReplaySafeBody(LoopProbe probe) : ProgressingBody(probe);
+
+    // Cancels the waiting Cancel's token from inside the yielded turn, before the mailbox is released to it.
+    private sealed class WithdrawCancelOnYield : IWorkflowSchedulerDrainObserver
+    {
+        public CancellationTokenSource? Waiter { get; set; }
+        public List<RuntimeSchedulerDrainResult> Results { get; } = [];
+        public async ValueTask OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)
+        {
+            lock (Results)
+                Results.Add(result);
+            if (result.StopReason == RuntimeSchedulerDrainStopReason.Yielded && Waiter is { } waiter)
+                await waiter.CancelAsync();
+        }
+    }
 
     private sealed class ObservedDrains : IWorkflowSchedulerDrainObserver
     {

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -11,11 +12,15 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider, IDisposable
 {
     internal DrainControlContext? DrainControls { private get; init; }
+    internal ILogger? Logger { private get; init; }
 
     // Core and distributed composition must use the same wiring, regardless of registration order.
     internal static InProcessWorkflowExecutionActorProvider Create(IServiceProvider services) =>
         new(services.GetRequiredService<IWorkflowExecutionCommandExecutor>(), services.GetRequiredService<RuntimeActorEvictionOptions>())
-        { DrainControls = services.GetService<DrainControlContext>() };
+        {
+            DrainControls = services.GetService<DrainControlContext>(),
+            Logger = services.GetService<ILogger<InProcessWorkflowExecutionActorProvider>>()
+        };
 
     // In-process diagnostic/routing label only; not persisted across runs (the actor subsystem is in-memory and
     // descriptors are transient), so the nameof value tracks the type name without wire-compatibility risk.
@@ -36,6 +41,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     public const string LiveMailboxGaugeName = "elsa.runtime.actor.live_mailboxes";
 
     private const string TerminalEvictionReason = "runtime.actor.terminal-eviction";
+    /// <summary>The <c>source</c> metadata of the scheduler command that re-drives a drain whose yield was not consumed.</summary>
+    internal const string YieldRedriveSource = "runtime.actor.yield-redrive";
 
     private readonly ConcurrentDictionary<ActorKey, SemaphoreSlim> _lifecycleLocks = new();
     private readonly ConcurrentDictionary<ActorKey, SelfPassivatingActorHandle> _agents = new();
@@ -44,6 +51,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     private readonly RuntimeActorEvictionOptions _evictionOptions;
     private readonly Meter _meter;
     private readonly bool _ownsMeter;
+    private readonly CancellationTokenSource _disposed = new();
     private long _activationCounter;
 
     public InProcessWorkflowExecutionActorProvider()
@@ -122,7 +130,9 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                     _commandProcessor,
                     _maxProcessedIdempotencyKeysPerAgent,
                     DrainControls);
-                return new SelfPassivatingActorHandle(actor, this, _evictionOptions);
+                var handle = new SelfPassivatingActorHandle(actor, this, _evictionOptions);
+                actor.StrandedYield = () => RedriveStrandedYield(handle, key.WorkflowExecutionId, request.Partition);
+                return handle;
             });
 
             return agent;
@@ -170,6 +180,9 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
 
     public void Dispose()
     {
+        // Stops any background yield re-drive; the resumption sweep owns that work after shutdown.
+        if (!_disposed.IsCancellationRequested)
+            _disposed.Cancel();
         if (_ownsMeter)
             _meter.Dispose();
     }
@@ -196,6 +209,57 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             // The instance we acquired was removed by a concurrent passivation (and possibly replaced). Release it —
             // which also wakes any other waiters parked on the same stale instance so they retry too — and loop.
             lifecycleLock.Release();
+        }
+    }
+
+    // A drain that yielded to a Cancel which then never ran (its waiter was cancelled, or it answered Duplicate) would
+    // otherwise wait for the resumption sweep (#3647). Re-drive it through the handle, so terminal eviction still applies,
+    // on a detached flow so no caller's ambient session or drain control reaches the new turn. Its drain delivers the
+    // continuations the yielded segment flushed undelivered before it starts (WorkflowDrainOrchestrator).
+    private void RedriveStrandedYield(SelfPassivatingActorHandle handle, string workflowExecutionId, WorkflowExecutionPartition partition)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var envelopeId = RuntimeExecutionIdGenerator.NewId(now);
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal) { ["source"] = YieldRedriveSource };
+        var envelope = new WorkflowExecutionCommandEnvelope(
+            envelopeId: envelopeId,
+            workflowExecutionId: workflowExecutionId,
+            command: new WorkflowExecutionCommand(
+                CommandId: RuntimeExecutionIdGenerator.NewId(now),
+                WorkflowExecutionId: workflowExecutionId,
+                Kind: WorkflowExecutionCommandKind.RunSchedulerWork,
+                EnqueuedAt: now,
+                Payload: null,
+                Metadata: metadata),
+            idempotencyKey: $"{YieldRedriveSource}:{workflowExecutionId}:{envelopeId}",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: now,
+            metadata: metadata,
+            partition: partition);
+
+        if (_disposed.IsCancellationRequested)
+            return;
+        // UnsafeQueueUserWorkItem flows no ExecutionContext, whether or not the caller already suppressed flow.
+        ThreadPool.UnsafeQueueUserWorkItem(static state => _ = state.Provider.RunRedriveAsync(state.Handle, state.Envelope),
+            (Provider: this, Handle: handle, Envelope: envelope), preferLocal: false);
+    }
+
+    private async Task RunRedriveAsync(SelfPassivatingActorHandle handle, WorkflowExecutionCommandEnvelope envelope)
+    {
+        try
+        {
+            var result = await handle.EnqueueAsync(envelope, _disposed.Token);
+            if (result.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
+                Logger?.LogDebug("Re-driving workflow execution '{WorkflowExecutionId}' after an unconsumed drain yield answered {Status}; the resumption sweep remains its backstop",
+                    envelope.WorkflowExecutionId, result.Status);
+        }
+        catch (OperationCanceledException) when (_disposed.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            // The resumption sweep remains the backstop for the yielded work.
+            Logger?.LogWarning(exception, "Re-driving workflow execution '{WorkflowExecutionId}' after an unconsumed drain yield failed", envelope.WorkflowExecutionId);
         }
     }
 
@@ -271,6 +335,11 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         private readonly object _statusLock = new();
         private readonly int _maxProcessedIdempotencyKeys;
         private WorkflowExecutionActorStatus _status = WorkflowExecutionActorStatus.Active;
+        // 1 while the last drain turn yielded and no Cancel has run since.
+        private int _strandedYield;
+
+        /// <summary>Re-drives this execution after a yield whose Cancel never ran. Set by the provider.</summary>
+        internal Action? StrandedYield { private get; set; }
 
         public InProcessWorkflowExecutionActor(
             string workflowExecutionId,
@@ -322,12 +391,22 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             cancellationToken.ThrowIfCancellationRequested();
             // Publish only a valid mailbox-local control wait, before waiting for its active turn. A cancelled
             // waiter removes its request; the running turn may safely have yielded in the meantime.
+            // The registration is held through the Cancel's own turn, so a drain that yielded to it is settled before the
+            // registration drops: either the Cancel ran, or the turn ends without it and the drain is re-driven.
             using var pendingControl = _drainControls is not null &&
                 envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel &&
                 envelope.WorkflowExecutionId == _workflowExecutionId && envelope.Partition == _partition &&
                 Status == WorkflowExecutionActorStatus.Active ? _drainControl.Wait() : null;
-            await _mailbox.WaitAsync(cancellationToken);
-            pendingControl?.Dispose();
+            try
+            {
+                await _mailbox.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                pendingControl?.Dispose();
+                RedriveIfYieldStranded();
+                throw;
+            }
             try
             {
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
@@ -347,6 +426,12 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 using var controlScope = _drainControls?.Push(_workflowExecutionId,
                     envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel ? null : _drainControl);
                 var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
+                // A Cancel turn never yields (its control is null), so completing one settles any earlier yield, and so
+                // does a drain that ran. A turn that drained nothing (no drain requested, or shed) leaves it as it was.
+                if (processResult.StopReason == RuntimeSchedulerDrainStopReason.Yielded)
+                    Interlocked.Exchange(ref _strandedYield, 1);
+                else if (envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel || processResult is { DrainPerformed: true, Shed: false })
+                    Interlocked.Exchange(ref _strandedYield, 0);
 
                 // Admission shed (RB1, #1235). Deferred is the truthful status either way, but the two refusals differ
                 // in what they left behind, and so in what the idempotency key must mean afterwards.
@@ -419,8 +504,20 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             }
             finally
             {
+                pendingControl?.Dispose();
                 _mailbox.Release();
+                RedriveIfYieldStranded();
             }
+        }
+
+        // The yielding turn sets the flag before it checks for waiters, and a leaving waiter unregisters before it
+        // checks the flag. Both are full fences, so whichever runs last sees both, and the exchange lets only one re-drive.
+        private void RedriveIfYieldStranded()
+        {
+            if (_drainControl.IsPending || Status != WorkflowExecutionActorStatus.Active)
+                return;
+            if (Interlocked.Exchange(ref _strandedYield, 0) == 1)
+                StrandedYield?.Invoke();
         }
 
         public async ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken)
