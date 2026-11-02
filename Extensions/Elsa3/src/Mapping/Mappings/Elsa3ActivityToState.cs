@@ -68,8 +68,8 @@ public sealed class Elsa3ActivityToState
 
         return mapped.GetValueOrDefault(root);
         // NOTE: Elsa-3 per-activity designer position/size in source.Metadata.Designer is not carried into
-        // ActivityNode; display metadata lives on the WorkflowDefinitionVersionLayout sibling, and no issue tracks
-        // populating it from the import.
+        // ActivityNode; display metadata lives in the layout siblings. The folder import (Elsa3JsonReconciliation)
+        // writes it to the draft it creates; the version's layout stays empty, because the materialize command takes none.
     }
 
     private static bool TryGetArgument(string key, JsonElement jsonElement, out ArgumentState argument)

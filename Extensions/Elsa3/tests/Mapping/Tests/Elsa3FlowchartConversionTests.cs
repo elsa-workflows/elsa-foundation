@@ -213,6 +213,24 @@ public sealed class Elsa3FlowchartConversionTests
     }
 
     [Fact]
+    public async Task A_connection_keeps_the_bend_points_Elsa_3_drew_it_through()
+    {
+        var chart = Elsa3FlowchartDiagnosticsTests.Flowchart("root",
+            Elsa3FlowchartDiagnosticsTests.Write("a"), Elsa3FlowchartDiagnosticsTests.Write("b"), Elsa3FlowchartDiagnosticsTests.Write("c"));
+        var bent = Elsa3FlowchartDiagnosticsTests.Connect("a", "Done", "b");
+        bent.Vertices = [new Elsa3Position { X = 300, Y = 125 }, new Elsa3Position { X = 300.5, Y = 245 }];
+        chart.Connections = [bent, Elsa3FlowchartDiagnosticsTests.Connect("b", "Done", "c")];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(chart));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var connections = result.Value!.State.RootActivity!.Structure!.Payload.GetProperty("connections").EnumerateArray().ToArray();
+        Assert.Equal("""[{"x":300,"y":125},{"x":300.5,"y":245}]""", connections[0].GetProperty("vertices").GetRawText());
+        // A connection Elsa 3 drew straight carries no vertices, as before.
+        Assert.False(connections[1].TryGetProperty("vertices", out _));
+    }
+
+    [Fact]
     public async Task Break_inside_a_flowchart_converts_and_its_outbound_connection_is_removed()
     {
         // US4.5 and US4.6: Break ends the flowchart in both engines; a connection after it never fires.

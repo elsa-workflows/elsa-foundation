@@ -173,6 +173,37 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
         Assert.Equal("Hello from Elsa 3", body);
     }
 
+    /// <summary>The draft an imported workflow opens in is laid out as the Elsa 3 designer placed it.</summary>
+    [Fact]
+    public async Task The_draft_of_an_imported_workflow_has_the_Elsa_3_positions_and_bend_points()
+    {
+        var draft = await DraftWithLayoutAsync("http-headers");
+
+        var endpoint = Assert.Single(draft.Layout, record => record.NodeId == "endpoint");
+        Assert.Equal((50d, 100d, 180d, 50d), (endpoint.X, endpoint.Y, endpoint.Width!.Value, endpoint.Height!.Value));
+        var respond = Assert.Single(draft.Layout, record => record.NodeId == "respond");
+        Assert.Equal((400d, 220d), (respond.X, respond.Y));
+        var connection = Assert.Single(draft.Draft.State.RootActivity!.Structure!.Payload.GetProperty("connections").EnumerateArray());
+        Assert.Equal("""[{"x":300,"y":125},{"x":300,"y":245}]""", connection.GetProperty("vertices").GetRawText());
+    }
+
+    /// <summary>An Elsa 3 export without positions keeps Elsa 4's default layout.</summary>
+    [Fact]
+    public async Task The_draft_of_an_imported_workflow_without_Elsa_3_positions_has_no_layout()
+    {
+        var draft = await DraftWithLayoutAsync("http-hello");
+
+        Assert.Empty(draft.Layout);
+    }
+
+    private Task<Elsa.Workflows.Design.Persistence.Core.Models.DraftWithLayout> DraftWithLayoutAsync(string definitionId) =>
+        Host.ReadAsync(async services =>
+        {
+            var store = services.GetRequiredService<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionDraftStore>();
+            var draft = Assert.Single(await store.ListByWorkflowDefinitionIdAsync(definitionId));
+            return (await store.FindWithLayoutByIdAsync(draft.Id))!;
+        });
+
     /// <summary>#3202: Elsa 3 saves an empty response header map; it publishes, and the response is what Elsa 3 sent.</summary>
     [Fact]
     public async Task Imported_http_response_with_the_empty_header_map_answers()

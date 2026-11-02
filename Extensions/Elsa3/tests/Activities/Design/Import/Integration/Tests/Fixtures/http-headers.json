@@ -2,7 +2,7 @@
   "id": "http-headers-v1",
   "definitionId": "http-headers",
   "name": "http-headers",
-  "description": "Test-owned flowchart (#3202): answers a POST to elsa3/headers with a literal response header.",
+  "description": "Test-owned flowchart (#3202): answers a POST to elsa3/headers with a literal response header. Laid out as the Elsa 3 designer placed it, with one bent connection.",
   "createdAt": "1970-01-01T00:00:00Z",
   "version": 1,
   "toolVersion": "3.6.0",
@@ -41,7 +41,18 @@
           "canStartWorkflow": true,
           "runAsynchronously": false
         },
-        "metadata": {},
+        "metadata": {
+          "designer": {
+            "size": {
+              "width": 180,
+              "height": 50
+            },
+            "position": {
+              "x": 50,
+              "y": 100
+            }
+          }
+        },
         "path": {
           "typeName": "String",
           "expression": {
@@ -67,7 +78,18 @@
           "canStartWorkflow": false,
           "runAsynchronously": false
         },
-        "metadata": {},
+        "metadata": {
+          "designer": {
+            "size": {
+              "width": 180,
+              "height": 50
+            },
+            "position": {
+              "x": 400,
+              "y": 220
+            }
+          }
+        },
         "content": {
           "typeName": "String",
           "expression": {
@@ -108,7 +130,16 @@
           "activity": "respond",
           "port": "In"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 300,
+            "y": 125
+          },
+          {
+            "x": 300,
+            "y": 245
+          }
+        ]
       }
     ]
   }

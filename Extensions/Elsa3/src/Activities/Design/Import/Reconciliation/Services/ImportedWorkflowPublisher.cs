@@ -1,5 +1,6 @@
 ﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -30,7 +31,7 @@ internal enum WorkflowPublicationStatus
 /// its target slot has published before (an <see cref="PublicationStatus.Active"/> or <see cref="PublicationStatus.Retired"/>
 /// record, or the record the slot serves) is left alone, so a start never takes back a slot an operator moved, and a
 /// re-exported newer version is published. A published definition without a draft gets one cloned from that version,
-/// so it opens in the designer; one that has a draft keeps it.
+/// so it opens in the designer, laid out as the Elsa 3 designer placed it; one that has a draft keeps it.
 /// </summary>
 internal sealed class ImportedWorkflowPublisher(
     IPublicationPolicyStore policyStore,
@@ -40,13 +41,15 @@ internal sealed class ImportedWorkflowPublisher(
     IRequestSender requestSender,
     IWorkflowDefinitionDraftStore draftStore,
     ICloneDraftFromVersionCommand cloneDraft,
+    IUpdateDraftCommand updateDraft,
     TimeProvider timeProvider,
     ILogger<ImportedWorkflowPublisher> logger)
 {
     public async Task<IReadOnlyDictionary<string, WorkflowPublicationStatus>> PublishAsync(
         IEnumerable<ReusableActivityImportedWorkflowVersion> versions,
         string tenantId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, IReadOnlyCollection<DesignMetadataRecord>>? layoutOf = null)
     {
         var results = new Dictionary<string, WorkflowPublicationStatus>(StringComparer.Ordinal);
         foreach (var newest in versions
@@ -55,19 +58,29 @@ internal sealed class ImportedWorkflowPublisher(
         {
             var status = await PublishOnceAsync(newest, tenantId, cancellationToken);
             if (status != WorkflowPublicationStatus.Failed)
-                await EnsureDraftAsync(newest, cancellationToken);
+                await EnsureDraftAsync(newest, layoutOf?.Invoke(newest.SourceVersionId) ?? [], cancellationToken);
             results[newest.SourceVersionId] = status;
         }
         return results;
     }
 
-    private async Task EnsureDraftAsync(ReusableActivityImportedWorkflowVersion version, CancellationToken cancellationToken)
+    private async Task EnsureDraftAsync(
+        ReusableActivityImportedWorkflowVersion version,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        CancellationToken cancellationToken)
     {
         try
         {
             if (await draftStore.FindByWorkflowDefinitionIdAsync(version.WorkflowDefinitionId, cancellationToken) is not null)
                 return;
-            await cloneDraft.Execute(new DesignOperationKey($"elsa3-import-draft:{version.WorkflowVersionId}"), version.WorkflowVersionId, cancellationToken);
+            var draftId = await cloneDraft.Execute(new DesignOperationKey($"elsa3-import-draft:{version.WorkflowVersionId}"), version.WorkflowVersionId, cancellationToken);
+            // The version is written without a layout (the materialize command takes none), so the draft carries the Elsa 3
+            // one; without it Elsa 4 lays the nodes out by default.
+            if (layout.Count > 0 && await draftStore.FindByIdAsync(draftId, cancellationToken) is { } draft)
+                await updateDraft.Execute(
+                    new DesignOperationKey($"elsa3-import-layout:{version.WorkflowVersionId}"),
+                    new UpdateDraftRequest(draftId, draft.State, layout),
+                    cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

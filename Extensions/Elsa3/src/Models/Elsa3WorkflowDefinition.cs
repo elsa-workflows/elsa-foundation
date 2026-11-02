@@ -131,6 +131,9 @@ public sealed class Elsa3Connection
 {
     public Elsa3Endpoint Source { get; set; } = null!;
     public Elsa3Endpoint Target { get; set; } = null!;
+
+    /// <summary>The bend points the Elsa 3 designer drew the connection through, or null.</summary>
+    public IList<Elsa3Position>? Vertices { get; set; }
 }
 
 public sealed class Elsa3Endpoint

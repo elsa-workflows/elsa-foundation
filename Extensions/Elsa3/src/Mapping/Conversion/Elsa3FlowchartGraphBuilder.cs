@@ -651,11 +651,18 @@ internal static class Elsa3FlowchartGraphBuilder
             }
 
             flowchart.StructureFields[ConnectionsField] = edges
-                .Select(edge => new
-                {
-                    source = new { nodeId = NodeId(edge.Source), port = edge.Port },
-                    target = new { nodeId = NodeId(edge.Target), port = (string?)null }
-                })
+                .Select(edge => Vertices(edge.Index) is { } vertices
+                    ? (object)new
+                    {
+                        source = new { nodeId = NodeId(edge.Source), port = edge.Port },
+                        target = new { nodeId = NodeId(edge.Target), port = (string?)null },
+                        vertices
+                    }
+                    : new
+                    {
+                        source = new { nodeId = NodeId(edge.Source), port = edge.Port },
+                        target = new { nodeId = NodeId(edge.Target), port = (string?)null }
+                    })
                 .ToArray();
             if (start is not null && _children.Count > 0)
                 flowchart.StructureFields[StartNodeIdField] = NodeId(start);
@@ -666,6 +673,15 @@ internal static class Elsa3FlowchartGraphBuilder
         private Elsa3GraphConstructKind? Construct(Elsa3Activity node) => plan.Find(node)?.GraphConstruct;
 
         private string ConnectionPath(int index) => $"{flowchart.JsonPath}.connections[{index}]";
+
+        /// <summary>
+        /// The Elsa 3 bend points of the connection an edge came from, as Elsa 4 draws them; none for an edge the
+        /// conversion made (index -1) or a connection Elsa 3 drew straight.
+        /// </summary>
+        private object[]? Vertices(int index) =>
+            index >= 0 && flowchart.Node.Connections?[index].Vertices is { Count: > 0 } vertices
+                ? vertices.Select(vertex => (object)new { x = vertex.X, y = vertex.Y }).ToArray()
+                : null;
 
         private string EdgePath(Edge edge) => edge.Index < 0 ? flowchart.JsonPath : ConnectionPath(edge.Index);
 
