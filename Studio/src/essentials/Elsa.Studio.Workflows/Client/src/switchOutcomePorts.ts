@@ -14,7 +14,9 @@ function cases(activity: ActivityNode): CaseOutcome[] | null {
   return items.map(item => {
     const value = item as Record<string, unknown>;
     const label = value.match as string;
-    const stable = typeof value.caseId === "string" && value.caseId.trim().length > 0;
+    // Case identities belong to the condition schema; similarly named legacy metadata is opaque.
+    const stable = activity.structure!.schemaVersion === "2.0.0"
+      && typeof value.caseId === "string" && value.caseId.trim().length > 0;
     return { label, outcome: normalizeSwitchOutcome(label), stable,
       identity: stable ? `case:${value.caseId}` : `label:${label}` };
   });

@@ -73,6 +73,17 @@ describe("structured Switch outcome ports", () => {
     const upgraded = updateActivity(root, "switch", () => subject(), [flowchartActivity, collectionActivity("switch")]);
     expect(wires(upgraded)).toEqual(wires(root));
   });
+  it("does not interpret unknown legacy caseId metadata as a condition-case identity", () => {
+    const node = subject(undefined, "1.0.0");
+    node.structure!.payload.cases = items(node).map(item => ({ ...item, caseId: "opaque-metadata" }));
+    const root = graph(node);
+    const next = change(root, items(node).map((item, i) => i === 0 ? { ...item, match: "Accepted" } : item));
+    expect(wires(next)[0].source.port).toBe("Accepted");
+    expect((next.structure!.payload.activities as ActivityNode[])[0].structure!.payload.cases).toEqual([
+      { match: "Accepted", activity: null, caseId: "opaque-metadata" },
+      { match: "Rejected", activity: null, caseId: "opaque-metadata" }
+    ]);
+  });
   it("keeps invalid or unsupported documents diagnosable without pruning wires", () => {
     const node = subject(), root = graph(node);
     expect(wires(change(root, [{ match: "other", activity: null }]))).toEqual(wires(root));
