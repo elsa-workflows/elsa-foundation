@@ -84,7 +84,7 @@ public static class EtlRuntimeIdentity
             ConnectorBinding(destination), contentHash, Number(byteLength), Number(recordCount));
     }
 
-    /// <summary>The immutable JSONL filename produced when the file publisher receives the connector effect identity.</summary>
+    /// <summary>The immutable JSONL filename for a connector effect identity; see the kind-aware overload for CSV.</summary>
     public static string ConnectorFileOutputKey(string effectId) => ConnectorFileOutputKey(effectId, EtlConnectorKind.Jsonl);
 
     /// <summary>The immutable filename for a connector file effect: the effect identity's hash with its route kind's extension.</summary>

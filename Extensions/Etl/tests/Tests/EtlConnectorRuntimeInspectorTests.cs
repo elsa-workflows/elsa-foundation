@@ -10,6 +10,9 @@ namespace Elsa.Etl.Tests;
 
 public sealed partial class EtlRuntimeStoreTests
 {
+    private const int HttpEffectMechanism = 1;
+    private const int FileEffectMechanism = 2;
+
     [Fact]
     public async Task Connector_inspection_is_scoped_and_pages_partitions_in_ascending_bounded_order()
     {
@@ -249,7 +252,8 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("inspection-corrupt-kind", new("tenant-a", "inspection-corrupt-kind"), httpShardIds: ["shard-a"]);
         var (_, batch, _) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
-        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET MainEffectKind = {(int)EtlConnectorKind.Jsonl} WHERE BatchId = {batch.BatchId}");
+        // The column holds the delivery mechanism (1 HTTP, 2 file) since spec 1190's CSV delivery; these values predate it unchanged.
+        await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET MainEffectKind = {FileEffectMechanism} WHERE BatchId = {batch.BatchId}");
 
         var inspector = (IEtlConnectorRuntimeInspector)database.CreateStore(context);
         await Assert.ThrowsAsync<InvalidDataException>(() => inspector.ListConnectorPartitionsAsync(
@@ -293,8 +297,9 @@ public sealed partial class EtlRuntimeStoreTests
         var migratedDigest = await context.Database.SqlQuery<string>($"SELECT OutputDigest AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
         var migratedBytes = await context.Database.SqlQuery<long>($"SELECT OutputBytes AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
         var migratedSchema = await context.Database.SqlQuery<string>($"SELECT SchemaVersion AS Value FROM elsa_etl_connector_batches WHERE BatchId = {batchId}").SingleAsync();
-        Assert.Equal((int)EtlConnectorKind.Http, mainKind);
-        Assert.Equal((int)EtlConnectorKind.Jsonl, errorKind);
+        // The migration backfill wrote the delivery mechanism: HTTP delivery and JSONL file publication.
+        Assert.Equal(HttpEffectMechanism, mainKind);
+        Assert.Equal(FileEffectMechanism, errorKind);
         Assert.Equal(outputJson, migratedOutput);
         Assert.Equal(outputDigest, migratedDigest);
         Assert.Equal(36, migratedBytes);

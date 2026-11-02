@@ -153,6 +153,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
                 "CK_elsa_etl_connector_batches_AcceptanceMetadataBytes",
                 "AcceptanceMetadataBytes >= 0");
             table.HasCheckConstraint(
+                // The effect columns record the delivery mechanism (1 HTTP delivery, 2 file publication), not the route format.
                 "CK_elsa_etl_connector_batches_MainEffectKind",
                 "MainEffectKind IS NULL OR MainEffectKind IN (1, 2)");
             table.HasCheckConstraint(
