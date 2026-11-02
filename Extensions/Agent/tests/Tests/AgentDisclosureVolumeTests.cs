@@ -57,11 +57,16 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
         var start = store!.Writes;
         source.Admissions.Clear();
         Assert.Equal(AgentStreamEventKind.Completed, (await host.StreamAsync(session))[^1].Kind);
-        // Writes: the prompt's start (start + 1), the checkpoint (start + 2), then the final journal. Everything the step
-        // admitted before the checkpoint write is asked again after it, before the provider is called.
+        // Writes: the prompt's start (start + 1), the checkpoint (start + 2), then the final journal. The checkpoint write ends
+        // the step's pass: the current context the step admitted before it is asked again after it, before the provider is
+        // called, and nothing is admitted after the write that the step had not admitted before it.
         var beforeWrite = source.Admissions.Where(x => x.Epoch == start + 1).Select(x => x.Key).ToHashSet();
         var afterWrite = source.Admissions.Where(x => x.Epoch == start + 2).Select(x => x.Key).ToHashSet();
         Assert.NotEmpty(beforeWrite);
+        Assert.NotEmpty(afterWrite);
+        var current = source.Admissions.Where(x => x.Epoch == start + 1 && x.Current).Select(x => x.Key).ToHashSet();
+        Assert.NotEmpty(current);
+        Assert.Contains(afterWrite, current.Contains);
         Assert.Superset(beforeWrite, afterWrite);
 
         await PostAsync(host, session, "Second question");
@@ -126,6 +131,11 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
     [InlineData("history-order", "history_fingerprint_mismatch")]
     [InlineData("delivery-fingerprint", "assistant_history_mismatch")]
     [InlineData("pause-fingerprint", "pause_history_mismatch")]
+    [InlineData("history-missing", "history_missing")]
+    [InlineData("pause-history-missing", "history_missing")]
+    [InlineData("decode-not-supported", "unreadable")]
+    [InlineData("decode-argument", "unreadable")]
+    [InlineData("decode-invalid-operation", "unreadable")]
     public async Task Recorded_disclosure_state_that_fails_verification_makes_the_session_unavailable_with_no_effect(string tampering, string reason)
     {
         TamperingRecordStore? store = null;
@@ -186,6 +196,13 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
             "history-order" => Replace(assistant with { DisclosureDigests = assistant.DisclosureDigests!.Reverse().ToArray() }),
             "delivery-fingerprint" => Replace(assistant with { Message = assistant.Message with { DeliveryFingerprint = "changed" } }),
             "pause-fingerprint" => record with { PausedTurn = record.PausedTurn! with { Turn = record.PausedTurn.Turn with { DisclosureHistoryFingerprint = "changed" } } },
+            // The fingerprint survives but the history it covers does not.
+            "history-missing" => Replace(assistant with { DisclosureDigests = null }),
+            "pause-history-missing" => record with { PausedTurn = record.PausedTurn! with { DisclosureDigests = null } },
+            // A store whose decoding fails throws the exceptions hydration verifies against, not only JSON failures.
+            "decode-not-supported" => throw new NotSupportedException("The recorded payload uses an unsupported encoding."),
+            "decode-argument" => throw new ArgumentException("The recorded payload is malformed."),
+            "decode-invalid-operation" => throw new InvalidOperationException("The recorded payload is incompatible."),
             _ => throw new ArgumentOutOfRangeException(nameof(tampering))
         };
     }
@@ -251,7 +268,8 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
     private sealed record Measurement(int Turn, int Checkpoints, int StoredCopies, int LargestPass, int RepeatedInPass, int DistinctSnapshots,
         int RecordedSnapshots);
 
-    private sealed record Admission(long Epoch, string Key);
+    /// <param name="Current">Whether the admission was of the current context rather than of retained history.</param>
+    private sealed record Admission(long Epoch, string Key, bool Current = false);
 
     /// <summary>
     /// The owning module's context source. It admits everything and records each admission with the number of store
@@ -272,7 +290,8 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
         {
             var epoch = writes();
             lock (Admissions)
-                Admissions.Add(new(epoch, AgentInvocationIntegrity.Digest(new { request.Context, request.Results, request.IsHistorical, request.IsReceiptContinuation })));
+                Admissions.Add(new(epoch, AgentInvocationIntegrity.Digest(new { request.Context, request.Results, request.IsHistorical, request.IsReceiptContinuation }),
+                    !request.IsHistorical));
             return ValueTask.FromResult(Deny?.Invoke(epoch) == true
                 ? new AgentContextContribution([], [new(SourceId, "volume.withdrawn", "The owner withdrew its authority over this evidence.", true)])
                 : new AgentContextContribution(request.Context, []));

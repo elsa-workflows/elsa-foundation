@@ -75,6 +75,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         if (!created.Succeeded || created.Fence is null)
             throw new AgentContributionException("The new session identity is already recorded.");
         _rows[session.Id] = new SessionRow(session, created.Fence);
+        await ReleaseIfShutDownAsync(session.Id, created.Fence);
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -540,12 +541,16 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     {
         if (_rows.TryGetValue(sessionId, out var loaded))
             return loaded;
+        // A process that began shutting down takes no new ownership: its sessions go to the next process at once.
+        ThrowIfShutDown(sessionId);
         var ownership = await _store.AcquireOwnershipAsync(sessionId, _ownerToken, cancellationToken);
         if (ownership.Outcome == AgentSessionRecordOutcome.NotFound)
             return null;
         if (!ownership.Succeeded || ownership.Fence is null)
             throw new AgentSessionOwnershipException(sessionId, AgentSessionOwnershipException.OwnedElsewhere,
                 "Another host process currently owns this session's work. Retry after its lease lapses.", ownership.LeaseExpiresAt);
+        if (await ReleaseIfShutDownAsync(sessionId, ownership.Fence))
+            ThrowIfShutDown(sessionId);
         AgentSessionRecord? record;
         HydratedHistory history;
         try
@@ -555,7 +560,11 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             // Every snapshot, history and fingerprint is verified before anything is settled or acts on the row (FR-018).
             history = HydratedHistory.Rebuild(record);
         }
-        catch (Exception failure) when (failure is AgentSessionUnavailableException or JsonException)
+        // A store's decode failure is unreadable state, the same set a snapshot rebuild verifies against; an ownership
+        // refusal, a disposed store or a cancellation keeps its own outcome.
+        catch (Exception failure) when (failure is AgentSessionUnavailableException or JsonException or NotSupportedException or ArgumentException
+                                            or AgentContributionException
+                                            or InvalidOperationException and not AgentSessionOwnershipException and not ObjectDisposedException)
         {
             // Nothing was settled; the lease this hydration took is given back so the refusal leaves no trace.
             try { await _store.ReleaseOwnershipAsync(sessionId, ownership.Fence, CancellationToken.None); }
@@ -675,7 +684,12 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     {
         // A planned write always completes, so the store and the applied change never diverge on cancellation.
         var written = await _store.WriteAsync(write, CancellationToken.None);
-        if (written.Succeeded) return;
+        if (written.Succeeded)
+        {
+            // A write extends the lease; one that completes after shutdown released it must not leave a full-length lease.
+            await ReleaseIfShutDownAsync(sessionId, write.Fence);
+            return;
+        }
         if (written.Outcome is AgentSessionRecordOutcome.OwnershipLost or AgentSessionRecordOutcome.NotFound)
         {
             if (row is not null) LoseOwnership(sessionId, row);
@@ -776,6 +790,21 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         catch (Exception) { }
     }
 
+    private void ThrowIfShutDown(string sessionId)
+    {
+        if (Volatile.Read(ref _disposed) == 1)
+            throw new ObjectDisposedException(nameof(InMemoryAgentSessionService), $"This host process is shutting down; agent session '{sessionId}' was not loaded.");
+    }
+
+    /// <summary>After shutdown began, gives back the lease a completed store operation just took or extended; true when it did.</summary>
+    private async Task<bool> ReleaseIfShutDownAsync(string sessionId, AgentSessionFence fence)
+    {
+        if (Volatile.Read(ref _disposed) == 0) return false;
+        try { await _store.ReleaseOwnershipAsync(sessionId, fence, CancellationToken.None); }
+        catch (Exception) { }
+        return true;
+    }
+
     private Task ReleaseLeasesAsync() => Task.WhenAll(_rows.ToArray().Select(async loaded =>
     {
         AgentSessionFence fence;
@@ -872,6 +901,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             var messages = record.Messages.Select(recorded =>
             {
                 var message = recorded.Message;
+                // A recorded history fingerprint without the history it fingerprints is missing state, never an empty history.
+                if (recorded.DisclosureDigests is null && recorded.DisclosureHistoryFingerprint is not null)
+                    throw new AgentSessionUnavailableException(sessionId, "history_missing");
                 if (History(recorded.DisclosureDigests) is { } history)
                 {
                     if (recorded.DisclosureHistoryFingerprint is not { } fingerprint || AgentInvocationIntegrity.Digest(history) != fingerprint)
@@ -882,6 +914,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                     throw new AgentSessionUnavailableException(sessionId, "assistant_history_mismatch");
                 return message;
             }).ToArray();
+            // A pause fingerprint is always recorded with the history it covers.
+            if (record.PausedTurn is { DisclosureDigests: null } missing && missing.Turn.DisclosureHistoryFingerprint is not null)
+                throw new AgentSessionUnavailableException(sessionId, "history_missing");
             var paused = record.PausedTurn is { } pause && History(pause.DisclosureDigests) is { } pausedHistory
                 ? pause.Turn with { DisclosureHistory = pausedHistory }
                 : record.PausedTurn?.Turn;

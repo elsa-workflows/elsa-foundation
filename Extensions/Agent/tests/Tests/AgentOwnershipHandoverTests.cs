@@ -93,6 +93,28 @@ public sealed class AgentOwnershipHandoverTests
     }
 
     [Fact]
+    public async Task A_conflicting_outcome_write_after_dispatch_is_uncertain_never_a_conflict_to_decide_again()
+    {
+        using var harness = new AgentRestartHarness(clock => new ScriptedRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (ScriptedRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        // Executing is recorded; the outcome write after the executor ran finds the operation changed meanwhile.
+        store.ConflictNextWrite(write => write.Proposals.Any(x => x.Proposal.Id == proposal.Id && x.Proposal.Status != AgentActionProposalStatus.Executing));
+
+        var executed = await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+
+        Assert.Equal(1, harness.Module.Dispatches);
+        Assert.True(executed.Succeeded, executed.Error?.Message);
+        Assert.Equal(("uncertain", false), (executed.Value!.Status, executed.Value.Executed));
+        Assert.DoesNotContain("decide again", executed.Value.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nothing was recorded", executed.Value.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(AgentActionProposalStatus.Executing, (await store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+    }
+
+    [Fact]
     public async Task A_graceful_restart_hands_recent_sessions_back_at_once()
     {
         using var harness = new AgentRestartHarness();
@@ -207,6 +229,11 @@ public sealed class AgentOwnershipHandoverTests
 
         public void FailNextAcquire() => Volatile.Write(ref _fail, 1);
 
+        private Func<AgentSessionRecordWrite, bool>? _conflict;
+
+        /// <summary>The next matching write answers <see cref="AgentSessionRecordOutcome.VersionConflict"/> and records nothing.</summary>
+        public void ConflictNextWrite(Func<AgentSessionRecordWrite, bool> condition) => Volatile.Write(ref _conflict, condition);
+
         public async Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref _fail, 0) == 1) throw new InvalidOperationException("The store is unavailable for this read.");
@@ -223,7 +250,12 @@ public sealed class AgentOwnershipHandoverTests
         public Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default) => inner.LoadAsync(sessionId, cancellationToken);
         public Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default)
             => inner.ReleaseOwnershipAsync(sessionId, fence, cancellationToken);
-        public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default) => inner.WriteAsync(write, cancellationToken);
+        public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref _conflict) is { } condition && condition(write) && Interlocked.CompareExchange(ref _conflict, null, condition) == condition)
+                return Task.FromResult(new AgentSessionRecordResult(AgentSessionRecordOutcome.VersionConflict));
+            return inner.WriteAsync(write, cancellationToken);
+        }
         public Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default)
             => inner.FindProposalSessionAsync(proposalId, cancellationToken);
         public Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)

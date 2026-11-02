@@ -343,7 +343,15 @@ internal sealed class InMemoryAgentProposalService(
                 result = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
             }
-            result = await StoreOutcomeAsync(executing, dispatched, result);
+            try { result = await StoreOutcomeAsync(executing, dispatched, result); }
+            catch (AgentProposalConflictException)
+            {
+                // Executing is recorded and the executor ran, so an effect may have happened. The operation changed
+                // meanwhile (for example, another process settled it), so this outcome is not recorded here; it is
+                // uncertain and never replayed, not a conflict to decide again.
+                return AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
+                    "The operation was dispatched, but its outcome could not be recorded because the operation changed meanwhile. Its effect is uncertain and will not be replayed; read its current state."));
+            }
             await AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
                     : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
                 actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);

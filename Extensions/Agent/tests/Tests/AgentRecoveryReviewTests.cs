@@ -178,6 +178,46 @@ public sealed class AgentRecoveryReviewTests
         catch (Exception) { }
     }
 
+    [Fact]
+    public async Task A_shut_down_process_takes_no_new_ownership()
+    {
+        using var harness = new AgentRestartHarness();
+        var session = await harness.Host.CreateAsync();
+        await harness.Host.PostAsync(session, "hello");
+        var host = harness.Restart(afterLease: false);
+        Assert.Null((await harness.Store.LoadAsync(session.Id))!.LeaseExpiresAt);
+
+        host.Owner.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => host.Sessions.ListMessagesAsync(session.Id));
+        Assert.Null((await harness.Store.LoadAsync(session.Id))!.LeaseExpiresAt);
+        // The next process takes the session over at once.
+        using var next = harness.StartAnotherHost();
+        Assert.Single(await next.Sessions.ListMessagesAsync(session.Id));
+    }
+
+    [Fact]
+    public async Task A_write_completing_after_a_graceful_shutdown_gives_its_lease_back()
+    {
+        GatedRecordStore? store = null;
+        using var harness = new AgentRestartHarness(clock => store = new(new InMemoryAgentSessionRecordStore(clock)));
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var write = store!.HoldNextWrite(_ => true);
+        var posting = Task.Run(() => host.PostAsync(session, "hello"));
+        await write.Entered.Task.WaitAsync(HandoffTimeout);
+
+        // The shutdown releases the lease while the write is still on its way to the store.
+        host.Owner.Dispose();
+        Assert.Null((await harness.Store.LoadAsync(session.Id))!.LeaseExpiresAt);
+        write.Release.SetResult();
+        await posting.WaitAsync(HandoffTimeout);
+
+        var recorded = (await harness.Store.LoadAsync(session.Id))!;
+        Assert.Single(recorded.Messages);
+        Assert.Null(recorded.LeaseExpiresAt);
+    }
+
     private static async Task<(AgentSession Session, AgentActionProposal Proposal)> AwaitingClientAsync(AgentRestartHarness harness, ProposalClientTool client)
     {
         var host = harness.Host;
