@@ -413,6 +413,9 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("CompletionRequestedAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("PreparedJson")
                         .HasColumnType("TEXT");
 
@@ -447,6 +450,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedByteCounts", "RetainedInputBytes >= 0 AND RetainedMetadataBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_SourceInputReservedBytes", "SourceInputReservedBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_runs_CompletionRequestedAtUtcTicks", "CompletionRequestedAtUtcTicks IS NULL OR CompletionRequestedAtUtcTicks > 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_runs_RetainedOutputBytes", "RetainedOutputBytes >= 0");
                         });
                 });
