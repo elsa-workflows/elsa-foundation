@@ -49,7 +49,7 @@ test("keyboard users can rename, restructure, and empty-delete folders in a narr
   await page.setViewportSize({ width: 430, height: 760 });
   await page.goto("/?theme=light&mode=folder-restructure");
 
-  const folderPicker = page.getByRole("button", { name: "Folders" });
+  const folderPicker = page.getByRole("button", { name: "Folders", exact: true });
   await folderPicker.focus();
   await page.keyboard.press("Enter");
   const platform = page.getByRole("treeitem", { name: /Platform/ });
@@ -206,4 +206,23 @@ test("renaming a continuation-page folder retains its selected and expanded tree
   await expect(page.getByRole("treeitem", { name: /Empty folder/ })).toBeVisible();
   await expect(page.locator(".wf-folder-breadcrumb")).toContainText("Long-term archive");
   await expect(page.getByText("Archive workflow")).toBeVisible();
+});
+
+for (const width of [390, 1440]) test(`Manage folders exposes the tree and selected folder actions (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/?theme=light&mode=folder-restructure");
+  const manage = page.getByRole("button", { name: "Manage folders", exact: true });
+  await manage.click();
+  const manager = page.getByRole("dialog", { name: "Manage workflow folders" });
+  await expect(manager.getByRole("button", { name: "Create folder", exact: true })).toBeVisible();
+  await expect(manager).toContainText("Select a folder to rename");
+  await manager.locator('[data-folder-id="folder-platform"]').click();
+  await expect(manager).toBeVisible();
+  await expect(manager.getByRole("button", { name: "Rename", exact: true })).toBeVisible();
+  await expect(manager.getByRole("button", { name: "Move", exact: true })).toBeVisible();
+  await expect(manager.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(manager).toBeHidden();
+  await expect(manage).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });

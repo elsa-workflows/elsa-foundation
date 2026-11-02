@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import tempfile
 import threading
@@ -240,6 +241,92 @@ server.serve_forever()
                 with self.launch(root, exit_code=1, cache_key="NUGET_HTTP_CACHE_PATH", bad_listener=True):
                     self.fail("An invalid ready marker must not enter the qualification body")
             self.assert_final_receipt(root, exit_code=1, cache_key="NUGET_HTTP_CACHE_PATH")
+
+
+@unittest.skipUnless(os.name == "posix", "Requires real POSIX SIGTERM/SIGKILL handling")
+class RestartableServerTests(unittest.TestCase):
+    """The driver's own host restarts (#3441): one owned origin, a separate receipt per generation, no overwritten evidence."""
+    HOST = '''import argparse, os, signal, sys
+from pathlib import Path
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+p=argparse.ArgumentParser();p.add_argument('--contentRoot');p.add_argument('--urls');a=p.parse_args()
+root=Path(a.contentRoot)
+signal.signal(signal.SIGTERM,lambda signum,frame:sys.exit(int((root/'exit-code').read_text()) if (root/'exit-code').exists() else 0))
+class Handler(BaseHTTPRequestHandler):
+ def do_GET(self): self.send_response(200);self.end_headers();self.wfile.write(str(os.getpid()).encode())
+ def log_message(self,*args): pass
+server=HTTPServer(('127.0.0.1',urlparse(a.urls).port),Handler)
+print('Now listening on: '+a.urls,flush=True)
+print('WEAVER_BACKEND_CONSUMER_READY',flush=True)
+server.serve_forever()
+'''
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.published = self.root / "published"
+        self.published.mkdir()
+        (self.published / "host.py").write_text(self.HOST)
+        self.run = SimpleNamespace(root=self.root, dotnet=sys.executable, profiles={"backend": {
+            "published": self.published, "assembly": "host.py", "env": dict(os.environ)}})
+        self.origin = runtime.owned_origin()
+
+    def pid(self):
+        status, body, _ = runtime.Http(self.origin).request("/health/live")
+        self.assertEqual(200, status)
+        return int(body)
+
+    def test_graceful_and_abrupt_restarts_keep_the_origin_and_retain_every_generation(self):
+        observed = []
+        def stopped():
+            with self.assertRaises(OSError):
+                runtime.Http(self.origin).request("/health/live")  # No generation runs while configuration changes.
+            observed.append("stopped")
+            return {"configured": True}
+        with runtime.RestartableServer(self.run, "backend", self.origin) as host:
+            first = self.pid()
+            graceful = host.restart("configure", while_stopped=stopped)
+            second = self.pid()
+            abrupt = host.restart("crash", abrupt=True)
+            third = self.pid()
+        self.assertEqual(["stopped"], observed)
+        self.assertEqual(3, len({first, second, third}))
+        self.assertEqual(("graceful", 1, 2, 0, {"configured": True}), (graceful["kind"], graceful["fromGeneration"], graceful["toGeneration"],
+                                                                     graceful["stoppedProcess"]["exitCode"], graceful["whileStopped"]))
+        self.assertEqual(("abrupt", 2, 3, -signal.SIGKILL), (abrupt["kind"], abrupt["fromGeneration"], abrupt["toGeneration"],
+                                                            abrupt["stoppedProcess"]["exitCode"]))
+        self.assertEqual([graceful, abrupt], host.restarts)
+        receipts = [json.loads((self.root / name).read_text()) for name in ("backend-process.json", "backend-process-g2.json", "backend-process-g3.json")]
+        self.assertEqual([first, second, third], [receipt["pid"] for receipt in receipts])
+        self.assertEqual([0, -signal.SIGKILL, 0], [receipt["exitCode"] for receipt in receipts])
+        self.assertTrue(all(receipt["origin"] == self.origin and receipt["runtimeCacheFiles"] == {"NUGET_PACKAGES": [], "NUGET_HTTP_CACHE_PATH": []}
+                            for receipt in receipts))
+        self.assertTrue(all((self.root / name).is_file() for name in ("backend-runtime.log", "backend-runtime-g2.log", "backend-runtime-g3.log")))
+        for receipt in receipts:
+            with self.assertRaises(ProcessLookupError):
+                os.kill(receipt["pid"], 0)
+
+    def test_an_unclean_graceful_stop_refuses_the_restart_and_starts_no_new_generation(self):
+        with self.assertRaisesRegex(RuntimeError, "exited unsuccessfully"):
+            with runtime.RestartableServer(self.run, "backend", self.origin) as host:
+                (self.published / "exit-code").write_text("3")
+                host.restart("unclean")
+        self.assertFalse((self.root / "backend-process-g2.json").exists())
+        self.assertEqual(3, json.loads((self.root / "backend-process.json").read_text())["exitCode"])
+
+    def test_a_failure_inside_a_phase_keeps_its_cause_and_still_stops_the_running_generation(self):
+        original = RuntimeError("Original restart-phase failure")
+        with self.assertRaises(RuntimeError) as raised:
+            with runtime.RestartableServer(self.run, "backend", self.origin) as host:
+                host.restart("phase")
+                raise original
+        self.assertIs(original, raised.exception)
+        final = json.loads((self.root / "backend-process-g2.json").read_text())
+        self.assertEqual(0, final["exitCode"])
+        with self.assertRaises(ProcessLookupError):
+            os.kill(final["pid"], 0)
 
 
 if __name__ == "__main__":

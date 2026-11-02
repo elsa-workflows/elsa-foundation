@@ -96,6 +96,8 @@ export interface BpmnShapeDescriptor {
   label: string;
   elementType: string;
   eventDefinitions?: BpmnEventDefinition[];
+  name?: string;
+  properties?: Record<string, string>;
 }
 
 export const bpmnShapePalette: BpmnShapeDescriptor[] = [

@@ -14,6 +14,7 @@ import { getDraftSignature } from "../workflow-editor/editorHelpers";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
 import type { TestRunObservation } from "../workflow-editor/useTestRunObservation";
 import { writeLine } from "./fixtures";
+import { runtimeValueContextId } from "../workflow-editor/RuntimeValueEvidence";
 
 const api = vi.hoisted(() => ({ instance: vi.fn(), executable: vi.fn(), browse: vi.fn(), start: vi.fn() }));
 vi.mock("../api/runtime", async importOriginal => ({ ...await importOriginal<object>(), getWorkflowInstance: api.instance, getExecutable: api.executable, browseActivityExecutions: api.browse }));
@@ -164,6 +165,24 @@ describe("execution attached to the editor canvas", () => {
     expect(latest.activities.map(item => item.activityExecutionId)).toEqual(["activity-4"]);
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
     expect(api.browse).toHaveBeenCalledWith(context, "run-1", { executableNodeId: "exec-write", ancestorActivityExecutionId: "body-4", anchorActivityExecutionId: "activity-4", limit: 1 }, expect.any(AbortSignal));
+  });
+
+  it("commits prepared overlays without dropping the verified graph during the next scope read", async () => {
+    render(); await settle();
+    const graph = latest.graph;
+    const chosen = { ...activity, activityExecutionId: "activity-4", status: "Faulted" };
+    api.browse.mockImplementation(() => new Promise(() => {}));
+    const prepared = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: "run-1", ancestorId: "body-4",
+      selectedActivityExecutionId: chosen.activityExecutionId,
+      evidence: { activities: [chosen], observations: [], repeated: false, failed: false, denied: false } };
+    render({ selectedExecution: chosen, ancestorId: "body-4", prepared });
+    expect(latest.graph).toBe(graph);
+    expect(latest.details).toBe(details);
+    expect(latest.activities[0]?.activityExecutionId).toBe("activity-4");
+    expect(latest.nodes[0].data.runtime?.status).toBe("Faulted");
+    render({ context: {} as StudioEndpointContext });
+    expect(latest.graph).toBeNull();
+    expect(latest.activities).toEqual([]);
   });
 
   it("reconciles a shared observation while keeping the inspected occurrence and verified graph", async () => {

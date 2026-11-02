@@ -75,6 +75,8 @@
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
+		<!-- Opt-in durable Weaver sessions (#3441): the reference alone adds nothing; a shell enables FoundationAgentEntityFrameworkCore with its provider. -->
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Persistence\EntityFrameworkCore\Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
 		<!-- Optional (#2294): the reference alone adds nothing; Program.cs composes it behind Elsa:ExtensionBuilder:Enabled. -->
 		<ProjectReference Include="..\..\..\Extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
 		<ProjectReference Include="..\..\src\Attention\Core\Elsa.Attention.Core.csproj" />
@@ -116,7 +118,7 @@
 		<ProjectReference Include="..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-		<ProjectReference Include="..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+		<ProjectReference Include="..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />

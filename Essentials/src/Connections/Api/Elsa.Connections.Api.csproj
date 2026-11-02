@@ -21,5 +21,5 @@
     <ProjectReference Include="..\..\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
   </ItemGroup>
 
-  <ItemGroup><ProjectReference Include="../../Api/Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" /></ItemGroup>
 </Project>

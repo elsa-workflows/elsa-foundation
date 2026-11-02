@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { ArrowDownAZ, Bookmark, Save, SlidersHorizontal, Star, Tags } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   deleteWorkflowView, getWorkflowTag, listWorkflowTags, listWorkflowViews, saveWorkflowView,
@@ -105,24 +106,28 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const viewsSaved = () => { setViewDialogOpen(false); setRefresh(value => value + 1); };
 
   return <section className="wf-library-controls" aria-label={support.tags || support.views || support.folders || support.favorites ? "Workflow library organization" : "Workflow library filters"}>
-    <div className="wf-library-control-row">
-      {support.favorites && support.queryOptions ? <button type="button" aria-pressed={location.favoritesOnly === true} onClick={() => change({ favoritesOnly: !location.favoritesOnly })}>Favorites</button> : null}
+    <div className="wf-library-control-row wf-library-toolbar-row">
+      <div className="wf-library-control-group" role="group" aria-label="Filter and sort workflows">
+      {support.favorites && support.queryOptions ? <StudioButton className="wf-library-favorites" aria-label="Favorites" title="Show favorite workflows" aria-pressed={location.favoritesOnly === true} onClick={() => change({ favoritesOnly: !location.favoritesOnly })}><Star size={16} aria-hidden="true" fill={location.favoritesOnly ? "currentColor" : "none"} /></StudioButton> : null}
+      {support.tags || support.folders || support.queryOptions ? <StudioButton aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={15} aria-hidden="true" />{support.queryOptions ? `Filters${activeCount ? ` (${activeCount})` : ""}` : "Columns"}</StudioButton> : null}
       {support.folders && support.queryOptions && typeof location.folderSelection === "object" ? <label className="wf-library-check"><input type="checkbox" checked={location.includeDescendants ?? false} onChange={event => change({ includeDescendants: event.target.checked })} /> Include subfolders</label> : null}
-      {support.queryOptions ? <label>Sort <select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
+      {support.queryOptions ? <label className="wf-library-toolbar-field"><ArrowDownAZ size={15} aria-hidden="true" /><span>Sort</span><select aria-label="Sort workflows" value={location.sort ?? "name"} onChange={event => change({ sort: event.target.value as WorkflowDefinitionBrowseLocation["sort"] })}>
         <option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="modified">Recently modified</option>
       </select></label> : null}
-      {support.tags || support.folders || support.queryOptions ? <button type="button" aria-expanded={filtersOpen} aria-controls={filtersId} onClick={() => setFiltersOpen(value => !value)}>{support.queryOptions ? `Filters${activeCount ? ` (${activeCount})` : ""}` : "Columns"}</button> : null}
+      </div>
+      <div className="wf-library-control-group wf-library-view-group" role="group" aria-label="Workflow views and tags">
       {support.views ? <>
-        <label>View <select aria-label="Saved workflow view" value={location.viewId ?? ""} onChange={event => {
+        <label className="wf-library-toolbar-field"><Bookmark size={15} aria-hidden="true" /><span>View</span><select aria-label="Saved workflow view" value={location.viewId ?? ""} onChange={event => {
           const view = views.find(item => item.id === event.target.value);
           if (view) onChange(workflowBrowseLocationFromQuery(view.query, view.id, view.columns));
           else change({ viewId: undefined });
-        }}><option value="">Current filters</option>{unknownView ? <option value={location.viewId}>Unavailable saved view</option> : null}
+        }}><option value="">Unsaved view</option>{unknownView ? <option value={location.viewId}>Unavailable saved view</option> : null}
           {views.map(view => <option key={view.id} value={view.id}>{view.name}{view.shared ? " · Shared" : " · Private"}</option>)}
         </select></label>
-        <button type="button" onClick={() => setViewDialogOpen(true)}>Save view</button>
+        <StudioButton onClick={() => setViewDialogOpen(true)}><Save size={15} aria-hidden="true" />Save view</StudioButton>
       </> : null}
-      {permissions.canManageTags === true ? <button className="wf-library-manage-tags" type="button" onClick={() => setCatalogOpen(true)}>Manage tags</button> : null}
+      {permissions.canManageTags === true ? <StudioButton onClick={() => setCatalogOpen(true)}><Tags size={15} aria-hidden="true" />Manage tags</StudioButton> : null}
+      </div>
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
     {modifiedView ? <p className="wf-library-help">The current filters differ from the saved view. Save to update it or choose the view again to restore its filters.</p> : null}

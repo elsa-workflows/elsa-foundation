@@ -57,8 +57,12 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     expect(await saved(page)).toEqual(before);
     const approvedRow = cases(page).locator(".wf-slot-collection-item").nth(1);
     await approvedRow.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
-    await approvedRow.locator(".cm-content").first().fill("");
-    await approvedRow.locator(".cm-content").first().press("Escape");
+    const conditionEditor = approvedRow.locator(".cm-content").first();
+    // Clear through CodeMirror's keyboard commands so its document and DOM selection stay in sync.
+    await conditionEditor.press("ControlOrMeta+a");
+    await conditionEditor.press("Backspace");
+    await expect(conditionEditor).toHaveText("");
+    await conditionEditor.press("Escape");
     if (host === "workflow") await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect.poll(async () => (await saved(page)).structure.payload.cases[1].condition.value.value).toBe("");
     await page.reload();

@@ -9,6 +9,11 @@ namespace Elsa.Agent.Api.Endpoints;
 /// Resolves the proposal and its owning session and confirms the current principal may act on it,
 /// returning an <see cref="AgentError"/> to send when access is denied or <c>null</c> when authorized.
 /// </summary>
+/// <remarks>
+/// The proposal resolves to its session, and the caller is authorized on that session's plain owner columns, before
+/// the proposal itself is read; reading it can hydrate the session. A foreign caller causes no hydration, takeover or
+/// settlement.
+/// </remarks>
 internal static class AgentProposalAuthorization
 {
     public static async Task<AgentError?> AuthorizeAsync(
@@ -18,16 +23,18 @@ internal static class AgentProposalAuthorization
         string proposalId,
         CancellationToken ct)
     {
-        var proposal = await proposals.FindAsync(proposalId, ct);
-        if (proposal is null)
-            return new("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
+        var sessionId = await proposals.FindSessionIdAsync(proposalId, ct);
+        if (sessionId is null)
+            return NotFound(proposalId);
 
-        var session = await sessions.FindAsync(proposal.SessionId, ct);
-        if (session is null)
-            return new("agent.session.not_found", $"Agent session '{proposal.SessionId}' was not found.", 404);
+        var owner = await sessions.FindOwnerAsync(sessionId, ct);
+        if (owner is null)
+            return new("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+        if (!AgentEndpointActor.CanAccess(owner.ActorId, owner.TenantId, user))
+            return new("agent.proposal.forbidden", "The agent proposal is not available to the current principal.", 403);
 
-        return AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, user)
-            ? null
-            : new("agent.proposal.forbidden", "The agent proposal is not available to the current principal.", 403);
+        return await proposals.FindAsync(proposalId, ct) is null ? NotFound(proposalId) : null;
     }
+
+    private static AgentError NotFound(string proposalId) => new("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
 }
