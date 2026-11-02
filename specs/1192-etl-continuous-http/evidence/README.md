@@ -7,7 +7,7 @@ Every receipt names the source revision it ran on. Each section states its limit
 The driver is [`continuous_workbench_journey.py`](continuous_workbench_journey.py), derived from spec 1191's driver (which stays unchanged as that spec's evidence).
 
 **Setup.**
-- Source `bb665fa53`, clean tree. Debug Workbench built from that commit (.NET SDK 10.0.402), Python 3.14. The first run at `e3dcb4c63` passed the same checks.
+- Source `22df4effd`, clean tree. Debug Workbench built from that commit (.NET SDK 10.0.402), Python 3.14. Earlier runs at `e3dcb4c63` and `bb665fa53` passed the same checks.
 - The Workbench ran on an ephemeral loopback port that the driver started and later stopped.
 - The driver serves its own two-shard cursor feed from the same process: `?cursor=n` returns a shard's records after position `n`.
 - It publishes a continuous HTTP → JSON Lines pipeline (poll interval 1 s) through the design API and runs it from a native Flowchart's `RunEtl` activity.
