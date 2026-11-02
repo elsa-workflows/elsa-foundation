@@ -32,6 +32,7 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, DateTimeOffset?> _durableVisibility = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingRelease> _pendingReleases = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durablyConsumedWorkItemIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _bufferedEffectWorkItemIds = new(StringComparer.Ordinal);
     private readonly TimeProvider _timeProvider;
     private bool _queueSeeded;
     private bool _durableSchedulerClaimBoundaryRequested;
@@ -217,7 +218,18 @@ public sealed class RuntimeCoalescingSession
         _bufferedChangeSets.Add(commit.StateChanges);
         foreach (var activityExecutionId in ActivityExecutionIdsOf(commit))
             _segmentActivityIds.Add(activityExecutionId);
+
+        // Outside a session a non-retaining commit consumes the claimed item. Here it consumes nothing until a flush,
+        // so remember that the in-flight item's effect is buffered: a later flush makes it durable whatever happens to
+        // the claim, and releasing that item to run again would repeat it (#3275).
+        if (!commit.RetainSchedulerWork)
+            foreach (var claim in _overlayClaims.Keys)
+                _bufferedEffectWorkItemIds.Add(claim.Item.WorkItemId);
     }
+
+    /// <summary>Whether this session buffered a non-retaining checkpoint while the claimed item was in flight.</summary>
+    internal bool HoldsBufferedEffectOf(RuntimeSchedulerWorkClaim claim) =>
+        _bufferedEffectWorkItemIds.Contains(claim.Item.WorkItemId);
 
     /// <summary>
     /// Whether buffering <paramref name="commit"/> would make the segment hold more than

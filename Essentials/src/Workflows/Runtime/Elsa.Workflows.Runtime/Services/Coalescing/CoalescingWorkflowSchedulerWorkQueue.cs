@@ -32,6 +32,9 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
     bool IRuntimeSchedulerWorkDeferralCapability.CanDefer(RuntimeSchedulerWorkClaim claim) =>
         sessionAccessor.Current is not { } session || !session.OwnsOverlayClaim(claim) || session.SupportsDeferredOverlayRelease;
 
+    bool IRuntimeSchedulerWorkDeferralCapability.HoldsBufferedEffect(RuntimeSchedulerWorkClaim claim) =>
+        sessionAccessor.Current is { } session && session.OwnsOverlayClaim(claim) && session.HoldsBufferedEffectOf(claim);
+
     public bool SupportsTargetedDeletion => _inner.SupportsTargetedDeletion;
 
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)

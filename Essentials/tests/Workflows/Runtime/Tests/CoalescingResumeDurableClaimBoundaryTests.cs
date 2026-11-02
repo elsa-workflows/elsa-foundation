@@ -394,6 +394,57 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retry_after_is_released_only_while_the_active_segment_holds_no_effect_of_the_faulted_item(bool? retainingCommit)
+    {
+        // #3275 inside an ACTIVE segment. Outside a session the first non-retaining commit consumes the claimed item, so
+        // a RetryAfter after it is acknowledged and poisoned. Inside one that commit is buffered and consumes nothing,
+        // so the release used to succeed through the overlay: the quiescence flush then committed the buffered effect
+        // and kept the released copy with its delay, and the sweep would re-drive an item whose effect is durable.
+        // A fault before any commit, or after one that retains the item for re-drive, is still released.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: retainingCommit);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay);
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+        await using var scope = provider.CreateAsyncScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+        Assert.True(Assert.Single(probe.InvokeSessionActive));
+        var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+        var queued = (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+        var commits = InnerCommitStore(scope.ServiceProvider).ListCommits();
+        if (retainingCommit is not null)
+        {
+            var flush = Assert.Single(commits, item => item.Commit.Checkpoint.Name == RuntimeCoalescingMetadataKeys.FlushCheckpointName);
+            Assert.Equal(1L, flush.Commit.StateChanges.Scheduler?.State.Version);
+        }
+        else
+        {
+            Assert.Empty(commits);
+        }
+
+        if (retainingCommit == false)
+        {
+            // The buffered effect is durable, and nothing is left to run it again.
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+            Assert.Null(record.NextRetryAt);
+            Assert.Empty(queued);
+        }
+        else
+        {
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, record.Disposition);
+            Assert.Equal(Now + RetryDelay, record.NextRetryAt);
+            var retained = Assert.Single(queued);
+            Assert.Equal(("invoke-1", Now + RetryDelay), (retained.Item.WorkItemId, retained.VisibleAfter));
+        }
+    }
+
+    [Theory]
     [InlineData(WorkflowExecutionCommandKind.InvokeActivity, false)]
     [InlineData(WorkflowExecutionCommandKind.CompleteActivity, false)]
     [InlineData(WorkflowExecutionCommandKind.NotifyParentActivity, false)]
@@ -451,7 +502,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         ProbeRecorder probe,
         WorkflowDrainOrchestratorOptions? drainOptions = null,
         ExternalOutboxDeliveryProbe? externalOutboxDelivery = null,
-        bool visibilitySnapshots = false)
+        bool visibilitySnapshots = false,
+        TimeSpan? retryAfter = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(shared.TimeProvider);
@@ -468,6 +520,13 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         services.AddSingleton(probe);
         services.AddScoped<IWorkflowSchedulerWorkHandler, CoalescingProbeHandler>();
         services.AddPersistenceModes();
+        if (retryAfter is { } delay)
+        {
+            services.RemoveAll<IRuntimeDomainRetryPolicy>();
+            services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(delay));
+            services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(new WorkflowDispatchDurabilityEvidence(
+                WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
+        }
         if (externalOutboxDelivery is not null)
             ReplaceOutboxProcessorWithExternalDeliveryProbe(services, externalOutboxDelivery);
         return services.BuildServiceProvider();
@@ -561,7 +620,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         bool deferFirstResume,
         bool enqueueScheduleSuffixAfterSuccessfulResume = false,
         int scheduleSuffixCount = 2,
-        bool retainingBoundaryBeforeDeferral = false)
+        bool retainingBoundaryBeforeDeferral = false,
+        bool faultInvoke = false,
+        bool? commitBeforeInvokeFault = null)
     {
         private bool _didDefer;
         private bool _didEnqueueScheduleSuffix;
@@ -571,6 +632,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public List<ResumeSnapshot> ResumeSnapshots { get; } = [];
         public int ScheduleSuffixCount => scheduleSuffixCount;
         public bool RetainingBoundaryBeforeDeferral => retainingBoundaryBeforeDeferral;
+        public bool FaultInvoke => faultInvoke;
+        // Null faults before any commit; otherwise the invoke commits once first, retaining its item when true.
+        public bool? CommitBeforeInvokeFault => commitBeforeInvokeFault;
+        public List<bool> InvokeSessionActive { get; } = [];
 
         public bool ShouldDeferResume()
         {
@@ -596,6 +661,12 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         int DurableCommitCount,
         bool SessionActive,
         IReadOnlyCollection<string> ActiveClaimWorkItemIds);
+
+    private sealed class RetryAfterPolicy(TimeSpan delay) : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            new(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after");
+    }
 
     private sealed class ExternalOutboxDeliveryProbe
     {
@@ -692,6 +763,18 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
         public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
         {
+            if (probe.FaultInvoke && workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity)
+            {
+                // A deferrable checkpoint, which an active segment buffers rather than commits.
+                probe.InvokeSessionActive.Add(sessionAccessor.Current?.AppliesTo(workItem.WorkflowExecutionId) == true);
+                if (probe.CommitBeforeInvokeFault is { } retain)
+                    await committer.CommitAsync(Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 1)) with
+                    {
+                        RetainSchedulerWork = retain
+                    }, cancellationToken);
+                throw new InvalidOperationException($"The probe faulted after invoking {workItem.WorkItemId}.");
+            }
+
             if (workItem.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity)
             {
                 var current = await schedulerStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);

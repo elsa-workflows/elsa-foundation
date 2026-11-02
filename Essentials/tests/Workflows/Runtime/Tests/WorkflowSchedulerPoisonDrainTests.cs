@@ -413,6 +413,28 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_WhenThePoisonStoreCannotBeRead_KeepsTheFaultedItemClaimedForReDrive()
+    {
+        // #3275 moved the poison-store read (the prior failure count the retry policy is given) before the ack, because
+        // a RetryAfter is released instead of acknowledged. A read that throws now leaves the item claimed and un-acked:
+        // the exception surfaces, and the item is claimable again once its claim lapses. Before, the ack ran first and
+        // the failed read dropped the item with no record.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var time = new FakeTimeProvider(_now);
+        var handler = new AlwaysFaultingSchedulerWorkHandler();
+        var drainer = NewDrainer(queue, new UnreadablePoisonStore(), new NoopRuntimeDomainRetryPolicy(), time, handler);
+        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+
+        await Assert.ThrowsAsync<IOException>(() => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask());
+
+        Assert.Equal(1, handler.InvocationCount);
+        Assert.Equal("work-1", Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).WorkItemId);
+        Assert.Empty(await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(time.GetUtcNow())));
+        time.Advance(new RuntimeSchedulerWorkClaimOptions().VisibilityTimeout);
+        Assert.Equal(["wfexec-1"], await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(time.GetUtcNow())));
+    }
+
+    [Fact]
     public async Task DrainAsync_WithRetryAfterPolicy_ForWorkThatCannotBeDelayed_PoisonsInsteadOfParkingSilently()
     {
         // RunSchedulerWork has no delayed release, so the queue cannot hold the retry even where a resumption sweep is
@@ -774,6 +796,16 @@ public sealed class WorkflowSchedulerPoisonDrainTests
                 await beforeFault(workItem);
             throw exceptionFactory?.Invoke(workItem) ?? new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
         }
+    }
+
+    private sealed class UnreadablePoisonStore : IWorkflowSchedulerPoisonStore
+    {
+        public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("No record is written when the read fails.");
+        public ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
+            throw new IOException("The poison store is unavailable.");
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new IOException("The poison store is unavailable.");
     }
 
     private sealed class ThrowingRetryPolicy : IRuntimeDomainRetryPolicy
