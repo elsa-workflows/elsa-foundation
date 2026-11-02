@@ -1,6 +1,7 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import type { StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
+import type { StudioBackendSession, StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
@@ -17,10 +18,13 @@ const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances"
 
 export function WorkflowManagementPage({
   context,
+  backendSession,
+  onOpenBpmnProcesses,
   ai,
   weaver,
   propertyEditors,
   expressionEditors,
+  runRelatedLinks = [],
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
@@ -30,10 +34,13 @@ export function WorkflowManagementPage({
   operations
 }: {
   context: StudioEndpointContext;
+  backendSession?: StudioBackendSession;
+  onOpenBpmnProcesses?(): void;
   ai: StudioAgentRegistry;
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -79,7 +86,7 @@ export function WorkflowManagementPage({
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor onOpenBpmnProcesses={onOpenBpmnProcesses} backendSession={backendSession} operations={operations} key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} runRelatedLinks={runRelatedLinks} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
@@ -173,14 +180,18 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], navigate }: {
+export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], backendSession, runRelatedLinks = [], navigate }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   navigate(path: string): void;
 }) {
-  const workflowExecutionId = readWorkflowExecutionIdFromUrl();
-  const searchParams = new URLSearchParams(window.location.search);
+  // A background workspace tab can render while another tab owns the address bar.
+  const routeLocation = useStudioRouteLocation();
+  const workflowExecutionId = readWorkflowExecutionIdFromUrl(routeLocation.pathname);
+  const searchParams = routeLocation.searchParams;
   // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
   // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
   // same initial URL because the detail view may replace its query while the operator moves between activities.
@@ -188,13 +199,14 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
     initialSelection.current = {
       workflowExecutionId,
-      activityExecutionId: readRunSelection(window.location.search),
+      activityExecutionId: readRunSelection(routeLocation.search),
       returnTo: searchParams.get("returnTo")
     };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;
   const requestedInspectorTab = searchParams.get("tab");
+  useStudioWorkspaceTitle(workflowExecutionId ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}` : null, "Execution");
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"
     : requestedInspectorTab === "details"
@@ -217,7 +229,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
@@ -254,7 +266,7 @@ function readExecutableInspectorLocation() {
   };
 }
 
-function readWorkflowExecutionIdFromUrl() {
-  const match = /^\/workflows\/instances\/([^/]+)$/.exec(window.location.pathname);
+function readWorkflowExecutionIdFromUrl(pathname = window.location.pathname) {
+  const match = /^\/workflows\/instances\/([^/]+)$/.exec(pathname);
   return match ? decodeURIComponent(match[1]) : "";
 }

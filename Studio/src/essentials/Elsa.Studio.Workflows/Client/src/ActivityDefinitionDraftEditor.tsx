@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, CopyPlus, Play, RefreshCw } fro
 import {
   studioNavigationRequestedEvent,
   StudioHttpError,
+  useStudioWorkspaceTitle,
   type StudioActivityDefinitionImplementationEditorContribution,
   type StudioActivityDefinitionImplementationState,
   type StudioActivityDefinitionRecoverySettings,
@@ -96,6 +97,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
 }) {
   const initialDraftIsActive = isActiveDraft(initialDraft.status);
   const [draft, setDraft] = useState(initialDraft);
+  useStudioWorkspaceTitle(definitionLabel, isActiveDraft(draft.status) ? "Draft" : "Published");
   const [status, setStatus] = useState<SaveStatus>("saved");
   const [conflictRevision, setConflictRevision] = useState<number | null>(null);
   const [copying, setCopying] = useState(false);

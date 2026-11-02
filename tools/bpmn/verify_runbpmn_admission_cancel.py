@@ -29,7 +29,7 @@ def verify(path):
             case["preparedRecoverySweepSeconds"]!=300 or case["recoveredSweepSeconds"]!=0.2):
         raise ValueError("The actual cancellation lacks its normal configured three-process loss/recovery provenance.")
     products=case["binaries"]
-    if (len(products)!=11 or {item["file"] for item in products}!=b.PRODUCTS or
+    if (not b.known_products(products) or
             any(not item["productVersion"].endswith("+"+source) for item in products if item["file"].startswith("Elsa.")) or
             any(not item["productVersion"].startswith("0.5.0+") for item in products if item["file"].startswith("Bpmn."))):
         raise ValueError("The actual cancellation products differ from their source/library release.")

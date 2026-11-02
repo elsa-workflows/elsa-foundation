@@ -11,7 +11,7 @@ import type {
   StudioWorkflowDesignerPanelContribution,
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
-import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
@@ -73,7 +73,7 @@ export function ActivityDefinitionsPage({
   graphExtensions = () => ({ properties: [], expressions: [], panels: [] }),
   inputEditors = () => [],
   runtime = {},
-  navigateToStudioPath = defaultStudioPathNavigation
+  navigateToStudioPath: navigateToStudioPathNow = defaultStudioPathNavigation
 }: {
   context: StudioEndpointContext;
   activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[];
@@ -87,6 +87,10 @@ export function ActivityDefinitionsPage({
   navigateToStudioPath?(path: string): void;
 }) {
   const [route, setRoute] = useState(readRouteState);
+  // A create or upgrade can complete while this screen's workspace tab is in the background; its
+  // navigation then waits for the tab to return instead of taking over the active tab's address.
+  const whenActive = useStudioWorkspaceWhenActive();
+  const navigateToStudioPath = (path: string) => whenActive(() => navigateToStudioPathNow(path));
   const routeRef = useRef(route);
   const navigationBlockedRef = useRef(false);
   const routeCollectionContextRef = useRef(readActivityHistoryMetadata()?.collection ?? null);
@@ -164,12 +168,12 @@ export function ActivityDefinitionsPage({
     observeActivityDefinitions({ event: "route-view", surface: route.definitionId ? "workbench" : "collection" });
   }, [route.definitionId]);
 
-  const navigate = (next: RouteState, force = false) => {
+  const navigate = (next: RouteState, force = false) => whenActive(() => {
     if (navigationBlockedRef.current && !force) return;
     navigationBlockedRef.current = false;
     writeRouteState(next, "push", routeCollectionContextRef.current);
     window.dispatchEvent(new PopStateEvent("popstate"));
-  };
+  });
 
   if (route.definitionId) {
     if (route.section === "editor" && route.draftId) {

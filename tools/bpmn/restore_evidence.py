@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Restore the exact archived BPMN test inputs; --all restores historical raw proof too."""
+"""Restore the exact archived BPMN test inputs; --all restores historical raw proof too.
+
+Spec 1184's pinned members of its own published capture archives are restored as well.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +18,8 @@ import zipfile
 REPO = Path(__file__).resolve().parents[2]
 CONFIG = Path("specs/1017-direct-bpmn-hosting/evidence/archive.json")
 PREFIX = "specs/1017-direct-bpmn-hosting/evidence/"
+STUDIO_CONFIG = Path("specs/1184-direct-bpmn-studio/evidence/fixtures.json")
+STUDIO_PREFIX = "specs/1184-direct-bpmn-studio/evidence/fixtures/"
 
 
 def digest(path: Path) -> str:
@@ -45,23 +50,66 @@ def restore(root: Path, archive: Path, record: dict, *, all_evidence: bool) -> i
             # Current tracked receipts can evolve; a full restore never replaces them with historical prose.
             if all_evidence and name in tracked:
                 continue
-            data = source.read(name)
-            if len(data) != item["bytes"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
-                raise ValueError(f"Archive member differs from its original bytes: {name}")
-            if target.exists():
-                if target.stat().st_size != item["bytes"] or digest(target) != item["sha256"]:
-                    raise ValueError(f"Existing evidence differs from the archived input; refusing to overwrite: {name}")
-                continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temporary:
-                temporary.write(data)
-                staged = Path(temporary.name)
-            try:
-                staged.replace(target)
-            finally:
-                staged.unlink(missing_ok=True)
-            written += 1
+            written += write_exact(target, source.read(name), item, name)
     return written
+
+
+def write_exact(target: Path, data: bytes, item: dict, name: str) -> bool:
+    """Write verified bytes once; an existing different file is never overwritten."""
+    if len(data) != item["bytes"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
+        raise ValueError(f"Archive member differs from its original bytes: {name}")
+    if target.exists():
+        if target.stat().st_size != item["bytes"] or digest(target) != item["sha256"]:
+            raise ValueError(f"Existing evidence differs from the archived input; refusing to overwrite: {name}")
+        return False
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temporary:
+        temporary.write(data)
+        staged = Path(temporary.name)
+    try:
+        staged.replace(target)
+    finally:
+        staged.unlink(missing_ok=True)
+    return True
+
+
+def restore_members(root: Path, archive: Path, record: dict) -> int:
+    """Restore only the pinned members of one published capture archive under the spec 1184 fixture root."""
+    if archive.stat().st_size != record["bytes"] or digest(archive) != record["sha256"]:
+        raise ValueError("The downloaded evidence archive does not match its pinned size and SHA-256.")
+    written = 0
+    with zipfile.ZipFile(archive) as source:
+        if len([item for item in source.infolist() if not item.is_dir()]) != record["files"]:
+            raise ValueError("The archived file inventory differs from the pinned receipt.")
+        for item in record["members"]:
+            relative = PurePosixPath(STUDIO_PREFIX + item["target"])
+            if relative.is_absolute() or ".." in relative.parts or not str(relative).startswith(STUDIO_PREFIX):
+                raise ValueError(f"Unexpected fixture path: {item['target']}")
+            target = (root / relative).resolve()
+            if root.resolve() not in target.parents:
+                raise ValueError(f"Fixture path escapes the checkout: {item['target']}")
+            written += write_exact(target, source.read(item["path"]), item, item["path"])
+    return written
+
+
+def fetch(record: dict) -> Path:
+    """Download a pinned archive once into the local cache; callers verify its digest before use."""
+    cache = REPO / ".artifacts/bpmn-evidence"
+    cache.mkdir(parents=True, exist_ok=True)
+    archive = cache / (record["sha256"] + ".zip")
+    if not archive.exists():
+        with tempfile.NamedTemporaryFile(dir=cache, delete=False) as temporary:
+            staged = Path(temporary.name)
+        try:
+            with urllib.request.urlopen(record["url"]) as source, staged.open("wb") as target:
+                while chunk := source.read(1024 * 1024):
+                    target.write(chunk)
+            if staged.stat().st_size != record["bytes"] or digest(staged) != record["sha256"]:
+                raise ValueError("Evidence download failed its pinned size/SHA-256 check.")
+            staged.replace(archive)
+        finally:
+            staged.unlink(missing_ok=True)
+    return archive
 
 
 def main() -> int:
@@ -71,25 +119,12 @@ def main() -> int:
     args = parser.parse_args()
     config = json.loads((REPO / CONFIG).read_text())
     record = config["completeArchive" if args.all else "testFixtures"]
-    archive = args.archive
-    if archive is None:
-        cache = REPO / ".artifacts/bpmn-evidence"
-        cache.mkdir(parents=True, exist_ok=True)
-        archive = cache / (record["sha256"] + ".zip")
-        if not archive.exists():
-            with tempfile.NamedTemporaryFile(dir=cache, delete=False) as temporary:
-                staged = Path(temporary.name)
-            try:
-                with urllib.request.urlopen(record["url"]) as source, staged.open("wb") as target:
-                    while chunk := source.read(1024 * 1024):
-                        target.write(chunk)
-                if staged.stat().st_size != record["bytes"] or digest(staged) != record["sha256"]:
-                    raise ValueError("Evidence download failed its pinned size/SHA-256 check.")
-                staged.replace(archive)
-            finally:
-                staged.unlink(missing_ok=True)
+    archive = args.archive or fetch(record)
     written = restore(REPO, archive, record, all_evidence=args.all)
     print(f"Verified pinned archive ({record['files']} recorded files); restored {written} missing files from {record['sourceCommit']}.")
+    for studio in json.loads((REPO / STUDIO_CONFIG).read_text())["archives"]:
+        written = restore_members(REPO, fetch(studio), studio)
+        print(f"Verified pinned {studio['kind']} archive; restored {written} of {len(studio['members'])} pinned members from {studio['sourceCommit']}.")
     return 0
 
 

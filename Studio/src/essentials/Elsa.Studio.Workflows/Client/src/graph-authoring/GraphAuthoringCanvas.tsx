@@ -15,6 +15,7 @@ import {
 import type { WorkflowEdgeActions, WorkflowNodeActions } from "../workflow-editor/contexts";
 import { edgeTypes, nodeTypes } from "../workflow-editor/graph";
 import { workflowCanvasAriaLabelConfig } from "../workflow-editor/workflowAccessibility";
+import { RetainFlowViewport } from "./RetainFlowViewport";
 
 export interface GraphAuthoringCanvasProps {
   canvasRef?: RefObject<HTMLDivElement | null>;
@@ -69,6 +70,7 @@ export function GraphAuthoringCanvas({
               >
                 <Background gap={18} size={1} />
                 <Controls />
+                <RetainFlowViewport />
                 <GraphOverflowMiniMap />
               </ReactFlow>
               </CollectionSlotActionsContext.Provider>

@@ -1,0 +1,51 @@
+{
+  "task": "T027",
+  "productAndTestSource": "bc5f464af843cf34c8cea35286c837ce634fd629",
+  "captures": [
+    {
+      "name": "preclaim",
+      "writerSource": "1d77ed131de3305da8b8236f739c63085bff3e73",
+      "kind": "API collector",
+      "archiveSha256": "be273c4f5bb18312f0841170e5c77701e93688911f8f8c37276c61bbe832c5c8",
+      "stages": [
+        "unclaimed-wait",
+        "unclaimed-completed"
+      ],
+      "command": "probe-complete"
+    },
+    {
+      "name": "human",
+      "writerSource": "11437c0bd2c0ee9d1dbf0a6bcc926f2f4672cd1a",
+      "kind": "Studio P1 browser journey",
+      "archiveSha256": "a76aba44d0a2f3d0a6b716eb70166398dab946c0dd2ed96938b597d4e111a7bb",
+      "stages": [
+        "human-wait",
+        "finished"
+      ],
+      "command": "c93fa4d8-bdba-44cb-bc9b-1c7cce6ba4ce"
+    }
+  ],
+  "fixturePins": "../fixtures.json",
+  "membersPinned": 16,
+  "membersMatchArchiveIndexes": true,
+  "checks": [
+    {
+      "case": "DirectHumanPreClaimUpgradeTests (4) + DirectBpmnWorkbenchTests.Authenticated_direct_* (1)",
+      "outcome": "passed:5,0 failed,0 skipped",
+      "logSha256": "df72d97afc0f9544e55fe0515a470a4cab67d8858c56fbc0c97af42e1eaab9bb"
+    },
+    {
+      "case": "temporary mutation: changed completion requestId, original attemptId",
+      "outcome": "expected failure:4 failed,0 passed; wait cases report $.inputId drift, terminal cases receive 409",
+      "source": "bc5f464af test with one temporary line, reverted byte-identical",
+      "logSha256": "fce6085690357b736cd6674a778f8d4283ca887d0055d52a77752c69bf5e2230"
+    },
+    {
+      "case": "tools/bpmn/test_restore_evidence.py",
+      "outcome": "passed:11 (6 existing, 5 new member-restore controls)",
+      "logSha256": "73e11a6c4bac538eae66f4bb616dd0a401e3ec41b18114f7780d0c11475268c4"
+    }
+  ],
+  "claimWriterChanged": false,
+  "claimsImplemented": false
+}

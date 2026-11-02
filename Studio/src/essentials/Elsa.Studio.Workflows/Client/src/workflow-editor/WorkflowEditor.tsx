@@ -1,9 +1,9 @@
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
+import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -86,6 +86,7 @@ import { useWorkflowGraphOperationBatch } from "./useWorkflowGraphOperationBatch
 import { useWorkflowPersistence } from "./useWorkflowPersistence";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
+import { DirectBpmnPublishAction } from "./DirectBpmnPublishAction";
 import { useWorkflowOperations } from "./useWorkflowOperations";
 import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
@@ -113,11 +114,11 @@ import {
   type ActivityInspectorTabId
 } from "./InspectorPanel";
 import { BpmnElementInspector, BpmnElementConfiguration } from "../bpmn/BpmnElementInspector";
-import { bpmnPaletteElements } from "../bpmn/bpmnPaletteElements";
+import { bpmnPaletteElements, directHumanBpmnElement } from "../bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
-import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
+import { assertLosslessBpmnImport, exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
@@ -146,12 +147,15 @@ import type { WorkflowAgentController } from "../workflowAgent";
 
 export function WorkflowEditor({
   context,
+  backendSession,
+  onOpenBpmnProcesses,
   definitionId,
   documentAdapter,
   ai,
   weaver,
   propertyEditors,
   expressionEditors,
+  runRelatedLinks = [],
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
@@ -162,12 +166,15 @@ export function WorkflowEditor({
   onBack
 }: {
   context: StudioEndpointContext;
+  backendSession?: StudioBackendSession;
+  onOpenBpmnProcesses?(): void;
   definitionId: string;
   documentAdapter?: WorkflowEditorDocumentAdapter;
   ai: StudioAgentRegistry;
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
@@ -177,6 +184,18 @@ export function WorkflowEditor({
   operations?: {publishing:import("@elsa-workflows/studio-sdk").StudioContributionAvailability;testRuns:import("@elsa-workflows/studio-sdk").StudioContributionAvailability};
   onBack(): void;
 }) {
+  const [, refreshBpmnCapabilities] = useState(0);
+  useEffect(() => {
+    const refresh = () => refreshBpmnCapabilities(value => value + 1);
+    window.addEventListener(studioBackendCapabilitiesChangedEvent, refresh);
+    return () => window.removeEventListener(studioBackendCapabilitiesChangedEvent, refresh);
+  }, []);
+  const directPublisherAvailable = !!backendSession && !backendSession.disposed && evaluateBackendRequirements(backendSession,
+    [{ id: "elsa.api.bpmn-publishing", contractVersion: "1", relations: ["bpmn-authored-publish"] }]).state === "available";
+  const directServicePublisherAvailable = !!backendSession && !backendSession.disposed && evaluateBackendRequirements(backendSession,
+    [{ id: "elsa.api.bpmn-publishing", contractVersion: "1", relations: ["bpmn-authored-service-publish"] }]).state === "available";
+  const directClaimPublisherAvailable = !!backendSession && !backendSession.disposed && evaluateBackendRequirements(backendSession,
+    [{ id: "elsa.api.bpmn-publishing", contractVersion: "1", relations: ["bpmn-authored-claim-publish"] }]).state === "available";
   const publicationUnavailableReason = operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined;
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
@@ -277,6 +296,7 @@ export function WorkflowEditor({
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
+  useStudioWorkspaceTitle(details?.definition.name, documentAdapter ? "Template" : "Draft");
   const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
 
   // Resolve the current scope + selection (designer mode, selected activity, descriptor/availability,
@@ -303,7 +323,11 @@ export function WorkflowEditor({
     canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
   const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
-  const elements = isBpmnDesigner ? bpmnPaletteElements : emptyGraphElements;
+  const directBpmnRoot = directPublisherAvailable && !documentAdapter && frames.length === 0
+    && draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
+  const elements = useMemo(() => isBpmnDesigner
+    ? directBpmnRoot && !editorDoc.pinned ? [...bpmnPaletteElements, directHumanBpmnElement] : bpmnPaletteElements
+    : emptyGraphElements, [directBpmnRoot, editorDoc.pinned, isBpmnDesigner]);
   const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
   const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
   const sidePanelLayout = useSidePanelLayout(undefined, {
@@ -453,11 +477,12 @@ export function WorkflowEditor({
   } = canvas;
   const runSelection = useAttachedExecutionSelection({ context, attachmentId: JSON.stringify([testRun?.view.testRunId, testRun?.view.artifactId, testRun?.draftSignature]),
     workflowExecutionId: testRun?.view.workflowExecutionId ?? "", nodeId: inspectedNode?.nodeId ?? null,
+    canvasOwnerId: scopeOwner?.nodeId, visibleNodeIds: authoringNodes.map(node => node.data.runtimeNodeId ?? node.id), activityCatalog: catalog,
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
   const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, observation, snapshotView: editorDoc.pinned, draftSignature: editableDraft ? getDraftSignature(editableDraft) : "", catalog, nodes: authoringNodes, edges: authoringEdges, mode: scope?.slot.mode, selectedNodeId,
-    ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
+    ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution, prepared: runSelection.prepared?.canvas,
     onOpenIncident: (incidentId, targetNodeId) => {
       const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
       const execution = runCanvas.activities.find(item => item.activityExecutionId === incident?.activityExecutionId);
@@ -970,6 +995,10 @@ export function WorkflowEditor({
     onSetDefaultFlow: setSelectedBpmnDefaultFlow,
     targetLabelFor: bpmnFlowTargetLabel,
     readOnly: editorDoc.pinned,
+    directHumanAvailable: directBpmnRoot,
+    directHumanClaimsAvailable: directBpmnRoot && directClaimPublisherAvailable,
+    directServiceSession: directBpmnRoot && directServicePublisherAvailable ? backendSession : undefined,
+    directServiceDocumentId: draft ? `${definitionId}:${draft.id}` : undefined,
     isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
     conversionBlockedReason: bpmnGatewayConversionBlocker(scopeOwner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
@@ -981,6 +1010,17 @@ export function WorkflowEditor({
   const isBpmnRoot = draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
   const canUseBpmnInterchange = isBpmnRoot && frames.length === 0;
   const bpmnFileInputRef = useRef<HTMLInputElement | null>(null);
+  const bpmnImportRequest = useRef<AbortController | null>(null);
+  const [refusedBpmnFile, setRefusedBpmnFile] = useState<File | null>(null);
+  const bpmnImportScope = useRef({ draft, pinned: editorDoc.pinned, root: canUseBpmnInterchange });
+  bpmnImportScope.current = { draft, pinned: editorDoc.pinned, root: canUseBpmnInterchange };
+  useEffect(() => () => bpmnImportRequest.current?.abort(), [context, definitionId]);
+  const downloadRefusedBpmn = useCallback(() => {
+    if (!refusedBpmnFile) return;
+    const url = URL.createObjectURL(refusedBpmnFile);
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = refusedBpmnFile.name;
+    anchor.click(); URL.revokeObjectURL(url);
+  }, [refusedBpmnFile]);
 
   const exportBpmn = useCallback(async () => {
     const rootActivity = draft?.state.rootActivity;
@@ -1004,10 +1044,24 @@ export function WorkflowEditor({
 
   const importBpmn = useCallback(async (file: File) => {
     const rootActivity = draft?.state.rootActivity;
-    if (!rootActivity) return;
+    if (!rootActivity || editorDoc.pinned || !canUseBpmnInterchange) return;
+    bpmnImportRequest.current?.abort();
+    const request = new AbortController(); bpmnImportRequest.current = request;
+    const signature = getDraftSignature(draft);
+    const assertCurrent = () => {
+      const current = bpmnImportScope.current;
+      if (request.signal.aborted || backendSession?.disposed || current.pinned || !current.root || !current.draft
+        || current.draft.id !== draft.id || getDraftSignature(current.draft) !== signature)
+        throw new DOMException("The BPMN import no longer belongs to this editable process.", "AbortError");
+    };
     try {
-      const xml = await file.text();
-      const result = await importBpmnDocument(context, xml);
+      const xml = await file.text(); assertCurrent();
+      const result = await importBpmnDocument(context, xml, undefined, request.signal); assertCurrent();
+      if (directBpmnRoot) {
+        // Keep the original bytes before refusing the conversion; do not normalize its vendor data.
+        setRefusedBpmnFile(file);
+        assertLosslessBpmnImport(result.analysis);
+      }
       const importedLayout = layoutFromBpmnDiagram(result.processNode);
       editDraftAndSelect(({ draft: current }) => {
         const currentRoot = current?.state.rootActivity;
@@ -1025,14 +1079,16 @@ export function WorkflowEditor({
           }
         };
       }, null);
+      setRefusedBpmnFile(null);
       const issueSummary = summarizeBpmnImportIssues(result.analysis);
       setError("");
       setStatus(issueSummary ? `Imported BPMN document (${issueSummary}).` : "Imported BPMN document.");
-    } catch {
+    } catch (error) {
+      if (request.signal.aborted || backendSession?.disposed || error instanceof DOMException && error.name === "AbortError") return;
       setStatus("");
-      setError("BPMN import failed — check that the file is a valid BPMN 2.0 document.");
+      setError(error instanceof Error ? error.message : "BPMN import failed — check that the file is a valid BPMN 2.0 document.");
     }
-  }, [context, draft, editDraftAndSelect, setError, setStatus]);
+  }, [backendSession, canUseBpmnInterchange, context, directBpmnRoot, draft, editDraftAndSelect, editorDoc.pinned, setError, setStatus]);
 
   const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
     setError("");
@@ -1243,7 +1299,7 @@ export function WorkflowEditor({
           tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
         {inspectorView === "run-data" && runCanvas.eligible ? <div className="wf-inspector-tab-panel">
           <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
-            <AttachedRunActivityInspector context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
+            <AttachedRunActivityInspector backendSession={backendSession} runRelatedLinks={runRelatedLinks} context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
               ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
                 const root = draft.state.rootActivity;
                 const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;
@@ -1390,6 +1446,11 @@ export function WorkflowEditor({
           }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
         }}
         onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
+        directBpmnPublication={directBpmnRoot && backendSession ? <DirectBpmnPublishAction
+          key={`${backendSession.key}:${definitionId}`} onOpenProcesses={onOpenBpmnProcesses} session={backendSession} definitionId={definitionId} draft={draft}
+          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} flushMetadata={flushDefinitionMeta}
+          setPaused={setAutosavePaused} setBusy={value => setOperation(value ? "publishing" : "idle")}
+          setStatus={setStatus} setError={setError} reload={reload} /> : undefined}
         publicationUnavailableReason={publicationUnavailableReason}
         onPublish={mode => { if (operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
@@ -1448,6 +1509,7 @@ export function WorkflowEditor({
                   : "Publish this workflow first: only a published version has a compiled executable artifact",
                 onSelect: () => void exportExecutableArtifact()
               }] : []),
+              ...(refusedBpmnFile ? [{ label: "Download refused BPMN source", icon: <Download size={15} />, onSelect: downloadRefusedBpmn }] : []),
               ...(canUseBpmnInterchange ? [
                 {
                   label: "Import BPMN",

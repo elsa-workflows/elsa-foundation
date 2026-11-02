@@ -99,7 +99,7 @@ public sealed class AgentApiMappingTests
     }
 
     [Fact]
-    public void Maps_exactly_thirteen_named_operations()
+    public void Maps_exactly_seventeen_named_operations()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var app = new TestEndpointRouteBuilder(services);
@@ -113,7 +113,7 @@ public sealed class AgentApiMappingTests
             .OrderBy(x => x)
             .ToArray();
 
-        Assert.Equal(13, names.Length);
+        Assert.Equal(17, names.Length);
         Assert.All(names, name => Assert.StartsWith("ElsaAgentApiEndpoints", name, StringComparison.Ordinal));
     }
 
@@ -138,7 +138,11 @@ public sealed class AgentApiMappingTests
             ["ElsaAgentApiEndpointsDenyProposal"] = AgentPermissionKeys.Proposals,
             ["ElsaAgentApiEndpointsExecuteProposal"] = AgentPermissionKeys.Proposals,
             ["ElsaAgentApiEndpointsAcknowledgeClientInvocation"] = AgentPermissionKeys.Proposals,
-            ["ElsaAgentApiEndpointsAudit"] = AgentPermissionKeys.Audit
+            ["ElsaAgentApiEndpointsAudit"] = AgentPermissionKeys.Audit,
+            ["ElsaAgentApiEndpointsListSessions"] = AgentPermissionKeys.Use,
+            ["ElsaAgentApiEndpointsListSessionProposals"] = AgentPermissionKeys.Use,
+            ["ElsaAgentApiEndpointsWithdrawMessage"] = AgentPermissionKeys.Use,
+            ["ElsaAgentApiEndpointsResolveClientInvocation"] = AgentPermissionKeys.Proposals
         };
         var codec = new PermissionPolicyCodec();
 

@@ -165,14 +165,14 @@ public sealed class AgentCompositionTests
         // The replacements carried the lease and the retained pause; the owner's claims still govern policy.
         Assert.Equal((1, 1), (registry.Registers, registry.Unregisters));
         Assert.Equal(1, store.Saves);
-        Assert.NotNull(store.Find(session.Id));
+        Assert.NotNull(await store.FindAsync(session.Id));
         Assert.Equal(AgentSessionPolicyOutcome.Busy, (await ChangeAsync(policy, session, AgentAutonomyMode.FullAuto, 1)).Outcome);
         Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
         Assert.True((await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value!.Executed);
         Assert.Equal(AgentSessionPolicyOutcome.Busy, (await ChangeAsync(policy, session, AgentAutonomyMode.FullAuto, 1)).Outcome);
 
         Assert.Equal(AgentStreamEventKind.Completed, (await Collect(streaming.StreamAsync(session.Id)))[^1].Kind);
-        Assert.Null(store.Find(session.Id));
+        Assert.Null(await store.FindAsync(session.Id));
         Assert.Equal((2, 2), (registry.Registers, registry.Unregisters));
         var changed = await ChangeAsync(policy, session, AgentAutonomyMode.FullAuto, 1);
         Assert.Equal(AgentSessionPolicyOutcome.Succeeded, changed.Outcome);
@@ -229,6 +229,111 @@ public sealed class AgentCompositionTests
         Assert.Equal(AgentSessionPolicyOutcome.Unsupported,
             (await later.ServiceProvider.GetRequiredService<IAgentSessionPolicyService>().GetAsync(session.Id, session.ActorId, session.TenantId)).Outcome);
     }
+
+    // ---- #3441 T004: the record store and the audit trio are single replacement contracts ----
+
+    [Fact]
+    public async Task The_default_feature_registers_one_round_tripping_record_store_behind_the_owner()
+    {
+        await using var root = BuildRoot([typeof(FoundationAgentApiFeature)]);
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using var scope = shell.BeginScope();
+        var services = scope.ServiceProvider;
+
+        var store = Assert.IsType<InMemoryAgentSessionRecordStore>(Assert.Single(services.GetServices<IAgentSessionRecordStore>()));
+        Assert.True(store.SupportsFencing);
+        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1",
+            DeterministicAgentProvider.Id, "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
+        var recorded = (await store.LoadAsync(session.Id))!;
+        Assert.NotSame(session, recorded.Session);
+        Assert.Equal(session.Id, recorded.Session.Id);
+    }
+
+    [Theory]
+    [InlineData(typeof(DuplicateRecordStoreProbeFeature), typeof(IAgentSessionRecordStore))]
+    [InlineData(typeof(DuplicateAuditSinkProbeFeature), typeof(IAgentAuditSink))]
+    [InlineData(typeof(DuplicateAuditReaderProbeFeature), typeof(IAgentAuditReader))]
+    [InlineData(typeof(DuplicateAuditOwnershipProbeFeature), typeof(IAgentAuditOwnership))]
+    public async Task A_second_record_store_or_audit_registration_aborts_shell_activation_with_a_replacement_diagnostic(Type feature, Type contract)
+    {
+        await using var root = BuildRoot([feature]);
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
+
+        var diagnostic = string.Join(" ", ExceptionChain(failure).Select(x => x.Message));
+        Assert.Contains(contract.FullName!, diagnostic);
+        Assert.Contains("at most one registration", diagnostic);
+        Assert.Contains("services.SelectAgent", diagnostic);
+    }
+
+    [Theory]
+    [InlineData(typeof(IAgentSessionRecordStore))]
+    [InlineData(typeof(IAgentAuditSink))]
+    [InlineData(typeof(IAgentAuditReader))]
+    [InlineData(typeof(IAgentAuditOwnership))]
+    [InlineData(typeof(IAgentRecoverySupport))]
+    public void A_second_record_store_or_audit_registration_refuses_the_default_lifecycle_services(Type contract)
+    {
+        using var root = AgentTestServices.Create(services => AddSecond(services, contract));
+        using var scope = root.CreateScope();
+
+        var failure = Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService<IAgentProposalService>());
+
+        Assert.Contains(contract.FullName!, failure.Message);
+        Assert.Contains("at most one registration", failure.Message);
+    }
+
+    [Fact]
+    public async Task Replacing_the_record_store_and_the_audit_trio_keeps_one_of_each_and_a_supported_owner()
+    {
+        var store = new InMemoryAgentSessionRecordStore();
+        var audit = new InMemoryAgentAuditStore();
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionRecordStore>(store));
+            services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink>(audit));
+            services.Replace(ServiceDescriptor.Singleton<IAgentAuditReader>(audit));
+            services.Replace(ServiceDescriptor.Singleton<IAgentAuditOwnership>(audit));
+        });
+        using var scope = root.CreateScope();
+        var services = scope.ServiceProvider;
+        foreach (var initializer in services.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync(CancellationToken.None);
+
+        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1",
+            DeterministicAgentProvider.Id, "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
+
+        Assert.NotNull(await store.LoadAsync(session.Id));
+        Assert.Single(await audit.ListAsync(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded,
+            (await services.GetRequiredService<IAgentSessionPolicyService>().GetAsync(session.Id, session.ActorId, session.TenantId)).Outcome);
+    }
+
+    private static void AddSecond(IServiceCollection services, Type contract)
+    {
+        if (contract == typeof(IAgentSessionRecordStore)) services.AddSingleton<IAgentSessionRecordStore>(_ => new InMemoryAgentSessionRecordStore());
+        else if (contract == typeof(IAgentAuditSink)) services.AddSingleton<IAgentAuditSink>(_ => new InMemoryAgentAuditStore());
+        else if (contract == typeof(IAgentAuditReader)) services.AddSingleton<IAgentAuditReader>(_ => new InMemoryAgentAuditStore());
+        else if (contract == typeof(IAgentRecoverySupport)) services.AddScoped<IAgentRecoverySupport, DefaultAgentRecoverySupport>();
+        else services.AddSingleton<IAgentAuditOwnership>(_ => new InMemoryAgentAuditStore());
+    }
+
+    public abstract class DuplicateRegistrationProbeFeature(Type contract) : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services) => AddSecond(services, contract);
+    }
+
+    [ShellFeature("AgentDuplicateRecordStoreProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateRecordStoreProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentSessionRecordStore));
+
+    [ShellFeature("AgentDuplicateAuditSinkProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateAuditSinkProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentAuditSink));
+
+    [ShellFeature("AgentDuplicateAuditReaderProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateAuditReaderProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentAuditReader));
+
+    [ShellFeature("AgentDuplicateAuditOwnershipProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateAuditOwnershipProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentAuditOwnership));
 
     private static Task<AgentSessionPolicyResult> ChangeAsync(IAgentSessionPolicyService policy, AgentSession session, AgentAutonomyMode mode, long expectedRevision)
         => policy.ChangeAutonomyAsync(new(session.Id, session.ActorId, session.TenantId, mode, expectedRevision));
@@ -339,14 +444,14 @@ public sealed class AgentCompositionTests
         private int _saves;
         public int Saves => Volatile.Read(ref _saves);
 
-        public void Save(AgentPausedTurn state)
+        public async Task SaveAsync(AgentPausedTurn state, CancellationToken cancellationToken = default)
         {
-            inner.Save(state);
+            await inner.SaveAsync(state, cancellationToken);
             Interlocked.Increment(ref _saves);
         }
 
-        public AgentPausedTurn? Find(string sessionId) => inner.Find(sessionId);
-        public void Remove(string sessionId) => inner.Remove(sessionId);
+        public Task<AgentPausedTurn?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindAsync(sessionId, cancellationToken);
+        public Task RemoveAsync(string sessionId, CancellationToken cancellationToken = default) => inner.RemoveAsync(sessionId, cancellationToken);
     }
 
     private static void AssertSingleDefaults(IServiceProvider services, bool hasProviderConflict = false)

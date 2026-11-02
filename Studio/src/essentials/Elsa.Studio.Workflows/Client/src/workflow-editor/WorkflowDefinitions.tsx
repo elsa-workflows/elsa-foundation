@@ -1,6 +1,6 @@
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, useStudioWorkspaceTab, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { AlertCircle, Package, Plus, Search } from "lucide-react";
+import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
@@ -101,7 +101,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     requestsPaused,
     blockedReason,
     changeSearch,
-    navigateBrowseLocation,
+    navigateBrowseLocation: navigateBrowseLocationNow,
     changePage,
     changePageSize,
     rebase,
@@ -127,8 +127,18 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
   const createInFlightRef = useRef(false);
+  // A create, folder change or delete can finish while this screen's workspace tab is in the background;
+  // the navigation that follows then waits for the tab to return instead of taking over the active tab.
+  const whenActive = useStudioWorkspaceWhenActive();
+  const navigateBrowseLocation = useCallback((...args: Parameters<typeof navigateBrowseLocationNow>) => {
+    whenActive(() => navigateBrowseLocationNow(...args));
+  }, [navigateBrowseLocationNow, whenActive]);
+  const workspaceTab = useStudioWorkspaceTab();
+  const workspaceTabRef = useRef(workspaceTab);
+  workspaceTabRef.current = workspaceTab;
   // Retired dialogs can still finish writes. Their callbacks belong to the originating authority/context.
   const workGenerationRef = useRef(0);
+  const workScopeRef = useRef<{ authorityRevision: number; context: StudioEndpointContext } | null>(null);
   const renderGeneration = workGenerationRef.current;
   const isCurrentGeneration = () => renderGeneration === workGenerationRef.current;
   const handledHomeCreateRequestRef = useRef<string | null>(null);
@@ -142,6 +152,13 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [tagCatalog, setTagCatalog] = useState<WorkflowTag[]>([]);
   const [organizationTarget, setOrganizationTarget] = useState<{ id: string; name: string } | null>(null);
   const [bulkTagTargets, setBulkTagTargets] = useState<string[] | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const bulkDeleteInFlight = useRef<object | null>(null);
+  const bulkDeleteButtonRef = useRef<HTMLButtonElement>(null);
+  const bulkDeleteResultRef = useRef<HTMLDivElement>(null);
+  const currentSelectionScope = useRef(scopeRevision);
+  currentSelectionScope.current = scopeRevision;
+  const [bulkDeleteResult, setBulkDeleteResult] = useState<{ scope: number; deleted: number; failures: { id: string; message: string }[] } | null>(null);
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const refreshButtonRef = useRef<HTMLButtonElement | null>(null);
   const browseSupport = librarySupport && { ...librarySupport, folders: folderCapability === "available" };
@@ -167,6 +184,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     page,
     pageSize
   }), [authorityRevision, context.baseUrl, effectiveFolderKey, folderSelection, libraryFilterKey, listState, page, pageSize, search]);
+  const currentBrowseIdentity = useRef(targetIdentity);
+  currentBrowseIdentity.current = targetIdentity;
   const endpointIdentityCurrent = context.baseUrl === authorityBaseUrl;
   const snapshotVisible = availabilityResolved && !browseScopeBlocked && lastSuccess && (sameBrowseIdentity(lastSuccess.identity, targetIdentity)
     || canRetainBrowseSnapshot(lastSuccess.identity, targetIdentity)) ? lastSuccess : null;
@@ -231,6 +250,9 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   useEffect(() => {
     setSelectedDefinitionIds(new Set());
     setSelectionScopeRevision(scopeRevision);
+    bulkDeleteInFlight.current = null;
+    setBulkDeleting(false);
+    setBulkDeleteResult(null);
   }, [scopeRevision]);
 
   const load = useCallback(async () => {
@@ -383,7 +405,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
       });
       if (!isCurrentGeneration()) return;
       setCreateDraft(null);
-      onOpen(details.definition.id);
+      whenActive(() => onOpen(details.definition.id));
     } catch (e) {
       if (!isCurrentGeneration()) return;
       setCreateError(e instanceof Error ? e.message : String(e));
@@ -509,6 +531,56 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     }
   };
 
+  const deleteSelected = async () => {
+    if (bulkDeleteInFlight.current || !isCurrentData || !selectionMatchesScope || listState !== "active") return;
+    const ids = [...selectedDefinitionIds];
+    if (!ids.length) return;
+    const operation = {};
+    bulkDeleteInFlight.current = operation;
+    setBulkDeleting(true);
+    const stillBrowsing = (identity = targetIdentity) => isCurrentGeneration() && currentSelectionScope.current === scopeRevision
+      && sameBrowseIdentity(currentBrowseIdentity.current, identity);
+    const current = () => bulkDeleteInFlight.current === operation && stillBrowsing();
+    try {
+      const confirmed = await getDialogs().confirm({
+        title: "Delete selected workflows",
+        message: `Delete ${ids.length} selected workflow definition${ids.length === 1 ? "" : "s"}? You can restore them from the Deleted view.`,
+        confirmLabel: "Delete selected",
+        tone: "danger"
+      });
+      if (!confirmed || !current()) {
+        if (!confirmed && current()) requestAnimationFrame(() => { if (stillBrowsing()) bulkDeleteButtonRef.current?.focus(); });
+        return;
+      }
+      setBulkDeleteResult(null);
+      const succeeded = new Set<string>();
+      const failures: { id: string; message: string }[] = [];
+      // Keep requests bounded and stop issuing writes if the user changes backend or browse scope.
+      for (const id of ids) {
+        if (!current()) break;
+        try { await deleteDefinition(context, id); succeeded.add(id); }
+        catch (caught) { failures.push({ id, message: caught instanceof Error ? caught.message : String(caught) }); }
+      }
+      if (!current()) return;
+      const returnToPreviousPage = succeeded.size > 0 && page > 1 && visibleDefinitionIds.every(id => succeeded.has(id));
+      const resultIdentity = returnToPreviousPage ? { ...targetIdentity, page: page - 1 } : targetIdentity;
+      setSelectedDefinitionIds(selected => new Set([...selected].filter(id => !succeeded.has(id))));
+      setBulkDeleteResult({ scope: scopeRevision, deleted: succeeded.size, failures });
+      requestAnimationFrame(() => { if (stillBrowsing(resultIdentity)) bulkDeleteResultRef.current?.focus(); });
+      if (succeeded.size) {
+        getNotifications().notify({ level: "success", title: `Deleted ${succeeded.size} workflow definition${succeeded.size === 1 ? "" : "s"}`,
+          link: { label: "View deleted", path: "/workflows/definitions?state=deleted" } });
+        if (returnToPreviousPage) changePage(page - 1);
+        else retry();
+      }
+    } finally {
+      if (bulkDeleteInFlight.current === operation) {
+        bulkDeleteInFlight.current = null;
+        setBulkDeleting(false);
+      }
+    }
+  };
+
   const restoredNotification = (definition: WorkflowDefinitionDetails["definition"]): StudioNotificationInput => {
     const definitionUrl = updateWorkflowDefinitionIdInUrl(new URL("/workflows/definitions", window.location.origin), definition.id);
     return { level: "success", title: `Restored ${definition.name}`, link: { label: "Open", path: `${definitionUrl.pathname}${definitionUrl.search}` } };
@@ -578,12 +650,20 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const renderResultRows = isCurrentData || hasPreviousData;
 
   useLayoutEffect(() => {
-    workGenerationRef.current += 1;
-    setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false);
-    createInFlightRef.current = false; setCreating(false);
-    setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
-    setLastSuccess(null); setRequestError(null);
-    return () => { workGenerationRef.current += 1; };
+    // A workspace tab mounts its effects again when it returns; only a new authority or context resets
+    // the work in progress, so the create dialog and an in-flight create survive the round trip.
+    const scope = workScopeRef.current;
+    if (!scope || scope.authorityRevision !== authorityRevision || scope.context !== context) {
+      workScopeRef.current = { authorityRevision, context };
+      workGenerationRef.current += 1;
+      setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false);
+      createInFlightRef.current = false; setCreating(false);
+      setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
+      setLastSuccess(null); setRequestError(null);
+    }
+    // Outside a workspace tab teardown is an unmount, which retires in-flight work. Inside one it may be
+    // the tab going to the background; navigation held for a tab that then closes is dropped with it.
+    return () => { if (!workspaceTabRef.current) workGenerationRef.current += 1; };
   }, [authorityRevision, context]);
 
   useEffect(() => {
@@ -626,6 +706,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           onFoldersMutated={foldersMutated}
           canManage={librarySupport === null ? false : librarySupport.organization ? libraryPermissions.canManageFolders === true : true}
         >
+        <div className="wf-library-toolbar">
         <StudioCollectionToolbar>
           <StudioSearchInput aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
           <div className="studio-filter-group" role="group" aria-label="Definition state">
@@ -641,6 +722,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
           location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions}
         /></Suspense> : null}
+        </div>
         {browseScopeBlocked && browseSupport ? <div className="wf-alert" role="alert">
           Some organization filters are unavailable on this backend. Your link and saved column choices are preserved. Clear the unavailable filters to continue browsing.
           <StudioButton onClick={() => changeLibraryLocation(clearUnavailableWorkflowBrowseConstraints(browseLocation, browseSupport))}>Clear unavailable organization filters</StudioButton>
@@ -664,12 +746,18 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           <div className="wf-selection-bar" aria-live="polite">
             <span>{selectedCount} selected</span>
             <div className="wf-selection-actions">
-              {moveCapabilityAvailable && librarySupport !== null && (!librarySupport.organization || libraryPermissions.canManageFolders === true) ? <button type="button" onClick={openMoveDialog}>Move to folder</button> : null}
-              {librarySupport?.bulk && libraryPermissions.canAssignTags === true && listState !== "deleted" ? <button type="button" disabled={selectedCount > 100} onClick={() => setBulkTagTargets([...selectedIds])}>Edit tags</button> : null}
-              <button type="button" onClick={clearSelection}>Clear selection</button>
+              {moveCapabilityAvailable && librarySupport !== null && (!librarySupport.organization || libraryPermissions.canManageFolders === true) ? <StudioButton disabled={bulkDeleting} onClick={openMoveDialog}>Move to folder</StudioButton> : null}
+              {librarySupport?.bulk && libraryPermissions.canAssignTags === true && listState !== "deleted" ? <StudioButton disabled={bulkDeleting || selectedCount > 100} onClick={() => setBulkTagTargets([...selectedIds])}>Edit tags</StudioButton> : null}
+              {listState === "active" ? <StudioButton ref={bulkDeleteButtonRef} className="wf-delete-action" disabled={bulkDeleting} onClick={() => void deleteSelected()}><Trash2 size={15} aria-hidden="true" />{bulkDeleting ? "Deleting…" : "Delete selected"}</StudioButton> : null}
+              <StudioButton disabled={bulkDeleting} onClick={clearSelection}>Clear selection</StudioButton>
             </div>
           </div>
         ) : null}
+        {bulkDeleteResult?.scope === scopeRevision ? <div ref={bulkDeleteResultRef} tabIndex={-1} className="wf-bulk-delete-result" role={bulkDeleteResult.failures.length ? "alert" : "status"}>
+          <p>{bulkDeleteResult.deleted} workflow definition{bulkDeleteResult.deleted === 1 ? "" : "s"} deleted.{bulkDeleteResult.failures.length ? ` ${bulkDeleteResult.failures.length} couldn't be deleted. Failed workflows remain selected; retry Delete selected.` : " You can restore them from the Deleted view."}</p>
+          {bulkDeleteResult.failures.length ? <ul>{bulkDeleteResult.failures.map(failure => <li key={failure.id}>{failure.id}: {failure.message}</li>)}</ul> : null}
+          <StudioButton onClick={() => setBulkDeleteResult(null)}>Dismiss</StudioButton>
+        </div> : null}
         {displayState === "loading" && !renderResultRows ? <WfListSkeleton /> : null}
         {isCurrentData && definitions.length === 0 ? (
           <WfEmptyState
@@ -687,6 +775,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                   {isCurrentData ? (
                   <input
                     ref={selectVisibleRef}
+                    disabled={bulkDeleting}
                     type="checkbox"
                     checked={allCurrentVisibleSelected}
                     onChange={event => toggleVisibleSelection(event.target.checked)}
@@ -744,6 +833,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                       {isCurrentData ? (
                       <input
                         type="checkbox"
+                        disabled={bulkDeleting}
                         checked={selectedIds.has(definition.id)}
                         onChange={event => toggleDefinitionSelection(definition.id, event.target.checked)}
                         aria-label={`Select workflow definition ${definition.name}`}

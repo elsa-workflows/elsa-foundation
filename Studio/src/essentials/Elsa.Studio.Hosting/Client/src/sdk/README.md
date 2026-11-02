@@ -32,6 +32,7 @@ Known host-owned Slot IDs:
 - `workflow.activity.property-editors`
 - `workflow.expression-editors`
 - `workflow.run-input.editors`
+- `workflow.run.related-links`
 - `workflow.designer.node-renderers`
 - `workflow.designer.toolbox-items`
 - `workflow.designer.panels`
@@ -46,6 +47,10 @@ Known host-owned Slot IDs:
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
+
+## Related run links
+
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 
@@ -106,6 +111,46 @@ api.navigation.add({
 
 Both forms keep icon code and assets in the contributing module; neither needs a Studio
 source change. Use `currentColor` and accept the `size` prop on navigation components too.
+
+## Workspace tabs
+
+Every routed screen renders inside a host-owned workspace tab. Most routes need nothing: the host
+derives the tab title and icon from navigation and route metadata. While a tab is in the background
+React keeps the screen's state but tears down its effects (polling, subscriptions, `popstate` and
+navigation-guard listeners), and mounts them again when the tab returns with its own address.
+
+```ts
+api.routes.add({
+  id: "acme-order",
+  path: "/acme/orders",
+  label: "Orders",
+  component: OrdersPage,
+  // Lists return nothing; an editor names the resource so two tabs never edit it at once.
+  workspace: { resourceKey: location => location.searchParams.get("order") ? `acme-order:${location.searchParams.get("order")}` : null }
+});
+
+function OrderEditor({ order }: { order: Order }) {
+  useStudioWorkspaceTitle(order.name, "Draft"); // tab reads "Order 42 · Draft"
+  const location = useStudioRouteLocation();   // read this, not window.location, while rendering
+  // …
+}
+```
+
+- `openStudioWorkspaceTab(path)` opens an in-app path in a tab (or focuses the tab that shows it) and
+  returns false on hosts without workspace tabs. `isStudioWorkspaceTabClick(event)` is the Alt-click
+  gesture; leave Ctrl/Cmd, Shift and middle clicks to the browser.
+- Navigation guards receive `StudioNavigationRequest.intent`: `navigate`, `close`, or `probe`. Cancel
+  a `probe` when the screen holds unsaved or pending work, but never prompt or change UI for it; the
+  host uses it to mark background tabs.
+- Effects mount again when a tab returns. An effect that loads data and seeds editable state (a draft,
+  undo history, a form) must do so once per resource, not on every mount, or returning to the tab
+  replaces unsaved edits with the server copy. Refetching read-only data on return is fine.
+- React Flow canvases render `RetainFlowViewport` (Workflows) so the viewport survives the return;
+  React Flow otherwise rebuilds its pan-zoom from `defaultViewport`.
+- Write history from user actions or effects. Navigation that follows async work (a create that opens
+  what it created) goes through `useStudioWorkspaceWhenActive()`: it runs at once while the tab is
+  active and otherwise waits until the tab returns, so a background tab never writes the active tab's
+  address.
 
 ## Expression editor Contributions
 
@@ -231,6 +276,13 @@ existing tool-contract contribution. The generic runner calls it only after expl
 backend pending acceptance. Resolve with an observed resource outcome, never merely after enqueueing
 an editor action. Matching duplicate delivery coalesces within this in-memory lifetime; post-dispatch
 loss yields uncertainty rather than replay. Backend acknowledgement validates the module result.
+
+Preview (#3441): a module may also provide `clientTargetAvailability` on the same contribution. The runner
+asks it before dispatch whether the invocation's exact unsaved target (its editor, working generation or other
+module-private state) still exists in this page. Anything other than `available`, or a failure to answer, refuses
+the operation with zero effect and the module's reason. The runner never reconstructs vanished unsaved state, and
+a missing adapter is reported as such. An operation already dispatched without a receipt stays uncertain; after a
+reload or a lost page its owner can resolve it explicitly, and that statement is never a receipt.
 
 Modules own live bindings, revision interpretation, validation, presentation and native undo.
 Resource targets now require `moduleId` and nullable `resourceId`/`revision`; mutations enforce the

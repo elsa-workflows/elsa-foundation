@@ -116,7 +116,13 @@ export function useWorkflowEditorData({ context, definitionId, documentAdapter, 
     setDescriptorStatus("ready");
   }, [context, definitionId, documentAdapter, resetHistory, loadDraft, markSaved, reloadExpressionDescriptors, setError]);
 
+  // A background workspace tab tears its effects down and mounts them again when it returns. Load once
+  // per reload identity (definition, backend, adapter): a re-mount for the same one keeps the live
+  // draft, its undo history and any unsaved edits instead of replacing them with the server copy.
+  const loadedReload = useRef<typeof reload | null>(null);
   useEffect(() => {
+    if (loadedReload.current === reload) return;
+    loadedReload.current = reload;
     void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
   }, [reload, setError]);
 

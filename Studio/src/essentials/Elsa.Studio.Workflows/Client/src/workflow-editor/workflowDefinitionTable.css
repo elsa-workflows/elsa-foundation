@@ -10,7 +10,7 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > 
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
-html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(160px, 1fr) 112px 72px 108px 112px 132px 60px; min-width: 936px; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(124px, 1fr) 104px 72px minmax(168px, .22fr) 104px 120px 60px; min-width: 936px; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modified { white-space: normal; }
 /* Keep actions reachable while optional controls settle or overflowing columns scroll.
    Blend state tints over the surface so columns never show through the pinned cell. */
@@ -103,9 +103,9 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 .wf-definitions-list .wf-definition-grid {
   --wf-definition-selection-track: 28px;
   --wf-definition-column-gap: 10px;
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 60px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px minmax(180px, .22fr) 132px max-content 60px;
   column-gap: var(--wf-definition-column-gap);
-  min-width: 1120px;
+  min-width: 1174px;
   overflow: visible;
 }
 
@@ -119,13 +119,13 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 
 .wf-definitions-list .wf-definition-grid[data-library-columns="tags"],
 .wf-definitions-list .wf-definition-grid[data-library-columns="location"] {
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 180px 60px;
-  min-width: 1310px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px minmax(180px, .22fr) 132px max-content 180px 60px;
+  min-width: 1364px;
 }
 
 .wf-definitions-list .wf-definition-grid[data-library-columns="both"] {
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 180px 180px 60px;
-  min-width: 1500px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px minmax(180px, .22fr) 132px max-content 180px 180px 60px;
+  min-width: 1554px;
 }
 
 .wf-definitions-list .wf-definition-grid > .wf-grid-row:last-child {
@@ -208,7 +208,8 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
   min-width: 0;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 6px;
+  gap: 6px 10px;
+  padding-inline-end: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -404,3 +405,32 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 .wf-definition-draft-details[open] .wf-definition-draft-chevron {
   transform: rotate(180deg);
 }
+
+.wf-definitions-list .wf-selection-actions .wf-delete-action { color: var(--studio-danger-fg); border-color: var(--studio-danger-fg); }
+.wf-bulk-delete-result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block: 12px; }
+.wf-bulk-delete-result p { margin: 0; }
+.wf-bulk-delete-result ul { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+.wf-bulk-delete-result[role="alert"] { color: var(--studio-danger-fg); }
+
+.wf-library-toolbar {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 8px 0 16px;
+  padding: 16px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+}
+
+.wf-library-toolbar > .studio-collection-toolbar {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wf-library-toolbar .studio-collection-toolbar > .studio-search {
+  flex: 1 1 240px;
+  max-width: 560px;
+}
+
+.wf-bulk-delete-result:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
