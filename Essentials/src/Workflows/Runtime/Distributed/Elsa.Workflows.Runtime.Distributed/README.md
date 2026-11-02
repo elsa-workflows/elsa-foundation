@@ -79,7 +79,9 @@ lease. That includes passivating or handing off an execution whose drain is stil
 passivation finishes on its own, and until it does, later sweeps neither hand the execution off again nor renew, claim
 or lease it. However many executions are busy, the sweep keeps renewing
 every placement the node holds. Without that, another node would claim a busy execution once its placement lease
-lapsed, take over its runtime ownership and run the same workflow (#3667 asks whether that takeover should wait).
+lapsed, take over its runtime ownership and run the same workflow. That takeover is deliberately immediate: it does not
+wait for the old owner's lease to expire, which keeps recovery fast, so keeping placement renewed is what stops two
+nodes from running one execution (#3667).
 
 An execution whose drain is still running gets no inline wait:
 - A Cancel for it is delivered at once, reaches the drain's mailbox, and the drain yields to it.
