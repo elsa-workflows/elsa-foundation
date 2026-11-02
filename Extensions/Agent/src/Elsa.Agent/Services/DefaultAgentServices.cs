@@ -643,7 +643,17 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         // Recovery settles what the recorded facts already decide, in one write, before anything acts on the row.
         var recovery = Recover(record, history.Messages, ownership.Fence, _clock.GetUtcNow());
         if (recovery.Write is { } write)
-            await WriteThroughAsync(sessionId, null, write);
+        {
+            try { await WriteThroughAsync(sessionId, null, write); }
+            // A lost ownership is no longer this process's lease to give back; any other refusal or store failure settled
+            // nothing, so the lease this hydration took is released, as a failed load releases it.
+            catch (Exception failure) when (failure is not AgentSessionOwnershipException)
+            {
+                try { await _store.ReleaseOwnershipAsync(sessionId, ownership.Fence, CancellationToken.None); }
+                catch (Exception) { }
+                throw;
+            }
+        }
         var row = new SessionRow(recovery.Record.Session, ownership.Fence, recovery.Messages, recovery.Record.Context, history.PausedTurn, history.Snapshots);
         lock (row) RebuildClaims(row, recovery.Messages, history.PausedTurn, recovery.Record.Proposals);
         LoadProposals(recovery.Record);

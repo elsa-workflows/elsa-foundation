@@ -90,6 +90,26 @@ public sealed class AgentRecoveryFailurePathTests
         Assert.Equal((0, 0), (client.ExecuteCalls, client.CompleteCalls));
         await release();
     }
+
+    [Fact]
+    public async Task A_recovery_write_the_store_refuses_gives_back_the_lease_that_hydration_took()
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var session = await harness.Host.CreateAsync();
+        var proposal = (await harness.Host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        harness.Clock.Advance(PastDeadline);
+        var b = harness.Restart();
+        store.FailNextWrite(write => write.Proposals.Any(x => x.Proposal.Status == AgentActionProposalStatus.Expired));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => b.Sessions.FindAsync(session.Id));
+
+        // Nothing was settled, and the lease is free at once: another process takes the session over and settles it.
+        Assert.Equal(AgentActionProposalStatus.AwaitingApproval, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+        using var c = harness.StartAnotherHost();
+        Assert.NotNull(await c.Sessions.FindAsync(session.Id));
+        Assert.Equal(AgentActionProposalStatus.Expired, (await c.Proposals.FindAsync(proposal.Id))!.Status);
+    }
 }
 
 /// <summary>A forwarding record store whose next matching write or acquisition fails as an unavailable store would.</summary>
