@@ -36,6 +36,39 @@ public sealed class HostConnectorBindingsTests
     }
 
     [Fact]
+    public async Task One_source_file_approval_pins_the_format_each_pipeline_declares()
+    {
+        var feature = Feature();
+        feature.FileBindings.Add(new()
+        {
+            TenantId = Scope.TenantId, PersistencePartition = Scope.PersistencePartition, Alias = "orders-file", Role = "Source",
+            Revision = "v7", Path = Path.Combine(Path.GetTempPath(), "etl-host-connector-orders"), ImmutableInput = true,
+            ExpectedSha256 = new string('a', 64)
+        });
+        using var provider = Compose(feature);
+        using var serviceScope = provider.CreateScope();
+        var resolver = serviceScope.ServiceProvider.GetRequiredService<IEtlConnectorBindingResolver>();
+        var routes = new EtlRoutes(new EtlHttpDestination("output"), new EtlJsonlDestination("errors"));
+        var csv = EtlV2TestPipelines.Create() with
+        {
+            Source = new EtlCsvSource("orders-file", [new EtlColumn("name", EtlColumnType.String, true)]), Routes = routes
+        };
+        var jsonl = csv with { Source = new EtlJsonlSource("orders-file", [new EtlJsonField("name", "/name", EtlColumnType.String, true)]) };
+
+        var csvPin = (await resolver.ResolveAsync(Scope, csv)).Bindings!.Source;
+        var jsonlPin = (await resolver.ResolveAsync(Scope, jsonl)).Bindings!.Source;
+
+        Assert.Equal(EtlConnectorKind.Csv, csvPin.Kind);
+        Assert.Equal(EtlConnectorKind.Jsonl, jsonlPin.Kind);
+        Assert.Equal(csvPin.Revision, jsonlPin.Revision);
+        Assert.Equal(new string('a', 64), jsonlPin.Revision.ExpectedSha256);
+        // Clients keep seeing source file approvals under the csv kind; the pin carries the declared format.
+        var entry = Assert.Single(serviceScope.ServiceProvider.GetRequiredService<IEtlConnectorBindingCatalog>()
+            .ListBindings(Scope, null, null, 100), x => x.Alias == "orders-file");
+        Assert.Equal(EtlConnectorKind.Csv, entry.Kind);
+    }
+
+    [Fact]
     public void Current_alias_role_collisions_are_refused_during_host_composition()
     {
         var feature = Feature();

@@ -10,6 +10,14 @@ extend the finite runtime with HTTP JSON sources and HTTP/JSONL routes. The
 HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable retries. These use the same worker
 capacity and terminal delivery as file ETL, with additive connector provider contracts.
 
+## JSON Lines file input
+
+[Spec 1190](../../specs/1190-etl-jsonl-input/spec.md), part of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908),
+adds a `jsonl` source: a host-approved file holding one JSON object per line, with fields selected by JSON Pointer.
+It reuses the CSV file path end to end (pinned approval, retained snapshot, byte index, file partitions, owed
+batches and fenced acceptance). Malformed, non-object and over-long lines are routed record errors rather than run
+failures. A file run with zero records settles as success when its preparation commits, for CSV and JSON Lines alike.
+
 [Native continuation](../../specs/996-http-etl/evidence/http-native-checkpoint.md),
 [process recovery](../../specs/996-http-etl/evidence/http-process-checkpoint.md),
 [cancellation](../../specs/996-http-etl/evidence/http-cancellation-checkpoint.md),

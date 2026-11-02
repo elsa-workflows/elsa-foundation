@@ -8,6 +8,31 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 /// </summary>
 public sealed class LoginPageTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("unknown")]
+    [InlineData("../unfolding-map")]
+    [InlineData("unfolding-map.jpg")]
+    public void Unknown_artwork_falls_back_to_unfolding_map(string? artwork)
+    {
+        var html = LoginPage.Render("/studio", false, null, new LoginPageOptions { Artwork = artwork! });
+        Assert.Contains("src=\"/_elsa/identity/login-assets/unfolding-map.jpg\"", html);
+    }
+
+    [Fact]
+    public void Custom_image_takes_precedence_over_bundled_artwork()
+    {
+        var html = LoginPage.Render("/studio", false, null, new LoginPageOptions
+        {
+            Artwork = "unfolding-map", ImageUrl = "/branding/login.jpg", Layout = "reverse", Palette = "canopy"
+        });
+        Assert.Contains("src=\"/branding/login.jpg\"", html);
+        Assert.DoesNotContain("login-assets/unfolding-map.jpg", html);
+        Assert.Contains("data-layout=\"reverse\"", html);
+        Assert.Contains("data-palette=\"canopy\"", html);
+    }
+
     [Fact]
     public void Field_guide_keeps_custom_branding_encoded_and_preserves_the_standard_form()
     {
