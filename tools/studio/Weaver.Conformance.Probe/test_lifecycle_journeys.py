@@ -34,13 +34,25 @@ def owner(revision, size):
     return {"widgetId": WITNESS["widgetId"], "revision": revision, "size": size, "hostId": WITNESS["hostId"]}
 
 
+# The order in which the busy runner retains its transport exchanges (lifecycle_journeys._run_busy).
+BUSY_RUN_ORDER = ("create", "command", "message", "initialStream", "busyReview", "busyReviewDetail", "approve", "busyApproved",
+                  "busyApprovedDetail", "execute", "busyContinuation", "busyContinuationDetail", "continuation", "settled", "acknowledge",
+                  "trace", "session")
+
+
 class Native:
-    """Builds the retained shape of one Python lifecycle case; mutations change parts before writing."""
-    def __init__(self, root, key, provider, mutate=None):
+    """Builds the retained shape of one Python lifecycle case; mutations change parts before writing.
+
+    Parts are written like AgentTransport receipts, ``NNNN-<name>.json`` in retention order; ``order`` maps the
+    default order to the written one, and a name it omits is not retained at all."""
+    def __init__(self, root, key, provider, mutate=None, order=None):
         self.root, self.key, self.provider = Path(root), key, provider
         self.call = COMMAND if provider == "anthropic" else "native-call-1"
         self.parts = {}
         self.build()
+        if key == "busy-policy-lifecycle":
+            self.parts = {**{name: self.parts[name] for name in BUSY_RUN_ORDER}, **self.parts}
+        self.order = list(order(list(self.parts)) if order else self.parts)
         for name, change in (mutate or {}).items():
             change(self.parts[name])  # In place; a mutation's return value is ignored.
 
@@ -143,9 +155,11 @@ class Native:
 
     def observation(self):
         refs = {}
-        for name, value in self.parts.items():
+        for index, name in enumerate(self.order, 1):
+            value = self.parts[name]
             if name == "authorityBody": continue
-            path = self.root / (name + ".json")
+            kind = "sse" if isinstance(value, dict) and "frames" in value else "protocol-trace" if name == "trace" else "http"
+            path = self.root / f"{index:04d}-{kind}.json"
             path.write_text(json.dumps(value))
             refs[name] = retained(path)
         if "authorityBody" in self.parts:
@@ -173,16 +187,20 @@ class LifecycleVerifierTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def verify(self, key, provider="copilot", mutate=None):
+    def verify(self, key, provider="copilot", mutate=None, order=None, refs=None):
         self.sequence += 1
         root = Path(self.temporary.name) / str(self.sequence); root.mkdir()
-        observation = Native(root, key, provider, mutate).observation()
+        observation = Native(root, key, provider, mutate, order).observation()
+        if refs: refs(observation["refs"])
         return VERIFIERS[key](Path(self.temporary.name), observation, WITNESS, provider)
 
-    def cause(self, key, mutate, provider="copilot"):
+    def cause(self, key, mutate=None, provider="copilot", order=None, refs=None):
+        return self.failure(key, mutate, provider, order, refs).cause
+
+    def failure(self, key, mutate=None, provider="copilot", order=None, refs=None):
         with self.assertRaises(LifecycleCaseFailure) as raised:
-            self.verify(key, provider, mutate)
-        return raised.exception.cause
+            self.verify(key, provider, mutate, order, refs)
+        return raised.exception
 
     def test_every_python_case_passes_once_per_actual_adapter_with_its_expected_outcome(self):
         for key in VERIFIERS:
@@ -276,6 +294,39 @@ class LifecycleVerifierTests(unittest.TestCase):
         self.assertEqual("lifecycle.busy_not_released", self.cause("busy-policy-lifecycle", {"settled": rewrite_http(lambda v: v["data"]["messages"][0].update(status="streaming"))}))
         self.assertEqual("lifecycle.busy_not_released", self.cause("busy-policy-lifecycle", {"acknowledge": rewrite_http(lambda v: v["data"].update(revision=3))}))
         self.assertEqual("lifecycle.policy_relabelled", self.cause("busy-policy-lifecycle", {"session": rewrite_http(lambda v: v["data"]["messages"][0].update(acceptedPolicyRevision=2))}))
+
+    def test_busy_attempts_are_proven_in_review_approved_and_receipt_phases_by_retained_order(self):
+        # Review round 1: three retained 409s did not prove when each attempt happened.
+        def move(names, after):
+            def change(order):
+                rest = [name for name in order if name not in names]
+                index = rest.index(after) + 1
+                return rest[:index] + list(names) + rest[index:]
+            return change
+        key = "busy-policy-lifecycle"
+        reordered = self.failure(key, order=move(("busyReview", "busyReviewDetail"), "busyApprovedDetail"))
+        self.assertEqual("lifecycle.busy_order", reordered.cause)
+        self.assertIn("busyReview", str(reordered))
+        swapped = self.failure(key, refs=lambda refs: refs.update(busyReview=refs["busyApproved"], busyApproved=refs["busyReview"]))
+        self.assertEqual("lifecycle.busy_order", swapped.cause)
+        relabelled = self.failure(key, refs=lambda refs: refs.update(busyApproved=refs["busyReview"]))
+        self.assertEqual("lifecycle.busy_order", relabelled.cause)
+        missing = self.failure(key, order=lambda order: [name for name in order if name != "busyApproved"])
+        self.assertEqual("lifecycle.busy_missing", missing.cause)
+        self.assertIn("approved", str(missing))
+        settled = self.failure(key, order=move(("busyContinuation", "busyContinuationDetail"), "settled"))
+        self.assertEqual("lifecycle.busy_order", settled.cause)
+        self.assertIn("busyContinuation", str(settled))
+        after_continuation = self.failure(key, order=move(("busyContinuation", "busyContinuationDetail"), "continuation"))
+        self.assertEqual("lifecycle.busy_order", after_continuation.cause)
+        before_execute = self.failure(key, order=move(("busyContinuation", "busyContinuationDetail"), "busyApprovedDetail"))
+        self.assertEqual("lifecycle.busy_order", before_execute.cause)
+        def foreign(refs):
+            other = Path(self.temporary.name) / "foreign"; other.mkdir()
+            moved = other / Path(refs["busyApproved"]["path"]).name
+            moved.write_bytes(Path(refs["busyApproved"]["path"]).read_bytes())
+            refs["busyApproved"] = retained(moved)
+        self.assertEqual("lifecycle.busy_order", self.cause(key, refs=foreign))
 
     def test_retained_native_evidence_never_discloses_private_policy(self):
         domain = {"policy": {"autonomyMode": "manual", "deniedCapabilityIds": ["acme.secret"], "retentionLabel": "Private"}, "revision": 1}

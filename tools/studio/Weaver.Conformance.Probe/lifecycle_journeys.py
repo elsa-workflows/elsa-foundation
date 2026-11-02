@@ -14,6 +14,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import time
@@ -436,6 +437,37 @@ def verify_duplicate(root, o, witness, provider):
 
 
 BUSY_PHASES = (("busyReview", "review"), ("busyApproved", "approved"), ("busyContinuation", "receipt-continuation"))
+# The retention order _run_busy produces on one AgentTransport: each busy attempt and its detail sit strictly between
+# the transitions that define its phase (review paused -> approve -> execute -> continuation and settlement).
+BUSY_SEQUENCE = ("initialStream", "busyReview", "busyReviewDetail", "approve", "busyApproved", "busyApprovedDetail", "execute",
+                 "busyContinuation", "busyContinuationDetail", "continuation", "settled", "acknowledge")
+_TRANSPORT_RECEIPT = re.compile(r"(\d{4,})-[a-z-]+\.json")
+
+
+def _verify_busy_order(root, refs):
+    """Proves when each busy attempt happened from the transport's own retained exchange ordinals.
+
+    AgentTransport names each receipt ``NNNN-<kind>.json`` from one monotonically increasing sequence, so the
+    ordinals of a single transport are its exchange order. Labels alone cannot prove a phase: the three busy
+    exchanges are byte-identical, so a reordered, relabelled or foreign set is refused here."""
+    phases = dict(BUSY_PHASES)
+    for name, phase in BUSY_PHASES:
+        need(name in refs and name + "Detail" in refs, "lifecycle.busy_missing", "No retained " + phase + " busy attempt (" + name + ") and its session detail")
+    for name in BUSY_SEQUENCE:
+        need(name in refs, "lifecycle.busy_order", "The busy evidence has no retained " + name + " exchange to order the attempts against")
+    ordinals, parents = {}, set()
+    for name in BUSY_SEQUENCE:
+        path = _path(root, refs[name])
+        match = _TRANSPORT_RECEIPT.fullmatch(path.name)
+        need(match is not None, "lifecycle.busy_order", name + " has no retained transport exchange ordinal")
+        ordinals[name] = int(match.group(1))
+        parents.add(path.parent)
+    need(len(parents) == 1, "lifecycle.busy_order", "The busy evidence was retained by more than one transport, so its order is unproven")
+    for earlier, later in zip(BUSY_SEQUENCE, BUSY_SEQUENCE[1:]):
+        label = lambda name: name + (" (" + phases[name] + " busy attempt)" if name in phases else "")
+        need(ordinals[earlier] < ordinals[later], "lifecycle.busy_order",
+             f"{label(later)} at exchange {ordinals[later]} was not retained after {label(earlier)} at exchange {ordinals[earlier]}")
+    return ordinals
 
 
 def verify_busy(root, o, witness, provider):
@@ -443,6 +475,7 @@ def verify_busy(root, o, witness, provider):
     created, _, before = _verify_open(root, o, witness)
     turn, proposal = _verify_pause(root, o, witness, before)
     session = o["sessionId"]
+    _verify_busy_order(root, refs)
     body = {"autonomyMode": "full-auto", "expectedRevision": created["revision"]}
     phases = []
     for name, phase in BUSY_PHASES:
