@@ -1136,6 +1136,9 @@ export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: Act
     return [...cases.map(name => ({ name, displayName: name })), { name: "Default", displayName: "Default" }];
   }
 
+  const dynamic = readValueOutcomePorts(activity, catalogItem);
+  if (dynamic) return dynamic;
+
   const descriptorPorts = [
     ...readFlowPorts(catalogItem?.designFacets),
     ...readFlowPorts((catalogItem as { ports?: unknown } | undefined)?.ports),
@@ -1181,6 +1184,36 @@ function isFlowSwitch(activity: ActivityNode, catalogItem?: ActivityCatalogItem)
   const key = catalogItem?.activityTypeKey ?? activity.activityVersionId;
   const name = catalogItem?.displayName ?? "";
   return key.endsWith(".FlowSwitch") || key === "FlowSwitch" || name === "FlowSwitch";
+}
+
+/** Mirrors the compiler's literal collection outcome rule, preserving opaque keys and outcome casing. */
+function readValueOutcomePorts(activity: ActivityNode, catalog?: ActivityCatalogItem): WorkflowPortDescriptor[] | null {
+  const facet = catalog?.designFacets?.find(item => isRecord(item) && item.kind === "elsa.outcomes");
+  if (!isRecord(facet) || !isRecord(facet.payload) || !isRecord(facet.payload.dynamicOutcomes)) return null;
+  const rule = facet.payload.dynamicOutcomes;
+  if (rule.kind !== "valuePerItem" || typeof rule.source !== "string") return null;
+  const descriptor = catalog?.inputs.find(item => isRecord(item) && (item.referenceKey === rule.source || item.name === rule.source));
+  const referenceKey = isRecord(descriptor) && typeof descriptor.referenceKey === "string" ? descriptor.referenceKey : rule.source;
+  const wrapped = activity[referenceKey];
+  let value: unknown;
+  if (isRecord(wrapped) && isRecord(wrapped.expression)) {
+    if (!["Literal", "Object"].includes(String(wrapped.expression.type))) return null;
+    value = wrapped.expression.value;
+  } else if (wrapped !== undefined) value = wrapped;
+  else {
+    const wire = activity.inputs.find(item => isRecord(item) && item.referenceKey === referenceKey);
+    if (isRecord(wire) && isRecord(wire.value)) {
+      if (!["Literal", "Object"].includes(String(wire.value.expressionType))) return null;
+      value = wire.value.value;
+    } else if (isRecord(descriptor) && (!descriptor.defaultSyntax || descriptor.defaultSyntax === "Literal")) value = descriptor.defaultValue;
+  }
+  if (typeof value === "string") { try { value = JSON.parse(value); } catch { return null; } }
+  if (!Array.isArray(value)) return null;
+  const ports = value.filter(item => typeof item === "string" || typeof item === "number").map(String).filter(name => name.trim().length > 0);
+  if (!ports.length) return null;
+  const fixed = readFlowPorts([facet.payload]);
+  return uniquePorts([...fixed, ...ports.map(name => ({ name, displayName: name })),
+    ...(typeof rule.unmatched === "string" && rule.unmatched ? [{ name: rule.unmatched, displayName: rule.unmatched }] : [])]);
 }
 
 function readFlowPorts(value: unknown): WorkflowPortDescriptor[] {

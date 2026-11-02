@@ -63,6 +63,17 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        var taskAccess = services.Where(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess)).ToArray();
+        if (taskAccess.Length != 1) throw new InvalidOperationException("Exactly one user-task eligibility adapter must be selected.");
+        if (taskAccess[0].ImplementationType == typeof(Elsa.Workflows.Runtime.UserTasks.UnavailableUserTaskAccess))
+            services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskAccess, UserTasks.TaskRequestAccess>());
+        services.AddPermissionContributor<UserTasks.UserTaskPermissionContributor>();
+        services.AddApiCapability(new Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration("elsa.api.user-tasks", 1,
+            [new("tasks", "runtime/user-tasks"), new("task", "runtime/user-tasks/{id}", templated: true),
+             new("claim", "runtime/user-tasks/{id}/claim", templated: true), new("release", "runtime/user-tasks/{id}/release", templated: true),
+             new("complete", "runtime/user-tasks/{id}/complete", templated: true), new("reassign", "runtime/user-tasks/{id}/reassign", templated: true),
+             new("forms", "runtime/user-task-forms"), new("form-version", "runtime/user-task-forms/{id}/versions/{version}", templated: true), new("targets", "runtime/user-task-targets"), new("identity", "runtime/user-task-identity")], "WorkflowsRuntimeApi.UserTasks"));
+
         services.AddDynamicEndpointApiExplorerRefresh();
         // The owner's failure services are keyed so hosts composing several modules keep each
         // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.

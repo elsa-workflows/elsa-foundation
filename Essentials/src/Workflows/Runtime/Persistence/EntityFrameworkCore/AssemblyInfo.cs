@@ -85,3 +85,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(RuntimeWorkflowDispatchEfModule.SchemaFamily, typeof(WorkflowDispatchEntity), nameof(WorkflowDispatchEntity.ContentJson))]
 [assembly: EfSchemaContent(RuntimeWorkflowExecutionEfModule.SchemaFamily, typeof(WorkflowExecutionStateEntity), nameof(WorkflowExecutionStateEntity.ContentJson))]
 [assembly: EfSchemaContent(RuntimeWorkflowTestScopeEfModule.SchemaFamily, typeof(WorkflowTestScopeEntity), nameof(WorkflowTestScopeEntity.ContentJson))]
+
+[assembly: EfSchemaFamily("UserTasks", "Workflows.Runtime", "1.0.0", Entities = [typeof(UserTaskEntity), typeof(UserTaskFormEntity)])]
+[assembly: EfSchemaContent("UserTasks", typeof(UserTaskEntity), nameof(UserTaskEntity.ContentJson))]
+[assembly: EfSchemaContent("UserTasks", typeof(UserTaskFormEntity), nameof(UserTaskFormEntity.ContentJson))]

@@ -70,6 +70,12 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             services.AddRuntimeOperationalStateEntityFrameworkCore(operational);
+            var taskRegistration = services.LastOrDefault(x => x.ServiceType == typeof(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore));
+            if (taskRegistration is not null && taskRegistration.ImplementationType?.Name != "MemoryUserTaskStore" && taskRegistration.ImplementationType != typeof(EfUserTaskStore))
+                throw new InvalidOperationException("The Runtime EF family cannot replace an independently selected user-task journal.");
+            services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore, EfUserTaskStore>());
+            services.Replace(ServiceDescriptor.Singleton<Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary, EfUserTaskPersistenceBoundary>());
+
             services.AddRuntimeArtifactsEntityFrameworkCore(new()
             {
                 Provider = options.Provider,

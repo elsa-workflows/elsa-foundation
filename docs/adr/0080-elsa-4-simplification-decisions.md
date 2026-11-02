@@ -211,6 +211,17 @@ for this Program; routine decisions, milestone transitions, tests, documentation
 review/merge and resulting-main qualification proceed under this instruction. Releases, deployments,
 provider purchases and publisher activation are not included. The remaining decisions apply.
 
+**Owner amendment, 2 November 2026:** [User Tasks #3688](../program-goals/user-tasks.md)
+is authorized for establishment, design, planning and end-to-end delivery of feature #3577. The owner
+instructed: “Design and plan the delivery of https://github.com/elsa-workflows/elsa-foundation/issues/3577.
+Create a Program issue for a durable plan, then deliver the program end to end”. Sequence research and
+reviewed design before durable lifecycle/recovery, workflow/forms/API integration, Studio and integrated
+qualification, review/merge and resulting-main acceptance. Run beside active programs, displace none,
+preserve Foundation/Studio consolidation as priority one and coordinate shared runtime/Studio paths.
+This activates only the User Tasks scope linked from parity #2771, not its remaining phases or any parked
+backlog. Routine decisions, milestone transitions, tests, docs and scoped PRs proceed under this authority;
+release and production deployment remain separate.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
