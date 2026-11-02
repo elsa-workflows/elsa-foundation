@@ -1,6 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { type AnchorHTMLAttributes, type MouseEvent } from "react";
-import { requestStudioNavigation } from "@elsa-workflows/studio-sdk";
+import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, requestStudioNavigation } from "@elsa-workflows/studio-sdk";
 import { pathBeforeStudioSegment } from "./studioHostPath";
 
 export function defaultStudioPathNavigation(path: string) {
@@ -74,10 +74,15 @@ function shouldInterceptStudioLinkClick(event: MouseEvent<HTMLAnchorElement>, hr
   return isStudioInAppHref(href);
 }
 
+function isWorkspaceTabTarget(anchor: HTMLAnchorElement, href: string) {
+  const target = anchor.getAttribute("target");
+  return (!target || target === "_self") && !anchor.hasAttribute("download") && isStudioInAppHref(href) && href.startsWith("/");
+}
+
 /**
  * In-app Studio link. Pass a root-relative Studio path such as
  * `/workflows/activity-definitions`. A plain primary click stays in-app through
- * `navigateToStudioPath`. `target`, `download`, mailto, external, and
+ * `navigateToStudioPath`; Alt-click opens it in a workspace tab. `target`, `download`, mailto, external, and
  * same-origin URLs outside the Studio base path are left to the browser.
  */
 export function StudioLink({
@@ -93,7 +98,13 @@ export function StudioLink({
   const targetHref = isStudioInAppHref(href) ? qualifyStudioBackendPath(href) : href;
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
-    if (event.defaultPrevented || !shouldInterceptStudioLinkClick(event, targetHref)) return;
+    if (event.defaultPrevented) return;
+    // Alt-click opens the in-app path in a workspace tab; other modifiers stay with the browser.
+    if (isStudioWorkspaceTabClick(event) && isWorkspaceTabTarget(event.currentTarget, targetHref) && openStudioWorkspaceTab(targetHref)) {
+      event.preventDefault();
+      return;
+    }
+    if (!shouldInterceptStudioLinkClick(event, targetHref)) return;
     event.preventDefault();
     if (!requestStudioNavigation(window.location.pathname, targetHref)) return;
     navigateToStudioPath(targetHref);

@@ -112,6 +112,46 @@ api.navigation.add({
 Both forms keep icon code and assets in the contributing module; neither needs a Studio
 source change. Use `currentColor` and accept the `size` prop on navigation components too.
 
+## Workspace tabs
+
+Every routed screen renders inside a host-owned workspace tab. Most routes need nothing: the host
+derives the tab title and icon from navigation and route metadata. While a tab is in the background
+React keeps the screen's state but tears down its effects (polling, subscriptions, `popstate` and
+navigation-guard listeners), and mounts them again when the tab returns with its own address.
+
+```ts
+api.routes.add({
+  id: "acme-order",
+  path: "/acme/orders",
+  label: "Orders",
+  component: OrdersPage,
+  // Lists return nothing; an editor names the resource so two tabs never edit it at once.
+  workspace: { resourceKey: location => location.searchParams.get("order") ? `acme-order:${location.searchParams.get("order")}` : null }
+});
+
+function OrderEditor({ order }: { order: Order }) {
+  useStudioWorkspaceTitle(order.name, "Draft"); // tab reads "Order 42 · Draft"
+  const location = useStudioRouteLocation();   // read this, not window.location, while rendering
+  // …
+}
+```
+
+- `openStudioWorkspaceTab(path)` opens an in-app path in a tab (or focuses the tab that shows it) and
+  returns false on hosts without workspace tabs. `isStudioWorkspaceTabClick(event)` is the Alt-click
+  gesture; leave Ctrl/Cmd, Shift and middle clicks to the browser.
+- Navigation guards receive `StudioNavigationRequest.intent`: `navigate`, `close`, or `probe`. Cancel
+  a `probe` when the screen holds unsaved or pending work, but never prompt or change UI for it; the
+  host uses it to mark background tabs.
+- Effects mount again when a tab returns. An effect that loads data and seeds editable state (a draft,
+  undo history, a form) must do so once per resource, not on every mount, or returning to the tab
+  replaces unsaved edits with the server copy. Refetching read-only data on return is fine.
+- React Flow canvases render `RetainFlowViewport` (Workflows) so the viewport survives the return;
+  React Flow otherwise rebuilds its pan-zoom from `defaultViewport`.
+- Write history from user actions or effects. Navigation that follows async work (a create that opens
+  what it created) goes through `useStudioWorkspaceWhenActive()`: it runs at once while the tab is
+  active and otherwise waits until the tab returns, so a background tab never writes the active tab's
+  address.
+
 ## Expression editor Contributions
 
 Expression descriptors carry one required semantic `editingMode`: `literal`,

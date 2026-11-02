@@ -43,9 +43,10 @@ import type {
   StudioNavigationSection,
   StudioAgentPromptRequest,
   StudioPanelContribution,
+  StudioFeatureAreaContribution,
   StudioContributionAvailability
 } from "../sdk";
-import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isHomeRunDetailPath, recordHomeRunDetailOpened, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -104,6 +105,11 @@ import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } f
 import "./agent/agent.css";
 import "./weaver/weaver.css";
 import { HostAuthContext } from "./auth/HostAuthContext";
+import { useWorkspaceTabs } from "./workspace/useWorkspaceTabs";
+import { WorkspaceTabStrip, type WorkspaceTabView } from "./workspace/WorkspaceTabStrip";
+import { WorkspaceTabPanels } from "./workspace/WorkspaceTabPanels";
+import { useWorkspaceShortcuts } from "./workspace/useWorkspaceShortcuts";
+import { locationPathname, resolveTabTitle, type WorkspaceTab } from "./workspace/model";
 
 const DevDisclosurePage = import.meta.env.DEV
   ? lazy(() => import("./ui/disclosure/DisclosureFixturePage").then(module => ({ default: module.DisclosureFixturePage })))
@@ -185,7 +191,6 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
   const [registryGeneration,setRegistryGeneration]=useState(0);
-  const [path, setPath] = useState(normalizePath(window.location.pathname));
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -193,8 +198,8 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<(StudioAgentPromptRequest & { id: string }) | null>(null);
   const incomingPromptRef = useRef<(StudioAgentPromptRequest & { id: string }) | null>(null);
-  const acceptedPathRef = useRef(normalizePath(window.location.pathname));
-  const acceptedLocationRef = useRef(currentRelativeLocation());
+  const contentRef = useRef<HTMLElement>(null);
+  const workspaceBaseId = useId();
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = backendSession.profile.baseUrl;
@@ -206,38 +211,6 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     () => createStudioEndpointContext(shellBaseUrl, authManager),
     [authManager, shellBaseUrl]
   );
-
-  useEffect(() => {
-    const onPopState = () => {
-      const qualified = connections.qualifyPath(currentRelativeLocation());
-      if (!qualified) {window.history.replaceState(window.history.state,"",acceptedLocationRef.current);return;}
-      if (qualified !== currentRelativeLocation()) window.history.replaceState(window.history.state,"",qualified);
-      const nextPath = normalizePath(window.location.pathname);
-      const nextLocation = currentRelativeLocation();
-      if (nextPath !== acceptedPathRef.current && !requestStudioNavigation(acceptedLocationRef.current, nextLocation)) {
-        window.history.pushState({}, "", acceptedLocationRef.current);
-        return;
-      }
-      acceptedPathRef.current = nextPath;
-      acceptedLocationRef.current = nextLocation;
-      setPath(nextPath);
-      if (isHomeRunDetailPath(nextPath)) recordHomeRunDetailOpened();
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [connections]);
-
-  const navigateTo = useCallback((nextPath: string) => {
-    if (!requestStudioNavigation(acceptedLocationRef.current, nextPath)) return;
-    const qualified=connections.qualifyPath(nextPath);
-    if (!qualified) return;
-    window.history.pushState({}, "", qualified);
-    acceptedPathRef.current = normalizePath(window.location.pathname);
-    acceptedLocationRef.current = currentRelativeLocation();
-    setPath(acceptedPathRef.current);
-    if (isHomeRunDetailPath(acceptedPathRef.current)) recordHomeRunDetailOpened();
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, [connections]);
 
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
   useEffect(() => {
@@ -425,7 +398,78 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   );
   const access = useShellNavigationAccess(enabledFeatures);
   const settingsGroups = getSettingsSectionGroups(navigation, access);
+  const workspaceScope = useMemo(() => ({
+    origin: window.location.origin,
+    backendId: backendSession.profile.id,
+    backendBaseUrl: backendSession.profile.baseUrl,
+    subject: backendSession.identity.subject,
+    tenantId: backendSession.identity.tenantId
+  }), [backendSession]);
+  const resourceKeyOf = useCallback((location: string) => {
+    const route = findRouteForPath(routes, locationPathname(location));
+    try {
+      return route?.workspace?.resourceKey?.(new URL(location, window.location.origin)) ?? null;
+    } catch {
+      return null;
+    }
+  }, [routes]);
+  const defaultTitleOf = useCallback((location: string) => describeScreen(locationPathname(location), routes, navigation, featureAreas, settingsGroups), [featureAreas, navigation, routes, settingsGroups]);
+  const titleOfRef = useRef<(tab: WorkspaceTab) => string>(() => "Studio");
+  const workspace = useWorkspaceTabs({
+    scope: workspaceScope,
+    qualifyPath: path => connections.qualifyPath(path),
+    resourceKeyOf,
+    titleOf: tab => titleOfRef.current(tab),
+    contentRef
+  });
+  const { path, navigate: navigateTo } = workspace;
+  const tabTitleOf = useCallback((tab: WorkspaceTab) => {
+    const fallback = defaultTitleOf(tab.location);
+    return resolveTabTitle(tab, workspace.screenKeyOf(tab.location), fallback.title).title;
+  }, [defaultTitleOf, workspace]);
+  titleOfRef.current = tabTitleOf;
+  useWorkspaceShortcuts(state === "ready" ? workspace : null);
   const settingsSurface = isSettingsSurfacePath(path, navigation);
+
+  const renderScreen = useCallback((location: string) => {
+    const screenPath = locationPathname(location);
+    const screenSettingsSurface = isSettingsSurfacePath(screenPath, navigation);
+    const route = findRouteForPath(routes, screenPath);
+    const RouteComponent = route?.component;
+    const area = findFeatureAreaForPath(featureAreas, screenPath);
+    const builtIn = screenPath === "/diagnostics" || screenPath === "/diagnostics/modules" || Boolean(DevDisclosurePage && screenPath === "/dev/disclosure");
+    return (
+      <>
+        {screenSettingsSurface ? (
+          <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
+            {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
+            <SettingsRoute
+              path={screenPath}
+              navigation={navigation}
+              enabledFeatures={enabledFeatures}
+              onNavigate={navigateTo}
+              renderSection={section => renderHostSettingsSection(section, api!, routes, navigateTo, themeCapabilities.managementEnabled)}
+            />
+          </Suspense>
+        ) : null}
+        {screenPath === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
+        {screenPath === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
+        {DevDisclosurePage && screenPath === "/dev/disclosure" ? (
+          <Suspense fallback={null}>
+            <DevDisclosurePage />
+          </Suspense>
+        ) : null}
+        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div> : null}
+        {!screenSettingsSurface && !RouteComponent && !builtIn ? (
+          <div className="empty-state" role="status">
+            {area
+              ? `${area.title} owns ${screenPath}, but no route component is registered for it.`
+              : `No Studio route is registered for ${screenPath}. Its module may be disabled or no longer installed; close this tab or navigate elsewhere.`}
+          </div>
+        ) : null}
+      </>
+    );
+  }, [access, api, enabledFeatures, featureAreas, navigateTo, navigation, routes, themeCapabilities.managementEnabled]);
 
   if (state === "loading") {
     return (
@@ -451,8 +495,6 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   }
 
   const activeRoute = findRouteForPath(routes, path);
-  const ActiveComponent = activeRoute?.component;
-  const routeAvailability = activeRoute?.availability;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
@@ -460,6 +502,18 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     ?? activeRoute?.label
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
+  const tabViews: WorkspaceTabView[] = workspace.state.tabs.map(tab => {
+    const fallback = defaultTitleOf(tab.location);
+    const title = resolveTabTitle(tab, workspace.screenKeyOf(tab.location), fallback.title);
+    return {
+      id: tab.id,
+      title: title.title,
+      detail: title.detail ?? (title.title === fallback.title ? fallback.detail : undefined),
+      icon: <ScreenIcon path={locationPathname(tab.location)} navigation={navigation} />,
+      pinned: tab.pinned,
+      guarded: Boolean(tab.guarded) && tab.id !== workspace.state.activeId
+    };
+  });
 
   return (
     <ThemeProvider storeContext={shellContext}>
@@ -476,42 +530,83 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
+        contentRef={contentRef}
+        tabStrip={
+          <WorkspaceTabStrip
+            baseId={workspaceBaseId}
+            tabs={tabViews}
+            activeId={workspace.state.activeId}
+            notice={workspace.notice}
+            onDismissNotice={workspace.dismissNotice}
+            onActivate={workspace.activate}
+            onClose={workspace.close}
+            onCloseOthers={workspace.closeOthers}
+            onCloseAll={workspace.closeAll}
+            onNewTab={() => workspace.open("/", { newTab: true })}
+            onPin={workspace.setPinned}
+            onMove={workspace.move}
+          />
+        }
       >
         <ToastHost navigate={navigateTo} />
         <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
-        {settingsSurface ? (
-          <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
-            {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
-            <SettingsRoute
-              path={path}
-              navigation={navigation}
-              enabledFeatures={enabledFeatures}
-              onNavigate={navigateTo}
-              renderSection={section => renderHostSettingsSection(section, api!, routes, navigateTo, themeCapabilities.managementEnabled)}
-            />
-          </Suspense>
-        ) : null}
-        {path === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
-        {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
-        {DevDisclosurePage && path === "/dev/disclosure" ? (
-          <Suspense fallback={null}>
-            <DevDisclosurePage />
-          </Suspense>
-        ) : null}
-        {!settingsSurface && ActiveComponent ? routeAvailability?.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability?.reason ?? "This route is unavailable."}</div> : null}
-        {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
-          <div className="empty-state">
-            {owningFeatureArea
-              ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
-              : `No Studio route is registered for ${path}.`}
-          </div>
-        ) : null}
+        <WorkspaceTabPanels
+          baseId={workspaceBaseId}
+          tabs={workspace.state.tabs}
+          activeId={workspace.state.activeId}
+          renderScreen={renderScreen}
+          titleOf={tabTitleOf}
+          setTitle={workspace.setTitle}
+          isActive={workspace.isActive}
+          markPendingWork={workspace.markPendingWork}
+          onCloseTab={workspace.close}
+        />
       </ShellFrame>
       {assistantOpen ? (
         <WeaverSurface key={registryGeneration} api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );
+}
+
+/** The shell's default identity for a screen: its settings section, navigation entry or route, with a short id for resource routes. */
+export function describeScreen(
+  path: string,
+  routes: ReadonlyArray<{ path: string; label: string }>,
+  navigation: StudioNavigationContribution[],
+  featureAreas: StudioFeatureAreaContribution[],
+  settingsGroups: ReturnType<typeof getSettingsSectionGroups>
+): { title: string; detail?: string } {
+  if (isSettingsSurfacePath(path, navigation)) return { title: resolveSettingsSection(path, settingsGroups)?.label ?? "Settings" };
+  const route = findRouteForPath([...routes], path);
+  if (route && route.path.includes(":")) {
+    const segments = path.split("/").filter(Boolean);
+    const parameter = route.path.split("/").filter(Boolean).map((segment, index) => segment.startsWith(":") ? segments[index] : null).filter(Boolean).pop();
+    const value = parameter ? safeDecodeSegment(parameter) : undefined;
+    return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
+  }
+  return {
+    title: navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
+      ?? route?.label
+      ?? findFeatureAreaForPath(featureAreas, path)?.title
+      ?? (path === "/" ? "Home" : "Studio")
+  };
+}
+
+/** Shell rendering must survive a malformed restored address; fall back to the raw segment. */
+function safeDecodeSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function ScreenIcon({ path, navigation }: { path: string; navigation: StudioNavigationContribution[] }) {
+  if (isSettingsSurfacePath(path, navigation)) return <Settings size={14} style={{ color: navIconColors.themes }} />;
+  const item = [...navigation].reverse().find(candidate => isNavigationItemActive(candidate, path, navigation));
+  if (!item) return <FileText size={14} />;
+  return <span style={{ display: "inline-flex", color: item.iconColor ?? getDefaultNavIconColor(item.id) }}><NavIcon id={item.id} icon={item.icon} /></span>;
 }
 
 export function findRouteForPath<TRoute extends { path: string }>(routes: TRoute[], path: string) {
@@ -567,6 +662,8 @@ export function ShellFrame({
   backendAction,
   enabledFeatures,
   onNavigate,
+  tabStrip,
+  contentRef,
   children
 }: {
   navigation: StudioNavigationContribution[];
@@ -581,6 +678,9 @@ export function ShellFrame({
   backendAction?: React.ReactNode;
   enabledFeatures?: ReadonlySet<string> | readonly string[];
   onNavigate: (path: string) => void;
+  /** The workspace tab strip, shown between the top bar and the content area once Studio is ready. */
+  tabStrip?: React.ReactNode;
+  contentRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
@@ -858,6 +958,11 @@ export function ShellFrame({
               aria-label="Settings"
               title={navCollapsed ? "Settings" : undefined}
               onClick={event => {
+                if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab("/settings")) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                 event.preventDefault();
                 navigateFromMainNavigation("/settings");
               }}
@@ -901,7 +1006,8 @@ export function ShellFrame({
             {accountAction}
           </div>
         </header>
-        <main className="content">{children}</main>
+        {tabStrip}
+        <main className="content" ref={contentRef}>{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {topNav ? (
@@ -1178,7 +1284,12 @@ export function Diagnostics({
                   className="diagnostics-task-link"
                   href={qualifyStudioBackendPath(destination.path)}
                   onClick={event => {
-                    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    if (event.defaultPrevented) return;
+                    if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(destination.path)) {
+                      event.preventDefault();
+                      return;
+                    }
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
                     onNavigate(destination.path);
                   }}
@@ -1401,6 +1512,10 @@ function NavItemGroup({
         aria-label={item.label}
         title={collapsed ? item.label : undefined}
         onClick={event => {
+          if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(item.path)) {
+            event.preventDefault();
+            return;
+          }
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           onNavigate(item.path);
@@ -1420,6 +1535,10 @@ function NavItemGroup({
                 href={qualifyStudioBackendPath(child.path)}
                 aria-current={childActive ? "page" : undefined}
                 onClick={event => {
+                  if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(child.path)) {
+                    event.preventDefault();
+                    return;
+                  }
                   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
                   onNavigate(child.path);
@@ -1564,14 +1683,6 @@ export function getNavigationPlacementForItem(item: Pick<StudioNavigationContrib
 
 export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
   return resolveTopLevelNavigationItems(navigation, section);
-}
-
-function normalizePath(path: string) {
-  if (path.length > 1 && path.endsWith("/")) {
-    return path.slice(0, -1);
-  }
-
-  return path;
 }
 
 function currentRelativeLocation() {

@@ -1,5 +1,5 @@
 import { lazy, type ReactNode } from "react";
-import { authSessionEndedEvent, evaluateBackendRequirements, qualifyStudioBackendPath, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, evaluateBackendRequirements, qualifyStudioBackendPath, type ElsaStudioModuleApi, type StudioRouteWorkspaceOptions } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { setNotifications } from "./workflow-editor/notifications";
 import { createObjectExpressionEditorContribution } from "./objectExpressionEditor";
@@ -52,6 +52,22 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
 export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
+
+/** A screen that edits one resource named by a query parameter; its list view (no parameter) may open in several tabs. */
+function workspaceResource(kind: string, parameter: string): StudioRouteWorkspaceOptions {
+  return { resourceKey: location => { const id = location.searchParams.get(parameter); return id ? `${kind}:${id}` : null; } };
+}
+
+/** A definition's draft and each version are distinct resources; its sections are views of one of them. */
+const activityDefinitionWorkspace: StudioRouteWorkspaceOptions = {
+  resourceKey: location => {
+    const definitionId = location.searchParams.get("definition");
+    if (!definitionId) return null;
+    const draftId = location.searchParams.get("draft");
+    const versionId = location.searchParams.get("version");
+    return `activity-definition:${definitionId}:${draftId ? `draft:${draftId}` : versionId ? `version:${versionId}` : "overview"}`;
+  }
+};
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
@@ -123,6 +139,7 @@ export function register(api: ElsaStudioModuleApi) {
           component: ({ navigate }: { navigate(path: string): void }) => deferred("BPMN run", <BpmnWorkflowsPage session={api.backendSession!} view="run" navigate={navigate} />) }
       ] : []),
       { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], path: "/workflows/templates", label: "Workflow templates",
+        workspace: workspaceResource("workflow-template", "template"),
         component: ({ navigate }) => deferred("workflow templates", <WorkflowTemplatesPage api={api} navigate={navigate} />) },
       {
         id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
@@ -134,18 +151,21 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/upgrades",
         label: "Activity Definition upgrades",
+        workspace: workspaceResource("activity-upgrade-plan", "plan"),
         component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions",
         label: "Activity Definitions",
+        workspace: activityDefinitionWorkspace,
         component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",
         label: "Workflow definitions",
+        workspace: workspaceResource("workflow-definition", "definition"),
         component: ({ navigate }) => deferred("workflow definitions", <WorkflowManagementPage onOpenBpmnProcesses={() => navigate(qualifyStudioBackendPath("/workflows/bpmn"))} backendSession={api.backendSession} operations={operationAvailability()} context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} runRelatedLinks={runRelatedLinks()} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {

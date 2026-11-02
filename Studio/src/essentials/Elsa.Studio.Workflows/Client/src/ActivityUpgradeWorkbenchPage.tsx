@@ -1,4 +1,4 @@
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -63,6 +63,9 @@ export function ActivityUpgradeWorkbenchPage({
   context: StudioEndpointContext;
   navigateToStudioPath?(path: string): void;
 }) {
+  // A plan can finish while this screen's workspace tab is in the background; recording it in the
+  // address then waits for the tab to return instead of taking over the active tab's address.
+  const whenActive = useStudioWorkspaceWhenActive();
   const locationSeed = useMemo(readLocationSeed, []);
   const persisted = useMemo(readSession, []);
   const [draft, setDraft] = useState(() => createActivityUpgradeDraft(locationSeed));
@@ -82,14 +85,20 @@ export function ActivityUpgradeWorkbenchPage({
   const requestedPlanId = locationSeed.planId ?? (hasNewSelectionSeed ? null : persisted?.planId) ?? null;
   const activePlanId = plan?.planId ?? null;
 
+  // Load each requested plan once. A background workspace tab mounts its effects again when it returns;
+  // reloading would replace the reviewed plan and clear its stale-evidence flag.
+  const loadedPlanRequestRef = useRef<{ context: StudioEndpointContext; planId: string } | null>(null);
   useEffect(() => {
     if (!requestedPlanId) return;
+    const loaded = loadedPlanRequestRef.current;
+    if (loaded?.context === context && loaded.planId === requestedPlanId) return;
     const controller = new AbortController();
     setBusy("load");
     setError(null);
     void getActivityUpgradePlan(context, requestedPlanId, controller.signal).then(
       loaded => {
         if (controller.signal.aborted) return;
+        loadedPlanRequestRef.current = { context, planId: requestedPlanId };
         setPlan(loaded);
         setReviewedEvidenceStale(false);
         setBusy(null);
@@ -145,7 +154,7 @@ export function ActivityUpgradeWorkbenchPage({
       receipts.current = [];
       idempotencyByStage.current = {};
       persistSession(reviewed.planId, [], {});
-      writePlanLocation(reviewed.planId, "push");
+      whenActive(() => writePlanLocation(reviewed.planId, "push"));
       observeActivityDefinitions({ event: "upgrade-plan", surface: "upgrade-workbench", outcome: "ready" });
     } catch (cause) {
       setError(privateSafePlanError(cause));
@@ -260,7 +269,7 @@ export function ActivityUpgradeWorkbenchPage({
       setPublicationVersions({});
       setOutcome(null);
       persistSession(successor.planId, receipts.current, idempotencyByStage.current);
-      writePlanLocation(successor.planId, "push");
+      whenActive(() => writePlanLocation(successor.planId, "push"));
       observeActivityDefinitions({ event: "upgrade-plan", surface: "upgrade-workbench", outcome: "ready" });
     } catch (cause) {
       setError(privateSafeMutationError(cause));

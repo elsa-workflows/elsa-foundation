@@ -3,7 +3,7 @@ import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdap
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, useStudioWorkspaceTitle, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution, type StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -296,6 +296,7 @@ export function WorkflowEditor({
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
+  useStudioWorkspaceTitle(details?.definition.name, documentAdapter ? "Template" : "Draft");
   const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
 
   // Resolve the current scope + selection (designer mode, selected activity, descriptor/availability,

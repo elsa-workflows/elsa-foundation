@@ -1,16 +1,21 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioWorkspaceTabProvider, type StudioAgentRegistry, type StudioEndpointContext, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { WorkflowDefinitions } from "../workflow-editor/WorkflowDefinitions";
 import { useWorkflowDefinitionBrowseSession } from "../workflow-editor/workflowDefinitionBrowseSession";
+import { getDialogs, setDialogs } from "../workflow-editor/dialogs";
+import { flowchartActivity } from "./fixtures/workflowCatalog";
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
 let previousClipboard: PropertyDescriptor | undefined;
 
+const hostDialogs = getDialogs();
+
 afterEach(() => {
+  setDialogs(hostDialogs);
   if (previousClipboard) Object.defineProperty(navigator, "clipboard", previousClipboard);
   else Reflect.deleteProperty(navigator, "clipboard");
   previousClipboard = undefined;
@@ -105,7 +110,149 @@ describe("workflow definition list", () => {
 
     expect(actions?.querySelector("button")?.textContent).toContain("Create workflow");
   });
+
+  it("keeps an open create dialog and its name when its workspace tab goes to the background and returns", async () => {
+    const getJson = vi.fn(async (url: string) => routeJson(url));
+    const tab = renderInTab(context(getJson), vi.fn());
+
+    await waitFor(() => expect(tab.container.textContent).toContain("Invoice evaluator"));
+    click(tab.container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    await vi.waitFor(() => expect(nameInput(tab.container)).not.toBeNull(), { timeout: 5_000, interval: 20 });
+    await fill(nameInput(tab.container)!, "Kept across tabs");
+
+    tab.hide();
+    await settle();
+    tab.reveal();
+    await settle();
+
+    expect(tab.container.querySelector('[role="dialog"][aria-labelledby="workflow-create-title"]')).not.toBeNull();
+    expect(nameInput(tab.container)?.value).toBe("Kept across tabs");
+  });
+
+  it("holds opening a definition created while its workspace tab is in the background until the tab returns", async () => {
+    const getJson = vi.fn(async (url: string) => routeJson(url));
+    let resolveCreate!: (value: unknown) => void;
+    const postJson = vi.fn(() => new Promise(resolve => { resolveCreate = resolve; }));
+    const onOpen = vi.fn();
+    const tab = renderInTab(context(getJson, postJson), onOpen);
+
+    await waitFor(() => expect(tab.container.textContent).toContain("Invoice evaluator"));
+    click(tab.container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    await vi.waitFor(() => expect(nameInput(tab.container)).not.toBeNull(), { timeout: 5_000, interval: 20 });
+    await fill(nameInput(tab.container)!, "Created in background");
+    await waitFor(() => expect(createButton(tab.container)?.getAttribute("aria-disabled")).toBe("false"));
+    click(createButton(tab.container)!);
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+
+    tab.hide();
+    await settle();
+    resolveCreate({ definition: { id: "created-definition", name: "Created in background" }, draft: null, versions: [] });
+    await settle();
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(tab.handle.markPendingWork).toHaveBeenCalled();
+
+    tab.reveal();
+    await waitFor(() => expect(onOpen).toHaveBeenCalledTimes(1));
+    expect(onOpen).toHaveBeenCalledWith("created-definition");
+  });
+
+  it("holds the folder change after deleting a folder while its workspace tab is in the background", async () => {
+    window.history.replaceState({}, "", "/workflows/definitions?folderId=same-folder");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return folderCapabilities;
+      if (url.endsWith("folders/same-folder")) return { folder: { id: "same-folder", name: "Selected folder", parentId: null, revision: "r1" }, ancestors: [] };
+      if (url.includes("definition-pages")) return { items: [{ id: "definition-1", name: "Invoice evaluator" }] };
+      return { items: [] };
+    });
+    let finishDelete!: () => void;
+    const deleteJson = vi.fn(() => new Promise<void>(resolve => { finishDelete = resolve; }));
+    setDialogs({ confirm: async () => true, prompt: async () => null, alert: async () => undefined } as unknown as Parameters<typeof setDialogs>[0]);
+    const tab = renderInTab({ ...context(getJson), http: { getJson, deleteJson } } as unknown as StudioEndpointContext, vi.fn());
+
+    const deleteButton = () => [...tab.container.querySelectorAll<HTMLButtonElement>(".wf-folder-actions button")].find(button => button.textContent?.trim() === "Delete") ?? null;
+    await vi.waitFor(() => expect(deleteButton()).not.toBeNull(), { timeout: 5_000, interval: 20 });
+    click(deleteButton()!);
+    await waitFor(() => expect(deleteJson).toHaveBeenCalledTimes(1));
+
+    tab.hide();
+    await settle();
+    const address = window.location.pathname + window.location.search;
+    const historyLength = window.history.length;
+    finishDelete();
+    await settle();
+
+    expect(window.location.pathname + window.location.search).toBe(address);
+    expect(window.history.length).toBe(historyLength);
+    expect(tab.handle.markPendingWork).toHaveBeenCalled();
+
+    tab.reveal();
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false));
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(window.history.length).toBe(historyLength + 1);
+  });
 });
+
+function renderInTab(contextValue: StudioEndpointContext, onOpen: (id: string) => void) {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  mounted = { root, container };
+  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn(), onPromptResult: () => () => {} } as unknown as StudioAgentRegistry;
+  let active = true;
+  const handle = {
+    id: "tab-1",
+    get active() { return active; },
+    location: "/workflows/definitions",
+    isActive: () => active,
+    markPendingWork: vi.fn(),
+    setTitle: vi.fn()
+  } satisfies StudioWorkspaceTabHandle;
+  function Harness() {
+    const session = useWorkflowDefinitionBrowseSession(contextValue);
+    return <WorkflowDefinitions context={contextValue} ai={ai} onOpen={onOpen} session={session} />;
+  }
+  const show = (mode: "visible" | "hidden") => flushSync(() => root.render(
+    <React.Activity mode={mode}>
+      <StudioWorkspaceTabProvider value={handle}><Harness /></StudioWorkspaceTabProvider>
+    </React.Activity>
+  ));
+  show("visible");
+  return {
+    container,
+    handle,
+    hide: () => { active = false; show("hidden"); },
+    reveal: () => { active = true; show("visible"); }
+  };
+}
+
+function routeJson(url: string) {
+  if (url === "/capabilities") return { capabilities: [...definitionCapabilities.capabilities, activityCapability] };
+  if (url.endsWith("design/activities/catalog")) return { activities: [flowchartActivity()] };
+  return { items: [{ id: "definition-1", name: "Invoice evaluator" }] };
+}
+
+function nameInput(container: HTMLElement) {
+  return container.querySelector<HTMLInputElement>('input[aria-label="Display name"]');
+}
+
+function createButton(container: HTMLElement) {
+  const dialog = container.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="workflow-create-title"]');
+  return [...(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(button => button.textContent?.trim() === "Create") ?? null;
+}
+
+async function fill(element: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  flushSync(() => {
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
+}
+
+async function settle() {
+  for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0));
+}
 
 function render(contextValue: StudioEndpointContext, onOpen: (id: string) => void) {
   const container = document.createElement("div");
@@ -121,8 +268,8 @@ function render(contextValue: StudioEndpointContext, onOpen: (id: string) => voi
   return container;
 }
 
-function context(getJson: (url: string) => Promise<unknown>): StudioEndpointContext {
-  return { baseUrl: "https://studio.test/", http: { getJson } } as unknown as StudioEndpointContext;
+function context(getJson: (url: string) => Promise<unknown>, postJson?: (url: string, body: unknown) => Promise<unknown>): StudioEndpointContext {
+  return { baseUrl: "https://studio.test/", http: { getJson, postJson } } as unknown as StudioEndpointContext;
 }
 
 function click(element: Element) {
@@ -148,5 +295,24 @@ const definitionCapabilities = {
     id: "elsa.api.workflow-design",
     contractVersion: "1",
     links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }]
+  }]
+};
+
+const activityCapability = {
+  id: "elsa.api.activity-design",
+  contractVersion: "1",
+  links: [{ rel: "activity-catalog", href: "design/activities/catalog" }]
+};
+
+const folderCapabilities = {
+  capabilities: [{
+    id: "elsa.api.workflow-design",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-definitions", href: "design/workflows/definitions" },
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true }
+    ]
   }]
 };

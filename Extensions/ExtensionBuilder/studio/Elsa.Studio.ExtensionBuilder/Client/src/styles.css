@@ -139,7 +139,7 @@
 
 /* The Extension Builder workspace is a full-bleed IDE: drop the host content container's padding so the
    shell fills the whole area (the home view keeps the normal padded layout). */
-.content:has(> .extension-builder-page-workspace) {
+.content:has(> .extension-builder-page-workspace, > .studio-workspace-panel:not([hidden]) > .extension-builder-page-workspace) {
   padding: 0;
   overflow: hidden;
 }
