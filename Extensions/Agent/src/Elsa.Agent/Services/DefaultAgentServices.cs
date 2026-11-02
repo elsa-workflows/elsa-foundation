@@ -10,7 +10,7 @@ namespace Elsa.Agent.Services;
 
 /// <summary>
 /// Process-lifetime session rows. Each row's monitor orders message insertion, the session's policy and
-/// policy revision, and the claims of work admitted under that policy (#3440, experimental).
+/// policy revision, and the claims of work admitted under that policy (#3440).
 /// </summary>
 /// <remarks>
 /// When an audit ownership association is installed, each new session is associated with its actor and tenant

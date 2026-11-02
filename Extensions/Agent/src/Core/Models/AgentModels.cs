@@ -238,8 +238,8 @@ public sealed record AgentSession(
     IReadOnlyDictionary<string, string> Metadata)
 {
     /// <summary>
-    /// Experimental: the owning session store's revision of <see cref="Policy"/>, or null when the installed
-    /// store does not own conditional policy updates. Provisional and not frozen (#3440).
+    /// Preview (#3440): the owning session store's revision of <see cref="Policy"/>, or null when the installed
+    /// store does not own conditional policy updates.
     /// </summary>
     public long? PolicyRevision { get; init; }
 }
@@ -361,13 +361,13 @@ public sealed record AgentAuditEvent(
     DateTimeOffset CreatedAt,
     IReadOnlyDictionary<string, string> Metadata);
 
-/// <summary>Experimental (#3440, not frozen): an owner-bounded audit query; <see cref="Take"/> must be within 1..<see cref="MaxTake"/>.</summary>
+/// <summary>Preview (#3440): an owner-bounded audit query; <see cref="Take"/> must be within 1..<see cref="MaxTake"/>.</summary>
 public sealed record AgentAuditOwnerQuery(string ActorId, string TenantId, string? SessionId, int Take)
 {
     public const int MaxTake = 1000;
 }
 
-/// <summary>Experimental (#3440, not frozen).</summary>
+/// <summary>Preview (#3440).</summary>
 public enum AgentAuditQueryOutcome
 {
     /// <summary>The events are the eligible records, already filtered, ordered and limited by the owning reader.</summary>
@@ -376,7 +376,7 @@ public enum AgentAuditQueryOutcome
     Unsupported
 }
 
-/// <summary>Experimental (#3440, not frozen).</summary>
+/// <summary>Preview (#3440).</summary>
 public sealed record AgentAuditQueryResult(AgentAuditQueryOutcome Outcome, IReadOnlyList<AgentAuditEvent> Events)
 {
     public static AgentAuditQueryResult Unsupported { get; } = new(AgentAuditQueryOutcome.Unsupported, []);
@@ -512,8 +512,8 @@ public sealed record AgentProviderDiagnostics(
     IReadOnlyDictionary<string, string> Metadata);
 
 /// <summary>
-/// Experimental: a session's acknowledged policy and the owner's monotonically increasing revision of it.
-/// Provisional and not frozen (#3440); wire names are recorded only after contract review.
+/// Preview (#3440): a session's acknowledged policy and the owner's monotonically increasing revision of it.
+/// The public wire shape is the session-policy response, never this domain record.
 /// </summary>
 public sealed record AgentSessionPolicyState(AgentPolicy Policy, long Revision);
 

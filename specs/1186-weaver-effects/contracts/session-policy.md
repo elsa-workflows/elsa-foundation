@@ -1,10 +1,12 @@
 # Candidate session policy and lifecycle contract
 
-**Status: EXPERIMENTAL, not frozen.** This records the surface implemented and qualified by
-T007–T022 (T023). It stays a candidate until the normal composed Studio run (T024) and the
-complete package witness (T025) pass; T026 freezes the demonstrated minimum. Every member below
-may still change. It is not a new module-specific orchestration path. The live domain catalog,
-[Agent `EXTENSION_POINTS.md`](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#session-policy-and-owner-scoped-audit-3440-experimental),
+**Status: Frozen for #3440 (T026), preview API.** This records the surface implemented by
+T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum, after these proofs passed on `7fc0a3c2e`:
+- the normal composed Studio gate (T024): the complete browser suite, 901 passed and 0 failed;
+- the complete independent package witness (T025): 38 original, 4 current-authority and 26 per-adapter autonomy cases, `independentPackageWitness:true`.
+
+The members stay preview (pre-GA) API under ADR 0080 D4, and the source marks them "Preview (#3440)". A later change needs its own scoped contract decision. It is not a new module-specific orchestration path. The live domain catalog,
+[Agent `EXTENSION_POINTS.md`](../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md#session-policy-and-owner-scoped-audit-3440-preview),
 owns current extension-point documentation; [Core contracts](../../../Extensions/Agent/src/Core/Contracts/AgentContracts.cs)
 and [Core models](../../../Extensions/Agent/src/Core/Models/AgentModels.cs) are the signature authority.
 
@@ -25,7 +27,7 @@ and [Core models](../../../Extensions/Agent/src/Core/Models/AgentModels.cs) are 
 - Accepted messages/turn results identify the policy that admitted them. A later selector value is
   never the authority for attributing an earlier result.
 
-### Wire shape (implemented by T009/T010, not frozen)
+### Wire shape (T009/T010, frozen for #3440)
 
 `PUT /_elsa/agent/sessions/{sessionId}/autonomy`, using the existing `Use` permission. Body:
 `{ "autonomyMode": "manual" | "auto-read-only" | "full-auto", "expectedRevision": <number> }`.
@@ -78,7 +80,7 @@ Client rules:
 Use the existing selected-backend HTTP transport and stream URL resolution. Preserve ambient-cookie
 omission and existing backend/generation isolation.
 
-### Core signatures (experimental, additive)
+### Core signatures (preview, additive)
 
 | Member | Shape |
 | --- | --- |
@@ -125,7 +127,7 @@ existing serialization order and use short session transitions/reservations arou
 work. The same operation may hand off ownership without an idle gap; a different operation receives
 an explicit losing disposition. Preserve original foreground cancellation tokens and pause storage.
 
-## Selected candidate (T007, implemented by T008, not frozen)
+## Selected contract (T007, implemented by T008, frozen by T026)
 
 Causal input: the `39a1affef` baseline on both actual adapters had 4 Passed controls and 4
 `autonomy.mode_mismatch` failures. Selecting a mode on an established conversation sent zero backend

@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Agent.Tests;
 
 /// <summary>
-/// HTTP behavior of the experimental (#3440, T009, not frozen) autonomy update and policy readback. Requests run
+/// HTTP behavior of the preview (#3440, T009) autonomy update and policy readback. Requests run
 /// through the mapped endpoint delegates and the real default owner, each in its own request scope.
 /// </summary>
 public sealed class AgentSessionAutonomyApiTests

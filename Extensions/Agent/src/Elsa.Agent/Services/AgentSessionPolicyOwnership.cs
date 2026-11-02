@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Services;
 
-/// <summary>The kinds of admitted work that own a session's current policy (#3440, experimental).</summary>
+/// <summary>The kinds of admitted work that own a session's current policy (#3440).</summary>
 internal enum AgentSessionClaimKind
 {
     Prompt,

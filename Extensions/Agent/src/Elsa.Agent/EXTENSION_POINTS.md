@@ -18,7 +18,7 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 
 | Contract | Default and lifetime | Signature surface | When to override; dependants |
 |---|---|---|---|
-| [`IAgentSessionService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentSessionService`, singleton | Create/find sessions; add/find/list messages and context; set message status | Supply persistent session/message storage. API, context sources, turn orchestration and proposal authorization consume it. The default also owns the session policy revision and work claims; a replacement makes autonomy updates Unsupported ([below](#session-policy-and-owner-scoped-audit-3440-experimental)). |
+| [`IAgentSessionService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentSessionService`, singleton | Create/find sessions; add/find/list messages and context; set message status | Supply persistent session/message storage. API, context sources, turn orchestration and proposal authorization consume it. The default also owns the session policy revision and work claims; a replacement makes autonomy updates Unsupported ([below](#session-policy-and-owner-scoped-audit-3440-preview)). |
 | [`IAgentSessionPolicyService`](../Core/Contracts/AgentContracts.cs) *(experimental, #3440)* | `DefaultAgentSessionPolicyService`, scoped | `GetAsync(sessionId, actorId, tenantId)` and `ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest)` return `Task<AgentSessionPolicyResult>` | Normally not replaced: a replacement cannot join the default claims, so it must own the same ordering against admitted work or return `Unsupported`. API create/detail readback and the autonomy route consume it. |
 | [`IAgentPolicyEvaluator`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentPolicyEvaluator`, scoped | `EvaluateAvailabilityAsync`, `EvaluateContextAsync`, `EvaluateCapabilityAsync` return `ValueTask<AgentPolicyDecision>` | Extend host policy. Context admission, API, invoker and executor consume it; policy does not grant resource permissions. |
 | [`IAgentContextSanitizer`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentContextSanitizer`, scoped | `SanitizeAsync(attachments)` returns `ValueTask<IReadOnlyCollection<AgentContextAttachment>>` | Add generic minimization/redaction. The collector sanitizes installed contributions before final host policy and provider use. |
@@ -114,10 +114,10 @@ Client execution returns HTTP 202 with `awaiting-client`, `executed: false` and 
 
 All lifecycle retention and deduplication here are in memory. Restart/shell replacement, cross-process coordination, durable history/approvals and broader recovery remain M2 work. The [owning receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) records completed package-consumer and deterministic provider-protocol evidence for 76ec; [final-head integration and resulting-main gates completed](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143). Registrations alone establish no runtime evidence, and no live-provider success is claimed.
 
-## Session policy and owner-scoped audit (#3440, experimental)
+## Session policy and owner-scoped audit (#3440, preview)
 
-These members are experimental and not frozen until the #3440 composed Studio and package proofs
-pass. The [candidate contract](../../../../specs/1186-weaver-effects/contracts/session-policy.md)
+These preview members are the #3440 contract, frozen after the normal composed Studio and complete
+package proofs passed. Pre-GA they may still change under ADR 0080. The [candidate contract](../../../../specs/1186-weaver-effects/contracts/session-policy.md)
 records the wire shape, refusal codes, lifecycle outcomes and constitution/SemVer classification;
 this section keeps only the extension rules.
 

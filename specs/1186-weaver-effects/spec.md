@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: Approved
+**Status**: Implemented
 
 **Input**: [Feature #3440](https://github.com/elsa-workflows/elsa-foundation/issues/3440), M2 of [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428). The owner authorizes autonomous delivery of the existing five acceptance criteria, their lifecycle follow-through and the remaining M0–M5 roadmap.
 
