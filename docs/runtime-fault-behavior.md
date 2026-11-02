@@ -233,9 +233,11 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
    safety the claim protocol provides.) The ack is skipped when a checkpoint commit inside this
    dispatch already consumed the item durably.
    - **Exception: an honored `RetryAfter`.** The claim is released until `now + delay` instead of
-     deleted only on positive evidence that running the step again repeats nothing: the handler itself
+     deleted only on positive evidence that running the step again repeats no checkpoint: the handler itself
      threw, and no non-retaining checkpoint was attempted during the dispatch. Anything else is
-     acknowledged and poisoned as before. In full, all of these must hold:
+     acknowledged and poisoned as before. Work the handler did before it failed and outside a checkpoint,
+     such as an activity body's external call, runs again, as it does after `RetryNow`. In full, all of
+     these must hold:
      - the handler threw. A failed acknowledgement after the handler returned lands in this arm too,
        but the step's effect is durable by then, so it is acknowledged again and poisoned;
      - the dispatch sent no non-retaining checkpoint of its execution to the checkpoint store. The
@@ -252,7 +254,8 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      - the fault was not caused by a checkpoint rule;
      - the delay ends no later than the last representable time, `DateTimeOffset.MaxValue`.
 
-     The step stays the only queued copy. It is not claimable before the delay ends, and the
+     The step stays the only queued copy. It is not claimable before the delay ends (except in one race,
+     #3690, where a coalescing segment's flush cannot persist the delay and the step runs at once), and the
      resumption sweep's backlog discovery then re-drives it. While it waits, the execution's later
      queued steps wait behind it, because the queue serves each execution in order. If the queue
      refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,

@@ -404,7 +404,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // RetryAfter (#3275) is the exception: where the claim can carry a delay and a resumption sweep is
             // composed to re-drive it, the item is released with the policy's delay instead, exactly like temporarily
             // unavailable work. It stays the only copy, becomes claimable when due, and the sweep's backlog discovery
-            // re-drives it. The release needs positive evidence that running the item again repeats nothing: the
+            // re-drives it. The release needs positive evidence that running the item again repeats no checkpoint: the
             // handler itself threw, rather than the acknowledgement after it returned, and the dispatch frame saw no
             // non-retaining checkpoint go to the store. A checkpoint that went may be durable whether or not the call
             // returned, a coalescing segment may hold it for its flush, and a handler may commit through a scope of
