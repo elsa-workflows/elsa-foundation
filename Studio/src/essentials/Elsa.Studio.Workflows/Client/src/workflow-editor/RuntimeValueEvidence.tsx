@@ -116,7 +116,10 @@ export function RuntimeValueEvidenceContent({
   const canResolve = !!scope && !!evidenceId && supportedCaptureMode && capturedState && permissionAllowsResolution && !snapshot.failure;
   const resolutionIdentity = JSON.stringify([runtimeValueContextId(scope?.context), scope?.workflowExecutionId, scope?.activityExecutionId, evidenceId, captureModeKey]);
   const [requestedSensitiveIdentity, setRequestedSensitiveIdentity] = useState<string | null>(null);
-  const [retrySequence, setRetrySequence] = useState(0);
+  const [retryRequest, setRetryRequest] = useState<{ identity: string; sequence: number } | null>(null);
+  const retrySequence = retryRequest?.identity === resolutionIdentity ? retryRequest.sequence : 0;
+  const retryResolution = () => setRetryRequest(previous => ({ identity: resolutionIdentity,
+    sequence: (previous?.identity === resolutionIdentity ? previous.sequence : 0) + 1 }));
   const [resolution, setResolution] = useState<RuntimeValueResolutionState | null>(null);
   const explicitlyRequested = snapshot.isSensitive && requestedSensitiveIdentity === resolutionIdentity;
   const shouldResolve = canResolve && (!snapshot.isSensitive || explicitlyRequested);
@@ -193,7 +196,7 @@ export function RuntimeValueEvidenceContent({
                 disabled={currentResolution?.status === "loading"}
                 onClick={() => {
                   setRequestedSensitiveIdentity(resolutionIdentity);
-                  if (currentResolution?.status === "failed") setRetrySequence(sequence => sequence + 1);
+                  if (currentResolution?.status === "failed") retryResolution();
                 }}
               >
                 {currentResolution?.status === "failed" ? "Retry captured value" : "Show captured value"}
@@ -215,7 +218,7 @@ export function RuntimeValueEvidenceContent({
         {!snapshot.isSensitive && !protectedAccess && currentResolution?.status === "failed" ? (
           <p role="alert">
             Could not resolve captured value: {currentResolution.error} {" "}
-            <button type="button" onClick={() => setRetrySequence(sequence => sequence + 1)}>Retry</button>
+            <button type="button" onClick={retryResolution}>Retry</button>
           </p>
         ) : null}
       </div>

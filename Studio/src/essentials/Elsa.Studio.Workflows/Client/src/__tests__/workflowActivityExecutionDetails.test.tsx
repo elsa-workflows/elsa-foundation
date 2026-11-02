@@ -28,6 +28,8 @@ import type {
   WorkflowExecutableNode
 } from "../workflowTypes";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { runtimeValueContextId, runtimeValuePayloadKey } from "../workflow-editor/RuntimeValueEvidence";
+import type { PreparedAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
 import { buildExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { ifActivity, ifNode, bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
@@ -1396,6 +1398,26 @@ it.each([false, true])("keeps other evidence available when a partial response o
   await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
   expect(container.textContent).toContain("Confirmed outcome");
   expect(container.textContent).not.toContain("No incidents recorded for this execution.");
+});
+
+it("uses the next occurrence's prepared value immediately after retrying a previous value", async () => {
+  const snapshot = valueEvidence({ inputKey: "Value" });
+  const prepared: PreparedAttachedExecution = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: activity.workflowExecutionId,
+    execution: activity, inspection: inspection([snapshot]), values: new Map([[runtimeValuePayloadKey(snapshot), { status: "failed", error: "Unavailable" }]]) };
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={prepared} />);
+  vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({ evidenceId: snapshot.evidenceId!, captureMode: snapshot.captureMode,
+    payload: { kind: "string", preview: "Retried previous value" } });
+  const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Retry")!;
+  flushSync(() => retry.click());
+  await waitFor(() => expect(container.textContent).toContain("Retried previous value"));
+  const next = { ...activity, activityExecutionId: "next-occurrence" };
+  const nextPrepared: PreparedAttachedExecution = { ...prepared, execution: next,
+    inspection: { ...inspection([snapshot]), activityExecutionId: next.activityExecutionId },
+    values: new Map([[runtimeValuePayloadKey(snapshot), { status: "ready", payload: { kind: "string", preview: "Prepared next value" } }]]) };
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={next} activityCatalog={catalog} prepared={nextPrepared} />);
+  expect(container.textContent).toContain("Prepared next value");
+  expect(container.textContent).not.toContain("Resolving captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
 });
 
 describe("WorkflowIncidentList", () => {
