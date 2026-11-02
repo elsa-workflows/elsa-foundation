@@ -3,7 +3,7 @@ import axe, { type AxeResults, type RunOptions } from "axe-core";
 import { createDefaultEtlConnectorPipeline } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
 
 // Browser-level product components against a deterministic API fixture. Actual Workbench HTTP acceptance is T019.
-async function arrangeApi(page: Page) {
+async function arrangeApi(page: Page, options: { jsonlSource?: boolean } = {}) {
   let pipeline = createDefaultEtlConnectorPipeline();
   let revision = 1;
   let created = false;
@@ -41,8 +41,15 @@ async function arrangeApi(page: Page) {
       if (request.method() === "PUT") {
         const body = request.postDataJSON();
         expect(body.expectedRevision).toBe(revision);
-        expect(body.pipeline.mapping[0].name).toBe("displayName");
-        expect(body.pipeline.routes.errors).toEqual({ kind: "jsonl", binding: "error-file" });
+        if (options.jsonlSource) {
+          expect(body.pipeline.source).toEqual({ kind: "jsonl", binding: "csv-only", fields: [
+            { name: "id", pointer: "/id", type: "int64", required: true },
+            { name: "name", pointer: "/customer/name", type: "string", required: true }
+          ] });
+        } else {
+          expect(body.pipeline.mapping[0].name).toBe("displayName");
+          expect(body.pipeline.routes.errors).toEqual({ kind: "jsonl", binding: "error-file" });
+        }
         pipeline = body.pipeline; revision++;
       }
       json = { definitionId: "orders", revision, lastPublishedVersion: published ? 1 : 0,
@@ -112,5 +119,40 @@ for (const width of [320, 768, 1024, 1440]) {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
     })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
     expect(violations).toEqual([]);
+  });
+}
+
+// Spec 1190: a JSON Lines source selects from the host's source file approvals and edits only its fields.
+for (const width of [320, 1024]) {
+  test(`JSON Lines source authoring saves its fields and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { jsonlSource: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await page.getByLabel("Source kind", { exact: true }).selectOption("jsonl");
+    const binding = page.getByLabel("Source file binding", { exact: true });
+    await expect(binding.locator("option")).toHaveText(["Choose an approved binding", "source (not approved for Source file)", "csv-only"]);
+    await binding.selectOption("csv-only");
+    await expect(page.getByText("Records JSON Pointer", { exact: true })).toHaveCount(0);
+    await page.getByLabel("JSON Lines field 2 pointer", { exact: true }).fill("/customer/name");
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByRole("heading", { name: "Source connector", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1190-studio-jsonl-source-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
   });
 }

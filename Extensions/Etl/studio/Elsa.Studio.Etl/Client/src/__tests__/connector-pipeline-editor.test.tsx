@@ -109,6 +109,39 @@ describe("connector pipeline editor", () => {
     expect(editor.pipeline.mapping[0].origin).toBe("lookup");
   });
 
+  it("switches to a JSON Lines file source that keeps its fields and selects from source file approvals", () => {
+    const editor = renderEditor();
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "jsonl");
+    editor.render();
+    expect(editor.pipeline.source).toEqual({
+      kind: "jsonl",
+      binding: "source",
+      fields: [
+        { name: "id", pointer: "/id", type: "int64", required: true },
+        { name: "name", pointer: "/name", type: "string", required: true }
+      ]
+    });
+    expect(editor.host.textContent).not.toContain("Records JSON Pointer");
+    expect(editor.host.textContent).not.toContain("Pagination strategy");
+    expect(editor.host.textContent).toContain("Read one JSON object per line");
+    const binding = control<HTMLSelectElement>(editor.host, "Source file binding");
+    expect(Array.from(binding.options).map(option => option.value)).toEqual(["", "source", "source-csv"]);
+    expect(binding.options[1].textContent).toContain("not loaded for Source file");
+    setSelect(binding, "source-csv");
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "JSON Lines field 2 pointer"), "/customer/name");
+    expect(editor.pipeline.source).toMatchObject({ kind: "jsonl", binding: "source-csv" });
+    expect((editor.pipeline.source as Extract<EtlPipelineV2["source"], { kind: "jsonl" }>).fields[1].pointer).toBe("/customer/name");
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "csv");
+    editor.render();
+    expect(editor.pipeline.source).toEqual({
+      kind: "csv",
+      binding: "source-csv",
+      schema: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }]
+    });
+  });
+
   it("edits all lossless byte controls without rounding and locks every control in read-only mode", () => {
     const editor = renderEditor();
     const exact = "9223372036854775807";

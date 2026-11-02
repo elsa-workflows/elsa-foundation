@@ -170,7 +170,7 @@ public sealed partial class EtlRuntimeStoreTests
     {
         public IFileChunkPublisher Create(EtlFileChunkFormat format) => new FileChunkStore(format switch
         {
-            EtlFileChunkFormat.Jsonl => ".jsonl",
+            EtlFileChunkFormat.Jsonl or EtlFileChunkFormat.JsonlSnapshot => ".jsonl",
             EtlFileChunkFormat.Csv => ".csv",
             EtlFileChunkFormat.Index => ".index",
             _ => throw new ArgumentOutOfRangeException(nameof(format))

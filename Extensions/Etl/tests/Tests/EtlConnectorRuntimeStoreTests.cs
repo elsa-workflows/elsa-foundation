@@ -182,30 +182,92 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(new EtlConnectorFilePosition(4, 6, 4), secondPosition);
     }
 
-    [Fact]
-    public async Task Empty_csv_preparation_can_settle_shared_terminal_success()
+    // Previously this test settled the empty run by hand, which hid that no production caller ever did (spec 1190 FR-011).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Empty_file_preparation_settles_terminal_success_with_the_commit(bool jsonl)
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var runtime = database.CreateStore(context);
         var connector = (IEtlConnectorRuntimeStore)runtime;
-        var admission = ConnectorAdmission("connector-empty-csv", new EtlScope("tenant-a", "partition-empty-csv"), CsvMixedRoutePipeline());
+        var pipeline = jsonl ? JsonlMixedRoutePipeline() : CsvMixedRoutePipeline();
+        var admission = ConnectorAdmission("connector-empty-file", new EtlScope("tenant-a", "partition-empty-file"), pipeline);
         Assert.Equal(EtlStoreStatus.Applied, (await connector.AdmitConnectorAsync(admission)).Status);
         var prepLease = await connector.ClaimConnectorPreparationAsync(admission.Invocation.Scope, "preparer");
         Assert.NotNull(prepLease);
+        var prepared = ConnectorPreparedFile(recordCount: 0, sourceByteLength: jsonl ? 0 : 128, jsonl: jsonl);
 
-        var commit = await connector.CommitConnectorPreparationAsync(prepLease!, ConnectorPreparedFile(recordCount: 0));
-        var success = await runtime.SettleTerminalAsync(new EtlTerminalProposal(
+        var commit = await connector.CommitConnectorPreparationAsync(prepLease!, prepared);
+        var replay = await connector.CommitConnectorPreparationAsync(prepLease!, prepared);
+        var lateSuccess = await runtime.SettleTerminalAsync(new EtlTerminalProposal(
             admission.Invocation.Scope, admission.Invocation.RunId, EtlTerminalOutcome.Succeeded, null));
         var persisted = await connector.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId);
 
         Assert.Equal(EtlStoreStatus.Applied, commit);
-        Assert.Equal(EtlStoreStatus.Applied, success.Status);
+        Assert.Equal(EtlStoreStatus.Replay, replay);
+        Assert.NotEqual(EtlStoreStatus.Applied, lateSuccess.Status);
         Assert.Equal(EtlRunStatus.Succeeded, persisted!.Run.Status);
         Assert.Equal(EtlTerminalOutcome.Succeeded, persisted.Run.TerminalResult!.Outcome);
         Assert.Single(await context.Terminals.ToListAsync());
         Assert.Single(await context.Outbox.ToListAsync());
         Assert.Empty(await context.ConnectorPartitions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Jsonl_preparation_creates_file_ranges_and_bounds_its_sentinel_index()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var connector = (IEtlConnectorRuntimeStore)database.CreateStore(context);
+        var scope = new EtlScope("tenant-a", "partition-jsonl");
+        var admission = ConnectorAdmission("connector-jsonl", scope, JsonlMixedRoutePipeline());
+        Assert.Equal(EtlStoreStatus.Applied, (await connector.AdmitConnectorAsync(admission)).Status);
+        var lease = await connector.ClaimConnectorPreparationAsync(scope, "preparer");
+
+        // One unterminated one-byte record: two index entries exceed sourceBytes × 24, which only CSV forbids.
+        Assert.Equal(EtlStoreStatus.Applied, await connector.CommitConnectorPreparationAsync(lease!,
+            ConnectorPreparedFile(recordCount: 1, sourceByteLength: 1, jsonl: true)));
+        var partition = await connector.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "worker");
+        Assert.Equal(new EtlConnectorFilePosition(1, 2, 1), Assert.IsType<EtlConnectorFilePosition>(partition!.Position));
+        // Two requested partitions over one record make exactly one partition.
+        Assert.Null(await connector.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "second-worker"));
+        Assert.Single(await context.ConnectorPartitions.ToListAsync());
+        Assert.Equal(EtlRunStatus.Running, (await connector.FindConnectorRunAsync(scope, admission.Invocation.RunId))!.Run.Status);
+    }
+
+    [Theory]
+    [InlineData("index-bound")]
+    [InlineData("digest")]
+    [InlineData("shards")]
+    public async Task Jsonl_storage_refuses_invalid_preparation_and_bindings(string variant)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var connector = (IEtlConnectorRuntimeStore)database.CreateStore(context);
+        var scope = new EtlScope("tenant-a", "partition-jsonl-invalid");
+        var admission = ConnectorAdmission("connector-jsonl-invalid", scope, JsonlMixedRoutePipeline(),
+            httpShardIds: variant == "shards" ? ["shard-a"] : null);
+        if (variant == "digest")
+            admission = admission with
+            {
+                Bindings = admission.Bindings with
+                {
+                    Source = admission.Bindings.Source with { Revision = admission.Bindings.Source.Revision with { ExpectedSha256 = null } }
+                }
+            };
+        var admitted = await connector.AdmitConnectorAsync(admission);
+        if (variant is "digest" or "shards")
+        {
+            Assert.Equal(EtlStoreStatus.Invalid, admitted.Status);
+            return;
+        }
+
+        Assert.Equal(EtlStoreStatus.Applied, admitted.Status);
+        var lease = await connector.ClaimConnectorPreparationAsync(scope, "preparer");
+        Assert.Equal(EtlStoreStatus.Invalid, await connector.CommitConnectorPreparationAsync(lease!,
+            ConnectorPreparedFile(recordCount: 2, sourceByteLength: 1, jsonl: true)));
     }
 
     [Theory]
@@ -251,9 +313,9 @@ public sealed partial class EtlRuntimeStoreTests
         EtlRuntimeFixtures.ConnectorAdmission(runId, scope, pipeline, httpShardIds);
 
     private static EtlConnectorPreparedRun ConnectorPreparedFile(long recordCount = 4,
-        long sourceByteLength = 128, long? indexByteLength = null) =>
+        long sourceByteLength = 128, long? indexByteLength = null, bool jsonl = false) =>
         new(new EtlPreparedCsvInput(
-            new EtlObjectReference("source.csv", EtlRuntimeFixtures.Hash, sourceByteLength),
+            new EtlObjectReference(jsonl ? "source.jsonl" : "source.csv", EtlRuntimeFixtures.Hash, sourceByteLength),
             new EtlObjectReference("source.index", EtlRuntimeFixtures.Hash, indexByteLength ?? checked((recordCount + 1) * 24)),
             recordCount), null);
 
@@ -275,4 +337,9 @@ public sealed partial class EtlRuntimeStoreTests
             }
         };
     }
+
+    private static EtlPipelineV2 JsonlMixedRoutePipeline() => CsvMixedRoutePipeline() with
+    {
+        Source = new EtlJsonlSource("source", [new EtlJsonField("id", "/id", EtlColumnType.Int64, Required: true)])
+    };
 }

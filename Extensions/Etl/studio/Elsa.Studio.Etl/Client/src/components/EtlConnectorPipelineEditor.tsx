@@ -40,7 +40,7 @@ export function EtlConnectorPipelineEditor({
       </header>
 
       <ol className="etl-editor-order" aria-label="ETL operation order">
-        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : "Read bounded HTTP JSON pages"}</small></div></li>
+        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : "Read bounded HTTP JSON pages"}</small></div></li>
         <li><span>2</span><div><strong>Match optional lookup</strong><small>{pipeline.lookup ? "Join CSV rows by exact typed keys" : "No lookup is configured"}</small></div></li>
         <li><span>3</span><div><strong>Map output fields</strong><small>Use declared source or lookup values</small></div></li>
         <li><span>4</span><div><strong>Apply output filters</strong><small>Equality or inequality over typed fields</small></div></li>
