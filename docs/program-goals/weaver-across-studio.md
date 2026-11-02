@@ -73,20 +73,19 @@ is verified Done through [PR #3514](https://github.com/elsa-workflows/elsa-found
 merged by the review App and qualified on resulting main `c0b47ceb1`. Its actual main CI,
 Studio and separate-package witnesses are recorded on the owning issue; existing skips and
 quarantined failures retain their original status. [Real effects #3440](https://github.com/elsa-workflows/elsa-foundation/issues/3440)
-is the sole current implementation leaf, under [spec1186](../../specs/1186-weaver-effects/spec.md).
-Its module-owned effects, acknowledged session autonomy and lifecycle follow-through retain
-all five acceptance criteria. Review, required checks and resulting-main evidence remain
-delivery gates for each subsequent leaf. The current
-inventory also includes workflow library folders, tags and saved views added on main during M2.
-#3440 is in review in PR #3612. Its acknowledged session autonomy, exact reviewed effects,
-admission/ownership barriers, correlated expiry and owner-scoped audit are implemented. Spec 1186 is
-Implemented and its session-policy contract is frozen as preview API. The normal composed Studio
-gate (the complete browser suite) and the complete independent package witness first passed on
-`7fc0a3c2e` and again on the final reviewed source `904671134`; #3440 records every run. The
-witness covered the original 38 cases, the 4 current-authority cases, and all 13 lifecycle cases on
-each actual adapter. This is deterministic provider-protocol evidence, not live-provider evidence.
-Independent review, exact-head required checks, merge and resulting-main verification remain
-before Done.
+is verified Done through [PR #3612](https://github.com/elsa-workflows/elsa-foundation/pull/3612),
+merged by the review App at its exact reviewed head as `95e4e9610`, under
+[spec1186](../../specs/1186-weaver-effects/spec.md), whose session-policy contract is frozen as
+preview API. Resulting main was requalified on `fbcb4a7f2`: quickstart suites, a fresh complete
+independent package witness (the original 38 cases, the 4 current-authority cases and all 13
+lifecycle cases on each actual adapter) and the normal composed Studio suite. The full tier then
+passed on main `bd0749d86`. This is deterministic provider-protocol evidence, not live-provider
+evidence; [the closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6570028483)
+records every run. [Supported recovery #3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441)
+is the sole current implementation leaf, under [spec1189](../../specs/1189-weaver-recovery/spec.md).
+Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
+The current inventory also includes workflow library folders, tags and saved views added on main
+during M2.
 
 ## Delivery plan
 

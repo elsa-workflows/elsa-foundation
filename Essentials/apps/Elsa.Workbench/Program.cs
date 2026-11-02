@@ -193,7 +193,8 @@ builder.Services.AddCors(options =>
         // CORS-safelisted response headers, so without exposing it a cross-origin Studio cannot read the
         // download name the executable-artifact export sets on the wire -- it silently falls back to
         // rebuilding the name, leaving the server not actually the authority on a name it owns (#1794).
-        .WithExposedHeaders("Content-Disposition"));
+        // Retry-After is not safelisted either: the Agent API's retryable refusals carry it (#3441).
+        .WithExposedHeaders("Content-Disposition", "Retry-After"));
 });
 
 builder.Services.AddNuplaneAdmin();
@@ -359,6 +360,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationAgentApiFeature).Assembly,
             typeof(FoundationWorkflowsAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
+            // Opt-in durable Weaver sessions (#3441); enabled only by a shell that lists FoundationAgentEntityFrameworkCore.
+            typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
 
             // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which

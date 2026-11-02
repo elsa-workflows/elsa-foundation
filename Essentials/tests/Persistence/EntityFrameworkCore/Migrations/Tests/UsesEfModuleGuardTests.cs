@@ -45,6 +45,7 @@ public sealed class UsesEfModuleGuardTests
         ("DiagnosticsOpenTelemetryEntityFrameworkCore", ["Diagnostics.OpenTelemetry"], true),
         ("DiagnosticsStructuredLogsEntityFrameworkCore", ["Diagnostics.StructuredLogs"], true),
         ("Elsa3ImportActivitiesEntityFrameworkCore", ["Elsa3.Activities.Design.Import"], true),
+        ("FoundationAgentEntityFrameworkCore", ["Agent"], true),
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityIamEntityFrameworkCore", ["Identity.Iam"], true),
         ("IdentityProviderConfigurationEntityFrameworkCore", ["Identity.ProviderConfiguration"], true),

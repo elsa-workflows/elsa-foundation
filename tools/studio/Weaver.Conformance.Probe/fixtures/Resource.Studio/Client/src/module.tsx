@@ -6,6 +6,8 @@ import {
   type StudioAgentContextAttachment,
   type StudioAgentContextCollection,
   type StudioAgentPayload,
+  type StudioAgentPreparedInvocation,
+  type StudioAgentToolAvailability,
   type StudioAgentPromptRequest,
   type StudioAgentResultRendererProps
 } from "@elsa-workflows/studio-sdk";
@@ -24,6 +26,9 @@ const sizeTool = "acme_home_set_size";
 const readResultType = "acme.home.widget-state";
 const changeResultType = "acme.home.widget-visibility";
 const sizeResultType = "acme.home.widget-size";
+// A client-working-state tool over the settings page's unsaved size choice; it is never saved by this tool.
+const previewTool = "acme_home_preview_size";
+const previewResultType = "acme.home.size-choice";
 
 interface WidgetSnapshot { widgetId: string; revision: string; visible: boolean }
 interface VisibilityPayload extends WidgetSnapshot { beforeVisible?: boolean }
@@ -84,6 +89,14 @@ export function register(api: ElsaStudioModuleApi) {
   let currentSize: SizeSnapshot | null = null;
   let sizeRefreshGeneration = 0;
   const sizeListeners = new Set<(value: SizeSnapshot) => void>();
+  // The open settings page's unsaved size choice and its working generation. Gone once the page unmounts or reloads;
+  // the module reports that and never reconstructs it.
+  let sizeChoice: { generation: string; set(size: WidgetSize): void } | null = null;
+  function choiceAvailability(invocation: StudioAgentPreparedInvocation): StudioAgentToolAvailability {
+    return sizeChoice && invocation.client?.generationId === sizeChoice.generation
+      ? { status: "available" }
+      : { status: "unavailable", reason: "The Acme settings page that held this unsaved size choice is closed. Nothing was applied." };
+  }
   async function refresh(signal?: AbortSignal) {
     const generation = ++refreshGeneration;
     const value = snapshot(await api.backend.http.getJson<unknown>(ownerEndpoint, { signal }));
@@ -163,6 +176,11 @@ export function register(api: ElsaStudioModuleApi) {
     const [desiredVisible, setDesiredVisible] = useState(false);
     const [desiredSize, setDesiredSize] = useState<WidgetSize>("medium");
     const [dispatching, setDispatching] = useState(false);
+    useEffect(() => {
+      const choice = { generation: crypto.randomUUID(), set: setDesiredSize };
+      sizeChoice = choice;
+      return () => { if (sizeChoice === choice) sizeChoice = null; };
+    }, []);
     async function request(toolName: string, args: Record<string, unknown>, label: string) {
       if (dispatching) return;
       setDispatching(true); setError("");
@@ -304,4 +322,18 @@ export function register(api: ElsaStudioModuleApi) {
     inputSchema: { type: "object", required: ["size"], properties: { size: { enum: ["small", "medium"] } }, additionalProperties: false },
     resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" }, invocationModes: ["proposal"], resultRendererIds: ["acme.home.widget-size-result"] });
   api.agent.resultRenderers.add({ id: "acme.home.widget-size-result", moduleId, displayName: "Acme card size", resultTypes: [sizeResultType], schemaVersions: ["1"], component: WidgetSizeResult });
+  api.agent.toolContracts.add({ id: previewTool, slotId: "acme.home.tools", moduleId, displayName: "Choose Acme card size",
+    description: "Change only the open settings page's unsaved size choice; saving stays explicit.", surfaces: [route], contractVersion: "1",
+    executionLocation: "clientWorkingState", risk: "review-required", invocationModes: ["proposal"],
+    inputSchema: { type: "object", required: ["size"], properties: { size: { enum: ["small", "medium"] } }, additionalProperties: false },
+    resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" },
+    clientTargetAvailability: choiceAvailability,
+    async executeClient(invocation) {
+      const size = record(invocation.arguments)?.size;
+      if (size !== "small" && size !== "medium") return { outcome: "refused", summary: "The requested size is not supported. Nothing was applied." };
+      const availability = choiceAvailability(invocation);
+      if (availability.status !== "available" || !sizeChoice) return { outcome: "refused", summary: availability.reason ?? "The size choice is unavailable." };
+      sizeChoice.set(size);
+      return { outcome: "applied", summary: `The unsaved size choice is now ${sizeLabel(size).toLowerCase()}.`, result: { typeId: previewResultType, schemaVersion: "1", data: { widgetId, size } } };
+    } });
 }
