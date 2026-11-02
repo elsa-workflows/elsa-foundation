@@ -76,19 +76,26 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   // Load until a store has arrived. A background workspace tab mounts its effects again when it returns:
-  // reloading a loaded store would reseed the theme draft below and discard unsaved edits, while a load
-  // that failed is retried.
+  // a loaded store is kept, a load still in flight is not repeated, and a load that failed is retried.
   const storeRef = useRef(store);
   storeRef.current = store;
+  const loadingRef = useRef(false);
   useEffect(() => {
-    if (storeRef.current) return;
-    void loadStore();
+    if (storeRef.current || loadingRef.current) return;
+    loadingRef.current = true;
+    void loadStore().finally(() => { loadingRef.current = false; });
   }, []);
 
+  // Seed the draft only when the store or the selection changes, not when a returning tab mounts its
+  // effects again, which would discard unsaved edits.
+  const seededRef = useRef<{ store: ThemeStoreResponse; themeId: string } | null>(null);
   useEffect(() => {
     if (!store) return;
     const selected = store.themes.find(theme => theme.id === selectedThemeId) ?? store.themes[0] ?? null;
-    setSelectedThemeId(selected?.id ?? "");
+    const themeId = selected?.id ?? "";
+    if (seededRef.current?.store === store && seededRef.current.themeId === themeId) return;
+    seededRef.current = { store, themeId };
+    setSelectedThemeId(themeId);
     setDraft(selected ? cloneThemeDefinition(selected) : null);
   }, [store, selectedThemeId]);
 

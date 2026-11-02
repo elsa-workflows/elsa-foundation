@@ -95,6 +95,34 @@ describe("theme management with an empty selectable default", () => {
     expect(requestStudioNavigation("/theme-builder", "/")).toBe(true);
   });
 
+  it("keeps an unsaved theme edit, and loads once, when a background tab returns", async () => {
+    const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
+    const wire = async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] });
+    // The page gets its own context so only its Theme Store loads are counted, not the provider's.
+    const getJson = vi.fn(wire);
+    const context = { http: { getJson: wire } } as unknown as StudioEndpointContext;
+    const api = { host: { http: { getJson } }, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const page = (mode: "visible" | "hidden") => <ThemeProvider storeContext={context}><React.Activity mode={mode}><ThemeBuilderPage api={api} /></React.Activity></ThemeProvider>;
+    // Hide the tab while the first load is still in flight.
+    flushSync(() => root.render(page("visible")));
+    flushSync(() => root.render(page("hidden")));
+    await update(() => root.render(page("visible")));
+    expect(getJson).toHaveBeenCalledTimes(1);
+    const customButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(button => button.textContent?.includes("Managed Theme"));
+    await update(() => customButton!.click());
+
+    const field = () => Array.from(container.querySelectorAll<HTMLInputElement>(".theme-builder-detail input")).find(input => !input.disabled && input.type !== "file" && input.type !== "checkbox")!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    const edited = `${field().value}x`;
+    await update(() => { setValue.call(field(), edited); field().dispatchEvent(new Event("input", { bubbles: true })); });
+
+    await update(() => root.render(page("hidden")));
+    await update(() => root.render(page("visible")));
+    expect(field().value).toBe(edited);
+    expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(false);
+    expect(getJson).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a failed Theme Store load with Retry and retries when a background tab returns", async () => {
     let calls = 0;
     const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };

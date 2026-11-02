@@ -49,7 +49,8 @@ Resource bounds:
 
 Because effects mount again when a tab returns, screens that seed editable state from a load-on-mount
 effect must load once per resource. The workflow editor's data hook, Feature Management's catalog
-refresh, Theme Builder's store load and the Activity Definition upgrade workbench's plan load now do.
+refresh, Theme Builder's store load and draft seeding, and the Activity Definition upgrade workbench's plan
+load now do.
 Without that, returning to a tab replaced the unsaved draft and its undo history with the server copy
 (found during live qualification). Audited and unaffected: the Activity Definitions pages (TanStack
 queries; drafts seed `useState` once), the Backends form (local state only), and Appearance, Modules
