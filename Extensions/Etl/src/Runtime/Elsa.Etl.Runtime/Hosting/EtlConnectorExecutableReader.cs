@@ -40,6 +40,8 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                     EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, hash)))
                 throw Refused("etl.executable.provenance-invalid");
             ValidateConnectors(pipeline);
+            if (EtlContinuousRunPolicy.FindViolation(pipeline) is { } continuousViolation)
+                throw Refused(continuousViolation);
             EtlRowTransformer.ValidateV2Semantics(pipeline);
             return pipeline;
         }

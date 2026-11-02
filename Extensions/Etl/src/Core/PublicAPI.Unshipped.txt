@@ -1905,3 +1905,20 @@ override sealed Elsa.Etl.Core.EtlCsvDestination.Equals(Elsa.Etl.Core.EtlDestinat
 static Elsa.Etl.Core.EtlCsvDestination.operator !=(Elsa.Etl.Core.EtlCsvDestination? left, Elsa.Etl.Core.EtlCsvDestination? right) -> bool
 static Elsa.Etl.Core.EtlCsvDestination.operator ==(Elsa.Etl.Core.EtlCsvDestination? left, Elsa.Etl.Core.EtlCsvDestination? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorFileOutputKey(string! effectId, Elsa.Etl.Core.Runtime.EtlConnectorKind kind) -> string!
+Elsa.Etl.Core.EtlContinuousRunPolicy
+Elsa.Etl.Core.EtlContinuousRunPolicy.<Clone>$() -> Elsa.Etl.Core.EtlContinuousRunPolicy!
+Elsa.Etl.Core.EtlContinuousRunPolicy.Deconstruct(out int PollIntervalSeconds) -> void
+Elsa.Etl.Core.EtlContinuousRunPolicy.Equals(Elsa.Etl.Core.EtlContinuousRunPolicy? other) -> bool
+Elsa.Etl.Core.EtlContinuousRunPolicy.EtlContinuousRunPolicy(int PollIntervalSeconds) -> void
+Elsa.Etl.Core.EtlContinuousRunPolicy.PollIntervalSeconds.get -> int
+Elsa.Etl.Core.EtlContinuousRunPolicy.PollIntervalSeconds.init -> void
+Elsa.Etl.Core.EtlPipelineV2.Continuous.get -> Elsa.Etl.Core.EtlContinuousRunPolicy?
+Elsa.Etl.Core.EtlPipelineV2.Continuous.init -> void
+override Elsa.Etl.Core.EtlContinuousRunPolicy.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlContinuousRunPolicy.GetHashCode() -> int
+override Elsa.Etl.Core.EtlContinuousRunPolicy.ToString() -> string!
+static Elsa.Etl.Core.EtlContinuousRunPolicy.operator !=(Elsa.Etl.Core.EtlContinuousRunPolicy? left, Elsa.Etl.Core.EtlContinuousRunPolicy? right) -> bool
+static Elsa.Etl.Core.EtlContinuousRunPolicy.operator ==(Elsa.Etl.Core.EtlContinuousRunPolicy? left, Elsa.Etl.Core.EtlContinuousRunPolicy? right) -> bool
+const Elsa.Etl.Core.EtlContinuousRunPolicy.MaximumPollIntervalSeconds = 86400 -> int
+const Elsa.Etl.Core.EtlContinuousRunPolicy.MinimumPollIntervalSeconds = 1 -> int
+static Elsa.Etl.Core.EtlContinuousRunPolicy.FindViolation(Elsa.Etl.Core.EtlPipelineV2! pipeline) -> string?

@@ -156,7 +156,10 @@ A second run is cancelled and ends `Cancelled`.
   - The policy is an init-only property, omitted from serialization when null, following the default-budget precedent in `EtlArtifactV2Json`. The positional record's public constructor is unchanged.
   - A pipeline without the policy therefore serializes byte-identically to today, so its artifact hash, invocation fingerprint, and batch, request and page identities are unchanged.
   - An explicit `null` on read is accepted as absent.
-- **FR-002** The policy is validated wherever the pipeline is read: the design compiler, the executable reader and the runtime codec. The error codes are those listed in Edge Cases.
+- **FR-002** The policy is validated wherever the pipeline is read, using one shared rule (`EtlContinuousRunPolicy.FindViolation`):
+  - the executable reader refuses with the codes listed in Edge Cases;
+  - the runtime codec refuses at admission;
+  - the design compiler reports the same codes without the `etl.` prefix, at path `continuous`, matching its existing diagnostic convention.
 - **FR-003** A continuous HTTP run plans its partitions exactly as a finite one does: one per host-pinned shard, two or more when the host configures them. Each is leased, fenced and heartbeat-renewed independently.
 - **FR-004** The acquirer classifies a caught-up response as described in Edge Cases.
   - Without a qualifying completion request, it records the response through a new store transition.
