@@ -1,0 +1,209 @@
+{
+  "formatVersion": 1,
+  "sourceRevision": "74b82f11e2025258cf1dc54a661f5c1249f7548f",
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "8d793af627c24ce22133650e42f1b701f9f974363f18a5b3d8bf992a591df0b3"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "6815ade2c533f633df01529af5e94dc8b5a84721f503003df7b555cc1202bb5c"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "81e173d194af59436487530f97fec2ff06dac0335476e0398733da41c4fe6217"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "a9b600543d72d840c3905c07f2283481fab216de369faa094baa87d508b24df5"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "2ec1399a7415a37fbb766e74482e2bbf1d2f73c5ec63aee782d1aec52d6e66b8"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "73f8fb194f2d293237d281a77d4a75574bb19d5bbbb82665decd1b5528cd8943"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "b6c3c7b5c53a6792820055083233b22c136dcb65c90643cdedfaced51a6127ea"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "923374c98671876669999fa388787f4a702a800a65403bc9ee1f1888948f5c94"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "8044b3a55fa7bcecff5cf643fd708ce992878df26c83592798930f149733f377"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "51b65b4865f9c3e5ce0261708a084a85e8caf504bfc1298a101cde7d5a83c560"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B74b82f11e2025258cf1dc54a661f5c1249f7548f",
+      "sha256": "22247a6489b3401a7bca826dff1402e5655ecf5bcec4d5bb0726a10bdfd726dc"
+    }
+  ],
+  "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+  "invocationId": "bpmn-work:4f39dcf96a0cb8034083b4e6ac3842d90f55d047cb4aed8bf208e659a186a39f",
+  "attemptId": "attempt:4127c892e089b0d3b57eeb5776160bee1f79550dcc04ec480528584614d6eda8",
+  "claimId": "bpmn-claim:2d144fc998d78bf0e04703c2894a90003a5200ecc10bad8509f403f9187a56d9",
+  "ownerSubject": "seed-user-516dd8aa49c146bd86326874",
+  "legacy": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "inputId": "legacy",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "claim-required",
+      "revision": 1,
+      "lifecycle": "Running"
+    }
+  },
+  "claimed": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "inputId": "claim-admin",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 2,
+      "lifecycle": "Running",
+      "claimId": "bpmn-claim:2d144fc998d78bf0e04703c2894a90003a5200ecc10bad8509f403f9187a56d9"
+    }
+  },
+  "contender": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "inputId": "claim-operator",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "already-claimed",
+      "revision": 2,
+      "lifecycle": "Running"
+    }
+  },
+  "foreign": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "inputId": "operator-completes",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "foreign-claim",
+      "revision": 2,
+      "lifecycle": "Running"
+    }
+  },
+  "accepted": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "inputId": "admin-completes",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "TerminalSettled"
+    }
+  },
+  "replayed": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "inputId": "admin-completes",
+    "replay": true,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "TerminalSettled"
+    }
+  },
+  "claimedView": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "revision": 2,
+    "status": "Running",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+      "definitionId": "bpmn-model:sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+      "definitionVersionId": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646"
+    },
+    "materialIncarnationId": "0261c1840cd845198d8b49a509fb46bb",
+    "createdAt": "2026-11-01T21:59:23.446438\u002B00:00",
+    "updatedAt": "2026-11-01T21:59:23.891359\u002B00:00",
+    "result": null
+  },
+  "completed": {
+    "executionId": "bpmn:b98b0f94e2165411b14db7ff5f59c5a92376001f03b18df0a2312a29ccd364c1",
+    "revision": 3,
+    "status": "TerminalSettled",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+      "definitionId": "bpmn-model:sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+      "definitionVersionId": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:7010f276804b7d3eec33fbf2a0baaad08ba4c054b885d015d6005a862d852646"
+    },
+    "materialIncarnationId": "0261c1840cd845198d8b49a509fb46bb",
+    "createdAt": "2026-11-01T21:59:23.446438\u002B00:00",
+    "updatedAt": "2026-11-01T21:59:31.899087\u002B00:00",
+    "result": {
+      "status": "Completed",
+      "outcome": "Done"
+    }
+  },
+  "snapshots": [
+    {
+      "file": "claimed-runtime.sqlite.gz",
+      "databaseSha256": "a0f2a9404d0db14f28ee750cc8c859eb692e2ada5916f4becd859c9ca516d34e",
+      "gzipSha256": "0b0db0d1fe0614a86c2726a4f80c28a4837f3545e2be70ef85f330957839943f"
+    },
+    {
+      "file": "claimed-design.sqlite.gz",
+      "databaseSha256": "96738942b52d32406b662984d340b0081b3e6c2de79ec850dfe95a622d485e0c",
+      "gzipSha256": "edaa79cbdcc6989779e93bd399d3e1527b17eab14fa23a7411d973b4befe0aa2"
+    },
+    {
+      "file": "completed-runtime.sqlite.gz",
+      "databaseSha256": "a74f77182859e81900fa7e5be7ad53361dcb5c476862b9e65931fd325d08e0e5",
+      "gzipSha256": "a1fc504380a80a855bf50f787abc60221615f07dc35c1a109d87a1df58135c92"
+    }
+  ]
+}

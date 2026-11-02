@@ -24,9 +24,18 @@ export function createClientInvocationRunner(api: ElsaStudioModuleApi) {
     if (invocation.executionLocation !== "clientWorkingState" || invocation.client.clientId !== api.agent.clientId) return refuse("The originating Studio context is unavailable.");
     if (signal?.aborted || Date.parse(invocation.expiresAt) <= Date.now() || !Number.isFinite(Date.parse(invocation.expiresAt))) return refuse("Client invocation was cancelled or expired before dispatch.");
     const contracts = api.agent.toolContracts.list().filter(item => item.id === invocation.toolName && item.moduleId === invocation.moduleId);
-    if (contracts.length !== 1) return refuse(contracts.length ? "Duplicate client tool registration." : "Client tool is unavailable.");
+    if (contracts.length !== 1) return refuse(contracts.length ? "Duplicate client tool registration." : "The owning module's client adapter for this change is not present. Nothing was applied.");
     const contract = contracts[0];
     if (contract.executionLocation !== "clientWorkingState" || contract.contractVersion !== invocation.toolContractVersion || !contract.executeClient || (contract.availability && contract.availability.status !== "available")) return refuse("Client tool contract or execution support is unavailable.");
+    // Not yet dispatched: the owning module alone says whether its unsaved target still exists. Nothing is reconstructed.
+    if (contract.clientTargetAvailability) {
+      let target: Awaited<ReturnType<NonNullable<typeof contract.clientTargetAvailability>>> | undefined;
+      try { target = await contract.clientTargetAvailability(invocation, signal); }
+      catch { return refuse("The owning module could not confirm that this change's target still exists. Nothing was applied."); }
+      // The owning module may take a while to answer: the deadline is checked again before anything is dispatched.
+      if (signal?.aborted || Date.parse(invocation.expiresAt) <= Date.now()) return refuse("Client invocation was cancelled or expired before dispatch.");
+      if (target?.status !== "available") return refuse(target?.reason?.trim() || "The owning module reports that this change's target no longer exists. Nothing was applied.");
+    }
     try {
       return { ...base, ...await contract.executeClient(invocation, signal) };
     } catch (error) {

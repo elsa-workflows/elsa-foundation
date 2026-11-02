@@ -460,3 +460,27 @@ html[data-theme-material] .agent-proposal {
   background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow);
 }
+
+/* Recovery (#3441): the owner's statement about an uncertain client operation. */
+.agent-proposal-resolution { color: var(--studio-text-muted); }
+
+.agent-proposal-resolve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.agent-proposal-resolve small { flex-basis: 100%; }
+
+.agent-proposal-resolve button {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-raised);
+  color: var(--studio-text);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.agent-proposal-resolve button:disabled { cursor: not-allowed; opacity: 0.55; }
