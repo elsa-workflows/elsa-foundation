@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-01
 
-**Status**: In progress — P1 human, frozen-native compatibility, BPMN → native RunEtl → ETL recovery and completed-occurrence navigation, and exact human claims with interruption are implemented and verified on real hosts and Studio (see evidence/final/README.md). Final exact-head gates, independent review convergence and resulting-main verification remain; status changes to Implemented only with T038.
+**Status**: In progress. PR #3603 delivers P1 human, frozen-native compatibility, BPMN → native RunEtl → ETL recovery and completed-occurrence navigation, and exact human claims with interruption, all verified on real hosts and in Studio ([requirement map](evidence/final/README.md)). Still open after that merge: FR-012, FR-014 and SC-005 are proved only partly or by component tests ([#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650)), as are T038 and the resulting-main verification in T039. The status changes to Implemented in the PR that closes #3650.
 
 **Input**: Deliver Program #2892 through working, recoverable BPMN, native, ETL and Studio journeys. Start with direct BPMN start → wait → restart → resume → complete, then real ETL failure/recovery and BPMN-to-ETL integration. Preserve authoring and saved-state compatibility; let demonstrated journey needs drive architecture.
 
@@ -137,6 +137,7 @@ Existing native/embedded BPMN authors retain their editor, authoring documents, 
 - The initial accepted host composition is #2898's qualified built-in profile. Provider contract tests do not establish new distributed placement or all-provider Studio recovery.
 - [#3597](https://github.com/elsa-workflows/elsa-foundation/issues/3597) owns optional bpmn-js feasibility/same-process switching. This feature retains process identity/configuration without selecting that editor.
 - Native authoring and saved execution compatibility remain required. Unratified constitution sections are not ratified by this feature.
+- Releasing or reassigning a claim is out of scope; FR-006 requires only exact claiming and claimed completion. Until [#3649](https://github.com/elsa-workflows/elsa-foundation/issues/3649) lands, a claimant who leaves can only be worked around by cancelling the execution.
 - This draft adds no owner decision or permission. Standing delivery/review authority applies; an actual product-policy choice is presented individually if source inspection finds no reasonable existing rule.
 
 ## Acceptance traceability

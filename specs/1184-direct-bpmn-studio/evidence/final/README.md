@@ -32,7 +32,7 @@ Each functional requirement and success criterion maps to its evidence, or to an
 | SC-003 races in both orders | Passed (actual) | Claim contention: two subjects race on the real host. Claim × cancellation and claimed completion × timer in both orders on the real host. Retry × cancellation in both orders below |
 | SC-004 frozen saved-Studio families | Passed (actual) | [compatibility](../compatibility/README.md) |
 | SC-005 unavailable/unauthorized/runtime-only | Partial | Actual: runtime-only and admission-off, absent capabilities, second-subject refusal. Component only: unauthorized and cross-tenant disclosure, read-only/source-owned editing and backend switching during a pending operation. The owned Workbench has one tenant and seeds only administrators |
-| SC-006 exact-head gates and resulting main | Pending | Recorded at merge |
+| SC-006 exact-head gates and resulting main | Pending | Recorded at merge. The partial rows above are tracked by [#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650); claim release/reassignment is out of scope ([#3649](https://github.com/elsa-workflows/elsa-foundation/issues/3649)) |
 
 Owner deferrals that remain outside this feature: Orleans and clustered placement, the task-runner host, a full operator console or inbox, assignment teams and timed leases, arbitrary token or history alteration, and live migration.
 
