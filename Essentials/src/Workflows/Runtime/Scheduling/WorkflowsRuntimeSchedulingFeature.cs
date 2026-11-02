@@ -48,6 +48,9 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max timers per tick", Description = "Hard cap on due timers loaded and fired per sweep, bounding both the store scan and dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
     public int MaxTimersPerTick { get; set; } = 100;
 
+    [ManifestSetting(DisplayName = "Max concurrent dispatches", Description = "Maximum simultaneous pump dispatches across independent executions, using separate persistence scopes. Tune against provider capacity.", Category = "Runtime", DefaultValue = "1")]
+    public int MaxConcurrentDispatches { get; set; } = 1;
+
     [ManifestSetting(DisplayName = "Timer claim visibility (seconds)", Description = "Visibility lease renewed while a claim-capable durable timer store dispatches one timer.", Category = "Runtime", DefaultValue = "60")]
     public double ClaimVisibilitySeconds { get; set; } = 60;
 
@@ -62,6 +65,7 @@ public sealed class WorkflowsRuntimeSchedulingFeature : IShellFeature
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
             options.MaxTimersPerTick = MaxTimersPerTick;
+            options.MaxConcurrentDispatches = MaxConcurrentDispatches;
             options.ClaimVisibilityTimeout = TimeSpan.FromSeconds(ClaimVisibilitySeconds);
             options.NotFoundGrace = TimeSpan.FromSeconds(NotFoundGraceSeconds);
         });

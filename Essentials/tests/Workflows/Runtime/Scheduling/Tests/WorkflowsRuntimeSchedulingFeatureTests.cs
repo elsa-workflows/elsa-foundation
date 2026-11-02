@@ -45,6 +45,7 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
         {
             SweepIntervalSeconds = 3,
             MaxBackoffIntervalMinutes = 2,
+            MaxConcurrentDispatches = 3,
             MaxTimersPerTick = 42,
             NotFoundGraceSeconds = 15
         }.ConfigureServices(services);
@@ -54,6 +55,7 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
         Assert.Equal(TimeSpan.FromSeconds(3), options.SweepInterval);
         Assert.Equal(TimeSpan.FromMinutes(2), options.MaxBackoffInterval);
         Assert.Equal(42, options.MaxTimersPerTick);
+        Assert.Equal(3, options.MaxConcurrentDispatches);
         Assert.Equal(TimeSpan.FromSeconds(15), options.NotFoundGrace);
     }
 

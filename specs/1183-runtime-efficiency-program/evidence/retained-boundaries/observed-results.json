@@ -1,0 +1,591 @@
+{
+  "controls": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "exit": 0,
+      "correct": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "exit": 0,
+      "correct": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "exit": 0,
+      "correct": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "exit": 0,
+      "correct": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "suspend",
+      "exit": 0,
+      "correct": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "child",
+      "exit": 0,
+      "correct": true
+    }
+  ],
+  "crashes": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 3,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "suspend",
+      "point": "before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "suspend",
+      "point": "after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "suspend",
+      "point": "after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "suspend",
+      "point": "after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "child",
+      "point": "before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "child",
+      "point": "after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "child",
+      "point": "after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "child",
+      "point": "after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    }
+  ],
+  "takeovers": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Ephemeral",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    }
+  ],
+  "parentCrashes": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 3,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 1,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-before-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-after-commit",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-after-advance",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 2,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "point": "parent-after-body",
+      "killedExit": -9,
+      "recoveryExit": 0,
+      "correct": true,
+      "durableCompletedBefore": 3,
+      "durableCompletedPreserved": true,
+      "persistedBodiesNotRepeated": true
+    }
+  ],
+  "parentTakeovers": [
+    {
+      "mode": "Durable",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Durable",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "suspend",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    },
+    {
+      "mode": "Balanced",
+      "scenario": "child",
+      "ownerBExit": 0,
+      "staleOwnerExit": -6,
+      "correct": true,
+      "staleOwnerDidNotChangeDurableState": true,
+      "staleFenceRejected": true
+    }
+  ],
+  "scope": "SQLite, physical processes on one macOS host. Parent cases use a cap of one in Durable/Balanced to reach the exact physical decision; Ephemeral has no intermediate cap. Offset recovery clock expires dead-owner leases. No capacity or independent-host claim.",
+  "sourceHashes": {
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/controls.py": "0be03639a332ffb5d09094919011404a0c2b9ebe3115517db8a8bb437f64ee73",
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/Worker.csproj": "b84c799a61c585b5f31a4bc514b6819d1000012a37cbef7951413d71b578889d",
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/crashes.py": "b1889372ef2673939a3e5e3f383356beaec8757c5ed324ab2dceca942d9448b1",
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/takeovers.py": "5e3a9d3d637bb292d7afb3647647ed6f325cc47e28cceb760bd4d6610604966f",
+    "specs/1183-runtime-efficiency-program/evidence/retained-boundaries/Program.cs": "1d3b94b06a7a2fe27a293dae863105cef93f61a9cd76639b63d395841b3ae718"
+  },
+  "productionHashes": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "d6a7ca706f82c4c31602af19281aca89cd1c0ab415b2554e8ee9bba0583fe94a",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "71d077ab54558bf4f9f462b178790e971358d92e8aa5287ecca48bd0bfbac773",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs": "aabb355f862d6543181b3c549d8d7ebc364eb96674744e20574c3168348abd59"
+  }
+}

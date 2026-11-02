@@ -1,0 +1,203 @@
+{
+ "runs": 22,
+ "expected": 22,
+ "issues": [],
+ "binaryHashSets": 1,
+ "binaryHashes": {
+  "Probe.dll": "b483296c40912cc14988d140123576fab9a7a4787c1b6c0bc158845c3ee88fa1",
+  "Elsa.Workflows.Runtime.dll": "3569536b74a57f5fcd5b9adf93608c663b1790454b6ddc22642eb815995070a2",
+  "Elsa.Workflows.Runtime.Core.dll": "1973904a492bf51caabfcdb237e01643edc2b6295671c5765a44f648f12e8555",
+  "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll": "9433436a0eae0d47df1d5e4f484c315d4582a0794701dbb163240a7b12493187",
+  "Elsa.Workflows.Runtime.Scheduling.dll": "71fad7ed92c6f71efa0c72ee2ef4a1ddacf6b580d626675d0045bf25b0edaf98"
+ },
+ "groups": [
+  {
+   "provider": "PostgreSql",
+   "mode": "Balanced",
+   "degree": 1,
+   "samples": 3,
+   "resumesPerSecond": [
+    6.0,
+    6.1,
+    6.01
+   ],
+   "min": 6.0,
+   "max": 6.1,
+   "sweepSeconds": [
+    16.65,
+    16.39,
+    16.64
+   ],
+   "cpuMsPerResume": 140.7,
+   "cpuCoresDuringSweep": 0.85,
+   "allocatedMBPerResume": 11.81,
+   "peakWorkingSetMB": 328
+  },
+  {
+   "provider": "PostgreSql",
+   "mode": "Balanced",
+   "degree": 2,
+   "samples": 3,
+   "resumesPerSecond": [
+    10.57,
+    10.32,
+    11.08
+   ],
+   "min": 10.32,
+   "max": 11.08,
+   "sweepSeconds": [
+    9.46,
+    9.69,
+    9.02
+   ],
+   "cpuMsPerResume": 124.6,
+   "cpuCoresDuringSweep": 1.33,
+   "allocatedMBPerResume": 11.78,
+   "peakWorkingSetMB": 344
+  },
+  {
+   "provider": "PostgreSql",
+   "mode": "Balanced",
+   "degree": 4,
+   "samples": 3,
+   "resumesPerSecond": [
+    15.26,
+    15.87,
+    16.44
+   ],
+   "min": 15.26,
+   "max": 16.44,
+   "sweepSeconds": [
+    6.55,
+    6.3,
+    6.08
+   ],
+   "cpuMsPerResume": 103.8,
+   "cpuCoresDuringSweep": 1.64,
+   "allocatedMBPerResume": 11.8,
+   "peakWorkingSetMB": 341
+  },
+  {
+   "provider": "PostgreSql",
+   "mode": "Balanced",
+   "degree": 8,
+   "samples": 3,
+   "resumesPerSecond": [
+    20.72,
+    22.94,
+    23.0
+   ],
+   "min": 20.72,
+   "max": 23.0,
+   "sweepSeconds": [
+    4.83,
+    4.36,
+    4.35
+   ],
+   "cpuMsPerResume": 77.3,
+   "cpuCoresDuringSweep": 1.71,
+   "allocatedMBPerResume": 11.79,
+   "peakWorkingSetMB": 347
+  },
+  {
+   "provider": "PostgreSql",
+   "mode": "Durable",
+   "degree": 1,
+   "samples": 2,
+   "resumesPerSecond": [
+    2.31,
+    2.4
+   ],
+   "min": 2.31,
+   "max": 2.4,
+   "sweepSeconds": [
+    43.27,
+    41.63
+   ],
+   "cpuMsPerResume": 169.8,
+   "cpuCoresDuringSweep": 0.4,
+   "allocatedMBPerResume": 24.3,
+   "peakWorkingSetMB": 368
+  },
+  {
+   "provider": "PostgreSql",
+   "mode": "Durable",
+   "degree": 4,
+   "samples": 2,
+   "resumesPerSecond": [
+    7.48,
+    7.0
+   ],
+   "min": 7.0,
+   "max": 7.48,
+   "sweepSeconds": [
+    13.37,
+    14.28
+   ],
+   "cpuMsPerResume": 165.9,
+   "cpuCoresDuringSweep": 1.2,
+   "allocatedMBPerResume": 24.42,
+   "peakWorkingSetMB": 416
+  },
+  {
+   "provider": "PostgreSql",
+   "mode": "Durable",
+   "degree": 8,
+   "samples": 2,
+   "resumesPerSecond": [
+    10.07,
+    10.99
+   ],
+   "min": 10.07,
+   "max": 10.99,
+   "sweepSeconds": [
+    9.93,
+    9.1
+   ],
+   "cpuMsPerResume": 136.1,
+   "cpuCoresDuringSweep": 1.43,
+   "allocatedMBPerResume": 24.32,
+   "peakWorkingSetMB": 415
+  },
+  {
+   "provider": "Sqlite",
+   "mode": "Balanced",
+   "degree": 1,
+   "samples": 2,
+   "resumesPerSecond": [
+    1.59,
+    1.61
+   ],
+   "min": 1.59,
+   "max": 1.61,
+   "sweepSeconds": [
+    62.84,
+    62.22
+   ],
+   "cpuMsPerResume": 166.7,
+   "cpuCoresDuringSweep": 0.27,
+   "allocatedMBPerResume": 12.56,
+   "peakWorkingSetMB": 317
+  },
+  {
+   "provider": "Sqlite",
+   "mode": "Balanced",
+   "degree": 4,
+   "samples": 2,
+   "resumesPerSecond": [
+    2.49,
+    2.36
+   ],
+   "min": 2.36,
+   "max": 2.49,
+   "sweepSeconds": [
+    40.2,
+    42.39
+   ],
+   "cpuMsPerResume": 183.0,
+   "cpuCoresDuringSweep": 0.44,
+   "allocatedMBPerResume": 12.66,
+   "peakWorkingSetMB": 345
+  }
+ ]
+}

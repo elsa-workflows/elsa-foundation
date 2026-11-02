@@ -1,0 +1,515 @@
+{
+ "waves": 13,
+ "expectedWaves": 13,
+ "workerRows": 25,
+ "binaryHashSets": 1,
+ "issues": [],
+ "monitor": {
+  "status": "passed",
+  "scope": "One-second server/device samples across 13 finite native waves; counter/statistics timestamps retained, not exact per-execution WAL attribution",
+  "phase": "complete",
+  "startedAt": "2026-11-01T19:44:24.908592+00:00",
+  "errors": 0,
+  "samples": 1740
+ },
+ "firstSampleStart": "2026-11-01 19:47:35.001153+00:00",
+ "lastValidation": "2026-11-01 20:12:25+00:00",
+ "results": [
+  {
+   "label": "pg-balanced-1-n1-r2",
+   "mode": "Balanced",
+   "acts": 1,
+   "nodes": 1,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:47:35",
+   "aggRate": 49.11,
+   "perNode": [
+    49.11
+   ],
+   "count": 1475,
+   "p95max": 91.3,
+   "overlapS": 30.032,
+   "spanS": 30.032,
+   "startSkewS": 0.0,
+   "slackToValS": 19.97,
+   "cpu": [
+    0.89
+   ],
+   "allocMB": 2.46,
+   "server": {
+    "dbCommitsPerS": 3452.7,
+    "commitsPerWorkflow": 70.3,
+    "walKBPerS": 1695.9,
+    "walSyncsPerS": 233.7,
+    "walSyncMsPerS": 916.2,
+    "hostCpuPctMean": 22.5,
+    "hostCpuPctMax": 24.8,
+    "sdaUtilMean": 87.8,
+    "sdaWawaitMean": 2.2,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  },
+  {
+   "label": "pg-balanced-1-n2-r2",
+   "mode": "Balanced",
+   "acts": 1,
+   "nodes": 2,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:49:35",
+   "aggRate": 90.29,
+   "perNode": [
+    45.22,
+    45.07
+   ],
+   "count": 2713,
+   "p95max": 124.8,
+   "overlapS": 30.041,
+   "spanS": 30.054,
+   "startSkewS": 0.0007,
+   "slackToValS": 19.95,
+   "cpu": [
+    0.82,
+    0.84
+   ],
+   "allocMB": 2.51,
+   "server": {
+    "dbCommitsPerS": 6358.2,
+    "commitsPerWorkflow": 70.4,
+    "walKBPerS": 3184.7,
+    "walSyncsPerS": 237.7,
+    "walSyncMsPerS": 974.7,
+    "hostCpuPctMean": 34.5,
+    "hostCpuPctMax": 41.6,
+    "sdaUtilMean": 93.0,
+    "sdaWawaitMean": 3.78,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  },
+  {
+   "label": "pg-balanced-1-n4-r2",
+   "mode": "Balanced",
+   "acts": 1,
+   "nodes": 4,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:51:35",
+   "aggRate": 147.67,
+   "perNode": [
+    37.76,
+    37.47,
+    36.09,
+    36.35
+   ],
+   "count": 4437,
+   "p95max": 179.9,
+   "overlapS": 30.033,
+   "spanS": 30.063,
+   "startSkewS": 0.0007,
+   "slackToValS": 19.94,
+   "cpu": [
+    0.71,
+    0.72,
+    0.74,
+    0.74
+   ],
+   "allocMB": 2.61,
+   "server": {
+    "dbCommitsPerS": 10016.4,
+    "commitsPerWorkflow": 67.8,
+    "walKBPerS": 5023.2,
+    "walSyncsPerS": 194.1,
+    "walSyncMsPerS": 955.4,
+    "hostCpuPctMean": 48.5,
+    "hostCpuPctMax": 60.9,
+    "sdaUtilMean": 93.0,
+    "sdaWawaitMean": 9.59,
+    "ioSamples": 30,
+    "pgSamples": 31
+   }
+  },
+  {
+   "label": "pg-balanced-10-n1-r2",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 1,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:53:35",
+   "aggRate": 28.3,
+   "perNode": [
+    28.3
+   ],
+   "count": 852,
+   "p95max": 200.1,
+   "overlapS": 30.103,
+   "spanS": 30.103,
+   "startSkewS": 0.0,
+   "slackToValS": 19.9,
+   "cpu": [
+    1.12
+   ],
+   "allocMB": 8.77,
+   "server": {
+    "dbCommitsPerS": 3017.8,
+    "commitsPerWorkflow": 106.6,
+    "walKBPerS": 3385.4,
+    "walSyncsPerS": 146.9,
+    "walSyncMsPerS": 752.6,
+    "hostCpuPctMean": 20.4,
+    "hostCpuPctMax": 24.9,
+    "sdaUtilMean": 75.2,
+    "sdaWawaitMean": 9.86,
+    "ioSamples": 30,
+    "pgSamples": 31
+   }
+  },
+  {
+   "label": "pg-balanced-10-n2-r2",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 2,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:55:35",
+   "aggRate": 56.45,
+   "perNode": [
+    27.76,
+    28.68
+   ],
+   "count": 1700,
+   "p95max": 185.7,
+   "overlapS": 30.112,
+   "spanS": 30.121,
+   "startSkewS": 0.0002,
+   "slackToValS": 19.88,
+   "cpu": [
+    1.16,
+    1.08
+   ],
+   "allocMB": 9.16,
+   "server": {
+    "dbCommitsPerS": 6068.5,
+    "commitsPerWorkflow": 107.5,
+    "walKBPerS": 7190.1,
+    "walSyncsPerS": 188.1,
+    "walSyncMsPerS": 891.4,
+    "hostCpuPctMean": 35.2,
+    "hostCpuPctMax": 39.2,
+    "sdaUtilMean": 87.3,
+    "sdaWawaitMean": 8.76,
+    "ioSamples": 30,
+    "pgSamples": 31
+   }
+  },
+  {
+   "label": "pg-balanced-10-n4-r2",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 4,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:57:35",
+   "aggRate": 88.89,
+   "perNode": [
+    23.11,
+    23.41,
+    21.08,
+    21.29
+   ],
+   "count": 2674,
+   "p95max": 356.6,
+   "overlapS": 30.017,
+   "spanS": 30.155,
+   "startSkewS": 0.0006,
+   "slackToValS": 19.84,
+   "cpu": [
+    1.0,
+    1.02,
+    1.06,
+    1.04
+   ],
+   "allocMB": 9.97,
+   "server": {
+    "dbCommitsPerS": 9630.4,
+    "commitsPerWorkflow": 108.3,
+    "walKBPerS": 10887.4,
+    "walSyncsPerS": 173.2,
+    "walSyncMsPerS": 872.7,
+    "hostCpuPctMean": 49.7,
+    "hostCpuPctMax": 58.8,
+    "sdaUtilMean": 90.1,
+    "sdaWawaitMean": 15.01,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  },
+  {
+   "label": "pg-durable-10-n1-r2",
+   "mode": "Durable",
+   "acts": 10,
+   "nodes": 1,
+   "pooling": false,
+   "conc": 4,
+   "start": "19:59:35",
+   "aggRate": 8.74,
+   "perNode": [
+    8.74
+   ],
+   "count": 264,
+   "p95max": 586.0,
+   "overlapS": 30.201,
+   "spanS": 30.201,
+   "startSkewS": 0.0,
+   "slackToValS": 19.8,
+   "cpu": [
+    0.92
+   ],
+   "allocMB": 20.76,
+   "server": {
+    "dbCommitsPerS": 2140.4,
+    "commitsPerWorkflow": 244.9,
+    "walKBPerS": 3200.2,
+    "walSyncsPerS": 190.7,
+    "walSyncMsPerS": 817.9,
+    "hostCpuPctMean": 22.8,
+    "hostCpuPctMax": 34.0,
+    "sdaUtilMean": 83.1,
+    "sdaWawaitMean": 5.82,
+    "ioSamples": 30,
+    "pgSamples": 31
+   }
+  },
+  {
+   "label": "pg-durable-10-n2-r2",
+   "mode": "Durable",
+   "acts": 10,
+   "nodes": 2,
+   "pooling": false,
+   "conc": 4,
+   "start": "20:01:35",
+   "aggRate": 14.98,
+   "perNode": [
+    7.46,
+    7.52
+   ],
+   "count": 456,
+   "p95max": 664.6,
+   "overlapS": 30.427,
+   "spanS": 30.445,
+   "startSkewS": 0.0,
+   "slackToValS": 19.55,
+   "cpu": [
+    0.84,
+    0.82
+   ],
+   "allocMB": 21.19,
+   "server": {
+    "dbCommitsPerS": 3660.0,
+    "commitsPerWorkflow": 244.3,
+    "walKBPerS": 5213.6,
+    "walSyncsPerS": 185.2,
+    "walSyncMsPerS": 926.9,
+    "hostCpuPctMean": 33.5,
+    "hostCpuPctMax": 38.4,
+    "sdaUtilMean": 92.7,
+    "sdaWawaitMean": 10.83,
+    "ioSamples": 30,
+    "pgSamples": 31
+   }
+  },
+  {
+   "label": "pg-durable-10-n4-r2",
+   "mode": "Durable",
+   "acts": 10,
+   "nodes": 4,
+   "pooling": false,
+   "conc": 4,
+   "start": "20:03:35",
+   "aggRate": 20.08,
+   "perNode": [
+    5.11,
+    5.11,
+    4.9,
+    4.96
+   ],
+   "count": 616,
+   "p95max": 1828.7,
+   "overlapS": 30.517,
+   "spanS": 30.8,
+   "startSkewS": 0.0005,
+   "slackToValS": 19.2,
+   "cpu": [
+    0.59,
+    0.59,
+    0.66,
+    0.65
+   ],
+   "allocMB": 21.97,
+   "server": {
+    "dbCommitsPerS": 5028.9,
+    "commitsPerWorkflow": 250.4,
+    "walKBPerS": 7203.0,
+    "walSyncsPerS": 130.1,
+    "walSyncMsPerS": 913.3,
+    "hostCpuPctMean": 45.2,
+    "hostCpuPctMax": 52.7,
+    "sdaUtilMean": 92.7,
+    "sdaWawaitMean": 30.62,
+    "ioSamples": 30,
+    "pgSamples": 31
+   }
+  },
+  {
+   "label": "pg-pool-b10-false-r1",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 1,
+   "pooling": false,
+   "conc": 4,
+   "start": "20:05:35",
+   "aggRate": 30.35,
+   "perNode": [
+    30.35
+   ],
+   "count": 914,
+   "p95max": 166.4,
+   "overlapS": 30.113,
+   "spanS": 30.113,
+   "startSkewS": 0.0,
+   "slackToValS": 19.89,
+   "cpu": [
+    1.19
+   ],
+   "allocMB": 8.78,
+   "server": {
+    "dbCommitsPerS": 3347.8,
+    "commitsPerWorkflow": 110.3,
+    "walKBPerS": 3806.1,
+    "walSyncsPerS": 166.0,
+    "walSyncMsPerS": 744.3,
+    "hostCpuPctMean": 20.9,
+    "hostCpuPctMax": 23.2,
+    "sdaUtilMean": 72.6,
+    "sdaWawaitMean": 8.35,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  },
+  {
+   "label": "pg-pool-b10-true-r1",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 1,
+   "pooling": true,
+   "conc": 4,
+   "start": "20:07:35",
+   "aggRate": 31.88,
+   "perNode": [
+    31.88
+   ],
+   "count": 960,
+   "p95max": 156.9,
+   "overlapS": 30.117,
+   "spanS": 30.117,
+   "startSkewS": 0.0,
+   "slackToValS": 19.88,
+   "cpu": [
+    1.19
+   ],
+   "allocMB": 7.94,
+   "server": {
+    "dbCommitsPerS": 3527.7,
+    "commitsPerWorkflow": 110.7,
+    "walKBPerS": 4015.1,
+    "walSyncsPerS": 173.8,
+    "walSyncMsPerS": 754.6,
+    "hostCpuPctMean": 21.3,
+    "hostCpuPctMax": 28.0,
+    "sdaUtilMean": 72.7,
+    "sdaWawaitMean": 4.85,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  },
+  {
+   "label": "pg-pool-b10-true-r2",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 1,
+   "pooling": true,
+   "conc": 4,
+   "start": "20:09:35",
+   "aggRate": 32.0,
+   "perNode": [
+    32.0
+   ],
+   "count": 963,
+   "p95max": 158.5,
+   "overlapS": 30.098,
+   "spanS": 30.098,
+   "startSkewS": 0.0,
+   "slackToValS": 19.9,
+   "cpu": [
+    1.18
+   ],
+   "allocMB": 7.95,
+   "server": {
+    "dbCommitsPerS": 3500.3,
+    "commitsPerWorkflow": 109.4,
+    "walKBPerS": 4156.5,
+    "walSyncsPerS": 172.5,
+    "walSyncMsPerS": 762.6,
+    "hostCpuPctMean": 21.9,
+    "hostCpuPctMax": 28.6,
+    "sdaUtilMean": 76.4,
+    "sdaWawaitMean": 5.04,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  },
+  {
+   "label": "pg-pool-b10-false-r2",
+   "mode": "Balanced",
+   "acts": 10,
+   "nodes": 1,
+   "pooling": false,
+   "conc": 4,
+   "start": "20:11:35",
+   "aggRate": 32.08,
+   "perNode": [
+    32.08
+   ],
+   "count": 965,
+   "p95max": 159.9,
+   "overlapS": 30.082,
+   "spanS": 30.082,
+   "startSkewS": 0.0,
+   "slackToValS": 19.92,
+   "cpu": [
+    1.13
+   ],
+   "allocMB": 8.74,
+   "server": {
+    "dbCommitsPerS": 3561.0,
+    "commitsPerWorkflow": 111.0,
+    "walKBPerS": 4045.8,
+    "walSyncsPerS": 173.5,
+    "walSyncMsPerS": 755.6,
+    "hostCpuPctMean": 22.4,
+    "hostCpuPctMax": 28.6,
+    "sdaUtilMean": 73.9,
+    "sdaWawaitMean": 4.83,
+    "ioSamples": 30,
+    "pgSamples": 30
+   }
+  }
+ ],
+ "notes": [
+  "xact_commit counts every committed PostgreSQL transaction in the wave database, including read-only autocommit statements; it is not the EF command budget.",
+  "docker stats lines carry no timestamps and are retained but not windowed; host CPU comes from iostat avg-cpu on the database host."
+ ]
+}

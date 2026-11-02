@@ -45,7 +45,14 @@ How often a burst of ordinary work is committed depends on the mode.
 
 ## What "suspend" means for Ephemeral
 
-For Ephemeral, a suspension is any stop that is not completion. A run that waits on a bookmark, a timer or a child workflow, or that pauses for any other reason, is committed when the runtime finishes its pass, so its queued work can resume it later. Only a run that goes from start to completion in one pass can skip its record.
+A bookmark, timer suspension or child dispatch is committed immediately in every mode. A safe nonterminal boundary
+starts another folding segment, so work in another branch continues under the selected mode's activity cap rather
+than committing every checkpoint for the rest of the pass. External outbox work is claimed from the durable store.
+Terminal and control boundaries end the session; the end of the pass flushes remaining changes. Only an Ephemeral
+run that completes without any earlier commit can skip its record.
+
+A custom scheduler queue without targeted deletion cannot fold safely: the runtime commits its checkpoints
+immediately in every mode. The standard stores support targeted deletion.
 
 ## Choosing a mode
 

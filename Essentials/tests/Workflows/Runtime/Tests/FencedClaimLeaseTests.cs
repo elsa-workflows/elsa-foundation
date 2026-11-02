@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// The shared claim rule (#2195): a side effect runs only under a claim renewed immediately before it, and a claim lost
 /// while it runs cancels it and is reported as lost, never as a cancellation of the caller or a failure of the row.
 /// </summary>
-public sealed class FencedClaimLeaseTests
+public sealed partial class FencedClaimLeaseTests
 {
     private static readonly TimeSpan VisibilityTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan Cadence = TimeSpan.FromSeconds(20);

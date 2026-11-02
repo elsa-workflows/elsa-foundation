@@ -29,6 +29,18 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private readonly IReadOnlyDictionary<(string Kind, string SchemaVersion), IRuntimeStructureInputMaterializationPolicy> _structurePolicies =
         new Dictionary<(string, string), IRuntimeStructureInputMaterializationPolicy>();
 
+    // A replacement resolver may consult any part of the context even for a literal. Only the
+    // built-in resolver's dependencies can be inferred from the pinned source declarations.
+    internal bool UsesExecutionIndependentBindings(ExecutableNode node) =>
+        _inputBindingResolver is RuntimeInputBindingResolver && node.ActivityContract is not null &&
+        node.InputBindings.Values.All(binding => binding.Source is RuntimeInputBindingSource.Literal or RuntimeInputBindingSource.SecretRead);
+
+    internal bool RequiresActivityHistory(ExecutableNode node) =>
+        _inputBindingResolver is not RuntimeInputBindingResolver ||
+        node.InputBindings.Values.Any(binding => binding.Source is not
+            (RuntimeInputBindingSource.Literal or RuntimeInputBindingSource.SecretRead or
+             RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.VariableRead));
+
     public RuntimeActivityInputMaterializer(
         IRuntimeInputBindingResolver inputBindingResolver,
         IEnumerable<IRuntimeStructureInputMaterializationPolicy> structurePolicies,

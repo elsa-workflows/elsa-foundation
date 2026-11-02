@@ -25,7 +25,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
         string scope,
         DateTimeOffset occurredAt,
         Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkflowExecutableIdentity? requiredExistingRoot = null)
     {
         var id = EfWorkflowExecutionStateStore.CreateId(scope, change.StateId);
         var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(candidate =>
@@ -35,6 +36,9 @@ internal static class EfRuntimeCheckpointParticipantStaging
             candidate.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(change.StateId) &&
             candidate.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(change.StateId),
             cancellationToken);
+        var previous = row is null ? null : EfWorkflowExecutionStateStore.ReadChecked(row, scope, change.StateId);
+        if (requiredExistingRoot is not null && (previous is null || previous.PinnedExecutable != requiredExistingRoot || previous.ModelWorkOrigin is not null))
+            throw new ExistingRootLeaseRequiredException();
         var writeVersion = ModelWorkWriteVersion.For(context, change.State, row?.SchemaVersion);
 
         if (row is null)
@@ -53,9 +57,11 @@ internal static class EfRuntimeCheckpointParticipantStaging
         if (change.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) && change.State.TestScope is { } resumeScope)
             await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
                 context, resumeScope, occurredAt, scope, touchedTestScopes, cancellationToken);
-        _ = EfWorkflowExecutionStateStore.ReadChecked(row, scope, change.StateId);
         EfWorkflowExecutionStateStore.CopyToEntityForWriteVersion(row, change.State, scope, id, checked(row.Revision + 1), writeVersion);
     }
+
+    // Raised only during staging, before any SaveChanges, so a missing/replaced root can retry under its lease.
+    internal sealed class ExistingRootLeaseRequiredException : Exception { }
 
     public static async ValueTask StageSchedulerAsync(
         RuntimeDbContext context,
