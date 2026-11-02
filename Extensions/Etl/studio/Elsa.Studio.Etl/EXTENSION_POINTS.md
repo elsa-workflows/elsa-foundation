@@ -25,6 +25,12 @@ retry state, owed receipts and accepted route-body counts without inventing an H
 that a cancelled run has stopped every external operation. API failure/missing capability must remain visible;
 an empty page is not a substitute for unavailable or forbidden access.
 
+Continuous runs ([spec 1192](../../../../specs/1192-etl-continuous-http/spec.md)) are authored with "Run continuously" and a
+poll interval, offered only for an HTTP source with token or next-link pagination; switching to an unsupported source
+drops the policy. Inspection shows the run mode, a completion request, and a caught-up shard's next poll apart from a
+retry wait. "Complete run" appears only when the host reports a running continuous run, so Studio keeps working against
+hosts that predate the `etl-run-complete` relation, which is resolved only when the action is used.
+
 See [the ETL module guide](../../README.md) for host composition and recovery limits, and
 [file component evidence](../../../../specs/255-finite-file-etl/evidence/studio-components.md),
 [connector component evidence](../../../../specs/996-http-etl/evidence/connector-studio-checkpoint.md), and

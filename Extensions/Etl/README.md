@@ -55,6 +55,30 @@ exporters, additional instrumentation and redaction configuration. Do not place 
 or assume that arbitrary host telemetry is covered by ETL's diagnostic boundary. The workflow activity fault
 mask is a separate adapter concern, not a global telemetry scrubber.
 
+## Continuous HTTP runs
+
+[Spec 1192](../../specs/1192-etl-continuous-http/spec.md) lets an HTTP pipeline run continuously: set
+`continuous: { pollIntervalSeconds }` (1–86,400) on a source with token or next-link pagination. A pipeline without it
+is finite and keeps its exact artifact bytes. Each host shard is still one independently leased partition.
+
+- **Feed contract.** Re-requesting a cursor returns the records after it, and every page with records carries a
+  continuation. When nothing is new, the feed answers with no records and a continuation that is absent or the same
+  cursor. A page with records and no continuation ends that shard, as in a finite run. A collection that re-lists
+  everything is not a continuous source. Single-page pagination and file sources are refused.
+- **Idling.** A caught-up response retains nothing: the request's fetch journal is cleared, its reservations are
+  released and the shard polls the same cursor again after the interval. A cursor that moves without records waits one
+  interval too, but each such response is a retained page.
+- **Completion.** `POST /etl/runs/{id}/complete` (permission `etl/runs:complete`, Studio "Complete run") records a
+  durable request and makes idle shards due at once. Each shard ends at its first caught-up response from an attempt
+  started after the request, retained as a final empty page; then the run settles `Succeeded`, or `BusinessError` if
+  records were rejected. Cancellation still settles `Cancelled`, and the first terminal outcome wins. A native workflow
+  waits on `RunEtl` until the run settles; it cannot request completion itself yet.
+- **Limits.** Until accepted state is compacted (a follow-up), every non-empty page still accumulates page, request,
+  batch and retained-byte state, so a run's lifetime is bounded by `MaxPagesPerPartition` and the retention budgets.
+  Each idle poll claims its partition and audits the shard's retained history, so its cost grows with that history. A
+  feed outage longer than the fetch deadline (`DeadlineSeconds`) fails the run. Workers without this feature refuse a
+  continuous artifact; upgrade every worker in a scope before admitting one.
+
 ## Implemented boundaries
 
 - Core: typed finite topology, exact nullable-tenant/required-persistence scope, immutable versioned artifact envelope, typed JSON representation and SHA-256. Complete v1 envelopes are limited to 256 KiB; a definition may request a lower limit. Unknown saved formats remain observable and are refused at publication/read boundaries.

@@ -3,10 +3,10 @@
 Owner project: `Elsa.Etl.Runtime.Api`
 Domain: `Elsa.Etl`
 
-`IEtlRuntimeOperations` is the scoped operation seam dispatched by the five NativeEndpoints endpoints. The default
+`IEtlRuntimeOperations` is the scoped operation seam dispatched by the six NativeEndpoints endpoints. The default
 implementation derives scope from a validated normalized principal and the host's ordinary persistence scope. Route
 and query values cannot set tenant or partition authority. The API requires `etl/runs:read` for inspection and
-`etl/runs:cancel` for cancellation; it returns bounded summaries and never exposes host file paths, binding handles,
+`etl/runs:cancel` for cancellation and `etl/runs:complete` to request completion of a continuous run; it returns bounded summaries and never exposes host file paths, binding handles,
 artifact payloads, native result addresses, output object keys or worker owner identities. Run detail includes
 retained source/lookup revisions and expected digests; prepared snapshot digests/lengths describe the last
 verified preparation, not a fresh integrity check. They remain absent before the relevant admission/preparation.
@@ -34,6 +34,13 @@ implementing their four original operations: the default connector-inspection me
 `etl.provider-unavailable` after ordinary endpoint authorization. Providers that support connector inspection
 override that method; unavailable support is not an empty successful page. A malformed inspector projection returns a fixed
 `etl.provider-invalid` error instead of contradictory progress or arbitrary provider state text.
+
+`CompleteAsync` serves `etl-run-complete` (`POST /etl/runs/{id}/complete`). Its default body reports HTTP 503 with
+`etl.provider-unavailable`, so existing replacements keep compiling. An unknown or foreign run is 404 through the same
+scoped lookup as cancellation; otherwise the 200 result is `accepted`, `alreadyRequested`, `terminal` or
+`notContinuous`. Connector run detail adds `mode` (`finite` or `continuous`) and `completionRequestedAt`; connector
+partitions add `nextPollAt`, which a provider may set only for an idle shard and only equal to `notBefore`
+([spec 1192](../../../../../specs/1192-etl-continuous-http/spec.md)).
 
 Accepted-effect totals count settled route bodies. A receiver acknowledgement or a JSONL or CSV file publication can still
 await batch acceptance, and cancelled runs can retain owed effects. Raw URLs, continuation tokens, bodies,
