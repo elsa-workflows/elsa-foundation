@@ -108,18 +108,119 @@ describe("notification storage adapter", () => {
     expect(storage.load("s").map(e => e.id)).toEqual(["ok"]);
   });
 
+  it("load drops a malformed message or link but keeps the entry", () => {
+    window.localStorage.setItem(notificationStorageKeyPrefix + "s", JSON.stringify([
+      { ...entry({ id: "bad-message" }), message: { text: "x" } },
+      { ...entry({ id: "bad-link" }), link: "/workflows" },
+      { ...entry({ id: "partial-link" }), link: { label: "Open" } },
+      entry({ id: "good", message: "Fine", link: { label: "Open", path: "/workflows" } })
+    ]));
+
+    const loaded = createStorage().load("s");
+    const byId = new Map(loaded.map(e => [e.id, e]));
+
+    expect(loaded).toHaveLength(4);
+    expect("message" in byId.get("bad-message")!).toBe(false);
+    expect("link" in byId.get("bad-link")!).toBe(false);
+    expect("link" in byId.get("partial-link")!).toBe(false);
+    expect(byId.get("good")).toMatchObject({ message: "Fine", link: { label: "Open", path: "/workflows" } });
+  });
+
+  it("load prefers a write that is still waiting for the debounce", () => {
+    vi.useFakeTimers();
+    try {
+      const storage = createLocalNotificationStorage({ now: () => now });
+      window.localStorage.setItem(notificationStorageKeyPrefix + "a", JSON.stringify([entry({ id: "stale" })]));
+
+      storage.save("a", [entry({ id: "fresh" }), entry({ id: "running", level: "progress" })]);
+      const loaded = storage.load("a");
+
+      expect(loaded.map(e => e.id)).toEqual(["fresh", "running"]);
+      expect(loaded[1].level).toBe("progress");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("load keeps a progress entry this page saved as progress", () => {
+    const storage = createStorage();
+
+    storage.save("a", [entry({ id: "running", level: "progress", message: "3 of 10" })]);
+    storage.flush();
+
+    expect(storage.load("a")[0]).toMatchObject({ level: "progress", message: "3 of 10" });
+    expect(createStorage().load("a")[0]).toMatchObject({ level: "warning", message: restoredMessage });
+  });
+
+  it("a progress entry from another tab arrives as progress", () => {
+    const listener = vi.fn();
+    createStorage().subscribe("s", listener);
+    const running = entry({ id: "running", level: "progress", message: "3 of 10" });
+
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: notificationStorageKeyPrefix + "s",
+      newValue: JSON.stringify([running])
+    }));
+
+    expect(listener.mock.calls[0][0][0]).toMatchObject({ level: "progress", message: "3 of 10" });
+  });
+
+  it("a storage event during the debounce merges both tabs and the flush writes the merge", () => {
+    const storage = createLocalNotificationStorage({ now: () => now, debounceMs: 60_000 });
+    const shared = entry({ id: "shared", createdAt: now - 5000, updatedAt: now - 5000 });
+    window.localStorage.setItem(notificationStorageKeyPrefix + "s", JSON.stringify([shared]));
+    storage.load("s");
+    const listener = vi.fn();
+    storage.subscribe("s", listener);
+
+    const mine = entry({ id: "mine", createdAt: now - 2000, updatedAt: now - 2000 });
+    storage.save("s", [mine, shared]);
+    const theirs = entry({ id: "theirs", createdAt: now - 1000, updatedAt: now - 1000 });
+    const sharedReadElsewhere = { ...shared, read: true };
+    const remote = JSON.stringify([theirs, sharedReadElsewhere]);
+    window.localStorage.setItem(notificationStorageKeyPrefix + "s", remote);
+    window.dispatchEvent(new StorageEvent("storage", { key: notificationStorageKeyPrefix + "s", newValue: remote }));
+
+    expect(listener.mock.calls[0][0].map((e: StudioNotificationEntry) => e.id)).toEqual(["theirs", "mine", "shared"]);
+    storage.flush();
+    const written = JSON.parse(window.localStorage.getItem(notificationStorageKeyPrefix + "s")!) as StudioNotificationEntry[];
+    expect(written.map(e => e.id)).toEqual(["theirs", "mine", "shared"]);
+    expect(written.find(e => e.id === "shared")!.read).toBe(true);
+  });
+
+  it("a merge keeps this tab's changes and removals of entries the other tab left alone", () => {
+    const storage = createLocalNotificationStorage({ now: () => now, debounceMs: 60_000 });
+    const edited = entry({ id: "edited", createdAt: now - 3000 });
+    const dismissed = entry({ id: "dismissed", createdAt: now - 4000 });
+    window.localStorage.setItem(notificationStorageKeyPrefix + "s", JSON.stringify([edited, dismissed]));
+    storage.load("s");
+    const listener = vi.fn();
+    storage.subscribe("s", listener);
+
+    storage.save("s", [{ ...edited, read: true }]);
+    const theirs = entry({ id: "theirs", createdAt: now - 1000 });
+    window.dispatchEvent(new StorageEvent("storage", {
+      key: notificationStorageKeyPrefix + "s",
+      newValue: JSON.stringify([theirs, edited, dismissed])
+    }));
+
+    const merged = listener.mock.calls[0][0] as StudioNotificationEntry[];
+    expect(merged.map(e => e.id)).toEqual(["theirs", "edited"]);
+    expect(merged[1].read).toBe(true);
+  });
+
   it("throwing storage degrades silently", () => {
     const storage = createLocalNotificationStorage({
       now: () => now,
       debounceMs: 0,
       storage: () => { throw new Error("denied"); }
     });
-    const stopListening = storage.subscribe?.("s", () => undefined);
+    const stopListening = storage.subscribe("s", () => undefined);
 
     expect(() => { storage.save("s", [entry()]); storage.flush(); }).not.toThrow();
     expect(() => storage.load("s")).not.toThrow();
     expect(storage.load("s")).toEqual([]);
-    expect(() => stopListening?.()).not.toThrow();
+    expect(() => stopListening()).not.toThrow();
   });
 
   it("write failures such as a full quota do not throw", () => {
@@ -175,7 +276,7 @@ describe("notification storage adapter", () => {
 
   it("storage events from another tab reach subscribers", () => {
     const listener = vi.fn();
-    const stop = createStorage().subscribe!("s", listener);
+    const stop = createStorage().subscribe("s", listener);
     const incoming = entry({ id: "remote", toasting: true });
 
     window.dispatchEvent(new StorageEvent("storage", {
@@ -201,7 +302,7 @@ describe("notification storage adapter", () => {
 
   it("a cleared scope in another tab reaches subscribers as an empty list", () => {
     const listener = vi.fn();
-    createStorage().subscribe!("s", listener);
+    createStorage().subscribe("s", listener);
 
     window.dispatchEvent(new StorageEvent("storage", { key: notificationStorageKeyPrefix + "s", newValue: null }));
 

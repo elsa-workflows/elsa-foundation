@@ -65,7 +65,7 @@ import { DialogHost } from "./ui/dialog/DialogHost";
 import { NotificationCenter } from "./ui/feedback/NotificationCenter";
 import { ToastHost } from "./ui/feedback/ToastHost";
 import { notificationController, notificationStorage } from "./notifications";
-import { notificationScopeKey } from "./notificationStorage";
+import { useNotificationScope } from "./useNotificationScope";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
 import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
@@ -191,13 +191,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const scopeKey = notificationScopeKey(backendSession);
-  // Notifications are scoped to the active identity and backend: switching either swaps the stored list.
-  useEffect(() => {
-    notificationController.setScope(scopeKey);
-    if (scopeKey === null) return;
-    return notificationStorage.subscribe?.(scopeKey, entries => notificationController.replaceEntries(entries));
-  }, [scopeKey]);
+  useNotificationScope(backendSession, notificationController, notificationStorage);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<(StudioAgentPromptRequest & { id: string }) | null>(null);
   const incomingPromptRef = useRef<(StudioAgentPromptRequest & { id: string }) | null>(null);
