@@ -213,7 +213,8 @@ T019 (`AgentCompositionTests`).
 | Deny before dispatch | Denied | Success with the denied proposal | Lifecycle envelope `denied`; zero effect |
 | Prepared deadline passes before dispatch (AwaitingApproval, Edited or Approved), seen by Approve, Execute or the dispatch mark | Expired, recorded once | 409 `agent.proposal.expired`, repeated unchanged for later Approve and Execute | One `ProposalFailed` record with `dispatch=none`, `effect=none` |
 | Cancellation during the current-authority recheck, before module or client dispatch, including turn cancellation before automatic dispatch | Cancelled | 409 `agent.proposal.cancelled`, repeated unchanged | Lifecycle envelope `refused`, zero-effect summary |
-| Cancellation or failure after module dispatch without confirmation | Uncertain | Uncertain result; never replayed | Lifecycle envelope `uncertain` |
+| The executor throws, is cancelled after module dispatch, or reports success without a valid owning-resource receipt | Uncertain | Uncertain result; never replayed | Lifecycle envelope `uncertain` |
+| The executor returns a failure, including a replacement returning the `agent.proposal.cancelled` code | Failed | The returned failure | Lifecycle envelope `refused`, zero-effect summary |
 | AwaitingClient reaches its deadline without an admitted receipt | Uncertain, never Expired | Uncertain result; the request is never reissued | `ProposalFailed` with `dispatch=client`, `effect=possible`, `deadline=pending-client` |
 | AwaitingClient loses its reviewed contract or authority on a repeated execute | Uncertain | Uncertain result | `ProposalFailed` with `dispatch=client`, `effect=possible` |
 | A validated receipt arrives for AwaitingClient or client-scope Uncertain | Executed | Accepted receipt; a duplicate identical acknowledgement returns it, a conflicting one is refused | `ProposalExecuted` |
