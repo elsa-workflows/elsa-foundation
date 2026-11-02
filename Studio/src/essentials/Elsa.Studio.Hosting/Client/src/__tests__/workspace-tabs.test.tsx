@@ -259,6 +259,19 @@ describe("workspace tabs", () => {
     expect(container.querySelectorAll(".editor")).toHaveLength(1);
   });
 
+  it("keeps the active screen's newest address when Back lands on a closed tab for its resource", async () => {
+    await mount("/editor?definition=a");
+    const closedTab = controller.state.activeId;
+    await act(async () => controller.open("/list"));
+    await act(async () => controller.close(closedTab));
+    await act(async () => controller.open("/editor?definition=a"));
+    // The screen updates its own address without a popstate, as filter changes do.
+    window.history.replaceState(window.history.state, "", "/editor?definition=a&panel=inputs");
+    window.history.pushState({ "elsa.studio.workspaceTab": closedTab }, "", "/editor?definition=a");
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state })));
+    expect(currentLocation()).toBe("/editor?definition=a&panel=inputs");
+  });
+
   it("restores open tabs for the same user and backend", async () => {
     await mount("/editor?definition=a");
     await act(async () => controller.open("/list"));

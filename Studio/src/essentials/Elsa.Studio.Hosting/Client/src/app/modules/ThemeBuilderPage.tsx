@@ -1,7 +1,7 @@
 import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
-import { isStudioThemeLayout, studioThemeLayouts, type ElsaStudioModuleApi } from "../../sdk";
+import { isStudioThemeLayout, studioNavigationRequestedEvent, studioThemeLayouts, type ElsaStudioModuleApi, type StudioNavigationRequest } from "../../sdk";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
@@ -95,6 +95,19 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const validation = useMemo(() => draft ? validateThemeDefinition(draft) : { valid: false, issues: [] }, [draft]);
   const isReadOnly = draft?.source === "built-in";
   const hasChanges = JSON.stringify(selectedTheme) !== JSON.stringify(draft);
+  const unsavedDraft = hasChanges && Boolean(draft) && !isReadOnly;
+
+  // Report an unsaved theme to workspace probes and closes, so a background tab holding one is kept
+  // mounted and is not closed without notice. Ordinary navigation keeps its existing behaviour.
+  useEffect(() => {
+    if (!unsavedDraft) return;
+    const guard = (event: Event) => {
+      const intent = (event as CustomEvent<StudioNavigationRequest>).detail?.intent;
+      if (intent === "probe" || intent === "close") event.preventDefault();
+    };
+    window.addEventListener(studioNavigationRequestedEvent, guard);
+    return () => window.removeEventListener(studioNavigationRequestedEvent, guard);
+  }, [unsavedDraft]);
   const optionalMode = mode === "dim" || mode === "high-contrast" ? mode : null;
 
   async function loadStore() {

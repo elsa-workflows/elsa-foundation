@@ -87,6 +87,8 @@ mean), `close`, or `probe`.
   notice. Closing a background tab that was marked keeps it and brings it to the front. **Close
   other tabs** and **Close all tabs** keep pinned tabs and tabs with unsaved work, and say how many
   stayed open.
+- Theme Builder reports an unsaved custom theme to probes and closes (not to ordinary navigation, which
+  keeps its earlier behaviour), so a background tab holding one is never released or closed silently.
 - While a background tab is marked, the shell's own `beforeunload` warns before the document unloads
   (backend switch, sign-out redirect, module reload, browser close).
 

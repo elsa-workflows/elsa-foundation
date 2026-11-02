@@ -270,7 +270,8 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
         } else if (owner) {
           // The closed tab's resource is open elsewhere: focus that tab rather than open a second editor.
           if (owner.id !== current.activeId) switchTo(owner.id, "replace");
-          else writeAddress(owner, "replace");
+          // Keep the active screen's newest address, which screens may have replaced without an event.
+          else writeAddress({ ...owner, location: activeLocationRef.current }, "replace");
         } else {
           // The entry belongs to a closed tab: Back reopens it at that address.
           const reopened = createTab(location, Date.now(), entryTabId);

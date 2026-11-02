@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "../sdk";
+import { requestStudioNavigation, type ElsaStudioModuleApi, type StudioEndpointContext } from "../sdk";
 import { ThemeProvider } from "../app/components/ThemeProvider";
 import { AppearancePage } from "../app/settings/AppearancePage";
 import { ThemeBuilderPage } from "../app/modules/ThemeBuilderPage";
@@ -75,5 +75,23 @@ describe("theme management with an empty selectable default", () => {
     expect(container.querySelectorAll(".theme-builder-list button.active")).toHaveLength(1);
     expect(container.textContent).not.toContain("Loading Theme Store definitions.");
     expect(container.textContent).toContain("Theme deleted.");
+  });
+
+  it("reports an unsaved custom theme to workspace probes and closes but not to ordinary navigation", async () => {
+    const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
+    const context = { http: { getJson: async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }) } } as unknown as StudioEndpointContext;
+    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
+    const customButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(button => button.textContent?.includes("Managed Theme"));
+    await update(() => customButton!.click());
+    expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(true);
+
+    const field = Array.from(container.querySelectorAll<HTMLInputElement>(".theme-builder-detail input")).find(input => !input.disabled && input.type !== "file" && input.type !== "checkbox")!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await update(() => { setValue.call(field, `${field.value}x`); field.dispatchEvent(new Event("input", { bubbles: true })); });
+
+    expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(false);
+    expect(requestStudioNavigation("/theme-builder", "/", "close")).toBe(false);
+    expect(requestStudioNavigation("/theme-builder", "/")).toBe(true);
   });
 });
