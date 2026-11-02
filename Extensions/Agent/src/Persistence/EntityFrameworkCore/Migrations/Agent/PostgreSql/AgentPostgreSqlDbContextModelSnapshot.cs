@@ -339,6 +339,10 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                     b.Property<long?>("LeaseExpiresAtUtcTicks")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("LimitReached")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<long>("NextSequence")
                         .HasColumnType("bigint");
 

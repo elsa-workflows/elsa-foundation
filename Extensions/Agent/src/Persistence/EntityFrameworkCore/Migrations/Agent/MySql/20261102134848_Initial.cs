@@ -110,6 +110,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     ExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     PolicyRevision = table.Column<long>(type: "bigint", nullable: true),
                     ContinuedFrom = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true),
+                    LimitReached = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: true),
                     OwnerToken = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     Fence = table.Column<long>(type: "bigint", nullable: false),
                     LeaseExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),

@@ -259,6 +259,12 @@ public sealed record AgentSession(
     public string? Workspace { get; init; }
     /// <summary>Preview: the session this one was created to continue past a limit; nothing else is carried over.</summary>
     public string? ContinuedFrom { get; init; }
+    /// <summary>
+    /// Preview: the documented session limit this session reached (<c>snapshots</c> or <c>bytes</c>, as
+    /// <see cref="AgentError.Limit"/> names it), or null. Recorded when a turn is refused at the limit, so a reopened
+    /// session shows the limit and its continuation before another prompt is refused.
+    /// </summary>
+    public string? LimitReached { get; init; }
 }
 
 public sealed record AgentMessage(
@@ -627,6 +633,16 @@ public static class AgentSessionKeyKinds
     public const string CallInput = "call-input";
 }
 
+/// <summary>Preview: the values of <see cref="AgentSessionSummary.RecoveryState"/>.</summary>
+public static class AgentSessionRecoveryStates
+{
+    /// <summary>The prefix of a session that reached a documented limit; the limit (<c>snapshots</c> or <c>bytes</c>) follows it.</summary>
+    public const string LimitReachedPrefix = "limit-reached:";
+
+    /// <summary>The recovery state a session with <paramref name="limitReached"/> reports, or null when nothing needs attention.</summary>
+    public static string? Of(string? limitReached) => string.IsNullOrEmpty(limitReached) ? null : LimitReachedPrefix + limitReached;
+}
+
 /// <summary>Preview: one unique duplicate-detection key of a session aggregate and the value it maps to.</summary>
 public sealed record AgentSessionUniqueKey(string Kind, string Key, string Value);
 
@@ -781,7 +797,7 @@ public sealed record AgentSessionOwnerQuery(string ActorId, string TenantId, str
 
 /// <summary>Preview: an owner's view of one recorded session, read without decoding its protected payloads.</summary>
 /// <param name="PendingReviewCount">Proposals awaiting a review decision.</param>
-/// <param name="RecoveryState">What recovery found that the owner should look at, or null when nothing needs attention.</param>
+/// <param name="RecoveryState">What recovery found that the owner should look at, or null when nothing needs attention; today only a reached session limit (<see cref="AgentSessionRecoveryStates"/>).</param>
 public sealed record AgentSessionSummary(
     string Id,
     string? Title,

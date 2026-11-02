@@ -102,6 +102,25 @@ public sealed class AgentRecoveryApiTests
         Assert.NotNull(await CreateAsync(harness, "actor-1", "tenant-1", new string('w', AgentSessionCreateRequest.MaxWorkspaceLength)));
     }
 
+    [Fact]
+    public async Task A_session_that_reached_its_limit_reports_it_on_its_detail_and_in_the_list()
+    {
+        using var harness = Harness();
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var (fresh, freshBody) = await AgentRecoveryApi.SendAsync(host, "GetSession", AgentRecoveryApi.Owner(session), Session(session));
+        Assert.Equal(200, fresh);
+        Assert.False(JsonDocument.Parse(freshBody).RootElement.GetProperty("data").TryGetProperty("limitReached", out _));
+
+        await host.Owner.RecordLimitAsync(session.Id, "snapshots");
+
+        var (status, body) = await AgentRecoveryApi.SendAsync(host, "GetSession", AgentRecoveryApi.Owner(session), Session(session));
+        Assert.Equal(200, status);
+        Assert.Equal("snapshots", JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("limitReached").GetString());
+        var item = (await ListAsync(host, AgentRecoveryApi.Owner(session), "")).GetProperty("items")[0];
+        Assert.Equal("limit-reached:snapshots", item.GetProperty("recoveryState").GetString());
+    }
+
     // ---- GET /sessions/{id}/proposals ----
 
     [Fact]

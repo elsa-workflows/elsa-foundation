@@ -280,7 +280,8 @@ public static class AgentApi
                 .Select(x => x.ToViewModel()).ToList())
         {
             // Authorization above proved these resolve to the session owner.
-            Policy = await ReadPolicyAsync(context, session.Id, AgentEndpointActor.Resolve(context.User)!, AgentEndpointActor.ResolveTenant(context.User)!)
+            Policy = await ReadPolicyAsync(context, session.Id, AgentEndpointActor.Resolve(context.User)!, AgentEndpointActor.ResolveTenant(context.User)!),
+            LimitReached = session.LimitReached
         };
         await WriteAsync(context, AgentApiResponse<AgentSessionDetailsResponse>.Success(data), AgentJsonContext.Default.AgentApiResponseAgentSessionDetailsResponse);
     }

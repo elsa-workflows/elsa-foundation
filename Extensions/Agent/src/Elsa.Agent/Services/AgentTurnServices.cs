@@ -141,6 +141,22 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        await foreach (var item in StreamTurnAsync(sessionId, cancellationToken))
+        {
+            // A refusal at a documented session limit is recorded on the session before it is reported, so a reload shows the
+            // limit and its continuation without another refused prompt. Recording is best effort: the refusal is reported
+            // either way, and a later refused prompt records it again.
+            if (item.Error?.Limit is { } limit && _owner is not null)
+            {
+                try { await _owner.RecordLimitAsync(sessionId, limit, CancellationToken.None); }
+                catch (Exception failure) when (failure is not OperationCanceledException) { }
+            }
+            yield return item;
+        }
+    }
+
+    private async IAsyncEnumerable<AgentStreamEvent> StreamTurnAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         var boundary = new TurnBoundary(sessionId);
         var session = await boundary.CallAsync("find-session", () => sessions.FindAsync(sessionId, cancellationToken), cancellationToken);
         if (session is null || session.Status != AgentSessionStatus.Active || session.ExpiresAt <= DateTimeOffset.UtcNow)

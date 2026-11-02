@@ -185,7 +185,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 .ToList();
             var items = page.Take(query.Take)
                 .Select(x => new AgentSessionSummary(x.Id, x.Index.Title, ListedStatus(x.Index.Status, x.Index.ExpiresAt, now), x.Index.UpdatedAt,
-                    x.Index.ExpiresAt, x.Pending, null))
+                    x.Index.ExpiresAt, x.Pending, AgentSessionRecoveryStates.Of(x.Index.LimitReached)))
                 .ToArray();
             var next = page.Count > query.Take ? Cursor.Format(items[^1].UpdatedAt, items[^1].Id) : null;
             return Task.FromResult(new AgentSessionSummaryPage(items, next));
@@ -220,10 +220,10 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
 
     /// <summary>The plain owner columns, readable without decoding the protected session payload.</summary>
     private sealed record Index(string ActorId, string TenantId, string? Workspace, string? Title, AgentSessionStatus Status,
-        DateTimeOffset UpdatedAt, DateTimeOffset? ExpiresAt)
+        DateTimeOffset UpdatedAt, DateTimeOffset? ExpiresAt, string? LimitReached)
     {
         public static Index From(AgentSession session) => new(session.ActorId, session.TenantId, session.Workspace, session.Title,
-            session.Status, session.UpdatedAt, session.ExpiresAt);
+            session.Status, session.UpdatedAt, session.ExpiresAt, session.LimitReached);
     }
 
     private sealed class Aggregate(string session, Index index)

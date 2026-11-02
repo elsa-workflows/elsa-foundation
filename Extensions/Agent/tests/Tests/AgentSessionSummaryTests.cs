@@ -26,6 +26,20 @@ public sealed class AgentSessionSummaryTests
         Assert.Equal((AgentSessionStatus.Expired, 0), Shape(await SummaryAsync(harness, session)));
     }
 
+    [Fact]
+    public async Task A_reached_session_limit_is_recorded_and_listed_across_a_restart()
+    {
+        using var harness = new AgentRestartHarness();
+        var session = await harness.Host.CreateAsync();
+        Assert.Null((await SummaryAsync(harness, session)).RecoveryState);
+
+        await harness.Host.Owner.RecordLimitAsync(session.Id, "bytes");
+        var host = harness.Restart();
+
+        Assert.Equal("limit-reached:bytes", (await SummaryAsync(harness, session)).RecoveryState);
+        Assert.Equal("bytes", (await host.Sessions.FindAsync(session.Id))!.LimitReached);
+    }
+
     internal static async Task<AgentSessionSummary> SummaryAsync(AgentRestartHarness harness, AgentSession session)
         => Assert.Single((await harness.Store.ListOwnedAsync(new(session.ActorId, session.TenantId, null, 20, null))).Items, x => x.Id == session.Id);
 

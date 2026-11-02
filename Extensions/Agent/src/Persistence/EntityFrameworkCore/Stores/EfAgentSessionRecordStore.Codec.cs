@@ -25,11 +25,12 @@ internal sealed partial class EfAgentSessionRecordStore
             Bounded(value.ActorId, AgentModelBuilderExtensions.PrincipalLength, "actor");
             if (value.Workspace is not null) Bounded(value.Workspace, AgentModelBuilderExtensions.PrincipalLength, "workspace");
             if (value.ContinuedFrom is not null) Bounded(value.ContinuedFrom, AgentModelBuilderExtensions.IdentityLength, "continued session identity");
+            if (value.LimitReached is not null) Bounded(value.LimitReached, AgentModelBuilderExtensions.KindLength, "session limit");
             session = new AgentSessionRow
             {
                 SessionId = sessionId, TenantId = value.TenantId, ActorId = value.ActorId, Workspace = value.Workspace, Title = value.Title,
                 Status = (int)value.Status, UpdatedAtUtcTicks = value.UpdatedAt.UtcTicks, ExpiresAtUtcTicks = value.ExpiresAt?.UtcTicks,
-                PolicyRevision = value.PolicyRevision, ContinuedFrom = value.ContinuedFrom, SchemaVersion = AgentEfModule.SchemaVersion,
+                PolicyRevision = value.PolicyRevision, ContinuedFrom = value.ContinuedFrom, LimitReached = value.LimitReached, SchemaVersion = AgentEfModule.SchemaVersion,
                 Payload = codec.Protect(AgentRecordCodec.SessionPurpose, sessionId, SessionRowId, value)
             };
         }
@@ -75,7 +76,8 @@ internal sealed partial class EfAgentSessionRecordStore
         var session = codec.Unprotect<AgentSession>(AgentRecordCodec.SessionPurpose, sessionId, SessionRowId, row.Payload);
         if (session.Id != sessionId || session.TenantId != row.TenantId || session.ActorId != row.ActorId || session.Workspace != row.Workspace
             || session.Title != row.Title || (int)session.Status != row.Status || session.UpdatedAt.UtcTicks != row.UpdatedAtUtcTicks
-            || session.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks || session.PolicyRevision != row.PolicyRevision || session.ContinuedFrom != row.ContinuedFrom)
+            || session.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks || session.PolicyRevision != row.PolicyRevision || session.ContinuedFrom != row.ContinuedFrom
+            || session.LimitReached != row.LimitReached)
             throw new InvalidDataException("The agent session columns do not match the protected session record.");
 
         var messages = rows.Messages.Select(message =>

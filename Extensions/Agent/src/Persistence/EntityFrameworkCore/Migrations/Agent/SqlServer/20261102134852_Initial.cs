@@ -102,6 +102,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                     ExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     PolicyRevision = table.Column<long>(type: "bigint", nullable: true),
                     ContinuedFrom = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
+                    LimitReached = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: true),
                     OwnerToken = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Fence = table.Column<long>(type: "bigint", nullable: false),
                     LeaseExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),

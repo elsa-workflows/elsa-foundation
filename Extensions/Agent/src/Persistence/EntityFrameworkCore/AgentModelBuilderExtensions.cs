@@ -40,6 +40,7 @@ public static class AgentModelBuilderExtensions
             entity.Property(x => x.ActorId).HasMaxLength(PrincipalLength).IsRequired();
             entity.Property(x => x.Workspace).HasMaxLength(PrincipalLength);
             entity.Property(x => x.ContinuedFrom).HasMaxLength(IdentityLength);
+            entity.Property(x => x.LimitReached).HasMaxLength(KindLength);
             entity.Property(x => x.OwnerToken).HasMaxLength(IdentityLength).IsRequired();
             entity.Property(x => x.Version).IsConcurrencyToken();
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();

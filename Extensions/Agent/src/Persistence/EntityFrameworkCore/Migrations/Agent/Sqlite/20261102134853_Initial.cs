@@ -102,6 +102,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                     ExpiresAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: true),
                     PolicyRevision = table.Column<long>(type: "INTEGER", nullable: true),
                     ContinuedFrom = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
+                    LimitReached = table.Column<string>(type: "TEXT", maxLength: 32, nullable: true),
                     OwnerToken = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Fence = table.Column<long>(type: "INTEGER", nullable: false),
                     LeaseExpiresAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: true),

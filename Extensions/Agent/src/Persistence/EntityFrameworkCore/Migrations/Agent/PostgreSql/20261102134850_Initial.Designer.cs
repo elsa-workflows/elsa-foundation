@@ -7,10 +7,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
+namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
 {
-    [DbContext(typeof(AgentMySqlDbContext))]
-    [Migration("20261102134430_Initial")]
+    [DbContext(typeof(AgentPostgreSqlDbContext))]
+    [Migration("20261102134850_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -19,38 +19,32 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
-
-            modelBuilder.HasAnnotation("MySQL:Charset", "utf8mb4");
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditOwnerRow", b =>
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("ActorId")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.HasKey("SessionId");
 
@@ -66,9 +60,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
 
                     b.Property<string>("ActorId")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<long>("CreatedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -76,27 +69,25 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<string>("EventId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.HasKey("Sequence");
 
@@ -112,7 +103,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
             modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditSequenceRow", b =>
                 {
                     b.Property<int>("Id")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<long>("Last")
                         .HasColumnType("bigint");
@@ -120,9 +111,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -135,39 +125,35 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("Kind")
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("KeyHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Key")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Value")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.HasKey("SessionId", "Kind", "KeyHash");
 
@@ -180,26 +166,23 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("AttachmentKey")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
@@ -215,26 +198,23 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("Digest")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Canonical")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
@@ -253,39 +233,36 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("MessageId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<int>("Role")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
 
                     b.Property<int>("Status")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<string>("StatusReason")
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("SessionId", "MessageId");
 
@@ -298,23 +275,21 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("ProposalId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<long?>("ExpiresAtUtcTicks")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<long>("Sequence")
                         .HasColumnType("bigint");
@@ -322,12 +297,11 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<string>("SessionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<int>("Status")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
@@ -346,20 +320,18 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("SessionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("ActorId")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("ContinuedFrom")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<long?>("ExpiresAtUtcTicks")
                         .HasColumnType("bigint");
@@ -370,22 +342,25 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<long?>("LeaseExpiresAtUtcTicks")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("LimitReached")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<long>("NextSequence")
                         .HasColumnType("bigint");
 
                     b.Property<string>("OwnerToken")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("PausedTurnPayload")
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<long?>("PolicyRevision")
                         .HasColumnType("bigint");
@@ -393,22 +368,20 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<int>("Status")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("Title")
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<long>("UpdatedAtUtcTicks")
                         .HasColumnType("bigint");
@@ -419,9 +392,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
 
                     b.Property<string>("Workspace")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.HasKey("SessionId");
 
@@ -435,19 +407,18 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -460,37 +431,36 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("text");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -499,9 +469,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.HasKey("Family");
 

@@ -342,6 +342,10 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                     b.Property<long?>("LeaseExpiresAtUtcTicks")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("LimitReached")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<long>("NextSequence")
                         .HasColumnType("bigint");
 

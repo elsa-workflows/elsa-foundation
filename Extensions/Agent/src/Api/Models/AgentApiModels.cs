@@ -112,6 +112,13 @@ public sealed record AgentSessionDetailsResponse(
     /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AgentSessionPolicyResponse? Policy { get; init; }
+
+    /// <summary>
+    /// Preview (#3441): the documented session limit the session reached (<c>snapshots</c> or <c>bytes</c>); omitted when it
+    /// reached none. A client offers continuation in a new, linked session.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LimitReached { get; init; }
 }
 
 /// <summary>

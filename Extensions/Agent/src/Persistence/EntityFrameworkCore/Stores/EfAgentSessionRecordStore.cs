@@ -261,7 +261,8 @@ internal sealed partial class EfAgentSessionRecordStore(
                                 .SetProperty(x => x.Workspace, session.Workspace).SetProperty(x => x.Title, session.Title)
                                 .SetProperty(x => x.Status, session.Status).SetProperty(x => x.UpdatedAtUtcTicks, session.UpdatedAtUtcTicks)
                                 .SetProperty(x => x.ExpiresAtUtcTicks, session.ExpiresAtUtcTicks).SetProperty(x => x.PolicyRevision, session.PolicyRevision)
-                                .SetProperty(x => x.ContinuedFrom, session.ContinuedFrom).SetProperty(x => x.Payload, session.Payload);
+                                .SetProperty(x => x.ContinuedFrom, session.ContinuedFrom).SetProperty(x => x.LimitReached, session.LimitReached)
+                                .SetProperty(x => x.Payload, session.Payload);
                         if (paused is not null) setters.SetProperty(x => x.PausedTurnPayload, paused);
                         else if (removePaused) setters.SetProperty(x => x.PausedTurnPayload, (string?)null);
                     }, cancellationToken);
@@ -323,7 +324,7 @@ internal sealed partial class EfAgentSessionRecordStore(
             var page = await sessions.OrderByDescending(x => x.UpdatedAtUtcTicks).ThenByDescending(x => x.SessionId).Take(query.Take + 1)
                 .Select(x => new
                 {
-                    x.SessionId, x.Title, x.Status, x.UpdatedAtUtcTicks, x.ExpiresAtUtcTicks,
+                    x.SessionId, x.Title, x.Status, x.UpdatedAtUtcTicks, x.ExpiresAtUtcTicks, x.LimitReached,
                     Pending = db.Set<AgentProposalRow>().Count(p => p.SessionId == x.SessionId && (p.Status == awaiting || p.Status == edited)
                                                                      && (p.ExpiresAtUtcTicks == null || p.ExpiresAtUtcTicks > now))
                 }).ToListAsync(cancellationToken);
@@ -331,7 +332,7 @@ internal sealed partial class EfAgentSessionRecordStore(
                 .Select(x => new AgentSessionSummary(x.SessionId, x.Title,
                     (AgentSessionStatus)x.Status == AgentSessionStatus.Active && x.ExpiresAtUtcTicks <= now ? AgentSessionStatus.Expired : (AgentSessionStatus)x.Status,
                     Time(x.UpdatedAtUtcTicks),
-                    x.ExpiresAtUtcTicks is { } expires ? Time(expires) : null, x.Pending, null))
+                    x.ExpiresAtUtcTicks is { } expires ? Time(expires) : null, x.Pending, AgentSessionRecoveryStates.Of(x.LimitReached)))
                 .ToArray();
             var next = page.Count > query.Take ? Cursor.Format(items[^1].UpdatedAt, items[^1].Id) : null;
             return new AgentSessionSummaryPage(items, next);

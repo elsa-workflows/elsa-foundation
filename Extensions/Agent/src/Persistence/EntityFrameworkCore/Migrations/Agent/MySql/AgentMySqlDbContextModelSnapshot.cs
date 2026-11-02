@@ -367,6 +367,10 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     b.Property<long?>("LeaseExpiresAtUtcTicks")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("LimitReached")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<long>("NextSequence")
                         .HasColumnType("bigint");
 

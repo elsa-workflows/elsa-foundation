@@ -45,6 +45,22 @@ public sealed partial class AgentCumulativeDisclosureTests
     }
 
     [Fact]
+    public async Task A_limit_reached_is_recorded_on_the_session_so_a_reload_reports_it_before_another_prompt()
+    {
+        using var fixture = new Fixture(true, Script.Answer);
+        await SeedRetainedHistory(fixture, AgentDisclosureHistory.MaximumSnapshots);
+        var sessions = fixture.Services.GetRequiredService<IAgentSessionService>();
+        Assert.Null((await sessions.FindAsync(fixture.Session!.Id))!.LimitReached);
+        await fixture.Post("Request the current expanded projection");
+
+        Assert.Equal("snapshots", Assert.Single(await fixture.Stream(), item => item.Error?.Code == BudgetExceeded).Error!.Limit);
+
+        Assert.Equal("snapshots", (await sessions.FindAsync(fixture.Session.Id))!.LimitReached);
+        var listed = await sessions.ListOwnedAsync(new(fixture.Session.ActorId, fixture.Session.TenantId, null, 20, null));
+        Assert.Equal(AgentSessionRecoveryStates.LimitReachedPrefix + "snapshots", Assert.Single(listed.Page!.Items).RecoveryState);
+    }
+
+    [Fact]
     public async Task A_limit_reached_mid_turn_keeps_the_executed_result_and_provenance_and_never_resets_or_replays()
     {
         using var fixture = new Fixture(true, Script.ReadThenAnswer);

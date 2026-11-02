@@ -295,6 +295,19 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             return row.Context.ToList();
     }
 
+    /// <summary>
+    /// Records the documented session limit a turn was refused at, so the session summary and detail report it after a
+    /// reload. Nothing else changes: no provenance is erased, no budget reset and nothing replayed. Repeating the same limit
+    /// writes nothing.
+    /// </summary>
+    internal Task RecordLimitAsync(string sessionId, string limit, CancellationToken cancellationToken = default)
+        => CommitAsync<bool>(sessionId, () => false, row =>
+        {
+            if (string.Equals(row.Session.LimitReached, limit, StringComparison.Ordinal)) return new(false);
+            var limited = row.Session with { LimitReached = limit, UpdatedAt = _clock.GetUtcNow() };
+            return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Session = limited }, () => row.Session = limited);
+        }, cancellationToken);
+
     /// <summary>Acquires an unkeyed claim under the session write gate; null when the session is not recorded.</summary>
     internal Task<AgentSessionClaim?> AcquireAsync(string sessionId, AgentSessionClaimKind kind, CancellationToken cancellationToken = default)
     {

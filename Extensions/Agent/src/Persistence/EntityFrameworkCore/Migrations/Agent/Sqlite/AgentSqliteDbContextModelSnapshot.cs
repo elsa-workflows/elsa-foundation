@@ -311,6 +311,10 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                     b.Property<long?>("LeaseExpiresAtUtcTicks")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("LimitReached")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("NextSequence")
                         .HasColumnType("INTEGER");
 

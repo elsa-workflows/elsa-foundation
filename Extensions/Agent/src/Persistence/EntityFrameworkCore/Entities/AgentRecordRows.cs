@@ -16,6 +16,8 @@ internal sealed class AgentSessionRow
     public long? ExpiresAtUtcTicks { get; set; }
     public long? PolicyRevision { get; set; }
     public string? ContinuedFrom { get; set; }
+    /// <summary>The documented session limit the session reached, so the owner list reports it without decoding.</summary>
+    public string? LimitReached { get; set; }
     public string OwnerToken { get; set; } = "";
     public long Fence { get; set; }
     public long? LeaseExpiresAtUtcTicks { get; set; }
