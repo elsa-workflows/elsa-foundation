@@ -1,7 +1,7 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Search } from "lucide-react";
-import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
@@ -499,7 +499,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
       getNotifications().notify({
         level: "success",
         title: `Deleted ${definition.name}`,
-        action: { label: "Restore", run: () => restore(definition) },
+        action: { label: "Restore", run: () => restoreFromNotification(definition) },
         link: { label: "View deleted", path: "/workflows/definitions?state=deleted" }
       });
       await refreshAfterMutation();
@@ -509,14 +509,30 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     }
   };
 
+  const restoredNotification = (definition: WorkflowDefinitionDetails["definition"]): StudioNotificationInput => {
+    const definitionUrl = updateWorkflowDefinitionIdInUrl(new URL("/workflows/definitions", window.location.origin), definition.id);
+    return { level: "success", title: `Restored ${definition.name}`, link: { label: "Open", path: `${definitionUrl.pathname}${definitionUrl.search}` } };
+  };
+
+  // A Restore from the toast or Notification Center is a fresh user intent, possibly long after this
+  // page moved on: it always reports its own outcome (a rejection reaches the host as "Restore
+  // failed") and only refreshes the list while this page generation is still current.
+  const restoreFromNotification = async (definition: WorkflowDefinitionDetails["definition"]) => {
+    await restoreDefinition(context, definition.id);
+    getNotifications().notify(restoredNotification(definition));
+    if (isCurrentGeneration()) {
+      toggleDefinitionSelection(definition.id, false);
+      retry();
+    }
+  };
+
   const restore = async (definition: WorkflowDefinitionDetails["definition"]) => {
     setRequestError(null);
     try {
       await restoreDefinition(context, definition.id);
       if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
-      const definitionUrl = updateWorkflowDefinitionIdInUrl(new URL("/workflows/definitions", window.location.origin), definition.id);
-      getNotifications().notify({ level: "success", title: `Restored ${definition.name}`, link: { label: "Open", path: `${definitionUrl.pathname}${definitionUrl.search}` } });
+      getNotifications().notify(restoredNotification(definition));
       await refreshAfterMutation();
     } catch (e) {
       if (!isCurrentGeneration()) return;
