@@ -203,6 +203,24 @@ and token contract while keeping each resource's domain columns and operations:
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
 | Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. Activity catalog tiers are lowercase `essential`, `optional` and `setting`; tier controls presentation independently of `isRequired` and runtime validation. Only an exact optional tier that is not required goes under one “More options” section. Missing, null, unfamiliar and setting tiers, plus required optional inputs, stay directly visible. Configured HTTP values start open and may be collapsed with a set-count badge through `allowCollapseWhenSet`; Runs opts in only because applied criteria stay visible as chips outside the disclosure. Other callers retain the existing default. Host-reported errors, option-source failures and editors without complete local-error reporting keep the section open; explicit force-open remains authoritative, and a forced reveal does not overwrite the saved collapsed preference. Only reported blocking errors receive an Error badge. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Settings and other surfaces do not use the kit yet. |
 
+### Read-only details composition
+
+The workflow editor's Runtime panel leads with a title and the latest confirmed execution
+status, followed by a short outcome and the available resource actions. Dispatch acceptance
+alone stays neutral while execution status is unknown. Keep actionable errors, incident links,
+stale-snapshot warnings and observation failures visible outside disclosure. Known counts may
+be shown compactly; missing counts must not imply zero. Hide empty waiting-trigger controls
+only after a confirmed terminal execution, retaining loading, failure and delivery feedback.
+
+Use this hierarchy for comparable information panels: header/status, outcome, notices,
+resource actions, domain sections, then optional technical details. Compose the existing
+`StudioButton`, `StudioLink`, status treatment, `TechnicalDetails` and `CopyableIdentifier`
+primitives. Keep exact IDs copyable and use resource links to inspect their precise entities.
+Technical metadata belongs in the keyboard-accessible disclosure; important next steps do not.
+Use the theme surface and spacing to group content without nesting decorative cards. Callers
+own domain status, permissions, observations and navigation. This is a composition pattern,
+not a requirement to migrate every details view or introduce a generic data-view framework.
+
 ## Appearance
 
 The appearance model is `app/themes/appearance.ts` (`exists`, landed in #2710). ThemeProvider

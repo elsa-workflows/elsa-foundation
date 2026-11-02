@@ -3218,7 +3218,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Test Run dispatched"));
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("Runtime");
-    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
+    expect(container.textContent).toContain("Temporary test · your draft is unchanged");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
     expect(container.textContent).toContain("1 activity");
@@ -3388,7 +3388,7 @@ describe("workflows module", () => {
     await waitForText(container, "Workflow version has no root activity to publish.");
 
     expect(container.textContent).toContain("Test Run rejected");
-    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
+    expect(container.textContent).toContain("Temporary test · your draft is unchanged");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
     await unmount();
