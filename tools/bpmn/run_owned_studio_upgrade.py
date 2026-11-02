@@ -33,6 +33,13 @@ Api, REPO, digest, process_field, write_json = (_qualification.Api, _qualificati
 
 
 LOOKUP = "id\n1\n2\n3\n4\n"
+HARNESS = ("tools/bpmn/", "e2e-tests/etl/", "specs/1184-direct-bpmn-studio/")
+
+
+def product_neutral(name):
+    """Paths that no host or browser product is built from: harness, evidence, documentation and tests."""
+    return (name.startswith(HARNESS) or name.endswith(".md") or name.startswith(("Essentials/tests/", "Extensions/")) and "/tests/" in name
+            or "/__tests__/" in name)
 
 
 def free_port():
@@ -154,8 +161,7 @@ def main():
     if product_source != source_revision:
         subprocess.run(["git", "merge-base", "--is-ancestor", product_source, source_revision], cwd=REPO, check=True)
         changed = subprocess.check_output(["git", "diff", "--name-only", product_source, source_revision], cwd=REPO, text=True).splitlines()
-        allowed = ("tools/bpmn/", "e2e-tests/etl/", "specs/1184-direct-bpmn-studio/")
-        if any(not name.startswith(allowed) for name in changed):
+        if any(not product_neutral(name) for name in changed):
             raise ValueError("Product reuse is limited to this journey's harness and evidence changes; rebuild changed product inputs.")
     browser_assets = []
     for wwwroot in sorted(list((REPO / "Studio/src/essentials").glob("*/wwwroot")) + list((REPO / "Extensions").glob("*/studio/*/wwwroot"))):

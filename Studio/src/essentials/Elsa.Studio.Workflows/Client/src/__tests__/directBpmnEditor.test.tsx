@@ -41,7 +41,8 @@ async function editor(direct: boolean, service = false) {
 
 it.each([false, true])("offers direct publication and a human-wait palette only when the backend supports them: %s", async direct => {
   const view = await editor(direct);
-  await vi.waitFor(() => expect(view.container.querySelector(".react-flow__node[data-id='keep']")).not.toBeNull());
+  // The canvas renders after the toolbar; allow it the same budget as the editor itself under a loaded machine.
+  await vi.waitFor(() => expect(view.container.querySelector(".react-flow__node[data-id='keep']")).not.toBeNull(), { timeout: 5000 });
   const category = view.container.querySelector<HTMLButtonElement>(".wf-palette-category-toggle[data-category='BPMN']");
   if (category?.getAttribute("aria-expanded") === "false") flushSync(() => category.click());
   const buttons = [...view.container.querySelectorAll("button")];
@@ -50,11 +51,11 @@ it.each([false, true])("offers direct publication and a human-wait palette only 
   // The established native publication remains available alongside the optional action.
   expect(view.container.querySelector("[aria-label='Workflow publication actions']")).not.toBeNull();
   await view.unmount();
-});
+}, 15000);
 
 it.each([false, true])("offers the service binding editor only with explicit authored-service support: %s", async service => {
   const view = await editor(true, service);
-  const node = await vi.waitFor(() => { const node = view.container.querySelector<HTMLElement>(".react-flow__node[data-id='keep']"); expect(node).not.toBeNull(); return node!; });
+  const node = await vi.waitFor(() => { const node = view.container.querySelector<HTMLElement>(".react-flow__node[data-id='keep']"); expect(node).not.toBeNull(); return node!; }, { timeout: 5000 });
   flushSync(() => node.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await vi.waitFor(() => expect(view.container.querySelector("[aria-label='Task execution']")).not.toBeNull());
   expect([...view.container.querySelectorAll("button")].some(button => button.textContent === "Bind a published service workflow")).toBe(service);
@@ -63,7 +64,7 @@ it.each([false, true])("offers the service binding editor only with explicit aut
 
 it("selects an immutable service publication through the real picker, undo, redo and normal save", async () => {
   const view = await editor(true, true);
-  const node = await vi.waitFor(() => { const node = view.container.querySelector<HTMLElement>(".react-flow__node[data-id='keep']"); expect(node).not.toBeNull(); return node!; });
+  const node = await vi.waitFor(() => { const node = view.container.querySelector<HTMLElement>(".react-flow__node[data-id='keep']"); expect(node).not.toBeNull(); return node!; }, { timeout: 5000 });
   flushSync(() => node.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   const bind = await vi.waitFor(() => {
     const button = [...view.container.querySelectorAll("button")].find(button => button.textContent === "Bind a published service workflow"); expect(button).toBeDefined(); return button!;

@@ -20,6 +20,10 @@ git=lambda *command:subprocess.check_output(['git',*command],cwd=REPO,text=True)
 reader=lambda *command:json.loads(subprocess.check_output(['dotnet',str(args.reader.resolve()),*command],text=True))
 
 
+def controller_module():
+    spec=importlib.util.spec_from_file_location('owned_studio_upgrade',REPO/'tools/bpmn/run_owned_studio_upgrade.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+
+
 def restore_upgrade(output):
     """Verify the pinned archive and both product identities, then restore a fresh private root from its finished stores."""
     record=json.loads(ARCHIVE_RECORD.read_text());archive=args.upgrade_archive.resolve(strict=True)
@@ -52,7 +56,7 @@ def restore_upgrade(output):
     if host['sourceCommit']!=product or studio['sourceCommit']!=product:raise ValueError('Build both newer products from the exact committed --product-source.')
     subprocess.run(['git','merge-base','--is-ancestor',legacy_source,product],cwd=REPO,check=True)
     subprocess.run(['git','merge-base','--is-ancestor',product,harness],cwd=REPO,check=True)
-    if any(not name.startswith(HARNESS) for name in git('diff','--name-only',product,harness).splitlines()):raise ValueError('Product inputs changed after --product-source; rebuild the products.')
+    if any(not controller_module().product_neutral(name) for name in git('diff','--name-only',product,harness).splitlines()):raise ValueError('Product inputs changed after --product-source; rebuild the products.')
     new_products={'workbench':sha(args.workbench.resolve()),'studio':sha(args.studio.resolve())}
     # The legacy guard becomes explicit: these are different, identified products, never an unnoticed rebuild.
     if any(new_products[role]==legacy_products[role] for role in new_products):raise ValueError('Upgrade inspection needs newer products than the legacy capture.')
