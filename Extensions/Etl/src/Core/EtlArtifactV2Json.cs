@@ -99,7 +99,8 @@ public static class EtlArtifactV2Json
         if (HasNullEntries(pipeline.Mapping) || HasNullEntries(pipeline.Filters) ||
             HasNullEntries(pipeline.Lookup?.Schema) ||
             pipeline.Source is EtlCsvSource csv && HasNullEntries(csv.Schema) ||
-            pipeline.Source is EtlHttpJsonSource http && HasNullEntries(http.Fields))
+            pipeline.Source is EtlHttpJsonSource http && HasNullEntries(http.Fields) ||
+            pipeline.Source is EtlJsonlSource jsonl && HasNullEntries(jsonl.Fields))
             throw new JsonException("ETL v2 declaration collections must not contain null entries.");
     }
 

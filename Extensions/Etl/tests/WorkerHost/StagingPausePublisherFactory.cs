@@ -11,7 +11,7 @@ internal sealed class StagingPausePublisherFactory(IFileChunkPublisherFactory in
 
     private int PrefixLength(EtlFileChunkFormat format, int count)
     {
-        var selected = pause == EtlWorkerWritePause.SourceSnapshot && format == EtlFileChunkFormat.Csv ||
+        var selected = pause == EtlWorkerWritePause.SourceSnapshot && format is EtlFileChunkFormat.Csv or EtlFileChunkFormat.JsonlSnapshot ||
                        pause == EtlWorkerWritePause.OutputChunk && format == EtlFileChunkFormat.Jsonl;
         return selected && count > 1 && Interlocked.CompareExchange(ref _paused, 1, 0) == 0 ? count / 2 : 0;
     }
@@ -23,7 +23,7 @@ internal sealed class StagingPausePublisherFactory(IFileChunkPublisherFactory in
         {
             EtlFileChunkFormat.Csv => ".csv",
             EtlFileChunkFormat.Index => ".index",
-            EtlFileChunkFormat.Jsonl => ".jsonl",
+            EtlFileChunkFormat.Jsonl or EtlFileChunkFormat.JsonlSnapshot => ".jsonl",
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
         await EtlWorkerProtocol.WriteStagingAsync(root, role,

@@ -78,7 +78,8 @@ public sealed record EtlConnectorRunBindings(EtlConnectorBindingRevision Source,
 public sealed record EtlConnectorRunAdmission(EtlInvocation Invocation, EtlConnectorRunBindings Bindings);
 public sealed record EtlConnectorAdmissionResult(EtlStoreStatus Status, EtlConnectorRunView? Run);
 
-/// <summary>Verified source/index snapshot metadata for a connector pipeline with a CSV source.</summary>
+/// <summary>Verified source/index snapshot metadata for a connector pipeline with a CSV or JSON Lines file source.</summary>
+/// <remarks>The name predates JSON Lines input; the shape is format-neutral. For JSON Lines, index entry 0 is a sentinel covering only a byte order mark.</remarks>
 public sealed record EtlPreparedCsvInput(EtlObjectReference Source, EtlObjectReference Index, long RecordCount);
 /// <summary>Optional inputs prepared before partitions become runnable; absence is explicit.</summary>
 public sealed record EtlConnectorPreparedRun(EtlPreparedCsvInput? File, EtlObjectReference? Lookup);
