@@ -20,14 +20,14 @@ flowchart TB
     subgraph B["Path B: a handler throws"]
         B1[Caught by the drain loop] --> B4{Retry policy}
         B4 -->|RetryNow| B4n[Step removed, RetryScheduled, re-enqueued immediately]
-        B4 -->|"RetryAfter, delayable step"| B4a["Step released until the delay ends, RetryScheduled; the sweep re-drives it"]
-        B4 -->|"RetryAfter, other step"| B4p
+        B4 -->|"RetryAfter, released"| B4a["Step released until the delay ends, RetryScheduled; the sweep re-drives it"]
+        B4 -->|"RetryAfter, not released"| B4p
         B4 -->|default DoNotRetry| B4p[Step removed, poison record shown as a blocking incident]
         B4p --> B5["Default: workflow stays Running, needs an operator"]
     end
 ```
 
-In every case the drain stops. `RetryAfter` keeps the step only where the queue can delay its claim and the resumption sweep is composed to re-drive it. Otherwise it is poisoned, so a `RetryAfter` never leaves a step parked with nothing to run it ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)).
+In every case the drain stops. `RetryAfter` keeps the step only where the queue can delay its claim and the resumption sweep is composed to re-drive it. Otherwise it is poisoned, so a `RetryAfter` never parks a step on a host that composes no sweep. The sweep still has to run: a host that registers the resumption feature but runs no Tasks host never re-drives it ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)).
 
 ## Words you will meet
 
@@ -238,7 +238,8 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      The step stays the only queued copy. It is not claimable before the delay ends, and the
      resumption sweep's backlog discovery then re-drives it. While it waits, the execution's later
      queued steps wait behind it, because the queue serves each execution in order. If the queue
-     refuses the release, the item is acknowledged and poisoned instead.
+     refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,
+     which throws claim-lost and records nothing, as for any lost claim.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 
@@ -247,7 +248,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 | `RetryNow` | `RetryScheduled` | re-enqueued immediately through the queue contract |
 | `RetryAfter`, step released | `RetryScheduled` | the released step runs again once `NextRetryAt` passes, when the sweep re-drives it; each later failure asks the policy again with a higher failure count, so a policy can bound the retries |
 | `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, and checkpoint-rule faults ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
-| a policy that throws | `Poisoned` | none; treated as no decision |
+| a policy that throws | `Poisoned` | none; treated as no decision, with retry mode `PolicyFailed` and the exception type in the record's metadata |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
 5. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's

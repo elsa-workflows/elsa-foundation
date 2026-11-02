@@ -400,6 +400,11 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
         Assert.Null(record.NextRetryAt);
         Assert.Empty(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        if (reason == "policy-throws")
+        {
+            Assert.Equal("PolicyFailed", record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode]);
+            Assert.Equal(typeof(InvalidOperationException).FullName, record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason]);
+        }
     }
 
     [Fact]

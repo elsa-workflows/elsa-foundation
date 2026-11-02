@@ -404,8 +404,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal))
             {
                 var visibleAt = retry.Now + (retry.Decision.Delay ?? TimeSpan.Zero);
-                if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
-                    releasedUntil = visibleAt;
+                try
+                {
+                    if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
+                        releasedUntil = visibleAt;
+                }
+                catch (InvalidOperationException)
+                {
+                    // An inactive coalescing segment refuses a release whose durable head moved. Treat it as refused.
+                }
             }
             if (releasedUntil is null && _consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
@@ -433,6 +440,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         var now = _timeProvider.GetUtcNow();
         var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
         RuntimeDomainRetryDecision? decision;
+        string? policyFailure = null;
         try
         {
             decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
@@ -445,16 +453,18 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // A policy that cannot decide must not leave the item claimed to loop on every lapse: it is poisoned, and
-            // so surfaces as an incident, exactly as with no policy.
+            // so surfaces as an incident. The record names the policy failure so it is not mistaken for DoNotRetry.
             decision = null;
+            policyFailure = exception.GetType().FullName ?? exception.GetType().Name;
         }
-        return new(now, existing, decision);
+        return new(now, existing, decision, policyFailure);
     }
 
     private readonly record struct RetryDecisionContext(
         DateTimeOffset Now,
         RuntimeSchedulerPoisonRecord? Existing,
-        RuntimeDomainRetryDecision? Decision);
+        RuntimeDomainRetryDecision? Decision,
+        string? PolicyFailure);
 
     // One delayed-release rule for temporarily unavailable work and for an honored RetryAfter.
     private bool CanReleaseWithDelay(RuntimeSchedulerWorkItem workItem, ClaimRenewalState? renewal) =>
@@ -491,7 +501,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         DateTimeOffset? releasedUntil,
         CancellationToken cancellationToken)
     {
-        var (now, existing, decision) = retry;
+        var (now, existing, decision, policyFailure) = retry;
         var failureCount = (existing?.FailureCount ?? 0) + 1;
         var firstFailedAt = existing?.FirstFailedAt ?? now;
 
@@ -518,6 +528,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
 
         var metadata = BuildPoisonMetadata(workItem, existing, decision, exception);
+        if (policyFailure is not null)
+        {
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode] = "PolicyFailed";
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason] = policyFailure;
+        }
         await _poisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
             workflowExecutionId: workItem.WorkflowExecutionId,
             workItemId: workItem.WorkItemId,
