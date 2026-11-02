@@ -1,7 +1,7 @@
 import "@xyflow/react/dist/style.css";
 import "./graphCanvas.css";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BaseEdge, EdgeLabelRenderer, Handle, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { BaseEdge, EdgeLabelRenderer, Handle, NodeResizeControl, ResizeControlVariant, getBezierPath, getSmoothStepPath, useStore, type EdgeProps, type NodeProps, type OnResizeEnd, type OnResizeStart, type ReactFlowState } from "@xyflow/react";
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
@@ -10,7 +10,8 @@ import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
-import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
+import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowNodeResizeContext } from "./contexts";
+import { defaultNodeWidth, maxNodeWidth, minNodeWidth } from "../graph-authoring/nodeWidth";
 import { NodeSlotBadges } from "./NodeSlotBadges";
 import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
 import { WorkflowNodeRuntimeBadges } from "./WorkflowNodeRuntimeBadges";
@@ -37,6 +38,39 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
+  const resizeNode = React.useContext(WorkflowNodeResizeContext);
+  // The node's explicit (saved or resized) width. NodeProps.width is the measured size instead, so
+  // applying it would pin every unresized node to whatever it measured on first render.
+  const width = useStore(useCallback((state: ReactFlowState) => state.nodeLookup.get(id)?.width, [id]));
+  const currentWidth = width ?? defaultNodeWidth;
+  // NodeResizeControl tears down its drag listeners whenever a callback prop changes, and each width
+  // change during a drag re-renders this node. Stable callbacks that read the latest handler through a
+  // ref keep a touch drag's end listener alive, so the final width is still committed.
+  const resizeNodeRef = useRef(resizeNode);
+  const resizeStartWidthRef = useRef(0);
+  useLayoutEffect(() => {
+    resizeNodeRef.current = resizeNode;
+  });
+  const onResizeStart = useCallback<OnResizeStart>((_event, params) => {
+    resizeStartWidthRef.current = params.width;
+  }, []);
+  const onResizeEnd = useCallback<OnResizeEnd>((_event, params) => {
+    resizeNodeRef.current?.(id, params.width, resizeStartWidthRef.current);
+  }, [id]);
+  // Keyboard equivalent of dragging the strip (ARIA window-splitter pattern). Keys are kept from the
+  // canvas, whose own arrow-key handling would otherwise move the node as well.
+  const resizeFromKeyboard = (event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? 64 : 16;
+    const target = event.key === "ArrowRight" ? currentWidth + step
+      : event.key === "ArrowLeft" ? currentWidth - step
+        : event.key === "Home" ? minNodeWidth
+          : event.key === "End" ? maxNodeWidth
+            : null;
+    if (target === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizeNode?.(id, Math.min(maxNodeWidth, Math.max(minNodeWidth, target)), currentWidth);
+  };
   const ports = useGraphPortLayout(id, sourcePorts.map(port => port.name), showFlowPorts && nodeData.acceptsInbound);
   return (
     <div
@@ -48,8 +82,33 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
-      style={{ minHeight: ports.minHeight }}
+      style={{ minHeight: ports.minHeight, width }}
     >
+      {resizeNode && selected ? (
+        <NodeResizeControl
+          nodeId={id}
+          className="wf-node-resize-control nodrag"
+          variant={ResizeControlVariant.Line}
+          position="right"
+          resizeDirection="horizontal"
+          minWidth={minNodeWidth}
+          maxWidth={maxNodeWidth}
+          onResizeStart={onResizeStart}
+          onResizeEnd={onResizeEnd}
+        >
+          <span
+            className="wf-node-resize-handle nokey"
+            role="separator"
+            tabIndex={0}
+            aria-orientation="vertical"
+            aria-label={`Resize ${nodeData.label}`}
+            aria-valuenow={Math.round(currentWidth)}
+            aria-valuemin={minNodeWidth}
+            aria-valuemax={maxNodeWidth}
+            onKeyDown={resizeFromKeyboard}
+          />
+        </NodeResizeControl>
+      ) : null}
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
       {nodeData.isStartNode ? (

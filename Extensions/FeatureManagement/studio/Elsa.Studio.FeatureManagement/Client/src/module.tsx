@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import {
+  defaultStudioHostId,
   useAuthSession,
   useDialogFocus,
   usePermissions,
@@ -9,6 +10,7 @@ import {
   notifyStudioNavigationGuardReleased,
   type AuthSession,
   type ElsaStudioModuleApi,
+  type StudioHostId,
   type StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
 import { registerBuiltInSettingEditors,
@@ -109,7 +111,7 @@ interface FeatureImpactEntry {
   reasons: FeatureImpactReason[];
 }
 
-type FeatureHostId = "studio" | "server";
+type FeatureHostId = StudioHostId;
 type FeatureEndpointContext = Pick<ElsaStudioModuleApi["host"], "http">;
 
 interface FeatureHostConfig {
@@ -475,7 +477,7 @@ export function FeatureManagementPage() {
   const session = useAuthSession();
   const permissions = usePermissions();
   const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
-  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => {const target=new URLSearchParams(window.location.search).get("target");return target === "studio" || target === "server" ? target : featureCompletion?.hostId ?? "server";});
+  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => {const target=new URLSearchParams(window.location.search).get("target");return target === "studio" || target === "server" ? target : featureCompletion?.hostId ?? defaultStudioHostId;});
   const completionRef = useRef<HTMLDivElement | null>(null);
   const [reviewSnapshot, setReviewSnapshot] = useState<FeatureReviewSnapshot | null>(null);
   const reviewSnapshotRef = useRef<FeatureReviewSnapshot | null>(null);

@@ -98,7 +98,7 @@ draws with a literal width), it may guard on `html[data-theme-appearance="high-c
 
 ### Independent workspace style and color scheme
 
-Appearance offers `linen`, `minimal`, `sketchbook`, `quiet`, `focus` and `open` workspace styles, independently
+Appearance offers `linen`, `minimal`, `quiet`, `focus` and `open` workspace styles, independently
 of the selected color scheme and mode. A theme can declare optional `workspaceStyle` metadata
 as its default treatment. Without an explicit workspace override, its own font, radii and layout
 remain authoritative. Existing themes without metadata retain their original presentation. See [ADR 0023](adr/0023-separate-workspace-style-and-color-scheme.md).
@@ -347,9 +347,17 @@ and runtime/selection states. Existing arrangements and full presets remain avai
 
 The additive navigation roles are `--studio-nav-bg`, `--studio-nav-text`, `--studio-nav-muted`,
 `--studio-nav-active` and `--studio-nav-active-text`. They form separate background/foreground pairs:
-never use work-area text on contrasting navigation. In light Linen the host derives these from the
-palette's dark navigation roles; in other modes it uses the selected mode. A light-only custom palette
-uses its own pair. High contrast retains the explicit high-contrast pair.
+never use work-area text on contrasting navigation. The user's **Sidebar color** choice (theme menu and
+Settings › Appearance, kept in `localStorage` as `elsa-studio-sidebar-color`) decides where they come
+from. **Dark**, the default, takes the palette's dark navigation roles in every mode; **Light** takes the
+light ones, or the light card surface when a palette's light mode ships a dark sidebar. A pinned tone is
+published as `data-sidebar-color` (`light` | `dark`) on `<html>`, and the shell re-declares the palette
+and `--studio-*` aliases on `.sidebar` from these roles so every sidebar part follows it. In top
+navigation the same setting paints the menubar. **Theme default** follows the workspace: in light Linen
+the host derives the roles from the palette's dark navigation roles; in other modes it uses the selected
+mode, and a light-only custom palette uses its own pair. High contrast always retains the explicit
+high-contrast pair and never carries `data-sidebar-color`. The choice is independent of Studio presets:
+applying a preset leaves it as it is, so a preset shows its own navigation only under Theme default.
 
 `--studio-workspace-page-background` and `--studio-workspace-panel-background` are workspace background recipes,
 which may contain subtle gradients. Use them only as `background`, with a solid role fallback; never
@@ -368,7 +376,3 @@ shared pattern rather than repeating local spacing values.
 primitive/disclosure styles. `tokens.css` remains available for token-only hosts.
 Both published files include the light-theme primitive defaults; load custom theme
 overrides afterward. See the [module UI guide](module-ui.md) for integration.
-
-### Sketchbook workspace
-
-`sketchbook` is a palette-independent workspace treatment: fine graphite edges, static paper grain, watercolor washes and a serif display face with readable sans/mono controls. `--studio-workspace-canvas-background` is an additive background recipe with a neutral `var(--studio-canvas)` fallback. Like the page/panel recipes, consume it as `background`, with a solid role fallback; never use it as a color or border. High contrast and forced-colors remove the decorative recipe. Module CSS uses the workspace-style guard and public roles, with no palette identity selectors. Graph hit boxes, ports, notation and runtime status colors keep their existing authority.

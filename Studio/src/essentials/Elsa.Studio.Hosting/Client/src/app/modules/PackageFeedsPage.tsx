@@ -1,7 +1,7 @@
 import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useRef, useState } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
-import { useDialogFocus } from "../../sdk";
+import { defaultStudioHostId, useDialogFocus } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
@@ -33,7 +33,7 @@ interface FeedDraft {
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
-  const [activeHostId, setActiveHostId] = useState<HostId>("studio");
+  const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeQuery = byHost(activeHost.id);
   // Present only when the host's registry read resolved to a ready result; an unavailable Server backend surfaces its

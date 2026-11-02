@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
 
-const styles = ["linen", "minimal", "quiet", "focus", "open", "sketchbook"] as const;
+const styles = ["linen", "minimal", "quiet", "focus", "open"] as const;
 const modes = ["light", "dark", "dim", "high-contrast"] as const;
 
 async function open(page: Page, style: string, scheme: string, mode: string, view = "editor", width = 1440) {

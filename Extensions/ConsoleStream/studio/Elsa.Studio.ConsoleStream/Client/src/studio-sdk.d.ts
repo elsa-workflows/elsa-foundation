@@ -50,4 +50,7 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly routes: StudioContributionRegistry<StudioRouteContribution>;
     readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   }
+
+  export type StudioHostId = "server" | "studio";
+  export const defaultStudioHostId: StudioHostId;
 }

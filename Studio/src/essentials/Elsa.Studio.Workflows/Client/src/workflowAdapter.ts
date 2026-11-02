@@ -12,6 +12,7 @@ import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicAct
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
 import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
+import { persistedNodeWidth, readSavedNodeWidth } from "./graph-authoring/nodeWidth";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 import type { CollectionSlot } from "./collectionSlots";
 
@@ -671,12 +672,13 @@ export function buildCanvas(
   const startNodeId = scope.slot.mode === "flowchart" ? readFlowchartStartNodeId(scope.owner) : null;
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
-    const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
+    const record = layoutByNodeId.get(activity.nodeId);
+    const position = record ?? defaultPosition(scope.slot.mode, index);
     return createWorkflowNode(
       activity,
       catalogItem,
       { x: position.x, y: position.y },
-      { isStartNode: activity.nodeId === startNodeId },
+      { isStartNode: activity.nodeId === startNodeId, width: readSavedNodeWidth(record?.width) },
       formatSummary,
       presentationByNodeId.get(activity.nodeId)
     );
@@ -696,14 +698,16 @@ export function buildUnsupportedActivityCanvas(
   activityPresentation?: ActivityPresentationRecord[]
 ) {
   const catalogItem = catalog.find(candidate => candidate.activityVersionId === activity.activityVersionId);
-  const position = layout.find(record => record.nodeId === activity.nodeId) ?? { x: 0, y: 0 };
+  const record = layout.find(candidate => candidate.nodeId === activity.nodeId);
+  const position = record ?? { x: 0, y: 0 };
 
   return {
     nodes: [createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y }, {
       connectable: false,
       deletable: false,
       draggable: false,
-      suppressFlowPorts: true
+      suppressFlowPorts: true,
+      width: readSavedNodeWidth(record?.width)
     }, formatSummary, indexActivityPresentation(activityPresentation).get(activity.nodeId))],
     edges: [] satisfies Edge[]
   };
@@ -859,11 +863,14 @@ export function withFlowchartConnections(owner: ActivityNode, edges: Edge[]) {
 export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
   const byNodeId = new Map(layout.map(record => [record.nodeId, record]));
   for (const node of nodes) {
+    const previous = byNodeId.get(node.id);
+    const width = persistedNodeWidth(node, previous?.width);
     byNodeId.set(node.id, {
-      ...(byNodeId.get(node.id) ?? { nodeId: node.id }),
+      ...(previous ?? { nodeId: node.id }),
       nodeId: node.id,
       x: Math.round(node.position.x),
-      y: Math.round(node.position.y)
+      y: Math.round(node.position.y),
+      ...(width !== undefined ? { width } : {})
     });
   }
   return [...byNodeId.values()];
@@ -917,7 +924,7 @@ function createWorkflowNode(
   activity: ActivityNode,
   catalogItem: ActivityCatalogItem | undefined,
   position: XYPosition,
-  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean } = {},
+  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean; isStartNode?: boolean; width?: number } = {},
   formatSummary?: WorkflowNodeSummaryFormatter,
   presentation?: ActivityPresentationRecord
 ): Node<WorkflowNodeData> {
@@ -925,6 +932,7 @@ function createWorkflowNode(
     id: activity.nodeId,
     type: "workflowActivity",
     position,
+    ...(options.width !== undefined ? { width: options.width } : {}),
     connectable: options.connectable,
     deletable: options.deletable,
     draggable: options.draggable,

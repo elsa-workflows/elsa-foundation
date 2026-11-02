@@ -11,6 +11,7 @@ import type { StudioNotificationApi } from "./notifications";
 
 export * from "../auth";
 export * from "./themeLayout";
+export * from "./hosts";
 export * from "./activityIcons";
 export * from "./useDialogFocus";
 

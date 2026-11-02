@@ -11,7 +11,8 @@ import {
 import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
-import { studioPresets, type StudioPresetId } from "../themes/studioPresets";
+import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
+import { isSidebarColorPreference, sidebarColorPreferenceLabels, sidebarColorPreferences } from "../themes/sidebarColor";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
 function keyTarget(key: string, index: number, count: number): number | undefined {
@@ -48,10 +49,14 @@ export function AppearancePage({
     mode,
     resetAppearance,
     supportedModes,
+    navMode,
     navModePreference,
-    setNavModePreference
+    setNavModePreference,
+    sidebarColorPreference,
+    setSidebarColorPreference
   } = useTheme();
   const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
+  const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
@@ -61,13 +66,13 @@ export function AppearancePage({
       <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">
         <RadioCardGroup
           ariaLabel="Studio preset"
-          value={currentColorScheme.id === currentTheme.id && studioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode && preset.workspaceStyle === workspaceStyle) ? currentTheme.id : ""}
-          options={studioPresets.flatMap(preset => {
+          value={workspaceStyle === "minimal" && currentColorScheme.id === currentTheme.id && minimalStudioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode) ? currentTheme.id : ""}
+          options={minimalStudioPresets.flatMap(preset => {
             const theme = availableThemes.find(candidate => candidate.id === preset.id);
             const colors = theme && getThemeModeDefinition(theme, preset.mode);
             return colors ? [{ value: preset.id, label: preset.name, description: preset.description, preview: colors }] : [];
           })}
-          onChange={value => applyPreset(value as StudioPresetId)}
+          onChange={value => applyPreset(value as MinimalStudioPresetId)}
         />
       </AppearanceCard>
 
@@ -146,6 +151,23 @@ export function AppearancePage({
             defaultValue: preference === defaultAppearancePreferences.navigation
           }))}
           onChange={value => isNavModePreference(value) && setNavModePreference(value)}
+        />
+      </AppearanceCard>
+
+      <AppearanceCard
+        title={sidebarColorTitle}
+        description="Keep the navigation dark or light in every mode, or follow the workspace. High contrast keeps its own navigation."
+      >
+        <RadioCardGroup
+          ariaLabel={sidebarColorTitle}
+          value={sidebarColorPreference}
+          options={sidebarColorPreferences.map(preference => ({
+            value: preference,
+            label: sidebarColorPreferenceLabels[preference],
+            defaultValue: preference === defaultAppearancePreferences.sidebarColor,
+            disabled: mode === "high-contrast"
+          }))}
+          onChange={value => isSidebarColorPreference(value) && setSidebarColorPreference(value)}
         />
       </AppearanceCard>
 
