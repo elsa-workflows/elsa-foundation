@@ -311,22 +311,79 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     }
 
     /// <summary>
-    /// Marks the proposal's claim dispatched after hydrating its session; false refuses a pre-dispatch claim past its
-    /// deadline, and a session that is not recorded, which can never authorize dispatch.
+    /// Checks that the proposal's claim may still authorize dispatch; false refuses a pre-dispatch claim past its
+    /// deadline, and a session that is not recorded, which can never authorize dispatch. Nothing is marked.
     /// </summary>
     internal Task<bool> MarkProposalDispatchedAsync(string sessionId, string proposalId, CancellationToken cancellationToken = default)
-        => CommitAsync<bool>(sessionId, () => false, row =>
+        => DispatchProposalAsync(sessionId, proposalId, null, cancellationToken);
+
+    /// <summary>
+    /// Under the session write gate: checks that the proposal's claim may still authorize dispatch, awaits the
+    /// <paramref name="executing"/> transition's write (the recorded Executing status), applies it, and only then marks the
+    /// claim dispatched with a live executor. A refused or failed write leaves the claim exactly as it was, so a dispatch
+    /// that never happened can never keep the session busy or its lease renewed. False refuses a pre-dispatch claim past
+    /// its deadline, and a session that is not recorded.
+    /// </summary>
+    internal async Task<bool> DispatchProposalAsync(string sessionId, string proposalId, Func<AgentSessionFence, AgentSessionTransition<bool>>? executing,
+        CancellationToken cancellationToken = default)
+    {
+        var gate = Gate(sessionId);
+        await gate.WaitAsync(cancellationToken);
+        var notRecorded = false;
+        try
         {
-            // Every unsettled proposal of a loaded row holds a claim, so a missing one means this process does not hold the
-            // proposal's current state (for example, another process settled it); it can never authorize dispatch.
-            if (row.Find(ProposalKey(proposalId)) is not { } claim) return new(false);
-            if (claim.Dispatched) return new(true);
-            // An expired pre-dispatch claim no longer counts as busy, so it cannot authorize dispatch.
-            if (claim.Deadline is { } deadline && deadline <= _clock.GetUtcNow()) return new(false);
-            claim.Dispatched = true;
+            var row = await HydrateAsync(sessionId, cancellationToken);
+            notRecorded = row is null;
+            if (row is null) return false;
+            AgentSessionClaim? claim;
+            AgentSessionFence fence;
+            lock (row)
+            {
+                // Every unsettled proposal of a loaded row holds a claim, so a missing one means this process does not hold the
+                // proposal's current state (for example, another process settled it); it can never authorize dispatch.
+                claim = row.Find(ProposalKey(proposalId));
+                // An expired pre-dispatch claim no longer counts as busy, so it cannot authorize dispatch.
+                if (claim is null || !claim.Dispatched && claim.Deadline is { } deadline && deadline <= _clock.GetUtcNow()) return false;
+                fence = row.Fence;
+            }
+            if (executing is null) return true;
+            // The plan runs and its change applies outside the row monitor, as every collaborator transition does.
+            var planned = executing(fence);
+            if (planned.Write is { } write) await WriteThroughAsync(sessionId, row, write);
+            planned.Apply?.Invoke();
+            lock (row)
+            {
+                claim.Dispatched = true;
+                claim.Executing = true;
+            }
             EnsureRenewal();
-            return new(true);
-        }, cancellationToken);
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+            if (notRecorded) ForgetGate(sessionId, gate);
+        }
+    }
+
+    /// <summary>The proposal's executor returned (or failed): its claim no longer needs its lease renewed for it.</summary>
+    internal void EndExecution(string sessionId, string proposalId)
+    {
+        if (!_rows.TryGetValue(sessionId, out var row)) return;
+        lock (row)
+            if (row.Find(ProposalKey(proposalId)) is { } claim)
+                claim.Executing = false;
+    }
+
+    /// <summary>
+    /// Forgets a loaded session whose recorded state this process can no longer vouch for (an outcome it could not
+    /// record), exactly as a lost ownership does: the next access hydrates the recorded facts again, and recovery settles
+    /// them.
+    /// </summary>
+    internal void Evict(string sessionId)
+    {
+        if (_rows.TryGetValue(sessionId, out var row)) LoseOwnership(sessionId, row);
+    }
 
     /// <summary>Releases the claim bound to this proposal identity, if any.</summary>
     internal void ReleaseProposal(string sessionId, string proposalId)

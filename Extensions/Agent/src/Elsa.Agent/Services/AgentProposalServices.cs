@@ -317,16 +317,20 @@ internal sealed class InMemoryAgentProposalService(
                     "The approval basis is no longer the session's current policy; no effect occurred.", CancellationToken.None, PreDispatchExpiry);
                 return stale;
             }
-            // The owner marks the claim dispatched before Executing. An expired pre-dispatch claim is no
-            // longer busy, so policy may have moved; it can never authorize dispatch.
-            if (_owner is not null && !await _owner.MarkProposalDispatchedAsync(proposal.SessionId, proposalId, CancellationToken.None))
+            // Executing is recorded before the executor runs, so a restart can never mistake a dispatch for "not started".
+            // The owner checks the claim, records Executing and marks the claim dispatched as one step: an expired
+            // pre-dispatch claim is no longer busy, so policy may have moved, and it can never authorize dispatch; a write
+            // that fails leaves the claim undispatched.
+            var executing = proposal with { Status = AgentActionProposalStatus.Executing, UpdatedAt = clock.GetUtcNow() };
+            long dispatched;
+            if (_owner is null) dispatched = await TransitionAsync(executing, version);
+            else if (await _owner.DispatchProposalAsync(proposal.SessionId, proposalId, fence => PlanTransition(executing, version, fence), CancellationToken.None))
+                dispatched = version + 1;
+            else
             {
                 await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<AgentProposalExecutionResult>();
             }
-            // Executing is recorded before the executor runs, so a restart can never mistake a dispatch for "not started".
-            var executing = proposal with { Status = AgentActionProposalStatus.Executing, UpdatedAt = clock.GetUtcNow() };
-            var dispatched = await TransitionAsync(executing, version);
             AgentResult<AgentProposalExecutionResult> result;
             try
             {
@@ -343,6 +347,7 @@ internal sealed class InMemoryAgentProposalService(
                 result = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
             }
+            finally { _owner?.EndExecution(proposal.SessionId, proposalId); }
             try { result = await StoreOutcomeAsync(executing, dispatched, result); }
             catch (AgentProposalConflictException)
             {
@@ -351,6 +356,17 @@ internal sealed class InMemoryAgentProposalService(
                 // uncertain and never replayed, not a conflict to decide again.
                 return AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The operation was dispatched, but its outcome could not be recorded because the operation changed meanwhile. Its effect is uncertain and will not be replayed; read its current state."));
+            }
+            catch (Exception failure) when (_owner is not null && failure is not AgentSessionOwnershipException)
+            {
+                // The executor ran, but the store could not record its outcome. What this process holds in memory (Executing,
+                // with no settlement) is no longer the record, so the session is forgotten: its next access hydrates the
+                // recorded Executing status, and recovery settles it Uncertain once. It is never replayed.
+                logger?.LogError("The outcome of prepared operation {InvocationId} could not be recorded ({FailureType}); its session is reloaded from the record.",
+                    proposal.PreparedInvocation.InvocationId, failure.GetType().Name);
+                _owner.Evict(proposal.SessionId);
+                return AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
+                    "The operation was dispatched, but its outcome could not be recorded. Its effect is uncertain and will not be replayed; read its current state."));
             }
             await AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
                     : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
@@ -597,25 +613,29 @@ internal sealed class InMemoryAgentProposalService(
     private async Task<long> TransitionAsync(AgentActionProposal proposal, long version, AgentToolResult? result = null,
         AgentResult<AgentProposalExecutionResult>? execution = null, string? acknowledgement = null)
     {
-        var invocationId = proposal.PreparedInvocation?.InvocationId;
-        await CommitAsync(proposal.SessionId, fence =>
-        {
-            var record = Record(proposal, version, execution, result, acknowledgement);
-            return new AgentSessionTransition<bool>(true, Write(fence, proposal.SessionId, record), () =>
-            {
-                lock (store.Mutation)
-                {
-                    store.Versions[proposal.Id] = record.Version + 1;
-                    if (execution is not null) store.Executions[proposal.Id] = execution;
-                    if (result is not null) store.Results[proposal.Id] = result;
-                    if (acknowledgement is not null && invocationId is not null) store.Acknowledgements[invocationId] = acknowledgement;
-                    store.Proposals[proposal.Id] = proposal;
-                }
-            });
-        });
+        await CommitAsync(proposal.SessionId, fence => PlanTransition(proposal, version, fence, result, execution, acknowledgement));
         if (_owner is not null && Settled(proposal))
             _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
         return version + 1;
+    }
+
+    /// <summary>One proposal transition's record write and the in-memory change applied after it succeeded.</summary>
+    private AgentSessionTransition<bool> PlanTransition(AgentActionProposal proposal, long version, AgentSessionFence? fence, AgentToolResult? result = null,
+        AgentResult<AgentProposalExecutionResult>? execution = null, string? acknowledgement = null)
+    {
+        var invocationId = proposal.PreparedInvocation?.InvocationId;
+        var record = Record(proposal, version, execution, result, acknowledgement);
+        return new(true, Write(fence, proposal.SessionId, record), () =>
+        {
+            lock (store.Mutation)
+            {
+                store.Versions[proposal.Id] = record.Version + 1;
+                if (execution is not null) store.Executions[proposal.Id] = execution;
+                if (result is not null) store.Results[proposal.Id] = result;
+                if (acknowledgement is not null && invocationId is not null) store.Acknowledgements[invocationId] = acknowledgement;
+                store.Proposals[proposal.Id] = proposal;
+            }
+        });
     }
 
     /// <summary>

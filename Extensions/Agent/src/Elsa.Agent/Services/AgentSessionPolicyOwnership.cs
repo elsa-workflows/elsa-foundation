@@ -38,6 +38,8 @@ internal sealed class AgentSessionClaim
     internal string? Key { get; set; }
     internal DateTimeOffset? Deadline { get; }
     internal bool Dispatched { get; set; }
+    /// <summary>This process dispatched the proposal and its executor has not returned yet; only then is the lease renewed for it.</summary>
+    internal bool Executing { get; set; }
 }
 
 /// <summary>
