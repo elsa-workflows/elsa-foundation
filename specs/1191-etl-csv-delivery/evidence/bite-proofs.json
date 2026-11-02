@@ -49,7 +49,8 @@
       ],
       "restored": "Passed!  - Failed:     0, Passed:    20",
       "original": "string.Join(',', cells) + \"\\r\\n\"",
-      "mutated_text": "string.Join(',', cells) + \"\\n\""
+      "mutated_text": "string.Join(',', cells) + \"\\n\"",
+      "note": "Round 2 (7f3974f29) renamed A_single_null_column_row_is_an_empty_line to A_single_null_column_row_is_an_empty_line_that_the_csv_source_reads_as_one_null_field."
     },
     {
       "mutation": "effect-kind-raw-csv",
@@ -98,7 +99,8 @@
       ],
       "restored": "Passed!  - Failed:     0, Passed:     1",
       "original": "var reserved = _count == 0 ? 1 : 0;",
-      "mutated_text": "var reserved = 0;"
+      "mutated_text": "var reserved = 0;",
+      "note": "This test leaves the bracket's byte free, so it bites only through the byte accounting; http-bracket-unreserved-at-limit (round 3) reproduces the overrun itself."
     },
     {
       "mutation": "csv-row-bound-loose",
@@ -125,6 +127,21 @@
       "mutated_text": ": remainingBytes);",
       "round": 1,
       "sourceRevision": "1b46b4574e431a326124190defcaa812695a2cfa"
+    },
+    {
+      "mutation": "http-bracket-unreserved-at-limit",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~A_file_row_that_would_take",
+      "mutated": "Failed!  - Failed:     2, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_file_row_that_would_take_the_http_error_arrays_closing_bracket_is_rejected_to_that_array(jsonlMain: False)",
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.A_file_row_that_would_take_the_http_error_arrays_closing_bracket_is_rejected_to_that_array(jsonlMain: True)"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     2",
+      "original": "var reserved = _count == 0 ? 1 : 0;",
+      "mutated_text": "var reserved = 0;",
+      "round": 3,
+      "sourceRevision": "81a82f43c191ccdb9868244cdbeed5166707daa5"
     }
   ]
 }

@@ -37,7 +37,7 @@ Both owned processes were stopped. The owner's Workbench on 5095 was not touched
 
 ## Bite-proofs (SC-002)
 
-[`bite-proofs.json`](bite-proofs.json) records each mutation at `eb418a835`, plus one round-1 mutation with its own source revision. For each one, the tests failed with the mutation in place and passed again after the file was restored from git.
+[`bite-proofs.json`](bite-proofs.json) records each mutation at `eb418a835`, plus a round-1 and a round-3 mutation, each with its own source revision. For each one, the tests failed with the mutation in place and passed again after the file was restored from git.
 
 | Mutation | Failing tests |
 |---|---|
@@ -47,9 +47,10 @@ Both owned processes were stopped. The owner's Workbench on 5095 was not touched
 | Effect column storing the raw CSV kind (0, which breaks the constraint) | 1/1 |
 | Acceptance computing a `.jsonl` key for a CSV route | 2/3 |
 | Publication verified through the `.jsonl` store | 1/1 |
-| HTTP array's closing bracket not reserved | 1/1 |
+| HTTP array's closing bracket not reserved (bites only through the byte accounting; see the round-3 row) | 1/1 |
 | CSV row bound loosened by one byte | 1/2 |
 | HTTP array's first row bounded without its reserved bracket (round-1 fix) | 1/1 |
+| HTTP array's closing bracket not reserved, with a file row that fills the limit exactly (round 3) | 2/2 |
 
 An earlier quoting mutation only disabled the empty-string check, because of operator precedence. It was replaced, and the replacement is noted in the file.
 
