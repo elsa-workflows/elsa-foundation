@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, Shield, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
@@ -11,13 +11,9 @@ import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicato
 import { WeaverComposer } from "./WeaverComposer";
 import { WeaverMessageList } from "./WeaverMessageList";
 import { WeaverTimeline } from "./WeaverTimeline";
-import { useWeaverSession, type UseWeaverSession, type WeaverAutoApplyMode } from "./useWeaverSession";
+import { useWeaverSession, WEAVER_AUTO_APPLY_LABELS, type UseWeaverSession, type WeaverAutoApplyMode, type WeaverAutoApplyNotice, type WeaverAutoApplyState } from "./useWeaverSession";
 
-const AUTO_APPLY_LABELS: Record<WeaverAutoApplyMode, string> = {
-  "manual": "Manual review",
-  "auto-read-only": "Auto-apply low-risk",
-  "full-auto": "Autopilot"
-};
+const AUTO_APPLY_LABELS = WEAVER_AUTO_APPLY_LABELS;
 
 // Tooltip copy for the autonomy menu.
 const AUTO_APPLY_HINTS: Record<WeaverAutoApplyMode, string> = {
@@ -53,6 +49,8 @@ export function WeaverSurface({
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
   const lastPromptIdRef = useRef<string | null>(null);
+  const autoApplyStatusId = useId();
+  const autoApplyStatus = describeAutoApplyStatus(session.autoApplyState, session.pendingAutoApplyMode, session.autoApplyUnsupported, session.autoApplyNotice);
 
   // Memoize on the underlying state (not the per-render session object) to avoid an update loop.
   const indicatorSessions = useMemo(
@@ -75,7 +73,8 @@ export function WeaverSurface({
     }
   }, [incomingPrompt, onPromptConsumed, session.bootstrap, session.ready]);
 
-  const composerDisabled = !session.ready || session.chatState === "awaiting-review" || session.chatState === "awaiting-confirmation";
+  // An unacknowledged mode change blocks dependent prompts, including module actions routed through send().
+  const composerDisabled = !session.ready || session.chatState === "awaiting-review" || session.chatState === "awaiting-confirmation" || session.autoApplyBlocked;
 
   return (
     <section className="weaver-surface" data-variant={variant} aria-label="Weaver assistant" aria-busy={session.busy}>
@@ -88,7 +87,10 @@ export function WeaverSurface({
           <WeaverAutoApplyMenu
             value={session.autoApplyMode}
             modes={session.allowedAutoApplyModes}
-            disabled={!session.ready}
+            state={session.autoApplyState}
+            pendingMode={session.pendingAutoApplyMode}
+            disabled={!session.ready || session.autoApplyUnsupported !== null}
+            statusId={autoApplyStatus ? autoApplyStatusId : undefined}
             onChange={session.setAutoApplyMode}
           />
           {onClose ? (
@@ -104,6 +106,15 @@ export function WeaverSurface({
         <span>{providerStatus.label}</span>
         {session.activeProvider ? <small>{session.activeProvider.providerId} · {session.activeProvider.riskProfile}</small> : null}
       </div>
+
+      {autoApplyStatus ? (
+        <div className="weaver-mode-status" id={autoApplyStatusId} role="status" aria-label="Auto-apply mode status" data-autonomy-state={session.autoApplyState}>
+          <span>{autoApplyStatus}</span>
+          {session.autoApplyState === "unresolved" ? (
+            <button type="button" className="weaver-mode-retry" onClick={session.retryAutoApplyMode}>Retry mode change</button>
+          ) : null}
+        </div>
+      ) : null}
 
       {session.error ? <div className="weaver-alert" role="alert">{session.error}</div> : null}
 
@@ -142,12 +153,18 @@ export function WeaverSurface({
 function WeaverAutoApplyMenu({
   value,
   modes,
+  state,
+  pendingMode,
   disabled,
+  statusId,
   onChange
 }: {
   value: WeaverAutoApplyMode;
   modes: readonly WeaverAutoApplyMode[];
+  state: WeaverAutoApplyState;
+  pendingMode: WeaverAutoApplyMode | null;
   disabled: boolean;
+  statusId?: string;
   onChange(mode: WeaverAutoApplyMode): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -181,13 +198,16 @@ function WeaverAutoApplyMenu({
   };
 
   return (
-    <div className="weaver-auto-apply" ref={wrapperRef}>
+    <div className="weaver-auto-apply" ref={wrapperRef} data-autonomy-state={state} data-pending-mode={pendingMode ?? undefined}>
+      {/* The button always names the mode in effect (acknowledged); a pending request is only described. */}
       <button
         type="button"
         className="weaver-mode-button"
         aria-label="Auto-apply mode"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-busy={pendingMode !== null}
+        aria-describedby={statusId}
         disabled={disabled}
         title={AUTO_APPLY_HINTS[value]}
         onClick={() => setOpen(current => !current)}
@@ -204,6 +224,8 @@ function WeaverAutoApplyMenu({
               aria-checked={mode === value}
               className="weaver-mode-option"
               key={mode}
+              // One change per conversation at a time: other modes are unavailable until it resolves.
+              disabled={pendingMode !== null && mode !== pendingMode}
               title={AUTO_APPLY_HINTS[mode]}
               onClick={() => selectMode(mode)}
             >
@@ -218,6 +240,40 @@ function WeaverAutoApplyMenu({
       ) : null}
     </div>
   );
+}
+
+/** Accessible copy for the selector's pending, unresolved, unavailable and settled outcomes. */
+function describeAutoApplyStatus(
+  state: WeaverAutoApplyState,
+  pendingMode: WeaverAutoApplyMode | null,
+  unsupported: "unsupported" | "unreadable" | null,
+  notice: WeaverAutoApplyNotice | null
+): string | null {
+  if (state === "pending" && pendingMode) {
+    return `Changing to ${AUTO_APPLY_LABELS[pendingMode]}. It is not in effect until the server confirms it; new prompts wait until then.`;
+  }
+  if (state === "unresolved" && pendingMode) {
+    return `The change to ${AUTO_APPLY_LABELS[pendingMode]} was sent but not confirmed, so it is not in effect and new prompts are blocked. Retry checks the same request without applying it twice.`;
+  }
+  if (unsupported === "unsupported") return "This conversation cannot change its auto-apply mode. Stop and start a new conversation to use a different mode.";
+  if (unsupported === "unreadable") return "This conversation cannot confirm its auto-apply mode, so the mode cannot be changed here.";
+  if (!notice) return null;
+  switch (notice.kind) {
+    case "clamped":
+      return `The server applied ${AUTO_APPLY_LABELS[notice.acknowledgedMode]} instead of ${AUTO_APPLY_LABELS[notice.requestedMode]}, within this conversation's limits.`;
+    case "reconciled":
+      return `The mode changed while your request was being confirmed. The server's current mode is ${AUTO_APPLY_LABELS[notice.acknowledgedMode]}.`;
+    case "busy":
+      return `Weaver is still working in this conversation, so the mode was not changed to ${AUTO_APPLY_LABELS[notice.requestedMode]}. Try again when it is idle.`;
+    case "closed":
+      return `This conversation has ended, so the mode was not changed to ${AUTO_APPLY_LABELS[notice.requestedMode]}.`;
+    case "starting":
+      return `The conversation is starting, so ${AUTO_APPLY_LABELS[notice.requestedMode]} was not applied. Choose it again once the conversation has started.`;
+    case "conflict":
+      return `The change to ${AUTO_APPLY_LABELS[notice.pendingMode]} is still being confirmed, so ${AUTO_APPLY_LABELS[notice.requestedMode]} was not sent.`;
+    case "refused":
+      return `The mode was not changed to ${AUTO_APPLY_LABELS[notice.requestedMode]}: ${notice.message}`;
+  }
 }
 
 function describeProviderStatus(session: UseWeaverSession): { label: string; tone: "success" | "neutral" | "warning" } {

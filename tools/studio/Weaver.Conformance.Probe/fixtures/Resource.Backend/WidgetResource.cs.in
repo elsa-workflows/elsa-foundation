@@ -20,11 +20,15 @@ internal static class WidgetContract
     internal const string GuidanceType = "acme.home.guidance";
     internal const string ReadTool = "acme_home_read_widget";
     internal const string WriteTool = "acme_home_set_visibility";
+    internal const string SizeTool = "acme_home_set_size";
     internal const string ReadResult = "acme.home.widget-state";
     internal const string ChangeResult = "acme.home.widget-visibility";
     internal const string Renderer = "acme.home.widget-result";
+    internal const string SizeResult = "acme.home.widget-size";
+    internal const string SizeRenderer = "acme.home.widget-size-result";
     internal const string Route = "/qualification/acme-home";
     internal const string Endpoint = "/_qualification/acme/home-widget";
+    internal const string SizeEndpoint = Endpoint + "/size";
     internal const string ReadPermission = "studio/preferences:read";
     internal const string WritePermission = "studio/preferences:write";
     internal static readonly string[] Scopes = [Route, "/", "/dashboard", "/overview"];
@@ -38,6 +42,12 @@ internal static class WidgetContract
         { widgetId = WidgetId, beforeVisible = state.Visible, visible, revision = state.Document.Revision, hostId = state.Key.StudioHostId }, Json));
     internal static AgentPayload Changed(WidgetObservation after, bool beforeVisible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
         { widgetId = WidgetId, beforeVisible, visible = after.Visible, revision = after.Document.Revision, hostId = after.Key.StudioHostId }, Json));
+    internal static object SizeState(WidgetObservation state) => new
+        { widgetId = WidgetId, revision = state.Document.Revision, size = WidgetResource.Size(state), hostId = state.Key.StudioHostId };
+    internal static AgentPayload SizePreview(WidgetObservation state, string size) => new(SizeResult, "1", JsonSerializer.SerializeToElement(new
+        { widgetId = WidgetId, beforeSize = WidgetResource.Size(state), size, revision = state.Document.Revision, hostId = state.Key.StudioHostId }, Json));
+    internal static AgentPayload SizeChanged(WidgetObservation after, string beforeSize) => new(SizeResult, "1", JsonSerializer.SerializeToElement(new
+        { widgetId = WidgetId, beforeSize, size = WidgetResource.Size(after), revision = after.Document.Revision, hostId = after.Key.StudioHostId }, Json));
     internal static bool SameTarget(AgentResourceTarget? target, WidgetObservation state) => target is not null &&
         target.ModuleId == Module && target.ResourceType == ResourceType && target.ResourceId == WidgetId && target.Revision == state.Document.Revision;
     internal static bool IsOwn(AgentContextAttachment item) => item.ModuleId == Module || item.ContentType.StartsWith("acme.home.", StringComparison.Ordinal);
@@ -143,6 +153,87 @@ internal sealed class WidgetResource(
         }
         using var parsed = JsonDocument.Parse(stream.ToArray());
         return parsed.RootElement.Clone();
+    }
+
+    // Size is a distinct bounded operation. Visibility's contract and default/fallback behavior are unchanged.
+    internal static string Size(WidgetObservation state)
+    {
+        var widget = state.Document.Value.GetProperty("widgets").EnumerateArray()
+            .Single(entry => entry.GetProperty("id").GetString() == WidgetContract.WidgetId);
+        if (!widget.TryGetProperty("size", out var size) || size.ValueKind != JsonValueKind.String || size.GetString() is not ("small" or "medium"))
+            WidgetContract.Refuse("size_unsupported", "The personal Acme status card must have an explicit small or medium size.");
+        return size.GetString()!;
+    }
+
+    internal static JsonElement WithSize(WidgetObservation before, string size)
+    {
+        WidgetSizeValidation.Canonical(size);
+        _ = Size(before); // Missing/unsupported sizes must not become an implicit layout migration.
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            foreach (var property in before.Document.Value.EnumerateObject())
+            {
+                writer.WritePropertyName(property.Name);
+                if (property.Name != "widgets") { property.Value.WriteTo(writer); continue; }
+                writer.WriteStartArray();
+                foreach (var entry in property.Value.EnumerateArray())
+                {
+                    if (entry.GetProperty("id").GetString() != WidgetContract.WidgetId) { entry.WriteTo(writer); continue; }
+                    writer.WriteStartObject();
+                    foreach (var field in entry.EnumerateObject())
+                    {
+                        writer.WritePropertyName(field.Name);
+                        if (field.Name == "size") writer.WriteStringValue(size); else field.Value.WriteTo(writer);
+                    }
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndObject();
+        }
+        using var parsed = JsonDocument.Parse(stream.ToArray());
+        return parsed.RootElement.Clone();
+    }
+
+    internal async Task<AgentToolResult> ApplySizeAsync(AgentPreparedToolInvocation invocation, string size, CancellationToken ct)
+    {
+        WidgetSizeValidation.Canonical(size);
+        var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
+        if (!WidgetContract.SameTarget(invocation.Target, before)) WidgetContract.Refuse("stale", "The prepared personal layout revision has changed.");
+        var beforeSize = Size(before);
+        if (beforeSize == size) WidgetContract.Refuse("noop", "The Acme status card already has the requested size.");
+        if (invocation.Preview.TypeId != WidgetContract.SizeResult || invocation.Preview.SchemaVersion != "1" ||
+            !JsonElement.DeepEquals(invocation.Preview.Data, WidgetContract.SizePreview(before, size).Data))
+            WidgetContract.Refuse("review_invalid", "The prepared preview does not match this exact size change.");
+        var value = WithSize(before, size);
+        ct.ThrowIfCancellationRequested();
+        StudioPreferenceDocument saved;
+        try
+        {
+            saved = await preferences.WriteAsync(before.Key, new(before.Document.SchemaVersion, value),
+                StudioPreferenceWriteCondition.Matches(before.Document.Revision), ct);
+        }
+        catch (StudioPreferenceConflictException) { WidgetContract.Refuse("conflict", "The personal layout changed before the native CAS could commit."); throw; }
+        catch (Exception exception) when (exception is StudioPreferenceValidationException or StudioPreferenceQuotaExceededException or StudioPreferenceNamespaceNotFoundException)
+        { WidgetContract.Refuse("write_invalid", "The native preference service refused the size change."); throw; }
+        catch (Exception) { return Uncertain(invocation); }
+        try
+        {
+            // A write return alone cannot prove application. Read the owning resource independently.
+            var after = await ObserveAsync(invocation.ActorId, invocation.TenantId, false, CancellationToken.None);
+            if (after.Document.Revision == before.Document.Revision || after.Document.Revision != saved.Revision || Size(after) != size ||
+                !JsonElement.DeepEquals(after.Document.Value, value) || !JsonElement.DeepEquals(saved.Value, value))
+                return Uncertain(invocation);
+            var payload = WidgetContract.SizeChanged(after, beforeSize);
+            return new(invocation.ToolCallId, invocation.ToolName, true, "Acme status card size is " + size + " in your saved Home layout.", payload)
+            {
+                Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), AgentEffectScope.ServerPersisted,
+                    new(WidgetContract.SizeResult, "1", payload.Data.Clone()))
+            };
+        }
+        catch (Exception) { return Uncertain(invocation); }
     }
 
     internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct)

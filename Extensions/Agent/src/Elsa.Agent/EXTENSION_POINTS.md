@@ -8,9 +8,9 @@ This is the domain catalog for framework §2.22.1. The [root index](../../../../
 
 `FoundationAgentAbstractionsFeature` in `Elsa.Agent` retains the configured feature name `FoundationAgentAbstractions`. Its virtual registration calls `services.AddFoundationAgentAbstractions()` idempotently. API, workflow and provider features inherit this feature and declare Type dependencies. The base declares the string dependency `Events`; consumers must explicitly discover ordinary Events infrastructure. Missing Events fails composition.
 
-`Elsa.Agent.Core` contains contracts, models, named collecting events and thin provider bridges. Active defaults and registration are in `Elsa.Agent`; modules contribute through Core without referencing these defaults. Context collectors, catalogs, registries, invoker, proposal facade/executor, policy, authorizer, streaming and provider registry are scoped. The scoped tool registry caches only its own collected tools, never a cross-request tool instance.
+`Elsa.Agent.Core` contains contracts, models, named collecting events and thin provider bridges. Active defaults and registration are in `Elsa.Agent`; modules contribute through Core without referencing these defaults. Context collectors, catalogs, registries, invoker, proposal facade/executor, policy, session policy service, authorizer, streaming and provider registry are scoped. The scoped tool registry caches only its own collected tools, never a cross-request tool instance.
 
-`InMemoryAgentSessionService`, `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore`, `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee.
+`InMemoryAgentSessionService` (which also owns policy revisions and work claims), `InMemoryAgentFeedbackService`, `InMemoryAgentAuditStore` (sink, reader and audit ownership), `AgentTurnRegistry`, `InMemoryAgentTurnStateStore` and `InMemoryAgentProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee.
 
 ## Overridable contracts
 
@@ -18,7 +18,8 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 
 | Contract | Default and lifetime | Signature surface | When to override; dependants |
 |---|---|---|---|
-| [`IAgentSessionService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentSessionService`, singleton | Create/find sessions; add/find/list messages and context; set message status | Supply persistent session/message storage. API, context sources, turn orchestration and proposal authorization consume it. |
+| [`IAgentSessionService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentSessionService`, singleton | Create/find sessions; add/find/list messages and context; set message status | Supply persistent session/message storage. API, context sources, turn orchestration and proposal authorization consume it. The default also owns the session policy revision and work claims; a replacement makes autonomy updates Unsupported ([below](#session-policy-and-owner-scoped-audit-3440-preview)). |
+| [`IAgentSessionPolicyService`](../Core/Contracts/AgentContracts.cs) *(preview, #3440)* | `DefaultAgentSessionPolicyService`, scoped | `GetAsync(sessionId, actorId, tenantId)` and `ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest)` return `Task<AgentSessionPolicyResult>` | Normally not replaced: a replacement cannot join the default claims, so it must own the same ordering against admitted work or return `Unsupported`. API create/detail readback and the autonomy route consume it. |
 | [`IAgentPolicyEvaluator`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentPolicyEvaluator`, scoped | `EvaluateAvailabilityAsync`, `EvaluateContextAsync`, `EvaluateCapabilityAsync` return `ValueTask<AgentPolicyDecision>` | Extend host policy. Context admission, API, invoker and executor consume it; policy does not grant resource permissions. |
 | [`IAgentContextSanitizer`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentContextSanitizer`, scoped | `SanitizeAsync(attachments)` returns `ValueTask<IReadOnlyCollection<AgentContextAttachment>>` | Add generic minimization/redaction. The collector sanitizes installed contributions before final host policy and provider use. |
 | [`IAgentContextCollector`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentContextCollector`, scoped | `CollectAsync(policy, AgentContextRequest)` returns `Task<AgentResult<AgentContextContribution>>` | Replace admission orchestration while preserving installed-source admission, diagnostics, minimization and policy. API/session input uses it. |
@@ -33,7 +34,8 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 | [`IAgentTurnStateStore`](../Core/Contracts/AgentTurnContracts.cs) | `InMemoryAgentTurnStateStore`, singleton | `Save(AgentPausedTurn)`, `Find(sessionId)`, `Remove(sessionId)` | Replace paused-turn retention. Orchestrator consumes the stored proposal/tool/history correlation after review. |
 | [`IAgentFeedbackService`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentFeedbackService`, singleton | `AddAsync(AgentFeedback)` returns `Task<AgentFeedback>` | Supply feedback persistence. API consumes it; default emits audit linkage. |
 | [`IAgentAuditSink`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentAuditStore`, singleton shared with reader | `EmitAsync(AgentAuditEvent)` returns `Task` | Supply audit persistence/forwarding. Sessions, context, tools, proposals, feedback and provider diagnostics emit records. |
-| [`IAgentAuditReader`](../Core/Contracts/AgentContracts.cs) | Same `InMemoryAgentAuditStore` | `ListAsync(sessionId?, take?)` returns `Task<IReadOnlyCollection<AgentAuditEvent>>` | Supply audit queries consistent with the sink. API audit views consume it. |
+| [`IAgentAuditReader`](../Core/Contracts/AgentContracts.cs) | Same `InMemoryAgentAuditStore` | `ListAsync(sessionId?, take?)` returns `Task<IReadOnlyCollection<AgentAuditEvent>>` (trusted, unscoped, in-process); preview default member `ListOwnedAsync(AgentAuditOwnerQuery)` returns `Task<AgentAuditQueryResult>`, `Unsupported` by default | Supply audit queries consistent with the sink. The API audit route reads only through `ListOwnedAsync`; a reader that does not implement it makes the route answer 409 `agent.audit.query_unsupported`. |
+| [`IAgentAuditOwnership`](../Core/Contracts/AgentContracts.cs) *(preview, #3440)* | Same `InMemoryAgentAuditStore`, singleton | `AssociateAsync(sessionId, actorId, tenantId)` returns `Task<bool>`; first association wins | Replace together with the reader so association and owner query stay coherent. The default session service associates each session before emitting any record for it. |
 | [`IAgentProviderRegistry`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentProviderRegistry`, scoped | `Active: IAgentProvider?` | Replace provider selection only while preserving the single-active-provider contract. Orchestrator/API consume it; multiple installed providers fail with `AgentHarnessConflictException`. |
 | [`IAgentProvider`](../Core/Contracts/AgentContracts.cs) | No provider in base registration | Provider/session identity, `CreateSessionAsync`, `ContinueTurnAsync(AgentTurnContext)`, approval and diagnostics | Install one provider adapter through its feature. The orchestrator consumes it; zero providers is unavailable, never a deterministic production fallback. |
 
@@ -112,6 +114,43 @@ Client execution returns HTTP 202 with `awaiting-client`, `executed: false` and 
 
 All lifecycle retention and deduplication here are in memory. Restart/shell replacement, cross-process coordination, durable history/approvals and broader recovery remain M2 work. The [owning receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) records completed package-consumer and deterministic provider-protocol evidence for 76ec; [final-head integration and resulting-main gates completed](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143). Registrations alone establish no runtime evidence, and no live-provider success is claimed.
 
+## Session policy and owner-scoped audit (#3440, preview)
+
+These preview members are the #3440 contract, frozen after the normal composed Studio and complete
+package proofs passed. Pre-GA they may still change under ADR 0080. The [session policy contract](../../../../specs/1186-weaver-effects/contracts/session-policy.md)
+records the wire shape, refusal codes, lifecycle outcomes and constitution/SemVer classification;
+this section keeps only the extension rules.
+
+The default session row owns the policy, its revision and internal work claims for prompts,
+foreground turns, mutating-tool preparation, proposals and pauses. `IAgentSessionPolicyService`
+reads it back and changes only `AutonomyMode`, conditionally on the expected revision. Accepted
+messages (`AgentMessage.AcceptedPolicy`) and prepared proposals (`AgentActionProposal.PolicyRevision`)
+keep the revision that admitted them. `AgentMessageCreateRequest.ExpectedPolicyRevision` lets a
+custom admission path refuse an insertion whose authorized revision moved, with
+`AgentSessionPolicyChangedException`.
+
+**Participation.** Readback and the update are supported only when the resolved `IAgentSessionService`,
+`IAgentStreamingService`, `IAgentToolInvoker` and `IAgentProposalService` are the default
+participants of one owner instance. Any replacement, forwarding decorator or additive
+last-registered service of those four returns `Unsupported`, with no shadow default state; admission
+and turns keep their existing behavior. `IAgentTurnRegistry` and `IAgentTurnStateStore` replacements
+stay supported because the orchestrator holds the claims around their calls. Only the default
+registry's busy refusal is known to precede a write, so a replacement registry's refusal leaves the
+session conservatively busy for policy changes. `IAgentActionProposalExecutor` is not a participant.
+Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled; any
+failure a replacement returns, including the `agent.proposal.cancelled` code, is recorded as a Failed
+zero-effect refusal.
+
+**Lifecycle disclosure.** For the engine's receipt-less `agent.operation-outcome` envelope
+(`denied`, `refused` or `uncertain`) of a mutating invocation, the owning module's
+`IAgentContextProvider.AdmitDisclosureAsync` decision, not the tool's mutation authority, now
+governs whether the outcome continues the originating turn. Module disclosure sources should admit
+these envelopes for their own invocations and targets while read authority remains.
+
+**Owner-scoped audit.** `ListOwnedAsync` filters by the associated actor and tenant and the
+optional session, and orders newest first before the limit (1..`AgentAuditOwnerQuery.MaxTake`). It
+never returns a record without an ownership association. A custom session service must call
+`IAgentAuditOwnership.AssociateAsync` before emitting records, or its sessions stay ineligible.
 
 ## Context and result disclosure (#3439, under qualification)
 

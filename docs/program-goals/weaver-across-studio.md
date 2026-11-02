@@ -57,15 +57,36 @@ with cumulative numbering and no reset. Full M0–M5 delivery remains authorized
 claim/WIP/readiness rule and resulting-main check remains required. The narrowly authorized one-file
 owner-account workflow update is complete; ordinary writes and merges use the worker's own App.
 
+The [1 November native-baseline exception](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6563215730)
+authorizes resuming #3440's native baseline after its three failed runs (`1495b57a6`, `d82a0b7fa`,
+`81965ed8a`), which stay recorded as Failed. Its scope is a stable locator for the reviewed size card
+in the probe driver, a regression check for it and at most two fresh native attempts. It is not a waiver
+of the three-failure stop or any other gate. The same record hands the Program to Claude. On the owner's
+instruction, Claude [posts through the owner account with the `[Claude]` tag](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6563355491)
+while its App credentials are unavailable locally, so its PRs merge through Code Review, not standing self-merge.
+
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
 rather than live-provider evidence. M2–M5 remain open. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
-is the sole current implementation leaf; its [spec1176](../../specs/1176-weaver-turn-context/spec.md)
-retains all six acceptance areas and the module ownership boundary. Its implementation and
-package qualification are in [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514);
-review, required checks and resulting-main evidence remain live delivery gates. The current
+is verified Done through [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514),
+merged by the review App and qualified on resulting main `c0b47ceb1`. Its actual main CI,
+Studio and separate-package witnesses are recorded on the owning issue; existing skips and
+quarantined failures retain their original status. [Real effects #3440](https://github.com/elsa-workflows/elsa-foundation/issues/3440)
+is the sole current implementation leaf, under [spec1186](../../specs/1186-weaver-effects/spec.md).
+Its module-owned effects, acknowledged session autonomy and lifecycle follow-through retain
+all five acceptance criteria. Review, required checks and resulting-main evidence remain
+delivery gates for each subsequent leaf. The current
 inventory also includes workflow library folders, tags and saved views added on main during M2.
+#3440 is in review in PR #3612. Its acknowledged session autonomy, exact reviewed effects,
+admission/ownership barriers, correlated expiry and owner-scoped audit are implemented. Spec 1186 is
+Implemented and its session-policy contract is frozen as preview API. The normal composed Studio
+gate (the complete browser suite) and the complete independent package witness first passed on
+`7fc0a3c2e` and again on the final reviewed source `904671134`; #3440 records every run. The
+witness covered the original 38 cases, the 4 current-authority cases, and all 13 lifecycle cases on
+each actual adapter. This is deterministic provider-protocol evidence, not live-provider evidence.
+Independent review, exact-head required checks, merge and resulting-main verification remain
+before Done.
 
 ## Delivery plan
 

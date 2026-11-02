@@ -32,7 +32,11 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.forbidden", "The prepared session actor or tenant is no longer available.", 403));
         if (!(await policyEvaluator.EvaluateAvailabilityAsync(session.Policy, cancellationToken)).Allowed)
             return (null, new("agent.disabled", "Current host policy disables this operation.", 403));
-        if (session.Policy.RequiresApprovalForMutations && (proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
+        // The digest-bound RequiresApproval records the approval's origin. An automatic approval only records
+        // that the policy accepted at preparation allowed the operation without review; it is never a human
+        // decision, so current policy that requires review refuses it before dispatch.
+        if (session.Policy.RequiresApprovalForMutations
+            && (!proposal.RequiresApproval || proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
             return (null, new("agent.proposal.approval_required", "Current session policy requires approval of the exact operation.", 409));
         IAgentTool? tool;
         try { tool = await registry.FindAsync(prepared.ToolName, cancellationToken); }

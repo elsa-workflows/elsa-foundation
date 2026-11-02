@@ -14,6 +14,9 @@ internal sealed class WidgetCapabilities : IAgentCapabilityProvider
                 AgentCapabilityKind.Answer, AgentRisk.ReadOnly, WidgetContract.Scopes, [WidgetContract.ReadPermission], [WidgetContract.ContextType]) { Modes = ["explain"] },
             new("acme.home.visibility", WidgetContract.Module, "Review Acme status card visibility", "Review showing or hiding the existing card in the current personal Home layout.",
                 AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, WidgetContract.Scopes,
+                [WidgetContract.ReadPermission, WidgetContract.WritePermission], [WidgetContract.ContextType]) { Modes = ["build"] },
+            new("acme.home.size", WidgetContract.Module, "Change Acme status card size", "Set the existing personal card size to small or medium under the current session policy.",
+                AgentCapabilityKind.Action, AgentRisk.ReviewRequired, WidgetContract.Scopes,
                 [WidgetContract.ReadPermission, WidgetContract.WritePermission], [WidgetContract.ContextType]) { Modes = ["build"] }
         ]);
     }
@@ -100,7 +103,8 @@ internal sealed class WidgetContextSource(WidgetResource resource, IAgentSession
 
     private static AgentContextAttachment InstalledGuidance() => new("acme.home:installed-guidance", "acme.home.module", null, "Acme Home guidance",
         WidgetContract.GuidanceType, AgentContextSensitivity.Public, "module",
-        "The Acme module reads the existing personal status card and proposes one reviewed boolean visibility change. Use only its declared tools. " +
+        "The Acme module reads the existing personal status card, proposes one reviewed boolean visibility change, and can set its size to exactly small or medium. " +
+        "The size operation is eligible for automatic execution only when the current server session policy permits it; visibility always requires review. Use only the declared tools. " +
         "A persisted receipt confirms the personal Home layout; reload native Home to observe it. Missing personal layouts/cards, stale revisions and no-op changes are refused. " +
         "Other widgets, options and default layouts are outside this contribution. An uncertain result must be reread and never replayed automatically.",
         null, new Dictionary<string, string>())

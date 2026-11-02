@@ -9,9 +9,14 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
+// T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
+const LIFECYCLE_JOURNEYS = { "visibility-review-control": ["resource", "full-auto"], "workflow-review-control": ["workflow", "full-auto"],
+  "interrupted-after-effect": ["lost-confirmation", null] };
+const lifecycle = config.lifecycleCase ?? null;
+if (lifecycle !== null && LIFECYCLE_JOURNEYS[lifecycle]?.[0] !== config.journey) throw new Error("A lifecycle case must name its exact declared journey.");
 function need(condition, message) { if (!condition) throw new Error(message); }
 function ownedOrigin(value) {
   const url = new URL(value);
@@ -51,9 +56,12 @@ result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
 const streamCapture = await captureNativeStreams(page);
+// Only the autonomy journey observes its policy route; other journeys keep their qualified capture.
+const autonomyCapture = config.journey === "autonomy-size" ? await captureAutonomyExchanges(page) : null;
 page.setDefaultTimeout(30000);
 const requests = [], owningWrites = [], pageErrors = [], consoleMessages = [], failedRequests = [];
 const resourceInteractions = [], moduleOwnerReads = [], pendingOwnerReads = [];
+const publishAttempts = [];
 await context.exposeBinding("qualificationObserveResourceInteraction", (_source, value) => resourceInteractions.push(value));
 await context.addInitScript(observeResourceInteractions, { route: witness.route });
 let owningDraftPath;
@@ -73,12 +81,15 @@ page.on("request", request => {
   if (url.origin === backend && owningDraftPath === url.pathname && ["PUT", "POST", "PATCH", "DELETE"].includes(request.method())) {
     owningWrites.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
   }
-  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || request.method() !== "POST") return;
+  // Publish is an explicit boundary: a lifecycle journey records any attempt to cross it.
+  if (lifecycle && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
+    publishAttempts.push({ url: diagnosticUrl(request.url()), method: request.method() });
+  if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
 page.on("response", response => {
   const url = new URL(response.url());
-  if (url.origin !== backend || url.pathname !== witness.ownerEndpoint || response.request().method() !== "GET") return;
+  if (url.origin !== backend || ![witness.ownerEndpoint, witness.sizeOwnerEndpoint].includes(url.pathname) || response.request().method() !== "GET") return;
   const observation = { url: diagnosticUrl(response.url()), status: response.status(), completed: false };
   moduleOwnerReads.push(observation);
   pendingOwnerReads.push(response.text().then(rawBody => Object.assign(observation, { rawBody, completed: true }))
@@ -86,7 +97,7 @@ page.on("response", response => {
 });
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
 function observeResourceInteractions({ route }) {
-  const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home"];
+  const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
   let pressed = null, sequence = 0;
   function control(target) {
     if (!(target instanceof Element)) return null;
@@ -138,7 +149,7 @@ async function captureNativeStreams(target) {
   // Observe the existing browser request only. A clone/second fetch would change
   // stream consumption, and response.body() loses bytes when Studio aborts it.
   const cdp = await context.newCDPSession(target);
-  const streams = new Map(), pending = [];
+  const streams = new Map(), requests = new Map(), pending = [];
   const limit = 8 * 1024 * 1024, sizeError = "Native SSE capture exceeded its bounded evidence size.";
   const hash = async value => Buffer.from(await globalThis.crypto.subtle.digest("SHA-256", value)).toString("hex");
   function sseText(value, allowTrailingIncomplete = false) {
@@ -220,16 +231,37 @@ async function captureNativeStreams(target) {
       stream.captureError = null;
     }).catch(error => { stream.responseBodyError = error.message; stream.captureError = error.message; }));
   }
+  function safeStreamUrl(value) {
+    const url = new URL(value);
+    return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)
+      && !url.username && !url.password && !url.search && !url.hash ? url.href : null;
+  }
+  cdp.on("Network.requestWillBeSent", event => {
+    const url = new URL(event.request.url);
+    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    requests.set(event.requestId, { rawUrl: event.request.url,
+      count: (requests.get(event.requestId)?.count ?? 0) + 1,
+      observation: { source: "Network.requestWillBeSent", requestId: event.requestId,
+        method: event.request.method, url: safeStreamUrl(event.request.url), resourceType: event.type ?? null,
+        initiatorType: event.initiator?.type ?? null } });
+  });
   cdp.on("Network.responseReceived", event => {
     const url = new URL(event.response.url);
     if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     const contentType = Object.entries(event.response.headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] ?? "";
     const isSse = event.response.status === 200 && contentType.split(";", 1)[0].trim() === "text/event-stream";
+    const request = requests.get(event.requestId);
+    const responseUrl = safeStreamUrl(event.response.url);
     const stream = { requestId: event.requestId, url: diagnosticUrl(url.href), status: event.response.status, contentType,
+      requestObservation: request?.observation ?? null, requestObservationCount: request?.count ?? 0,
+      responseObservation: { source: "Network.responseReceived", requestId: event.requestId, url: responseUrl, resourceType: event.type ?? null },
+      responseObservationCount: (streams.get(event.requestId)?.responseObservationCount ?? 0) + 1,
+      requestIdentityMatchesResponse: !!request && request.rawUrl === event.response.url && responseUrl !== null && request.observation.url === responseUrl,
       reportedCharset: event.response.charset ?? null, reportedMimeType: event.response.mimeType ?? null,
       bodyProfile: "native-agent-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
       termination: "open", captureError: null, captureMethod: isSse ? "streamResourceContent" : "not-sse",
       streamResourceContentError: null, responseBodyError: null, captureValidationError: null, responseBodyAttempted: false,
+      receivedDataBytes: 0, dataEventCount: 0, dataLengthMetadataError: null,
       prefix: Buffer.alloc(0), chunks: [], streamedBytes: 0, completeBody: null, sizeExceeded: false };
     streams.set(event.requestId, stream);
     if (!isSse) return;
@@ -253,7 +285,14 @@ async function captureNativeStreams(target) {
   });
   cdp.on("Network.dataReceived", event => {
     const stream = streams.get(event.requestId);
-    if (!stream || stream.captureMethod === "not-sse" || !event.data || stream.captureError || stream.completeBody) return;
+    if (!stream) return;
+    // Observe decoded body lengths even where no SSE body capture was enabled.
+    // An OPTIONS204 may be ignored only when this independent observer saw no body.
+    stream.dataEventCount++;
+    if (!Number.isSafeInteger(event.dataLength) || event.dataLength < 0)
+      stream.dataLengthMetadataError = "Network.dataReceived did not supply an exact nonnegative body length.";
+    else stream.receivedDataBytes += event.dataLength;
+    if (stream.captureMethod === "not-sse" || !event.data || stream.captureError || stream.completeBody) return;
     try {
       const received = bytes(event.data, true, true);
       stream.streamedBytes += received.length;
@@ -297,6 +336,45 @@ async function captureNativeStreams(target) {
         reconstructedBodySha256: await hash(observed), rawBody };
     }));
   };
+}
+async function captureAutonomyExchanges(target) {
+  // Independent CDP metadata for the autonomy route only: every actual PUT and its CORS
+  // preflight. Bodies come from the awaited Playwright exchange; nothing is replayed.
+  const cdp = await context.newCDPSession(target);
+  const rows = new Map();
+  const owned = value => {
+    try {
+      const url = new URL(value);
+      return url.origin === backend && /^\/_elsa\/agent\/sessions\/[^/]+\/autonomy$/.test(url.pathname) ? url : null;
+    } catch { return null; }
+  };
+  const exact = url => url.username || url.password || url.search || url.hash ? null : url.href;
+  const row = id => {
+    if (!rows.has(id)) rows.set(id, { requestId: id, method: null, url: null, responseUrl: null, resourceType: null, initiatorType: null,
+      responseResourceType: null, status: null, requestObservationCount: 0, responseObservationCount: 0, termination: "open",
+      errorText: null, canceled: false });
+    return rows.get(id);
+  };
+  cdp.on("Network.requestWillBeSent", event => {
+    const url = owned(event.request.url);
+    if (!url) return;
+    const item = row(event.requestId);
+    Object.assign(item, { method: event.request.method, url: exact(url), resourceType: event.type ?? null, initiatorType: event.initiator?.type ?? null });
+    item.requestObservationCount++;
+  });
+  cdp.on("Network.responseReceived", event => {
+    const url = owned(event.response.url);
+    if (!url) return;
+    const item = row(event.requestId);
+    Object.assign(item, { responseUrl: exact(url), status: event.response.status, responseResourceType: event.type ?? null });
+    item.responseObservationCount++;
+  });
+  cdp.on("Network.loadingFinished", event => { if (rows.has(event.requestId)) rows.get(event.requestId).termination = "loadingFinished"; });
+  cdp.on("Network.loadingFailed", event => {
+    if (rows.has(event.requestId)) Object.assign(rows.get(event.requestId), { termination: "loadingFailed", errorText: event.errorText ?? null, canceled: event.canceled === true });
+  });
+  await cdp.send("Network.enable");
+  return () => [...rows.values()].map(item => ({ ...item }));
 }
 function command(toolName, args) {
   const value = { commandId: crypto.randomUUID(), toolName, arguments: args };
@@ -469,6 +547,301 @@ function unrelated(value) {
 function canonicalLayout(value) {
   return value.map(row => ({ ...row, width: row.width ?? null, height: row.height ?? null, additionalProperties: row.additionalProperties ?? null }));
 }
+// T012 (#3440): an established conversation's mode is in effect only after the owning backend
+// acknowledges exactly one conditional PUT. A selector label alone is never policy evidence.
+const AUTONOMY_LABELS = { manual: "Manual review", "full-auto": "Autopilot" };
+class AutonomyFailure extends Error {
+  constructor(cause, message) { super(message); this.name = "AutonomyFailure"; this.autonomyCause = cause; }
+}
+function autonomyNeed(condition, cause, message) { if (!condition) throw new AutonomyFailure(cause, message); }
+function canonical(value) {
+  return JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)) : item);
+}
+function autonomyPolicy(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+    && canonical(Object.keys(value).sort()) === canonical(["allowedAutonomyModes", "autonomyMode", "maxAutonomyMode", "revision"])
+    && typeof value.autonomyMode === "string" && typeof value.maxAutonomyMode === "string"
+    && Array.isArray(value.allowedAutonomyModes) && value.allowedAutonomyModes.every(item => typeof item === "string")
+    && Number.isSafeInteger(value.revision) && value.revision >= 0;
+}
+async function requireAcknowledgedSelector(mode, cause) {
+  const selector = dock().locator(".weaver-auto-apply");
+  const button = selector.getByRole("button", { name: "Auto-apply mode", exact: true });
+  try {
+    await expect(selector).toHaveAttribute("data-autonomy-state", "acknowledged");
+    await expect(button).toHaveText(AUTONOMY_LABELS[mode]);
+    await expect(button).toHaveAttribute("aria-busy", "false");
+    await expect(dock().getByRole("status", { name: "Auto-apply mode status", exact: true })).toHaveCount(0);
+  } catch (error) {
+    throw new AutonomyFailure(cause, "The selector does not show only the acknowledged " + mode + " mode: " + error.message);
+  }
+  const observed = { state: await selector.getAttribute("data-autonomy-state"), pendingMode: await selector.getAttribute("data-pending-mode"),
+    ariaBusy: await button.getAttribute("aria-busy"), label: (await button.innerText()).trim(), statusCount: 0, mode };
+  autonomyNeed(observed.state === "acknowledged" && observed.pendingMode === null && observed.label === AUTONOMY_LABELS[mode], cause,
+    "An acknowledged selector still names a pending or different mode.");
+  return observed;
+}
+async function changeEstablishedMode(sessionId, requestedMode, acknowledged) {
+  const updatePath = "/_elsa/agent/sessions/" + encodeURIComponent(sessionId) + "/autonomy";
+  const offset = requests.length;
+  await requireAcknowledgedSelector(acknowledged.autonomyMode, "autonomy.selector_unacknowledged");
+  const selector = dock().locator(".weaver-auto-apply");
+  const button = selector.getByRole("button", { name: "Auto-apply mode", exact: true });
+  await expect(button).toBeEnabled();
+  const update = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.origin === backend && url.pathname === updatePath && response.request().method() === "PUT";
+  }, { timeout: 30000 });
+  update.catch(() => undefined); // A failed menu action reports its own error first.
+  await button.click();
+  await dock().getByRole("menu", { name: "Auto-apply mode", exact: true })
+    .getByRole("menuitemradio", { name: new RegExp("^" + AUTONOMY_LABELS[requestedMode] + "(?:\\s|$)") }).click();
+  let response;
+  try { response = await update; }
+  catch (error) {
+    const sent = requests.slice(offset).some(item => item.method === "PUT" && item.url === backend + updatePath);
+    throw new AutonomyFailure(sent ? "autonomy.update_lost" : "autonomy.update_not_sent",
+      (sent ? "The actual autonomy PUT received no response: " : "No actual autonomy PUT reached the owned backend: ") + error.message);
+  }
+  const rawBody = await response.text(), request = response.request(), body = request.postDataJSON();
+  result.evidence.push(retain("autonomy-mode-update-http", { url: diagnosticUrl(response.url()), method: request.method(), status: response.status(), rawBody }));
+  let value = null;
+  try { value = JSON.parse(rawBody); } catch { /* The raw retained body is the evidence. */ }
+  const receipt = retain("autonomy-mode-update", { url: response.url(), method: request.method(), status: response.status(), request: body, response: value });
+  result.evidence.push(receipt);
+  autonomyNeed(canonical(body) === canonical({ autonomyMode: requestedMode, expectedRevision: acknowledged.revision }), "autonomy.update_body_mismatch",
+    "The selector must send only the requested mode and the revision acknowledged at creation.");
+  autonomyNeed(response.status() === 200 && value && value.error == null && autonomyPolicy(value.data), "autonomy.update_refused",
+    "The owning backend refused the established-session mode change: HTTP " + response.status() + " " + (value?.error?.code ?? "without an error code"));
+  const ack = value.data;
+  autonomyNeed(ack.autonomyMode === requestedMode && ack.revision === acknowledged.revision + 1 && ack.maxAutonomyMode === acknowledged.maxAutonomyMode
+    && canonical(ack.allowedAutonomyModes) === canonical(acknowledged.allowedAutonomyModes), "autonomy.acknowledgement_mismatch",
+    "The acknowledgement is not the requested mode at the next revision with unchanged limits.");
+  const selectorState = await requireAcknowledgedSelector(requestedMode, "autonomy.selector_unacknowledged");
+  const updates = requests.slice(offset);
+  autonomyNeed(updates.length === 1 && updates[0].method === "PUT" && updates[0].url === backend + updatePath, "autonomy.update_duplicated",
+    "Exactly one actual autonomy request may change the established mode.");
+  result.evidence.push(retain("autonomy-mode-selector", selectorState));
+  return { acknowledgement: ack, receipt, selector: selectorState };
+}
+async function readTurnSettled(sessionId, messageId) {
+  // Policy claims are released when the accepted message is terminal; read the owner without retaining polls.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const response = await page.request.get(backend + "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+    const value = response.status() === 200 ? await response.json() : null;
+    if (value?.data?.messages?.find(item => item.id === messageId)?.status === "completed") return;
+    await page.waitForTimeout(250);
+  }
+}
+async function autonomySize() {
+  const cases = {
+    "automatic-size-control": ["full-auto", "full-auto"],
+    "reviewed-size-control": ["manual", "manual"],
+    "automatic-to-manual": ["full-auto", "manual"],
+    "manual-to-automatic": ["manual", "full-auto"]
+  };
+  const pair = cases[config.autonomyCase];
+  need(pair, "The autonomy qualification requires an exact declared case key.");
+  const [initialMode, requestedMode] = pair;
+  async function selectDraftMode(mode) {
+    // No conversation exists yet: this selection only controls the real create request.
+    const selector = dock().locator(".weaver-auto-apply");
+    const button = selector.getByRole("button", { name: "Auto-apply mode", exact: true });
+    await expect(button).toBeEnabled();
+    await button.click();
+    await dock().getByRole("menu", { name: "Auto-apply mode", exact: true })
+      .getByRole("menuitemradio", { name: new RegExp("^" + AUTONOMY_LABELS[mode] + "(?:\\s|$)") }).click();
+    await expect(button).toHaveText(AUTONOMY_LABELS[mode]);
+    await expect(selector).toHaveAttribute("data-autonomy-state", "requested");
+  }
+  await page.goto(studio + witness.route);
+  await expect(page.getByTestId("acme-home-revision")).toBeVisible();
+  await expect(page.getByTestId("acme-home-size")).not.toHaveText("Not available");
+  const before = await owner("size-owner-before", witness.sizeOwnerEndpoint);
+  const layoutBefore = await owner("size-layout-before", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
+  const bootstrap = await owner("autonomy-native-bootstrap", "/_elsa/agent/bootstrap");
+  const installedCapabilities = bootstrap.value.data?.capabilities;
+  need(Array.isArray(installedCapabilities) && installedCapabilities.some(item => item.id === witness.sizeCapability && item.moduleId === witness.moduleId),
+    "The actual backend must advertise the module's size capability before this journey.");
+  result.ownerBefore = before.receipt;
+  need(["small", "medium"].includes(before.value.size), "A canonical non-noop native size is required.");
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await expect(dock()).toBeVisible();
+  await selectDraftMode(initialMode);
+  need(requests.length === 0, "The initial mode must be selected before the first native session or prompt.");
+  const readCommand = command(witness.readTool, {});
+  const created = responseFor("/sessions"), readMessage = responseFor("/messages");
+  await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
+  const creation = await accepted(created, "autonomy-create-session");
+  expect(creation.response.request().postDataJSON().autonomyMode).toBe(initialMode);
+  const createdPolicy = creation.value.data?.policy;
+  autonomyNeed(autonomyPolicy(createdPolicy) && createdPolicy.autonomyMode === initialMode
+    && createdPolicy.allowedAutonomyModes.includes(initialMode) && createdPolicy.allowedAutonomyModes.includes(requestedMode),
+    "autonomy.create_policy_missing", "The new session did not acknowledge the requested initial mode with a readable policy.");
+  const read = await accepted(readMessage, "autonomy-read-message");
+  const sessionId = creation.value.data?.sessionId;
+  need(typeof sessionId === "string" && sessionId && read.value.data?.message?.sessionId === sessionId,
+    "The harmless read must belong to the actual newly created session.");
+  await expect(dock().getByRole("region", { name: "Module results", exact: true }).getByTestId("acme-home-result")).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  expect((await owner("size-owner-after-read", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
+  await readTurnSettled(sessionId, read.value.data?.message?.id);
+  const initialSession = await owner("autonomy-session-before-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  expect(initialSession.value.data?.sessionId).toBe(sessionId);
+  autonomyNeed(canonical(initialSession.value.data?.policy) === canonical(createdPolicy), "autonomy.readback_mismatch",
+    "Session detail does not read back the policy acknowledged at creation.");
+  autonomyNeed(initialSession.value.data.messages?.find(item => item.id === read.value.data?.message?.id)?.status === "completed",
+    "autonomy.session_not_idle", "The original read was not terminal in its owner before the mode decision.");
+  const selectionOffset = requests.length;
+  let update = null;
+  if (initialMode !== requestedMode) update = await changeEstablishedMode(sessionId, requestedMode, createdPolicy);
+  else result.evidence.push(retain("autonomy-mode-selector", await requireAcknowledgedSelector(initialMode, "autonomy.selector_unacknowledged")));
+  const effectivePolicy = update ? update.acknowledgement : createdPolicy;
+  const selectionRequests = requests.slice(selectionOffset);
+  autonomyNeed(selectionRequests.length === (update ? 1 : 0), update ? "autonomy.update_duplicated" : "autonomy.unexpected_update",
+    "An unchanged control sends no autonomy request; a transition sends exactly one.");
+  const selectedSession = await owner("autonomy-session-after-selection", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  autonomyNeed(selectedSession.value.data?.sessionId === sessionId && canonical(selectedSession.value.data?.policy) === canonical(effectivePolicy),
+    "autonomy.readback_mismatch", "Session detail does not read back the acknowledged mode and revision.");
+  const targetSize = before.value.size === "small" ? "medium" : "small";
+  const sizeCommand = command(witness.sizeTool, { size: targetSize });
+  await page.getByRole("combobox", { name: "Personal card size", exact: true }).selectOption(targetSize);
+  const sizeMessage = responseFor("/messages");
+  await page.getByRole("button", { name: "Resize with Weaver", exact: true }).click();
+  const sent = await accepted(sizeMessage, "autonomy-size-message");
+  expect(sent.value.data?.message?.sessionId).toBe(sessionId);
+  expect(new URL(sent.response.url()).pathname).toBe("/_elsa/agent/sessions/" + sessionId + "/messages");
+  const sentBody = sent.response.request().postDataJSON();
+  // The current host forwards its first active capability; the module prompt source
+  // identifies the size action. Do not invent action-specific capability propagation.
+  expect(sentBody.requestedCapabilities).toEqual(read.response.request().postDataJSON().requestedCapabilities);
+  need(sentBody.requestedCapabilities.length === 1 && installedCapabilities.some(item => item.id === sentBody.requestedCapabilities[0]
+    && item.moduleId === witness.moduleId), "The requested capability must be actually installed for this module.");
+  expect(sentBody.source).toMatchObject({ moduleId: witness.moduleId, actionId: witness.sizeTool });
+  expect(sentBody.contextAttachments).toEqual(expect.arrayContaining([expect.objectContaining({ moduleId: witness.moduleId,
+    contentType: witness.contextType, target: expect.objectContaining({ resourceId: witness.widgetId, revision: before.value.revision }) })]));
+  const acceptedPolicy = sent.value.data?.message?.acceptedPolicy;
+  // The accepted message carries exactly the acknowledged public session policy, never the private domain policy.
+  autonomyNeed(canonical(acceptedPolicy) === canonical(effectivePolicy),
+    "autonomy.attribution_mismatch", "The size prompt was not accepted under the acknowledged policy revision.");
+  // A visible module preview/result distinguishes real review from real application; idle alone can race dispatch.
+  await expect(dock().getByTestId("acme-home-size-result").last()).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const pending = dock().locator('.agent-proposal[data-status="awaiting-approval"]').filter({ has: page.getByTestId("acme-home-size-result") });
+  const pendingCount = await pending.count();
+  need(pendingCount <= 1, "The single size request created duplicate review proposals.");
+  const outcome = pendingCount === 1 ? "review" : "automatic";
+  // Approval and application change data-status on the same card, so keep it by
+  // its module result rather than by the status that classified the outcome.
+  const sizeProposal = dock().locator(".agent-proposal").filter({ has: page.getByTestId("acme-home-size-result") });
+  const atDecision = await owner("size-owner-at-decision", witness.sizeOwnerEndpoint);
+  const layoutAtDecision = await owner("size-layout-at-decision", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
+  const expectedOutcome = requestedMode === "manual" ? "review" : "automatic";
+  const mismatch = expectedOutcome !== outcome;
+  // The acknowledged mode is authoritative: a different native outcome is a real failure, never an expected one.
+  autonomyNeed(!mismatch, "autonomy.mode_mismatch", "The acknowledged " + requestedMode + " mode produced a " + outcome + " outcome.");
+  if (outcome === "review") {
+    expect(atDecision.value).toEqual(before.value);
+    expect(layoutAtDecision.value).toEqual(layoutBefore.value);
+    await expect(sizeProposal).toHaveCount(1);
+    await expect(sizeProposal).toHaveAttribute("data-status", "awaiting-approval");
+    await expect(sizeProposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    result.evidence.push(retain("autonomy-pending-review", { status: await sizeProposal.getAttribute("data-status"), text: await sizeProposal.innerText() }));
+    await approve(sizeProposal, "autonomy-size");
+    expect((await owner("size-owner-after-approval", witness.sizeOwnerEndpoint)).value).toEqual(before.value);
+    const executed = responseFor("/execute");
+    await sizeProposal.getByRole("button", { name: "Apply", exact: true }).click();
+    await accepted(executed, "autonomy-size-execute");
+    await expect(sizeProposal).toHaveAttribute("data-status", "executed");
+    await expect(sizeProposal.getByTestId("acme-home-size-result")).toContainText("independently confirmed the saved size");
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+  } else {
+    expect(atDecision.value.size).toBe(targetSize);
+    expect(atDecision.value.revision).not.toBe(before.value.revision);
+    await expect(dock().getByTestId("acme-home-size-result").last()).toContainText("independently confirmed the saved size");
+  }
+  const after = await owner("size-owner-after", witness.sizeOwnerEndpoint);
+  const layoutAfter = await owner("size-layout-after", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
+  result.ownerAfter = after.receipt;
+  const finalSession = await owner("autonomy-session-after-outcome", "/_elsa/agent/sessions/" + encodeURIComponent(sessionId));
+  const finalData = finalSession.value.data;
+  expect(finalData?.sessionId).toBe(sessionId);
+  expect(requests.filter(item => new URL(item.url).pathname === "/_elsa/agent/sessions")).toHaveLength(1);
+  expect(requests.filter(item => new URL(item.url).pathname.endsWith("/messages"))).toHaveLength(2);
+  autonomyNeed(requests.filter(item => new URL(item.url).pathname.endsWith("/autonomy")).length === selectionRequests.length,
+    update ? "autonomy.update_duplicated" : "autonomy.unexpected_update", "A later autonomy request changed the established policy.");
+  autonomyNeed(canonical(finalData?.policy) === canonical(effectivePolicy), "autonomy.readback_mismatch",
+    "The final session detail no longer reads back the acknowledged policy.");
+  // Every message keeps the revision current at its own acceptance: the original read under the
+  // created policy and the size turn under the acknowledged one. A later value never relabels history.
+  const sizeIndex = finalData.messages.findIndex(item => item.id === sent.value.data?.message?.id);
+  autonomyNeed(sizeIndex > 0 && finalData.messages.every((item, index) => item.acceptedPolicyRevision === (index < sizeIndex ? createdPolicy.revision : effectivePolicy.revision)),
+    "autonomy.attribution_mismatch", "Session history is not attributed to the policy revisions that accepted it.");
+  const attribution = await dock().locator(".weaver-message").evaluateAll(nodes => nodes.map(node => ({ role: node.getAttribute("data-role"),
+    revision: node.getAttribute("data-accepted-policy-revision"), autonomyMode: node.getAttribute("data-accepted-autonomy-mode") })));
+  result.evidence.push(retain("autonomy-ui-attribution", attribution));
+  const attributed = attribution.filter(item => item.revision !== null);
+  const revisionModes = new Map([[String(createdPolicy.revision), createdPolicy.autonomyMode], [String(effectivePolicy.revision), effectivePolicy.autonomyMode]]);
+  autonomyNeed(attributed.length >= 2 && attributed.every(item => revisionModes.get(item.revision) === item.autonomyMode)
+    && attributed[0].revision === String(createdPolicy.revision) && attributed.at(-1).revision === String(effectivePolicy.revision),
+    "autonomy.attribution_mismatch", "Visible results are not attributed to the policy that admitted their turn.");
+  expect(after.value.size).toBe(targetSize);
+  expect(after.value.revision).not.toBe(before.value.revision);
+  result.autonomy = { caseKey: config.autonomyCase, initialMode, requestedMode, expectedOutcome, outcomeAtDecision: outcome,
+    sameSessionId: sessionId, readCommandId: readCommand.commandId, sizeCommandId: sizeCommand.commandId,
+    readMessageId: read.value.data?.message?.id, sizeMessageId: sent.value.data?.message?.id,
+    readRequestId: read.value.data?.message?.requestId, sizeRequestId: sent.value.data?.message?.requestId,
+    selectionRequests, targetSize, applied: true, modeMismatch: false, policyAcknowledgementClaimed: update !== null,
+    createdPolicy, acknowledgedPolicy: update?.acknowledgement ?? null, effectivePolicy, policyUpdate: update?.receipt ?? null,
+    ownerAtDecision: atDecision.receipt, layoutBefore: layoutBefore.receipt, layoutAtDecision: layoutAtDecision.receipt,
+    layoutAfter: layoutAfter.receipt, sessionBefore: initialSession.receipt, sessionAfterSelection: selectedSession.receipt, sessionAfter: finalSession.receipt };
+  result.observations = { sameConversation: true, initialModeBeforeCreation: true, acknowledgedBeforePrompt: true,
+    ownerObserved: true, noImplicitExecute: outcome !== "automatic" || !requests.some(item => item.url.endsWith("/execute")) };
+  await screenshot("autonomy-native-outcome");
+}
+async function lifecycleBegin() {
+  // Select the declared draft mode before the first native request, exactly as the mode cases do.
+  if (!lifecycle) return null;
+  const mode = LIFECYCLE_JOURNEYS[lifecycle][1];
+  if (!await dock().isVisible()) {
+    await page.getByRole("button", { name: /^Weaver/ }).click();
+    await expect(dock()).toBeVisible();
+  }
+  if (mode) {
+    need(requests.length === 0, "The lifecycle mode must be selected before the first native request.");
+    const selector = dock().locator(".weaver-auto-apply");
+    const button = selector.getByRole("button", { name: "Auto-apply mode", exact: true });
+    await expect(button).toBeEnabled();
+    await button.click();
+    await dock().getByRole("menu", { name: "Auto-apply mode", exact: true })
+      .getByRole("menuitemradio", { name: new RegExp("^" + AUTONOMY_LABELS[mode] + "(?:\\s|$)") }).click();
+    await expect(button).toHaveText(AUTONOMY_LABELS[mode]);
+    await expect(selector).toHaveAttribute("data-autonomy-state", "requested");
+  }
+  const response = responseFor("/sessions");
+  response.catch(() => undefined); // A failed first request reports its own error first.
+  // Wrapped: an async function returning the promise itself would wait for the request it precedes.
+  return { response };
+}
+async function lifecycleCreated(created) {
+  if (!created) return;
+  const creation = await accepted(created.response, "autonomy-create-session");
+  const mode = LIFECYCLE_JOURNEYS[lifecycle][1];
+  const policy = creation.value.data?.policy, sessionId = creation.value.data?.sessionId;
+  need(typeof sessionId === "string" && sessionId && autonomyPolicy(policy)
+    && (!mode || creation.response.request().postDataJSON().autonomyMode === mode && policy.autonomyMode === mode),
+  "The lifecycle conversation did not acknowledge its selected mode with a readable policy.");
+  result.lifecycle = { caseKey: lifecycle, sessionId, createdPolicy: policy, requestedMode: mode };
+}
+async function lifecycleFinish() {
+  // The originating turn has already settled; read the owning conversation once, never retrying work.
+  if (!lifecycle) return;
+  need(result.lifecycle?.sessionId, "The lifecycle conversation was never acknowledged.");
+  const session = await owner("lifecycle-session-after", "/_elsa/agent/sessions/" + encodeURIComponent(result.lifecycle.sessionId));
+  need(session.value.data?.sessionId === result.lifecycle.sessionId, "The lifecycle conversation changed.");
+  result.lifecycle.sessionAfter = session.receipt;
+}
 async function resource() {
   await page.goto(studio + witness.route);
   await expect(page.getByTestId("acme-home-revision")).toBeVisible();
@@ -481,10 +854,12 @@ async function resource() {
   await screenshot("home-before");
   await page.goto(studio + witness.route);
   await expect(page.getByTestId("acme-home-revision")).toHaveText(before.value.revision);
+  const created = await lifecycleBegin();
   command(witness.readTool, {});
   const readMessage = responseFor("/messages");
   await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
   const read = await accepted(readMessage, "read-message");
+  await lifecycleCreated(created);
   const readResult = dock().getByRole("region", { name: "Module results", exact: true }).getByTestId("acme-home-result");
   await expect(readResult).toContainText(`The owning resource reports ${before.value.visible ? "visible" : "hidden"}.`);
   await expect(readResult.getByTestId("acme-home-result-revision")).toHaveText(before.value.revision);
@@ -561,6 +936,7 @@ async function resource() {
   expect((await owner("owner-after-home-reload", witness.ownerEndpoint)).value).toEqual(after.value);
   if (config.journey === "resource") result.observations.homeReload = true;
   await screenshot("home-reloaded");
+  await lifecycleFinish();
   // actualAdapter is attached by the Python coordinator only after matching the protocol trace.
   result.readMessage = { url: read.response.url(), status: read.response.status() };
 }
@@ -587,9 +963,11 @@ async function workflow() {
   await nativeValidation("validation-before");
   const position = await activity.getAttribute("style");
   await page.getByRole("button", { name: /^Weaver/ }).click();
+  const created = await lifecycleBegin();
   const args = { activityId, x: 480, y: 320 };
   need(!position?.includes("translate(480px, 320px)"), "Workflow baseline must differ from the requested position.");
   const { proposal, sent } = await sendTool("workflow_set_designer_position", args, "workflow");
+  await lifecycleCreated(created);
   expect(sent.response.request().postDataJSON().contextAttachments).toEqual(expect.arrayContaining([expect.objectContaining({ contentType: "workflow.definition",
     target: expect.objectContaining({ resourceId: definitionId }), client: expect.objectContaining({ generationId: expect.any(String) }) })]));
   await approve(proposal, "workflow");
@@ -692,6 +1070,8 @@ async function workflow() {
     expect(confirmed.response.request().postDataJSON()).toEqual(intercepted.original);
     expect(confirmed.value).toEqual(intercepted.value);
     await expect(proposal).toHaveAttribute("data-status", "executed");
+    // The late receipt resumes its originating turn; let that continuation settle before Undo.
+    if (lifecycle) await expect(dock()).toHaveAttribute("aria-busy", "false");
     expect(await workingDraft("working-after-confirmation-retry")).toEqual(workingApplied);
     await proposal.getByRole("button", { name: "Undo whole change", exact: true }).click();
     await expect(activity).toHaveAttribute("style", position);
@@ -708,6 +1088,7 @@ async function workflow() {
     result.expectedFailureObserved = true;
     result.actual = { stage: "client-confirmation-delivery", diagnostic: "net::ERR_FAILED" };
     need(failedRequests.some(item => item.url === diagnosticUrl(intercepted.url) && item.errorText === result.actual.diagnostic), "The real accepted ACK response was not observed as lost browser delivery.");
+    await lifecycleFinish();
     result.status = "failed";
     return;
   }
@@ -757,6 +1138,7 @@ async function workflow() {
   result.observations.validated = true;
   result.observations.explicitSaveReadback = true;
   await screenshot("workflow-saved-reloaded");
+  await lifecycleFinish();
 }
 async function rendererUnavailable() {
   const { definitionId, activityId, definitionPath, draftPath, htmlCanary } = config.workflow ?? {};
@@ -1022,13 +1404,29 @@ try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
+  else if (config.journey === "autonomy-size" || lifecycle) {
+    const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
+    let deadline;
+    try {
+      await Promise.race([bounded(), new Promise((_resolve, reject) => {
+        deadline = setTimeout(() => {
+          // Stop pending UI actions in this owned context; never let an expired
+          // journey submit a late intent while failure evidence is captured.
+          void context.close().catch(error => { result.deadlineCleanupError = redact({ type: error.name, message: error.message }); });
+          reject(new Error("The bounded autonomy browser journey expired after 180 seconds; no retry."));
+        }, 180000);
+      })]);
+    } finally { clearTimeout(deadline); }
+  }
   else if (["workflow", "duplicate-ack", "client-binding-removed", "malformed-result", "lost-confirmation"].includes(config.journey)) await workflow();
   else await resource();
   need(pageErrors.length === 0, "Studio raised browser errors: " + pageErrors.join("; "));
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
-  result.failure = redact({ type: error.name, message: error.message });
+  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
+  // A precise autonomy cause is a real failure, never an expected one.
+  if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
   try { await failureDom(); } catch (diagnosticError) {
     result.evidence.push(retain("failure-dom-unavailable", { type: diagnosticError.name, message: diagnosticError.message }));
   }
@@ -1039,6 +1437,8 @@ try {
   await Promise.all(pendingOwnerReads);
   result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
   result.evidence.push(retain("agent-requests", requests));
+  if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
+  if (lifecycle) result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);
