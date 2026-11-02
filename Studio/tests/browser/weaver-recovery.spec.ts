@@ -170,7 +170,9 @@ test("a session limit is explained and continues in a new session that carries o
   await open(page);
   await send(page, "Keep reading everything [limit]");
   const notice = dock(page).locator('[data-kind="limit"]');
-  await expect(notice).toContainText("Session limit reached. This conversation has recorded 8 MiB of disclosed context.");
+  // The bound is the server's own words; Studio adds only what the continuation carries over.
+  await expect(notice).toHaveAttribute("data-limit", "bytes");
+  await expect(notice).toContainText("Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded. It stays readable");
   await notice.getByRole("button", { name: "Continue in a new session" }).click();
   await expect(dock(page).getByText("Only a link to it was carried over")).toBeVisible();
   await expect(dock(page).getByText("Keep reading everything [limit]")).toHaveCount(0);

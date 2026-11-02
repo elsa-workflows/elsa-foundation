@@ -32,7 +32,8 @@ export function createClientInvocationRunner(api: ElsaStudioModuleApi) {
       let target: Awaited<ReturnType<NonNullable<typeof contract.clientTargetAvailability>>> | undefined;
       try { target = await contract.clientTargetAvailability(invocation, signal); }
       catch { return refuse("The owning module could not confirm that this change's target still exists. Nothing was applied."); }
-      if (signal?.aborted) return refuse("Client invocation was cancelled or expired before dispatch.");
+      // The owning module may take a while to answer: the deadline is checked again before anything is dispatched.
+      if (signal?.aborted || Date.parse(invocation.expiresAt) <= Date.now()) return refuse("Client invocation was cancelled or expired before dispatch.");
       if (target?.status !== "available") return refuse(target?.reason?.trim() || "The owning module reports that this change's target no longer exists. Nothing was applied.");
     }
     try {

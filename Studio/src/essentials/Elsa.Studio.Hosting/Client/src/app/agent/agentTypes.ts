@@ -137,6 +137,8 @@ export interface AgentRecordedMessage {
   content?: string;
   statusReason?: AgentMessageStatusReason;
   acceptedPolicyRevision?: number;
+  /** Preview (#3441): the public policy the owner recorded this message as accepted under, when the server sends it. */
+  acceptedPolicy?: AgentAcceptedPolicy;
 }
 
 /** Preview (#3441): an owner-scoped session list query; actor and tenant come from the authenticated caller. */

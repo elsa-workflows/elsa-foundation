@@ -193,6 +193,8 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
   Verified: commits `9c776a5d1` (backend) and `043228b58` (Studio). `AgentError.Limit` names `snapshots` or `bytes`, and the turn passes refusals through whole so the stream and the API wire carry it; the tests were red before. A limit reached mid-turn after a read keeps the tool result's transcript record and the retained provenance, a later prompt is refused again before the provider, and the read ran once. A continuation links the original and carries nothing. Studio shows "Session limit reached" with the limit and creates the continuation with only `continuedFrom` and the workspace (Vitest and Playwright). The complete Agent suite passes 882/882 twice, including the review fixes in `8b6919c85`.
 
+  Review follow-up (#3441 Studio review): Studio shows the server's limit message, which names the bound, instead of restating "64" and "8 MiB" itself, and marks the notice with `data-limit`. **Known gap (FR-016 after a reload):** the limit notice is shown only when the stream reports the refusal. On reopen nothing the server sends says the session is limited: `AgentSessionSummary.recoveryState` is always null in both stores, and a recorded message carries no error code. Studio therefore does not show the notice after a reload until the next prompt is refused again (before the provider, with no effect), which shows it with its continuation. Closing this needs a server-side limit state on the session summary or detail; Studio does not infer one.
+
 ## Phase 7: Durable EF store (plan step 4)
 
 - [x] T026 Create `Extensions/Agent/src/Persistence/EntityFrameworkCore/` following the Specialists EF project:

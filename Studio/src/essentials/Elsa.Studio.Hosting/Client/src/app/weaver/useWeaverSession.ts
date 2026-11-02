@@ -99,8 +99,11 @@ export type WeaverRecoveryNotice =
   | { kind: "closed"; sessionId: string; status: string }
   | { kind: "lost"; sessionId: string; message: string }
   | { kind: "action-refused"; message: string }
-  /** The session reached a documented limit; it stays readable and may be continued in a new, linked session. */
-  | { kind: "limit"; sessionId: string; limit?: AgentSessionLimit };
+  /**
+   * The session reached a documented limit; it stays readable and may be continued in a new, linked session. The
+   * server's message names the bound, so Studio never restates the limits itself.
+   */
+  | { kind: "limit"; sessionId: string; limit?: AgentSessionLimit; message?: string };
 
 export interface UseWeaverSessionOptions {
   api: ElsaStudioModuleApi;
@@ -234,8 +237,14 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const policyScopeRef = useRef<PolicyScope | null>(null);
   const autonomySeqRef = useRef(0);
   const creatingSessionsRef = useRef(0);
-  // Acknowledged revisions seen by this surface, so a result can name the mode that admitted it.
-  const revisionModesRef = useRef(new Map<number, WeaverAutoApplyMode>());
+  // Acknowledged revisions seen by this surface, per session (revisions are per session), so a result can name the
+  // mode that admitted it. The server's recorded accepted policy, when sent, is preferred over this.
+  const revisionModesRef = useRef(new Map<string, Map<number, WeaverAutoApplyMode>>());
+  const revisionModesOf = useCallback((sessionId: string) => {
+    let modes = revisionModesRef.current.get(sessionId);
+    if (!modes) revisionModesRef.current.set(sessionId, modes = new Map());
+    return modes;
+  }, []);
   // The policy the server stamped on the current turn's accepted message.
   const turnAcceptedPolicyRef = useRef<AgentAcceptedPolicy | null>(null);
   const setDraftAutoApplyMode = useCallback((mode: WeaverAutoApplyMode) => { draftAutoApplyModeRef.current = mode; setDraftAutoApplyModeState(mode); }, []);
@@ -325,21 +334,22 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     if (!mountedRef.current || policyScopeRef.current !== scope) return false;
     const known = sessionPolicyRef.current;
     if (known && policy.revision < known.revision) return false;
-    revisionModesRef.current.set(policy.revision, policy.autonomyMode);
+    revisionModesOf(scope.sessionId).set(policy.revision, policy.autonomyMode);
     setSessionPolicy(policy);
     setDraftAutoApplyMode(policy.autonomyMode);
     return true;
-  }, [setDraftAutoApplyMode, setSessionPolicy]);
+  }, [revisionModesOf, setDraftAutoApplyMode, setSessionPolicy]);
 
   /** Attributes readback messages to the policy revision that accepted them; an earlier attribution is never replaced. */
-  const attributeMessages = useCallback((detail: AgentSessionDetailResponse) => {
-    const revisions = new Map(detail.messages.filter(item => item.acceptedPolicyRevision !== undefined).map(item => [item.id, item.acceptedPolicyRevision!]));
-    if (revisions.size === 0) return;
+  const attributeMessages = useCallback((sessionId: string, detail: AgentSessionDetailResponse) => {
+    const modes = revisionModesOf(sessionId);
+    const accepted = new Map(detail.messages.map(item => [item.id, recordedAcceptedPolicy(item, modes)] as const).filter(([, policy]) => policy !== undefined));
+    if (accepted.size === 0) return;
     setMessages(current => current.map(message => {
-      const revision = revisions.get(message.id);
-      return revision === undefined || message.acceptedPolicy ? message : { ...message, acceptedPolicy: { revision, autonomyMode: revisionModesRef.current.get(revision) } };
+      const policy = accepted.get(message.id);
+      return policy === undefined || message.acceptedPolicy ? message : { ...message, acceptedPolicy: policy };
     }));
-  }, []);
+  }, [revisionModesOf]);
 
   /** Reads the current conversation's policy back without settling any in-flight change. */
   const refreshSessionPolicy = useCallback(async () => {
@@ -349,7 +359,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       const detail = await scope.client.getSession(scope.sessionId);
       if (!mountedRef.current || policyScopeRef.current !== scope) return;
       if (detail.policy) acceptPolicy(scope, detail.policy);
-      attributeMessages(detail);
+      attributeMessages(scope.sessionId, detail);
     } catch {
       // The refused prompt already explains itself; a later prompt is refused again while the policy stays stale.
     }
@@ -401,7 +411,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       setAutonomyUpdate(null);
       if (!detail.policy) { setAutonomyUnsupported("unreadable"); setAutoApplyNotice(null); return; }
       acceptPolicy(scope, detail.policy);
-      attributeMessages(detail);
+      attributeMessages(scope.sessionId, detail);
       // Another write committed. The authoritative state is shown without claiming which intent won.
       setAutoApplyNotice({ kind: "reconciled", acknowledgedMode: sessionPolicyRef.current?.autonomyMode ?? detail.policy.autonomyMode });
     } catch {
@@ -560,7 +570,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         break;
       case "error":
         // A session limit is a documented outcome with its own continuation, not a failure of this turn's work.
-        if (event.code === SESSION_LIMIT_REACHED && sessionIdRef.current) setRecoveryNotice({ kind: "limit", sessionId: sessionIdRef.current, ...(event.limit ? { limit: event.limit } : {}) });
+        if (event.code === SESSION_LIMIT_REACHED && sessionIdRef.current) setRecoveryNotice({ kind: "limit", sessionId: sessionIdRef.current, ...(event.limit ? { limit: event.limit } : {}), ...(event.message ? { message: event.message } : {}) });
         // A disclosure refusal must never leave an earlier admission displayed as current.
         setAttachments([]);
         clearContextDiagnostics();
@@ -674,7 +684,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         settle("failed"); finishTurn(); return;
       }
       const accepted = response.acceptedPolicy
-        ? { ...response.acceptedPolicy, autonomyMode: response.acceptedPolicy.autonomyMode ?? revisionModesRef.current.get(response.acceptedPolicy.revision) }
+        ? { ...response.acceptedPolicy, autonomyMode: response.acceptedPolicy.autonomyMode ?? revisionModesOf(activeSessionId).get(response.acceptedPolicy.revision) }
         : null;
       turnAcceptedPolicyRef.current = accepted;
       setMessages(current => [...current, { id: response.messageId, role: "assistant", content: ASSISTANT_PLACEHOLDER, status: "streaming", ...(accepted ? { acceptedPolicy: accepted } : {}) }]);
@@ -697,7 +707,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       setMessages(current => [...current, { id: `error-${current.length}`, role: "error", content: message, status: "failed" }]);
       finishTurn();
     }
-  }, [agentClient, api, capabilities, clearContextDiagnostics, ensureSession, mode, publishTurnResult, refreshSessionPolicy, subscribeToTurn, surface]);
+  }, [agentClient, api, capabilities, clearContextDiagnostics, ensureSession, mode, publishTurnResult, refreshSessionPolicy, revisionModesOf, subscribeToTurn, surface]);
 
   const steer = useCallback(async (message: string) => {
     const generation = turnGenerationRef.current;
@@ -947,25 +957,34 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     const closed = detail.status !== "active";
     turnIdRef.current = null; turnMessageIdRef.current = null; turnRequestIdRef.current = null; turnAcceptedPolicyRef.current = null;
     streamRef.current?.close(); streamRef.current = null;
-    setAutonomyUpdate(null); setAutoApplyNotice(null); setSessionPolicy(null);
+    // Rereading the conversation already shown (after a refused withdraw or resolution, or Try again) keeps its policy
+    // scope and any in-flight or unresolved mode change: only that change's own response or readback settles it.
+    const current = policyScopeRef.current;
+    const sameScope = !closed && current !== null && current.sessionId === sessionId && current.client === agentClient && sessionIdRef.current === sessionId;
+    const update = sameScope ? autonomyUpdateRef.current : null;
+    if (!update) { setAutonomyUpdate(null); setAutoApplyNotice(null); }
+    if (!sameScope) setSessionPolicy(null);
     if (closed) {
       sessionIdRef.current = null; setSessionId(null); policyScopeRef.current = null; setAutonomyUnsupported(null);
       if (sessionScope) clearSessionHint(sessionScope.storageKey, sessionId);
     } else {
       sessionIdRef.current = sessionId; setSessionId(sessionId);
-      const scope = { client: agentClient, sessionId };
+      const scope = sameScope ? current : { client: agentClient, sessionId };
       policyScopeRef.current = scope;
       if (detail.policy) { setAutonomyUnsupported(null); acceptPolicy(scope, detail.policy); }
       else setAutonomyUnsupported("unreadable");
       if (sessionScope) writeSessionHint(sessionScope.storageKey, sessionId);
+      // An unresolved change whose revision has moved on is settled by the existing authoritative readback.
+      if (update?.status === "unresolved" && detail.policy && detail.policy.revision > update.expectedRevision) void reconcileAutonomy(scope, update);
     }
     const proposals = recorded.map(item => recordedProposalView(item, clientConfirmationsRef.current.has(item.id)));
-    setMessages(detail.messages.map(message => recordedMessageView(message, revisionModesRef.current)));
+    const modes = revisionModesOf(sessionId);
+    setMessages(detail.messages.map(message => recordedMessageView(message, modes)));
     setProposals(proposals);
     setTimeline([]); setPlan([]); setToolResults([]); setAttachments([]); setFollowups([]); clearContextDiagnostics(); setError(null);
     setChatState(!closed && proposals.some(item => BUSY_PROPOSAL_STATUSES.includes(item.status)) ? "awaiting-review" : "idle");
     setRecoveryNotice(closed ? { kind: "closed", sessionId, status: detail.status } : null);
-  }, [acceptPolicy, agentClient, clearContextDiagnostics, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
+  }, [acceptPolicy, agentClient, clearContextDiagnostics, reconcileAutonomy, revisionModesOf, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
 
   const reopenSession = useCallback(async (sessionId: string, options: { automatic?: boolean; notice?: WeaverRecoveryNotice } = {}) => {
     const generation = ++recoveryGenerationRef.current;
@@ -1035,7 +1054,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
   const withdrawMessage = useCallback((messageId: string) => void withProposalDecision(`withdraw:${messageId}`, async () => {
     const session = sessionIdRef.current;
-    if (!session) return;
+    // A recorded action waits while a mode change is unconfirmed, as prompts do.
+    if (!session || autonomyUpdateRef.current) return;
     try {
       const recorded = await agentClient.withdrawMessage(session, messageId);
       if (session !== sessionIdRef.current) return;
@@ -1049,6 +1069,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const resolveProposal = useCallback((proposal: AgentActionProposal, claim: AgentOwnerResolutionClaim) => void withProposalDecision(proposal.id, async () => {
     const session = sessionIdRef.current;
     const invocationId = proposal.preparedInvocation?.invocationId;
+    if (autonomyUpdateRef.current) return;
     if (!session || !invocationId) throw new Error("This operation cannot be resolved from this conversation.");
     try {
       const recorded = await agentClient.resolveClientInvocation(session, invocationId, claim);
@@ -1158,15 +1179,22 @@ function toMessageStatus(status: string): AgentMessageStatus {
   return (["pending", "streaming", "completed", "failed", "cancelled"] as const).find(item => item === status) ?? "failed";
 }
 
+/** The policy that admitted a recorded message: the server's own record first, else a mode this session acknowledged. */
+function recordedAcceptedPolicy(message: AgentRecordedMessage, revisionModes: ReadonlyMap<number, WeaverAutoApplyMode>): AgentAcceptedPolicy | undefined {
+  if (message.acceptedPolicy?.autonomyMode) return message.acceptedPolicy;
+  const revision = message.acceptedPolicy?.revision ?? message.acceptedPolicyRevision;
+  return revision === undefined ? undefined : { revision, autonomyMode: revisionModes.get(revision) };
+}
+
 function recordedMessageView(message: AgentRecordedMessage, revisionModes: ReadonlyMap<number, WeaverAutoApplyMode>): AgentMessageViewModel {
-  const revision = message.acceptedPolicyRevision;
+  const acceptedPolicy = recordedAcceptedPolicy(message, revisionModes);
   return {
     id: message.id,
     role: MESSAGE_ROLES.find(role => role === message.role) ?? "assistant",
     content: message.content ?? "",
     status: toMessageStatus(message.status),
     ...(message.statusReason ? { statusReason: message.statusReason } : {}),
-    ...(revision !== undefined ? { acceptedPolicy: { revision, autonomyMode: revisionModes.get(revision) } } : {})
+    ...(acceptedPolicy ? { acceptedPolicy } : {})
   };
 }
 

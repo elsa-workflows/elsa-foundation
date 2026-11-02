@@ -147,6 +147,7 @@ export function WeaverSurface({
           onExecute={session.executeProposal}
           onRetryConfirmation={session.retryConfirmation}
           onResolve={session.resolveProposal}
+          resolveDisabled={session.autoApplyBlocked}
         />
       </div>
 
@@ -174,10 +175,11 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
     <section className="weaver-recovery" aria-label="Conversation recovery" data-reopening={session.reopening || undefined}>
       {session.reopening ? <p role="status">Reading the conversation's recorded state…</p> : null}
       {notice ? (
-        <div className="weaver-recovery-notice" role="status" data-kind={notice.kind}>
+        <div className="weaver-recovery-notice" role="status" data-kind={notice.kind} data-limit={notice.kind === "limit" ? notice.limit : undefined}>
           <span>{describeRecoveryNotice(notice)}</span>
           {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
-            <button type="button" disabled={session.reopening} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
+            // A reread waits while a mode change is unconfirmed, as prompts and recorded actions do.
+            <button type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
           ) : null}
           {notice.kind === "limit" ? (
             <button type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</button>
@@ -227,7 +229,8 @@ function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {
     case "action-refused":
       return notice.message;
     case "limit":
-      return `Session limit reached. This conversation has recorded ${notice.limit === "bytes" ? "8 MiB of disclosed context" : notice.limit === "snapshots" ? "64 distinct context snapshots" : "the most context it can keep"}. It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
+      // The server's message names the bound it reached; Studio does not restate the limits.
+      return `${notice.message?.trim() || "Session limit reached: this conversation has recorded the most context it can keep."} It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
   }
 }
 

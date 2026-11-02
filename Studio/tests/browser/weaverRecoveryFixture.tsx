@@ -167,7 +167,7 @@ const subscribeStream: typeof subscribeAgentSessionStream = (_context, url, onEv
     if (prompt.content.includes("[limit]")) {
       // The documented session limit: the turn stops before the provider, and everything recorded stays.
       prompt.status = "failed"; write(store);
-      emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure." });
+      emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure. Continue in a new session; nothing recorded here was discarded." });
       return;
     }
     if (prompt.content.includes("[drop]")) {

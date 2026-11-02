@@ -87,6 +87,16 @@ describe("module-owned client target availability", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("refuses when the deadline passed while the module was answering", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { runner, execute, invocation } = withAvailability(async () => { vi.setSystemTime(Date.parse(invocation.expiresAt) + 1); return { status: "available" }; });
+      const acknowledgement = await runner.run(invocation);
+      expect(acknowledgement).toMatchObject({ outcome: "refused", summary: "Client invocation was cancelled or expired before dispatch." });
+      expect(execute).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
   it("reports a missing module adapter explicitly", async () => {
     const { runner, invocation } = fixture();
     const acknowledgement = await runner.run({ ...invocation, toolName: "removed_tool" });

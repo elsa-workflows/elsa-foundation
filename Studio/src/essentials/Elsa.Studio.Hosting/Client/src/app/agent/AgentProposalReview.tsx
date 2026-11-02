@@ -25,7 +25,8 @@ export function AgentProposalReview({
   onDeny,
   onExecute,
   onRetryConfirmation,
-  onResolve
+  onResolve,
+  resolveDisabled
 }: {
   proposals: AgentActionProposal[];
   disabled?: boolean;
@@ -37,6 +38,8 @@ export function AgentProposalReview({
   onRetryConfirmation?(proposal: AgentActionProposal): void;
   /** Preview (#3441): records the owner's statement about an uncertain client operation. */
   onResolve?(proposal: AgentActionProposal, claim: AgentOwnerResolutionClaim): void;
+  /** True while a resolution must wait, for example while a mode change is unconfirmed. */
+  resolveDisabled?: boolean;
 }) {
   if (proposals.length === 0) {
     return null;
@@ -88,7 +91,7 @@ export function AgentProposalReview({
               <div className="agent-proposal-resolve" role="group" aria-label="Resolve uncertain change">
                 <small>Weaver cannot confirm whether this change was applied, and it will not run it again. Check the resource, then say what you found.</small>
                 {(Object.keys(RESOLUTION_LABELS) as AgentOwnerResolutionClaim[]).map(claim => (
-                  <button key={claim} type="button" disabled={disabled || pending} onClick={() => onResolve!(proposal, claim)}>{RESOLUTION_LABELS[claim]}</button>
+                  <button key={claim} type="button" disabled={disabled || pending || resolveDisabled} onClick={() => onResolve!(proposal, claim)}>{RESOLUTION_LABELS[claim]}</button>
                 ))}
               </div>
             ) : null}

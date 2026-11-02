@@ -358,13 +358,15 @@ function mapRecordedMessage(message: Record<string, unknown>): AgentRecordedMess
   const revision = readField(message, "acceptedPolicyRevision");
   const reason = normalizeEnum(readField(message, "statusReason"));
   const content = readString(message, "content");
+  const accepted = mapAcceptedPolicy(readRecord(message, "acceptedPolicy"));
   return {
     id: readString(message, "id") ?? "",
     role: normalizeEnum(readField(message, "role")),
     status: normalizeEnum(readField(message, "status")),
     ...(content !== undefined ? { content } : {}),
     ...(MESSAGE_STATUS_REASONS.includes(reason as AgentMessageStatusReason) ? { statusReason: reason as AgentMessageStatusReason } : {}),
-    acceptedPolicyRevision: typeof revision === "number" ? revision : undefined
+    acceptedPolicyRevision: typeof revision === "number" ? revision : accepted?.revision,
+    ...(accepted ? { acceptedPolicy: accepted } : {})
   };
 }
 
