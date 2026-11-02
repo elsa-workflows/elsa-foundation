@@ -201,7 +201,7 @@ public sealed partial class EtlRuntimeApiHttpTests
             .Select(row => row.GetProperty("file").GetProperty("startOrdinal").GetInt64()));
     }
 
-    // Widened by spec 1191 to a CSV error route; the JSONL case and its assertions are unchanged.
+    // Widened by spec 1191 to a CSV error route; the JSONL case keeps its assertions and also reads back effect columns written as the prior writer stored them.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

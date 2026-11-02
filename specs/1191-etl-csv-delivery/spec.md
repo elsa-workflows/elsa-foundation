@@ -28,7 +28,7 @@ An integration author picks **CSV file** as the destination of the accepted-reco
 2. **Given** values with commas, double quotes, CR or LF, leading or trailing spaces, non-ASCII text, decimals with trailing zeros, negative and very large integers, booleans and nulls, **When** they are written, **Then** each is written so that an RFC 4180 reader recovers the value: strings verbatim, quoted when they need it with inner quotes doubled; numbers as the canonical invariant text of the typed value (a decimal keeps its scale, so `1.50` stays `1.50`; `+5` and `007` from a CSV source were already typed as `5` and `7`); booleans as `true` or `false`; null as an empty unquoted field.
 3. **Given** the CSV output of a run, **When** it is read back through a CSV source with the matching schema, **Then** every non-null value round-trips exactly. An empty string is written as `""` but, like an empty field, is read back as null by the CSV source.
 4. **Given** a rejected record and a CSV error route, **When** the batch is published, **Then** the error file has the header `recordOrdinal,code,field` and one row per rejected record, carrying no source text.
-5. **Given** an existing pipeline with JSON Lines or HTTP routes, **When** it runs after this change, **Then** its artifact bytes, hashes, effect identities and outputs are unchanged.
+5. **Given** an existing pipeline with JSON Lines or HTTP routes, **When** it runs after this change, **Then** its artifact bytes, hashes, effect identities and outputs are unchanged, except the exact-limit HTTP bracket cases in Edge Cases.
 
 ---
 
@@ -65,7 +65,7 @@ In Studio the author chooses CSV as a route's destination kind and picks an outp
 
 On an actual Workbench, a native workflow runs a published JSON Lines → CSV pipeline (source from spec 1190) to success, and a file with rejected lines to business error, with CSV files on both routes.
 
-**Independent Test**: the spec 1190 journey driver, extended with CSV routes, publishes the pipeline through the design API, runs it from a native Flowchart and checks the published CSV files.
+**Independent Test**: a copy of the spec 1190 journey driver with CSV routes publishes the pipeline through the design API, runs it from a native Flowchart and checks the published CSV files.
 
 ### Edge Cases
 
@@ -75,7 +75,8 @@ On an actual Workbench, a native workflow runs a published JSON Lines → CSV pi
 - A mapping with a single output field whose value is null writes an empty line. Elsa's CSV reader reads it as one null field, but many general-purpose readers skip blank lines; this is a stated limitation of single-column CSV.
 - A row that would fit as CSV but whose intermediate JSON object is larger: it is accepted, because the CSV bytes are what is bounded (FR-007). The transformer's memory-only bound of eight times the batch output limit can never reject such a row (research R2).
 - Output exactly at, and one byte over, the batch output byte limit, counting the header row: at the limit the row is written; one byte over, that row is rejected to the error route as `etl.output-too-large`, as for JSON Lines. If the header plus the first row do not fit, that row is rejected and the header is not written; the next row that fits carries it. A CSV row rejected for size carries no field name. If the rejection's own error row cannot fit either, the batch fails with `etl.output-too-large`, as it does for JSON Lines.
-- An HTTP route in the same pipeline: the closing `]` of its JSON array is reserved when its first element is appended, so a CSV (or JSON Lines) route that fills the allowance exactly cannot leave the array unclosable. This fixes the existing JSON Lines + HTTP behaviour, where that case failed the batch.
+- An HTTP route in the same pipeline: the closing `]` of its JSON array is reserved when its first element is appended, so a file route (CSV or JSON Lines) that fills the allowance exactly cannot leave the array unclosable; previously that case failed the batch.
+- An HTTP main route's first row whose JSON exactly fills the allowance: the row is bounded with its reserved bracket, so it is rejected to the error route as `etl.output-too-large` instead of failing the batch. This changes existing HTTP-main pipelines only at that exact limit.
 - Many batches: each file repeats the header, so every file can be read on its own.
 - Main route CSV and error route JSON Lines, or the reverse, in one pipeline.
 - The same output folder approval used by a JSON Lines route in one pipeline and a CSV route in another: files differ by extension and effect identity, so they never collide.
@@ -109,7 +110,7 @@ On an actual Workbench, a native workflow runs a published JSON Lines → CSV pi
 - **SC-001** CSV → CSV, HTTP → CSV and JSON Lines → CSV runs through the real worker and store publish exactly the expected header and rows on both routes.
 - **SC-002** Every formatting rule in FR-004 to FR-006 and each listed edge case has a test that fails when the rule is broken, and the quoting rule and header rule have recorded bite-proofs.
 - **SC-003** In real worker processes, a worker killed after CSV publication and before acceptance is replaced; the replacement accepts the same effect identity once under a higher fence, no second file appears, and accounting returns to zero.
-- **SC-004** Existing CSV, HTTP, JSON Lines and v1 artifacts keep their canonical hashes, existing persisted batch rows are unchanged, and the whole ETL test project passes.
+- **SC-004** Existing CSV, HTTP, JSON Lines and v1 artifacts keep their canonical hashes, existing persisted batch rows are unchanged (outputs change only in the exact-limit HTTP bracket cases in Edge Cases), and the whole ETL test project passes.
 - **SC-005** Studio authoring of a CSV destination is covered by a component test and a browser test, and observed in a real browser against a running host.
 - **SC-006** On an actual Workbench, a native workflow runs a JSON Lines → CSV pipeline to success and to business error, and the published CSV files hold the expected header and rows.
 

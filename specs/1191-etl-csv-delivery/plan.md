@@ -56,7 +56,7 @@ No violations.
 - `Execution/EtlConnectorOutputProcessor.cs` (a CSV row rejected for size carries a null field):
   - `RouteBodyBuilder` takes the destination kind. For a CSV main route, `BuildOutputAsync` calls the transformer with the memory-only bound (R2). If the measured CSV row, with the header if first, does not fit the remaining allowance, the row is rejected to the error route as `etl.output-too-large` with the record's ordinal. JSON Lines and HTTP keep the transformer's bound.
   - `EtlConnectorKindFor`, `BodyStore` and `RetainedBodyIdentity` gain CSV entries (`etl-connector-csv-route-body-v1:`, `.csv` store).
-  - `RouteBodyBuilder` for an HTTP array reserves its closing `]` when it appends the first element, and `Finish` adds no unreserved byte. This fixes the existing JSON Lines + HTTP limit case.
+  - `RouteBodyBuilder` for an HTTP array reserves its closing `]` when it appends the first element, and `Finish` adds no unreserved byte. An HTTP main route's first row is transformed with one byte less, so an exact-limit first row is rejected rather than failing the batch. Both fix existing HTTP limit cases.
   - `DispatchAsync` sends JSON Lines and CSV to `PublishFileRouteAsync`. That method takes its publisher, its verification store (not the fixed `_jsonlStore`) and its key from the route kind.
 - Every gate in research R7a is updated, including the `StagingPausePublisherFactory` test host mapping.
 
@@ -91,8 +91,7 @@ No violations.
    - every FR-005 quoting and formatting case, including empty, comma, quote, CR, LF, edge spaces, non-ASCII, the formula-like prefix, decimal scale, `long.MinValue`/`MaxValue`, booleans and null;
    - header quoting;
    - error rows;
-   - an exact byte bound and one byte over, with the header counted, where one over rejects the row as `etl.output-too-large`;
-   - a row whose JSON exceeds the CSV allowance but whose CSV fits is accepted;
+   - (the byte-bound cases are in `EtlConnectorCsvOutputTests`, step 2);
    - a single-column null row writes an empty line;
    - parsing the output back through `CsvRecordReader` recovers the values.
 2. **Store**:
@@ -113,7 +112,7 @@ No violations.
    - All published files are parsed and compared.
 5. **Process recovery**: a kill at `BeforeAcceptance` with CSV routes. The replacement must hold a higher fence, publish no second file, and leave zero accounting.
 6. **Studio**: Vitest for the route kind switch and picker; Playwright for authoring a CSV destination.
-7. **Actual host**: the spec 1190 driver gains a JSON Lines → CSV case (success and business error) that checks the published CSV files. A real browser observes the route type.
+7. **Actual host**: a copy of the spec 1190 driver (left unchanged as that spec's evidence) runs a JSON Lines → CSV case (success and business error) that checks the published CSV files. A real browser observes the route type.
 8. **Bite-proofs**:
    - quoting trigger removed;
    - header omitted;

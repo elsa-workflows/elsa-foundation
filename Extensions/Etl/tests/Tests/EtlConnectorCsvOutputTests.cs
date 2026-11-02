@@ -100,7 +100,7 @@ public sealed partial class EtlRuntimeStoreTests
     [Fact]
     public async Task A_row_whose_json_exceeds_the_allowance_is_accepted_when_its_csv_fits()
     {
-        var accented = new string('é', 60); // 120 UTF-8 bytes in CSV; escaped as é (360 bytes) in the JSON object.
+        var accented = new string('é', 60); // 120 UTF-8 bytes in CSV; the JSON writer escapes each é as \u00e9 (6 bytes, 360 in all).
         var limit = EtlCsvRouteWriter.Header(CsvOutputFields).Length + CsvRow(1, accented).Length;
         Assert.True(limit < 200);
         await using var fixture = await CsvOutputFixture.StartAsync(this, limit, Accepted(1, 1, accented));
@@ -111,19 +111,23 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal((1L, 0L), (prepared.Output!.AcceptedRecords, prepared.Output.RejectedRecords));
     }
 
-    [Fact]
-    public async Task An_http_error_array_reserves_its_closing_bracket_when_a_file_route_fills_the_limit()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_http_error_array_reserves_its_closing_bracket_when_a_file_route_fills_the_limit(bool jsonlMain)
     {
         const string errorJson = "{\"recordOrdinal\":1,\"code\":\"etl.invalid-value\"}";
-        var limit = 1 + errorJson.Length + 1 + EtlCsvRouteWriter.Header(CsvOutputFields).Length + CsvRow(2, "Ada").Length;
+        const string jsonlRow = "{\"id\":2,\"name\":\"Ada\"}\n";
+        var mainBytes = jsonlMain ? jsonlRow.Length : EtlCsvRouteWriter.Header(CsvOutputFields).Length + CsvRow(2, "Ada").Length;
+        var limit = 1 + errorJson.Length + 1 + mainBytes;
         await using var fixture = await CsvOutputFixture.StartAsync(this, limit, httpErrors: true,
-            Error(1, "etl.invalid-value", null), Accepted(2, 2, "Ada"));
+            mainKind: jsonlMain ? EtlConnectorKind.Jsonl : EtlConnectorKind.Csv, Error(1, "etl.invalid-value", null), Accepted(2, 2, "Ada"));
 
         var prepared = await fixture.TransformAsync();
 
         Assert.True(prepared.Succeeded, prepared.FailureCode);
         Assert.Equal("[" + errorJson + "]", await fixture.RetainedAsync(prepared.Output!.Errors!));
-        Assert.Equal("id,name\r\n2,Ada\r\n", await fixture.RetainedAsync(prepared.Output.Main!));
+        Assert.Equal(jsonlMain ? jsonlRow : "id,name\r\n2,Ada\r\n", await fixture.RetainedAsync(prepared.Output.Main!));
     }
 
     [Fact]
@@ -136,8 +140,8 @@ public sealed partial class EtlRuntimeStoreTests
         var rejection = EtlCsvRouteWriter.ErrorHeader().Length + EtlCsvRouteWriter.ErrorRow(new(1, "name", "etl.output-too-large")).Length;
         Assert.True(rowJson.Length + 1 > rejection);
         // The transformer's JSONL line is the object plus LF, so this limit is exactly what the line occupies.
-        await using var fixture = await CsvOutputFixture.StartAsync(this, rowJson.Length + 1, httpErrors: false, httpMain: true,
-            Accepted(1, 1, name));
+        await using var fixture = await CsvOutputFixture.StartAsync(this, rowJson.Length + 1, httpErrors: false,
+            mainKind: EtlConnectorKind.Http, Accepted(1, 1, name));
 
         var prepared = await fixture.TransformAsync();
 
@@ -221,17 +225,17 @@ public sealed partial class EtlRuntimeStoreTests
             params EtlConnectorInputRecord[] records) => StartAsync(_, outputLimit, httpErrors: false, records);
 
         public static Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreTests _, long outputLimit, bool httpErrors,
-            params EtlConnectorInputRecord[] records) => StartAsync(_, outputLimit, httpErrors, httpMain: false, records);
+            params EtlConnectorInputRecord[] records) => StartAsync(_, outputLimit, httpErrors, EtlConnectorKind.Csv, records);
 
-        public static async Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreTests _, long outputLimit, bool httpErrors, bool httpMain,
-            params EtlConnectorInputRecord[] records)
+        public static async Task<CsvOutputFixture> StartAsync(EtlRuntimeStoreTests _, long outputLimit, bool httpErrors,
+            EtlConnectorKind mainKind, params EtlConnectorInputRecord[] records)
         {
             var fixture = new CsvOutputFixture();
-            await fixture.InitializeAsync(outputLimit, httpErrors, httpMain, records);
+            await fixture.InitializeAsync(outputLimit, httpErrors, mainKind, records);
             return fixture;
         }
 
-        private async Task InitializeAsync(long outputLimit, bool httpErrors, bool httpMain, EtlConnectorInputRecord[] records)
+        private async Task InitializeAsync(long outputLimit, bool httpErrors, EtlConnectorKind mainKind, EtlConnectorInputRecord[] records)
         {
             Directory.CreateDirectory(_root);
             var scope = new EtlScope("tenant-csv", "csv-output");
@@ -254,7 +258,12 @@ public sealed partial class EtlRuntimeStoreTests
             _pipeline = baseline with
             {
                 Source = new EtlCsvSource("source", [new EtlColumn("id", EtlColumnType.Int64, true), new EtlColumn("name", EtlColumnType.String, true)]),
-                Routes = new(httpMain ? new EtlHttpDestination("output") : new EtlCsvDestination("output"),
+                Routes = new(mainKind switch
+                    {
+                        EtlConnectorKind.Http => new EtlHttpDestination("output"),
+                        EtlConnectorKind.Jsonl => new EtlJsonlDestination("output"),
+                        _ => new EtlCsvDestination("output")
+                    },
                     httpErrors ? new EtlHttpDestination("errors") : new EtlCsvDestination("errors")),
                 Mapping = [new EtlOutputField("id", EtlFieldOrigin.Source, "id"), new EtlOutputField("name", EtlFieldOrigin.Source, "name")],
                 Limits = baseline.Limits with
@@ -272,9 +281,9 @@ public sealed partial class EtlRuntimeStoreTests
             {
                 Bindings = Admission.Bindings with
                 {
-                    Main = httpMain
+                    Main = mainKind == EtlConnectorKind.Http
                         ? new(EtlConnectorKind.Http, new("output", httpMainPin.Revision, httpMainPin.Handle, null))
-                        : new(EtlConnectorKind.Csv, new("output", mainPin.Revision, mainPin.Handle, null)),
+                        : new(mainKind, new("output", mainPin.Revision, mainPin.Handle, null)),
                     Errors = httpErrors
                         ? new(EtlConnectorKind.Http, new("errors", httpPin.Revision, httpPin.Handle, null))
                         : new(EtlConnectorKind.Csv, new("errors", errorPin.Revision, errorPin.Handle, null))
@@ -312,8 +321,12 @@ public sealed partial class EtlRuntimeStoreTests
 
         public async Task<string> RetainedAsync(EtlConnectorRouteOutput route)
         {
-            var (extension, prefix) = route.Kind == EtlConnectorKind.Csv ? (".csv", "etl-connector-csv-route-body-v1:")
-                : (".json", "etl-connector-http-route-body-v1:");
+            var (extension, prefix) = route.Kind switch
+            {
+                EtlConnectorKind.Csv => (".csv", "etl-connector-csv-route-body-v1:"),
+                EtlConnectorKind.Jsonl => (".jsonl", "etl-connector-jsonl-route-body-v1:"),
+                _ => (".json", "etl-connector-http-route-body-v1:")
+            };
             var bytes = await new FileChunkStore(extension).ReadAsync(SnapshotRoot, prefix + route.EffectId,
                 _pipeline.Limits.MaxOutputBatchBytes, route.Body.ByteLength);
             return Encoding.UTF8.GetString(Assert.IsType<byte[]>(bytes));

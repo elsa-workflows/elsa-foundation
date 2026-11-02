@@ -50,9 +50,20 @@ public sealed class EtlCsvRouteWriterTests
     }
 
     [Fact]
-    public void A_single_null_column_row_is_an_empty_line()
+    public async Task A_single_null_column_row_is_an_empty_line_that_the_csv_source_reads_as_one_null_field()
     {
-        Assert.Equal("\r\n", Encoding.UTF8.GetString(EtlCsvRouteWriter.RecordRow(Encoding.UTF8.GetBytes("{\"note\":null}"), 1)));
+        var row = EtlCsvRouteWriter.RecordRow(Encoding.UTF8.GetBytes("{\"note\":null}"), 1);
+        Assert.Equal("\r\n", Encoding.UTF8.GetString(row));
+
+        var schema = new[] { new EtlColumn("note", EtlColumnType.String, false) };
+        var records = new List<CsvRecord>();
+        await foreach (var record in new CsvRecordReader(new MemoryStream([.. EtlCsvRouteWriter.Header(["note"]), .. row]), 1024, 4)
+                           .ReadAsync(CancellationToken.None))
+            records.Add(record);
+        Assert.Equal(2, records.Count);
+        Assert.True(EtlRowTransformer.TryCompileHeader(schema, records[0], out var header, out _));
+        Assert.True(EtlRowTransformer.TryParseTypedRow(schema, header!, records[1], out var typed, out var error), error?.Code);
+        Assert.Null(typed!.Values["note"].Value);
     }
 
     [Theory]

@@ -48,7 +48,7 @@ snapshots and bounded partition pages. It has the same positive cap and short-pa
 Run snapshots contain internal invocation data; public consumers must project approved fields. Partition
 projections carry typed source progress and safe receipt/retry metadata. Counts represent settled route
 bodies, and neither expiry nor acknowledgement proves physical termination or accepted progress. The SQLite
-provider reads a consistent transaction and aggregates indexed scalar route kinds without materializing the
+provider reads a consistent transaction and aggregates indexed delivery-mechanism columns (HTTP or file) without materializing the
 historical output documents. See the [inspection checkpoint](../../../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).
 
 ## Connector artifact format
@@ -68,7 +68,10 @@ file-only replacement/decorator remains usable and receives a durable v2-unavail
 [worker checkpoint](../../../../specs/996-http-etl/evidence/http-worker-checkpoint.md). A connector provider's
 `CommitConnectorPreparationAsync` must settle a zero-record file run (CSV or JSON Lines) as success in the same
 transaction, because no partition exists to complete it; an identical replay returns `Replay`
-([spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md) FR-011).
+([spec 1190](../../../../specs/1190-etl-jsonl-input/spec.md) FR-011). A provider must also accept `EtlConnectorKind.Csv` route
+outputs as file routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)): `RecordConnectorFilePublicationAsync`
+matches a CSV publication against `EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, kind)` (a `.csv` key, refusing the
+`.jsonl` one), and a CSV route counts as a file publication for delivery, acceptance and inspection state.
 
 Connector providers distinguish temporary outstanding-capacity pressure (`BudgetExceeded`) from a transition
 that cannot fit the retained-input/output/metadata limits (`PermanentBudgetExceeded`). The worker yields for
