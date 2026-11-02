@@ -199,13 +199,17 @@ public sealed partial class EtlRuntimeApiHttpTests
             .Select(row => row.GetProperty("file").GetProperty("startOrdinal").GetInt64()));
     }
 
-    [Fact]
-    public async Task Connector_api_distinguishes_captured_input_and_acknowledged_outputs_from_accepted_progress()
+    // Widened by spec 1191 to a CSV error route; the JSONL case and its assertions are unchanged.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Connector_api_distinguishes_captured_input_and_acknowledged_outputs_from_accepted_progress(bool csvErrors)
     {
         await using var host = await EtlDesignApiTestHost.StartRuntimeAsync();
+        var errorKind = csvErrors ? EtlConnectorKind.Csv : EtlConnectorKind.Jsonl;
         var pipeline = EtlV2TestPipelines.Create() with
         {
-            Routes = new(new EtlHttpDestination("output"), new EtlJsonlDestination("errors"))
+            Routes = new(new EtlHttpDestination("output"), csvErrors ? new EtlCsvDestination("errors") : new EtlJsonlDestination("errors"))
         };
         var scope = new EtlScope("tenant-a", "partition-a");
         var admission = await SeedConnectorAsync(host, "owed-progress", scope, pipeline);
@@ -228,7 +232,7 @@ public sealed partial class EtlRuntimeApiHttpTests
             new($"private-{route}-body", EtlRuntimeFixtures.Hash, 19), 1,
             EtlRuntimeIdentity.ConnectorEffectId(admission, batchId, route, EtlRuntimeFixtures.Hash, 19, 1));
         var main = Output(EtlOutputRoute.Main, EtlConnectorKind.Http);
-        var errors = Output(EtlOutputRoute.Error, EtlConnectorKind.Jsonl);
+        var errors = Output(EtlOutputRoute.Error, errorKind);
         Assert.Equal(EtlStoreStatus.Applied,
             (await store.RetainConnectorBatchOutputAsync(lease, batchId, new(1, 1, 0, main, errors))).Status);
 
@@ -245,8 +249,11 @@ public sealed partial class EtlRuntimeApiHttpTests
         Assert.Equal(EtlStoreStatus.Applied, begin.Status);
         Assert.Equal(EtlStoreStatus.Applied, (await store.CompleteConnectorHttpDeliveryAsync(lease, batchId,
             EtlOutputRoute.Main, begin.Permit!, new(204, null))).Status);
+        if (csvErrors)
+            Assert.Equal(EtlStoreStatus.Conflict, await store.RecordConnectorFilePublicationAsync(lease, batchId,
+                EtlOutputRoute.Error, errors.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(errors.EffectId) }));
         Assert.Equal(EtlStoreStatus.Applied, await store.RecordConnectorFilePublicationAsync(lease, batchId,
-            EtlOutputRoute.Error, errors.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(errors.EffectId) }));
+            EtlOutputRoute.Error, errors.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(errors.EffectId, errorKind) }));
         using (var owed = await ReadConnectorPartitionAsync(host, "owed-progress"))
         {
             var row = owed.RootElement.GetProperty("items")[0];
@@ -258,6 +265,7 @@ public sealed partial class EtlRuntimeApiHttpTests
             Assert.Equal("acknowledged", RequiredString(output.GetProperty("main"), "state"));
             Assert.Equal(204, output.GetProperty("main").GetProperty("retry").GetProperty("lastStatusCode").GetInt32());
             Assert.Equal("published", RequiredString(output.GetProperty("errors"), "state"));
+            Assert.Equal(csvErrors ? "csv" : "jsonl", RequiredString(output.GetProperty("errors"), "kind"));
             AssertConnectorProjection(row);
         }
         await AssertConnectorEffectCountsAsync(host, "owed-progress", 0);
