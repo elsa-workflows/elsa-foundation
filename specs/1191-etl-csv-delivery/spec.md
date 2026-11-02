@@ -43,7 +43,7 @@ An operator loses a worker after it published a CSV file and before the batch wa
 **Acceptance Scenarios**:
 
 1. **Given** a published but unaccepted CSV effect, **When** a replacement claims the partition after the lease expires, **Then** it accepts the same effect identity under a higher fence and no second file appears.
-2. **Given** a different file already exists at the effect's key, **When** publication runs, **Then** it is refused with `etl.effect-conflict`, the batch is not accepted, and the run settles as a fault.
+2. **Given** a different file already exists at the effect's key, **When** publication runs, **Then** it is refused with `etl.effect-conflict`, the existing file is left untouched, the batch is not accepted, and the run settles with that diagnostic through the existing shared settlement path (which classifies it as a business error, as it does for JSON Lines).
 3. **Given** a retained CSV route body that no longer matches its hash, **When** dispatch runs, **Then** it is refused before anything is published.
 
 ---

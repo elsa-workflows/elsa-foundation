@@ -229,6 +229,15 @@ public sealed class EtlConnectorExecutableReaderTests
     }
 
     [Fact]
+    public void Reader_accepts_csv_destinations()
+    {
+        using var runtime = CreateRuntime();
+        var pipeline = EtlV2TestPipelines.Create() with { Routes = new(new EtlCsvDestination("output"), new EtlCsvDestination("errors")) };
+
+        Assert.IsType<EtlCsvDestination>(runtime.Reader.Read(Compile(pipeline)).Routes.Errors);
+    }
+
+    [Fact]
     public void Reader_verifies_content_hash_and_artifact_identity()
     {
         var artifact = Compile(EtlV2TestPipelines.Create());

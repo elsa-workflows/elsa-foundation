@@ -69,6 +69,22 @@ public sealed class HostConnectorBindingsTests
     }
 
     [Fact]
+    public async Task A_csv_destination_pins_the_output_folder_approval_as_csv_without_a_digest()
+    {
+        using var provider = Compose(Feature());
+        using var serviceScope = provider.CreateScope();
+        var resolver = serviceScope.ServiceProvider.GetRequiredService<IEtlConnectorBindingResolver>();
+        var pipeline = EtlV2TestPipelines.Create() with { Routes = new(new EtlHttpDestination("output"), new EtlCsvDestination("errors")) };
+
+        var errors = (await resolver.ResolveAsync(Scope, pipeline)).Bindings!.Errors;
+
+        Assert.Equal(EtlConnectorKind.Csv, errors.Kind);
+        Assert.Null(errors.Revision.ExpectedSha256);
+        Assert.Equal(EtlConnectorKind.Jsonl, Assert.Single(serviceScope.ServiceProvider.GetRequiredService<IEtlConnectorBindingCatalog>()
+            .ListBindings(Scope, null, null, 100), x => x.Alias == "errors").Kind);
+    }
+
+    [Fact]
     public void Current_alias_role_collisions_are_refused_during_host_composition()
     {
         var feature = Feature();
