@@ -9,6 +9,9 @@ namespace Elsa.Agent.Specialists.Connections;
 /// </summary>
 public sealed class SpecialistModelConnectionTypeProvider(string providerKey, string connectionTypeName) : IConnectionTypeProvider
 {
+    /// <summary>The model provider key that specialist manifests name; its connections are of this type.</summary>
+    public string ProviderKey { get; } = providerKey;
+
     /// <inheritdoc />
     public ConnectionTypeDescriptor Descriptor { get; } = new(connectionTypeName, providerKey + " specialist model", [HttpAuthSchemes.ApiKey],
     [
