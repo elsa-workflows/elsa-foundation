@@ -45,17 +45,24 @@ public sealed partial class AgentCumulativeDisclosureTests
     }
 
     [Fact]
-    public async Task A_completed_turn_clears_a_recorded_session_limit()
+    public async Task A_reached_limit_stays_recorded_after_a_later_turn_that_adds_no_snapshot_completes()
     {
         using var fixture = new Fixture(true, Script.Answer);
-        await SeedRetainedHistory(fixture, 1);
-        var owner = (InMemoryAgentSessionService)fixture.Services.GetRequiredService<IAgentSessionService>();
-        await owner.RecordLimitAsync(fixture.Session!.Id, "bytes");
-        await fixture.Post("An ordinary request");
+        await SeedRetainedHistory(fixture, AgentDisclosureHistory.MaximumSnapshots);
+        var sessions = fixture.Services.GetRequiredService<IAgentSessionService>();
+        await fixture.Post("Request the current expanded projection");
+        Assert.Equal("snapshots", Assert.Single(await fixture.Stream(), item => item.Error?.Code == BudgetExceeded).Error!.Limit);
+        foreach (var message in (await sessions.ListMessagesAsync(fixture.Session!.Id)).Where(x => x.Role == AgentRole.User && x.Status is AgentMessageStatus.Pending or AgentMessageStatus.Streaming))
+            await sessions.SetMessageStatusAsync(fixture.Session.Id, message.Id, AgentMessageStatus.Failed);
 
+        // A turn that discloses only an already recorded snapshot completes, but the session is still full.
+        fixture.Source.ShowDetail = false;
+        await fixture.Post("Answer from what is already recorded");
         Assert.Equal(AgentStreamEventKind.Completed, (await fixture.Stream())[^1].Kind);
 
-        Assert.Null((await owner.FindAsync(fixture.Session.Id))!.LimitReached);
+        Assert.Equal("snapshots", (await sessions.FindAsync(fixture.Session.Id))!.LimitReached);
+        var listed = await sessions.ListOwnedAsync(new(fixture.Session.ActorId, fixture.Session.TenantId, null, 20, null));
+        Assert.Equal(AgentSessionRecoveryStates.LimitReachedPrefix + "snapshots", Assert.Single(listed.Page!.Items).RecoveryState);
     }
 
     [Fact]
