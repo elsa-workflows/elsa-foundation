@@ -99,7 +99,8 @@ export interface StudioNotificationApi {
 
 All components live in `Elsa.Studio.Hosting/Client/src/app/ui/feedback/`.
 
-- `<ToastHost />` is mounted once in `App.tsx` beside `<DialogHost />`. Toasts appear top-right
+- `<ToastHost />` is mounted once inside the main shell frame in `App.tsx`, where host navigation is
+  available for links. Toasts appear top-right
   below the header as an overlay that never reflows content, about 360 px wide and full width on
   narrow viewports. At most three are visible, newest on top; the rest queue (they are already in
   the Center). Each toast shows a level icon (spinner for `progress`), title, optional message,
