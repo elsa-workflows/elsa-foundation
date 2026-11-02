@@ -292,6 +292,12 @@ Rechecked against framework v6.1.0 and Elsa v6.3.0.
   no infrastructure exception crosses the new members.
 - **§4.2.** The members above are additive (Minor): new interfaces, one default interface member,
   new models, enums and exception, init-only properties, a new route and additive response fields.
+  There is one exception, a changed public signature (Major under §4.1/§4.2):
+  `AgentMessageAcceptedResponse.Message` in `Elsa.Agent.Api` changes type from `AgentMessage` to
+  `AgentAcceptedMessageResponse`. This keeps private policy fields off the wire. It breaks C#
+  consumers that construct the record or read `.Message` as `AgentMessage`; the JSON is unchanged
+  except for the projected `acceptedPolicy`. It is accepted pre-GA under ADR 0080 D4 with computed
+  versions under Elsa §E5, like the behaviour changes below.
 - **Behavior changes** (Major under §4.2's changed-semantics rule; accepted pre-GA under ADR 0080 D4
   with computed versions under Elsa §E5; this work performs no release):
   1. The audit route requires `ListOwnedAsync`: custom readers now get 409, and legacy sessions without

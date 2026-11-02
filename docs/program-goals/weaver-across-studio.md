@@ -78,10 +78,14 @@ Its module-owned effects, acknowledged session autonomy and lifecycle follow-thr
 all five acceptance criteria. Review, required checks and resulting-main evidence remain
 delivery gates for each subsequent leaf. The current
 inventory also includes workflow library folders, tags and saved views added on main during M2.
-The #3440 implementation base incorporates main `94be29ece` and its Sketchbook appearance changes;
-the reviewed Agent/Weaver/fixture inputs are unchanged, while fresh native/composed proof remains
-required. The spec, plan and 31-task breakdown are reviewed; their explicit native matrix requires
-thirteen lifecycle cases on each actual adapter before the new shared contract freezes.
+#3440 is in review in PR #3612. Its acknowledged session autonomy, exact reviewed effects,
+admission/ownership barriers, correlated expiry and owner-scoped audit are implemented. Spec 1186 is
+Implemented and its session-policy contract is frozen as preview API. The normal composed Studio
+gate (the complete browser suite) and the complete independent package witness both passed. The
+witness covered the original 38 cases, the 4 current-authority cases, and all 13 lifecycle cases on
+each actual adapter. This is deterministic provider-protocol evidence, not live-provider evidence.
+Independent review, exact-head required checks, merge and resulting-main verification remain
+before Done.
 
 ## Delivery plan
 
