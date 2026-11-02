@@ -107,7 +107,7 @@ test("narrow keyboard users preserve workflow browse context through global sear
 
   await page.reload();
   await expect(page.getByText("Operations workflow")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Folders" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Folders", exact: true })).toBeVisible();
 });
 
 test("editor Back restores the later workflow page with its observed opaque cursor", async ({ page }) => {
