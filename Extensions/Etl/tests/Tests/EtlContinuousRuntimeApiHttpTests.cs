@@ -145,8 +145,8 @@ public sealed partial class EtlRuntimeApiHttpTests
                 var connectors = (IEtlConnectorRuntimeStore)services.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
                 Assert.Equal(EtlStoreStatus.Applied, (await connectors.AdmitConnectorAsync(admission)).Status);
             }
-            using var unknown = await fileOnly.SendAsync(HttpMethod.Post, "/etl/runs/v2-without-store/complete", permissions: CompletePermissions);
-            await AssertProblemAsync(unknown, HttpStatusCode.ServiceUnavailable, "etl.provider-unavailable");
+            using var v2WithoutStore = await fileOnly.SendAsync(HttpMethod.Post, "/etl/runs/v2-without-store/complete", permissions: CompletePermissions);
+            await AssertProblemAsync(v2WithoutStore, HttpStatusCode.ServiceUnavailable, "etl.provider-unavailable");
         }
 
         await using var legacy = await EtlDesignApiTestHost.StartRuntimeAsync(configureServices: services =>
