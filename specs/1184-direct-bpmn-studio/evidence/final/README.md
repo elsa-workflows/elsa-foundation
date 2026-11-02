@@ -81,4 +81,21 @@ The candidate is `d808f7bf2`: the branch with main `b392aef0a` merged cleanly. R
 
 Reversed controls report the additions as removals (2 and 19 differences), which proves the comparison sees them. Under constitution §4.2 every delta is compatible expansion: default interface members, a constructor overload, new types, optional init properties and a new constant. That is Minor. Before GA the packages stay on the single 4.0 line (§E5), and the calculator advances the patch; no version-line or exception change is requested. PR3410's version exception is not inherited.
 
-**Not established here:** exact-head required CI (it is queued on the candidate), independent full-PR review, and resulting-main verification.
+## Final head
+
+The review fixes were re-qualified at `3e0c1e5b1`. They passed BPMN 575, Interchange 196, Architecture 609 (after a catalog link fix), and the whole BPMN hosting project, 56/56. The Studio suites also passed once the editor waits were widened for load.
+
+Main `6f77c0f2c` was then merged (`7ca434ab2`). Main's new `Elsa.Agent.Specialists.Review.Api` referenced the capabilities project at its former root path, which this branch had moved. With that one reference corrected (`618cd5465`), the post-merge checks are:
+
+| Check | Result |
+|---|---|
+| Locked-mode restore, full `Elsa.Server.slnx` Release build | Passed, 0 errors |
+| Generated solution filters | Fresh |
+| Architecture | 611 passed |
+| BPMN (focused), BPMN hosting claims and authored publication | 59, 4 passed |
+| Agent specialists, provider and agent tests; Foundation identity | 825, 3, 573; 540 passed |
+| Studio typecheck; inspector, direct authoring, editor and runtime API suites | Passed; 58 passed |
+
+The merge changed no BPMN, ETL or persisted-format product code, so the real journeys recorded above stand. Whole-suite coverage of the exact head is left to the required CI.
+
+**Not established here:** exact-head required CI, independent full-PR review, and resulting-main verification.
