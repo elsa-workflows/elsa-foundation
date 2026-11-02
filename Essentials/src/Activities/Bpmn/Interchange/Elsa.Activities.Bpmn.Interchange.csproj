@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\..\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\Api\Capabilities\Core\Elsa.Api.Capabilities.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,99 @@
+{
+  "formatVersion": 1,
+  "sourceCommit": "77bb8dd5c22f7f71b1e345b303c53f5ddf62b34c",
+  "nativeSdkCommit": "ddad5c8cc85b38ff317a4f66dafa49a90f7a553e",
+  "baseMain": "94be29ece1b3fd55b534a6a9043d3b2b94f5e33c",
+  "sourceNote": "Results use these committed source inputs; ETL50 was repeated on77bb8dd5c after completing fixture type corrections. SDK/native source inputs are unchanged from their recorded125/38-case results. This receipt is a documentation descendant and qualifies no compiled host/browser product.",
+  "checks": [
+    {
+      "name": "workflow component suite",
+      "outcome": "passed",
+      "log": "related-links-final.log",
+      "sha256": "b5c82bfb9cb42c7b7665d48eedfd9862d74b2f8cdce6e4580231045105a33142",
+      "total": 125,
+      "passed": 125,
+      "failed": 0,
+      "skipped": 0,
+      "newRelatedLinkControls": 24
+    },
+    {
+      "name": "SDK registry and compiler consumers",
+      "outcome": "passed",
+      "log": "related-sdk-final.log",
+      "sha256": "a38d0a65b27f264bf9f863264c343fedcb8ad2844b6e1027f75387898b45f27b",
+      "total": 38,
+      "passed": 38,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "ETL component/reference suite",
+      "outcome": "passed",
+      "log": "etl-links-77bb8dd5c.log",
+      "sha256": "7fb49142fa3a212537e017a52ddddee849151b0b16909fdf1e532c6c2d50726d",
+      "total": 50,
+      "passed": 50,
+      "failed": 0,
+      "skipped": 0,
+      "newControls": 37
+    },
+    {
+      "name": "Workflows typecheck",
+      "outcome": "passed",
+      "log": "related-workflows-final-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "ETL typecheck",
+      "outcome": "passed",
+      "log": "etl-links-typecheck-corrected.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "SDK declared build",
+      "outcome": "passed",
+      "log": "related-sdk-declared-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "SDK/workflow targeted lint",
+      "outcome": "passed with existing warning",
+      "log": "related-links-final-lint.log",
+      "sha256": "f15f9b32e885643f1f5d026f7624c2a1ac2bd4553c85c5d6c00859fec3d5afc8",
+      "errors": 0,
+      "warnings": 1,
+      "existingWarning": "ElsaStudioBackendContext empty interface; present at831d355fe"
+    },
+    {
+      "name": "ETL targeted lint",
+      "outcome": "passed",
+      "log": "etl-links-final-lint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "name": "Raw Hosting/Client tsc diagnostic probe",
+      "outcome": "failed",
+      "log": "related-host-typecheck.log",
+      "sha256": "a7f243d77a08ef56945b19833dc39420e38f0261c36afa94254ada6c568c94ac",
+      "isDeclaredPackageGate": false,
+      "notes": "Host Client has no typecheck script; standalone config includes unresolved workspace aliases and test fixture diagnostics. No pass or baseline-health claim."
+    }
+  ],
+  "expectedBeforeFailures": [
+    "Missing related-link registry",
+    "Native inspector did not render the projected link",
+    "ETL URL did not reopen the selected run",
+    "Live revisions aborted the outstanding reference read"
+  ],
+  "rawLogsPublished": false,
+  "actualHostAcceptance": false,
+  "actualStudioBrowserAcceptance": false,
+  "actualRunEtlPublicationReplay": false,
+  "actualFailureRestartRetryAcceptance": false,
+  "newPersistedStateWriter": false,
+  "fullFinalQualification": false,
+  "fullReviewRounds": 0,
+  "verification": "Partial"
+}

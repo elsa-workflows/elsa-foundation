@@ -82,14 +82,15 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md) |
+| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md) |
 | API endpoint layer (failure pipeline, endpoint composition contracts, unload-safety enforcement) | [`Essentials/src/Api/EXTENSION_POINTS.md`](Essentials/src/Api/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
 
 | Domain | Catalog |
 |---|---|
-| Agent foundation (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Agent foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
+| Agent EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Specialist model providers | [`Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Core/EXTENSION_POINTS.md) |
 | Connection-backed specialist model contributors | [`Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Connections/EXTENSION_POINTS.md) |
 | Specialist EF turn journal | [`Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
@@ -231,4 +232,4 @@ not automatic constitution violations.
 ## Studio
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
-- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

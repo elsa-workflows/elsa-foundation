@@ -254,7 +254,8 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
 
     def qualify(self, **overrides):
         names = (*ORIGINAL_SEQUENCE, "owned_origin", "configure_runtime", "_seed_principals", "JourneyRuntime", "private_json", "CaseRecords",
-                 "server", "_autonomy_preflight", "qualify_witness_autonomy", "capture_consumer_after", "validate_complete_witness")
+                 "server", "RestartableServer", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
+                 "capture_consumer_after", "validate_complete_witness")
         order = []
         def recorder(name):
             def call(*args, **kwargs):
@@ -264,6 +265,8 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
                     self.run.report["contextDisclosureQualification"] = {"status": "passed"}
                 if name in overrides: return overrides[name](*args, **kwargs)
                 if name == "server": return nullcontext()
+                if name == "RestartableServer": return nullcontext(SimpleNamespace(restarts=[{"reason": "synthetic"}]))
+                if name == "qualify_witness_autonomy": self.run.report["autonomyLifecycleQualification"] = {"status": "passed"}
                 if name == "JourneyRuntime":
                     return SimpleNamespace(gate_file=self.root / "gate.json", root=self.root, select_provider=Mock(), browser=Mock(),
                                            native=SimpleNamespace(feature=Mock()), studio=object(), witness={"studioFeature": "resource"})
@@ -283,23 +286,29 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         sequence = [name for name in order if name in ORIGINAL_SEQUENCE]
         self.assertEqual("qualify_context_disclosure", sequence[-1])
         tail = order[order.index("qualify_context_disclosure") + 1:]
-        self.assertEqual(["_autonomy_preflight", "qualify_witness_autonomy", "capture_consumer_after",
+        self.assertEqual(["_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts", "capture_consumer_after",
                           "validate_complete_witness", "validate_complete_witness"], tail)
         self.assertEqual(1, order.count("qualify_witness_autonomy"))
+        self.assertEqual(1, order.count("qualify_witness_restarts"))
+        self.assertEqual(1, order.count("RestartableServer"))
+        self.assertEqual([{"reason": "synthetic"}], self.run.report["hostRestarts"])
         self.assertEqual(("passed", True), (self.run.report["status"], self.run.report["independentPackageWitness"]))
-        self.assertEqual(68, self.run.report["witnessManifest"]["expectedCaseCount"])
+        self.assertEqual(89, self.run.report["witnessManifest"]["expectedCaseCount"])
         self.assertNotIn("stageCount", json.dumps(self.run.report["witnessManifest"]))
 
     def test_failed_matrix_changed_original_records_or_failed_gate_never_promote(self):
         def failed(_runtime): raise RuntimeError("anthropic-cancel-before-effect: lifecycle.gate")
         def relabels(_runtime): self.run.report["cases"][0]["status"] = "relabelled"
         def rejects(*_args): raise ValueError("Incomplete complete witness")
-        for name, override in (("qualify_witness_autonomy", failed), ("qualify_witness_autonomy", relabels), ("validate_complete_witness", rejects)):
+        def restart_failed(_runtime, _host): raise RuntimeError("copilot-dispatched-without-receipt: restart.dispatch_not_held")
+        def restart_relabels(_runtime, _host): self.run.report["autonomyLifecycleQualification"]["status"] = "relabelled"
+        for name, override in (("qualify_witness_autonomy", failed), ("qualify_witness_autonomy", relabels), ("validate_complete_witness", rejects),
+                               ("qualify_witness_restarts", restart_failed), ("qualify_witness_restarts", restart_relabels)):
             with self.subTest(override=override.__name__):
                 self.setUp()
                 with self.assertRaises((RuntimeError, ValueError)): self.qualify(**{name: override})
                 self.assertFalse(self.run.report["independentPackageWitness"]); self.assertNotEqual("passed", self.run.report["status"])
-                if name == "qualify_witness_autonomy": self.assertNotIn("capture_consumer_after", self.order)
+                if name in ("qualify_witness_autonomy", "qualify_witness_restarts"): self.assertNotIn("capture_consumer_after", self.order)
 
     def preflight_runtime(self):
         bootstrap = Mock(); bootstrap.require_status.return_value = bootstrap; bootstrap.receipt = {"synthetic": "bootstrap"}
