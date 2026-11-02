@@ -27,7 +27,8 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
         IReadOnlyDictionary<string, JsonElement>? Inputs = null,
         IReadOnlyCollection<ActivityPresentationRecord>? ActivityPresentation = null,
         bool AcknowledgeUnavailableExpressionValidation = false,
-        WorkflowTestRunStartSelection? Start = null)
+        WorkflowTestRunStartSelection? Start = null,
+        IReadOnlyCollection<WorkflowExecutableLayoutRecord>? Layout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(SnapshotId);
@@ -42,6 +43,7 @@ public sealed record StartWorkflowDraftTestRun : IRequest<WorkflowTestRunView>
             ActivityPresentationRecord.NormalizeCollection(ActivityPresentation);
         this.AcknowledgeUnavailableExpressionValidation = AcknowledgeUnavailableExpressionValidation;
         this.Start = Start;
+        this.Layout = Layout?.ToArray() ?? [];
     }
 
     public string DefinitionId { get; init; }
