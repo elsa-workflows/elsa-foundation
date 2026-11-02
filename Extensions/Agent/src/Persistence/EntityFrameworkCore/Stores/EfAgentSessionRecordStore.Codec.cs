@@ -56,7 +56,8 @@ internal sealed partial class EfAgentSessionRecordStore
             .ToArray();
         var proposals = write.Proposals
             .GroupBy(x => Bounded(x.Proposal.Id, AgentModelBuilderExtensions.IdentityLength, "proposal identity"), StringComparer.Ordinal)
-            .Select(group => new EncodedProposal(group.Key, (int)group.Last().Proposal.Status, group.Select(x => x.Version).ToArray(),
+            .Select(group => new EncodedProposal(group.Key, (int)group.Last().Proposal.Status, group.Last().Proposal.PreparedInvocation?.ExpiresAt.UtcTicks,
+                group.Select(x => x.Version).ToArray(),
                 codec.Protect(AgentRecordCodec.ProposalPurpose, sessionId, group.Key, group.Last())))
             .ToArray();
         var keys = write.Keys.DistinctBy(x => (x.Kind, x.Key))
@@ -107,7 +108,8 @@ internal sealed partial class EfAgentSessionRecordStore
         {
             Current(proposal.SchemaVersion);
             var record = codec.Unprotect<AgentProposalRecord>(AgentRecordCodec.ProposalPurpose, sessionId, proposal.ProposalId, proposal.Payload);
-            if (record.Proposal.Id != proposal.ProposalId || (int)record.Proposal.Status != proposal.Status || proposal.Version < 1)
+            if (record.Proposal.Id != proposal.ProposalId || (int)record.Proposal.Status != proposal.Status || proposal.Version < 1
+                || record.Proposal.PreparedInvocation?.ExpiresAt.UtcTicks != proposal.ExpiresAtUtcTicks)
                 throw new InvalidDataException("A proposal's columns do not match its protected record.");
             return record with { Version = proposal.Version };
         }).ToArray();
@@ -196,19 +198,20 @@ internal sealed partial class EfAgentSessionRecordStore
     }
 
     /// <param name="ReadVersions">The version each occurrence in the write was decided on; every one must be current.</param>
-    private sealed record EncodedProposal(string Id, int Status, IReadOnlyList<long> ReadVersions, string Payload)
+    private sealed record EncodedProposal(string Id, int Status, long? ExpiresAtUtcTicks, IReadOnlyList<long> ReadVersions, string Payload)
     {
         public int Occurrences => ReadVersions.Count;
 
         public AgentProposalRow Row(string sessionId, long sequence, int version) => new()
         {
-            ProposalId = Id, SessionId = sessionId, Sequence = sequence, Status = Status, Version = version,
+            ProposalId = Id, SessionId = sessionId, Sequence = sequence, Status = Status, ExpiresAtUtcTicks = ExpiresAtUtcTicks, Version = version,
             SchemaVersion = AgentEfModule.SchemaVersion, Payload = Payload
         };
 
         public void Apply(AgentProposalRow row)
         {
             row.Status = Status;
+            row.ExpiresAtUtcTicks = ExpiresAtUtcTicks;
             row.Version += Occurrences;
             row.SchemaVersion = AgentEfModule.SchemaVersion;
             row.Payload = Payload;

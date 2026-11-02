@@ -34,7 +34,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         foreach (var snapshot in record.Snapshots) created.Snapshots.TryAdd(snapshot.Digest, Serialize(snapshot));
         foreach (var attachment in record.Context) created.Context.Add(attachment.Id, Serialize(attachment));
         created.PausedTurn = record.PausedTurn is null ? null : Serialize(record.PausedTurn);
-        foreach (var proposal in record.Proposals) created.Proposals.Upsert(proposal.Proposal.Id, Serialize(proposal), proposal.Proposal.Status);
+        foreach (var proposal in record.Proposals) created.Proposals.Upsert(proposal.Proposal.Id, Serialize(proposal), proposal.Proposal.Status, Deadline(proposal));
         // A key repeated within one create keeps its first value, as a write does.
         foreach (var key in record.Keys) created.Keys.TryAdd((key.Kind, key.Key), key.Value);
         lock (_gate)
@@ -115,7 +115,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         var snapshots = write.Snapshots.Select(x => (x.Digest, Json: Serialize(x))).ToArray();
         var context = write.Context.Select(x => (x.Id, Json: Serialize(x))).ToArray();
         var paused = write.PausedTurn is null ? null : Serialize(write.PausedTurn);
-        var proposals = write.Proposals.Select(x => (x.Proposal.Id, x.Proposal.Status, x.Version, Json: Serialize(x))).ToArray();
+        var proposals = write.Proposals.Select(x => (x.Proposal.Id, x.Proposal.Status, x.Version, Deadline: Deadline(x), Json: Serialize(x))).ToArray();
         lock (_gate)
         {
             if (!_sessions.TryGetValue(write.SessionId, out var aggregate))
@@ -144,9 +144,9 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
             foreach (var (id, json) in context) aggregate.Context.TryAdd(id, json);
             if (paused is not null) aggregate.PausedTurn = paused;
             else if (write.RemovePausedTurn) aggregate.PausedTurn = null;
-            foreach (var (id, status, _, json) in proposals)
+            foreach (var (id, status, _, deadline, json) in proposals)
             {
-                aggregate.Proposals.Upsert(id, json, status);
+                aggregate.Proposals.Upsert(id, json, status, deadline);
                 _proposalSessions[id] = write.SessionId;
             }
             foreach (var key in write.Keys) aggregate.Keys.TryAdd((key.Kind, key.Key), key.Value);
@@ -171,11 +171,12 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         ArgumentOutOfRangeException.ThrowIfGreaterThan(query.Take, AgentSessionOwnerQuery.MaxTake, nameof(query));
         cancellationToken.ThrowIfCancellationRequested();
         var before = Cursor.Parse(query.Before);
+        var now = _clock.GetUtcNow();
         lock (_gate)
         {
             // Owner first, then workspace, then order, cursor and limit; payloads are never decoded.
             var page = _sessions
-                .Select(x => (Id: x.Key, x.Value.Index, Pending: x.Value.Proposals.PendingReviewCount))
+                .Select(x => (Id: x.Key, x.Value.Index, Pending: x.Value.Proposals.PendingReviewCount(now)))
                 .Where(x => x.Index.ActorId == query.ActorId && x.Index.TenantId == query.TenantId)
                 .Where(x => query.Workspace is null || x.Index.Workspace == query.Workspace)
                 .OrderByDescending(x => x.Index.UpdatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal)
@@ -183,7 +184,8 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 .Take(query.Take + 1)
                 .ToList();
             var items = page.Take(query.Take)
-                .Select(x => new AgentSessionSummary(x.Id, x.Index.Title, x.Index.Status, x.Index.UpdatedAt, x.Index.ExpiresAt, x.Pending, null))
+                .Select(x => new AgentSessionSummary(x.Id, x.Index.Title, ListedStatus(x.Index.Status, x.Index.ExpiresAt, now), x.Index.UpdatedAt,
+                    x.Index.ExpiresAt, x.Pending, null))
                 .ToArray();
             var next = page.Count > query.Take ? Cursor.Format(items[^1].UpdatedAt, items[^1].Id) : null;
             return Task.FromResult(new AgentSessionSummaryPage(items, next));
@@ -198,6 +200,15 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 ? new AgentSessionOwner(aggregate.Index.ActorId, aggregate.Index.TenantId)
                 : null);
     }
+
+    /// <summary>
+    /// The status a list reports: an active session past its expiry is closed, as hydrating it would record, so a list
+    /// read before any hydration never offers it as active.
+    /// </summary>
+    internal static AgentSessionStatus ListedStatus(AgentSessionStatus status, DateTimeOffset? expiresAt, DateTimeOffset now)
+        => status == AgentSessionStatus.Active && expiresAt is { } expires && expires <= now ? AgentSessionStatus.Expired : status;
+
+    private static DateTimeOffset? Deadline(AgentProposalRecord record) => record.Proposal.PreparedInvocation?.ExpiresAt;
 
     private static AgentSessionRecordResult Owned(Aggregate aggregate)
         => new(AgentSessionRecordOutcome.Succeeded) { Fence = aggregate.Owner, LeaseExpiresAt = aggregate.LeaseExpiresAt };
@@ -237,6 +248,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         private readonly Dictionary<string, string> _values = new(StringComparer.Ordinal);
         private readonly Dictionary<string, AgentActionProposalStatus> _statuses = new(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _versions = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, DateTimeOffset?> _deadlines = new(StringComparer.Ordinal);
 
         public IEnumerable<string> Values => _order.Select(id => _values[id]);
         public IEnumerable<(string Id, string Json)> Entries => _order.Select(id => (id, _values[id]));
@@ -244,7 +256,9 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         /// <summary>How many times the value was recorded; 0 when it is not recorded.</summary>
         public long VersionOf(string id) => _versions.GetValueOrDefault(id);
 
-        public int PendingReviewCount => _statuses.Values.Count(x => x is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited);
+        /// <summary>Reviews that can still be decided: awaiting a decision and not past their prepared deadline.</summary>
+        public int PendingReviewCount(DateTimeOffset now) => _statuses.Count(x => x.Value is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited
+            && (_deadlines.GetValueOrDefault(x.Key) is not { } deadline || deadline > now));
 
         public void Add(string id, string json)
         {
@@ -258,10 +272,11 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
             return true;
         }
 
-        public void Upsert(string id, string json, AgentActionProposalStatus? status = null)
+        public void Upsert(string id, string json, AgentActionProposalStatus? status = null, DateTimeOffset? deadline = null)
         {
             if (!TryAdd(id, json)) _values[id] = json;
             if (status is { } value) _statuses[id] = value;
+            if (status is not null) _deadlines[id] = deadline;
             _versions[id] = VersionOf(id) + 1;
         }
     }

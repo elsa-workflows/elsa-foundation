@@ -32,6 +32,7 @@
     <Compile Include="../../Tests/AgentRecoveryDeduplicationTests.cs" Link="Restart/AgentRecoveryDeduplicationTests.cs" />
     <Compile Include="../../Tests/AgentRecoveryExecutionTests.cs" Link="Restart/AgentRecoveryExecutionTests.cs" />
     <Compile Include="../../Tests/AgentSessionOwnershipTests.cs" Link="Restart/AgentSessionOwnershipTests.cs" />
+    <Compile Include="../../Tests/AgentSessionSummaryTests.cs" Link="Restart/AgentSessionSummaryTests.cs" />
     <Compile Include="../../Tests/AgentTestServices.cs" Link="Restart/AgentTestServices.cs" />
     <Compile Include="../../Tests/AgentTestTools.cs" Link="Restart/AgentTestTools.cs" />
     <Compile Include="../../Tests/AgentProposalFixtures.cs" Link="Restart/AgentProposalFixtures.cs" />

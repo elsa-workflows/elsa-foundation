@@ -227,6 +227,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
                     Status = table.Column<int>(type: "int", nullable: false),
+                    ExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     Version = table.Column<long>(type: "bigint", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
                     Payload = table.Column<string>(type: "longtext", nullable: false)

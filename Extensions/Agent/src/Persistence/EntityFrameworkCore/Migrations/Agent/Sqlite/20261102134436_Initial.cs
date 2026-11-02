@@ -214,6 +214,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                     SessionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Sequence = table.Column<long>(type: "INTEGER", nullable: false),
                     Status = table.Column<int>(type: "INTEGER", nullable: false),
+                    ExpiresAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: true),
                     Version = table.Column<long>(type: "INTEGER", nullable: false),
                     SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     Payload = table.Column<string>(type: "TEXT", nullable: false)

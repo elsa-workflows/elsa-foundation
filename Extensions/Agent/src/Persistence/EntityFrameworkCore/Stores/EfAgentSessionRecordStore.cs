@@ -304,6 +304,8 @@ internal sealed partial class EfAgentSessionRecordStore(
         {
             await using var scope = scopes.CreateAsyncScope();
             var db = resolveContext(scope.ServiceProvider);
+            // Store time, as leases use: a review past its prepared deadline is not counted and an expired session is listed closed.
+            var now = (await _clock.NowAsync(db, cancellationToken)).UtcTicks;
             // Owner first, then workspace, then order, cursor and limit; payloads are never decoded.
             // Exact owner and workspace match: the suffix keeps a trailing space significant under SQL Server's PAD SPACE comparison.
             var (actor, tenant) = (query.ActorId + EfAgentAuditStore.ExactSuffix, query.TenantId + EfAgentAuditStore.ExactSuffix);
@@ -322,10 +324,13 @@ internal sealed partial class EfAgentSessionRecordStore(
                 .Select(x => new
                 {
                     x.SessionId, x.Title, x.Status, x.UpdatedAtUtcTicks, x.ExpiresAtUtcTicks,
-                    Pending = db.Set<AgentProposalRow>().Count(p => p.SessionId == x.SessionId && (p.Status == awaiting || p.Status == edited))
+                    Pending = db.Set<AgentProposalRow>().Count(p => p.SessionId == x.SessionId && (p.Status == awaiting || p.Status == edited)
+                                                                     && (p.ExpiresAtUtcTicks == null || p.ExpiresAtUtcTicks > now))
                 }).ToListAsync(cancellationToken);
             var items = page.Take(query.Take)
-                .Select(x => new AgentSessionSummary(x.SessionId, x.Title, (AgentSessionStatus)x.Status, Time(x.UpdatedAtUtcTicks),
+                .Select(x => new AgentSessionSummary(x.SessionId, x.Title,
+                    (AgentSessionStatus)x.Status == AgentSessionStatus.Active && x.ExpiresAtUtcTicks <= now ? AgentSessionStatus.Expired : (AgentSessionStatus)x.Status,
+                    Time(x.UpdatedAtUtcTicks),
                     x.ExpiresAtUtcTicks is { } expires ? Time(expires) : null, x.Pending, null))
                 .ToArray();
             var next = page.Count > query.Take ? Cursor.Format(items[^1].UpdatedAt, items[^1].Id) : null;

@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
+namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
 {
     /// <inheritdoc />
     public partial class Initial : Migration
@@ -14,9 +14,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "__ElsaDatabaseIdentity_ElsaAgent",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false),
-                    DatabaseIdentity = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    DatabaseIdentity = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2")
                 },
                 constraints: table =>
                 {
@@ -27,16 +27,16 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "__ElsaSchemaFinalization_ElsaAgent",
                 columns: table => new
                 {
-                    Family = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    DatabaseIdentity = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Family = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    DatabaseIdentity = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     Revision = table.Column<long>(type: "bigint", nullable: false),
-                    FinalizedVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    IntentJson = table.Column<string>(type: "text", nullable: true),
-                    HoldsJson = table.Column<string>(type: "text", nullable: false),
-                    HistoryJson = table.Column<string>(type: "text", nullable: false),
-                    FinishJson = table.Column<string>(type: "text", nullable: true),
-                    FinishHistoryJson = table.Column<string>(type: "text", nullable: false)
+                    FinalizedVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
+                    IntentJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    HoldsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    HistoryJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FinishJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    FinishHistoryJson = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -48,13 +48,13 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 columns: table => new
                 {
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    EventId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Kind = table.Column<int>(type: "integer", nullable: false),
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true, collation: "C"),
-                    ActorId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true, collation: "C"),
+                    EventId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true, collation: "Latin1_General_100_BIN2"),
+                    ActorId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true, collation: "Latin1_General_100_BIN2"),
                     CreatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -65,10 +65,10 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_audit_owners",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    ActorId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    TenantId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    ActorId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    TenantId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2")
                 },
                 constraints: table =>
                 {
@@ -79,9 +79,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_audit_sequence",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false),
                     Last = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2")
                 },
                 constraints: table =>
                 {
@@ -92,24 +92,24 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_sessions",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    TenantId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    ActorId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    Workspace = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true, collation: "C"),
-                    Title = table.Column<string>(type: "text", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    TenantId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    ActorId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Workspace = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true, collation: "Latin1_General_100_BIN2"),
+                    Title = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     UpdatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
                     ExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     PolicyRevision = table.Column<long>(type: "bigint", nullable: true),
-                    ContinuedFrom = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    OwnerToken = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
+                    ContinuedFrom = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
+                    OwnerToken = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Fence = table.Column<long>(type: "bigint", nullable: false),
                     LeaseExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     Version = table.Column<long>(type: "bigint", nullable: false),
                     NextSequence = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false),
-                    PausedTurnPayload = table.Column<string>(type: "text", nullable: true)
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PausedTurnPayload = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -120,13 +120,13 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_call_keys",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    KeyHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
-                    Key = table.Column<string>(type: "text", nullable: false),
-                    Value = table.Column<string>(type: "text", nullable: false),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Kind = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    KeyHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Key = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Value = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2")
                 },
                 constraints: table =>
                 {
@@ -143,11 +143,11 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_context",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    AttachmentKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    AttachmentKey = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -164,18 +164,18 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_disclosure_snapshots",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    Digest = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Digest = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
                     Size = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Canonical = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Canonical = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_elsa_agent_disclosure_snapshots", x => new { x.SessionId, x.Digest });
                     table.ForeignKey(
-                        name: "FK_elsa_agent_disclosure_snapshots_elsa_agent_sessions_Session~",
+                        name: "FK_elsa_agent_disclosure_snapshots_elsa_agent_sessions_SessionId",
                         column: x => x.SessionId,
                         principalTable: "elsa_agent_sessions",
                         principalColumn: "SessionId",
@@ -186,14 +186,14 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_messages",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    MessageId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    MessageId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    Role = table.Column<int>(type: "integer", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    StatusReason = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    StatusReason = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: true),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -210,13 +210,14 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 name: "elsa_agent_proposals",
                 columns: table => new
                 {
-                    ProposalId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
+                    ProposalId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    SessionId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     Version = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -300,7 +301,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
-                name: "IX_elsa_agent_sessions_TenantId_ActorId_UpdatedAtUtcTicks_Sess~",
+                name: "IX_elsa_agent_sessions_TenantId_ActorId_UpdatedAtUtcTicks_SessionId",
                 table: "elsa_agent_sessions",
                 columns: new[] { "TenantId", "ActorId", "UpdatedAtUtcTicks", "SessionId" });
         }

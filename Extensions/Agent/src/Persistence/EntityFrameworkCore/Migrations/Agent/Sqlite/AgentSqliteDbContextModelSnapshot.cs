@@ -251,6 +251,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ExpiresAtUtcTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("TEXT");

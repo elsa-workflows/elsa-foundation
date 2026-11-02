@@ -275,6 +275,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                         .HasColumnType("character varying(128)")
                         .UseCollation("C");
 
+                    b.Property<long?>("ExpiresAtUtcTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("text");

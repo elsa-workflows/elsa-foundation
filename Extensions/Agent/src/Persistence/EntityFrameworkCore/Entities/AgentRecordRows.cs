@@ -70,6 +70,8 @@ internal sealed class AgentProposalRow
     public string SessionId { get; set; } = "";
     public long Sequence { get; set; }
     public int Status { get; set; }
+    /// <summary>The prepared deadline, so the owner list counts only reviews that can still be decided without decoding.</summary>
+    public long? ExpiresAtUtcTicks { get; set; }
     public long Version { get; set; }
     public string SchemaVersion { get; set; } = "";
     /// <summary>Protected <c>AgentProposalRecord</c>; its <c>Version</c> is the column.</summary>

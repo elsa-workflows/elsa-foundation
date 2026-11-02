@@ -299,6 +299,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<long?>("ExpiresAtUtcTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("longtext");
