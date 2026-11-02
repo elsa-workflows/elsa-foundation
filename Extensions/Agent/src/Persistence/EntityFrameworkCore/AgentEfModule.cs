@@ -22,6 +22,7 @@ public static class AgentEfModule
     internal const string CallKeyTableName = "elsa_agent_call_keys";
     internal const string AuditTableName = "elsa_agent_audit";
     internal const string AuditOwnerTableName = "elsa_agent_audit_owners";
+    internal const string AuditSequenceTableName = "elsa_agent_audit_sequence";
 
     /// <summary>The canonical chain used by metadata readers and host schema-readability tooling.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(AgentEfModule).Assembly, SchemaFamily);

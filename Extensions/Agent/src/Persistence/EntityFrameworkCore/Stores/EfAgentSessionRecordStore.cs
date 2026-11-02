@@ -305,8 +305,16 @@ internal sealed partial class EfAgentSessionRecordStore(
             await using var scope = scopes.CreateAsyncScope();
             var db = resolveContext(scope.ServiceProvider);
             // Owner first, then workspace, then order, cursor and limit; payloads are never decoded.
-            var sessions = db.Set<AgentSessionRow>().AsNoTracking().Where(x => x.ActorId == query.ActorId && x.TenantId == query.TenantId);
-            if (query.Workspace is { } workspace) sessions = sessions.Where(x => x.Workspace == workspace);
+            // Exact owner and workspace match: the suffix keeps a trailing space significant under SQL Server's PAD SPACE comparison.
+            var (actor, tenant) = (query.ActorId + EfAgentAuditStore.ExactSuffix, query.TenantId + EfAgentAuditStore.ExactSuffix);
+            var sessions = db.Set<AgentSessionRow>().AsNoTracking().Where(x => x.ActorId == query.ActorId && x.TenantId == query.TenantId
+                                                                             && x.ActorId + EfAgentAuditStore.ExactSuffix == actor
+                                                                             && x.TenantId + EfAgentAuditStore.ExactSuffix == tenant);
+            if (query.Workspace is { } workspace)
+            {
+                var exactWorkspace = workspace + EfAgentAuditStore.ExactSuffix;
+                sessions = sessions.Where(x => x.Workspace == workspace && x.Workspace + EfAgentAuditStore.ExactSuffix == exactWorkspace);
+            }
             if (before is { } cursor)
                 sessions = sessions.Where(x => x.UpdatedAtUtcTicks < cursor.Ticks
                                                || x.UpdatedAtUtcTicks == cursor.Ticks && string.Compare(x.SessionId, cursor.Id) < 0);

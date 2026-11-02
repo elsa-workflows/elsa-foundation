@@ -25,6 +25,37 @@ public sealed class EfAgentSessionRecordStoreTests
     }
 
     [Fact]
+    public void A_restart_scenario_disposes_its_database_when_it_ends()
+    {
+        string path;
+        Elsa.Agent.Core.Contracts.IAgentSessionRecordStore store;
+        using (var harness = new AgentRestartHarness())
+        {
+            store = harness.Store;
+            path = EfRestartComposition.DatabaseOf(store).Path;
+            Assert.True(File.Exists(path));
+        }
+
+        // The database file and its context provider are gone, and the composition no longer tracks them.
+        Assert.False(File.Exists(path));
+        Assert.Throws<KeyNotFoundException>(() => EfRestartComposition.DatabaseOf(store));
+    }
+
+    [Fact]
+    public async Task A_key_repeated_within_one_create_keeps_its_first_value()
+    {
+        using var database = new AgentSqliteDatabase();
+        var store = database.RecordStore();
+        var session = Records.Session("session-1");
+        Assert.True((await store.CreateAsync(new(session)
+        {
+            Keys = [new(AgentSessionKeyKinds.Call, "call-1", "first"), new(AgentSessionKeyKinds.Call, "call-1", "second")]
+        }, Owner)).Succeeded);
+
+        Assert.Equal("first", Assert.Single((await store.LoadAsync(session.Id))!.Keys).Value);
+    }
+
+    [Fact]
     public async Task A_new_store_over_the_same_database_reads_every_part_with_byte_identical_digests_and_fingerprints()
     {
         using var database = new AgentSqliteDatabase();

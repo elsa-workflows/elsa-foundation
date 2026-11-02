@@ -44,8 +44,8 @@ internal sealed class AgentSqliteDatabase : IDisposable
         => new((contexts ?? _contexts).GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(),
             codec ?? Codec, TimeSpan.FromSeconds(30), clock is null ? null : new AgentTimeProviderClock(clock));
 
-    public EfAgentAuditStore AuditStore(AgentRecordCodec? codec = null)
-        => new(_contexts.GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec ?? Codec);
+    public EfAgentAuditStore AuditStore(AgentRecordCodec? codec = null, ServiceProvider? contexts = null)
+        => new((contexts ?? _contexts).GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec ?? Codec);
 
     /// <summary>A fresh context for direct inspection or tampering, as an operator with database access would.</summary>
     public AgentDbContext Open() => _contexts.CreateScope().ServiceProvider.GetRequiredService<AgentDbContext>();
@@ -64,7 +64,7 @@ internal sealed class AgentSqliteDatabase : IDisposable
         await db.Database.OpenConnectionAsync();
         var connection = db.Database.GetDbConnection();
         foreach (var table in new[] { "elsa_agent_sessions", "elsa_agent_messages", "elsa_agent_disclosure_snapshots", "elsa_agent_context",
-                     "elsa_agent_proposals", "elsa_agent_call_keys", "elsa_agent_audit", "elsa_agent_audit_owners" })
+                     "elsa_agent_proposals", "elsa_agent_call_keys", "elsa_agent_audit", "elsa_agent_audit_owners", "elsa_agent_audit_sequence" })
         {
             await using var command = connection.CreateCommand();
             command.CommandText = $"SELECT * FROM {table}";
@@ -130,8 +130,28 @@ internal static class EfRestartComposition
 #pragma warning restore CA2255
     internal static void UseEfRecordStore()
     {
-        // One fresh database per harness: each harness is one store shared by its hosts, as one database is.
-        AgentRestartHarness.DefaultStore = clock => new AgentSqliteDatabase().RecordStore(clock);
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => AgentSqliteDatabase.DeleteAll();
+        // One fresh database per harness: each harness is one store shared by its hosts, as one database is. The
+        // database and its context provider are disposed when the harness ends.
+        AgentRestartHarness.DefaultStore = clock =>
+        {
+            var database = new AgentSqliteDatabase();
+            var store = database.RecordStore(clock);
+            Databases[store] = database;
+            return store;
+        };
+        AgentRestartHarness.ReleaseDefaultStore = store =>
+        {
+            if (Databases.TryRemove(store, out var database)) database.Dispose();
+        };
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            foreach (var store in Databases.Keys) if (Databases.TryRemove(store, out var database)) database.Dispose();
+            AgentSqliteDatabase.DeleteAll();
+        };
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<IAgentSessionRecordStore, AgentSqliteDatabase> Databases = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>The database a harness's default store runs over, while that harness is alive.</summary>
+    internal static AgentSqliteDatabase DatabaseOf(IAgentSessionRecordStore store) => Databases[store];
 }

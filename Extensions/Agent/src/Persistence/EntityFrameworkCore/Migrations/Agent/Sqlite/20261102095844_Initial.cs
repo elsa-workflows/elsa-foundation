@@ -76,6 +76,19 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                 });
 
             migrationBuilder.CreateTable(
+                name: "elsa_agent_audit_sequence",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false),
+                    Last = table.Column<long>(type: "INTEGER", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_agent_audit_sequence", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_agent_sessions",
                 columns: table => new
                 {
@@ -247,6 +260,11 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_agent_audit_sequence_SchemaVersion",
+                table: "elsa_agent_audit_sequence",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_agent_call_keys_SchemaVersion",
                 table: "elsa_agent_call_keys",
                 column: "SchemaVersion");
@@ -301,6 +319,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
 
             migrationBuilder.DropTable(
                 name: "elsa_agent_audit_owners");
+
+            migrationBuilder.DropTable(
+                name: "elsa_agent_audit_sequence");
 
             migrationBuilder.DropTable(
                 name: "elsa_agent_call_keys");

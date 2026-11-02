@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
 {
     [DbContext(typeof(AgentPostgreSqlDbContext))]
-    [Migration("20261102090441_Initial")]
+    [Migration("20261102095842_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -98,6 +98,27 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                     b.HasIndex("SessionId", "CreatedAtUtcTicks");
 
                     b.ToTable("elsa_agent_audit", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditSequenceRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Last")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_agent_audit_sequence", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentCallKeyRow", b =>

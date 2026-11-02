@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
+namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
 {
     /// <inheritdoc />
     public partial class Initial : Migration
@@ -10,110 +10,132 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AlterDatabase()
+                .Annotation("MySQL:Charset", "utf8mb4");
+
             migrationBuilder.CreateTable(
                 name: "__ElsaDatabaseIdentity_ElsaAgent",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false),
-                    DatabaseIdentity = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    DatabaseIdentity = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK___ElsaDatabaseIdentity_ElsaAgent", x => x.Id);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "__ElsaSchemaFinalization_ElsaAgent",
                 columns: table => new
                 {
-                    Family = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    DatabaseIdentity = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Family = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    DatabaseIdentity = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
                     Revision = table.Column<long>(type: "bigint", nullable: false),
-                    FinalizedVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    IntentJson = table.Column<string>(type: "text", nullable: true),
-                    HoldsJson = table.Column<string>(type: "text", nullable: false),
-                    HistoryJson = table.Column<string>(type: "text", nullable: false),
-                    FinishJson = table.Column<string>(type: "text", nullable: true),
-                    FinishHistoryJson = table.Column<string>(type: "text", nullable: false)
+                    FinalizedVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
+                    IntentJson = table.Column<string>(type: "longtext", nullable: true),
+                    HoldsJson = table.Column<string>(type: "longtext", nullable: false),
+                    HistoryJson = table.Column<string>(type: "longtext", nullable: false),
+                    FinishJson = table.Column<string>(type: "longtext", nullable: true),
+                    FinishHistoryJson = table.Column<string>(type: "longtext", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK___ElsaSchemaFinalization_ElsaAgent", x => x.Family);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_audit",
                 columns: table => new
                 {
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    EventId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Kind = table.Column<int>(type: "integer", nullable: false),
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true, collation: "C"),
-                    ActorId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true, collation: "C"),
+                    EventId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin"),
+                    ActorId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true, collation: "utf8mb4_0900_bin"),
                     CreatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Payload = table.Column<string>(type: "longtext", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_elsa_agent_audit", x => x.Sequence);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_audit_owners",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    ActorId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    TenantId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ActorId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_elsa_agent_audit_owners", x => x.SessionId);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "elsa_agent_audit_sequence",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    Last = table.Column<long>(type: "bigint", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_agent_audit_sequence", x => x.Id);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_sessions",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    TenantId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    ActorId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false, collation: "C"),
-                    Workspace = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true, collation: "C"),
-                    Title = table.Column<string>(type: "text", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ActorId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Workspace = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true, collation: "utf8mb4_0900_bin"),
+                    Title = table.Column<string>(type: "longtext", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     UpdatedAtUtcTicks = table.Column<long>(type: "bigint", nullable: false),
                     ExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     PolicyRevision = table.Column<long>(type: "bigint", nullable: true),
-                    ContinuedFrom = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    OwnerToken = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
+                    ContinuedFrom = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true),
+                    OwnerToken = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     Fence = table.Column<long>(type: "bigint", nullable: false),
                     LeaseExpiresAtUtcTicks = table.Column<long>(type: "bigint", nullable: true),
                     Version = table.Column<long>(type: "bigint", nullable: false),
                     NextSequence = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false),
-                    PausedTurnPayload = table.Column<string>(type: "text", nullable: true)
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Payload = table.Column<string>(type: "longtext", nullable: false),
+                    PausedTurnPayload = table.Column<string>(type: "longtext", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_elsa_agent_sessions", x => x.SessionId);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_call_keys",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    KeyHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
-                    Key = table.Column<string>(type: "text", nullable: false),
-                    Value = table.Column<string>(type: "text", nullable: false),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Kind = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    KeyHash = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Key = table.Column<string>(type: "longtext", nullable: false),
+                    Value = table.Column<string>(type: "longtext", nullable: false),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C")
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
                 {
@@ -124,17 +146,18 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                         principalTable: "elsa_agent_sessions",
                         principalColumn: "SessionId",
                         onDelete: ReferentialAction.Restrict);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_context",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    AttachmentKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    AttachmentKey = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Payload = table.Column<string>(type: "longtext", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -145,42 +168,44 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                         principalTable: "elsa_agent_sessions",
                         principalColumn: "SessionId",
                         onDelete: ReferentialAction.Restrict);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_disclosure_snapshots",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    Digest = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Digest = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
                     Size = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Canonical = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Canonical = table.Column<string>(type: "longtext", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_elsa_agent_disclosure_snapshots", x => new { x.SessionId, x.Digest });
                     table.ForeignKey(
-                        name: "FK_elsa_agent_disclosure_snapshots_elsa_agent_sessions_Session~",
+                        name: "FK_elsa_agent_disclosure_snapshots_elsa_agent_sessions_SessionId",
                         column: x => x.SessionId,
                         principalTable: "elsa_agent_sessions",
                         principalColumn: "SessionId",
                         onDelete: ReferentialAction.Restrict);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_messages",
                 columns: table => new
                 {
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    MessageId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    MessageId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    Role = table.Column<int>(type: "integer", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    StatusReason = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    StatusReason = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: true),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Payload = table.Column<string>(type: "longtext", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -191,19 +216,20 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                         principalTable: "elsa_agent_sessions",
                         principalColumn: "SessionId",
                         onDelete: ReferentialAction.Restrict);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
                 name: "elsa_agent_proposals",
                 columns: table => new
                 {
-                    ProposalId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
-                    SessionId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false, collation: "C"),
+                    ProposalId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    SessionId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     Sequence = table.Column<long>(type: "bigint", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     Version = table.Column<long>(type: "bigint", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Payload = table.Column<string>(type: "text", nullable: false)
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Payload = table.Column<string>(type: "longtext", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -214,7 +240,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                         principalTable: "elsa_agent_sessions",
                         principalColumn: "SessionId",
                         onDelete: ReferentialAction.Restrict);
-                });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateIndex(
                 name: "IX___ElsaDatabaseIdentity_ElsaAgent_SchemaVersion",
@@ -244,6 +271,11 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_agent_audit_owners_SchemaVersion",
                 table: "elsa_agent_audit_owners",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_agent_audit_sequence_SchemaVersion",
+                table: "elsa_agent_audit_sequence",
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
@@ -282,7 +314,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
-                name: "IX_elsa_agent_sessions_TenantId_ActorId_UpdatedAtUtcTicks_Sess~",
+                name: "IX_elsa_agent_sessions_TenantId_ActorId_UpdatedAtUtcTicks_Sessi~",
                 table: "elsa_agent_sessions",
                 columns: new[] { "TenantId", "ActorId", "UpdatedAtUtcTicks", "SessionId" });
         }
@@ -301,6 +333,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
 
             migrationBuilder.DropTable(
                 name: "elsa_agent_audit_owners");
+
+            migrationBuilder.DropTable(
+                name: "elsa_agent_audit_sequence");
 
             migrationBuilder.DropTable(
                 name: "elsa_agent_call_keys");

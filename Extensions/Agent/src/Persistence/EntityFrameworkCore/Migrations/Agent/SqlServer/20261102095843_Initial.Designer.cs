@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
 {
     [DbContext(typeof(AgentSqlServerDbContext))]
-    [Migration("20261102090442_Initial")]
+    [Migration("20261102095843_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -101,6 +101,27 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                     b.HasIndex("SessionId", "CreatedAtUtcTicks");
 
                     b.ToTable("elsa_agent_audit", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditSequenceRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Last")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_agent_audit_sequence", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentCallKeyRow", b =>

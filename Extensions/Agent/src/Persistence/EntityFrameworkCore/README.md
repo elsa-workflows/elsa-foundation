@@ -46,9 +46,18 @@ application changes or enlists in an application transaction.
 | `elsa_agent_proposals` | One protected `AgentProposalRecord` per proposal, with status and its record version |
 | `elsa_agent_call_keys` | The call, invocation, turn-mutation and call-input keys, keyed by SHA-256 of the key |
 | `elsa_agent_audit`, `elsa_agent_audit_owners` | Protected audit records and the first-wins owner association that scopes audit queries |
+| `elsa_agent_audit_sequence` | One counter row that allocates audit append positions |
 
 Messages, snapshots, context, proposals and keys keep their first-insertion order. Owner and identity
-columns compare and order ordinally on every provider.
+columns compare and order ordinally on every provider. Owner and workspace filters are exact: SQL Server's
+`Latin1_General_100_BIN2` compares with PAD SPACE (and `LEN` ignores trailing spaces), so those filters also
+compare each side with a fixed suffix appended, and an actor, tenant or workspace with a trailing space is a
+different one.
+
+An audit append bumps the counter row with a locking update inside its transaction and takes the new value
+as its position, so concurrent appends across the deployment (for example, many sessions recovering after a
+restart) wait on that row instead of colliding on the next position. The order stays distinct and gap-free,
+because a rolled-back append rolls its position back too.
 
 ## Ownership, fence and lease
 

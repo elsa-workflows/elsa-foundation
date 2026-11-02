@@ -113,13 +113,47 @@ public sealed class AgentRecordStoreProviderTests
         Assert.Null(second.Next);
 
         // Durable audit with its owner association.
-        var audit = new EfAgentAuditStore(contexts.GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec);
+        var audit = Audit(contexts, codec);
         Assert.True(await audit.AssociateAsync(session.Id, "actor-1", "tenant-1"));
         await Task.WhenAll(Enumerable.Range(0, 6).Select(index => audit.EmitAsync(new($"audit-{index}", AgentAuditEventKind.MessageAccepted, session.Id, "actor-1",
             "Summary", at, new Dictionary<string, string>()))));
         var owned = await audit.ListOwnedAsync(new("actor-1", "tenant-1", session.Id, 10));
         Assert.Equal(6, owned.Events.Count);
         Assert.Empty((await audit.ListOwnedAsync(new("actor-1", "TENANT-1", session.Id, 10))).Events);
+
+        // Many sessions recovering at once append their audits together from separate connections: every append succeeds
+        // and the append order stays distinct and gap-free.
+        var appenders = Enumerable.Range(0, 24).Select(_ => Contexts(provider, connection)).ToArray();
+        try
+        {
+            await Task.WhenAll(appenders.Select((pool, index) => Audit(pool, codec).EmitAsync(new($"burst-{index}", AgentAuditEventKind.ProposalFailed,
+                $"recovered-{index}", "actor-1", "Recovered", at, new Dictionary<string, string> { ["settledBy"] = "recovery" }))));
+        }
+        finally
+        {
+            foreach (var pool in appenders) pool.Dispose();
+        }
+        await using (var scope = contexts.CreateAsyncScope())
+        {
+            var sequences = await scope.ServiceProvider.GetRequiredService<AgentDbContext>().Set<Elsa.Agent.Persistence.EntityFrameworkCore.Entities.AgentAuditRow>()
+                .OrderBy(x => x.Sequence).Select(x => x.Sequence).ToListAsync();
+            Assert.Equal(Enumerable.Range(1, 6 + 24).Select(x => (long)x), sequences);
+        }
+
+        // Owner filters are exact: a trailing space is a different actor, also under SQL Server's PAD SPACE comparison.
+        await store.CreateAsync(new(Session("padded") with { ActorId = "actor-2 ", UpdatedAt = at, Workspace = "workspace-2" }), Owner);
+        await store.CreateAsync(new(Session("unpadded") with { ActorId = "actor-3", UpdatedAt = at, Workspace = "workspace-2" }), Owner);
+        Assert.Empty((await store.ListOwnedAsync(new("actor-2", "tenant-1", "workspace-2", Take: 10))).Items);
+        Assert.Empty((await store.ListOwnedAsync(new("actor-3 ", "tenant-1", "workspace-2", Take: 10))).Items);
+        Assert.Empty((await store.ListOwnedAsync(new("actor-2", "tenant-1", "workspace-2 ", Take: 10))).Items);
+        Assert.Equal(["padded"], (await store.ListOwnedAsync(new("actor-2 ", "tenant-1", "workspace-2", Take: 10))).Items.Select(x => x.Id));
+        Assert.True(await audit.AssociateAsync("padded", "actor-2 ", "tenant-1"));
+        Assert.True(await audit.AssociateAsync("unpadded", "actor-3", "tenant-1 "));
+        await audit.EmitAsync(new("padded-audit", AgentAuditEventKind.MessageAccepted, "padded", "actor-2 ", "Summary", at, new Dictionary<string, string>()));
+        await audit.EmitAsync(new("unpadded-audit", AgentAuditEventKind.MessageAccepted, "unpadded", "actor-3", "Summary", at, new Dictionary<string, string>()));
+        Assert.Empty((await audit.ListOwnedAsync(new("actor-2", "tenant-1", null, 10))).Events);
+        Assert.Empty((await audit.ListOwnedAsync(new("actor-3", "tenant-1", null, 10))).Events);
+        Assert.Equal(["padded-audit"], (await audit.ListOwnedAsync(new("actor-2 ", "tenant-1", null, 10))).Events.Select(x => x.Id));
 
         // Unreadable state is unavailable and leaves the owner columns readable.
         await using (var scope = contexts.CreateAsyncScope())
@@ -128,6 +162,9 @@ public sealed class AgentRecordStoreProviderTests
         Assert.Equal("unreadable", (await Assert.ThrowsAsync<AgentSessionUnavailableException>(() => store.LoadAsync(session.Id))).Reason);
         Assert.Equal(new AgentSessionOwner("actor-1", "tenant-1"), await store.FindOwnerAsync(session.Id));
     }
+
+    private static EfAgentAuditStore Audit(ServiceProvider contexts, AgentRecordCodec codec)
+        => new(contexts.GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec);
 
     private static EfAgentSessionRecordStore Store(ServiceProvider contexts, AgentRecordCodec codec)
         => new(contexts.GetRequiredService<IServiceScopeFactory>(), static scoped => scoped.GetRequiredService<AgentDbContext>(), codec, TimeSpan.FromSeconds(30));

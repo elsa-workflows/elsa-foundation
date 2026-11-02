@@ -16,7 +16,7 @@ public static class AgentModelBuilderExtensions
     private static readonly Type[] Entities =
     [
         typeof(AgentSessionRow), typeof(AgentMessageRow), typeof(AgentDisclosureSnapshotRow), typeof(AgentContextRow),
-        typeof(AgentProposalRow), typeof(AgentCallKeyRow), typeof(AgentAuditRow), typeof(AgentAuditOwnerRow)
+        typeof(AgentProposalRow), typeof(AgentCallKeyRow), typeof(AgentAuditRow), typeof(AgentAuditOwnerRow), typeof(AgentAuditSequenceRow)
     ];
 
     public static ModelBuilder AddAgentModel(this ModelBuilder modelBuilder, string providerName)
@@ -107,7 +107,7 @@ public static class AgentModelBuilderExtensions
         {
             entity.ToTable(AgentEfModule.AuditTableName);
             entity.HasKey(x => x.Sequence);
-            // Assigned by the store as the next append position; no provider identity column is used.
+            // Allocated by the store from the audit sequence row; no provider identity column is used.
             entity.Property(x => x.Sequence).ValueGeneratedNever();
             entity.Property(x => x.EventId).HasMaxLength(IdentityLength).IsRequired();
             entity.Property(x => x.SessionId).HasMaxLength(IdentityLength);
@@ -116,6 +116,13 @@ public static class AgentModelBuilderExtensions
             entity.Property(x => x.Payload).HasColumnType(payloadType).IsRequired();
             entity.HasIndex(x => new { x.SessionId, x.CreatedAtUtcTicks });
             entity.HasIndex(x => x.CreatedAtUtcTicks);
+        });
+        modelBuilder.Entity<AgentAuditSequenceRow>(entity =>
+        {
+            entity.ToTable(AgentEfModule.AuditSequenceTableName);
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedNever();
+            entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
         });
         modelBuilder.Entity<AgentAuditOwnerRow>(entity =>
         {

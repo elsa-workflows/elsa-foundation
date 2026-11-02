@@ -1,4 +1,6 @@
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Persistence.EntityFrameworkCore.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Agent.Persistence.Tests;
 
@@ -51,6 +53,31 @@ public sealed class EfAgentAuditStoreTests
         var concurrent = await Task.WhenAll(Enumerable.Range(0, 6).Select(index => database.AuditStore().AssociateAsync("session-2", $"actor-{index % 2}", "tenant-1")));
         Assert.True(concurrent.Count(x => x) is 3, "Exactly the associations agreeing with the first one succeed.");
         await Assert.ThrowsAnyAsync<ArgumentException>(() => restarted.AssociateAsync(" ", "actor-1", "tenant-1"));
+    }
+
+    /// <summary>
+    /// Many sessions recovering at once append their audits together. Every append from a separate connection succeeds,
+    /// and the append order stays distinct and gap-free.
+    /// </summary>
+    [Fact]
+    public async Task A_burst_of_concurrent_appends_all_succeed_in_a_distinct_gap_free_order()
+    {
+        using var database = new AgentSqliteDatabase();
+        var pools = Enumerable.Range(0, 24).Select(_ => database.NewContexts()).ToArray();
+        try
+        {
+            var at = DateTimeOffset.UtcNow;
+            await Task.WhenAll(pools.Select((pool, index) => database.AuditStore(contexts: pool).EmitAsync(Event($"burst-{index}", $"session-{index}", at))));
+        }
+        finally
+        {
+            foreach (var pool in pools) await pool.DisposeAsync();
+        }
+
+        await using var db = database.Open();
+        var sequences = await db.Set<AgentAuditRow>().OrderBy(x => x.Sequence).Select(x => x.Sequence).ToListAsync();
+        Assert.Equal(Enumerable.Range(1, 24).Select(x => (long)x), sequences);
+        Assert.Equal(24, (await database.AuditStore().ListAsync()).Select(x => x.Id).Distinct().Count());
     }
 
     private static AgentAuditEvent Event(string id, string? sessionId, DateTimeOffset at) => new(id, AgentAuditEventKind.MessageAccepted, sessionId, "actor-1",

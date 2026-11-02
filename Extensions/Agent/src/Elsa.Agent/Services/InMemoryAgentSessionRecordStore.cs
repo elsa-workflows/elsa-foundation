@@ -35,7 +35,8 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         foreach (var attachment in record.Context) created.Context.Add(attachment.Id, Serialize(attachment));
         created.PausedTurn = record.PausedTurn is null ? null : Serialize(record.PausedTurn);
         foreach (var proposal in record.Proposals) created.Proposals.Upsert(proposal.Proposal.Id, Serialize(proposal), proposal.Proposal.Status);
-        foreach (var key in record.Keys) created.Keys[(key.Kind, key.Key)] = key.Value;
+        // A key repeated within one create keeps its first value, as a write does.
+        foreach (var key in record.Keys) created.Keys.TryAdd((key.Kind, key.Key), key.Value);
         lock (_gate)
         {
             if (_sessions.ContainsKey(record.Session.Id) || record.Proposals.Any(x => _proposalSessions.ContainsKey(x.Proposal.Id)))

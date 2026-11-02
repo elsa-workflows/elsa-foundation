@@ -102,6 +102,19 @@ internal sealed class AgentAuditRow
     public string Payload { get; set; } = "";
 }
 
+/// <summary>
+/// The single counter row that allocates audit append positions. An append bumps it with a locking update inside its
+/// transaction, so concurrent appends queue on it instead of colliding on the next position, and a rolled-back append
+/// leaves no gap.
+/// </summary>
+internal sealed class AgentAuditSequenceRow
+{
+    public int Id { get; set; }
+    /// <summary>The last append position allocated.</summary>
+    public long Last { get; set; }
+    public string SchemaVersion { get; set; } = "";
+}
+
 /// <summary>The first-wins owner association that scopes audit queries; it survives restarts with the records.</summary>
 internal sealed class AgentAuditOwnerRow
 {

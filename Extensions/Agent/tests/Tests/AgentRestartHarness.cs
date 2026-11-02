@@ -22,15 +22,24 @@ internal sealed class AgentRestartHarness : IDisposable
     /// </summary>
     internal static Func<TimeProvider, IAgentSessionRecordStore>? DefaultStore { get; set; }
 
+    /// <summary>Releases a store <see cref="DefaultStore"/> built (its database, for example) when its harness ends.</summary>
+    internal static Action<IAgentSessionRecordStore>? ReleaseDefaultStore { get; set; }
+
     /// <param name="store">Builds the shared store over the harness clock; the default is <see cref="DefaultStore"/>.</param>
     public AgentRestartHarness(Func<TimeProvider, IAgentSessionRecordStore>? store = null, Action<IServiceCollection>? configure = null)
     {
-        Store = store?.Invoke(Clock) ?? DefaultStore?.Invoke(Clock) ?? new InMemoryAgentSessionRecordStore(Clock);
+        if (store is null && DefaultStore is { } defaultStore)
+        {
+            Store = defaultStore(Clock);
+            _ownsDefaultStore = true;
+        }
+        else Store = store?.Invoke(Clock) ?? new InMemoryAgentSessionRecordStore(Clock);
         _configure = configure;
         Host = new RecoveryHost(this);
     }
 
     private readonly Action<IServiceCollection>? _configure;
+    private readonly bool _ownsDefaultStore;
 
     public RestartTestClock Clock { get; } = new();
     public IAgentSessionRecordStore Store { get; }
@@ -61,7 +70,11 @@ internal sealed class AgentRestartHarness : IDisposable
         _configure?.Invoke(services);
     }
 
-    public void Dispose() => Host.Dispose();
+    public void Dispose()
+    {
+        Host.Dispose();
+        if (_ownsDefaultStore) ReleaseDefaultStore?.Invoke(Store);
+    }
 }
 
 internal sealed class RecoveryHost : IDisposable

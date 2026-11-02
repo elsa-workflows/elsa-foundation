@@ -76,6 +76,19 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                 });
 
             migrationBuilder.CreateTable(
+                name: "elsa_agent_audit_sequence",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    Last = table.Column<long>(type: "bigint", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_agent_audit_sequence", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_agent_sessions",
                 columns: table => new
                 {
@@ -247,6 +260,11 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_agent_audit_sequence_SchemaVersion",
+                table: "elsa_agent_audit_sequence",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_agent_call_keys_SchemaVersion",
                 table: "elsa_agent_call_keys",
                 column: "SchemaVersion");
@@ -301,6 +319,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
 
             migrationBuilder.DropTable(
                 name: "elsa_agent_audit_owners");
+
+            migrationBuilder.DropTable(
+                name: "elsa_agent_audit_sequence");
 
             migrationBuilder.DropTable(
                 name: "elsa_agent_call_keys");

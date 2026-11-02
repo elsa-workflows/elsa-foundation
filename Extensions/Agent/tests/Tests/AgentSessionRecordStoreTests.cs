@@ -34,6 +34,20 @@ public sealed class AgentSessionRecordStoreTests
         Assert.Equal(new AgentSessionFence(Owner, 1), first.Owner);
     }
 
+    /// <summary>A key repeated within one create keeps its first value, as a write does and as the EF store records it.</summary>
+    [Fact]
+    public async Task A_key_repeated_within_one_create_keeps_its_first_value()
+    {
+        var store = new InMemoryAgentSessionRecordStore(new ProposalTestClock());
+        var session = Session("session-1");
+        Assert.True((await store.CreateAsync(new(session)
+        {
+            Keys = [new(AgentSessionKeyKinds.Call, "call-1", "first"), new(AgentSessionKeyKinds.Call, "call-1", "second")]
+        }, Owner)).Succeeded);
+
+        Assert.Equal("first", Assert.Single((await store.LoadAsync(session.Id))!.Keys).Value);
+    }
+
     [Fact]
     public async Task A_write_under_a_stale_fence_or_a_conflicting_key_changes_nothing()
     {

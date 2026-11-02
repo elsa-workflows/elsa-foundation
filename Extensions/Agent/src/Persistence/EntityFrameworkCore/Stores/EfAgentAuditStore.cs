@@ -34,8 +34,8 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
                 var db = resolveContext(scope.ServiceProvider);
                 try
                 {
-                    // The next append position; a competing append that took it first fails the key and is retried.
-                    var sequence = (await db.Set<AgentAuditRow>().MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0) + 1;
+                    await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+                    var sequence = await AllocateAsync(db, cancellationToken);
                     db.Add(new AgentAuditRow
                     {
                         Sequence = sequence, EventId = auditEvent.Id, Kind = (int)auditEvent.Kind, SessionId = auditEvent.SessionId,
@@ -43,13 +43,39 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
                         Payload = payload
                     });
                     await db.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
                     return true;
                 }
+                // Only the first append ever races to create the counter row; it and transient failures are retried.
                 catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<bool>.Retry(exception); }
             }, conflict => throw new AgentContributionException("The agent audit store could not append a record: the bounded store retries were exhausted.", conflict),
                 cancellationToken);
         });
     }
+
+    /// <summary>
+    /// The next append position, allocated under the counter row's lock until the append's transaction ends (a locking
+    /// update on SQL Server, PostgreSQL and MySQL; SQLite's write lock). Concurrent appends wait instead of colliding, and
+    /// a rolled-back append releases its position. A store without the counter row starts it after the highest recorded
+    /// position; a competing first append that created it first fails its key and is retried.
+    /// </summary>
+    private static async Task<long> AllocateAsync(DbContext db, CancellationToken cancellationToken)
+    {
+        var counter = db.Set<AgentAuditSequenceRow>();
+        if (await counter.Where(x => x.Id == SequenceRowId).ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Last, x => x.Last + 1), cancellationToken) == 1)
+        {
+            var allocated = await counter.AsNoTracking().Where(x => x.Id == SequenceRowId).Select(x => new { x.Last, x.SchemaVersion }).SingleAsync(cancellationToken);
+            // A counter a newer module version wrote reports skew; the update rolls back with the append.
+            if (allocated.SchemaVersion != AgentEfModule.SchemaVersion)
+                throw new InvalidDataException($"The agent audit sequence schema '{allocated.SchemaVersion}' is not supported by this build.");
+            return allocated.Last;
+        }
+        var next = (await db.Set<AgentAuditRow>().MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0) + 1;
+        counter.Add(new AgentAuditSequenceRow { Id = SequenceRowId, Last = next, SchemaVersion = AgentEfModule.SchemaVersion });
+        return next;
+    }
+
+    private const int SequenceRowId = 1;
 
     public async Task<IReadOnlyCollection<AgentAuditEvent>> ListAsync(string? sessionId = null, int? take = null, CancellationToken cancellationToken = default)
     {
@@ -80,7 +106,10 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
             await using var scope = scopes.CreateAsyncScope();
             var db = resolveContext(scope.ServiceProvider);
             // Ownership and the session filter apply before ordering and the limit; ties keep the latest append first.
-            var owned = db.Set<AgentAuditOwnerRow>().AsNoTracking().Where(x => x.ActorId == query.ActorId && x.TenantId == query.TenantId);
+            // Exact owner match: the suffix keeps a trailing space significant under SQL Server's PAD SPACE comparison.
+            var (actor, tenant) = (query.ActorId + ExactSuffix, query.TenantId + ExactSuffix);
+            var owned = db.Set<AgentAuditOwnerRow>().AsNoTracking().Where(x => x.ActorId == query.ActorId && x.TenantId == query.TenantId
+                                                                             && x.ActorId + ExactSuffix == actor && x.TenantId + ExactSuffix == tenant);
             var rows = db.Set<AgentAuditRow>().AsNoTracking().Where(x => x.SessionId != null && owned.Any(owner => owner.SessionId == x.SessionId));
             if (query.SessionId is { } sessionId) rows = rows.Where(x => x.SessionId == sessionId);
             var page = await rows.OrderByDescending(x => x.CreatedAtUtcTicks).ThenByDescending(x => x.Sequence).Take(query.Take).ToListAsync(cancellationToken);
@@ -116,6 +145,12 @@ internal sealed class EfAgentAuditStore(IServiceScopeFactory scopes, Func<IServi
         }, conflict => throw new AgentContributionException(
             $"Agent session '{sessionId}' audit ownership could not be associated: the bounded store retries were exhausted.", conflict), cancellationToken).AsTask());
     }
+
+    /// <summary>
+    /// Appended to both sides of an owner comparison so a trailing space stays significant: SQL Server compares
+    /// <c>Latin1_General_100_BIN2</c> text with PAD SPACE, and its <c>LEN</c> ignores trailing spaces too.
+    /// </summary>
+    internal const string ExactSuffix = "|";
 
     private AgentAuditEvent Decode(AgentAuditRow row)
     {
