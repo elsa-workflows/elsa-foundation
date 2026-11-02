@@ -1,6 +1,6 @@
 {
   "sourceRevision": "e11275eb75662fb27da1da692117f974e28ba955",
-  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records. The round-3 revert of the superseded-attempt deferral changed only the idle-invariant line, which was re-recorded at its own revision; no other recorded original changed.",
+  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records. The round-3 revert of the superseded-attempt deferral changed only the idle-invariant line, which was re-recorded at its own revision. Round 4 re-recorded the two mutations whose failing tests round 3 edited. No other recorded original or failing test changed.",
   "mutations": [
     {
       "mutation": "validator-guard",
@@ -100,7 +100,9 @@
       ],
       "restored": "Passed!  - Failed:     0, Passed:     1",
       "original": "checked(NowTicks() + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks)",
-      "mutated_text": "checked(NowTicks() + 0 * continuous.PollIntervalSeconds)"
+      "mutated_text": "checked(NowTicks() + 0 * continuous.PollIntervalSeconds)",
+      "round": 4,
+      "sourceRevision": "3d227c08cf215299d104317fb357907ed88d94fd"
     },
     {
       "mutation": "final-page-not-normalized",
@@ -148,7 +150,9 @@
       ],
       "restored": "Passed!  - Failed:     0, Passed:     1",
       "original": "        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlRunCompletionOutcome.Terminal;\n",
-      "mutated_text": ""
+      "mutated_text": "",
+      "round": 4,
+      "sourceRevision": "3d227c08cf215299d104317fb357907ed88d94fd"
     },
     {
       "mutation": "complete-under-cancel-permission",

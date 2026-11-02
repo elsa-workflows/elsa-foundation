@@ -80,6 +80,8 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
   continuous artifact; upgrade every worker in a scope before admitting one. Claims are ordered by run creation, so a
   continuous run whose shards are never idle can keep every connector slot in its scope and delay newer runs. Deciding
   whether a caught-up response ends a draining shard compares host clocks, which must agree, as leases already require.
+  A worker that stalls past its lease while the feed answers its request late can fail the whole run closed with
+  `etl.http.page-provenance-invalid` ([spec 1192](../../specs/1192-etl-continuous-http/spec.md) FR-004).
 
 ## Implemented boundaries
 

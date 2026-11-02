@@ -4,8 +4,10 @@ using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Runtime.Api;
+using Elsa.Etl.Runtime.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Etl.Tests;
 
@@ -123,6 +125,22 @@ public sealed partial class EtlRuntimeApiHttpTests
 
         await Assert.ThrowsAsync<InvalidDataException>(async () => await services.ServiceProvider
             .GetRequiredService<IEtlConnectorRuntimeInspector>().ListConnectorPartitionsAsync(scope, finite.Invocation.RunId, -1, 10));
+    }
+
+    [Fact]
+    public async Task Completion_reports_not_continuous_without_a_connector_store_and_unavailable_for_legacy_operations()
+    {
+        await using (var fileOnly = await EtlDesignApiTestHost.StartRuntimeAsync(configureServices: services =>
+                         services.RemoveAll<IEtlConnectorRuntimeStore>()))
+        {
+            var invocation = await SeedRunningAsync(fileOnly, "file-only-complete", new EtlScope("tenant-a", "partition-a"));
+            Assert.Equal("notContinuous", await CompleteResultAsync(fileOnly, invocation.RunId));
+        }
+
+        await using var legacy = await EtlDesignApiTestHost.StartRuntimeAsync(configureServices: services =>
+            services.Replace(ServiceDescriptor.Scoped<IEtlRuntimeOperations, LegacyRuntimeOperations>()));
+        using var unavailable = await legacy.SendAsync(HttpMethod.Post, "/etl/runs/legacy/complete", permissions: CompletePermissions);
+        await AssertProblemAsync(unavailable, HttpStatusCode.ServiceUnavailable, "etl.provider-unavailable");
     }
 
     private static async Task<string> CompleteResultAsync(EtlDesignApiTestHost host, string runId)

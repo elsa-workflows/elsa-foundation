@@ -170,7 +170,7 @@ A second run is cancelled and ends `Cancelled`.
     - sets the partition's next-eligible time to the store's time plus the interval.
 
     It adds no page, request or batch row.
-  - Known limit: A superseded attempt that is still in flight when a successor records a caught-up response can later publish a page whose attempt is no longer in the cleared journal; the shard then fails closed with `etl.http.page-provenance-invalid` rather than accepting the page. This needs a worker stall longer than its lease while the feed serves the stalled request late, with records appended in between. A poll-generation page identity, planned with compaction, removes it.
+  - Known limit: a superseded attempt that is still in flight when a successor records a caught-up response can later publish a page whose attempt is no longer in the cleared journal; the whole run then fails closed with `etl.http.page-provenance-invalid` (every shard stops and `RunEtl` resumes with that failure) rather than accepting the page. This needs a worker stall longer than its lease while the feed serves the stalled request late, with records appended in between. A poll-generation page identity, planned with compaction, removes it.
   - The position is unchanged, so the execution's normal release frees the lease.
 - **FR-005** The audit invariants accept the idle state.
   - In a continuous run, a partition with no owed batch, no attached page, a cleared journal and a next-eligible time is idle, and that time is valid.
@@ -236,14 +236,14 @@ A second run is cancelled and ends `Cancelled`.
   - Cancellation settles `Cancelled`.
   - Completion of a finite or a terminal run is refused.
 - **SC-003** In real worker processes, a kill after capture replays the page from the cache, and a kill during an idle poll's attempt retries the poll. Accounting is exact in both cases.
-- **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof. The evidence README names the guards that are tested without a bite-proof, or not tested.
-- **SC-005** Studio authoring and inspection, including "Complete run", work in a real browser against owned hosts, with no axe violations at 320px and 1024px. Axe runs on the authoring page; inspection and Complete run are checked in a real browser without axe, as the evidence README states.
+- **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof, except the guards the evidence README names as tested without a bite-proof or not tested.
+- **SC-005** Studio authoring works in a fixture-backed real browser with no axe violations at 320px and 1024px; inspection and "Complete run" work in a real browser against owned hosts (without axe), as the evidence README states.
 - **SC-006** An actual Workbench journey shows continuous delivery, idle polling, completion and cancellation.
 - **SC-007** Finite pipelines keep their artifact bytes and identities. The whole ETL suite passes, changed only by intended additions.
 
 ## Assumptions and boundaries
 
-- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page can fail a shard closed (FR-004, known limit).
+- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source. A superseded attempt's late page can fail the run closed (FR-004, known limit).
 - **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime is unbounded and its idle-poll cost bounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
 - **Native completion.** No workflow activity requests completion in this slice; the runtime API and Studio do. Native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
 - **Other continuous sources.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.

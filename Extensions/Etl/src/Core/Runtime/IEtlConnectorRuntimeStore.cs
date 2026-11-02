@@ -42,7 +42,7 @@ public interface IEtlConnectorRuntimeStore
     /// Replays do not charge retained bytes again. Use the returned position for subsequent operations.</remarks>
     ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease, EtlRetainedHttpPage page, CancellationToken cancellationToken = default);
     /// <summary>Advances only a retained empty page; nonempty pages require batch acceptance.</summary>
-    /// <remarks>In a continuous run a moving empty page makes the next request wait one poll interval, unless completion was requested.</remarks>
+    /// <remarks>In a continuous run a moving empty page makes the next request wait one poll interval, also while a completion drains.</remarks>
     ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     /// <summary>Records a continuous run's caught-up response (no records, no cursor movement) from the live latest attempt.</summary>
     /// <remarks>

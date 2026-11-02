@@ -40,7 +40,7 @@ A completion request causes each shard's next qualifying caught-up response to b
   - `RecordConnectorHttpCaughtUpAsync` and `EtlHttpCaughtUpResult`;
   - `RequestConnectorRunCompletionAsync` and `EtlRunCompletionOutcome`.
 
-  Both are new interface members. The only implementation is the EF store; test wrappers such as `ConnectorGateStore` delegate.
+  Both are new interface members. The only implementation is the EF store; test wrappers such as `ConnectorWorkerGateStore` delegate.
 - Connector inspection records: `Continuous`, `CompletionRequestedAt` and `NextPollAt`; the API projects `Continuous` as `mode` (R8).
 - `PublicAPI.Unshipped.txt`, `README.md` and `EXTENSION_POINTS.md`.
 
@@ -68,7 +68,7 @@ A completion request causes each shard's next qualifying caught-up response to b
 
 ### Studio (`studio/Elsa.Studio.Etl/Client`)
 - `etlTypes.ts`, `etlApi.completeRun`, `EtlConnectorPipelineEditor`, `EtlRunInspection` and `EtlRunsPage` (R9).
-- Vitest component tests and the Playwright authoring and inspection spec.
+- Vitest component tests and the Playwright authoring spec.
 
 ### Tests (`tests/Tests`, `tests/WorkerHost`, `tests/Shared`)
 - **Artifact.** Continuous policy round-trips. A finite artifact's bytes and hash are unchanged. Validation errors are covered at all three sites.
