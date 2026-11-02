@@ -1,4 +1,4 @@
-import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
@@ -127,6 +127,9 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
   const createInFlightRef = useRef(false);
+  // A create can finish while this screen's workspace tab is in the background; opening the new
+  // definition then waits for the tab to return instead of taking over the active tab.
+  const whenActive = useStudioWorkspaceWhenActive();
   // Retired dialogs can still finish writes. Their callbacks belong to the originating authority/context.
   const workGenerationRef = useRef(0);
   const renderGeneration = workGenerationRef.current;
@@ -383,7 +386,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
       });
       if (!isCurrentGeneration()) return;
       setCreateDraft(null);
-      onOpen(details.definition.id);
+      whenActive(() => onOpen(details.definition.id));
     } catch (e) {
       if (!isCurrentGeneration()) return;
       setCreateError(e instanceof Error ? e.message : String(e));

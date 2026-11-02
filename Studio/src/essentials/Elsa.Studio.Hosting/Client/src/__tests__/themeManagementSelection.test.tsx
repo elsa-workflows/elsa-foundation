@@ -95,6 +95,24 @@ describe("theme management with an empty selectable default", () => {
     expect(requestStudioNavigation("/theme-builder", "/")).toBe(true);
   });
 
+  it("reports a Theme Store write in progress to workspace probes and closes until it finishes", async () => {
+    const wire = { themes: [], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] };
+    let release = () => {};
+    const putJson = vi.fn((_url: string, theme: unknown) => new Promise(resolve => { release = () => resolve({ ...wire, themes: [theme] }); }));
+    const context = { http: { getJson: async () => wire, putJson } } as unknown as StudioEndpointContext;
+    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
+    const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-actions button")).find(button => button.textContent?.trim() === "Duplicate")!;
+    await update(() => duplicate.click());
+    expect(putJson).toHaveBeenCalledTimes(1);
+    expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(false);
+    expect(requestStudioNavigation("/theme-builder", "/", "close")).toBe(false);
+
+    await update(() => release());
+    expect(container.textContent).toContain("Theme duplicated");
+    expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(true);
+  });
+
   it("keeps an unsaved theme edit, and loads once, when a background tab returns", async () => {
     const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
     const wire = async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] });

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openStudioWorkspaceTab, requestStudioNavigation, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type StudioNavigationRequest } from "../sdk";
+import { openStudioWorkspaceTab, requestStudioNavigation, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, useStudioWorkspaceWhenActive, type StudioNavigationRequest } from "../sdk";
 import { useWorkspaceTabs, type WorkspaceTabsController } from "../app/workspace/useWorkspaceTabs";
 import { WorkspaceTabPanels } from "../app/workspace/WorkspaceTabPanels";
 import { readHistoryTabId } from "../app/workspace/history";
@@ -17,12 +17,13 @@ async function act(action: () => unknown) {
 const scope: WorkspaceScope = { origin: "http://localhost:3000", backendId: "local", backendBaseUrl: "http://api.test", subject: "ada", tenantId: null };
 
 // Live effect bookkeeping for the editor screen, so tests can see whether a hidden tab still runs.
-const editorProbe = { mountedEffects: 0, popstates: 0, intents: [] as string[], setEdits: null as null | ((value: number) => void) };
+const editorProbe = { mountedEffects: 0, popstates: 0, intents: [] as string[], setEdits: null as null | ((value: number) => void), whenActive: null as null | ((action: () => void) => void) };
 
 function Editor() {
   const [edits, setEdits] = useState(0);
   const location = useStudioRouteLocation();
   editorProbe.setEdits = setEdits;
+  editorProbe.whenActive = useStudioWorkspaceWhenActive();
   useStudioWorkspaceTitle(`Order flow ${location.searchParams.get("definition") ?? ""}`.trim(), "Draft");
   useEffect(() => {
     editorProbe.mountedEffects += 1;
@@ -70,7 +71,7 @@ function Harness() {
   controller = useWorkspaceTabs({ scope, qualifyPath: path => path, resourceKeyOf, titleOf: () => "Order flow", contentRef });
   return (
     <main ref={contentRef}>
-      <WorkspaceTabPanels baseId="ws" tabs={controller.state.tabs} activeId={controller.state.activeId} renderScreen={renderScreen} titleOf={() => "Screen"} setTitle={controller.setTitle} onCloseTab={controller.close} />
+      <WorkspaceTabPanels baseId="ws" tabs={controller.state.tabs} activeId={controller.state.activeId} renderScreen={renderScreen} titleOf={() => "Screen"} setTitle={controller.setTitle} isActive={controller.isActive} onCloseTab={controller.close} />
     </main>
   );
 }
@@ -99,7 +100,7 @@ const currentLocation = () => `${window.location.pathname}${window.location.sear
 
 beforeEach(() => {
   window.localStorage.removeItem(workspaceStorageKey(scope));
-  Object.assign(editorProbe, { mountedEffects: 0, popstates: 0, intents: [], setEdits: null });
+  Object.assign(editorProbe, { mountedEffects: 0, popstates: 0, intents: [], setEdits: null, whenActive: null });
 });
 
 afterEach(async () => {
@@ -140,6 +141,29 @@ describe("workspace tabs", () => {
     expect(currentLocation()).toBe("/editor?definition=a");
     expect(visiblePanel().querySelector("[data-testid=edits]")?.textContent).toBe("2");
     expect(editorProbe.mountedEffects).toBe(1);
+  });
+
+  it("holds a background screen's navigation until its tab returns, leaving the active tab's address alone", async () => {
+    await mount("/editor?definition=a");
+    const editorTab = controller.state.activeId;
+    const whenActive = editorProbe.whenActive!;
+    await act(async () => controller.open("/list"));
+    const listTab = controller.state.activeId;
+
+    // A request the editor started completes in the background and opens what it created.
+    await act(async () => whenActive(() => {
+      window.history.pushState({}, "", "/editor?definition=a&draft=d1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }));
+    expect(currentLocation()).toBe("/list");
+    expect(controller.activeTab.location).toBe("/list");
+    expect(controller.state.tabs.find(tab => tab.id === editorTab)?.location).toBe("/editor?definition=a");
+
+    await act(async () => controller.activate(editorTab));
+    expect(currentLocation()).toBe("/editor?definition=a&draft=d1");
+    expect(controller.activeTab.location).toBe("/editor?definition=a&draft=d1");
+    expect(readHistoryTabId(window.history.state)).toBe(editorTab);
+    expect(controller.state.tabs.find(tab => tab.id === listTab)?.location).toBe("/list");
   });
 
   it("does not let a background tab's guard block navigation in the active tab", async () => {

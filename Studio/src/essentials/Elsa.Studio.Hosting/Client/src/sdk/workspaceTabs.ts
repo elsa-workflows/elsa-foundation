@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef } from "react";
 
 /**
  * How a route's screens take part in Studio workspace tabs. The host derives tab titles, icons and
@@ -27,6 +27,8 @@ export interface StudioWorkspaceTabHandle {
   readonly active: boolean;
   /** The Studio-relative location the tab shows, without the backend qualifier. */
   readonly location: string;
+  /** Whether the tab is active right now. Unlike `active`, this is current inside async callbacks. */
+  isActive(): boolean;
   setTitle(title: StudioWorkspaceTabTitle | null): void;
 }
 
@@ -49,6 +51,31 @@ export function useStudioWorkspaceTab() {
 export function useStudioRouteLocation(): URL {
   const tab = useStudioWorkspaceTab();
   return tab && !tab.active ? new URL(tab.location, window.location.origin) : new URL(window.location.href);
+}
+
+/**
+ * Returns a function that runs navigation only while this screen's tab is active. History and the address
+ * bar belong to the active tab, so a background tab whose request completes (a create that opens the new
+ * resource, say) must not write them: the action is held and runs when the tab returns, the latest one
+ * winning. Outside a workspace tab it runs at once.
+ */
+export function useStudioWorkspaceWhenActive() {
+  const tab = useStudioWorkspaceTab();
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const heldRef = useRef<(() => void) | null>(null);
+  // A background tab mounts its effects again when it returns, which is when held navigation runs: after
+  // the rest of that commit's effects, so the screen's own history listeners are back first.
+  useEffect(() => {
+    const held = heldRef.current;
+    heldRef.current = null;
+    if (held) queueMicrotask(held);
+  });
+  return useCallback((action: () => void) => {
+    const current = tabRef.current;
+    if (!current || current.isActive()) action();
+    else heldRef.current = action;
+  }, []);
 }
 
 /**

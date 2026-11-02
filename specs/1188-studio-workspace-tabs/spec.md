@@ -88,8 +88,9 @@ mean), `close`, or `probe`.
   notice. Closing a background tab that was marked keeps it and brings it to the front. **Close
   other tabs** and **Close all tabs** keep pinned tabs and tabs with unsaved work, and say how many
   stayed open.
-- Theme Builder reports an unsaved custom theme to probes and closes (not to ordinary navigation, which
-  keeps its earlier behaviour), so a background tab holding one is never released or closed silently.
+- Theme Builder reports an unsaved custom theme or a Theme Store write in progress to probes and closes
+  (not to ordinary navigation, which keeps its earlier behaviour), so a background tab holding one is
+  never released or closed silently.
 - While a background tab is marked, the shell's own `beforeunload` warns before the document unloads
   (backend switch, sign-out redirect, module reload, browser close).
 
@@ -123,6 +124,14 @@ A hidden tab can still render (a request resolves, the registry refreshes) while
 the address bar. `useStudioRouteLocation()` returns the tab's own location for that case; the run
 inspector and Backends page now read their location through it instead of `window.location`.
 
+A hidden tab can also finish async work that navigates: a create that opens what it created, or an
+upgrade plan that records itself in the address. History belongs to the active tab, so such a write
+would move the active tab to another screen without asking its guards. `useStudioWorkspaceWhenActive()`
+returns a function that runs navigation at once while the tab is active and otherwise holds it until
+the tab returns (the latest held navigation wins), after the screen's own listeners are back. The
+handle's `isActive()` answers for the current moment, inside async callbacks too. Activity Definitions
+navigation, the upgrade workbench's plan address and the workflow definition create flow use it.
+
 ### Opening tabs
 
 - **New tab** button and `Alt+Shift+T` open Home in a new tab.
@@ -152,9 +161,9 @@ the document, so no tab is reinterpreted against another backend.
 
 ## Known limits
 
-- A screen that writes history from an async callback after its tab went to the background writes
-  the active tab's address. No such path is known in a common flow; screens should write history only
-  from user actions or effects.
+- A screen that writes history from an async callback without `useStudioWorkspaceWhenActive()` still
+  writes the active tab's address if its tab went to the background first. The flows above that
+  navigate after a request use it; other history writes come from user actions or effects.
 - Across browser sessions only the location, pin, title and scroll offset are restored; graph
   viewport, selection and undo history live only in memory, as the issue scopes.
 - Split views, docking, tab groups, preview tabs and cross-device sync are out of scope.

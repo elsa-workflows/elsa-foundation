@@ -142,8 +142,10 @@ function OrderEditor({ order }: { order: Order }) {
   replaces unsaved edits with the server copy. Refetching read-only data on return is fine.
 - React Flow canvases render `RetainFlowViewport` (Workflows) so the viewport survives the return;
   React Flow otherwise rebuilds its pan-zoom from `defaultViewport`.
-- Write history only from user actions or effects. A callback that resolves after the tab went to the
-  background would otherwise write the active tab's address.
+- Write history from user actions or effects. Navigation that follows async work (a create that opens
+  what it created) goes through `useStudioWorkspaceWhenActive()`: it runs at once while the tab is
+  active and otherwise waits until the tab returns, so a background tab never writes the active tab's
+  address.
 
 ## Expression editor Contributions
 

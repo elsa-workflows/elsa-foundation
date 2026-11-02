@@ -373,6 +373,8 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
     return () => window.cancelAnimationFrame(handle);
   }, [contentRef, state.activeId]);
 
+  const isActive = useCallback((id: string) => stateRef.current.activeId === id, []);
+
   const activeTab = getActiveTab(state);
   return useMemo(() => ({
     state,
@@ -389,6 +391,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
     setPinned: (id: string, pinned: boolean) => commit(setPinned(stateRef.current, id, pinned)),
     move: (id: string, toIndex: number) => commit(moveTab(stateRef.current, id, toIndex)),
     setTitle,
+    isActive,
     screenKeyOf
-  }), [activeTab, close, closeAll, closeOthers, commit, navigate, notice, open, screenKeyOf, setTitle, state, switchTo]);
+  }), [activeTab, close, closeAll, closeOthers, commit, isActive, navigate, notice, open, screenKeyOf, setTitle, state, switchTo]);
 }

@@ -72,6 +72,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [mode, setMode] = useState<ThemeMode>("light");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingWrites, setPendingWrites] = useState(0);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -104,17 +105,19 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const hasChanges = JSON.stringify(selectedTheme) !== JSON.stringify(draft);
   const unsavedDraft = hasChanges && Boolean(draft) && !isReadOnly;
 
-  // Report an unsaved theme to workspace probes and closes, so a background tab holding one is kept
-  // mounted and is not closed without notice. Ordinary navigation keeps its existing behaviour.
+  // Report an unsaved theme or a Theme Store write in progress to workspace probes and closes, so a
+  // background tab holding one is kept mounted and is not closed without notice. Ordinary navigation keeps
+  // its existing behaviour.
+  const pendingWork = unsavedDraft || pendingWrites > 0;
   useEffect(() => {
-    if (!unsavedDraft) return;
+    if (!pendingWork) return;
     const guard = (event: Event) => {
       const intent = (event as CustomEvent<StudioNavigationRequest>).detail?.intent;
       if (intent === "probe" || intent === "close") event.preventDefault();
     };
     window.addEventListener(studioNavigationRequestedEvent, guard);
     return () => window.removeEventListener(studioNavigationRequestedEvent, guard);
-  }, [unsavedDraft]);
+  }, [pendingWork]);
   const optionalMode = mode === "dim" || mode === "high-contrast" ? mode : null;
 
   async function loadStore() {
@@ -124,7 +127,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         const nextStore = await fetchThemeStore(api.host);
         setStore(nextStore);
         setSelectedThemeId(current => current || nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
-      }, "Theme Store refreshed.");
+      }, "Theme Store refreshed.", "load");
     } finally {
       loadingRef.current = false;
     }
@@ -259,14 +262,17 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }, "Theme pack imported.");
   }
 
-  async function run(operation: () => Promise<void>, success: string) {
+  async function run(operation: () => Promise<void>, success: string, kind: "load" | "write" = "write") {
     setError(null);
     setStatus(null);
+    if (kind === "write") setPendingWrites(count => count + 1);
     try {
       await operation();
       setStatus(success);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (kind === "write") setPendingWrites(count => count - 1);
     }
   }
 

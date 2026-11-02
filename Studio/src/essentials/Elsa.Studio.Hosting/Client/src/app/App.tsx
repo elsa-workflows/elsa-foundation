@@ -557,6 +557,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
           renderScreen={renderScreen}
           titleOf={tabTitleOf}
           setTitle={workspace.setTitle}
+          isActive={workspace.isActive}
           onCloseTab={workspace.close}
         />
       </ShellFrame>
