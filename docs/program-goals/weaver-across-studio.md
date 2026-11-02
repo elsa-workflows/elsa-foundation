@@ -82,7 +82,12 @@ lifecycle cases on each actual adapter) and the normal composed Studio suite. Th
 passed on main `bd0749d86`. This is deterministic provider-protocol evidence, not live-provider
 evidence; [the closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6570028483)
 records every run. [Supported recovery #3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441)
-is the sole current implementation leaf, under [spec1189](../../specs/1189-weaver-recovery/spec.md).
+is verified Done under [spec1189](../../specs/1189-weaver-recovery/spec.md). It merged as `364e636c9`
+(PR #3640) on Sipke's instruction, while Code Review was unavailable, after a self-review that converged
+in four rounds. Main's own CI requalified it, including a fresh complete package witness with 20 restart
+cases on both actual adapters against the packaged EF store. M2 #3431 is verified complete.
+[Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is the sole
+current implementation leaf, under [spec1193](../../specs/1193-weaver-workflow-journeys/spec.md).
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
 The current inventory also includes workflow library folders, tags and saved views added on main
 during M2.
