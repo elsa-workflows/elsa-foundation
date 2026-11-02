@@ -607,7 +607,7 @@ describe("Weaver recovery through the real agent client", () => {
     await settle(() => expect(container.querySelector('[data-kind="limit"]')).not.toBeNull());
     const notice = container.querySelector('[data-kind="limit"]');
     expect(notice?.getAttribute("data-limit")).toBe("snapshots");
-    expect(notice?.textContent).toContain("Session limit reached");
+    expect(notice?.textContent).toContain("Session limit reached: this conversation has no room left for more context.");
     expect(buttonIn(notice, "Continue in a new session")).not.toBeNull();
     expect(container.textContent).toContain("A long conversation");
     expect(fetch).not.toHaveBeenCalled();

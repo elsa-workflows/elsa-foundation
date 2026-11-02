@@ -246,7 +246,7 @@ function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {
       return notice.message;
     case "limit":
       // The server's message names the bound it reached; Studio does not restate the limits.
-      return `${notice.message?.trim() || "Session limit reached: this conversation has recorded the most context it can keep."} It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
+      return `${notice.message?.trim() || "Session limit reached: this conversation has no room left for more context."} It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
   }
 }
 
