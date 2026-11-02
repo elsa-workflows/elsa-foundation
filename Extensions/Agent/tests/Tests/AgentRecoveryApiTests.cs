@@ -116,7 +116,7 @@ public sealed class AgentRecoveryApiTests
         Assert.Equal(200, status);
         var data = JsonDocument.Parse(body).RootElement.GetProperty("data");
         Assert.Equal(("cancelled", "withdrawn"), (data.GetProperty("status").GetString(), data.GetProperty("statusReason").GetString()));
-        var stored = (await harness.Store.LoadAsync(session.Id))!.Messages.Single();
+        var stored = (await harness.Store.LoadAsync(session.Id))!.Messages.Single().Message;
         Assert.Equal((AgentMessageStatus.Cancelled, AgentMessageStatusReasons.Withdrawn), (stored.Status, stored.StatusReason));
         Assert.Equal(AgentSessionPolicyOutcome.Succeeded, (await host.ProbeAsync(session)).Outcome);
         // The session details carry the reason, so a returning view can show it.
@@ -157,7 +157,7 @@ public sealed class AgentRecoveryApiTests
         var session = await host.CreateAsync();
         var prompt = await host.PostAsync(session, "hello");
         // The withdraw holds the session write gate across its awaited write; the start arrives meanwhile.
-        var held = store.HoldNextWrite(write => write.Messages.Any(x => x.Status == AgentMessageStatus.Cancelled));
+        var held = store.HoldNextWrite(write => write.Messages.Any(x => x.Message.Status == AgentMessageStatus.Cancelled));
         var withdraw = Task.Run(() => WithdrawAsync(host, session, prompt.Id));
         await held.Entered.Task.WaitAsync(HandoffTimeout);
         var start = Task.Run(() => host.StreamAsync(session));
@@ -181,7 +181,7 @@ public sealed class AgentRecoveryApiTests
         var session = await host.CreateAsync();
         var prompt = await host.PostAsync(session, "hello");
         // The start holds the session write gate across its Pending-to-Streaming write; the withdraw arrives meanwhile.
-        var held = store.HoldNextWrite(write => write.Messages.Any(x => x.Status == AgentMessageStatus.Streaming));
+        var held = store.HoldNextWrite(write => write.Messages.Any(x => x.Message.Status == AgentMessageStatus.Streaming));
         var start = Task.Run(() => host.StreamAsync(session));
         await held.Entered.Task.WaitAsync(HandoffTimeout);
         var withdraw = Task.Run(() => WithdrawAsync(host, session, prompt.Id));

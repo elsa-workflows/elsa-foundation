@@ -30,7 +30,8 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerToken);
         cancellationToken.ThrowIfCancellationRequested();
         var created = new Aggregate(Serialize(record.Session), Index.From(record.Session));
-        foreach (var message in record.Messages) created.Messages.Upsert(message.Id, Serialize(message));
+        foreach (var message in record.Messages) created.Messages.Upsert(message.Message.Id, Serialize(message));
+        foreach (var snapshot in record.Snapshots) created.Snapshots.TryAdd(snapshot.Digest, Serialize(snapshot));
         foreach (var attachment in record.Context) created.Context.Add(attachment.Id, Serialize(attachment));
         created.PausedTurn = record.PausedTurn is null ? null : Serialize(record.PausedTurn);
         foreach (var proposal in record.Proposals) created.Proposals.Upsert(proposal.Proposal.Id, Serialize(proposal), proposal.Proposal.Status);
@@ -57,9 +58,10 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
             if (!_sessions.TryGetValue(sessionId, out var aggregate)) return Task.FromResult<AgentSessionRecord?>(null);
             return Task.FromResult<AgentSessionRecord?>(new AgentSessionRecord(Deserialize<AgentSession>(aggregate.Session))
             {
-                Messages = aggregate.Messages.Values.Select(Deserialize<AgentMessage>).ToArray(),
+                Messages = aggregate.Messages.Values.Select(Deserialize<AgentMessageRecord>).ToArray(),
+                Snapshots = aggregate.Snapshots.Values.Select(Deserialize<AgentDisclosureSnapshotRecord>).ToArray(),
                 Context = aggregate.Context.Values.Select(Deserialize<AgentContextAttachment>).ToArray(),
-                PausedTurn = aggregate.PausedTurn is null ? null : Deserialize<AgentPausedTurn>(aggregate.PausedTurn),
+                PausedTurn = aggregate.PausedTurn is null ? null : Deserialize<AgentPausedTurnRecord>(aggregate.PausedTurn),
                 Proposals = aggregate.Proposals.Entries
                     .Select(x => Deserialize<AgentProposalRecord>(x.Json) with { Version = aggregate.Proposals.VersionOf(x.Id) }).ToArray(),
                 Keys = aggregate.Keys.Select(x => new AgentSessionUniqueKey(x.Key.Kind, x.Key.Key, x.Value)).ToArray(),
@@ -108,7 +110,8 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         cancellationToken.ThrowIfCancellationRequested();
         // Serialize outside the store lock; a value that cannot be recorded refuses the write before any change.
         var session = write.Session is null ? null : Serialize(write.Session);
-        var messages = write.Messages.Select(x => (x.Id, Json: Serialize(x))).ToArray();
+        var messages = write.Messages.Select(x => (x.Message.Id, Json: Serialize(x))).ToArray();
+        var snapshots = write.Snapshots.Select(x => (x.Digest, Json: Serialize(x))).ToArray();
         var context = write.Context.Select(x => (x.Id, Json: Serialize(x))).ToArray();
         var paused = write.PausedTurn is null ? null : Serialize(write.PausedTurn);
         var proposals = write.Proposals.Select(x => (x.Proposal.Id, x.Proposal.Status, x.Version, Json: Serialize(x))).ToArray();
@@ -135,6 +138,8 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 aggregate.Index = Index.From(write.Session!);
             }
             foreach (var (id, json) in messages) aggregate.Messages.Upsert(id, json);
+            // Each distinct snapshot is recorded once; a digest already recorded keeps its recorded text.
+            foreach (var (digest, json) in snapshots) aggregate.Snapshots.TryAdd(digest, json);
             foreach (var (id, json) in context) aggregate.Context.TryAdd(id, json);
             if (paused is not null) aggregate.PausedTurn = paused;
             else if (write.RemovePausedTurn) aggregate.PausedTurn = null;
@@ -214,6 +219,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         public string Session { get; set; } = session;
         public Index Index { get; set; } = index;
         public Ordered Messages { get; } = new();
+        public Ordered Snapshots { get; } = new();
         public Ordered Context { get; } = new();
         public string? PausedTurn { get; set; }
         public Ordered Proposals { get; } = new();

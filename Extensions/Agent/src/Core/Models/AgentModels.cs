@@ -634,16 +634,54 @@ public sealed record AgentProposalRecord(AgentActionProposal Proposal)
     public long Version { get; init; }
 }
 
+/// <summary>
+/// Preview: one distinct disclosure snapshot of a session, recorded once and referenced by its digest. The owner computes
+/// both: <see cref="Canonical"/> is the canonical JSON text (sorted keys, raw scalars) the digest was taken over, and a
+/// store keeps it byte-identical, so a recorded fingerprint stays verifiable after any number of restarts.
+/// </summary>
+/// <param name="Digest">The lowercase hexadecimal SHA-256 of <see cref="Canonical"/> as UTF-8.</param>
+public sealed record AgentDisclosureSnapshotRecord(string Digest, string Canonical)
+{
+    /// <summary>The snapshot's recorded size in bytes; it counts toward the session's disclosure size limit.</summary>
+    public long Size => System.Text.Encoding.UTF8.GetByteCount(Canonical);
+}
+
+/// <summary>
+/// Preview: a message as the record store holds it. Its cumulative disclosure history is not stored inline:
+/// <see cref="AgentMessage.DisclosureHistory"/> is null here and <see cref="DisclosureDigests"/> lists the same snapshots,
+/// in order, by digest. Every other member, including <see cref="AgentMessage.DeliveryFingerprint"/>, is stored verbatim.
+/// </summary>
+public sealed record AgentMessageRecord(AgentMessage Message)
+{
+    /// <summary>The message's disclosure history as ordered snapshot digests, or null when the message has none.</summary>
+    public IReadOnlyList<string>? DisclosureDigests { get; init; }
+    /// <summary>The digest of the complete ordered history, recorded with it and re-verified when the session is hydrated.</summary>
+    public string? DisclosureHistoryFingerprint { get; init; }
+}
+
+/// <summary>
+/// Preview: the paused turn as the record store holds it. <see cref="AgentPausedTurn.DisclosureHistory"/> is null here and
+/// <see cref="DisclosureDigests"/> lists the same snapshots in order; the pause fingerprint
+/// (<see cref="AgentPausedTurn.DisclosureHistoryFingerprint"/>) is stored verbatim.
+/// </summary>
+public sealed record AgentPausedTurnRecord(AgentPausedTurn Turn)
+{
+    /// <summary>The paused turn's disclosure history as ordered snapshot digests, or null when it has none.</summary>
+    public IReadOnlyList<string>? DisclosureDigests { get; init; }
+}
+
 /// <summary>Preview: one session aggregate as the record store holds it.</summary>
 /// <remarks>Claims, gates, monitors and the turn registry are process-local and never recorded; they are rebuilt from these facts.</remarks>
 public sealed record AgentSessionRecord(AgentSession Session)
 {
     /// <summary>The messages in insertion order.</summary>
-    public IReadOnlyList<AgentMessage> Messages { get; init; } = [];
+    public IReadOnlyList<AgentMessageRecord> Messages { get; init; } = [];
+    /// <summary>The session's distinct disclosure snapshots in first-recorded order, each referenced by digest.</summary>
+    public IReadOnlyList<AgentDisclosureSnapshotRecord> Snapshots { get; init; } = [];
     /// <summary>The retained session context, unique by attachment identity, in insertion order.</summary>
     public IReadOnlyList<AgentContextAttachment> Context { get; init; } = [];
     /// <summary>The paused turn, if any. Its presence is the durable fact behind the Pause claim.</summary>
-    public AgentPausedTurn? PausedTurn { get; init; }
+    public AgentPausedTurnRecord? PausedTurn { get; init; }
     /// <summary>The session's proposals in insertion order.</summary>
     public IReadOnlyList<AgentProposalRecord> Proposals { get; init; } = [];
     /// <summary>The recorded duplicate-detection keys.</summary>
@@ -666,11 +704,16 @@ public sealed record AgentSessionRecordWrite(string SessionId, AgentSessionFence
     /// <summary>The session's new state, or null to keep it.</summary>
     public AgentSession? Session { get; init; }
     /// <summary>Messages to insert or replace by identity.</summary>
-    public IReadOnlyList<AgentMessage> Messages { get; init; } = [];
+    public IReadOnlyList<AgentMessageRecord> Messages { get; init; } = [];
+    /// <summary>
+    /// Snapshots the written messages or paused turn reference for the first time. A digest already recorded keeps its
+    /// recorded text; every digest a recorded message or paused turn references is recorded.
+    /// </summary>
+    public IReadOnlyList<AgentDisclosureSnapshotRecord> Snapshots { get; init; } = [];
     /// <summary>Context attachments to append; an attachment identity already recorded is kept unchanged.</summary>
     public IReadOnlyList<AgentContextAttachment> Context { get; init; } = [];
     /// <summary>The paused turn to record, or null to keep the recorded one (see <see cref="RemovePausedTurn"/>).</summary>
-    public AgentPausedTurn? PausedTurn { get; init; }
+    public AgentPausedTurnRecord? PausedTurn { get; init; }
     /// <summary>Removes the recorded paused turn. Ignored when <see cref="PausedTurn"/> is set.</summary>
     public bool RemovePausedTurn { get; init; }
     /// <summary>Proposal records to insert or replace by proposal identity.</summary>

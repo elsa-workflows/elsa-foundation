@@ -280,11 +280,14 @@ internal sealed class DefaultAgentTurnOrchestrator(
             {
                 // Delegated SDK functions capture their initial context, and a host provider can
                 // request several calls in one batch. Neither snapshot admits a later operation.
-                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken));
+                var messages = await TrackAsync(() => sessions.ListMessagesAsync(sessionId, dispatchToken));
+                // One authorization pass, up to the checkpoint write below.
+                var beforeWrite = new AgentAdmissionPass();
+                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, messages, beforeWrite, dispatchToken));
                 if (historical is not null) return new(null, historical, true);
-                historical = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, dispatchToken));
+                historical = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, beforeWrite, dispatchToken));
                 if (historical is not null) return new(null, historical, true);
-                var admission = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, false, false, dispatchToken));
+                var admission = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, false, false, beforeWrite, dispatchToken));
                 if (!admission.Succeeded || admission.Value is null) return new(null, admission.Error, true);
                 prepared = prepared with { Context = admission.Value.Attachments, Diagnostics = admission.Value.Diagnostics };
                 var admittedTools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, dispatchToken), dispatchToken);
@@ -300,15 +303,17 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 if (await TrackAsync(async () => await CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, dispatchToken)) is { } checkpointError)
                     return new(null, checkpointError, true);
                 // Persistence can await arbitrary store I/O. It grants no authority to use the
-                // earlier projection after that await, and cannot silently refresh this intent.
-                var current = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, false, false, dispatchToken));
+                // earlier projection after that await, and cannot silently refresh this intent:
+                // the write ended the pass, and a new one admits everything again.
+                var afterWrite = new AgentAdmissionPass();
+                var current = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, false, false, afterWrite, dispatchToken));
                 if (!current.Succeeded || current.Value is null) return new(null, current.Error, true);
                 if (!SameContextBindings(current.Value.Attachments, prepared.Context))
                     return new(null, new("agent.tool.context_changed", "The admitted resource context changed. Submit fresh context before another operation.", 409), true);
                 admittedTools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, dispatchToken), dispatchToken);
                 if (!admittedTools.Any(tool => string.Equals(tool.Descriptor.Name, invocation.ToolName, StringComparison.OrdinalIgnoreCase)))
                     return new(null, new("agent.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
-                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, dispatchToken)) is { } postWriteDenial)
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, afterWrite, dispatchToken)) is { } postWriteDenial)
                     return new(null, postWriteDenial, true);
                 return new(invocation with { Context = prepared.Context }, null);
             }, async (invocation, result, dispatchToken) =>
@@ -317,17 +322,20 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 // provider errors and an empty assistant response cannot erase its provenance.
                 await boundary.CallAsync("record-tool-result", () => RecordToolResultAsync(sessionId, invocation.Context, result));
                 observedResults.Add(result);
-                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken));
+                var messages = await TrackAsync(() => sessions.ListMessagesAsync(sessionId, dispatchToken));
+                // The tool execution and its recorded result ended the earlier pass; this one lasts until the checkpoint write.
+                var beforeWrite = new AgentAdmissionPass();
+                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, messages, beforeWrite, dispatchToken));
                 if (historical is not null) return historical;
-                historical = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, dispatchToken));
+                historical = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, beforeWrite, dispatchToken));
                 if (historical is not null) return historical;
                 var admission = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults,
-                    receiptOnly || result.Receipt is not null, false, dispatchToken));
+                    receiptOnly || result.Receipt is not null, false, beforeWrite, dispatchToken));
                 if (!admission.Succeeded || admission.Value is null) return admission.Error;
                 if (boundary.Call("retain-result-snapshot", () => disclosures.Add(invocation.Context, [result]), dispatchToken) is { } boundError) return boundError;
                 if (await TrackAsync(async () => await CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, dispatchToken)) is { } checkpointError)
                     return checkpointError;
-                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, dispatchToken)) is { } postWriteDenial)
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, new AgentAdmissionPass(), dispatchToken)) is { } postWriteDenial)
                     return postWriteDenial;
                 receiptOnly |= result.Receipt is not null;
                 prepared = prepared with { Context = admission.Value.Attachments, Diagnostics = admission.Value.Diagnostics, IsContinuation = receiptOnly };
@@ -355,7 +363,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
             if (provider is IAgentHarness harness)
             {
-                var dependencyError = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, token))
+                var dependencyError = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, new AgentAdmissionPass(), token))
                     ?? boundary.Call("retain-provider-snapshot", () => disclosures.Add(prepared.Context, prepared.PendingResults), token);
                 if (dependencyError is not null)
                 {
@@ -378,8 +386,10 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
                     yield break;
                 }
+                // The checkpoint write ended the pass; the provider call ends this one.
+                var harnessPass = new AgentAdmissionPass();
                 var currentTools = await boundary.CallAsync("discover-current-tools",
-                    () => GetCurrentAdmittedToolsAsync(session, prepared, source, observedResults, token), token);
+                    () => GetCurrentAdmittedToolsAsync(session, prepared, source, observedResults, harnessPass, token), token);
                 if (!currentTools.Succeeded || currentTools.Value is null)
                 {
                     var error = currentTools.Error!;
@@ -387,7 +397,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield break;
                 }
                 tools = currentTools.Value;
-                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, token)) is { } postWriteDenial)
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, harnessPass, token)) is { } postWriteDenial)
                 {
                     yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
                     yield break;
@@ -461,10 +471,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         : Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, maxSteps));
                     yield break;
                 }
-                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, token), token));
-                historical ??= await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, token));
+                var messages = await TrackAsync(() => sessions.ListMessagesAsync(sessionId, token));
+                // The previous provider call or tool execution ended the earlier pass; this one lasts until the checkpoint write.
+                var stepPass = new AgentAdmissionPass();
+                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, messages, stepPass, token));
+                historical ??= await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, stepPass, token));
                 var refreshed = historical is null
-                    ? await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, prepared.IsContinuation, false, token))
+                    ? await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, prepared.IsContinuation, false, stepPass, token))
                     : new AgentResult<AgentContextContribution>(null, historical);
                 if (!refreshed.Succeeded || refreshed.Value is null)
                 {
@@ -496,8 +509,10 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
                     yield break;
                 }
+                // The checkpoint write ended the step's pass; everything is admitted again until the provider call.
+                var providerPass = new AgentAdmissionPass();
                 var currentTools = await boundary.CallAsync("discover-current-tools",
-                    () => GetCurrentAdmittedToolsAsync(session, prepared, source, observedResults, token), token);
+                    () => GetCurrentAdmittedToolsAsync(session, prepared, source, observedResults, providerPass, token), token);
                 if (!currentTools.Succeeded || currentTools.Value is null)
                 {
                     var error = currentTools.Error!;
@@ -505,7 +520,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield break;
                 }
                 tools = currentTools.Value;
-                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, token)) is { } postWriteDenial)
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, providerPass, token)) is { } postWriteDenial)
                 {
                     yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
                     yield break;
@@ -960,7 +975,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             rememberSource(source, true, paused.ProposalId);
             if (!source.HasDisclosureProvenance)
                 return Rejected(source, "agent.history.provenance_unavailable", "The retained turn predates complete disclosure provenance. Start a fresh session.", 409);
-            if (!PauseHistoryMatches(paused))
+            if (!AgentDisclosureHistory.PauseHistoryMatches(paused))
                 return Rejected(source, "agent.history.provenance_unavailable", "The paused transcript has incomplete disclosure history. Its accepted operation and receipt remain retained and cannot be replayed.", 409) with { KeepPause = true };
             // Reading the result also advances an expired dispatched client request to explicit
             // uncertainty. Do that before checking pending state, including on stream reconnect.
@@ -983,13 +998,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 }
             }
             var results = paused.DisclosureResults.Append(result).ToArray();
-            var historyError = await AuthorizeHistoryAsync(session, messages.Where(x => x.Id != source.Id), cancellationToken);
+            // Recording the receipt above was a write; the continuation's one pass starts after it.
+            var pass = new AgentAdmissionPass();
+            var historyError = await AuthorizeHistoryAsync(session, messages.Where(x => x.Id != source.Id), pass, cancellationToken);
             if (historyError is not null) return Rejected(source, historyError) with { KeepPause = historyError.StatusCode >= 500 };
-            historyError = await AuthorizeDisclosuresAsync(session, paused.DisclosureHistory!, cancellationToken);
+            historyError = await AuthorizeDisclosuresAsync(session, paused.DisclosureHistory!, pass, cancellationToken);
             if (historyError is not null) return Rejected(source, historyError) with { KeepPause = historyError.StatusCode >= 500 };
             var cumulative = DisclosureHistoryFor(messages, paused.DisclosureHistory);
             if (cumulative.Error is not null) return Rejected(source, cumulative.Error) with { KeepPause = true };
-            var admission = await AdmitAsync(session, paused.Context, results, true, false, cancellationToken);
+            var admission = await AdmitAsync(session, paused.Context, results, true, false, pass, cancellationToken);
             if (!admission.Succeeded || admission.Value is null) return Rejected(source, admission.Error!) with { KeepPause = admission.Error!.StatusCode >= 500 };
             var history = Append(paused.History, new(AgentRole.Tool, JsonSerializer.Serialize(result, JsonOptions), result.ToolCallId, result.ToolName));
             return new(source, history, [result], 0, admission.Value.Attachments, true, null)
@@ -1000,11 +1017,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
         rememberSource(latest, false, null);
         if (!latest.HasDisclosureProvenance)
             return Rejected(latest, "agent.history.provenance_unavailable", "The current message store does not preserve complete disclosure provenance. Start a fresh supported session.", 409);
-        var priorError = await AuthorizeHistoryAsync(session, messages.Where(x => x.Id != latest.Id), cancellationToken);
+        // A new prompt's one pass: its history and its current context, before the start is written.
+        var promptPass = new AgentAdmissionPass();
+        var priorError = await AuthorizeHistoryAsync(session, messages.Where(x => x.Id != latest.Id), promptPass, cancellationToken);
         if (priorError is not null) return Rejected(latest, priorError);
         var inherited = DisclosureHistoryFor(messages);
         if (inherited.Error is not null) return Rejected(latest, inherited.Error);
-        var current = await AdmitAsync(session, latest.Context, [], false, false, cancellationToken);
+        var current = await AdmitAsync(session, latest.Context, [], false, false, promptPass, cancellationToken);
         if (!current.Succeeded || current.Value is null) return Rejected(latest, current.Error!);
         var initial = AcceptedProviderHistory(messages)
             .Where(x => x.Role != AgentRole.Assistant || x.Content.Length > 0 || x.DisclosureHistory is null)
@@ -1041,7 +1060,11 @@ internal sealed class DefaultAgentTurnOrchestrator(
         => auditSink?.EmitAsync(new(NewId(), AgentAuditEventKind.ProviderDiagnostic, sessionId, null, notice.Label, DateTimeOffset.UtcNow,
             new Dictionary<string, string> { ["code"] = notice.Code, ["turnId"] = turnId, ["providerId"] = providerId }), CancellationToken.None) ?? Task.CompletedTask;
 
-    private async Task<AgentError?> AuthorizeHistoryAsync(AgentSession session, IEnumerable<AgentMessage> messages, CancellationToken token)
+    /// <summary>
+    /// Re-admits the transcript's recorded evidence under current authority within <paramref name="pass"/>: each distinct
+    /// snapshot is admitted once however many recorded histories repeat it.
+    /// </summary>
+    private async Task<AgentError?> AuthorizeHistoryAsync(AgentSession session, IEnumerable<AgentMessage> messages, AgentAdmissionPass pass, CancellationToken token)
     {
         var protectedHistory = false;
         foreach (var message in messages)
@@ -1055,30 +1078,32 @@ internal sealed class DefaultAgentTurnOrchestrator(
             if (message.Role == AgentRole.Assistant)
             {
                 var requiresHistory = protectedHistory || message.Context.Count > 0 || message.ToolResults.Count > 0;
-                if (message.DisclosureHistory is null && requiresHistory || message.DisclosureHistory is not null && !AssistantHistoryMatches(message))
+                if (message.DisclosureHistory is null && requiresHistory || message.DisclosureHistory is not null && !AgentDisclosureHistory.AssistantHistoryMatches(message))
                     return new("agent.history.provenance_unavailable", "Historical assistant content has incomplete disclosure history. Start a fresh supported session.", 409);
             }
             if (message.DisclosureHistory is { } disclosures)
             {
                 if (disclosures.Count > 0) protectedHistory = true;
-                var historyError = await AuthorizeDisclosuresAsync(session, disclosures, token);
+                var historyError = await AuthorizeDisclosuresAsync(session, disclosures, pass, token);
                 if (historyError is not null) return historyError;
             }
             if (message.Context.Count == 0 && message.ToolResults.Count == 0) continue;
             protectedHistory = true;
-            var admitted = await AdmitAsync(session, message.Context, message.ToolResults, false, true, token);
+            var admitted = await AdmitAsync(session, message.Context, message.ToolResults, false, true, pass, token);
             if (!admitted.Succeeded) return admitted.Error;
         }
         return null;
     }
 
-    private async Task<AgentError?> AuthorizeDisclosuresAsync(AgentSession session, IReadOnlyList<AgentDisclosureSnapshot> history, CancellationToken token)
+    private async Task<AgentError?> AuthorizeDisclosuresAsync(AgentSession session, IReadOnlyList<AgentDisclosureSnapshot> history,
+        AgentAdmissionPass pass, CancellationToken token)
     {
         try
         {
             foreach (var snapshot in history)
             {
-                var admitted = await AdmitAsync(session, snapshot.Context, snapshot.ToolResults, false, true, token);
+                var admitted = await AdmitAsync(session, snapshot.Context, snapshot.ToolResults, false, true, pass, token,
+                    AgentDisclosureHistory.Identity(snapshot));
                 if (!admitted.Succeeded) return admitted.Error;
             }
             return null;
@@ -1105,23 +1130,21 @@ internal sealed class DefaultAgentTurnOrchestrator(
         return (history.Snapshots, null);
     }
 
-    private static bool AssistantHistoryMatches(AgentMessage message)
-    {
-        try
-        {
-            return message.DisclosureHistory is not null && message.HasDisclosureProvenance
-                && message.DeliveryFingerprint == AgentDisclosureHistory.MessageFingerprint(message.Content, message.Context, message.ToolResults, message.DisclosureHistory);
-        }
-        catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or NotSupportedException) { return false; }
-    }
-
-    private static bool PauseHistoryMatches(AgentPausedTurn state)
-    {
-        try { return state.DisclosureHistory is not null && state.DisclosureHistoryFingerprint == AgentDisclosureHistory.PauseFingerprint(state); }
-        catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or NotSupportedException) { return false; }
-    }
-
+    /// <summary>
+    /// Asks the owning sources to admit one snapshot under current authority. Within <paramref name="pass"/> a snapshot
+    /// already admitted with the same flags is not asked again; its admission is returned as obtained. <paramref name="identity"/>
+    /// is the snapshot's known identity, computed here when absent.
+    /// </summary>
     private async Task<AgentResult<AgentContextContribution>> AdmitAsync(AgentSession session,
+        IReadOnlyCollection<AgentContextAttachment> context, IReadOnlyList<AgentToolResult> results,
+        bool continuation, bool historical, AgentAdmissionPass pass, CancellationToken token, string? identity = null)
+    {
+        identity ??= AgentDisclosureHistory.TryIdentity(context, results);
+        if (pass.Find(identity, continuation, historical) is { } admitted) return admitted;
+        return pass.Remember(identity, continuation, historical, await AdmitOnceAsync(session, context, results, continuation, historical, token));
+    }
+
+    private async Task<AgentResult<AgentContextContribution>> AdmitOnceAsync(AgentSession session,
         IReadOnlyCollection<AgentContextAttachment> context, IReadOnlyList<AgentToolResult> results,
         bool continuation, bool historical, CancellationToken token)
     {
@@ -1171,10 +1194,10 @@ internal sealed class DefaultAgentTurnOrchestrator(
         => Rejected(source, new AgentError(code, message, status));
 
     private async Task<AgentResult<IReadOnlyCollection<IAgentTool>>> GetCurrentAdmittedToolsAsync(AgentSession session,
-        PreparedTurn prepared, AgentMessage source, IReadOnlyList<AgentToolResult> results, CancellationToken token)
+        PreparedTurn prepared, AgentMessage source, IReadOnlyList<AgentToolResult> results, AgentAdmissionPass pass, CancellationToken token)
     {
         if (prepared.IsContinuation) return AgentResult<IReadOnlyCollection<IAgentTool>>.Success([]);
-        var current = await AdmitAsync(session, source.Context, results, false, false, token);
+        var current = await AdmitAsync(session, source.Context, results, false, false, pass, token);
         if (!current.Succeeded || current.Value is null)
             return new(null, current.Error ?? new("agent.context.incomplete", "Current module tool admission is unavailable.", 409));
         // The current projection determines tool scopes/authority only. It does not replace the
@@ -1226,7 +1249,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             // The pause is retained whatever happens to the turn's token; a cancelled turn still keeps its paused operation.
             await stateStore.SaveAsync(state, CancellationToken.None);
             var retained = await stateStore.FindAsync(sessionId, CancellationToken.None);
-            if (retained is not null && PauseHistoryMatches(retained)
+            if (retained is not null && AgentDisclosureHistory.PauseHistoryMatches(retained)
                 && AgentInvocationIntegrity.Digest(retained) == AgentInvocationIntegrity.Digest(state)) return null;
         }
         catch (AgentContributionException) { throw; }

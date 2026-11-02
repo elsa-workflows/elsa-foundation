@@ -95,7 +95,9 @@ public static class AgentApi
 
     /// <summary>
     /// Any route on a session another process owns answers 409 agent.session.owned_elsewhere with a retry hint; a session
-    /// this process lost during the call answers 409 agent.session.ownership_lost. Nothing was applied in either case.
+    /// this process lost during the call answers 409 agent.session.ownership_lost; a session whose recorded state is
+    /// unreadable or fails verification answers 409 agent.session.unavailable_state with its reason. Nothing was applied in
+    /// any case. Session authorization runs on the plain owner columns first, so only the owner reaches these outcomes.
     /// </summary>
     private static async Task DispatchAsync(HttpContext context, Func<HttpContext, Task> dispatch)
     {
@@ -107,9 +109,17 @@ public static class AgentApi
             await WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Failure(OwnershipError(ownership)),
                 AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse, StatusCodes.Status409Conflict);
         }
+        catch (Exception failure) when (AgentSessionUnavailableException.Find(failure) is { } unavailable && !context.Response.HasStarted)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Failure(UnavailableError(unavailable)),
+                AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse, StatusCodes.Status409Conflict);
+        }
     }
 
     private static AgentError OwnershipError(AgentSessionOwnershipException ownership) => new(ownership.Code, ownership.Message, StatusCodes.Status409Conflict);
+
+    private static AgentError UnavailableError(AgentSessionUnavailableException unavailable)
+        => new(AgentSessionUnavailableException.Code, unavailable.Message, StatusCodes.Status409Conflict);
 
     private static long? RetryAfterSeconds(HttpContext context, AgentSessionOwnershipException ownership)
     {
@@ -547,6 +557,10 @@ public static class AgentApi
         {
             // Ownership is reported to the session's owner explicitly; the turn's recorded state is unchanged here.
             await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, OwnershipError(ownership), DateTimeOffset.UtcNow));
+        }
+        catch (Exception failure) when (AgentSessionUnavailableException.Find(failure) is { } unavailable)
+        {
+            await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, UnavailableError(unavailable), DateTimeOffset.UtcNow));
         }
         catch (AgentContributionException failure)
         {

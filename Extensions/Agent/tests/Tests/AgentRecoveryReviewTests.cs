@@ -144,7 +144,7 @@ public sealed class AgentRecoveryReviewTests
         try { await running.WaitAsync(HandoffTimeout); }
         catch (AgentContributionException) { }
 
-        var recorded = (await harness.Store.LoadAsync(session.Id))!.Messages.Single(x => x.Id == prompt.Id);
+        var recorded = (await harness.Store.LoadAsync(session.Id))!.Messages.Single(x => x.Message.Id == prompt.Id).Message;
         Assert.Equal((AgentMessageStatus.Cancelled, AgentMessageStatusReasons.Interrupted), (recorded.Status, recorded.StatusReason));
     }
 

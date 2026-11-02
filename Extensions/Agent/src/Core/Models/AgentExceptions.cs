@@ -48,3 +48,26 @@ public sealed class AgentSessionOwnershipException(string sessionId, string code
         _ => Find(exception.InnerException)
     };
 }
+
+/// <summary>
+/// Preview: a session's recorded state is unreadable, corrupt or incompatible (FR-018), for example a recorded disclosure
+/// snapshot whose text no longer matches its digest. Nothing was hydrated, settled or changed; the session is
+/// unavailable until its record is repaired. <see cref="Reason"/> names what failed verification.
+/// </summary>
+public sealed class AgentSessionUnavailableException(string sessionId, string reason)
+    : InvalidOperationException($"The recorded state of agent session '{sessionId}' is unavailable ({reason}); nothing was changed.")
+{
+    public const string Code = "agent.session.unavailable_state";
+
+    public string SessionId { get; } = sessionId;
+    public string Reason { get; } = reason;
+
+    /// <summary>The unavailable-state refusal anywhere in a causal chain, including wrapped and aggregated causes.</summary>
+    public static AgentSessionUnavailableException? Find(Exception? exception) => exception switch
+    {
+        null => null,
+        AgentSessionUnavailableException unavailable => unavailable,
+        AggregateException aggregate => aggregate.InnerExceptions.Select(Find).FirstOrDefault(x => x is not null),
+        _ => Find(exception.InnerException)
+    };
+}

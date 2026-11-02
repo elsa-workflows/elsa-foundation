@@ -241,7 +241,7 @@ public sealed class AgentRecoveryRestartTests
         // The crashed host's turn resumes later; nothing it records is accepted under the superseded fence.
         held.Release.SetResult();
         await Assert.ThrowsAnyAsync<Exception>(() => running.WaitAsync(HandoffTimeout));
-        Assert.Equal(AgentMessageStatus.Cancelled, (await harness.Store.LoadAsync(session.Id))!.Messages.Single(x => x.Id == prompt.Id).Status);
+        Assert.Equal(AgentMessageStatus.Cancelled, (await harness.Store.LoadAsync(session.Id))!.Messages.Single(x => x.Message.Id == prompt.Id).Message.Status);
         Assert.Equal(0, harness.Module.Dispatches);
     }
 

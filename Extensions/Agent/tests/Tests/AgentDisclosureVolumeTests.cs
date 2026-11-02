@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Services;
+using Elsa.Api.AspNetCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 
@@ -19,22 +20,174 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
     private const string Marker = "volume-marker:";
     private const int Turns = 40;
 
+    /// <remarks>
+    /// T023 recorded the baseline on the earlier representation, where every checkpoint stored the complete cumulative
+    /// list and every pass re-admitted each stored copy: from turn 20 to turn 40 the stored copies went 318 to 1038 and
+    /// the largest pass 306 to 1016, with 1966 repeated admissions within the passes of the last turn.
+    /// </remarks>
     [Fact]
-    public async Task Stored_snapshots_and_owner_admissions_per_pass_grow_quadratically_with_checkpoints()
+    public async Task Stored_snapshots_and_owner_admissions_per_pass_grow_with_distinct_disclosures_not_with_checkpoints()
     {
         var measured = await MeasureAsync(Turns);
 
-        // Each turn writes one checkpoint and one final journal; every one of them stores the complete cumulative list.
+        // Each turn writes one checkpoint and one final journal, and every one of them references the cumulative history.
         Assert.True(measured[^1].Checkpoints >= 40);
         var half = measured[Turns / 2 - 1];
         var full = measured[^1];
-        // Quadratic: the second half of the session adds more than twice what the first half added.
-        Assert.True(full.StoredCopies - half.StoredCopies > 2 * half.StoredCopies,
-            $"stored copies {half.StoredCopies} -> {full.StoredCopies}");
-        // One pass re-admits every stored copy, so doubling the session more than triples its largest pass.
-        Assert.True(full.LargestPass > 3 * half.LargestPass, $"largest pass {half.LargestPass} -> {full.LargestPass}");
-        // And within one pass the owner is asked to admit the same snapshot again and again.
-        Assert.True(full.RepeatedInPass > full.DistinctSnapshots, $"repeated {full.RepeatedInPass}, distinct {full.DistinctSnapshots}");
+        // Each distinct snapshot is recorded once, however many checkpoints reference it.
+        Assert.All(measured, item => Assert.Equal(item.DistinctSnapshots, item.RecordedSnapshots));
+        // Linear: the second half of the session adds no more than the first half did.
+        Assert.True(full.StoredCopies - half.StoredCopies <= half.StoredCopies, $"stored copies {half.StoredCopies} -> {full.StoredCopies}");
+        // Within one pass the owner is asked once per distinct snapshot, so a pass grows with the distinct snapshots only.
+        Assert.All(measured, item => Assert.Equal(0, item.RepeatedInPass));
+        Assert.All(measured, item => Assert.True(item.LargestPass <= item.DistinctSnapshots + 1, $"turn {item.Turn}: largest pass {item.LargestPass}"));
+    }
+
+    [Fact]
+    public async Task Each_checkpoint_write_ends_the_pass_so_withdrawn_authority_stops_the_provider_call()
+    {
+        CountingRecordStore? store = null;
+        var source = new LedgerSource(() => store!.Writes);
+        using var harness = new AgentRestartHarness(clock => store = new(new InMemoryAgentSessionRecordStore(clock)),
+            services => services.AddSingleton<IAgentContextProvider>(source));
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        source.Current = "repeated";
+        await PostAsync(host, session, "First question");
+        var start = store!.Writes;
+        source.Admissions.Clear();
+        Assert.Equal(AgentStreamEventKind.Completed, (await host.StreamAsync(session))[^1].Kind);
+        // Writes: the prompt's start (start + 1), the checkpoint (start + 2), then the final journal. Everything the step
+        // admitted before the checkpoint write is asked again after it, before the provider is called.
+        var beforeWrite = source.Admissions.Where(x => x.Epoch == start + 1).Select(x => x.Key).ToHashSet();
+        var afterWrite = source.Admissions.Where(x => x.Epoch == start + 2).Select(x => x.Key).ToHashSet();
+        Assert.NotEmpty(beforeWrite);
+        Assert.Superset(beforeWrite, afterWrite);
+
+        await PostAsync(host, session, "Second question");
+        start = store.Writes;
+        var turns = harness.Provider.Turns;
+        // The owner withdraws its authority right after the checkpoint write.
+        source.Deny = epoch => epoch >= start + 2;
+
+        var events = await host.StreamAsync(session);
+
+        Assert.Contains(events, x => x.Kind == AgentStreamEventKind.Error);
+        Assert.DoesNotContain(events, x => x.Kind == AgentStreamEventKind.Completed);
+        Assert.Equal(turns, harness.Provider.Turns);
+    }
+
+    [Fact]
+    public async Task Repeated_snapshots_keep_fingerprints_retries_and_the_paused_continuation_stable_across_a_restart()
+    {
+        var source = new LedgerSource(() => 0);
+        using var harness = new AgentRestartHarness(configure: services => services.AddSingleton<IAgentContextProvider>(source));
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        foreach (var value in new[] { "repeated", "new-1", "repeated", "new-2" })
+        {
+            source.Current = value;
+            await PostAsync(host, session, $"Question about {value}");
+            Assert.Equal(AgentStreamEventKind.Completed, (await host.StreamAsync(session))[^1].Kind);
+        }
+        source.Current = "repeated";
+        var retried = await PostAsync(host, session, "mutate the resource", "request-1");
+        var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(await host.StreamAsync(session), x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        Assert.True((await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value!.Executed);
+        var messages = await host.Sessions.ListMessagesAsync(session.Id);
+        var paused = (await host.Pauses.FindAsync(session.Id))!;
+        var record = (await harness.Store.LoadAsync(session.Id))!;
+        // Three distinct snapshots, recorded once each, behind many references.
+        Assert.Equal(3, record.Snapshots.Count);
+        Assert.True(record.Messages.Sum(x => x.DisclosureDigests?.Count ?? 0) + record.PausedTurn!.DisclosureDigests!.Count > 3 * record.Snapshots.Count);
+
+        host = harness.Restart();
+
+        // Every message, its delivery fingerprint and the pause fingerprint read back byte-identical.
+        var recovered = await host.Sessions.ListMessagesAsync(session.Id);
+        Assert.Equal(messages.Select(x => AgentInvocationIntegrity.Digest(x)), recovered.Select(x => AgentInvocationIntegrity.Digest(x)));
+        var resumed = (await host.Pauses.FindAsync(session.Id))!;
+        Assert.Equal(paused.DisclosureHistoryFingerprint, resumed.DisclosureHistoryFingerprint);
+        Assert.Equal(AgentInvocationIntegrity.Digest(paused), AgentInvocationIntegrity.Digest(resumed));
+        // An identical retry returns the original message; the paused turn continues once and nothing runs twice.
+        Assert.Equal(retried.Id, (await PostAsync(host, session, "mutate the resource", "request-1")).Id);
+        var turns = harness.Provider.Turns;
+        Assert.Equal(AgentStreamEventKind.Completed, (await host.StreamAsync(session))[^1].Kind);
+        Assert.Equal(turns + 1, harness.Provider.Turns);
+        Assert.Equal(1, harness.Module.Effects);
+        // The continuation adds exactly one snapshot, its receipt; the restart added none.
+        Assert.Equal(4, (await harness.Store.LoadAsync(session.Id))!.Snapshots.Count);
+    }
+
+    [Theory]
+    [InlineData("snapshot-text", "snapshot_digest_mismatch")]
+    [InlineData("snapshot-missing", "snapshot_missing")]
+    [InlineData("history-order", "history_fingerprint_mismatch")]
+    [InlineData("delivery-fingerprint", "assistant_history_mismatch")]
+    [InlineData("pause-fingerprint", "pause_history_mismatch")]
+    public async Task Recorded_disclosure_state_that_fails_verification_makes_the_session_unavailable_with_no_effect(string tampering, string reason)
+    {
+        TamperingRecordStore? store = null;
+        var source = new LedgerSource(() => 0);
+        using var harness = new AgentRestartHarness(clock => store = new(new InMemoryAgentSessionRecordStore(clock)), services =>
+        {
+            services.AddRouting().AddElsaEndpoints();
+            services.AddSingleton<IAgentContextProvider>(source);
+        });
+        var session = await harness.Host.CreateAsync();
+        foreach (var value in new[] { "new-1", "new-2" })
+        {
+            source.Current = value;
+            await PostAsync(harness.Host, session, $"Question about {value}");
+            Assert.Equal(AgentStreamEventKind.Completed, (await harness.Host.StreamAsync(session))[^1].Kind);
+        }
+        await PostAsync(harness.Host, session, "mutate the resource");
+        Assert.Contains(await harness.Host.StreamAsync(session), x => x.Kind == AgentStreamEventKind.ProposalCreated);
+        // Past the review deadline: a readable record would be settled Expired when it is hydrated.
+        harness.Clock.Advance(TimeSpan.FromMinutes(6));
+        var host = harness.Restart();
+        var turns = harness.Provider.Turns;
+        store!.Tamper = record => Tamper(record, tampering);
+
+        var (status, body) = await AgentRecoveryApi.SendAsync(host, "GetSession", AgentRecoveryApi.Owner(session),
+            new Dictionary<string, string> { ["sessionId"] = session.Id });
+
+        AgentRecoveryApi.AssertFailure(status, body, 409, AgentSessionUnavailableException.Code);
+        Assert.Contains(reason, body, StringComparison.Ordinal);
+        // No effect: nothing settled or audited, no provider call, and the lease the hydration took was given back.
+        var recorded = (await store.LoadUntamperedAsync(session.Id))!;
+        Assert.Equal(AgentActionProposalStatus.AwaitingApproval, recorded.Proposals.Single().Proposal.Status);
+        Assert.Null(recorded.LeaseExpiresAt);
+        Assert.Empty(await host.AuditAsync(session));
+        Assert.Equal((turns, 0), (harness.Provider.Turns, harness.Module.Dispatches));
+        Assert.Equal(409, (await AgentRecoveryApi.SendAsync(host, "GetSession", AgentRecoveryApi.Owner(session),
+            new Dictionary<string, string> { ["sessionId"] = session.Id })).Status);
+
+        // The same record, read back unchanged, hydrates and settles normally.
+        store.Tamper = null;
+        Assert.Equal(200, (await AgentRecoveryApi.SendAsync(host, "GetSession", AgentRecoveryApi.Owner(session),
+            new Dictionary<string, string> { ["sessionId"] = session.Id })).Status);
+        Assert.Equal(AgentActionProposalStatus.Expired, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+    }
+
+    private static AgentSessionRecord Tamper(AgentSessionRecord record, string tampering)
+    {
+        var assistant = record.Messages.First(x => x.Message.Role == AgentRole.Assistant && x.DisclosureDigests is { Count: > 1 });
+        AgentSessionRecord Replace(AgentMessageRecord changed)
+            => record with { Messages = record.Messages.Select(x => x.Message.Id == changed.Message.Id ? changed : x).ToArray() };
+        return tampering switch
+        {
+            "snapshot-text" => record with
+            {
+                Snapshots = record.Snapshots.Select((x, index) => index == 0 ? x with { Canonical = x.Canonical.Replace(Marker, Marker + "changed-", StringComparison.Ordinal) } : x).ToArray()
+            },
+            "snapshot-missing" => record with { Snapshots = record.Snapshots.Skip(1).ToArray() },
+            "history-order" => Replace(assistant with { DisclosureDigests = assistant.DisclosureDigests!.Reverse().ToArray() }),
+            "delivery-fingerprint" => Replace(assistant with { Message = assistant.Message with { DeliveryFingerprint = "changed" } }),
+            "pause-fingerprint" => record with { PausedTurn = record.PausedTurn! with { Turn = record.PausedTurn.Turn with { DisclosureHistoryFingerprint = "changed" } } },
+            _ => throw new ArgumentOutOfRangeException(nameof(tampering))
+        };
     }
 
     /// <summary>Runs <paramref name="turns"/> turns and measures the session after each one.</summary>
@@ -58,25 +211,27 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
             var record = (await harness.Store.LoadAsync(session.Id))!;
             var passes = source.Admissions.GroupBy(x => x.Epoch).ToArray();
             measured.Add(new(turn,
-                record.Messages.Count(x => x.Role == AgentRole.Assistant),
+                record.Messages.Count(x => x.Message.Role == AgentRole.Assistant),
                 Occurrences(JsonSerializer.Serialize(record), Marker),
                 passes.Max(x => x.Count()),
                 passes.Sum(x => x.Count() - x.Select(y => y.Key).Distinct().Count()),
-                turn / 2 + 1));
+                // One new snapshot per odd turn, plus the repeated one from turn 2 on.
+                (turn + 1) / 2 + (turn >= 2 ? 1 : 0),
+                record.Snapshots.Count));
         }
         foreach (var item in measured.Where(x => x.Turn % 10 == 0 || x.Turn == 1))
-            output.WriteLine($"turn {item.Turn}: checkpoints {item.Checkpoints}, stored copies {item.StoredCopies}, largest pass {item.LargestPass}, repeated in pass {item.RepeatedInPass}");
+            output.WriteLine($"turn {item.Turn}: checkpoints {item.Checkpoints}, stored copies {item.StoredCopies}, recorded snapshots {item.RecordedSnapshots}, largest pass {item.LargestPass}, repeated in pass {item.RepeatedInPass}");
         return measured;
     }
 
-    private static async Task PostAsync(RecoveryHost host, AgentSession session, string text)
+    private static async Task<AgentMessage> PostAsync(RecoveryHost host, AgentSession session, string text, string? requestId = null)
     {
         var collected = await host.Services.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
             new(session.Id, SourceId, new Dictionary<string, string>()));
         Assert.True(collected.Succeeded, collected.Error?.Message);
         var context = collected.Value!.Attachments;
-        await host.Sessions.AddMessageAsync(session.Id, new(AgentRole.User, text, AgentMessageStatus.Pending, null,
-            context.Select(item => item.Id).ToArray(), context) { HasDisclosureProvenance = true });
+        return await host.Sessions.AddMessageAsync(session.Id, new(AgentRole.User, text, AgentMessageStatus.Pending, null,
+            context.Select(item => item.Id).ToArray(), context) { HasDisclosureProvenance = true, RequestId = requestId, DeliveryFingerprint = requestId });
     }
 
     private static int Occurrences(string text, string value)
@@ -92,7 +247,9 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
     /// <param name="LargestPass">The most owner admissions in one authorization pass of the latest turn.</param>
     /// <param name="RepeatedInPass">Admissions of the latest turn that repeated an identical request within the same pass.</param>
     /// <param name="DistinctSnapshots">The distinct snapshots disclosed so far.</param>
-    private sealed record Measurement(int Turn, int Checkpoints, int StoredCopies, int LargestPass, int RepeatedInPass, int DistinctSnapshots);
+    /// <param name="RecordedSnapshots">The snapshot records the session holds.</param>
+    private sealed record Measurement(int Turn, int Checkpoints, int StoredCopies, int LargestPass, int RepeatedInPass, int DistinctSnapshots,
+        int RecordedSnapshots);
 
     private sealed record Admission(long Epoch, string Key);
 
@@ -104,6 +261,8 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
     {
         internal string Current { get; set; } = "initial";
         internal List<Admission> Admissions { get; } = [];
+        /// <summary>Withdraws the owner's authority for admissions made after the given number of store writes.</summary>
+        internal Func<long, bool>? Deny { get; set; }
         public AgentContextProviderDescriptor Descriptor { get; } = new(SourceId, Module, "*", ["volume.resource"], ["1"], ["resource"]);
 
         public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
@@ -111,15 +270,43 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
 
         public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
         {
+            var epoch = writes();
             lock (Admissions)
-                Admissions.Add(new(writes(), AgentInvocationIntegrity.Digest(new { request.Context, request.Results, request.IsHistorical, request.IsReceiptContinuation })));
-            return ValueTask.FromResult(new AgentContextContribution(request.Context, []));
+                Admissions.Add(new(epoch, AgentInvocationIntegrity.Digest(new { request.Context, request.Results, request.IsHistorical, request.IsReceiptContinuation })));
+            return ValueTask.FromResult(Deny?.Invoke(epoch) == true
+                ? new AgentContextContribution([], [new(SourceId, "volume.withdrawn", "The owner withdrew its authority over this evidence.", true)])
+                : new AgentContextContribution(request.Context, []));
         }
 
         private static AgentContextAttachment Attachment(string value)
             => new("evidence", Module, "resource-1", "Owned resource", "volume.resource", AgentContextSensitivity.Internal, "selection",
                 "Evidence", new { value = Marker + value }, new Dictionary<string, string>())
             { ModuleId = Module, Target = new(Module, "resource", "resource-1", "revision-1") };
+    }
+
+    /// <summary>A forwarding record store whose loads can be altered, as corrupt or incompatible stored state would be.</summary>
+    private sealed class TamperingRecordStore(IAgentSessionRecordStore inner) : IAgentSessionRecordStore
+    {
+        public Func<AgentSessionRecord, AgentSessionRecord>? Tamper { get; set; }
+        public bool SupportsFencing => inner.SupportsFencing;
+
+        public async Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default)
+            => await inner.LoadAsync(sessionId, cancellationToken) is { } record && Tamper is { } tamper ? tamper(record) : await inner.LoadAsync(sessionId, cancellationToken);
+
+        public Task<AgentSessionRecord?> LoadUntamperedAsync(string sessionId) => inner.LoadAsync(sessionId);
+
+        public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default) => inner.WriteAsync(write, cancellationToken);
+        public Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default)
+            => inner.CreateAsync(record, ownerToken, cancellationToken);
+        public Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)
+            => inner.AcquireOwnershipAsync(sessionId, ownerToken, cancellationToken);
+        public Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default)
+            => inner.ReleaseOwnershipAsync(sessionId, fence, cancellationToken);
+        public Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default)
+            => inner.FindProposalSessionAsync(proposalId, cancellationToken);
+        public Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
+            => inner.ListOwnedAsync(query, cancellationToken);
+        public Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindOwnerAsync(sessionId, cancellationToken);
     }
 
     /// <summary>A forwarding record store that counts its writes.</summary>

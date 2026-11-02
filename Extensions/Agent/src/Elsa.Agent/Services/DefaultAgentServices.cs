@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Primitives.Identity;
@@ -140,6 +141,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             HasDisclosureProvenance = request.HasDisclosureProvenance || request.Role == AgentRole.User,
             DisclosureHistory = request.DisclosureHistory is null ? null : AgentDisclosureHistory.Freeze(request.DisclosureHistory)
         };
+        // Canonical records are computed before the row monitor is taken; only snapshots the session has not recorded are written.
+        var snapshots = message.DisclosureHistory?.Select(AgentDisclosureHistory.Record).ToArray() ?? [];
 
         var (accepted, inserted) = await CommitAsync<(AgentMessage Message, bool Inserted)>(sessionId, () => throw new InvalidOperationException($"Agent session '{sessionId}' was not found."), row =>
         {
@@ -170,11 +173,13 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             if (request.Role == AgentRole.User && messages.Any(x => x.Role == AgentRole.User && x.Status is AgentMessageStatus.Pending or AgentMessageStatus.Streaming))
                 throw new AgentContributionException("Another prompt remains pending in this session.");
             // Attribution is the policy current at this atomic insertion; a later change never relabels it.
-            var attributed = message with { AcceptedPolicy = row.State };
-            return new((attributed, true), new AgentSessionRecordWrite(sessionId, row.Fence) { Messages = [attributed] }, () =>
+            var attributed = row.Intern(message with { AcceptedPolicy = row.State });
+            var added = row.Unrecorded(snapshots);
+            return new((attributed, true), new AgentSessionRecordWrite(sessionId, row.Fence) { Messages = [ToRecord(attributed)], Snapshots = added }, () =>
             {
                 if (request.Role == AgentRole.User && request.Status == AgentMessageStatus.Pending)
                     row.Bind(row.NewClaim(AgentSessionClaimKind.Prompt, null), PromptKey(attributed.Id));
+                row.Recorded(attributed.DisclosureHistory);
                 messages.Add(attributed);
             });
         }, cancellationToken);
@@ -226,7 +231,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 if (message.Status != AgentMessageStatus.Pending || turns?.IsActive(row.Session.Id) == true)
                     return new(AgentResult<AgentMessage>.Failure("agent.message.not_pending", "The prompt is not waiting to start, so it cannot be withdrawn.", 409));
                 var planned = PlanMessageStatus(row, messageId, AgentMessageStatus.Pending, AgentMessageStatus.Cancelled, AgentMessageStatusReasons.Withdrawn);
-                return new(AgentResult<AgentMessage>.Success(planned.Write!.Messages[0]), planned.Write, planned.Apply);
+                // A prompt has no disclosure history, so its record holds the complete message.
+                return new(AgentResult<AgentMessage>.Success(planned.Write!.Messages[0].Message), planned.Write, planned.Apply);
             }, cancellationToken);
 
     /// <summary>The record store's owner-scoped list; it filters by owner before it orders and limits, and decodes no payload.</summary>
@@ -346,12 +352,20 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     /// recorded pause and the claim that keeps its policy never come apart.
     /// </summary>
     internal Task SavePausedTurnAsync(AgentPausedTurn state, CancellationToken cancellationToken = default)
-        => CommitAsync<bool>(state.SessionId, () => throw new InvalidOperationException($"Agent session '{state.SessionId}' was not found."),
-            row => new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { PausedTurn = state }, () =>
+    {
+        var snapshots = state.DisclosureHistory?.Select(AgentDisclosureHistory.Record).ToArray() ?? [];
+        return CommitAsync<bool>(state.SessionId, () => throw new InvalidOperationException($"Agent session '{state.SessionId}' was not found."), row =>
+        {
+            var interned = row.Intern(state);
+            var added = row.Unrecorded(snapshots);
+            return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { PausedTurn = ToRecord(interned), Snapshots = added }, () =>
             {
-                row.PausedTurn = state;
+                row.Recorded(interned.DisclosureHistory);
+                row.PausedTurn = interned;
                 EnsurePause(row);
-            }), cancellationToken);
+            });
+        }, cancellationToken);
+    }
 
     /// <summary>The session's recorded paused turn, after hydrating the session; null when there is none.</summary>
     internal async Task<AgentPausedTurn?> FindPausedTurnAsync(string sessionId, CancellationToken cancellationToken = default)
@@ -491,7 +505,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             Status = status, CompletedAt = terminal ? DateTimeOffset.UtcNow : null,
             StatusReason = reason ?? (status == AgentMessageStatus.Cancelled ? messages[index].StatusReason : null)
         };
-        return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Messages = [updated] }, () =>
+        return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Messages = [ToRecord(updated)] }, () =>
         {
             messages[index] = updated;
             // Releases only this exact prompt's claim, including a never-started Pending prompt.
@@ -532,15 +546,29 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         if (!ownership.Succeeded || ownership.Fence is null)
             throw new AgentSessionOwnershipException(sessionId, AgentSessionOwnershipException.OwnedElsewhere,
                 "Another host process currently owns this session's work. Retry after its lease lapses.", ownership.LeaseExpiresAt);
-        if (await _store.LoadAsync(sessionId, cancellationToken) is not { } record)
-            return null;
+        AgentSessionRecord? record;
+        HydratedHistory history;
+        try
+        {
+            if ((record = await _store.LoadAsync(sessionId, cancellationToken)) is null)
+                return null;
+            // Every snapshot, history and fingerprint is verified before anything is settled or acts on the row (FR-018).
+            history = HydratedHistory.Rebuild(record);
+        }
+        catch (Exception failure) when (failure is AgentSessionUnavailableException or JsonException)
+        {
+            // Nothing was settled; the lease this hydration took is given back so the refusal leaves no trace.
+            try { await _store.ReleaseOwnershipAsync(sessionId, ownership.Fence, CancellationToken.None); }
+            catch (Exception) { }
+            throw failure as AgentSessionUnavailableException ?? new AgentSessionUnavailableException(sessionId, "unreadable");
+        }
 
         // Recovery settles what the recorded facts already decide, in one write, before anything acts on the row.
-        var recovery = Recover(record, ownership.Fence, _clock.GetUtcNow());
+        var recovery = Recover(record, history.Messages, ownership.Fence, _clock.GetUtcNow());
         if (recovery.Write is { } write)
             await WriteThroughAsync(sessionId, null, write);
-        var row = new SessionRow(recovery.Record, ownership.Fence);
-        lock (row) RebuildClaims(row, recovery.Record);
+        var row = new SessionRow(recovery.Record.Session, ownership.Fence, recovery.Messages, recovery.Record.Context, history.PausedTurn, history.Snapshots);
+        lock (row) RebuildClaims(row, recovery.Messages, history.PausedTurn, recovery.Record.Proposals);
         LoadProposals(recovery.Record);
         row = _rows.GetOrAdd(sessionId, row);
         bool renew;
@@ -556,29 +584,29 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     /// prompt that was streaming without a pause is interrupted, and overdue or in-flight proposals settle. Settlement
     /// takes no proposal gate; it applies only to the recorded status it read.
     /// </summary>
-    private (AgentSessionRecord Record, AgentSessionRecordWrite? Write, IReadOnlyList<AgentAuditEvent> Audits) Recover(
-        AgentSessionRecord record, AgentSessionFence fence, DateTimeOffset now)
+    private (AgentSessionRecord Record, IReadOnlyList<AgentMessage> Messages, AgentSessionRecordWrite? Write, IReadOnlyList<AgentAuditEvent> Audits) Recover(
+        AgentSessionRecord record, IReadOnlyList<AgentMessage> hydrated, AgentSessionFence fence, DateTimeOffset now)
     {
         AgentSession? closed = null;
         if (record.Session.Status == AgentSessionStatus.Active && record.Session.ExpiresAt is { } expires && expires <= now)
             closed = record.Session with { Status = AgentSessionStatus.Expired, UpdatedAt = now };
-        var interrupted = record.Messages
-            .Where(x => x.Status == AgentMessageStatus.Streaming && x.Id != record.PausedTurn?.SourceMessageId)
+        var interrupted = hydrated
+            .Where(x => x.Status == AgentMessageStatus.Streaming && x.Id != record.PausedTurn?.Turn.SourceMessageId)
             .Select(x => x with { Status = AgentMessageStatus.Cancelled, CompletedAt = now, StatusReason = AgentMessageStatusReasons.Interrupted })
             .ToArray();
         // Each settlement writes from the version it read, so a concurrent change refuses it instead of being overwritten.
         var settlements = record.Proposals.Select(x => AgentProposalRecovery.Settle(x, now)).OfType<AgentProposalRecovery.Settlement>().ToArray();
         if (closed is null && interrupted.Length == 0 && settlements.Length == 0)
-            return (record, null, []);
+            return (record, hydrated, null, []);
 
-        var messages = record.Messages.Select(x => interrupted.FirstOrDefault(y => y.Id == x.Id) ?? x).ToArray();
+        var messages = hydrated.Select(x => interrupted.FirstOrDefault(y => y.Id == x.Id) ?? x).ToArray();
         var proposals = record.Proposals.Select(x => settlements.FirstOrDefault(y => y.Record.Proposal.Id == x.Proposal.Id) is { } settled
             ? settled.Record with { Version = settled.Record.Version + 1 } : x).ToArray();
-        var recovered = record with { Session = closed ?? record.Session, Messages = messages, Proposals = proposals };
+        var recovered = record with { Session = closed ?? record.Session, Proposals = proposals };
         var audits = settlements.Select(x => AgentProposalRecovery.Audit(x, now)).ToArray();
-        return (recovered, new AgentSessionRecordWrite(record.Session.Id, fence)
+        return (recovered, messages, new AgentSessionRecordWrite(record.Session.Id, fence)
         {
-            Session = closed, Messages = interrupted, Proposals = settlements.Select(x => x.Record).ToArray()
+            Session = closed, Messages = interrupted.Select(ToRecord).ToArray(), Proposals = settlements.Select(x => x.Record).ToArray()
         }, audits);
     }
 
@@ -587,13 +615,13 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     /// a paused turn, and a Proposal claim per unsettled prepared proposal with its deadline, dispatched when its request
     /// already left. Foreground and Preparation claims never survive a process.
     /// </summary>
-    private static void RebuildClaims(SessionRow row, AgentSessionRecord record)
+    private static void RebuildClaims(SessionRow row, IReadOnlyList<AgentMessage> messages, AgentPausedTurn? paused, IReadOnlyList<AgentProposalRecord> proposals)
     {
-        foreach (var prompt in record.Messages.Where(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending))
+        foreach (var prompt in messages.Where(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending))
             row.Bind(row.NewClaim(AgentSessionClaimKind.Prompt, null), PromptKey(prompt.Id));
-        if (record.PausedTurn is not null)
+        if (paused is not null)
             EnsurePause(row);
-        foreach (var proposal in record.Proposals.Select(x => x.Proposal))
+        foreach (var proposal in proposals.Select(x => x.Proposal))
         {
             if (proposal.PreparedInvocation is not { } prepared || InMemoryAgentProposalService.Settled(proposal)) continue;
             var claim = row.NewClaim(AgentSessionClaimKind.Proposal, prepared.ExpiresAt);
@@ -806,6 +834,63 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         DeniedCapabilityIds = Array.AsReadOnly(policy.DeniedCapabilityIds.ToArray())
     };
 
+    /// <summary>A message as the record store holds it: its disclosure history becomes ordered digests plus their fingerprint.</summary>
+    private static AgentMessageRecord ToRecord(AgentMessage message) => message.DisclosureHistory is not { } history
+        ? new(message)
+        : new(message with { DisclosureHistory = null })
+        {
+            DisclosureDigests = history.Select(AgentDisclosureHistory.Identity).ToArray(),
+            DisclosureHistoryFingerprint = AgentInvocationIntegrity.Digest(history)
+        };
+
+    /// <summary>The paused turn as the record store holds it; its pause fingerprint is kept verbatim.</summary>
+    private static AgentPausedTurnRecord ToRecord(AgentPausedTurn turn) => turn.DisclosureHistory is not { } history
+        ? new(turn)
+        : new(turn with { DisclosureHistory = null }) { DisclosureDigests = history.Select(AgentDisclosureHistory.Identity).ToArray() };
+
+    /// <summary>
+    /// A session's recorded histories rebuilt from their digest references (research R3): every snapshot's text still
+    /// digests to its recorded digest and reads back to the same snapshot; every message history matches its recorded
+    /// fingerprint; every assistant message and the paused turn still match their delivery and pause fingerprints. Any
+    /// mismatch makes the session unavailable (FR-018).
+    /// </summary>
+    private sealed record HydratedHistory(IReadOnlyList<AgentMessage> Messages, AgentPausedTurn? PausedTurn,
+        IReadOnlyDictionary<string, AgentDisclosureSnapshot> Snapshots)
+    {
+        public static HydratedHistory Rebuild(AgentSessionRecord record)
+        {
+            var sessionId = record.Session.Id;
+            var snapshots = new Dictionary<string, AgentDisclosureSnapshot>(StringComparer.Ordinal);
+            foreach (var recorded in record.Snapshots)
+                snapshots[recorded.Digest] = AgentDisclosureHistory.Rebuild(recorded)
+                    ?? throw new AgentSessionUnavailableException(sessionId, "snapshot_digest_mismatch");
+
+            IReadOnlyList<AgentDisclosureSnapshot>? History(IReadOnlyList<string>? digests)
+                => digests is null ? null : Array.AsReadOnly(digests.Select(digest => snapshots.GetValueOrDefault(digest)
+                    ?? throw new AgentSessionUnavailableException(sessionId, "snapshot_missing")).ToArray());
+
+            var messages = record.Messages.Select(recorded =>
+            {
+                var message = recorded.Message;
+                if (History(recorded.DisclosureDigests) is { } history)
+                {
+                    if (recorded.DisclosureHistoryFingerprint is not { } fingerprint || AgentInvocationIntegrity.Digest(history) != fingerprint)
+                        throw new AgentSessionUnavailableException(sessionId, "history_fingerprint_mismatch");
+                    message = message with { DisclosureHistory = history };
+                }
+                if (message.Role == AgentRole.Assistant && message.DisclosureHistory is not null && !AgentDisclosureHistory.AssistantHistoryMatches(message))
+                    throw new AgentSessionUnavailableException(sessionId, "assistant_history_mismatch");
+                return message;
+            }).ToArray();
+            var paused = record.PausedTurn is { } pause && History(pause.DisclosureDigests) is { } pausedHistory
+                ? pause.Turn with { DisclosureHistory = pausedHistory }
+                : record.PausedTurn?.Turn;
+            if (paused?.DisclosureHistory is not null && !AgentDisclosureHistory.PauseHistoryMatches(paused))
+                throw new AgentSessionUnavailableException(sessionId, "pause_history_mismatch");
+            return new(messages, paused, snapshots);
+        }
+    }
+
     private static string PromptKey(string messageId) => "prompt:" + messageId;
     private static string ProposalKey(string proposalId) => "proposal:" + proposalId;
 
@@ -823,12 +908,17 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         }
 
         /// <summary>Hydrates the recorded facts. Claims are never recorded; nothing is rebuilt from them here.</summary>
-        public SessionRow(AgentSessionRecord record, AgentSessionFence fence) : this(record.Session, fence)
+        public SessionRow(AgentSession session, AgentSessionFence fence, IEnumerable<AgentMessage> messages, IEnumerable<AgentContextAttachment> context,
+            AgentPausedTurn? pausedTurn, IReadOnlyDictionary<string, AgentDisclosureSnapshot> snapshots) : this(session, fence)
         {
-            Messages.AddRange(record.Messages);
-            Context.AddRange(record.Context);
-            PausedTurn = record.PausedTurn;
+            Messages.AddRange(messages);
+            Context.AddRange(context);
+            PausedTurn = pausedTurn;
+            foreach (var (digest, snapshot) in snapshots) _snapshots.Add(digest, snapshot);
         }
+
+        // The session's distinct recorded snapshots by digest. Every recorded history refers to these instances.
+        private readonly Dictionary<string, AgentDisclosureSnapshot> _snapshots = new(StringComparer.Ordinal);
 
         public AgentSession Session { get; set; }
         public AgentSessionFence Fence { get; }
@@ -836,6 +926,28 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         public List<AgentMessage> Messages { get; } = [];
         public List<AgentContextAttachment> Context { get; } = [];
         public AgentPausedTurn? PausedTurn { get; set; }
+
+        /// <summary>The records among <paramref name="snapshots"/> whose digest the session has not recorded yet, once each.</summary>
+        public AgentDisclosureSnapshotRecord[] Unrecorded(IEnumerable<AgentDisclosureSnapshotRecord> snapshots)
+            => snapshots.Where(x => !_snapshots.ContainsKey(x.Digest)).DistinctBy(x => x.Digest).ToArray();
+
+        /// <summary>After its write: interns the snapshots of an interned history that the session had not recorded yet.</summary>
+        public void Recorded(IReadOnlyList<AgentDisclosureSnapshot>? history)
+        {
+            foreach (var snapshot in history ?? [])
+                _snapshots.TryAdd(AgentDisclosureHistory.Identity(snapshot), snapshot);
+        }
+
+        /// <summary>The message with each recorded snapshot of its history replaced by the session's interned instance.</summary>
+        public AgentMessage Intern(AgentMessage message)
+            => message.DisclosureHistory is { } history ? message with { DisclosureHistory = Intern(history) } : message;
+
+        /// <inheritdoc cref="Intern(AgentMessage)"/>
+        public AgentPausedTurn Intern(AgentPausedTurn turn)
+            => turn.DisclosureHistory is { } history ? turn with { DisclosureHistory = Intern(history) } : turn;
+
+        private IReadOnlyList<AgentDisclosureSnapshot> Intern(IReadOnlyList<AgentDisclosureSnapshot> history)
+            => Array.AsReadOnly(history.Select(x => _snapshots.GetValueOrDefault(AgentDisclosureHistory.Identity(x)) ?? x).ToArray());
         // The live policy is the host's; claims and accepted messages retain a frozen snapshot of it.
         public AgentSessionPolicyState State => new(Freeze(Session.Policy), Revision);
 

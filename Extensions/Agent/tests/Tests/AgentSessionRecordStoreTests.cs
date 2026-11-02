@@ -20,7 +20,7 @@ public sealed class AgentSessionRecordStoreTests
                 new { value = 1.50, text = "kept" }, new Dictionary<string, string> { ["ref"] = "1" })],
             DisclosureHistory = []
         };
-        Assert.True((await store.CreateAsync(new(session) { Messages = [message] }, Owner)).Succeeded);
+        Assert.True((await store.CreateAsync(new(session) { Messages = [new(message)] }, Owner)).Succeeded);
 
         var first = (await store.LoadAsync(session.Id))!;
         var second = (await store.LoadAsync(session.Id))!;
@@ -28,9 +28,9 @@ public sealed class AgentSessionRecordStoreTests
         Assert.NotSame(session, first.Session);
         Assert.NotSame(first.Messages[0], second.Messages[0]);
         Assert.Equal(AgentInvocationIntegrity.Digest(session), AgentInvocationIntegrity.Digest(first.Session));
-        Assert.Equal(AgentInvocationIntegrity.Digest(message), AgentInvocationIntegrity.Digest(first.Messages[0]));
+        Assert.Equal(AgentInvocationIntegrity.Digest(message), AgentInvocationIntegrity.Digest(first.Messages[0].Message));
         // Opaque module content is recorded as JSON, never as the caller's object.
-        Assert.IsType<JsonElement>(first.Messages[0].Context.Single().Content);
+        Assert.IsType<JsonElement>(first.Messages[0].Message.Context.Single().Content);
         Assert.Equal(new AgentSessionFence(Owner, 1), first.Owner);
     }
 
@@ -49,11 +49,11 @@ public sealed class AgentSessionRecordStoreTests
         var takeover = await store.AcquireOwnershipAsync(session.Id, "owner-b");
         Assert.Equal(new AgentSessionFence("owner-b", 2), takeover.Fence);
 
-        var stale = await store.WriteAsync(new(session.Id, fence) { Messages = [Message(session.Id, "message-1")] });
+        var stale = await store.WriteAsync(new(session.Id, fence) { Messages = [new(Message(session.Id, "message-1"))] });
         Assert.Equal(AgentSessionRecordOutcome.OwnershipLost, stale.Outcome);
         var conflict = await store.WriteAsync(new(session.Id, takeover.Fence!)
         {
-            Messages = [Message(session.Id, "message-2")],
+            Messages = [new(Message(session.Id, "message-2"))],
             Keys = [new(AgentSessionKeyKinds.CallInput, "call-1", "input-1"), new(AgentSessionKeyKinds.Call, "call-1", "proposal-2")]
         });
         Assert.Equal(AgentSessionRecordOutcome.KeyConflict, conflict.Outcome);
@@ -76,7 +76,7 @@ public sealed class AgentSessionRecordStoreTests
         var fence = (await store.CreateAsync(new(Session("session-1")), Owner)).Fence!;
         clock.Advance(TimeSpan.FromHours(1));
 
-        Assert.True((await store.WriteAsync(new("session-1", fence) { Messages = [Message("session-1", "message-1")] })).Succeeded);
+        Assert.True((await store.WriteAsync(new("session-1", fence) { Messages = [new(Message("session-1", "message-1"))] })).Succeeded);
         Assert.Equal(fence, (await store.AcquireOwnershipAsync("session-1", Owner)).Fence);
         await store.ReleaseOwnershipAsync("session-1", fence);
         Assert.Equal(new AgentSessionFence("owner-b", 2), (await store.AcquireOwnershipAsync("session-1", "owner-b")).Fence);
@@ -91,10 +91,10 @@ public sealed class AgentSessionRecordStoreTests
         var proposal = Proposal(session.Id, "proposal-1", AgentActionProposalStatus.AwaitingApproval);
         var paused = new Core.Contracts.AgentPausedTurn(session.Id, "turn-1", proposal.Id, "call-1", "tool", [], 1);
 
-        Assert.True((await store.WriteAsync(new(session.Id, fence) { Proposals = [new(proposal)], PausedTurn = paused })).Succeeded);
+        Assert.True((await store.WriteAsync(new(session.Id, fence) { Proposals = [new(proposal)], PausedTurn = new(paused) })).Succeeded);
         Assert.Equal(session.Id, await store.FindProposalSessionAsync(proposal.Id));
         Assert.Null(await store.FindProposalSessionAsync("proposal-unknown"));
-        Assert.Equal(AgentInvocationIntegrity.Digest(paused), AgentInvocationIntegrity.Digest((await store.LoadAsync(session.Id))!.PausedTurn));
+        Assert.Equal(AgentInvocationIntegrity.Digest(paused), AgentInvocationIntegrity.Digest((await store.LoadAsync(session.Id))!.PausedTurn!.Turn));
 
         Assert.True((await store.WriteAsync(new(session.Id, fence) { RemovePausedTurn = true })).Succeeded);
         Assert.Null((await store.LoadAsync(session.Id))!.PausedTurn);

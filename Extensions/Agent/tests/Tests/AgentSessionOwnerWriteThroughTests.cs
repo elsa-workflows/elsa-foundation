@@ -103,7 +103,7 @@ public sealed class AgentSessionOwnerWriteThroughTests
         Assert.True(await owner.TrySetMessageStatusAsync(session.Id, prompt.Id, AgentMessageStatus.Pending, AgentMessageStatus.Cancelled, "withdrawn"));
         Assert.False(await owner.TrySetMessageStatusAsync(session.Id, prompt.Id, AgentMessageStatus.Pending, AgentMessageStatus.Streaming));
 
-        var recorded = Assert.Single((await owner.RecordStore.LoadAsync(session.Id))!.Messages);
+        var recorded = Assert.Single((await owner.RecordStore.LoadAsync(session.Id))!.Messages).Message;
         Assert.Equal(AgentMessageStatus.Cancelled, recorded.Status);
         Assert.Equal("withdrawn", recorded.StatusReason);
         // The withdrawn prompt released its own claim; the session is idle again.
@@ -140,7 +140,7 @@ public sealed class AgentSessionOwnerWriteThroughTests
         Assert.NotNull(owner.FindPause(session.Id));
         Assert.Equal(AgentSessionPolicyOutcome.Busy,
             (await owner.ChangeAutonomyAsync(new(session.Id, session.ActorId, session.TenantId, AgentAutonomyMode.Manual, 1))).Outcome);
-        var recorded = (await owner.RecordStore.LoadAsync(session.Id))!.PausedTurn;
+        var recorded = (await owner.RecordStore.LoadAsync(session.Id))!.PausedTurn!.Turn;
         Assert.Equal(AgentInvocationIntegrity.Digest(paused), AgentInvocationIntegrity.Digest(recorded));
 
         // After the first owner releases its lease, a host over the same store finds the recorded pause and records its removal.
