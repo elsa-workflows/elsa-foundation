@@ -25,6 +25,11 @@ def psql(sql, db=DB):
 def enc(value): return base64.b64encode(value.encode('utf-16-le')).decode()
 
 
+def dec(value):
+    try: return base64.b64decode(value, validate=True).decode('utf-16-le')
+    except Exception: return value
+
+
 def record(row):
     ledger.append(row); print(json.dumps(row), flush=True); (OUT / 'ledger.json').write_text(json.dumps(ledger, indent=1))
 
@@ -54,13 +59,18 @@ def start(host, control=None):
     host_id = IDS[host] if host == 'A' else f'{IDS[host]}{count}'
     assert ssh(host, f'umask 077; cat > {RB}/node.env', data=env(host, host_id))[0] == 0
     extra = f"DOTNET_STARTUP_HOOKS={RB}/hook/ElsaEfficiencyClusterHook.dll ELSA_EFFICIENCY_CLUSTER_CONTROL_ROOT={control} " if control else ''
+    # Never share the port with a leftover node: a stale listener would answer readiness for a process that failed to bind.
+    assert not ssh(host, "pgrep -f '[E]lsa.Workbench --contentRoot'")[1].strip(), f'a Workbench is already running on {host}'
     script = f"cd {RB}/{WORKBENCH} && set -a && . {RB}/node.env && set +a && exec env {extra}./Elsa.Workbench --contentRoot {RB}/{WORKBENCH} --urls http://127.0.0.1:5095"
     code, out = ssh(host, f"setsid sh -c '{script}' < /dev/null > {RB}/{name}.log 2>&1 & echo $!")
     pids[(host, name)] = int(out.strip())
     deadline = time.monotonic() + 240
     while time.monotonic() < deadline:
         code, out = ssh(host, 'curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5095/health/ready')
-        if out.strip() == '200': return name
+        if out.strip() == '200':
+            listener = ssh(host, "ss -ltnpH 'sport = :5095'")[1]
+            assert f'pid={pids[(host, name)]},' in listener, f'{name} is not the process listening on 5095'
+            return name
         alive = ssh(host, f'kill -0 {pids[(host, name)]} && echo alive')[1]
         if 'alive' not in alive: raise RuntimeError(f'{name} exited during startup')
         time.sleep(2)
@@ -89,11 +99,27 @@ def activity_rows(execution):
 
 
 def case(shape, index):
-    control = f'{RB}/control-{shape}'
+    control = f'{RB}/control-{OUT.name}-{shape}'
     assert ssh('B', f'umask 077; mkdir {control}')[0] == 0
     b = start('B', control)
+    try:
+        return run_case(shape, index, control)
+    finally:
+        stop('B', b)
+
+
+def run_case(shape, index, control):
     ready = json.loads(file('B', f'{control}/ready.json') or 'null') if wait_for('B', f'{control}/ready.json', 60) else None
-    code, out = ssh('A', f'python3 {RB}/api.py {shape}'); run = json.loads(out.strip().splitlines()[-1])
+    # A progressing loop drains inline, so its execute request does not return; read the run from the database instead.
+    code, out = ssh('A', f'timeout 50 python3 {RB}/api.py {shape}', timeout=120)
+    lines = out.strip().splitlines()
+    if lines:
+        run = json.loads(lines[-1])
+    else:
+        rows = [line.split('|', 1) for line in psql('select "WorkflowExecutionId", "ContentJson" from elsa_runtime_workflow_execution_state where "Status" = 1').splitlines() if line]
+        assert len(rows) == 1, f'expected exactly one running execution, found {len(rows)}'
+        content = json.loads(rows[0][1])
+        run = {'workflowExecutionId': dec(rows[0][0]), 'artifactId': dec(content['pinnedExecutable']['artifactId']), 'executeReturned': False}
     execution = run['workflowExecutionId']; row = dict(shape=shape, run=run, senderReady=ready is not None)
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline and state(execution) != 1: time.sleep(.5)
@@ -119,7 +145,6 @@ def case(shape, index):
                      and row['activityRowsAfterCancel'][0] == row['activityRowsAfterCancel'][1]
                      and (shape != 'loop' or row['activityRowsProgressingBefore'][1] > row['activityRowsProgressingBefore'][0]))
     row['receiptStatuses'] = statuses
-    stop('B', b)
     return row
 
 
@@ -134,7 +159,7 @@ def wait_for(host, path, seconds):
 psql(f'create database {DB}', 'postgres')
 a = start('A')
 record(dict(step='node-a-ready', members=json.loads(psql('select coalesce(json_agg(json_build_object(\'HostId\',"HostId",\'Status\',"Status")),\'[]\') from elsa_cluster_members'))))
-for index, shape in enumerate(['delay', 'loop']):
+for index, shape in enumerate(sys.argv[3].split(',') if len(sys.argv) > 3 else ['delay', 'loop']):
     try: row = case(shape, index)
     except Exception as e: row = dict(shape=shape, passed=False, error=type(e).__name__ + ': ' + str(e)[:300])
     row['members'] = json.loads(psql('select coalesce(json_agg(json_build_object(\'HostId\',"HostId",\'Status\',"Status")),\'[]\') from elsa_cluster_members'))

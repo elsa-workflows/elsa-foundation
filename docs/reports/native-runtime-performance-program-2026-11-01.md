@@ -1,7 +1,7 @@
 # Runtime Efficiency continuation evidence
 
 Program [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531), draft integration [#3601](https://github.com/elsa-workflows/elsa-foundation/pull/3601).
-This is an in-progress receipt. It does not establish completion of M0–M5, current-main throughput, or clustered placement/failover. Independent-host capacity below covers independent starts sharing one PostgreSQL server only.
+This is an in-progress receipt. It does not establish completion of M0–M5 or current-main throughput. Independent-host capacity below covers independent starts sharing one PostgreSQL server; failure injection and remote Cancel are reported separately, including what did not qualify.
 The [baseline assessment](native-runtime-performance-2026-10-31.md) and [first implementation receipt](native-runtime-performance-implementation-2026-10-31.md) retain their original cohorts and exclusions.
 
 ## Hydration and preparation
@@ -641,4 +641,64 @@ temporary-disk directories and every protected file in the task base were remove
 NSG rule was deleted and the remaining rules match the recorded original. The task resource group (four workers,
 disks, NICs and evidence storage) was deleted, the existing runner was restored to deallocated, and the local task
 SSH key and transfer token were deleted. No task-tagged resource or running VM remains. See `fixture-cleanup.json`.
-Independent-host failure injection, real remote Cancel and the root-GC race were **not run**; they need a new fixture.
+Failure injection, remote Cancel and the root-GC race were not part of that fixture; they ran on a second, owner-approved fixture below.
+
+### Independent-host failure qualification
+
+A second owner-approved fixture ran owner A and recoverer B on separate D2s_v6 workers against one PostgreSQL 16
+container on a third host, all on one private subnet. Every case used a fresh database. The retained-boundary Worker
+was published self-contained from this branch; `two-host-controller.py` drove both workers over a task-only SSH key.
+
+On the final engine (Worker r8, including the fence-renewal fix below) all **68 cases pass**:
+
+| Kind | Cases | What is checked |
+| --- | --- | --- |
+| Crash and cross-host recovery | 40 | SIGKILL of A's process group before/after the boundary commit, after queue advance and mid-body, plus the parent-decision variants; B completes with committed activity identities preserved and committed bodies not re-run |
+| Stale-owner takeover | 10 | A paused; B recovers with an expired lease and completes; A is released, rejected by the stale fence, and every core row is byte-for-byte unchanged |
+| Root-GC race | 6 | After B completes, B deletes the terminal history through the real deletion store, retires the source references and runs a real executable sweep (two references and two artifacts removed) while A is paused; released A is fenced and nothing is resurrected |
+| Database restart, default policy | 6 | PostgreSQL restarts while A is paused before its commit; A dies on `57P01`. Outcome is the documented default: one blocking `SchedulerWorkPoisoned` incident awaiting intervention, all 20 work items completed once, nothing queued or undelivered |
+| Database restart, host `RetryNow` policy | 6 | Same interruption with a host policy that retries transient provider failures: B completes the run with no incident and no duplicate rows |
+
+Earlier attempts are retained: the first full run had 50/62 (the reclaim cases collided with database names left by
+the shakedown; the interrupt cases asserted automatic completion, which is not the default policy), and a second
+series hit a stale per-case folder. A host `RetryAfter` policy was also measured: the run stalls silently, because
+nothing re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRetryAt`, but no sweep reads it).
+That pre-existing defect is outside this delivery and is listed below as a follow-up.
+
+### A lease heartbeat failed fenced checkpoints (found and fixed)
+
+A progressing `While(true)` on a real Workbench with PostgreSQL was poisoned in 2 of 3 runs on this branch and 0 of 3
+on main: a `ScheduleActivity` work item hit `DbUpdateConcurrencyException` and became a blocking incident. A
+diagnostics-only startup hook showed that the only conflicting entity was the ownership liveness (fence) row. Every
+fenced checkpoint bumps that row's revision, and the drain's own background heartbeat bumps it too without changing the
+lease. On PostgreSQL a heartbeat committing between the fence read and the save failed the checkpoint. The race exists
+on main; this branch's denser commits made it frequent.
+
+`EfRuntimeCheckpointCommitStore` now retries the whole commit, at most three attempts, only when every conflicting
+entry is the fence row and the context had nothing else pending. Each attempt re-reads and revalidates the fence, so a
+real ownership change still fails as stale. Four new SQLite controls cover the heartbeat on both commit paths, a lease
+removed during the race (still stale) and a caller-staged context (no hidden retry). Disabling the retry fails three of
+them; dropping the pending-changes guard fails the fourth. On the real fixture the fixed build ran four 50-second loops
+with **no poison**, while two of them still logged five or more fence conflicts that the retry absorbed.
+
+### Remote cancellation across a durable cluster
+
+Two real Workbench nodes formed a durable PostgreSQL cluster (membership, runtime, design, publishing, placement,
+command transport, database locking and Data Protection on shared PostgreSQL). A workflow parked on a 30-minute Delay
+was started through node A's authenticated API; node B's control hook sent two identical actor Cancel envelopes.
+Both were forwarded through the durable transport (`Deferred`), and the execution became `Cancelled` by the database
+and by node A's own API, with no incident, empty transport and no further activity. This passed in all three complete
+runs (`c3`, `c5` and the hook-side result of `c1`, whose controller then failed on a receipt key).
+
+Cancelling a **progressing** drain on another node did **not** qualify. Node A's `While(true)` kept progressing with no
+incidents, but node B's sender stalled right after picking up its request in some runs and failed its own pre-dispatch
+check in others, so no Cancel was ever dispatched. The same happens with main's build. Sampling showed placement stayed
+on node A throughout on both builds, so ownership flapping is ruled out; the root cause is not established. Local
+cooperative Cancel of a progressing drain remains covered by the in-process tests only.
+
+### Second fixture cleanup
+
+After the 2,178-file archive was verified, the database container and task directory (SSH key, database password,
+transfer token) were removed from the runner, the added NSG rule was deleted (remaining rules equal the original), the
+task resource group with both workers and its storage was deleted, and the runner was deallocated again. No
+task-tagged resource or running VM remains.

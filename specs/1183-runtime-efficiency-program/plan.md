@@ -74,6 +74,25 @@ The nine guard cases, eight independent guard mutations, reference budget contro
 qualify this change. The parent process matrix uses an explicit cap of one for Balanced to reach a physical parent
 outcome; Ephemeral does not produce those cap-triggered checkpoints. Independent-host acceptance is separate.
 
+### Crash windows changed by #2584 (ADR 0020, ADR 0031)
+
+The change removes one recovery anchor: the accepted inline parent-completion item is acknowledged by the queue
+advance that follows its committed decision, instead of by a later separate write. Everything else keeps its anchor.
+ADR 0020 still holds because the decision's post-commit work is recorded in that same checkpoint and delivered
+separately. ADR 0031 still holds because every write remains behind the owner's execution fence.
+
+| Window | Durable state at the crash | Recovery behaviour | Evidence (two-host PostgreSQL, fixed head) |
+| --- | --- | --- | --- |
+| Before the decision commit | Decision absent; item still queued | Recovery re-runs the handler from the queued item | `parent-before-commit`, 4/4 |
+| Decision committed, queue not yet advanced | Decision, marker and post-commit work durable; item still queued | The re-run resolves to the committed marker; no second decision | `parent-after-commit`, 4/4 |
+| Queue advanced (item acknowledged) | Item removed; following fused anchors kept | Recovery continues from the next anchor | `parent-after-advance`, 4/4 crashes and 4/4 stale-owner takeovers |
+| During the following body | As above, plus uncommitted replay-safe work | Uncommitted replay-safe work may run again, as the modes allow; committed bodies do not | `parent-after-body`, 4/4 |
+| Ambiguous commit acknowledgement | Unknown to the writer | Acknowledgement only after the provider reports success; the marker decides | Guard cases (nine) and mutations (eight) |
+| Stale owner after takeover | New owner holds the fence | Stale owner rejected; no row changes | `takeover` parent cases, 4/4, byte-for-byte unchanged |
+
+Out of scope: outbox delivery, external effects, model admission and alteration paths keep their prior anchors. This
+analysis is posted on #2584 for the owner review its acceptance requires; until that review, the criterion stays open.
+
 
 ## M4 bounded pumps (#1307)
 

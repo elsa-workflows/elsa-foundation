@@ -69,7 +69,7 @@ public static class StartupHook
             var placement = await services.GetRequiredService<IExecutionPlacementStore>().FindAsync(request.WorkflowExecutionId, ct)
                 ?? throw new InvalidOperationException("The requested execution is unplaced.");
             if (state.PinnedExecutable.ArtifactId != request.ArtifactId || state.Status != WorkflowExecutionStatus.Running || placement.OwnerId != request.OwnerHostId)
-                throw new InvalidOperationException("The actual live execution pin/placement must match the owned request.");
+                throw new InvalidOperationException($"The actual live execution pin/placement must match the owned request (status {state.Status}, artifact {state.PinnedExecutable.ArtifactId}, owner {placement.OwnerId}).");
             var actors = services.GetRequiredService<IWorkflowExecutionActorProvider>();
             Emit(root, "before-cancel.json", new { state, placement, sender = local.Identity.HostId, actorProvider = actors.GetType().FullName,
                 transport = services.GetRequiredService<IExecutionCommandTransport>().GetType().FullName,
@@ -102,7 +102,7 @@ public static class StartupHook
             }
             Emit(root, "finished.json", new { status = "passed", request, sender = local.Identity.HostId, timingEligible = false });
         }
-        catch (Exception error) { Emit(root, "finished.json", new { status = "failed", errorType = error.GetType().FullName, timingEligible = false }); }
+        catch (Exception error) { Emit(root, "finished.json", new { status = "failed", errorType = error.GetType().FullName, message = error.Message, at = error.StackTrace?.Split('\n').Take(6), timingEligible = false }); }
     }
     private sealed record CancelRequest(string WorkflowExecutionId, string ArtifactId, string OwnerHostId, string CommandKey);
 }

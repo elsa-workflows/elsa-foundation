@@ -107,3 +107,15 @@ files are excluded. `timer-custody.json` records the verified transfer; `analyze
 archive root) re-checks every result hash and correctness field and writes `timer-summary.json` (issues: none).
 
 `fixture-cleanup.json` records the removal of every task fixture and the restored runner state.
+
+## Two-host failure, fence and cluster-cancel qualification
+
+`two-host-i68-evidence.tar.gz` (2,178 files, 3,771,916 bytes, SHA-256
+`9805c652d042652251b90a25c75654d10bd437ad738a439a3e63658bd7ea745f`) holds every series from the second fixture: the
+reclaim shakedown, the failed first and second failure runs, `f3` and the final `f4`; the loop A/B on main and branch,
+with and without the conflict hook, and on the fixed build; and every cluster-cancel attempt (`c1`–`c7`, `p-main`,
+`p-branch`). It includes controller ledgers, before/after row snapshots, each worker's case configurations, logs and
+results, the cluster hook receipts and node logs trimmed to their first and last megabyte. Environment files and
+databases are excluded, and every file was checked for the database password and transfer token before upload.
+`two-host-custody.json` records the binary identities per series. `analyze-two-host.py` (run on the extracted archive)
+writes `two-host-summary.json`, which keeps every failed attempt and its cause.
