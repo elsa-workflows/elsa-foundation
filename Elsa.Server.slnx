@@ -9,6 +9,9 @@
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/src/Persistence/">
+    <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/src/Specialists/">
     <Project Path="Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
@@ -27,6 +30,10 @@
   </Folder>
   <Folder Name="/Extensions/Agent/tests/">
     <Project Path="Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Agent/tests/Persistence/">
+    <Project Path="Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj" />
+    <Project Path="Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Agent/tests/Specialists/">
     <Project Path="Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj" />

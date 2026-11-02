@@ -272,6 +272,13 @@ backend pending acceptance. Resolve with an observed resource outcome, never mer
 an editor action. Matching duplicate delivery coalesces within this in-memory lifetime; post-dispatch
 loss yields uncertainty rather than replay. Backend acknowledgement validates the module result.
 
+Preview (#3441): a module may also provide `clientTargetAvailability` on the same contribution. The runner
+asks it before dispatch whether the invocation's exact unsaved target (its editor, working generation or other
+module-private state) still exists in this page. Anything other than `available`, or a failure to answer, refuses
+the operation with zero effect and the module's reason. The runner never reconstructs vanished unsaved state, and
+a missing adapter is reported as such. An operation already dispatched without a receipt stays uncertain; after a
+reload or a lost page its owner can resolve it explicitly, and that statement is never a receipt.
+
 Modules own live bindings, revision interpretation, validation, presentation and native undo.
 Resource targets now require `moduleId` and nullable `resourceId`/`revision`; mutations enforce the
 exact applicable identity and revision. Typed `{typeId,schemaVersion,data}` results pass through

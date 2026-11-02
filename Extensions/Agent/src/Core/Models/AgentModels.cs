@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Elsa.Agent.Core.Contracts;
+
 namespace Elsa.Agent.Core.Models;
 
 public enum AgentRole
@@ -100,7 +103,9 @@ public enum AgentAuditEventKind
     FeedbackReceived,
     ProviderDiagnostic,
     ModuleInteraction,
-    ToolInvoked
+    ToolInvoked,
+    /// <summary>Preview: the owner stated the outcome of an uncertain client operation. The statement is not a receipt.</summary>
+    ProposalResolved
 }
 
 public enum AgentStreamEventKind
@@ -159,7 +164,18 @@ public enum AgentProviderRiskProfile
     PrivilegedExecution
 }
 
-public sealed record AgentError(string Code, string Message, int StatusCode = 400);
+public sealed record AgentError(string Code, string Message, int StatusCode = 400)
+{
+    /// <summary>
+    /// Preview: what an <c>agent.context.disclosure_budget_exceeded</c> refusal reached. The session limits, recorded on the
+    /// session and offered a continuation: <c>snapshots</c> (64 distinct snapshots) and <c>bytes</c> (8 MiB of recorded
+    /// disclosure, with less than 64 KiB left, so the session is treated as full). Refusals of one disclosure, never recorded:
+    /// <c>snapshot-too-large</c> (larger than any session can record) and <c>snapshot-does-not-fit</c> (larger than the room
+    /// left in a session that is not full). Null for every other error.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Limit { get; init; }
+}
 
 public sealed record AgentResult<T>(T? Value, AgentError? Error)
 {
@@ -242,6 +258,16 @@ public sealed record AgentSession(
     /// store does not own conditional policy updates.
     /// </summary>
     public long? PolicyRevision { get; init; }
+    /// <summary>Preview: the workspace stamped when the session was created. It only narrows owner-scoped lists.</summary>
+    public string? Workspace { get; init; }
+    /// <summary>Preview: the session this one was created to continue past a limit; nothing else is carried over.</summary>
+    public string? ContinuedFrom { get; init; }
+    /// <summary>
+    /// Preview: the documented session limit this session reached (<c>snapshots</c> or <c>bytes</c>, as
+    /// <see cref="AgentError.Limit"/> names it), or null. Recorded when a turn is refused at the limit, so a reopened
+    /// session shows the limit and its continuation before another prompt is refused.
+    /// </summary>
+    public string? LimitReached { get; init; }
 }
 
 public sealed record AgentMessage(
@@ -274,6 +300,12 @@ public sealed record AgentMessage(
     /// A later policy change never relabels it; null when the installed store does not own policy revisions.
     /// </summary>
     public AgentSessionPolicyState? AcceptedPolicy { get; init; }
+    /// <summary>
+    /// Preview: why a <see cref="AgentMessageStatus.Cancelled"/> message stopped: <c>interrupted</c> (the process
+    /// stopped while it streamed), <c>withdrawn</c> (the owner withdrew a prompt that never started) or
+    /// <c>user-stop</c>. Null for any other status and for older records.
+    /// </summary>
+    public string? StatusReason { get; init; }
 }
 
 public sealed record AgentContextAttachment(
@@ -337,7 +369,27 @@ public sealed record AgentActionProposal(
     /// or null when the installed services do not own policy revisions.
     /// </summary>
     public long? PolicyRevision { get; init; }
+    /// <summary>
+    /// Preview: the owner's statement about an uncertain client operation, or null when none was made. It is not a
+    /// receipt: a later truthful receipt still reconciles the operation and supersedes it, and the statement is kept.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentOwnerResolution? OwnerResolution { get; init; }
 }
+
+/// <summary>Preview: what the owner states about an uncertain client operation.</summary>
+public enum AgentOwnerResolutionClaim
+{
+    /// <summary>The owner states that the operation was applied.</summary>
+    Applied,
+    /// <summary>The owner states that the operation was not applied.</summary>
+    NotApplied,
+    /// <summary>The owner cannot tell whether the operation was applied.</summary>
+    Unknown
+}
+
+/// <summary>Preview: an owner's recorded statement about an uncertain client operation (<see cref="AgentActionProposal.OwnerResolution"/>).</summary>
+public sealed record AgentOwnerResolution(AgentOwnerResolutionClaim Claim, string ActorId, DateTimeOffset ResolvedAt);
 
 public sealed record AgentProposalExecutionResult(
     string ProposalId,
@@ -405,7 +457,19 @@ public sealed record AgentSessionCreateRequest(
     string Mode,
     string? Title,
     AgentPolicy? Policy,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    /// <summary>Preview: the longest <see cref="Workspace"/> a session records, in characters.</summary>
+    public const int MaxWorkspaceLength = 256;
+
+    /// <summary>Preview: the longest <see cref="ContinuedFrom"/> link a session records, in characters.</summary>
+    public const int MaxContinuedFromLength = 128;
+
+    /// <summary>Preview: the workspace to stamp on the new session. It only narrows owner-scoped lists.</summary>
+    public string? Workspace { get; init; }
+    /// <summary>Preview: the session this one continues past a limit. Only the link is recorded.</summary>
+    public string? ContinuedFrom { get; init; }
+}
 
 public sealed record AgentMessageCreateRequest(
     AgentRole Role,
@@ -553,3 +617,236 @@ public sealed record AgentSessionPolicyResult(AgentSessionPolicyOutcome Outcome,
 {
     public bool Succeeded => Outcome == AgentSessionPolicyOutcome.Succeeded;
 }
+
+/// <summary>Preview: one process's ownership of a session aggregate. Every guarded record write names it.</summary>
+/// <param name="OwnerToken">The owning process's opaque token.</param>
+/// <param name="Fence">Increases monotonically on every takeover; a write under an older fence is refused.</param>
+public sealed record AgentSessionFence(string OwnerToken, long Fence);
+
+/// <summary>Preview: the kinds of duplicate-detection keys recorded with a session aggregate.</summary>
+public static class AgentSessionKeyKinds
+{
+    /// <summary>A tool call (session, turn and call identity); the value is the proposal id.</summary>
+    public const string Call = "call";
+    /// <summary>A prepared invocation identity; the value is the proposal id.</summary>
+    public const string Invocation = "invocation";
+    /// <summary>The one mutation a turn may acquire; the value is the call key.</summary>
+    public const string TurnMutation = "turn-mutation";
+    /// <summary>The input digest of a tool call; the value is the digest.</summary>
+    public const string CallInput = "call-input";
+}
+
+/// <summary>Preview: the values of <see cref="AgentSessionSummary.RecoveryState"/>.</summary>
+public static class AgentSessionRecoveryStates
+{
+    /// <summary>The prefix of a session that reached a documented limit; the limit (<c>snapshots</c> or <c>bytes</c>) follows it.</summary>
+    public const string LimitReachedPrefix = "limit-reached:";
+
+    /// <summary>The recovery state a session with <paramref name="limitReached"/> reports, or null when nothing needs attention.</summary>
+    public static string? Of(string? limitReached) => string.IsNullOrEmpty(limitReached) ? null : LimitReachedPrefix + limitReached;
+}
+
+/// <summary>Preview: one unique duplicate-detection key of a session aggregate and the value it maps to.</summary>
+public sealed record AgentSessionUniqueKey(string Kind, string Key, string Value);
+
+/// <summary>Preview: a proposal with its retained execution outcome, result and accepted acknowledgement.</summary>
+public sealed record AgentProposalRecord(AgentActionProposal Proposal)
+{
+    /// <summary>The retained execution outcome, written together with the proposal status.</summary>
+    public AgentResult<AgentProposalExecutionResult>? Execution { get; init; }
+    /// <summary>The retained tool result or lifecycle envelope.</summary>
+    public AgentToolResult? Result { get; init; }
+    /// <summary>The digest of the accepted client acknowledgement; a different later acknowledgement is a conflict.</summary>
+    public string? AcknowledgementDigest { get; init; }
+    /// <summary>
+    /// The record's version. A load returns the recorded version (1 after the first record). A write names the version
+    /// its writer read, 0 for a new proposal: the store refuses the write with
+    /// <see cref="AgentSessionRecordOutcome.VersionConflict"/> when the recorded version differs, and otherwise records
+    /// the next version. A transition therefore applies only to the state it was decided on.
+    /// </summary>
+    public long Version { get; init; }
+}
+
+/// <summary>
+/// Preview: one distinct disclosure snapshot of a session, recorded once and referenced by its digest. The owner computes
+/// both: <see cref="Canonical"/> is the canonical JSON text (sorted keys, raw scalars) the digest was taken over, and a
+/// store keeps it byte-identical, so a recorded fingerprint stays verifiable after any number of restarts.
+/// </summary>
+/// <param name="Digest">The lowercase hexadecimal SHA-256 of <see cref="Canonical"/> as UTF-8.</param>
+public sealed record AgentDisclosureSnapshotRecord(string Digest, string Canonical)
+{
+    /// <summary>The snapshot's recorded size in bytes; it counts toward the session's disclosure size limit.</summary>
+    public long Size => System.Text.Encoding.UTF8.GetByteCount(Canonical);
+}
+
+/// <summary>
+/// Preview: a message as the record store holds it. Its cumulative disclosure history is not stored inline:
+/// <see cref="AgentMessage.DisclosureHistory"/> is null here and <see cref="DisclosureDigests"/> lists the same snapshots,
+/// in order, by digest. Every other member, including <see cref="AgentMessage.DeliveryFingerprint"/>, is stored verbatim.
+/// </summary>
+public sealed record AgentMessageRecord(AgentMessage Message)
+{
+    /// <summary>The message's disclosure history as ordered snapshot digests, or null when the message has none.</summary>
+    public IReadOnlyList<string>? DisclosureDigests { get; init; }
+    /// <summary>The digest of the complete ordered history, recorded with it and re-verified when the session is hydrated.</summary>
+    public string? DisclosureHistoryFingerprint { get; init; }
+}
+
+/// <summary>
+/// Preview: the paused turn as the record store holds it. <see cref="AgentPausedTurn.DisclosureHistory"/> is null here and
+/// <see cref="DisclosureDigests"/> lists the same snapshots in order; the pause fingerprint
+/// (<see cref="AgentPausedTurn.DisclosureHistoryFingerprint"/>) is stored verbatim.
+/// </summary>
+public sealed record AgentPausedTurnRecord(AgentPausedTurn Turn)
+{
+    /// <summary>The paused turn's disclosure history as ordered snapshot digests, or null when it has none.</summary>
+    public IReadOnlyList<string>? DisclosureDigests { get; init; }
+}
+
+/// <summary>Preview: one session aggregate as the record store holds it.</summary>
+/// <remarks>Claims, gates, monitors and the turn registry are process-local and never recorded; they are rebuilt from these facts.</remarks>
+public sealed record AgentSessionRecord(AgentSession Session)
+{
+    /// <summary>The messages in insertion order.</summary>
+    public IReadOnlyList<AgentMessageRecord> Messages { get; init; } = [];
+    /// <summary>The session's distinct disclosure snapshots in first-recorded order, each referenced by digest.</summary>
+    public IReadOnlyList<AgentDisclosureSnapshotRecord> Snapshots { get; init; } = [];
+    /// <summary>The retained session context, unique by attachment identity, in insertion order.</summary>
+    public IReadOnlyList<AgentContextAttachment> Context { get; init; } = [];
+    /// <summary>The paused turn, if any. Its presence is the durable fact behind the Pause claim.</summary>
+    public AgentPausedTurnRecord? PausedTurn { get; init; }
+    /// <summary>The session's proposals in insertion order.</summary>
+    public IReadOnlyList<AgentProposalRecord> Proposals { get; init; } = [];
+    /// <summary>The recorded duplicate-detection keys.</summary>
+    public IReadOnlyList<AgentSessionUniqueKey> Keys { get; init; } = [];
+    /// <summary>
+    /// Audit records a recorded recovery settlement still owes: written with the settlement and cleared once emitted, so a
+    /// process that stops between the two emits them at the session's next hydration instead of losing them.
+    /// </summary>
+    public IReadOnlyList<AgentAuditEvent> PendingAudits { get; init; } = [];
+    /// <summary>The current owner, or null when no process owns the aggregate.</summary>
+    public AgentSessionFence? Owner { get; init; }
+    /// <summary>When the current owner's lease lapses, in the store's time.</summary>
+    public DateTimeOffset? LeaseExpiresAt { get; init; }
+    /// <summary>The optimistic concurrency token; it changes on every write.</summary>
+    public long Version { get; init; }
+}
+
+/// <summary>
+/// Preview: one transition of a session aggregate, written atomically under <see cref="Fence"/>. Every member is
+/// optional: messages and proposals are upserted by identity, context is appended by attachment identity, and keys
+/// are inserted all or nothing together with everything else.
+/// </summary>
+public sealed record AgentSessionRecordWrite(string SessionId, AgentSessionFence Fence)
+{
+    /// <summary>The session's new state, or null to keep it.</summary>
+    public AgentSession? Session { get; init; }
+    /// <summary>Messages to insert or replace by identity.</summary>
+    public IReadOnlyList<AgentMessageRecord> Messages { get; init; } = [];
+    /// <summary>
+    /// Snapshots the written messages or paused turn reference for the first time. A digest already recorded keeps its
+    /// recorded text; every digest a recorded message or paused turn references is recorded.
+    /// </summary>
+    public IReadOnlyList<AgentDisclosureSnapshotRecord> Snapshots { get; init; } = [];
+    /// <summary>Context attachments to append; an attachment identity already recorded is kept unchanged.</summary>
+    public IReadOnlyList<AgentContextAttachment> Context { get; init; } = [];
+    /// <summary>The paused turn to record, or null to keep the recorded one (see <see cref="RemovePausedTurn"/>).</summary>
+    public AgentPausedTurnRecord? PausedTurn { get; init; }
+    /// <summary>Removes the recorded paused turn. Ignored when <see cref="PausedTurn"/> is set.</summary>
+    public bool RemovePausedTurn { get; init; }
+    /// <summary>Proposal records to insert or replace by proposal identity.</summary>
+    public IReadOnlyList<AgentProposalRecord> Proposals { get; init; } = [];
+    /// <summary>Keys to insert. A key already recorded with the same value is kept; a different value refuses the whole write.</summary>
+    public IReadOnlyList<AgentSessionUniqueKey> Keys { get; init; } = [];
+    /// <summary>The audit records the aggregate owes (<see cref="AgentSessionRecord.PendingAudits"/>), or null to keep them; empty clears them.</summary>
+    public IReadOnlyList<AgentAuditEvent>? PendingAudits { get; init; }
+}
+
+/// <summary>Preview: the disposition of a record store operation.</summary>
+public enum AgentSessionRecordOutcome
+{
+    /// <summary>The operation took effect.</summary>
+    Succeeded,
+    /// <summary>The store has no such session. Nothing changed.</summary>
+    NotFound,
+    /// <summary>A session with this identity is already recorded. Nothing changed.</summary>
+    AlreadyExists,
+    /// <summary>Another owner holds a live lease. Nothing changed; the caller may retry later.</summary>
+    OwnedElsewhere,
+    /// <summary>The write's owner or fence is no longer current. Nothing changed.</summary>
+    OwnershipLost,
+    /// <summary>A key is already recorded with a different value. Nothing changed; <see cref="AgentSessionRecordResult.ConflictingKeys"/> holds the recorded values.</summary>
+    KeyConflict,
+    /// <summary>A proposal record changed since its writer read it (<see cref="AgentProposalRecord.Version"/>). Nothing changed.</summary>
+    VersionConflict
+}
+
+/// <summary>Preview: the result of a record store operation.</summary>
+public sealed record AgentSessionRecordResult(AgentSessionRecordOutcome Outcome)
+{
+    /// <summary>The fence the caller now owns, after a successful create or ownership acquisition.</summary>
+    public AgentSessionFence? Fence { get; init; }
+    /// <summary>When the caller's lease lapses after a successful operation, in the store's time.</summary>
+    public DateTimeOffset? LeaseExpiresAt { get; init; }
+    /// <summary>The recorded values of the keys that refused a write.</summary>
+    public IReadOnlyList<AgentSessionUniqueKey> ConflictingKeys { get; init; } = [];
+
+    public bool Succeeded => Outcome == AgentSessionRecordOutcome.Succeeded;
+}
+
+/// <summary>
+/// Preview: an owner-scoped session list query. Actor and tenant filter first, then the optional workspace, then
+/// the result is ordered by last update (newest first) and limited to <see cref="Take"/>, at most <see cref="MaxTake"/>.
+/// </summary>
+/// <param name="Before">An opaque cursor from <see cref="AgentSessionSummaryPage.Next"/>; only older sessions are returned.</param>
+public sealed record AgentSessionOwnerQuery(string ActorId, string TenantId, string? Workspace = null, int Take = AgentSessionOwnerQuery.DefaultTake, string? Before = null)
+{
+    public const int DefaultTake = 20;
+    public const int MaxTake = 100;
+}
+
+/// <summary>Preview: an owner's view of one recorded session, read without decoding its protected payloads.</summary>
+/// <param name="PendingReviewCount">Proposals awaiting a review decision.</param>
+/// <param name="RecoveryState">What recovery found that the owner should look at, or null when nothing needs attention; today only a reached session limit (<see cref="AgentSessionRecoveryStates"/>).</param>
+public sealed record AgentSessionSummary(
+    string Id,
+    string? Title,
+    AgentSessionStatus Status,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt,
+    int PendingReviewCount,
+    string? RecoveryState);
+
+/// <summary>Preview: one page of owner-scoped session summaries.</summary>
+/// <param name="Next">The cursor for the next older page, or null when this page is the last.</param>
+public sealed record AgentSessionSummaryPage(IReadOnlyList<AgentSessionSummary> Items, string? Next);
+
+/// <summary>
+/// Preview: a recorded session's plain owner columns. Authorization reads them before anything decodes a payload,
+/// hydrates the session or takes its ownership.
+/// </summary>
+public sealed record AgentSessionOwner(string ActorId, string TenantId);
+
+/// <summary>Preview.</summary>
+public enum AgentSessionQueryOutcome
+{
+    /// <summary>The page holds the owner's sessions, already filtered, ordered and limited by the owning store.</summary>
+    Succeeded,
+    /// <summary>The installed session service cannot answer owner-scoped session queries. Nothing is returned.</summary>
+    Unsupported
+}
+
+/// <summary>Preview: the outcome of an owner-scoped session list query.</summary>
+public sealed record AgentSessionListResult(AgentSessionQueryOutcome Outcome, AgentSessionSummaryPage? Page)
+{
+    public static AgentSessionListResult Unsupported { get; } = new(AgentSessionQueryOutcome.Unsupported, null);
+
+    public bool Succeeded => Outcome == AgentSessionQueryOutcome.Succeeded;
+}
+
+/// <summary>
+/// Preview: an explicit provider outcome shown to the user as a <see cref="AgentStreamEventKind.Progress"/> event, such
+/// as a provider conversation that could not be resumed and was replaced by a new one. The orchestrator records it on
+/// the turn's audit trail. It never counts as an accepted outcome.
+/// </summary>
+public sealed record AgentProviderNotice(string Code, string Label);

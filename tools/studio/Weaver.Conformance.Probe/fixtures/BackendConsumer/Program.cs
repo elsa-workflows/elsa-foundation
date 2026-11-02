@@ -124,6 +124,9 @@ builder.Services.AddCShellsAspNetCore(shells => shells.WithHostAssemblies()
         typeof(Elsa.Agent.Workflows.FoundationWorkflowsAgentFeature).Assembly,
         typeof(Elsa.Agent.GitHubCopilot.GitHubCopilotAgentFeature).Assembly,
         typeof(Elsa.Agent.Anthropic.AnthropicAgentFeature).Assembly,
+        // #3441: discoverable, enabled only when the restart inventory configures durable recovery.
+        typeof(Elsa.Agent.Persistence.EntityFrameworkCore.FoundationAgentEntityFrameworkCoreFeature).Assembly,
+        typeof(Elsa.Secrets.Features.SecretsFeature).Assembly,
         typeof(Elsa.Modularity.Api.ModularityApiFeature).Assembly)
     .WithNuplaneFeatureDiscovery(integration => { integration.Enabled = true; integration.RefreshTrigger = NuplaneRefreshTrigger.ChangedOrPending; integration.AutoReload = true; })
     .WithAuthenticationAndAuthorization()
