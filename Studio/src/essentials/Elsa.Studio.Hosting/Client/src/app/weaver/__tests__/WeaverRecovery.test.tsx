@@ -527,6 +527,37 @@ describe("Weaver recovery through the real agent client", () => {
     container.remove();
   });
 
+  it.each([
+    ["processLifetime", "Conversations survive a reload while this server runs; a server restart ends them."],
+    ["unsupported", "This server cannot recover conversations: a server restart ends them."],
+    ["durable", null],
+    [undefined, null]
+  ] as const)("states what a server restart does to conversations when bootstrap reports %s", async (recovery, note) => {
+    const http = {
+      async getJson(path: string) {
+        if (path === "/_elsa/agent/bootstrap") return { data: { enabled: true, providerStatus: "available", modes: ["explain"], ...(recovery ? { recovery } : {}),
+          capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "readOnly", surfaces: ["*"] }],
+          provider: { providerId: "wire", isAvailable: true, status: "available", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
+          policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "fullAuto", allowedAutonomyModes: ["manual", "autoReadOnly", "fullAuto"] } } };
+        if (path.startsWith("/_elsa/agent/sessions?")) return { data: { items: [], next: null } };
+        throw new Error(`Unexpected GET ${path}`);
+      },
+      async postJson(path: string) { throw new Error(`Unexpected POST ${path}`); },
+      async putJson(path: string) { throw new Error(`Unexpected PUT ${path}`); }
+    };
+    const client = createAgentClient({ baseUrl: "https://primary.example/", http } as unknown as StudioEndpointContext);
+    expect((await client.bootstrap()).recovery).toBe(recovery);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => root.render(<WeaverSurface api={readyApi("ada")} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={vi.fn()} />));
+
+    await composerReady(container);
+    expect(container.querySelector(".weaver-recovery-scope")?.textContent ?? null).toBe(note);
+    flushSync(() => root.unmount());
+    container.remove();
+  });
+
   it("reopens a session the server records as limited and offers its continuation before any prompt", async () => {
     const requests: string[] = [];
     const id = "agt_limited";

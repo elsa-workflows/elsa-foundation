@@ -527,13 +527,16 @@ function mapBootstrap(response: BackendAgentBootstrapResponse): AgentBootstrapRe
   const provider = providerRecord ? mapProviderDiagnostics(providerRecord) : undefined;
   const capabilities = readRecordArray(response, "capabilities");
   const providerStatus = mapProviderStatus(readField(response, "providerStatus"), provider);
+  const recoveryValue = readString(response, "recovery");
+  const recovery = recoveryValue === "durable" || recoveryValue === "processLifetime" || recoveryValue === "unsupported" ? recoveryValue : undefined;
   return {
     enabled: readBoolean(response, "enabled") ?? providerStatus === "available",
     providerStatus,
     modes: readStringArray(response, "modes") as AgentBootstrapResponse["modes"] ?? ["explain", "troubleshoot", "build"],
     capabilities: capabilities.map(mapCapability),
     provider,
-    policy: mapPolicy(readRecord(response, "policy"))
+    policy: mapPolicy(readRecord(response, "policy")),
+    ...(recovery ? { recovery } : {})
   };
 }
 

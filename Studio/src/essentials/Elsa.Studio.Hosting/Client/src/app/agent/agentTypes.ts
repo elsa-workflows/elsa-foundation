@@ -30,8 +30,17 @@ export interface AgentPlanStep {
   status: string;
 }
 
+/**
+ * Preview (#3441): what a server restart does to this backend's sessions. `durable`: they are recovered;
+ * `processLifetime`: they survive reloads while the server runs, and a restart ends them; `unsupported`: this
+ * composition cannot recover them.
+ */
+export type AgentRecoveryMode = "durable" | "processLifetime" | "unsupported";
+
 export interface AgentBootstrapResponse {
   enabled: boolean;
+  /** Preview (#3441): absent from a server that does not report it. */
+  recovery?: AgentRecoveryMode;
   providerStatus: AgentProviderStatus;
   modes: StudioAgentMode[];
   capabilities: StudioAgentCapabilityContribution[];

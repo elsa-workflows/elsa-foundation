@@ -526,3 +526,10 @@ html[data-theme-material] .weaver-scroll {
   flex-wrap: wrap;
   gap: 0.35rem;
 }
+
+/* Preview (#3441): what a server restart does to this backend's conversations, when they are not recovered. */
+.weaver-recovery-scope {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--studio-text-muted);
+}

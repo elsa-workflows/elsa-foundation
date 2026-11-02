@@ -8,7 +8,7 @@ import { AgentToolResults } from "../agent/AgentToolResults";
 import { AgentProposalReview } from "../agent/AgentProposalReview";
 import type { subscribeAgentSessionStream } from "../agent/agentStream";
 import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
-import type { AgentSessionSummary } from "../agent/agentTypes";
+import type { AgentRecoveryMode, AgentSessionSummary } from "../agent/agentTypes";
 import { WeaverComposer } from "./WeaverComposer";
 import { WeaverMessageList } from "./WeaverMessageList";
 import { WeaverTimeline } from "./WeaverTimeline";
@@ -52,6 +52,7 @@ export function WeaverSurface({
   const lastPromptIdRef = useRef<string | null>(null);
   const autoApplyStatusId = useId();
   const autoApplyStatus = describeAutoApplyStatus(session.autoApplyState, session.pendingAutoApplyMode, session.autoApplyUnsupported, session.autoApplyNotice);
+  const recoveryScope = describeRecoveryScope(session.bootstrap?.recovery);
 
   // Memoize on the underlying state (not the per-render session object) to avoid an update loop.
   const indicatorSessions = useMemo(
@@ -120,6 +121,7 @@ export function WeaverSurface({
       {session.error ? <div className="weaver-alert" role="alert">{session.error}</div> : null}
 
       <WeaverRecovery session={session} />
+      {recoveryScope ? <p className="weaver-recovery-scope" role="note" data-recovery={session.bootstrap?.recovery}>{recoveryScope}</p> : null}
 
       <AgentContextChips attachments={session.attachments} />
       {session.contextDiagnostics.length ? <div role="status" aria-label="Context limitations">{session.contextDiagnostics.map((item, index) => <p key={`${item.contributorId}-${index}`}>{item.contributorId}: {item.message}</p>)}</div> : null}
@@ -205,6 +207,18 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
       ) : null}
     </section>
   );
+}
+
+/** Preview (#3441): a short note when this backend does not recover conversations across a server restart. */
+function describeRecoveryScope(recovery: AgentRecoveryMode | undefined): string | null {
+  switch (recovery) {
+    case "processLifetime":
+      return "Conversations survive a reload while this server runs; a server restart ends them.";
+    case "unsupported":
+      return "This server cannot recover conversations: a server restart ends them.";
+    default:
+      return null;
+  }
 }
 
 function describeSessionSummary(summary: AgentSessionSummary) {
