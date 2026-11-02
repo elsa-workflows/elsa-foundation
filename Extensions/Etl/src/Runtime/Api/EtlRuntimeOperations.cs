@@ -133,10 +133,10 @@ internal sealed partial class EtlRuntimeOperations(
     {
         var scope = requestScope.Get();
         var run = await FindRunAsync(scope, request.Id, cancellationToken);
-        // A file-only provider has no connector store, so none of its runs can be continuous.
-        if (services.GetService<IEtlConnectorRuntimeStore>() is not { } connectors)
+        // A v1 file run is never continuous, even on a provider without a connector store; a v2 run needs the store.
+        if (run.Invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)
             return new("notContinuous");
-        var status = await connectors.RequestConnectorRunCompletionAsync(scope, run.Invocation.RunId, cancellationToken);
+        var status = await Required<IEtlConnectorRuntimeStore>().RequestConnectorRunCompletionAsync(scope, run.Invocation.RunId, cancellationToken);
         return status switch
         {
             EtlRunCompletionOutcome.Accepted => new("accepted"),

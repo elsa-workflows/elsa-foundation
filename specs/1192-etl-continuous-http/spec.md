@@ -191,6 +191,7 @@ A second run is cancelled and ends `Cancelled`.
     - `notContinuous`.
   - An unknown run, or one in another scope, is `404` through the same scoped lookup as cancellation.
   - `notContinuous` takes precedence over `terminal`: a finite run answers `notContinuous` before or after it settles, so the answer does not race settlement.
+  - A v1 file run answers `notContinuous` even on a provider without a connector store; a v2 run there answers `503 etl.provider-unavailable`, as run detail does.
   - On `accepted`, it clears the next-eligible time of every idle partition in the same transaction. Partitions waiting on a retry are left alone.
 - **FR-008** Once every partition is exhausted and nothing is outstanding, the existing completion rules settle the run: `Succeeded`, or `BusinessError` with `etl.rows-rejected`. The terminal result and outbox are written in the same transaction, as today.
 - **FR-009** Cancellation and fault settlement are unchanged, and the first terminal outcome wins over a pending completion request.

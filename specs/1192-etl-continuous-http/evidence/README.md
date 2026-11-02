@@ -57,6 +57,7 @@ Real worker and store, against a loopback cursor feed (`EtlRuntimeJourneyTests.C
 - the results are `accepted`, `alreadyRequested`, `notContinuous` and `terminal`;
 - only the idle shard is woken, and a 429 retry wait keeps its time;
 - `nextPollAt` appears only on the idle shard, including while its worker still holds the lease.
+- on a provider without a connector store, a v1 run answers `notContinuous` and a v2 run 503; a legacy `IEtlRuntimeOperations` replacement keeps the 503 default.
 
 `Caught_up_records_need_the_live_lease_and_a_continuous_run_and_preparing_runs_accept_completion` refuses a caught-up record under a stale fence, from another attempt, outside its receipt window or for a finite run, and accepts completion during preparation. `A_finite_partition_may_not_wait_without_a_retry_journal` shows the audit still refuses an idle-style wait in a finite run.
 
@@ -108,7 +109,7 @@ This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from
 | Completion without a connector store reports unavailable instead of `notContinuous` (round 4, at `e1a6bcaf7`) | 1/1 |
 | Studio offers Complete run for every running run | 1/14 |
 
-**Tested without a bite-proof:** cancellation winning over a pending completion (it reuses the unchanged first-terminal settlement); the stale-attempt refusal of a caught-up record; the pagination and interval codes of the shared rule (the bite-proof covers the file-source code); completion accepted during preparation; the 404 for a foreign scope; the editor's visibility rule; `notContinuous` taking precedence for a settled finite run.
+**Tested without a bite-proof:** cancellation winning over a pending completion (it reuses the unchanged first-terminal settlement); the stale-attempt refusal of a caught-up record; the pagination and interval codes of the shared rule (the bite-proof covers the file-source code); completion accepted during preparation; the 404 for a foreign scope; `notContinuous` taking precedence for a settled finite run; the 503 for a v2 run without a connector store and the legacy operations default; the API's `mode` and `completionRequestedAt` projection; the completion migration's null column and CHECK; the editor's visibility rule; Studio's inspection labels (run mode, completion requested, "Next poll at" apart from "Eligible after") and the post-completion message.
 
 **Not tested:** the acquirer's cache re-read before recording a caught-up response, and the publish-conflict recovery.
 

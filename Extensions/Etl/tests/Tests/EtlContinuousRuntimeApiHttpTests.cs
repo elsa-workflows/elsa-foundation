@@ -133,8 +133,20 @@ public sealed partial class EtlRuntimeApiHttpTests
         await using (var fileOnly = await EtlDesignApiTestHost.StartRuntimeAsync(configureServices: services =>
                          services.RemoveAll<IEtlConnectorRuntimeStore>()))
         {
-            var invocation = await SeedRunningAsync(fileOnly, "file-only-complete", new EtlScope("tenant-a", "partition-a"));
+            var scope = new EtlScope("tenant-a", "partition-a");
+            var invocation = await SeedRunningAsync(fileOnly, "file-only-complete", scope);
             Assert.Equal("notContinuous", await CompleteResultAsync(fileOnly, invocation.RunId));
+
+            // A v2 run cannot be judged without the connector store, so the API reports it unavailable rather than finite.
+            var admission = EtlRuntimeFixtures.ConnectorAdmission("v2-without-store", scope,
+                EtlV2TestPipelines.Create() with { Continuous = new EtlContinuousRunPolicy(600) }, ["private-shard-one"]);
+            await using (var services = fileOnly.Host.Services.CreateAsyncScope())
+            {
+                var connectors = (IEtlConnectorRuntimeStore)services.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
+                Assert.Equal(EtlStoreStatus.Applied, (await connectors.AdmitConnectorAsync(admission)).Status);
+            }
+            using var unknown = await fileOnly.SendAsync(HttpMethod.Post, "/etl/runs/v2-without-store/complete", permissions: CompletePermissions);
+            await AssertProblemAsync(unknown, HttpStatusCode.ServiceUnavailable, "etl.provider-unavailable");
         }
 
         await using var legacy = await EtlDesignApiTestHost.StartRuntimeAsync(configureServices: services =>
