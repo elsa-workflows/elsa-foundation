@@ -9,23 +9,40 @@ using static Elsa.Agent.Services.AgentIds;
 namespace Elsa.Agent.Services;
 
 /// <summary>
-/// Process-lifetime session rows. Each row's monitor orders message insertion, the session's policy and
+/// The default session owner. Each session row's monitor orders message insertion, the session's policy and
 /// policy revision, and the claims of work admitted under that policy.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Every change is written through <see cref="IAgentSessionRecordStore"/>: take the session's async write gate,
+/// await the record write, then apply the change in memory under the row monitor. A monitor is never held across an
+/// await. A session this owner has not loaded is hydrated from the store, once, under the same gate, and every
+/// operation hydrates before it acts. Claim acquisition and policy changes serialize on the gate, so a claim
+/// acquired while a policy write is in flight waits and then reads the new revision. Lock order: call key, proposal
+/// gate, session write gate, row monitor; hydration never takes a proposal gate. Claims are process-local tokens:
+/// releasing one needs no hydration, because a row that is not loaded holds none.
+/// </para>
+/// <para>
 /// When an audit ownership association is installed, each new session is associated with its actor and tenant
 /// before the row exists or any record for it is emitted. The association has no dependency on this service.
+/// </para>
 /// </remarks>
-internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null)
+internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null,
+    IAgentSessionRecordStore? recordStore = null)
     : IAgentSessionService, IAgentSessionPolicyParticipant
 {
     private const long InitialPolicyRevision = 1;
     private const string PauseKey = "pause";
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+    private readonly IAgentSessionRecordStore _store = recordStore ?? new InMemoryAgentSessionRecordStore(clock);
+    private readonly string _ownerToken = NewId();
     private readonly ConcurrentDictionary<string, SessionRow> _rows = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, List<AgentContextAttachment>> _contexts = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
 
     InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => this;
+
+    /// <summary>The record store this owner writes through.</summary>
+    internal IAgentSessionRecordStore RecordStore => _store;
 
     public async Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default)
     {
@@ -44,14 +61,16 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             now,
             now.AddHours(8),
             request.Metadata)
-        { PolicyRevision = InitialPolicyRevision };
+        { PolicyRevision = InitialPolicyRevision, Workspace = request.Workspace, ContinuedFrom = request.ContinuedFrom };
 
         // A blank owner cannot be associated; such a session stays ineligible for owner-scoped audit queries.
         if (auditOwnership is not null && !string.IsNullOrWhiteSpace(session.ActorId) && !string.IsNullOrWhiteSpace(session.TenantId)
             && !await auditOwnership.AssociateAsync(session.Id, session.ActorId, session.TenantId, cancellationToken))
             throw new AgentContributionException("The new session identity is already associated with another audit owner.");
-        _rows[session.Id] = new SessionRow(session);
-        _contexts[session.Id] = [];
+        var created = await _store.CreateAsync(new AgentSessionRecord(session), _ownerToken, cancellationToken);
+        if (!created.Succeeded || created.Fence is null)
+            throw new AgentContributionException("The new session identity is already recorded.");
+        _rows[session.Id] = new SessionRow(session, created.Fence);
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -65,19 +84,19 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         return session;
     }
 
-    public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        if (!_rows.TryGetValue(sessionId, out var row))
-            return Task.FromResult<AgentSession?>(null);
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return null;
         lock (row)
-            return Task.FromResult<AgentSession?>(row.Session);
+            return row.Session;
     }
 
     public async Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
     {
-        if (!_rows.TryGetValue(sessionId, out var row))
+        if (await RowAsync(sessionId, cancellationToken) is not { } loaded)
             throw new InvalidOperationException($"Agent session '{sessionId}' was not found.");
-        sessionId = row.Session.Id;
+        sessionId = loaded.Session.Id;
 
         var message = new AgentMessage(
             NewId(),
@@ -102,17 +121,17 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             HasDisclosureProvenance = request.HasDisclosureProvenance || request.Role == AgentRole.User,
             DisclosureHistory = request.DisclosureHistory is null ? null : AgentDisclosureHistory.Freeze(request.DisclosureHistory)
         };
-        var messages = row.Messages;
 
-        lock (row)
+        var (accepted, inserted) = await CommitAsync<(AgentMessage Message, bool Inserted)>(sessionId, () => throw new InvalidOperationException($"Agent session '{sessionId}' was not found."), row =>
         {
+            var messages = row.Messages;
             if (request.Role == AgentRole.Tool && !string.IsNullOrEmpty(request.RequestId))
             {
                 var existing = messages.FirstOrDefault(x => x.Role == AgentRole.Tool && x.RequestId == request.RequestId);
                 if (existing is not null)
                 {
                     if (!string.IsNullOrEmpty(request.DeliveryFingerprint) && existing.DeliveryFingerprint == request.DeliveryFingerprint)
-                        return existing;
+                        return new((existing, false));
                     throw new AgentContributionException("An observed tool outcome cannot change its original invocation identity or evidence.");
                 }
             }
@@ -122,7 +141,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 if (existing is not null)
                 {
                     if (!string.IsNullOrEmpty(request.DeliveryFingerprint) && existing.DeliveryFingerprint == request.DeliveryFingerprint)
-                        return existing;
+                        return new((existing, false));
                     throw new AgentContributionException("A prompt delivery identity was reused with different input.");
                 }
             }
@@ -132,11 +151,16 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             if (request.Role == AgentRole.User && messages.Any(x => x.Role == AgentRole.User && x.Status is AgentMessageStatus.Pending or AgentMessageStatus.Streaming))
                 throw new AgentContributionException("Another prompt remains pending in this session.");
             // Attribution is the policy current at this atomic insertion; a later change never relabels it.
-            message = message with { AcceptedPolicy = row.State };
-            if (request.Role == AgentRole.User && request.Status == AgentMessageStatus.Pending)
-                row.Bind(row.NewClaim(AgentSessionClaimKind.Prompt, null), PromptKey(message.Id));
-            messages.Add(message);
-        }
+            var attributed = message with { AcceptedPolicy = row.State };
+            return new((attributed, true), new AgentSessionRecordWrite(sessionId, row.Fence) { Messages = [attributed] }, () =>
+            {
+                if (request.Role == AgentRole.User && request.Status == AgentMessageStatus.Pending)
+                    row.Bind(row.NewClaim(AgentSessionClaimKind.Prompt, null), PromptKey(attributed.Id));
+                messages.Add(attributed);
+            });
+        }, cancellationToken);
+        if (!inserted)
+            return accepted;
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -144,104 +168,90 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             sessionId,
             null,
             "Agent message accepted.",
-            message.CreatedAt,
-            new Dictionary<string, string> { ["messageId"] = message.Id, ["role"] = message.Role.ToString() }), cancellationToken);
+            accepted.CreatedAt,
+            new Dictionary<string, string> { ["messageId"] = accepted.Id, ["role"] = accepted.Role.ToString() }), cancellationToken);
 
-        return message;
+        return accepted;
     }
 
-    public Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default)
+    public async Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default)
     {
-        if (!_rows.TryGetValue(sessionId, out var row))
-            return Task.FromResult<AgentMessage?>(null);
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return null;
 
         lock (row)
         {
-            return Task.FromResult(row.Messages.LastOrDefault(x => role is null || x.Role == role));
+            return row.Messages.LastOrDefault(x => role is null || x.Role == role);
         }
     }
 
-    public Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default)
+    public async Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_rows.TryGetValue(sessionId, out var row))
-            lock (row)
-            {
-                var messages = row.Messages;
-                var index = messages.FindIndex(x => x.Id == messageId);
-                if (index >= 0)
-                {
-                    var terminal = status is AgentMessageStatus.Completed or AgentMessageStatus.Failed or AgentMessageStatus.Cancelled;
-                    messages[index] = messages[index] with { Status = status, CompletedAt = terminal ? DateTimeOffset.UtcNow : null };
-                    // Releases only this exact prompt's claim, including a never-started Pending prompt.
-                    if (terminal && row.Find(PromptKey(messageId)) is { } prompt)
-                        row.Release(prompt);
-                }
-            }
-        return Task.CompletedTask;
+        await CommitAsync(sessionId, () => false, row => PlanMessageStatus(row, messageId, null, status, null), cancellationToken);
     }
 
-    public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Compare-and-set of one message's status: changes it only while it still has <paramref name="expected"/>.
+    /// False when the message is missing or another transition moved it first.
+    /// </summary>
+    internal Task<bool> TrySetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus expected, AgentMessageStatus status,
+        string? reason = null, CancellationToken cancellationToken = default)
+        => CommitAsync(sessionId, () => false, row => PlanMessageStatus(row, messageId, expected, status, reason), cancellationToken);
+
+    public async Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        if (!_rows.TryGetValue(sessionId, out var row))
-            return Task.FromResult<IReadOnlyCollection<AgentMessage>>([]);
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return [];
 
         lock (row)
-            return Task.FromResult<IReadOnlyCollection<AgentMessage>>(row.Messages.ToList());
+            return row.Messages.ToList();
     }
 
-    public Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
+    public async Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
     {
-        if (!_rows.TryGetValue(sessionId, out var row))
-            return Task.FromResult<AgentMessage?>(null);
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return null;
 
         lock (row)
-            return Task.FromResult(row.Messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.Ordinal)));
+            return row.Messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.Ordinal));
     }
 
-    public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
+    public async Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
     {
         if (attachments.Count == 0)
-            return Task.CompletedTask;
+            return;
 
-        if (!_rows.ContainsKey(sessionId))
-            throw new InvalidOperationException($"Agent session '{sessionId}' was not found.");
-
-        var contexts = _contexts.GetOrAdd(sessionId, _ => []);
-        lock (contexts)
+        await CommitAsync<bool>(sessionId, () => throw new InvalidOperationException($"Agent session '{sessionId}' was not found."), row =>
         {
-            var existingIds = contexts.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
-            foreach (var attachment in attachments.Where(x => existingIds.Add(x.Id)))
-                contexts.Add(attachment);
-        }
-
-        return Task.CompletedTask;
+            var existingIds = row.Context.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+            var added = attachments.Where(x => existingIds.Add(x.Id)).ToArray();
+            return added.Length == 0
+                ? new(true)
+                : new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Context = added }, () => row.Context.AddRange(added));
+        }, cancellationToken);
     }
 
-    public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        if (!_contexts.TryGetValue(sessionId, out var contexts))
-            return Task.FromResult<IReadOnlyCollection<AgentContextAttachment>>([]);
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return [];
 
-        lock (contexts)
-            return Task.FromResult<IReadOnlyCollection<AgentContextAttachment>>(contexts.ToList());
+        lock (row)
+            return row.Context.ToList();
     }
 
-    /// <summary>Acquires an unkeyed claim; null when this owner has no row for the session.</summary>
-    internal AgentSessionClaim? Acquire(string sessionId, AgentSessionClaimKind kind)
+    /// <summary>Acquires an unkeyed claim under the session write gate; null when the session is not recorded.</summary>
+    internal Task<AgentSessionClaim?> AcquireAsync(string sessionId, AgentSessionClaimKind kind, CancellationToken cancellationToken = default)
     {
         if (kind is AgentSessionClaimKind.Prompt or AgentSessionClaimKind.Proposal or AgentSessionClaimKind.Pause)
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "Keyed claims are acquired through their owning transition.");
-        if (!_rows.TryGetValue(sessionId, out var row)) return null;
-        lock (row) return row.NewClaim(kind, null);
+        return CommitAsync<AgentSessionClaim?>(sessionId, () => null, row => new(row.NewClaim(kind, null)), cancellationToken);
     }
 
     /// <summary>Acquires a provisional proposal claim before store insertion; it records the prepared deadline.</summary>
-    internal AgentSessionClaim? AcquireProposal(string sessionId, DateTimeOffset? deadline)
-    {
-        if (!_rows.TryGetValue(sessionId, out var row)) return null;
-        lock (row) return row.NewClaim(AgentSessionClaimKind.Proposal, deadline);
-    }
+    internal Task<AgentSessionClaim?> AcquireProposalAsync(string sessionId, DateTimeOffset? deadline, CancellationToken cancellationToken = default)
+        => CommitAsync<AgentSessionClaim?>(sessionId, () => null, row => new(row.NewClaim(AgentSessionClaimKind.Proposal, deadline)), cancellationToken);
 
     /// <summary>Binds a provisional proposal claim to its inserted proposal identity.</summary>
     internal bool BindProposal(AgentSessionClaim claim, string proposalId)
@@ -250,20 +260,20 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         lock (row) return row.Bind(claim, ProposalKey(proposalId));
     }
 
-    /// <summary>Marks the proposal's claim dispatched; false refuses a pre-dispatch claim past its deadline.</summary>
-    internal bool MarkProposalDispatched(string sessionId, string proposalId)
-    {
-        if (!_rows.TryGetValue(sessionId, out var row)) return true;
-        lock (row)
+    /// <summary>
+    /// Marks the proposal's claim dispatched after hydrating its session; false refuses a pre-dispatch claim past its
+    /// deadline, and a session that is not recorded, which can never authorize dispatch.
+    /// </summary>
+    internal Task<bool> MarkProposalDispatchedAsync(string sessionId, string proposalId, CancellationToken cancellationToken = default)
+        => CommitAsync<bool>(sessionId, () => false, row =>
         {
-            if (row.Find(ProposalKey(proposalId)) is not { } claim) return true;
-            if (claim.Dispatched) return true;
+            if (row.Find(ProposalKey(proposalId)) is not { } claim) return new(true);
+            if (claim.Dispatched) return new(true);
             // An expired pre-dispatch claim no longer counts as busy, so it cannot authorize dispatch.
-            if (claim.Deadline is { } deadline && deadline <= _clock.GetUtcNow()) return false;
+            if (claim.Deadline is { } deadline && deadline <= _clock.GetUtcNow()) return new(false);
             claim.Dispatched = true;
-            return true;
-        }
-    }
+            return new(true);
+        }, cancellationToken);
 
     /// <summary>Releases the claim bound to this proposal identity, if any.</summary>
     internal void ReleaseProposal(string sessionId, string proposalId)
@@ -274,18 +284,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 row.Release(claim);
     }
 
-    /// <summary>Returns the retained pause claim, acquiring it when absent.</summary>
-    internal AgentSessionClaim? EnsurePause(string sessionId)
-    {
-        if (!_rows.TryGetValue(sessionId, out var row)) return null;
-        lock (row)
-        {
-            if (row.Find(PauseKey) is { } existing) return existing;
-            var claim = row.NewClaim(AgentSessionClaimKind.Pause, null);
-            row.Bind(claim, PauseKey);
-            return claim;
-        }
-    }
+    /// <summary>Returns the retained pause claim, acquiring it under the session write gate when absent.</summary>
+    internal Task<AgentSessionClaim?> EnsurePauseAsync(string sessionId, CancellationToken cancellationToken = default)
+        => CommitAsync<AgentSessionClaim?>(sessionId, () => null, row => new(EnsurePause(row)), cancellationToken);
 
     /// <summary>The currently retained pause claim, if any.</summary>
     internal AgentSessionClaim? FindPause(string sessionId)
@@ -302,9 +303,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     }
 
     /// <summary>Reads the session's current policy state for its owning actor and tenant.</summary>
-    internal AgentSessionPolicyResult GetPolicy(string sessionId, string actorId, string tenantId)
+    internal async Task<AgentSessionPolicyResult> GetPolicyAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default)
     {
-        if (!_rows.TryGetValue(sessionId, out var row))
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
             return new(AgentSessionPolicyOutcome.NotFound, null);
         lock (row)
             return Owned(row.Session, actorId, tenantId)
@@ -312,43 +313,189 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 : new(AgentSessionPolicyOutcome.NotFound, null);
     }
 
-    /// <summary>Applies one conditional autonomy change under the session row monitor.</summary>
-    internal AgentSessionPolicyResult ChangeAutonomy(AgentSessionAutonomyChangeRequest request)
+    /// <summary>
+    /// Applies one conditional autonomy change. The busy check, the awaited revision write and its application are one
+    /// step under the session write gate, so no claim can be admitted between them.
+    /// </summary>
+    internal Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default)
     {
         // 1. An undefined mode is refused before any session state is consulted.
         if (!Enum.IsDefined(request.RequestedMode))
-            return new(AgentSessionPolicyOutcome.InvalidMode, null);
-        if (!_rows.TryGetValue(request.SessionId, out var row))
-            return new(AgentSessionPolicyOutcome.NotFound, null);
-        lock (row)
+            return Task.FromResult(new AgentSessionPolicyResult(AgentSessionPolicyOutcome.InvalidMode, null));
+        return CommitAsync<AgentSessionPolicyResult>(request.SessionId, () => new AgentSessionPolicyResult(AgentSessionPolicyOutcome.NotFound, null), row =>
         {
             var session = row.Session;
             if (!Owned(session, request.ActorId, request.TenantId))
-                return new(AgentSessionPolicyOutcome.NotFound, null);
+                return new(new(AgentSessionPolicyOutcome.NotFound, null));
             var now = _clock.GetUtcNow();
             // 2. Closed or expired.
             if (session.Status != AgentSessionStatus.Active || session.ExpiresAt is { } expires && expires <= now)
-                return new(AgentSessionPolicyOutcome.SessionClosed, null);
+                return new(new(AgentSessionPolicyOutcome.SessionClosed, null));
             // 3. Stale before any no-op comparison, so an old request cannot be acknowledged as current.
             if (request.ExpectedRevision != row.Revision)
-                return new(AgentSessionPolicyOutcome.StaleRevision, row.State);
+                return new(new(AgentSessionPolicyOutcome.StaleRevision, row.State));
             // 4. Admitted work owns the current policy.
             if (row.IsBusy(now))
-                return new(AgentSessionPolicyOutcome.Busy, row.State);
+                return new(new(AgentSessionPolicyOutcome.Busy, row.State));
             // 5. Clamp to the current ceiling; 6. replace only the autonomy mode.
             var effective = session.Policy.Clamp(request.RequestedMode);
             if (effective == session.Policy.AutonomyMode)
-                return new(AgentSessionPolicyOutcome.Succeeded, row.State);
-            // 7. A real change increments the revision.
-            row.Revision++;
-            row.Session = session with
+                return new(new(AgentSessionPolicyOutcome.Succeeded, row.State));
+            // 7. A real change increments the revision; it is recorded before it governs anything.
+            var revision = row.Revision + 1;
+            var changed = session with
             {
                 Policy = session.Policy with { AutonomyMode = effective },
-                PolicyRevision = row.Revision,
+                PolicyRevision = revision,
                 UpdatedAt = now
             };
-            return new(AgentSessionPolicyOutcome.Succeeded, row.State);
+            return new(new(AgentSessionPolicyOutcome.Succeeded, new(Freeze(changed.Policy), revision)),
+                new AgentSessionRecordWrite(session.Id, row.Fence) { Session = changed }, () =>
+                {
+                    row.Revision = revision;
+                    row.Session = changed;
+                });
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// One collaborator transition on a session aggregate, such as a proposal change: under the session write gate,
+    /// <paramref name="plan"/> runs (outside the row monitor), its write is awaited, then its change is applied. A
+    /// session that is not recorded receives a null fence; its plan's change is then applied in memory only.
+    /// </summary>
+    internal async Task<T> CommitAsync<T>(string sessionId, Func<AgentSessionFence?, AgentSessionTransition<T>> plan, CancellationToken cancellationToken = default)
+    {
+        var gate = Gate(sessionId);
+        await gate.WaitAsync(cancellationToken);
+        SessionRow? row = null;
+        try
+        {
+            row = await HydrateAsync(sessionId, cancellationToken);
+            AgentSessionFence? fence = null;
+            if (row is not null)
+                lock (row) fence = row.Fence;
+            var planned = plan(fence);
+            if (row is not null && planned.Write is { } write) await WriteThroughAsync(row, write);
+            planned.Apply?.Invoke();
+            return planned.Result;
         }
+        finally
+        {
+            gate.Release();
+            if (row is null) ForgetGate(sessionId, gate);
+        }
+    }
+
+    private static AgentSessionClaim EnsurePause(SessionRow row)
+    {
+        if (row.Find(PauseKey) is { } existing) return existing;
+        var claim = row.NewClaim(AgentSessionClaimKind.Pause, null);
+        row.Bind(claim, PauseKey);
+        return claim;
+    }
+
+    private static AgentSessionTransition<bool> PlanMessageStatus(SessionRow row, string messageId, AgentMessageStatus? expected,
+        AgentMessageStatus status, string? reason)
+    {
+        var messages = row.Messages;
+        var index = messages.FindIndex(x => x.Id == messageId);
+        if (index < 0 || expected is { } required && messages[index].Status != required)
+            return new(false);
+        var terminal = status is AgentMessageStatus.Completed or AgentMessageStatus.Failed or AgentMessageStatus.Cancelled;
+        var updated = messages[index] with
+        {
+            Status = status, CompletedAt = terminal ? DateTimeOffset.UtcNow : null,
+            StatusReason = reason ?? (status == AgentMessageStatus.Cancelled ? messages[index].StatusReason : null)
+        };
+        return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Messages = [updated] }, () =>
+        {
+            messages[index] = updated;
+            // Releases only this exact prompt's claim, including a never-started Pending prompt.
+            if (terminal && row.Find(PromptKey(messageId)) is { } prompt)
+                row.Release(prompt);
+        });
+    }
+
+    /// <summary>The loaded row, hydrating it once under the session write gate; null when the session is not recorded.</summary>
+    private async ValueTask<SessionRow?> RowAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        if (_rows.TryGetValue(sessionId, out var row))
+            return row;
+        var gate = Gate(sessionId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            row = await HydrateAsync(sessionId, cancellationToken);
+            return row;
+        }
+        finally
+        {
+            gate.Release();
+            if (row is null) ForgetGate(sessionId, gate);
+        }
+    }
+
+    /// <summary>Under the session write gate: single-flight hydration. It never takes a proposal gate.</summary>
+    private async Task<SessionRow?> HydrateAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        if (_rows.TryGetValue(sessionId, out var loaded))
+            return loaded;
+        var ownership = await _store.AcquireOwnershipAsync(sessionId, _ownerToken, cancellationToken);
+        if (ownership.Outcome == AgentSessionRecordOutcome.NotFound)
+            return null;
+        if (!ownership.Succeeded || ownership.Fence is null)
+            throw new AgentContributionException($"Agent session '{sessionId}' is owned by another process.");
+        if (await _store.LoadAsync(sessionId, cancellationToken) is not { } record)
+            return null;
+        return _rows.GetOrAdd(sessionId, new SessionRow(record, ownership.Fence));
+    }
+
+    /// <summary>Awaits one record write; an owner or fence that is no longer current evicts the row and applies nothing.</summary>
+    private async Task WriteThroughAsync(SessionRow row, AgentSessionRecordWrite write)
+    {
+        // A planned write always completes, so the store and the applied change never diverge on cancellation.
+        var written = await _store.WriteAsync(write, CancellationToken.None);
+        if (written.Succeeded) return;
+        if (written.Outcome is AgentSessionRecordOutcome.OwnershipLost or AgentSessionRecordOutcome.NotFound)
+        {
+            _rows.TryRemove(new KeyValuePair<string, SessionRow>(write.SessionId, row));
+            throw new AgentContributionException($"Agent session '{write.SessionId}' is no longer owned by this process; nothing was applied.");
+        }
+        throw new AgentContributionException($"Agent session '{write.SessionId}' could not record the transition ({written.Outcome}); nothing was applied.");
+    }
+
+    /// <summary>Under the session write gate: hydrate, plan under the row monitor, await the write, apply under the monitor.</summary>
+    private async Task<T> CommitAsync<T>(string sessionId, Func<T> missing, Func<SessionRow, AgentSessionTransition<T>> plan, CancellationToken cancellationToken)
+    {
+        var gate = Gate(sessionId);
+        await gate.WaitAsync(cancellationToken);
+        SessionRow? row = null;
+        try
+        {
+            row = await HydrateAsync(sessionId, cancellationToken);
+            if (row is null)
+                return missing();
+            AgentSessionTransition<T> planned;
+            lock (row) planned = plan(row);
+            if (planned.Write is { } write) await WriteThroughAsync(row, write);
+            if (planned.Apply is { } apply)
+                lock (row) apply();
+            return planned.Result;
+        }
+        finally
+        {
+            gate.Release();
+            if (row is null) ForgetGate(sessionId, gate);
+        }
+    }
+
+    private SemaphoreSlim Gate(string sessionId) => _gates.GetOrAdd(sessionId, _ => new(1, 1));
+
+    // Probes for sessions that are not recorded must not accumulate gates; hydration itself is idempotent.
+    private void ForgetGate(string sessionId, SemaphoreSlim gate)
+    {
+        if (!_rows.ContainsKey(sessionId))
+            _gates.TryRemove(new KeyValuePair<string, SemaphoreSlim>(sessionId, gate));
     }
 
     private static bool Owned(AgentSession session, string actorId, string tenantId)
@@ -364,15 +511,33 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     private static string PromptKey(string messageId) => "prompt:" + messageId;
     private static string ProposalKey(string proposalId) => "proposal:" + proposalId;
 
-    /// <summary>One session's state. Every member is used only under <c>lock (row)</c>.</summary>
-    private sealed class SessionRow(AgentSession session)
+    /// <summary>One loaded session's state. Every member is used only under <c>lock (row)</c>.</summary>
+    private sealed class SessionRow
     {
         private readonly HashSet<AgentSessionClaim> _claims = new(ReferenceEqualityComparer.Instance);
         private readonly Dictionary<string, AgentSessionClaim> _keyed = new(StringComparer.Ordinal);
 
-        public AgentSession Session { get; set; } = session;
-        public long Revision { get; set; } = session.PolicyRevision ?? InitialPolicyRevision;
+        public SessionRow(AgentSession session, AgentSessionFence fence)
+        {
+            Session = session;
+            Fence = fence;
+            Revision = session.PolicyRevision ?? InitialPolicyRevision;
+        }
+
+        /// <summary>Hydrates the recorded facts. Claims are never recorded; nothing is rebuilt from them here.</summary>
+        public SessionRow(AgentSessionRecord record, AgentSessionFence fence) : this(record.Session, fence)
+        {
+            Messages.AddRange(record.Messages);
+            Context.AddRange(record.Context);
+            PausedTurn = record.PausedTurn;
+        }
+
+        public AgentSession Session { get; set; }
+        public AgentSessionFence Fence { get; }
+        public long Revision { get; set; }
         public List<AgentMessage> Messages { get; } = [];
+        public List<AgentContextAttachment> Context { get; } = [];
+        public AgentPausedTurn? PausedTurn { get; set; }
         // The live policy is the host's; claims and accepted messages retain a frozen snapshot of it.
         public AgentSessionPolicyState State => new(Freeze(Session.Policy), Revision);
 
@@ -404,6 +569,12 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             || claim.Dispatched || claim.Deadline is not { } deadline || deadline > now);
     }
 }
+
+/// <summary>
+/// One planned transition of a session aggregate: its result, the record write that makes it durable (none for a
+/// refusal or a no-op), and the in-memory change applied only after that write succeeded.
+/// </summary>
+internal readonly record struct AgentSessionTransition<T>(T Result, AgentSessionRecordWrite? Write = null, Action? Apply = null);
 
 internal sealed class InMemoryAgentFeedbackService(IAgentAuditSink auditSink) : IAgentFeedbackService
 {

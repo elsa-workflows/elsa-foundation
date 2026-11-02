@@ -202,7 +202,7 @@ public sealed class AgentSessionAutonomyApiTests
         var session = await fixture.CreateAsync();
         var owner = (InMemoryAgentSessionService)fixture.Sessions;
         // The orchestrator holds exactly this claim from before it reads policy until Unregister completes.
-        var foreground = owner.Acquire(session.Id, AgentSessionClaimKind.Foreground)!;
+        var foreground = (await owner.AcquireAsync(session.Id, AgentSessionClaimKind.Foreground))!;
 
         var (status, body) = await fixture.ChangeAsync(session.Id, new { autonomyMode = "manual", expectedRevision = 1 });
         AssertFailure(status, body, 409, "agent.session.busy");

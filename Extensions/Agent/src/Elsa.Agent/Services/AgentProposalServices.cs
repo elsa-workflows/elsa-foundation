@@ -47,7 +47,8 @@ internal sealed class InMemoryAgentProposalService(
         // prepared invocation is never claimed: ExecuteAsync refuses it before dispatch, so its outcome cannot
         // depend on policy, and a claim with no deadline and no reachable settling transition would hold the
         // session busy forever.
-        var claim = proposal.PreparedInvocation is { } claimed ? _owner?.AcquireProposal(proposal.SessionId, claimed.ExpiresAt) : null;
+        var claim = proposal.PreparedInvocation is { } claimed && _owner is not null
+            ? await _owner.AcquireProposalAsync(proposal.SessionId, claimed.ExpiresAt, cancellationToken) : null;
         var inserted = false;
         try
         {
@@ -206,7 +207,7 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.executor_unavailable", "This proposal has no concrete prepared executor.", 409);
             // The owner marks the claim dispatched before Executing. An expired pre-dispatch claim is no
             // longer busy, so policy may have moved; it can never authorize dispatch.
-            if (_owner?.MarkProposalDispatched(proposal.SessionId, proposalId) == false)
+            if (_owner is not null && !await _owner.MarkProposalDispatchedAsync(proposal.SessionId, proposalId, CancellationToken.None))
             {
                 await ExpireBeforeDispatchAsync(proposal, actorId);
                 return Expired<AgentProposalExecutionResult>();

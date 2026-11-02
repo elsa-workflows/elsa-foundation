@@ -50,7 +50,8 @@ internal sealed class DefaultAgentToolInvoker(
 
         // A mutation's approval basis is the claim's snapshot, read after acquisition and held until a
         // proposal claim covers the work. The caller-supplied policy can only tighten it.
-        var preparationClaim = descriptor.Mutability == AgentToolMutability.Mutating ? _owner?.Acquire(session.Id, AgentSessionClaimKind.Preparation) : null;
+        var preparationClaim = descriptor.Mutability == AgentToolMutability.Mutating && _owner is not null
+            ? await _owner.AcquireAsync(session.Id, AgentSessionClaimKind.Preparation, cancellationToken) : null;
         var approvalBasis = preparationClaim?.State.Policy ?? session.Policy;
         try
         {

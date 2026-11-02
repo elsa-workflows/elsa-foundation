@@ -197,7 +197,7 @@ public sealed class AgentSessionPolicyTests
         using var fixture = new Fixture();
         var session = await fixture.CreateAsync();
         var prompt = await fixture.PostAsync(session, "hello");
-        var foreground = fixture.Owner.Acquire(session.Id, AgentSessionClaimKind.Foreground)!;
+        var foreground = (await fixture.Owner.AcquireAsync(session.Id, AgentSessionClaimKind.Foreground))!;
 
         await fixture.Sessions.SetMessageStatusAsync(session.Id, prompt.Id, AgentMessageStatus.Cancelled);
 
@@ -212,17 +212,17 @@ public sealed class AgentSessionPolicyTests
         using var fixture = new Fixture();
         var session = await fixture.CreateAsync();
         var owner = fixture.Owner;
-        var old = owner.Acquire(session.Id, AgentSessionClaimKind.Foreground)!;
+        var old = (await owner.AcquireAsync(session.Id, AgentSessionClaimKind.Foreground))!;
         owner.Release(old);
-        var successor = owner.Acquire(session.Id, AgentSessionClaimKind.Foreground)!;
+        var successor = (await owner.AcquireAsync(session.Id, AgentSessionClaimKind.Foreground))!;
         owner.Release(old);
         Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
         owner.Release(successor);
 
-        var oldPause = owner.EnsurePause(session.Id)!;
-        Assert.Same(oldPause, owner.EnsurePause(session.Id));
+        var oldPause = (await owner.EnsurePauseAsync(session.Id))!;
+        Assert.Same(oldPause, await owner.EnsurePauseAsync(session.Id));
         owner.Release(oldPause);
-        var nextPause = owner.EnsurePause(session.Id)!;
+        var nextPause = (await owner.EnsurePauseAsync(session.Id))!;
         Assert.NotSame(oldPause, nextPause);
         owner.Release(oldPause);
         Assert.Same(nextPause, owner.FindPause(session.Id));

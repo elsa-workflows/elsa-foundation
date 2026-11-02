@@ -109,7 +109,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         var turnId = boundary.Call("find-paused-turn", () => stateStore.Find(sessionId), cancellationToken)?.TurnId ?? NewId();
         // The foreground claim precedes registration and every policy read for this turn or continuation.
         // Its snapshot replaces the earlier lookup as the turn's approval authority.
-        var foreground = _owner?.Acquire(sessionId, AgentSessionClaimKind.Foreground);
+        var foreground = _owner is null ? null : await _owner.AcquireAsync(sessionId, AgentSessionClaimKind.Foreground, CancellationToken.None);
         if (foreground is not null)
             session = session with { Policy = foreground.State.Policy, PolicyRevision = foreground.State.Revision };
         // A continuation releases exactly the pause it observed once that pause is removed.
@@ -145,6 +145,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         var providerEntered = false;
         string? pausedProposalId = null;
         var assistantJournaled = false;
+        var sourceMoved = false;
         AgentError? disclosureStop = null;
         Task<T> TrackAsync<T>(Func<Task<T>> pending)
             => boundary.CallAsync("admit-disclosure", pending, token);
@@ -196,7 +197,17 @@ internal sealed class DefaultAgentTurnOrchestrator(
             }
             checkpoint.History = disclosures.Snapshots;
             var source = prepared.Source!;
-            await boundary.CallAsync("start-prompt", () => sessions.SetMessageStatusAsync(sessionId, source.Id, AgentMessageStatus.Streaming, token), token);
+            if (_owner is null)
+                await boundary.CallAsync("start-prompt", () => sessions.SetMessageStatusAsync(sessionId, source.Id, AgentMessageStatus.Streaming, token), token);
+            // Start is a compare-and-set from the status this turn observed, so it cannot overwrite a concurrent withdraw.
+            else if (!await boundary.CallAsync("start-prompt", () => _owner.TrySetMessageStatusAsync(sessionId, source.Id, source.Status,
+                         AgentMessageStatus.Streaming, cancellationToken: token), token))
+            {
+                // Another transition moved the prompt first. This turn never started it and leaves its status alone.
+                sourceMoved = true;
+                yield return Error("agent.message.not_pending", "The prompt is no longer pending; it was not started.", 409);
+                yield break;
+            }
             var maxSteps = boundary.Call("read-turn-options", () => Math.Max(1, options.Value.MaxSteps), token);
             yield return Lifecycle(AgentStreamEventKind.Started, new AgentTurnStarted(turnId, maxSteps));
             yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution(prepared.Context, prepared.Diagnostics));
@@ -558,7 +569,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     $"Agent disclosure '{operation}' for session '{sessionId}' could not complete.", cause));
             try
             {
-                if ((prepared is null ? preparationSource : prepared.Source) is { } source && !paused)
+                if ((prepared is null ? preparationSource : prepared.Source) is { } source && !paused && !sourceMoved)
                 {
                     try
                     {
@@ -596,7 +607,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             finally
             {
                 // A verified pause is claimed before foreground is released, so there is no idle gap.
-                if (paused && foreground is not null) _owner!.EnsurePause(sessionId);
+                if (paused && foreground is not null) await _owner!.EnsurePauseAsync(sessionId, CancellationToken.None);
                 var unregistered = false;
                 try { turnRegistry.Unregister(sessionId, turnId); unregistered = true; }
                 catch (Exception cause) { RecordCleanupFailure("release-turn", cause); }

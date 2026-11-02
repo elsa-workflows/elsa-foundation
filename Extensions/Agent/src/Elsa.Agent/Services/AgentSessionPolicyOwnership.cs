@@ -68,14 +68,14 @@ internal sealed class DefaultAgentSessionPolicyService(IServiceProvider services
     public Task<AgentSessionPolicyResult> GetAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Owner() is { } owner ? owner.GetPolicy(sessionId, actorId, tenantId) : Unsupported);
+        return Owner() is { } owner ? owner.GetPolicyAsync(sessionId, actorId, tenantId, cancellationToken) : Task.FromResult(Unsupported);
     }
 
     public Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Owner() is { } owner ? owner.ChangeAutonomy(request) : Unsupported);
+        return Owner() is { } owner ? owner.ChangeAutonomyAsync(request, cancellationToken) : Task.FromResult(Unsupported);
     }
 
     // Participants are resolved lazily so that an unrelated provider conflict surfaces from its own consumer.

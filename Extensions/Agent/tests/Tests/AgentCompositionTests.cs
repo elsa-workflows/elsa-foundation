@@ -232,6 +232,23 @@ public sealed class AgentCompositionTests
 
     // ---- #3441 T004: the record store and the audit trio are single replacement contracts ----
 
+    [Fact]
+    public async Task The_default_feature_registers_one_round_tripping_record_store_behind_the_owner()
+    {
+        await using var root = BuildRoot([typeof(FoundationAgentApiFeature)]);
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using var scope = shell.BeginScope();
+        var services = scope.ServiceProvider;
+
+        var store = Assert.IsType<InMemoryAgentSessionRecordStore>(Assert.Single(services.GetServices<IAgentSessionRecordStore>()));
+        Assert.True(store.SupportsFencing);
+        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1",
+            DeterministicAgentProvider.Id, "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
+        var recorded = (await store.LoadAsync(session.Id))!;
+        Assert.NotSame(session, recorded.Session);
+        Assert.Equal(session.Id, recorded.Session.Id);
+    }
+
     [Theory]
     [InlineData(typeof(DuplicateRecordStoreProbeFeature), typeof(IAgentSessionRecordStore))]
     [InlineData(typeof(DuplicateAuditSinkProbeFeature), typeof(IAgentAuditSink))]
@@ -263,6 +280,32 @@ public sealed class AgentCompositionTests
 
         Assert.Contains(contract.FullName!, failure.Message);
         Assert.Contains("at most one registration", failure.Message);
+    }
+
+    [Fact]
+    public async Task Replacing_the_record_store_and_the_audit_trio_keeps_one_of_each_and_a_supported_owner()
+    {
+        var store = new InMemoryAgentSessionRecordStore();
+        var audit = new InMemoryAgentAuditStore();
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionRecordStore>(store));
+            services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink>(audit));
+            services.Replace(ServiceDescriptor.Singleton<IAgentAuditReader>(audit));
+            services.Replace(ServiceDescriptor.Singleton<IAgentAuditOwnership>(audit));
+        });
+        using var scope = root.CreateScope();
+        var services = scope.ServiceProvider;
+        foreach (var initializer in services.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync(CancellationToken.None);
+
+        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1",
+            DeterministicAgentProvider.Id, "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
+
+        Assert.NotNull(await store.LoadAsync(session.Id));
+        Assert.Single(await audit.ListAsync(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded,
+            (await services.GetRequiredService<IAgentSessionPolicyService>().GetAsync(session.Id, session.ActorId, session.TenantId)).Outcome);
     }
 
     private static void AddSecond(IServiceCollection services, Type contract)
