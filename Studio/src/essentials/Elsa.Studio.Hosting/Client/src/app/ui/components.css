@@ -543,6 +543,151 @@ html[data-theme-material] .studio-action-notice {
   box-shadow: var(--studio-material-shadow);
 }
 
+.studio-toast-host {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 1100;
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.studio-toast {
+  --studio-toast-tone: var(--studio-accent);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--studio-border);
+  border-left: 3px solid var(--studio-toast-tone);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 10px 8px 10px 12px;
+  pointer-events: auto;
+}
+
+.studio-toast[data-level="success"] { --studio-toast-tone: var(--studio-success); }
+.studio-toast[data-level="warning"] { --studio-toast-tone: var(--studio-warning); }
+.studio-toast[data-level="error"] { --studio-toast-tone: var(--studio-danger); }
+
+.studio-toast-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--studio-toast-tone);
+  padding-top: 1px;
+}
+
+.studio-toast-body {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.studio-toast-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.studio-toast-message {
+  margin-top: 2px;
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.studio-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.studio-toast-button,
+.studio-toast-dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--studio-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.studio-toast-button {
+  min-height: 28px;
+  border-radius: var(--studio-radius-sm);
+  margin-left: -7px;
+  padding: 0 7px;
+}
+
+.studio-toast-dismiss {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text-muted);
+  padding: 0;
+}
+
+.studio-toast-button:hover,
+.studio-toast-dismiss:hover {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-toast-button:focus-visible,
+.studio-toast-dismiss:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+
+html[data-theme-material] .studio-toast {
+  border-color: var(--studio-material-edge);
+  border-left-color: var(--studio-toast-tone);
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .studio-toast {
+    animation: studio-toast-in 0.18s ease-out;
+  }
+
+  .studio-toast-spinner {
+    animation: studio-toast-spin 1s linear infinite;
+  }
+}
+
+@keyframes studio-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes studio-toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Visually hidden live regions that announce toasts to assistive technology. */
+.studio-toast-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .studio-stat-tile {
   display: grid;
   grid-template-columns: 1fr auto;

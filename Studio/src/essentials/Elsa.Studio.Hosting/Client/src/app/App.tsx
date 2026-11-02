@@ -62,6 +62,7 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { ToastHost } from "./ui/feedback/ToastHost";
 import { notificationController, notificationStorage } from "./notifications";
 import { notificationScopeKey } from "./notificationStorage";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
@@ -482,6 +483,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
       >
+        <ToastHost navigate={navigateTo} />
         <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
         {settingsSurface ? (
           <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
