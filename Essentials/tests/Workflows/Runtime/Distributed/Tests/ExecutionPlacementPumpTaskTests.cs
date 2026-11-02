@@ -239,6 +239,28 @@ public sealed class ExecutionPlacementPumpTaskTests
             inner.ListOwnedAsync(request, cancellationToken);
     }
 
+    /// <summary>A drain that fails still releases the commands held behind it; the failed command keeps its lease.</summary>
+    [Fact]
+    public async Task A_failed_drain_releases_the_commands_held_behind_it()
+    {
+        var store = new InMemoryExecutionPlacementStore();
+        var transport = new InMemoryExecutionCommandTransport();
+        var clock = new FakeTimeProvider(_now);
+        var executor = new HoldingCommandExecutor("env-1") { FailHeld = true };
+        var node = new NodeHarness(NodeA, store, transport, clock, executor, LeaseDuration);
+        await transport.SendAsync(ExecutionId, NodeHarness.Envelope(ExecutionId, "env-1", _now), _now);
+        await SweepAdvancingAsync(node, clock);
+
+        await transport.SendAsync(ExecutionId, NodeHarness.Envelope(ExecutionId, "env-2", clock.GetUtcNow()), clock.GetUtcNow());
+        var held = await SweepAdvancingAsync(node, clock);
+        Assert.Equal(0, held.DispatchedCommandCount);
+        Assert.Equal(2, (await transport.ListLeasedAsync(NodeA, clock.GetUtcNow(), 10)).Count);
+
+        executor.Release.SetResult();
+        await WaitUntilAsync(async () => (await transport.ListLeasedAsync(NodeA, clock.GetUtcNow(), 10)).Count == 1);
+        Assert.Equal(["env-1"], (await transport.ListLeasedAsync(NodeA, clock.GetUtcNow(), 10)).Select(item => item.Envelope.EnvelopeId));
+    }
+
     private static WorkflowExecutionCommandEnvelope CancelEnvelope(string executionId, string envelopeId, DateTimeOffset now) =>
         new(
             envelopeId: envelopeId,
@@ -280,6 +302,7 @@ public sealed class ExecutionPlacementPumpTaskTests
         public TaskCompletionSource Holding { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public IReadOnlyList<string> Processed => _processed.ToArray();
+        public bool FailHeld { get; init; }
 
         public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
         {
@@ -288,6 +311,8 @@ public sealed class ExecutionPlacementPumpTaskTests
             {
                 Holding.TrySetResult();
                 await Release.Task.WaitAsync(cancellationToken);
+                if (FailHeld)
+                    throw new InvalidOperationException("The held drain failed.");
             }
             return WorkflowExecutionCommandProcessResult.NoDrain;
         }

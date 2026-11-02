@@ -780,22 +780,16 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         {
             try
             {
-                if (!IsDelivered(await dispatch))
-                    return;
-
-                var leaseToken = detached.LeaseToken;
-                var acked = await AckAsync(leaseToken);
-                // The sweep may have leased the item again while this ack ran; acknowledge under that lease instead.
-                if (!acked && detached.LeaseToken != leaseToken)
-                    acked = await AckAsync(detached.LeaseToken);
-                if (!acked)
-                    Logger.LogDebug("Command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} finished after its lease moved on; it is re-driven and deduplicated.", item.TransportItemId, executionId);
-
-                // Commands the sweep held back while this drain ran stay leased to this node. Make them visible now, so
-                // the next sweep dispatches them rather than wait out their lease.
-                _detached.TryRemove(new KeyValuePair<string, DetachedDispatch>(key, detached));
-                if (!_detached.Values.Any(running => running.ExecutionKey == executionKey))
-                    await ReleaseHeldAsync();
+                if (IsDelivered(await dispatch))
+                {
+                    var leaseToken = detached.LeaseToken;
+                    var acked = await AckAsync(leaseToken);
+                    // The sweep may have leased the item again while this ack ran; acknowledge under that lease instead.
+                    if (!acked && detached.LeaseToken != leaseToken)
+                        acked = await AckAsync(detached.LeaseToken);
+                    if (!acked)
+                        Logger.LogDebug("Command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} finished after its lease moved on; it is re-driven and deduplicated.", item.TransportItemId, executionId);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -811,9 +805,22 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                 // dispatch in the sweep would be after the sweep's backoff.
                 Logger.LogWarning(exception, "Dispatching command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} failed after the sweep moved on.", item.TransportItemId, executionId);
             }
-            finally
+
+            _detached.TryRemove(new KeyValuePair<string, DetachedDispatch>(key, detached));
+            try
             {
-                _detached.TryRemove(new KeyValuePair<string, DetachedDispatch>(key, detached));
+                // Commands the sweep held back while this drain ran stay leased to this node, whatever this command's
+                // outcome. Make them visible now, so the next sweep, or the execution's new owner, dispatches them
+                // rather than wait out their lease. An undelivered command keeps its own lease, as it would in the sweep.
+                if (!_detached.Values.Any(running => running.ExecutionKey == executionKey))
+                    await ReleaseHeldAsync();
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
+            {
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning(exception, "Could not release the commands held for workflow execution {WorkflowExecutionId}; they are re-driven once their lease lapses.", executionId);
             }
         }
 
@@ -822,7 +829,10 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
             {
                 var now = _timeProvider.GetUtcNow();
                 foreach (var held in await leases.ListLeasedAsync(ownerId, now, _pumpOptions.Value.TransportLeaseBatchSize, executionId))
-                    await leases.ReleaseLeaseAsync(executionId, held.TransportItemId, ownerId, held.LeaseToken!.Value, now);
+                {
+                    if (held.TransportItemId != item.TransportItemId)
+                        await leases.ReleaseLeaseAsync(executionId, held.TransportItemId, ownerId, held.LeaseToken!.Value, now);
+                }
                 return true;
             });
 
