@@ -809,7 +809,7 @@ export function hasSwitchCaseOutgoingConnections(root: ActivityNode, activity: A
       && value.source.nodeId === activity.nodeId && typeof value.source.port === "string" && normalizeSwitchOutcome(value.source.port) === outcome)) return true;
   if (root.structure?.kind === bpmnStructureKind && Array.isArray(payload?.elements) && Array.isArray(payload?.sequenceFlows)) {
     const ids = new Set(payload.elements.filter(value => isRecord(value) && value.childNodeId === activity.nodeId).map(value => (value as Record<string, unknown>).elementId));
-    const defaults = new Set(payload.elements.filter(isRecord).map(value => value.defaultFlowId).filter(id => typeof id === "string"));
+    const defaults = new Set<unknown>(payload.elements.filter(isRecord).map(value => value.defaultFlowId).filter(id => typeof id === "string"));
     if (payload.sequenceFlows.some(value => isRecord(value) && ids.has(value.sourceRef)
       && value.isDefault !== true && !defaults.has(value.flowId)
       && typeof value.conditionOutcome === "string" && normalizeSwitchOutcome(value.conditionOutcome) === outcome)) return true;
