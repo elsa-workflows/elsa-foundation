@@ -147,7 +147,7 @@ for (const theme of ["light", "dark"]) {
     await details.click();
     const previous = inspector.locator(".wf-activity-overview + .wf-execution-browser").getByRole("button", { name: "Previous activity execution", exact: true });
     await previous.click();
-    await expect(inspector.locator(".wf-attached-run-inspection")).toHaveAttribute("aria-busy", "true");
+    await expect(inspector.locator(".wf-execution-content")).toHaveAttribute("aria-busy", "true");
     await expect(inspector.getByText("Loading requested execution… Showing the previous execution.")).toBeVisible();
     await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
     await expect(inspector.getByRole("button", { name: "Execution 4 of 10", exact: false })).toBeVisible();

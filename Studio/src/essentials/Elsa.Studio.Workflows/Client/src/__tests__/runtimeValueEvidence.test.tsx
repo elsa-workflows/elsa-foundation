@@ -9,7 +9,7 @@ describe("RuntimeValueEvidenceContent presentation defaults", () => {
   it("renders a prepared captured value immediately while preserving sensitive-value protection", () => {
     const snapshot = { evidenceId: "value", captureMode: "Payload", accessState: "resolutionAvailable", isSensitive: false } as ActivityExecutionInspectionValueSnapshot;
     const scope = { context: {} as StudioEndpointContext, workflowExecutionId: "run", activityExecutionId: "activity",
-      preparedValues: new Map([[runtimeValuePayloadKey(snapshot), { payload: "Confirmed destination value" }]]) };
+      preparedValues: new Map([[runtimeValuePayloadKey(snapshot), { status: "ready" as const, payload: "Confirmed destination value" }]]) };
     const markup = (sensitive: boolean) => renderToStaticMarkup(<RuntimeValueEvidenceResolutionProvider scope={scope}>
       <RuntimeValueEvidenceContent snapshot={{ ...snapshot, isSensitive: sensitive }} />
     </RuntimeValueEvidenceResolutionProvider>);

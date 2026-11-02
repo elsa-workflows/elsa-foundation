@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ExecutableActivityGraph } from "../executableGraph";
-import type { ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
 import { loadExecutionScope } from "../workflow-editor/executionScope";
 import { useAttachedExecutionSelection, type AttachedExecutionSelection } from "../workflow-editor/useAttachedExecutionSelection";
 
@@ -235,7 +235,7 @@ it("waits for the destination's visible captured values and never prefetches sen
   expect(api.payload).toHaveBeenCalledWith(context, "run", "write-5", "value-5", "Payload", expect.any(AbortSignal));
   release({ payload: "Current: 5" }); await task; mount();
   expect(current.execution?.activityExecutionId).toBe("write-5");
-  expect([...current.prepared!.values.values()]).toEqual([{ payload: "Current: 5" }]);
+  expect([...current.prepared!.values.values()]).toEqual([{ status: "ready", payload: "Current: 5" }]);
 });
 
 it("stages a nested scope's selected child and overlays before committing its breadcrumb", async () => {
@@ -260,6 +260,35 @@ it("stages a nested scope's selected child and overlays before committing its br
   expect(current.prepared?.inspection?.activityExecutionId).toBe("write-5");
   expect(current.prepared?.canvas?.ancestorId).toBe("body-5");
   expect(current.prepared?.canvas?.evidence.activities[0]?.activityExecutionId).toBe("write-5");
+});
+
+it.each(["password", "declaration", "authored", "compiled"])("does not prefetch values protected by %s sensitivity", async sensitivity => {
+  const next = summary("write-5");
+  tree.set(next.activityExecutionId, { ...inspection(next), valueSnapshots: [{ name: "Token", inputKey: "token", evidenceId: "secret",
+    subject: "ActivityInput", captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} }] });
+  const protectedGraph = { ...graph, factsByNodeId: new Map(graph.factsByNodeId) };
+  protectedGraph.factsByNodeId.set("write", { ...graph.factsByNodeId.get("write")!,
+    authoredInputs: [{ executableNodeId: "write", inputKey: "token", expressionType: "Literal", value: "PRIVATE", isSensitive: sensitivity === "authored" }],
+    inputBindings: [{ inputKey: "token", inputName: "Token", source: "Literal", isSensitive: sensitivity === "compiled" }] });
+  mount({ activityCatalog: [{ activityTypeKey: "Test.Activity", inputs: [{ referenceKey: "token", name: "Token", typeName: "System.String",
+    uiHint: sensitivity === "password" ? "password" : undefined, isSensitive: sensitivity === "declaration" }] } as ActivityCatalogItem] });
+  expect(await current.choose(next, protectedGraph, labelFor)).toBe(true); mount();
+  expect(api.payload).not.toHaveBeenCalled();
+  expect(current.prepared?.values.size).toBe(0);
+});
+
+it("commits valid execution evidence when an individual captured value is unavailable", async () => {
+  const next = summary("write-5");
+  tree.set(next.activityExecutionId, { ...inspection(next), outcomeNames: ["Done"], valueSnapshots: [{ name: "Value", inputKey: "Value", evidenceId: "unavailable",
+    subject: "ActivityInput", captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} }] });
+  api.payload.mockRejectedValue(Object.assign(new Error("Captured payload is unavailable"), { status: 409 }));
+  mount(); expect(await current.choose(next, graph, labelFor)).toBe(true); mount();
+  expect(current.execution?.activityExecutionId).toBe("write-5");
+  expect(current.prepared?.inspection?.outcomeNames).toEqual(["Done"]);
+  expect([...current.prepared!.values.values()]).toEqual([{ status: "failed", error: "Captured payload is unavailable" }]);
+  expect(current.error).toBe("");
 });
 
 it.each(["incidents", "bookmarks"] as const)("keeps exact attached selection when %s are unavailable in selected and ancestor responses", async collection => {

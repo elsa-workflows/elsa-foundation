@@ -35,7 +35,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
   const ancestorId = scope?.execution.executableNodeId === identity.executableNodeId
     ? scope.execution.parentActivityExecutionId ?? undefined : scope?.execution.activityExecutionId;
   const choose = (value: ActivityExecutionStateSummary) => { void selection.choose(value, graph, labelFor); };
-  return <div className="wf-attached-run-inspection" aria-busy={selection.loading}>
+  return <div className="wf-attached-run-inspection">
     <nav className="wf-execution-scope" aria-label="Execution scope">
       <button type="button" onClick={selection.clear}>All executions</button>
       {selection.scopes.map(item => <button type="button" key={item.execution.activityExecutionId} onClick={() => {
@@ -49,6 +49,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
       {selection.loading ? selection.execution ? "Loading requested execution… Showing the previous execution." : "Resolving execution scope…"
         : selection.error ? <>{selection.error} {selection.execution ? "Showing the previous execution. " : null}{selection.canRetry ? <button type="button" onClick={() => { void selection.retry(); }}>Retry selection</button> : null}</> : null}
     </div>
+    <div className="wf-execution-content" aria-busy={selection.loading}>
     {(!selection.loading && !selection.error || selection.execution) ? <ActivityExecutionInspectionPanel
       key={`${details.instance.workflowExecutionId}:${identity.executableNodeId}`}
       context={context} workflowExecutionId={details.instance.workflowExecutionId} nodeId={identity.executableNodeId}
@@ -66,5 +67,6 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
         prepared={prepared}
         expressionEditors={expressionEditors} executionNavigation={navigation} childExecutions={children} refreshKey={canvas.refreshKey} />}
     /> : null}
+    </div>
   </div>;
 }

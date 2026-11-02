@@ -18,7 +18,7 @@ export interface RuntimeValueEvidenceResolutionScope {
   preparedValues?: ReadonlyMap<string, PreparedRuntimeValue>;
 }
 
-export interface PreparedRuntimeValue { payload: unknown }
+export type PreparedRuntimeValue = { status: "ready"; payload: unknown } | { status: "failed"; error: string };
 
 export function runtimeValuePayloadKey(snapshot: ActivityExecutionInspectionValueSnapshot) {
   return JSON.stringify([snapshot.evidenceId?.trim(), snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase()]);
@@ -157,7 +157,7 @@ export function RuntimeValueEvidenceContent({
     ? null
     : snapshot.snapshot ?? (snapshot.captureMode === "DiagnosticSnapshot" && hasInlinePayload ? snapshot.payload : null);
   const hasPayload = snapshot.captureMode === "Payload" && hasInlinePayload;
-  const currentResolution: RuntimeValueResolutionState | null = preparedValue ? { identity: resolutionIdentity, status: "ready", payload: preparedValue.payload }
+  const currentResolution: RuntimeValueResolutionState | null = preparedValue ? { identity: resolutionIdentity, ...preparedValue }
     : resolution?.identity === resolutionIdentity ? resolution : null;
   const protectedAccess = ["redacted", "permissionhidden", "permission-hidden", "resolutionpermissionrequired", "unavailable"].includes(accessKey);
   const canShowSensitiveValue = snapshot.isSensitive && canResolve;

@@ -453,7 +453,7 @@ export function WorkflowEditor({
   } = canvas;
   const runSelection = useAttachedExecutionSelection({ context, attachmentId: JSON.stringify([testRun?.view.testRunId, testRun?.view.artifactId, testRun?.draftSignature]),
     workflowExecutionId: testRun?.view.workflowExecutionId ?? "", nodeId: inspectedNode?.nodeId ?? null,
-    canvasOwnerId: scopeOwner?.nodeId, visibleNodeIds: authoringNodes.map(node => node.data.runtimeNodeId ?? node.id),
+    canvasOwnerId: scopeOwner?.nodeId, visibleNodeIds: authoringNodes.map(node => node.data.runtimeNodeId ?? node.id), activityCatalog: catalog,
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;

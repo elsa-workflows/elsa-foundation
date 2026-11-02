@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { supportsActivityExecutionBrowsing } from "../api/runtime";
 import type { ExecutableActivityGraph } from "../executableGraph";
-import type { ActivityExecutionStateSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "../workflowTypes";
 import type { ExecutionScopeEntry } from "./executionScope";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
@@ -18,9 +18,10 @@ interface SelectionState {
 }
 
 /** Exact selection survives inspector tabs; obsolete or unauthorized evidence never does. */
-export function useAttachedExecutionSelection({ context, attachmentId, workflowExecutionId, enabled, nodeId, canvasOwnerId, visibleNodeIds }: {
+export function useAttachedExecutionSelection({ context, attachmentId, workflowExecutionId, enabled, nodeId, canvasOwnerId, visibleNodeIds, activityCatalog }: {
   context: StudioEndpointContext; attachmentId: string; workflowExecutionId: string; enabled: boolean; nodeId: string | null;
   canvasOwnerId?: string; visibleNodeIds?: readonly string[];
+  activityCatalog?: readonly ActivityCatalogItem[];
 }) {
   const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${attachmentId}`;
   const [state, setState] = useState<SelectionState | null>(null);
@@ -74,7 +75,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
       if (!isCurrent() || controller.signal.aborted) return false;
       const { prepareAttachedExecution } = await import("./prepareAttachedExecution");
       const prepared = await prepareAttachedExecution(context, workflowExecutionId, execution, result, graph, nodeId, controller.signal,
-        canvasOwnerId, JSON.parse(visibleNodeKey ?? "null") ?? undefined);
+        canvasOwnerId, JSON.parse(visibleNodeKey ?? "null") ?? undefined, activityCatalog);
       if (!isCurrent() || controller.signal.aborted) return false;
       retrySelection.current = null;
       setState({ key, nodeId, execution, scopes: result.scopes, prepared, loading: false, error: "" });
@@ -88,7 +89,7 @@ export function useAttachedExecutionSelection({ context, attachmentId, workflowE
         error: error instanceof Error ? error.message : "Execution context could not be resolved. Retry the selection." }));
       return false;
     }
-  }, [canvasOwnerId, context, key, nodeId, visibleNodeKey, workflowExecutionId]);
+  }, [activityCatalog, canvasOwnerId, context, key, nodeId, visibleNodeKey, workflowExecutionId]);
   useEffect(() => {
     if (!pending) return;
     setPending(null);

@@ -1,9 +1,9 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { browseActivityExecutions, getActivityExecutionInspection, type ActivityExecutionBrowsePage } from "../api/runtime";
 import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
-import type { ExecutableActivityGraph } from "../executableGraph";
-import { buildInputInspectionRows } from "../inputInspectionRows";
-import type { ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
+import { findExecutableNodeFacts, type ExecutableActivityGraph } from "../executableGraph";
+import { buildInputInspectionRows, inputRuntimeSnapshot, readDeclaredActivityInputs } from "../inputInspectionRows";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
 import type { loadExecutionScope } from "./executionScope";
 import { readVisibleActivityExecutions } from "./scopedExecutionEvidence";
 import { canAutomaticallyResolveValue, runtimeValueContextId, runtimeValuePayloadKey, type PreparedRuntimeValue } from "./RuntimeValueEvidence";
@@ -28,7 +28,7 @@ export interface PreparedAttachedExecution {
 /** Prepare one bounded destination while the confirmed view remains interactive. No cross-selection cache. */
 export async function prepareAttachedExecution(context: StudioEndpointContext, workflowExecutionId: string,
   selected: ActivityExecutionStateSummary, scope: Awaited<ReturnType<typeof loadExecutionScope>>, graph: ExecutableActivityGraph,
-  nodeId: string | null, signal: AbortSignal, canvasOwnerId?: string, visibleNodeIds?: readonly string[]): Promise<PreparedAttachedExecution> {
+  nodeId: string | null, signal: AbortSignal, canvasOwnerId?: string, visibleNodeIds?: readonly string[], catalog: readonly ActivityCatalogItem[] = []): Promise<PreparedAttachedExecution> {
   const facts = nodeId ? graph.factsByNodeId.get(nodeId) : undefined;
   const owner = [...scope.scopes].reverse().find(item => item.execution.authoredActivityId === canvasOwnerId)?.execution;
   const ancestorId = owner?.activityExecutionId;
@@ -58,15 +58,26 @@ export async function prepareAttachedExecution(context: StudioEndpointContext, w
   const values = new Map<string, PreparedRuntimeValue>();
   if (inspection) {
     const snapshots = inspection.valueSnapshots ?? [];
-    const inputs = buildInputInspectionRows({ evaluations: snapshots.filter(item => item.subject === "ActivityInput") })
-      .flatMap(row => row.latestEvaluation ?? []);
+    const inputFacts = findExecutableNodeFacts(graph, execution);
+    const inputs = buildInputInspectionRows({
+      declarations: readDeclaredActivityInputs(catalog.find(item => item.activityTypeKey === inspection.activityType)?.inputs),
+      authoredSources: inputFacts?.authoredInputs ?? [], compiledBindings: inputFacts?.inputBindings ?? [],
+      authoredSourceAccess: inputFacts?.authoredInputsAccess,
+      evaluations: snapshots.filter(item => item.subject === "ActivityInput")
+    }).flatMap(row => inputRuntimeSnapshot(row) ?? []);
     const visibleValues = [...inputs, ...snapshots.filter(item => item.subject === "ActivityOutput")];
     await Promise.all([...new Map(visibleValues.filter(canAutomaticallyResolveValue).map(snapshot => [runtimeValuePayloadKey(snapshot), snapshot])).values()].map(async snapshot => {
       const key = runtimeValuePayloadKey(snapshot);
       if (values.has(key)) return;
-      const response = await getActivityExecutionValuePayload(context, workflowExecutionId, inspection.activityExecutionId,
-        snapshot.evidenceId!.trim(), snapshot.captureMode, signal);
-      values.set(key, { payload: response.payload });
+      try {
+        const response = await getActivityExecutionValuePayload(context, workflowExecutionId, inspection.activityExecutionId,
+          snapshot.evidenceId!.trim(), snapshot.captureMode, signal);
+        values.set(key, { status: "ready", payload: response.payload });
+      } catch (error) {
+        const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+        if (signal.aborted || status === 401 || status === 403) throw error;
+        values.set(key, { status: "failed", error: error instanceof Error ? error.message : "Captured value could not be loaded." });
+      }
     }));
   }
   const contextIdentity = runtimeValueContextId(context);
