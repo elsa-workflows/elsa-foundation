@@ -22,7 +22,7 @@ export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed"
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
 export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
-export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "context-admitted" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+export type AgentStreamEventType = "provider-notice" | "turn-started" | "message-started" | "message-delta" | "context-used" | "context-admitted" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
 
 export interface AgentPlanStep {
   id: string;
@@ -193,6 +193,10 @@ export interface AgentMessageViewModel {
   role: AgentMessageRole;
   content: string;
   status: AgentMessageStatus;
+  /** Preview (#3441): why a recorded cancelled message stopped. */
+  statusReason?: AgentMessageStatusReason;
+  /** Preview (#3441): the code of a provider or session notice this entry shows. */
+  noticeCode?: string;
   /** The acknowledged policy that admitted the turn this message belongs to, when known. */
   acceptedPolicy?: AgentAcceptedPolicy;
 }
@@ -292,7 +296,8 @@ export type AgentStreamEvent =
   | { type: "plan-updated"; steps: AgentPlanStep[] }
   | { type: "message-completed"; messageId: string }
   | { type: "turn-cancelled"; turnId: string }
-  | { type: "error"; message: string };
+  | { type: "provider-notice"; code: string; message: string }
+  | { type: "error"; message: string; code?: string };
 
 export interface AgentFeedbackRequest {
   rating: "positive" | "negative";

@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, Shield, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, History, Plus, Shield, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
 import { AgentContextChips } from "../agent/AgentContextChips";
@@ -8,10 +8,11 @@ import { AgentToolResults } from "../agent/AgentToolResults";
 import { AgentProposalReview } from "../agent/AgentProposalReview";
 import type { subscribeAgentSessionStream } from "../agent/agentStream";
 import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
+import type { AgentSessionSummary } from "../agent/agentTypes";
 import { WeaverComposer } from "./WeaverComposer";
 import { WeaverMessageList } from "./WeaverMessageList";
 import { WeaverTimeline } from "./WeaverTimeline";
-import { useWeaverSession, WEAVER_AUTO_APPLY_LABELS, type UseWeaverSession, type WeaverAutoApplyMode, type WeaverAutoApplyNotice, type WeaverAutoApplyState } from "./useWeaverSession";
+import { useWeaverSession, WEAVER_AUTO_APPLY_LABELS, type UseWeaverSession, type WeaverAutoApplyMode, type WeaverAutoApplyNotice, type WeaverAutoApplyState, type WeaverRecoveryNotice } from "./useWeaverSession";
 
 const AUTO_APPLY_LABELS = WEAVER_AUTO_APPLY_LABELS;
 
@@ -118,12 +119,22 @@ export function WeaverSurface({
 
       {session.error ? <div className="weaver-alert" role="alert">{session.error}</div> : null}
 
+      <WeaverRecovery session={session} />
+
       <AgentContextChips attachments={session.attachments} />
       {session.contextDiagnostics.length ? <div role="status" aria-label="Context limitations">{session.contextDiagnostics.map((item, index) => <p key={`${item.contributorId}-${index}`}>{item.contributorId}: {item.message}</p>)}</div> : null}
       <AgentPromptStarters prompts={session.promptStarters} disabled={composerDisabled || session.busy} onSelect={prompt => session.send(prompt)} />
 
       <div className="weaver-scroll">
-        <WeaverMessageList messages={session.messages} streaming={session.busy} onFeedback={session.submitFeedback} />
+        <WeaverMessageList
+          messages={session.messages}
+          streaming={session.busy}
+          onFeedback={session.submitFeedback}
+          canStart={session.sessionId !== null && session.chatState === "idle" && !session.autoApplyBlocked && !session.reopening}
+          pendingActionIds={session.pendingProposalIds}
+          onStart={session.startRecordedTurn}
+          onWithdraw={session.withdrawMessage}
+        />
         <WeaverTimeline entries={session.timeline} plan={session.plan} />
         <AgentToolResults results={session.toolResults} renderers={resultRenderers} />
         <AgentProposalReview
@@ -135,6 +146,7 @@ export function WeaverSurface({
           onDeny={session.denyProposal}
           onExecute={session.executeProposal}
           onRetryConfirmation={session.retryConfirmation}
+          onResolve={session.resolveProposal}
         />
       </div>
 
@@ -148,6 +160,70 @@ export function WeaverSurface({
       />
     </section>
   );
+}
+
+/**
+ * Preview (#3441): the owner's recent sessions and what reopening one found. Reopening reads the recorded state
+ * only; a prompt, decision or resolution always needs its own explicit action.
+ */
+function WeaverRecovery({ session }: { session: UseWeaverSession }) {
+  const notice = session.recoveryNotice;
+  const offered = session.sessionId === null && session.chatState === "idle" ? session.recentSessions : [];
+  if (!notice && offered.length === 0 && !session.reopening && (session.sessionId === null || session.chatState === "streaming")) return null;
+  return (
+    <section className="weaver-recovery" aria-label="Conversation recovery" data-reopening={session.reopening || undefined}>
+      {session.reopening ? <p role="status">Reading the conversation's recorded state…</p> : null}
+      {notice ? (
+        <div className="weaver-recovery-notice" role="status" data-kind={notice.kind}>
+          <span>{describeRecoveryNotice(notice)}</span>
+          {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
+            <button type="button" disabled={session.reopening} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
+          ) : null}
+        </div>
+      ) : null}
+      {offered.length > 0 ? (
+        <div className="weaver-recent-sessions">
+          <strong><History size={13} aria-hidden="true" /> Recent conversations</strong>
+          <ul aria-label="Recent conversations">
+            {offered.map(item => (
+              <li key={item.id}>
+                <button type="button" disabled={session.reopening} data-session-id={item.id} onClick={() => session.reopenSession(item.id)}>
+                  {describeSessionSummary(item)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {session.sessionId !== null && session.chatState !== "streaming" ? (
+        <button type="button" className="weaver-new-conversation" onClick={session.startNewConversation}><Plus size={13} aria-hidden="true" /> New conversation</button>
+      ) : null}
+    </section>
+  );
+}
+
+function describeSessionSummary(summary: AgentSessionSummary) {
+  const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? new Date(summary.updatedAt).toLocaleString() : summary.updatedAt;
+  const reviews = summary.pendingReviewCount > 0 ? ` · ${summary.pendingReviewCount} awaiting review` : "";
+  const status = summary.status === "active" ? "" : ` · ${summary.status}`;
+  return `${summary.title ?? "Conversation"} · ${updated}${reviews}${status}`;
+}
+
+function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {
+  switch (notice.kind) {
+    case "owned-elsewhere":
+      return `Another Studio server process is working on this conversation, so it cannot be opened here yet.${notice.retryAfterSeconds !== undefined ? ` Try again in about ${notice.retryAfterSeconds} seconds.` : " Try again shortly."}`;
+    case "unavailable":
+      return `This conversation's recorded state is unavailable, so nothing was opened or changed. ${notice.message}`;
+    case "not-found":
+      return "This conversation is not available.";
+    case "closed":
+      return `This conversation has ended (${notice.status}). Its recorded history is shown; your next prompt starts a new conversation.`;
+    case "lost":
+      return `The conversation could not be read. Nothing was changed. ${notice.message}`;
+    case "action-refused":
+      return notice.message;
+  }
 }
 
 function WeaverAutoApplyMenu({

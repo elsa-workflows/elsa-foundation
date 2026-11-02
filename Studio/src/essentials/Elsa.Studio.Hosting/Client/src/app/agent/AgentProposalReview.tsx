@@ -2,7 +2,19 @@ import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import type { StudioAgentResultRendererContribution } from "../../sdk";
 import { AgentResultBoundary } from "./AgentResultBoundary";
-import type { AgentActionProposal } from "./agentTypes";
+import type { AgentActionProposal, AgentOwnerResolutionClaim } from "./agentTypes";
+
+const RESOLUTION_LABELS: Record<AgentOwnerResolutionClaim, string> = {
+  "applied": "It was applied",
+  "not-applied": "It was not applied",
+  "unknown": "I can't tell"
+};
+
+const RESOLUTION_STATEMENTS: Record<AgentOwnerResolutionClaim, string> = {
+  "applied": "You stated that this change was applied.",
+  "not-applied": "You stated that this change was not applied.",
+  "unknown": "You stated that you cannot tell whether this change was applied."
+};
 
 export function AgentProposalReview({
   proposals,
@@ -12,7 +24,8 @@ export function AgentProposalReview({
   onApprove,
   onDeny,
   onExecute,
-  onRetryConfirmation
+  onRetryConfirmation,
+  onResolve
 }: {
   proposals: AgentActionProposal[];
   disabled?: boolean;
@@ -22,6 +35,8 @@ export function AgentProposalReview({
   onDeny(proposal: AgentActionProposal): void;
   onExecute(proposal: AgentActionProposal): void;
   onRetryConfirmation?(proposal: AgentActionProposal): void;
+  /** Preview (#3441): records the owner's statement about an uncertain client operation. */
+  onResolve?(proposal: AgentActionProposal, claim: AgentOwnerResolutionClaim): void;
 }) {
   if (proposals.length === 0) {
     return null;
@@ -33,6 +48,8 @@ export function AgentProposalReview({
         const reviewable = isReviewable(proposal);
         const pending = pendingProposalIds?.has(proposal.id) ?? false;
         const controlsDisabled = disabled || pending || proposal.isLoading || Boolean(proposal.disabledReason);
+        const resolvable = Boolean(onResolve) && proposal.status === "uncertain" && !proposal.confirmationPending && !proposal.ownerResolution
+          && proposal.preparedInvocation?.executionLocation === "clientWorkingState";
         return (
           <article key={proposal.id} className="agent-proposal" data-risk={proposal.risk} data-status={proposal.status}>
             <header>
@@ -62,6 +79,19 @@ export function AgentProposalReview({
             {proposal.error ? <small className="agent-proposal-error">{proposal.error}</small> : null}
             {proposal.isLoading ? <small className="agent-proposal-loading"><Loader2 size={14} /> Loading review state.</small> : null}
             {proposal.disabledReason ? <small className="agent-proposal-disabled">{proposal.disabledReason}</small> : null}
+            {proposal.ownerResolution ? (
+              <small className="agent-proposal-resolution" data-claim={proposal.ownerResolution.claim}>
+                {RESOLUTION_STATEMENTS[proposal.ownerResolution.claim]} This is your statement, not a receipt; a later receipt from the module still takes precedence.
+              </small>
+            ) : null}
+            {resolvable ? (
+              <div className="agent-proposal-resolve" role="group" aria-label="Resolve uncertain change">
+                <small>Weaver cannot confirm whether this change was applied, and it will not run it again. Check the resource, then say what you found.</small>
+                {(Object.keys(RESOLUTION_LABELS) as AgentOwnerResolutionClaim[]).map(claim => (
+                  <button key={claim} type="button" disabled={disabled || pending} onClick={() => onResolve!(proposal, claim)}>{RESOLUTION_LABELS[claim]}</button>
+                ))}
+              </div>
+            ) : null}
             {!reviewable ? <small>Proposal details are still loading. Approval is available after review details arrive.</small> : null}
             <footer>
               {proposal.confirmationPending && onRetryConfirmation ? <button type="button" disabled={controlsDisabled} onClick={() => onRetryConfirmation(proposal)}>Retry confirmation</button> : null}

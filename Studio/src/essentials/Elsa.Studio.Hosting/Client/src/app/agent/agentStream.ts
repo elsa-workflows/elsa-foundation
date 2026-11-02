@@ -247,8 +247,12 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       };
     case "plan-updated":
       return { type: "plan-updated", steps: normalizePlanSteps(payload) };
-    case "progress":
+    case "progress": {
+      // A provider notice (for example a conversation reset) is an explicit outcome, not transient progress.
+      const code = readString(payload, "code");
+      if (code) return { type: "provider-notice", code, message: readString(payload, "message") ?? (content || code) };
       return { type: "progress", label: content || readString(payload, "label") || "Working…" };
+    }
     case "turn-cancelled":
       return { type: "turn-cancelled", turnId: readString(payload, "turnId") ?? messageId };
     case "message-delta":
@@ -274,7 +278,8 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       return { type: "message-completed", messageId };
     case "error": {
       const error = readObject<Record<string, unknown>>(event, "error") ?? readObject<Record<string, unknown>>(data, "error");
-      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed.") };
+      const code = readString(error, "code");
+      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed."), ...(code ? { code } : {}) };
     }
     case "conversation.error":
     case "conversation.failed":

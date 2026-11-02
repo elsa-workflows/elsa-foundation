@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContributionDiagnostic, StudioAgentMode, StudioAgentPromptRequest, StudioAgentSurface, StudioAgentToolResult } from "../../sdk";
-import { AgentExecutionError, classifyAutonomyFailure, createAgentClient, getAgentErrorCode, POLICY_CHANGED, type AgentClient } from "../agent/agentClient";
+import { AgentExecutionError, classifyAutonomyFailure, classifyRecoveryFailure, createAgentClient, getAgentErrorCode, getAgentRetryAfterSeconds, POLICY_CHANGED, type AgentClient } from "../agent/agentClient";
 import { collectAgentContext } from "../agent/agentContext";
 import { getActiveAgentCapabilities, getActivePromptStarters } from "../agent/agentContributions";
 import { getAgentErrorMessage } from "../agent/agentErrors";
@@ -13,13 +13,20 @@ import type {
   AgentClientAcknowledgement,
   AgentAutonomyMode,
   AgentBootstrapResponse,
+  AgentMessageRole,
+  AgentMessageStatus,
   AgentMessageViewModel,
+  AgentOwnerResolutionClaim,
   AgentPlanStep,
   AgentProviderDiagnostics,
+  AgentRecordedMessage,
+  AgentRecordedProposal,
   AgentSessionDetailResponse,
   AgentSessionPolicy,
+  AgentSessionSummary,
   AgentStreamEvent
 } from "../agent/agentTypes";
+import { clearSessionHint, readSessionHint, weaverSessionScope, writeSessionHint } from "./weaverSessionHint";
 
 export type WeaverChatState = "idle" | "streaming" | "awaiting-review" | "awaiting-confirmation";
 // The Weaver "auto-apply" control selects the session's server-side autonomy mode.
@@ -79,6 +86,18 @@ export interface WeaverFollowup {
   message: string;
 }
 
+/**
+ * Preview (#3441): why a session could not be reopened, or what reopening found. Each names only what the
+ * owner may see; a foreign or missing session is one not-found outcome and discloses nothing.
+ */
+export type WeaverRecoveryNotice =
+  | { kind: "owned-elsewhere"; sessionId: string; retryAfterSeconds?: number }
+  | { kind: "unavailable"; sessionId: string; message: string }
+  | { kind: "not-found"; sessionId: string }
+  | { kind: "closed"; sessionId: string; status: string }
+  | { kind: "lost"; sessionId: string; message: string }
+  | { kind: "action-refused"; message: string };
+
 export interface UseWeaverSessionOptions {
   api: ElsaStudioModuleApi;
   surface: StudioAgentSurface;
@@ -127,6 +146,21 @@ export interface UseWeaverSession {
   setAutoApplyMode(mode: WeaverAutoApplyMode): void;
   /** Resends the same unresolved conditional change, or repeats its authoritative readback. */
   retryAutoApplyMode(): void;
+  /** Preview (#3441): the owner's own sessions in this workspace, newest first, as the server listed them. */
+  recentSessions: AgentSessionSummary[];
+  recoveryNotice: WeaverRecoveryNotice | null;
+  /** True while a session is being reread from the server. */
+  reopening: boolean;
+  /** Reads a session's authoritative details and proposals. It never opens the stream. */
+  reopenSession(sessionId: string): void;
+  /** Explicitly runs a recorded prompt that never started, or a paused turn's continuation, by opening the stream. */
+  startRecordedTurn(messageId: string): void;
+  /** Withdraws a recorded prompt that never started. */
+  withdrawMessage(messageId: string): void;
+  /** Records the owner's statement about an uncertain client operation; it is never a receipt. */
+  resolveProposal(proposal: AgentActionProposal, claim: AgentOwnerResolutionClaim): void;
+  /** Leaves the shown session without changing it; the next prompt starts a new conversation. */
+  startNewConversation(): void;
 }
 
 const ASSISTANT_PLACEHOLDER = "Awaiting assistant response…";
@@ -162,6 +196,13 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const [autoApplyNotice, setAutoApplyNotice] = useState<WeaverAutoApplyNotice | null>(null);
   const autoApplyMode = sessionPolicy?.autonomyMode ?? draftAutoApplyMode;
   const [pendingProposalIds, setPendingProposalIds] = useState<ReadonlySet<string>>(new Set());
+  const [recentSessions, setRecentSessions] = useState<AgentSessionSummary[]>([]);
+  const [recoveryNotice, setRecoveryNotice] = useState<WeaverRecoveryNotice | null>(null);
+  const [reopening, setReopening] = useState(false);
+  const sessionScope = useMemo(() => weaverSessionScope(api), [api]);
+  // Bumped by every reopen, new conversation and turn start, so a late reread never replaces newer state.
+  const recoveryGenerationRef = useRef(0);
+  const listOwnedSessionsRef = useRef<() => Promise<{ items: AgentSessionSummary[]; authoritative: boolean }>>(async () => ({ items: [], authoritative: false }));
 
   const clientControllersRef = useRef(new Set<AbortController>());
   const clientConfirmationsRef = useRef(new Map<string, ClientConfirmation>());
@@ -317,11 +358,13 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         mode,
         autonomyMode: requested,
         activeSurface: surface,
-        clientContext: { studioVersion: api.host.hostVersion, sdkVersion: api.host.sdkVersion, moduleIds: [] }
+        clientContext: { studioVersion: api.host.hostVersion, sdkVersion: api.host.sdkVersion, moduleIds: [] },
+        ...(sessionScope ? { workspace: sessionScope.workspace } : {})
       });
       if (generation === turnGenerationRef.current) {
         sessionIdRef.current = response.sessionId;
         setSessionId(response.sessionId);
+        if (sessionScope) writeSessionHint(sessionScope.storageKey, response.sessionId);
         const scope = { client: agentClient, sessionId: response.sessionId };
         policyScopeRef.current = scope;
         setAutonomyUpdate(null);
@@ -339,7 +382,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     } finally {
       creatingSessionsRef.current--;
     }
-  }, [acceptPolicy, agentClient, api.host.hostVersion, api.host.sdkVersion, mode, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy, surface]);
+  }, [acceptPolicy, agentClient, api.host.hostVersion, api.host.sdkVersion, mode, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy, surface]);
 
   const reconcileAutonomy = useCallback(async (scope: PolicyScope, update: AutonomyUpdate) => {
     const checking: AutonomyUpdate = { ...update, status: "pending", phase: "readback" };
@@ -473,6 +516,10 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       case "plan-updated":
         setPlan(event.steps);
         break;
+      case "provider-notice":
+        // An explicit provider outcome (for example a conversation reset) stays in the conversation, not the transient timeline.
+        setMessages(current => [...current, { id: `notice-${current.length}-${event.code}`, role: "system", content: event.message, status: "completed", noticeCode: event.code }]);
+        break;
       case "proposal-created":
         setProposals(current => upsertProposal(current, normalizeProposal(event.proposalId, event.proposal)));
         maybeAutoApplyProposal(event.proposalId, event.proposal);
@@ -570,6 +617,9 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
   const startTurn = useCallback(async (request: StudioAgentPromptRequest) => {
     const { message, requestId } = request;
+    recoveryGenerationRef.current++;
+    setReopening(false);
+    setRecoveryNotice(null);
     const deliveryId = requestId ?? globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`;
     const generation = ++turnGenerationRef.current;
     diagnosticGenerationRef.current = generation;
@@ -696,7 +746,10 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     const sessionId = sessionIdRef.current;
     const turnId = turnIdRef.current;
     const stoppedStream = streamRef.current;
-    // Stop detaches this foreground conversation before any new prompt may start.
+    // Stop detaches this foreground conversation before any new prompt may start. A reload no longer reopens it;
+    // it stays in the owner's session list.
+    recoveryGenerationRef.current++; setReopening(false);
+    if (sessionId && sessionScope) clearSessionHint(sessionScope.storageKey, sessionId);
     sessionIdRef.current = null; setSessionId(null); streamRef.current = null;
     // The next conversation requests the last acknowledged mode; late policy responses for this one are ignored.
     policyScopeRef.current = null; setAutonomyUpdate(null); setSessionPolicy(null); setAutonomyUnsupported(null); setAutoApplyNotice(null);
@@ -707,7 +760,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     publishTurnResult("cancelled", "");
     finishTurn();
     setProposals(current => current.map(proposal => clientConfirmationsRef.current.has(proposal.id) ? { ...proposal, status: "uncertain", error: "Stopped waiting for confirmation. The observed change may already have been applied; retry only confirms its receipt." } : proposal));
-  }, [agentClient, clearContextDiagnostics, publishTurnResult, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
+    if (sessionScope) void listOwnedSessionsRef.current();
+  }, [agentClient, clearContextDiagnostics, publishTurnResult, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
 
   const removeFollowup = useCallback((id: string) => setFollowups(current => current.filter(item => item.id !== id)), []);
 
@@ -864,6 +918,156 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     void agentClient.submitFeedback(sessionIdRef.current ?? "", messageId, { rating }).catch(e => setError(getAgentErrorMessage(e)));
   }, [agentClient]);
 
+
+  /** The owner's sessions in this workspace. Only a successful list is authoritative; a hint is never trusted over it. */
+  const listOwnedSessions = useCallback(async (): Promise<{ items: AgentSessionSummary[]; authoritative: boolean }> => {
+    if (!sessionScope) return { items: [], authoritative: false };
+    try {
+      const page = await agentClient.listSessions({ workspace: sessionScope.workspace, take: RECENT_SESSION_COUNT });
+      if (mountedRef.current) setRecentSessions(page.items);
+      return { items: page.items, authoritative: true };
+    } catch {
+      // A backend that cannot list sessions (or did not answer) can still reopen the remembered one by identity.
+      return { items: [], authoritative: false };
+    }
+  }, [agentClient, sessionScope]);
+  listOwnedSessionsRef.current = listOwnedSessions;
+
+  /** Shows a session exactly as its owner recorded it. Nothing runs: a prompt, decision or resolution needs an explicit action. */
+  const applyRecordedSession = useCallback((sessionId: string, detail: AgentSessionDetailResponse, recorded: AgentRecordedProposal[]) => {
+    const closed = detail.status !== "active";
+    turnIdRef.current = null; turnMessageIdRef.current = null; turnRequestIdRef.current = null; turnAcceptedPolicyRef.current = null;
+    streamRef.current?.close(); streamRef.current = null;
+    setAutonomyUpdate(null); setAutoApplyNotice(null); setSessionPolicy(null);
+    if (closed) {
+      sessionIdRef.current = null; setSessionId(null); policyScopeRef.current = null; setAutonomyUnsupported(null);
+      if (sessionScope) clearSessionHint(sessionScope.storageKey, sessionId);
+    } else {
+      sessionIdRef.current = sessionId; setSessionId(sessionId);
+      const scope = { client: agentClient, sessionId };
+      policyScopeRef.current = scope;
+      if (detail.policy) { setAutonomyUnsupported(null); acceptPolicy(scope, detail.policy); }
+      else setAutonomyUnsupported("unreadable");
+      if (sessionScope) writeSessionHint(sessionScope.storageKey, sessionId);
+    }
+    const proposals = recorded.map(item => recordedProposalView(item, clientConfirmationsRef.current.has(item.id)));
+    setMessages(detail.messages.map(message => recordedMessageView(message, revisionModesRef.current)));
+    setProposals(proposals);
+    setTimeline([]); setPlan([]); setToolResults([]); setAttachments([]); setFollowups([]); clearContextDiagnostics(); setError(null);
+    setChatState(!closed && proposals.some(item => BUSY_PROPOSAL_STATUSES.includes(item.status)) ? "awaiting-review" : "idle");
+    setRecoveryNotice(closed ? { kind: "closed", sessionId, status: detail.status } : null);
+  }, [acceptPolicy, agentClient, clearContextDiagnostics, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
+
+  const reopenSession = useCallback(async (sessionId: string, options: { automatic?: boolean; notice?: WeaverRecoveryNotice } = {}) => {
+    const generation = ++recoveryGenerationRef.current;
+    const turnGeneration = turnGenerationRef.current;
+    const isCurrent = () => mountedRef.current && generation === recoveryGenerationRef.current && turnGeneration === turnGenerationRef.current;
+    setReopening(true);
+    setRecoveryNotice(null);
+    try {
+      const [detail, recorded] = await Promise.all([agentClient.getSession(sessionId), agentClient.listProposals(sessionId)]);
+      if (!isCurrent()) return;
+      applyRecordedSession(sessionId, detail, recorded);
+      if (options.notice) setRecoveryNotice(options.notice);
+    } catch (error) {
+      if (!isCurrent()) return;
+      const failure = classifyRecoveryFailure(error);
+      if (failure === "not-found") {
+        // The shared not-found outcome: a stale or foreign hint is forgotten and nothing about it is shown.
+        if (sessionScope) clearSessionHint(sessionScope.storageKey, sessionId);
+        if (!options.automatic) setRecoveryNotice({ kind: "not-found", sessionId });
+      } else if (failure === "owned-elsewhere") setRecoveryNotice({ kind: "owned-elsewhere", sessionId, retryAfterSeconds: getAgentRetryAfterSeconds(error) });
+      else if (failure === "unavailable") setRecoveryNotice({ kind: "unavailable", sessionId, message: getAgentErrorMessage(error) });
+      else setRecoveryNotice({ kind: "lost", sessionId, message: getAgentErrorMessage(error) });
+    } finally {
+      if (isCurrent()) setReopening(false);
+    }
+  }, [agentClient, applyRecordedSession, sessionScope]);
+
+  // Reload or dock reopen: list the owner's sessions, then reread the remembered one if the server still lists it.
+  // Reading never opens the stream, so nothing is resubmitted and no turn is reattached.
+  const discoveredRef = useRef(false);
+  useEffect(() => {
+    if (!bootstrap?.enabled || !sessionScope || discoveredRef.current) return;
+    discoveredRef.current = true;
+    const generation = recoveryGenerationRef.current;
+    const turnGeneration = turnGenerationRef.current;
+    void (async () => {
+      const listed = await listOwnedSessions();
+      if (!mountedRef.current || generation !== recoveryGenerationRef.current || turnGeneration !== turnGenerationRef.current || sessionIdRef.current) return;
+      const hint = readSessionHint(sessionScope.storageKey);
+      if (!hint) return;
+      if (listed.authoritative && !listed.items.some(item => item.id === hint)) { clearSessionHint(sessionScope.storageKey, hint); return; }
+      await reopenSession(hint, { automatic: true });
+    })();
+  }, [bootstrap, listOwnedSessions, reopenSession, sessionScope]);
+
+  const reopenSessionAction = useCallback((id: string) => void reopenSession(id), [reopenSession]);
+
+  const startRecordedTurn = useCallback((messageId: string) => {
+    const session = sessionIdRef.current;
+    if (!session || chatState !== "idle" || autonomyUpdateRef.current) return;
+    const recorded = messages.find(message => message.id === messageId);
+    if (!recorded || recorded.role !== "user" || (recorded.status !== "pending" && recorded.status !== "streaming")) return;
+    const generation = ++turnGenerationRef.current;
+    recoveryGenerationRef.current++;
+    diagnosticGenerationRef.current = generation;
+    const replyId = `${messageId}:reply`;
+    turnRequestIdRef.current = null;
+    turnAcceptedPolicyRef.current = recorded.acceptedPolicy ?? null;
+    turnMessageIdRef.current = replyId;
+    setChatState("streaming"); setError(null); setRecoveryNotice(null); setTimeline([]); setPlan([]); setAttachments([]); clearContextDiagnostics();
+    setMessages(current => [...current.map(message => message.id === messageId && message.status === "pending" ? { ...message, status: "completed" as const } : message),
+      { id: replyId, role: "assistant", content: ASSISTANT_PLACEHOLDER, status: "streaming", ...(recorded.acceptedPolicy ? { acceptedPolicy: recorded.acceptedPolicy } : {}) }]);
+    streamRef.current?.close();
+    // The stream runs the latest accepted prompt or the paused continuation once; it is never a new submission.
+    streamRef.current = subscribeToTurn(session, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, generation, replyId, null);
+  }, [chatState, clearContextDiagnostics, messages, subscribeToTurn]);
+
+  const withdrawMessage = useCallback((messageId: string) => void withProposalDecision(`withdraw:${messageId}`, async () => {
+    const session = sessionIdRef.current;
+    if (!session) return;
+    try {
+      const recorded = await agentClient.withdrawMessage(session, messageId);
+      if (session !== sessionIdRef.current) return;
+      setMessages(current => current.map(message => message.id === messageId ? { ...message, status: toMessageStatus(recorded.status), statusReason: recorded.statusReason } : message));
+    } catch (error) {
+      if (classifyRecoveryFailure(error) !== "not-pending") throw error;
+      await reopenSession(session, { notice: { kind: "action-refused", message: "This prompt already started, so it was not withdrawn. Its recorded outcome is shown." } });
+    }
+  }), [agentClient, reopenSession, withProposalDecision]);
+
+  const resolveProposal = useCallback((proposal: AgentActionProposal, claim: AgentOwnerResolutionClaim) => void withProposalDecision(proposal.id, async () => {
+    const session = sessionIdRef.current;
+    const invocationId = proposal.preparedInvocation?.invocationId;
+    if (!session || !invocationId) throw new Error("This operation cannot be resolved from this conversation.");
+    try {
+      const recorded = await agentClient.resolveClientInvocation(session, invocationId, claim);
+      if (session !== sessionIdRef.current) return;
+      updateProposal(proposal.id, { status: recorded.status, ownerResolution: recorded.ownerResolution, error: undefined, disabledReason: undefined });
+    } catch (error) {
+      const failure = classifyRecoveryFailure(error);
+      if (failure !== "not-uncertain" && failure !== "resolution-conflict" && failure !== "proposal-conflict") throw error;
+      await reopenSession(session, { notice: { kind: "action-refused", message: failure === "resolution-conflict"
+        ? "A different statement about this operation is already recorded, so yours was not recorded. The recorded state is shown."
+        : "This operation changed before your statement was recorded, so it was not recorded. The recorded state is shown." } });
+    }
+  }), [agentClient, reopenSession, updateProposal, withProposalDecision]);
+
+  const startNewConversation = useCallback(() => {
+    if (chatState === "streaming") return;
+    recoveryGenerationRef.current++;
+    turnGenerationRef.current++;
+    const previous = sessionIdRef.current;
+    if (previous && sessionScope) clearSessionHint(sessionScope.storageKey, previous);
+    sessionIdRef.current = null; setSessionId(null); streamRef.current?.close(); streamRef.current = null;
+    policyScopeRef.current = null; setAutonomyUpdate(null); setSessionPolicy(null); setAutonomyUnsupported(null); setAutoApplyNotice(null);
+    setMessages([]); setProposals([]); setTimeline([]); setPlan([]); setToolResults([]); setAttachments([]); clearContextDiagnostics();
+    setError(null); setRecoveryNotice(null); setReopening(false);
+    finishTurn();
+    void listOwnedSessions();
+  }, [chatState, clearContextDiagnostics, listOwnedSessions, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy]);
+
   return {
     bootstrap,
     sessionId,
@@ -902,7 +1106,47 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     retryConfirmation,
     submitFeedback,
     setAutoApplyMode: selectAutoApplyMode,
-    retryAutoApplyMode
+    retryAutoApplyMode,
+    recentSessions,
+    recoveryNotice,
+    reopening,
+    reopenSession: reopenSessionAction,
+    startRecordedTurn,
+    withdrawMessage,
+    resolveProposal,
+    startNewConversation
+  };
+}
+
+const RECENT_SESSION_COUNT = 20;
+/** Statuses that keep the session's review or client delivery open; the composer waits on them. */
+const BUSY_PROPOSAL_STATUSES: readonly AgentActionProposal["status"][] = ["awaiting-approval", "approved", "awaiting-client", "executing"];
+const WAITING_ELSEWHERE = "Waiting for the Studio tab or page that started this change. If that page is gone, it becomes uncertain once its deadline passes, and you can then resolve it.";
+const MESSAGE_ROLES: readonly AgentMessageRole[] = ["user", "assistant", "system", "tool", "progress", "error"];
+
+function toMessageStatus(status: string): AgentMessageStatus {
+  return (["pending", "streaming", "completed", "failed", "cancelled"] as const).find(item => item === status) ?? "failed";
+}
+
+function recordedMessageView(message: AgentRecordedMessage, revisionModes: ReadonlyMap<number, WeaverAutoApplyMode>): AgentMessageViewModel {
+  const revision = message.acceptedPolicyRevision;
+  return {
+    id: message.id,
+    role: MESSAGE_ROLES.find(role => role === message.role) ?? "assistant",
+    content: message.content ?? "",
+    status: toMessageStatus(message.status),
+    ...(message.statusReason ? { statusReason: message.statusReason } : {}),
+    ...(revision !== undefined ? { acceptedPolicy: { revision, autonomyMode: revisionModes.get(revision) } } : {})
+  };
+}
+
+/** A recorded proposal for review. An operation awaiting another tab's client delivery offers this tab no action. */
+function recordedProposalView(proposal: AgentRecordedProposal, deliveredHere: boolean): AgentActionProposal {
+  return {
+    ...normalizeProposal(proposal.id, proposal),
+    ...(proposal.ownerResolution ? { ownerResolution: proposal.ownerResolution } : {}),
+    ...(proposal.expiresAt ? { expiresAt: proposal.expiresAt } : {}),
+    ...(proposal.status === "awaiting-client" && !deliveredHere ? { disabledReason: WAITING_ELSEWHERE } : {})
   };
 }
 
