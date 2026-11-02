@@ -119,15 +119,23 @@ internal sealed class RecoveryHost : IDisposable
 internal sealed class RecoveryModuleTool : IAgentTool
 {
     private int _dispatches;
+    private int _effects;
     private (TaskCompletionSource Started, TaskCompletionSource Release)? _hold;
 
     /// <summary>How many times the owning module was dispatched, across every host.</summary>
     public int Dispatches => Volatile.Read(ref _dispatches);
+    /// <summary>How many effects the owning module actually applied, across every host.</summary>
+    public int Effects => Volatile.Read(ref _effects);
     public string Revision { get; private set; } = "revision-1";
+    /// <summary>The installed tool's current risk; raising it requires a new review.</summary>
+    public AgentRisk Risk { get; set; } = AgentRisk.ReviewRequired;
 
-    public AgentToolDescriptor Descriptor { get; } = new(DeterministicAgentProvider.MutatingToolName, "Apply change", "Applies a test resource change.",
-        AgentToolMutability.Mutating, AgentRisk.ReviewRequired, """{"type":"object","properties":{"change":{"type":"string"}}}""", [], [])
+    public AgentToolDescriptor Descriptor => new(DeterministicAgentProvider.MutatingToolName, "Apply change", "Applies a test resource change.",
+        AgentToolMutability.Mutating, Risk, """{"type":"object","properties":{"change":{"type":"string"}}}""", [], [])
     { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId, ResultType = "test.change", ResultSchemaVersion = "1" };
+
+    /// <summary>A user edit in the owning module moves the resource to a new revision.</summary>
+    public void ChangeByUser() => Revision += "-edited";
 
     /// <summary>Holds the next dispatch after it is counted and before it reports anything.</summary>
     public (TaskCompletionSource Started, TaskCompletionSource Release) HoldNextDispatch()
@@ -149,6 +157,7 @@ internal sealed class RecoveryModuleTool : IAgentTool
         if (invocation.Target?.Revision != Revision)
             return AgentResult<AgentToolResult>.Failure("test.revision_changed", "The resource moved since preparation.", 409);
         Revision = $"revision-{count + 1}";
+        Interlocked.Increment(ref _effects);
         var data = new AgentPayload("test.change", "1", JsonSerializer.SerializeToElement(new { dispatches = count }));
         return AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "applied", data)
         { Receipt = new(invocation.InvocationId, invocation.Target!, invocation.Target! with { Revision = Revision }, AgentEffectScope.ServerPersisted, data) });

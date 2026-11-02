@@ -552,6 +552,8 @@ public static class AgentApi
             return;
         }
         var result = await proposals.ExecuteAsync(proposalId, actorId, request.Revision, context.RequestAborted);
+        // A refusal recorded as a terminal outcome, such as 409 agent.proposal.policy_stale or agent.proposal.expired, keeps
+        // its own error code and status and also carries the authoritative non-success outcome.
         var failureData = result.Succeeded ? null : await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted);
         var response = result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!)
             : new AgentApiResponse<AgentProposalExecutionResult>(failureData, result.Error);

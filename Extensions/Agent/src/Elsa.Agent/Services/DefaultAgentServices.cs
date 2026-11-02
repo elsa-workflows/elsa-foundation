@@ -329,6 +329,15 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         lock (row) row.Release(claim);
     }
 
+    /// <summary>The session's current policy revision after hydrating it; null when the session is not recorded.</summary>
+    internal async Task<long?> CurrentRevisionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return null;
+        lock (row)
+            return row.Revision;
+    }
+
     /// <summary>Reads the session's current policy state for its owning actor and tenant.</summary>
     internal async Task<AgentSessionPolicyResult> GetPolicyAsync(string sessionId, string actorId, string tenantId, CancellationToken cancellationToken = default)
     {

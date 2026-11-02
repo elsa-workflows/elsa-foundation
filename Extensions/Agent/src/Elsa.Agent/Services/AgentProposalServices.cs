@@ -257,6 +257,17 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             if (proposal.PreparedInvocation is null)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.executor_unavailable", "This proposal has no concrete prepared executor.", 409);
+            // Story 2.3: the approval basis must still be the session's current policy revision. A stale basis is a
+            // recorded zero-effect refusal; the executor and resolver then recheck everything else before dispatch.
+            if (_owner is not null && proposal.PolicyRevision is { } stamped
+                && await _owner.CurrentRevisionAsync(proposal.SessionId, CancellationToken.None) is { } currentRevision && currentRevision != stamped)
+            {
+                var stale = await StoreOutcomeAsync(proposal, AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.policy_stale",
+                    "The session policy changed after this operation was approved. It was not dispatched; prepare it again under the current policy.", 409));
+                await AuditAsync(store.Proposals[proposalId], AgentAuditEventKind.ProposalFailed, actorId,
+                    "The approval basis is no longer the session's current policy; no effect occurred.", CancellationToken.None, PreDispatchExpiry);
+                return stale;
+            }
             // The owner marks the claim dispatched before Executing. An expired pre-dispatch claim is no
             // longer busy, so policy may have moved; it can never authorize dispatch.
             if (_owner is not null && !await _owner.MarkProposalDispatchedAsync(proposal.SessionId, proposalId, CancellationToken.None))
