@@ -174,7 +174,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 Narrow("StatusCode", "StatusCode", Elsa3ValueContract.EnumNameToInt) with { OnNull = NullUnbound },
                 Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody) with { BehaviourWarning = HttpResponseJsonVariant, OnNull = NullAsNull },
                 Narrow("ContentType", "ContentType", Elsa3ValueContract.HttpResponseContentType) with { OnNull = NullAsNull },
-                Carry("ResponseHeaders", "Headers") with { OnNull = NullRefused("Elsa 3 faults on null response headers.") }
+                Narrow("ResponseHeaders", "Headers", Elsa3ValueContract.HttpResponseHeaders) with { OnNull = NullRefused("Elsa 3 faults on null response headers.") }
             ]),
         NoCounterpart("DownloadHttpFile", "Elsa 4 has no file download activity."),
         NoCounterpart("WriteFileHttpResponse", "Elsa 4 has no file response activity."),

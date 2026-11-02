@@ -43,7 +43,8 @@ public sealed class Elsa3BuiltInConversionTests
         Assert.Equal("00:00:05", Text(Input(Node(state, "delay"), "Duration")));
         Assert.Equal("[1,2]", Text(Input(Node(state, "loop"), "Collection")));
         Assert.Equal("body", Text(Input(Node(state, "respond"), "Body")));
-        Assert.Equal("{}", Text(Input(Node(state, "respond"), "Headers")));
+        // #3202: the empty header map Elsa 3 saves is no binding; Elsa 4 then sends no extra headers, as Elsa 3 did.
+        Assert.DoesNotContain(Node(state, "respond").Inputs, input => input.ReferenceKey == "Headers");
         Assert.Equal("{}", Text(Input(Node(state, "dispatch"), "Inputs")));
         // R2: Elsa 4 cancels the child by default; Elsa 3 did not.
         Assert.Equal("false", Text(Input(Node(state, "dispatch"), "CancelChildOnParentCancellation")));

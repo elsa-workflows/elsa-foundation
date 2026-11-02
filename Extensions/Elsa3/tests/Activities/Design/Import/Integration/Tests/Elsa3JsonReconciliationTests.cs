@@ -11,7 +11,7 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 
 /// <summary>
 /// One host that started with <c>Elsa3JsonReconciliation</c> on a folder of Elsa 3 exports, on an empty store: the
-/// approval reusable and its caller, the nested <c>inner</c>/<c>outer</c> reusables, and an HTTP endpoint workflow. File
+/// approval reusable and its caller, the nested <c>inner</c>/<c>outer</c> reusables, and HTTP endpoint workflows. File
 /// names put callers before what they call, so the import cannot rely on file order. No request carries a tenant claim
 /// while the host starts, so the reusables publish through the startup grant.
 /// </summary>
@@ -26,6 +26,8 @@ public sealed class FolderImportFixture : IAsyncLifetime
         _folder = Directory.CreateTempSubdirectory("elsa3-folder-");
         Copy("caller-routes-outcome", "a-caller.json");
         Copy("http-endpoint", "b-http.json");
+        Copy("http-empty-headers", "b-http-empty-headers.json");
+        Copy("http-headers", "b-http-headers.json");
         Copy("reusable-calls-reusable", "c-nested.json");
         Copy("reusable-two-outcomes", "z-approval.json");
         Host = await Elsa3ImportHost.StartAsync(withHttp: true, reconcileFolder: _folder.FullName);
@@ -56,6 +58,8 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
     [Theory]
     [InlineData("caller")]
     [InlineData("http-hello")]
+    [InlineData("http-empty-headers")]
+    [InlineData("http-headers")]
     [InlineData("approval")]
     [InlineData("outer")]
     [InlineData("inner")]
@@ -102,9 +106,10 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
     [Fact]
     public void The_start_logs_one_summary_with_what_it_imported_and_published()
     {
-        // Reusables: approval, inner v1 and v2, outer. Workflows: caller, http-hello and the wrappers approval, inner (v2), outer.
+        // Reusables: approval, inner v1 and v2, outer. Workflows: caller, the three HTTP workflows and the wrappers approval,
+        // inner (v2), outer.
         Assert.Contains(Host.Warnings.Entries, entry =>
-            entry.Contains("4 reusable activities and 5 workflows in place; 5 workflows published by this start; 0 skipped", StringComparison.Ordinal));
+            entry.Contains("4 reusable activities and 7 workflows in place; 7 workflows published by this start; 0 skipped", StringComparison.Ordinal));
     }
 
     private static async Task<string?> WorkflowVersionIdAsync(IServiceProvider services, string definitionId, string version)
@@ -149,5 +154,39 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
             Assert.Fail($"{(int)response.StatusCode}: {body}\n{run?.Describe()}");
         }
         Assert.Equal("Hello from Elsa 3", body);
+    }
+
+    /// <summary>#3202: Elsa 3 saves an empty response header map; it publishes, and the response is what Elsa 3 sent.</summary>
+    [Fact]
+    public async Task Imported_http_response_with_the_empty_header_map_answers()
+    {
+        using var response = await PostAsync("workflows/http/elsa3/empty-headers");
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("Hello from http-empty-headers", await response.Content.ReadAsStringAsync());
+        Assert.False(response.Headers.Contains("X-Demo"));
+    }
+
+    /// <summary>#3202: a literal response header map is sent with the response.</summary>
+    [Fact]
+    public async Task Imported_http_response_sends_its_literal_headers()
+    {
+        using var response = await PostAsync("workflows/http/elsa3/headers");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Hello from http-headers", await response.Content.ReadAsStringAsync());
+        Assert.Equal(["elsa3"], response.Headers.GetValues("X-Demo"));
+    }
+
+    private async Task<HttpResponseMessage> PostAsync(string path)
+    {
+        var response = await Host.Client.PostAsync(path, new StringContent("{}", Encoding.UTF8, "application/json"));
+        if ((int)response.StatusCode < 400)
+            return response;
+        var body = await response.Content.ReadAsStringAsync();
+        var started = System.Text.Json.Nodes.JsonNode.Parse(body)?["started"]?.AsArray().FirstOrDefault()?.GetValue<string>();
+        var run = started is null ? null : await Host.WaitForSettledAsync(started);
+        Assert.Fail($"{(int)response.StatusCode}: {body}\n{run?.Describe()}");
+        return response;
     }
 }
