@@ -33,7 +33,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await expect(folderDialog).toBeHidden();
   await page.getByRole("treeitem", { name: new RegExp(folderName) }).click();
 
-  await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).click();
+  await page.getByRole("group", { name: "Workflow definition page actions", exact: true }).getByRole("button", { name: "Create workflow", exact: true }).click();
   const create = page.getByRole("dialog", { name: "Create Workflow", exact: true });
   await create.getByLabel("Display name").fill(workflowName);
   const sequence = create.getByRole("radio", { name: "Sequence" });

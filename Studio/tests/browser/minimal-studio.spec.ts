@@ -285,10 +285,11 @@ for (const item of presets) for (const width of [320, 1440]) test(`${item.name} 
   const payment = page.getByRole("row", { name: "Open workflow definition Collect overdue payment", exact: true });
   await expect(payment).toBeVisible();
   await payment.getByRole("button", { name: "Actions for Collect overdue payment", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
-  const organize = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
-  await expect(organize.getByText("Finance", { exact: true })).toBeVisible();
-  await organize.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
+  const organize = page.getByRole("dialog", { name: "Tags for Collect overdue payment", exact: true });
+  await expect(organize.getByRole("button", { name: "Remove Owning team: Billing", exact: true })).toBeVisible();
+  await organize.getByRole("combobox", { name: "Tags", exact: true }).fill("Critical");
+  await organize.getByRole("option", { name: "Critical", exact: true }).click();
   await expect(organize.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
   await page.screenshot({ path: testInfo.outputPath(`${item.name}-organization-${width}.png`), fullPage: true });
   await organize.getByRole("button", { name: "Save tags", exact: true }).click();
