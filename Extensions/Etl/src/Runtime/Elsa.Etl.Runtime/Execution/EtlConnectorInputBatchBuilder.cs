@@ -614,7 +614,8 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
         return prefix is [0xEF, 0xBB, 0xBF];
     }
 
-    /// <summary>Checks the R10 framing of one span or the gap before it as its bytes stream past.</summary>
+    /// <summary>Checks one indexed span, or the gap before it, as its bytes stream past: a span is one non-blank line ending in
+    /// LF (or at end of file) with no LF inside, and a gap holds only whole blank lines.</summary>
     private sealed class JsonlFraming
     {
         private bool _lineFeedBeforeEnd;

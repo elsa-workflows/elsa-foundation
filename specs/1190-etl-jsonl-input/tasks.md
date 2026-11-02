@@ -11,7 +11,7 @@
 - [x] T003 [P] Compiler validation and string budget for the `jsonl` case (`Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs`). FR-002.
 - [x] T004 [P] Executable reader field count and `ValidateConnectors` case (`Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs`). FR-002.
 - [x] T005 [P] Transformer field mapping for JSON Lines sources (`Transformation/EtlRowTransformer.cs`). FR-007.
-- [x] T006 Tests: artifact round trip and unchanged existing hashes; compiler valid/invalid JSON Lines drafts; executable reader acceptance and refusals (`EtlArtifactV2JsonTests`, `EtlArtifactCompilerV2Tests`, `EtlConnectorExecutableReaderTests`). FR-001, FR-002, SC-004.
+- [x] T006 Tests: artifact round trip and golden bytes and hashes for existing CSV and HTTP JSON artifacts (`EtlV2ArtifactIdentityTests`); compiler valid/invalid JSON Lines drafts; executable reader acceptance and refusals (`EtlArtifactV2JsonTests`, `EtlArtifactCompilerV2Tests`, `EtlConnectorExecutableReaderTests`). FR-001, FR-002, SC-004.
 
 ## Phase 2 — Bindings and persistence (US1, US4)
 
@@ -50,7 +50,7 @@
 
 ## Phase 5 — Studio (US1, US4)
 
-- [x] T021 [P] Types, source-kind option, binding filter, fields editor reuse, labels (`etlTypes.ts`, `EtlConnectorSourceEditor.tsx`, `EtlHttpJsonSourceFieldsEditor.tsx`, the pipeline editor and inspection text). FR-009, FR-010.
+- [x] T021 [P] Types, source-kind option, binding filter, fields editor reuse, labels (`etlTypes.ts`, `EtlConnectorSourceEditor.tsx`, `EtlJsonSourceFieldsEditor.tsx` (renamed from `EtlHttpJsonSourceFieldsEditor.tsx`), `PipelineBindingSelect.tsx`, the pipeline editor and budgets labels). FR-009, FR-010.
 - [x] T022 [P] Tests, written first against T021's intended behaviour. SC-005.
   - Vitest for the kind switch, the binding filter and label (`__tests__/connector-pipeline-editor.test.tsx`). Run inspection needed no change: its `JSON Lines` kind label already existed.
   - Extend `Studio/tests/browser/etl-connector-authoring.spec.ts` with a JSON Lines source; its existing `csv` Source approval serves as the source file.
@@ -62,7 +62,7 @@
 - [x] T025 Bite-proofs for framing, line-error routing and zero-record settlement, recorded in `evidence/`. SC-002, SC-004.
 - [x] T026 Whole ETL test project with `--list-tests` count comparison; architecture guard; `Elsa.Maps.Generator -- check`; Studio ETL client tests. SC-004.
 - [x] T027 Docs: `Extensions/Etl/README.md`, `src/Core/README.md` and `studio/Elsa.Studio.Etl/EXTENSION_POINTS.md` source-kind lists. FR-001, §2.22.1.
-- [x] T028 Review loop to convergence (correctness, standards, spec lenses with adversarial verification); gate-evidence PR comment; set spec `**Status**: Implemented` in the PR; mark ready; request review; source-bound status on #2908, #2892 and Project #62.
+- [x] T028 Review loop to convergence (correctness, standards, spec lenses with adversarial verification); gate-evidence PR comment; set spec `**Status**: Implemented` in this PR. Marking the PR ready, requesting review and the #2908/#2892/Project #62 status updates follow outside this diff.
 
 ## Dependencies
 

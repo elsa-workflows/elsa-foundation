@@ -43,7 +43,7 @@ Both constitutions and the review checklist were loaded.
 | §4.1 / §E5 Public API delta | Additive: one record and its members, recorded in `Core/PublicAPI.Unshipped.txt`. |
 | §E7 CI tiers | No new test project. |
 
-No violations; one recorded naming exception (R4). Recorded debt: the shared `EtlJsonRecordReader` lives beside `EtlJsonPointer` in the `Http` namespace, and the JSON Lines snapshot is opened through `EtlConnectorCsvSupport`; both are format-neutral helpers whose names predate this slice. Complexity Tracking is empty.
+No violations; one recorded naming exception (R4). Recorded debt: the shared `EtlJsonRecordReader`, created in this slice, is placed on purpose beside `EtlJsonPointer` in the `Http` namespace that already holds the JSON helpers, and the JSON Lines snapshot is opened through the pre-existing `EtlConnectorCsvSupport`; moving the JSON helpers to a format-neutral namespace is a later cleanup. Complexity Tracking is empty.
 
 ## Design
 
@@ -86,7 +86,7 @@ No violations; one recorded naming exception (R4). Recorded debt: the shared `Et
   - `OpenAsync`: CSV still compiles its header from entry 0; JSON Lines verifies the sentinel.
   - `ValidatePrepared`: the snapshot key extension depends on the source kind.
   - `PreparedPin`: accepts the `Jsonl` kind for the source role only.
-  - `BuildFileRangeAsync`: dispatches per format. JSON Lines classifies oversize from the index; streams the span (and any gap before it) through a bounded buffer for the R10 checks, so an oversize line is never held in memory; reads content of at most `maxRecordBytes` into one buffer; parses with `EtlJsonRecordReader` at `MaxDepth = http.maxJsonDepth`; and uses the file ordinal.
+  - `BuildFileRangeAsync`: dispatches per format. JSON Lines classifies oversize from the index; streams the span (and any gap before it) through a bounded buffer for the R10 checks, so an oversize line is never held in memory; buffers a span of at most `maxRecordBytes` plus a CRLF terminator (and never beyond `Array.MaxLength`); parses with `EtlJsonRecordReader` at `MaxDepth = http.maxJsonDepth`; and uses the file ordinal.
   - `SourceFieldNames`: covers JSON Lines fields.
 - `Transformation/EtlRowTransformer.cs:346`: map `EtlJsonlSource.Fields` like HTTP fields.
 - `Execution/EtlConnectorExecution.cs:193`: unchanged (the file path uses batch limits).
@@ -110,7 +110,7 @@ No violations; one recorded naming exception (R4). Recorded debt: the shared `Et
   - A "JSON Lines file" option.
   - The binding picker filters Source approvals of kind `csv`, labelled "Source file binding".
   - The kind switch carries fields across, as the existing CSV↔HTTP switch does.
-- `EtlHttpJsonSourceFieldsEditor.tsx`: accepts a JSON Lines source, rendering only the fields table (no records pointer or pagination).
+- `EtlJsonSourceFieldsEditor.tsx` (renamed from `EtlHttpJsonSourceFieldsEditor.tsx`, since it now edits both JSON sources): accepts a JSON Lines source, rendering only the fields table (no records pointer or pagination).
 - `PipelineBindingSelect.tsx`: an optional `subjectLabel` prop overrides the role and kind wording, so the JSON Lines picker reads "Source file" rather than "Source CSV".
 - Pipeline editor summary labels and run inspection empty-state text name JSON Lines where they name only CSV/HTTP.
 
@@ -119,9 +119,9 @@ No violations; one recorded naming exception (R4). Recorded debt: the shared `Et
 Focused checks run while implementing. CI runs whole suites (`Build & test`, `Full tier`).
 
 1. **Unit**, all in `Extensions/Etl/tests/Tests`:
-   - `EtlJsonlLineIndexerTests`: BOM, LF/CRLF mix, unterminated last line, blank and whitespace-only lines, empty file, entry bounds, sentinel.
+   - `EtlJsonlInputTests.Line_indexer_*`: BOM, LF/CRLF mix, unterminated last line, blank and whitespace-only lines, empty file, entry bounds, sentinel.
    - JSON Lines batch-builder coverage of every FR-006 code: exact and over-max content, depth, top-level and nested duplicate names, invalid UTF-8, non-object, wrong types, object and array values, int64 and decimal bounds, CR-only files.
-   - `EtlArtifactV2JsonTests`: round trip, plus unchanged hashes for existing fixtures.
+   - `EtlArtifactV2JsonTests`: round trip; `EtlV2ArtifactIdentityTests`: golden bytes and hashes for existing CSV and HTTP JSON v2 artifacts.
    - Compiler V2, executable reader, `HostConnectorBindings` and codec tests for the new kind and the input-digest rule.
 2. **Preparer and batch builder**:
    - Preparer: unavailable file, digest mismatch, snapshot too large, empty and BOM-only files, shards refused, too-many-records through the injectable ceiling.
@@ -133,7 +133,7 @@ Focused checks run while implementing. CI runs whole suites (`Build & test`, `Fu
    - An empty JSON Lines file and a header-only CSV settle as success with no manual call.
    - Cancellation with owed work.
 5. **Worker process recovery** (`EtlRuntimeJourneyTests.Jsonl.cs`), using the child `WorkerHost`:
-   - Gates at `AfterReservation` and `BeforeAcceptance` on a two-partition file. The child host needs no change: it receives file bindings through `EtlWorkerConfiguration` and shares the snapshot root.
+   - Gates at `AfterReservation` and `BeforeAcceptance` on a two-partition file. The child host receives file bindings through `EtlWorkerConfiguration` and shares the snapshot root; its staging-pause publisher only maps the new snapshot format.
    - Crash, then start the replacement only after the predecessor's partition lease has expired, so owed-batch-first claiming gives it the owed partition. A gate checkpoints once per process, and partition 1 is otherwise free immediately.
    - Assert the higher fence, the same batch descriptor, effect identity and file bytes, no lost records and zero outstanding accounting.
 6. **Studio**: a Vitest case for the JSON Lines kind switch and binding filter, and the `etl-connector-authoring` browser spec extended with a JSON Lines source.
@@ -159,7 +159,6 @@ The ETL test project runs whole once before the PR is marked ready, with execute
 ```text
 specs/1190-etl-jsonl-input/
 ├── spec.md, research.md, plan.md, data-model.md, quickstart.md, tasks.md
-├── checklists/requirements.md
 └── evidence/                # real-host and browser receipts
 Extensions/Etl/src/{Core,Design,Runtime,Persistence}/…   # files above
 Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/…

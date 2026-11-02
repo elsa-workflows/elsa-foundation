@@ -32,7 +32,8 @@ public sealed partial class EtlRuntimeJourneyTests
         var delivery = new TestResultDelivery(EtlDeliveryDisposition.Consumed);
         var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, resultDelivery: delivery,
             configureRuntime: runtime => ConfigureConnectorBindings(runtime, files.Scope, endpoint, csvSource: true, httpMain, httpErrors: false));
-        var invocation = ConnectorInvocation(files.Scope, "jsonl-worker", JsonlJourneyPipeline(httpMain));
+        // One record per batch: the "skip" batch is fully filtered and the broken-line batch carries only an error.
+        var invocation = ConnectorInvocation(files.Scope, "jsonl-worker", JsonlJourneyPipeline(httpMain, maxBatchRecords: 1));
 
         await files.AdmitAsync(host, invocation);
         var run = await files.WaitForTerminalAsync(host, invocation.RunId);
@@ -106,10 +107,9 @@ public sealed partial class EtlRuntimeJourneyTests
 
         await predecessor.CrashAsync();
         Assert.True(predecessor.HasExited);
-        // Wait for the abandoned lease to expire so owed-batch-first claiming hands the same partition to the replacement.
-        var expiry = stopped.Lease.ExpiresAt - DateTimeOffset.UtcNow;
-        if (expiry > TimeSpan.Zero)
-            await Task.Delay(expiry + TimeSpan.FromMilliseconds(500), deadline.Token);
+        // The predecessor's heartbeat renewed its lease until the kill, so wait on the stored expiry rather than the
+        // checkpointed one; once it passes, owed-batch-first claiming hands the same partition to the replacement.
+        await WaitForPartitionLeaseExpiryAsync(host.Services, stopped.Lease.PartitionOrdinal, deadline.Token);
         var survivor = await files.StartWorkerAsync("jsonl-survivor", deadline.Token, connectorGate: EtlConnectorWorkerGate.BeforeAcceptance);
         var recovered = await survivor.WaitForConnectorCheckpointAsync(deadline.Token);
 
@@ -178,7 +178,7 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Empty(PublishedMainFiles(files));
     }
 
-    private static EtlPipelineV2 JsonlJourneyPipeline(bool httpMain)
+    private static EtlPipelineV2 JsonlJourneyPipeline(bool httpMain, int maxBatchRecords = 1_000)
     {
         var baseline = EtlV2TestPipelines.Create();
         return baseline with
@@ -189,7 +189,7 @@ public sealed partial class EtlRuntimeJourneyTests
             Routes = new(httpMain ? new EtlHttpDestination("output") : new EtlJsonlDestination("output"), new EtlJsonlDestination("errors")),
             Mapping = [new("name", EtlFieldOrigin.Source, "name"), new("category", EtlFieldOrigin.Lookup, "category")],
             Filters = [new("name", EtlComparison.NotEqual, JsonSerializer.SerializeToElement("skip"))],
-            Limits = baseline.Limits with { FilePartitionCount = 2 }
+            Limits = baseline.Limits with { FilePartitionCount = 2, MaxBatchRecords = maxBatchRecords }
         };
     }
 
@@ -201,6 +201,20 @@ public sealed partial class EtlRuntimeJourneyTests
         var invocation = ConnectorInvocation(files.Scope, runId, JsonlJourneyPipeline(httpMain: false));
         await files.AdmitAsync(host, invocation);
         return (host, invocation);
+    }
+
+    private static async Task WaitForPartitionLeaseExpiryAsync(IServiceProvider services, int partitionOrdinal,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            await using var operation = services.CreateAsyncScope();
+            var partition = await operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().ConnectorPartitions.AsNoTracking()
+                .SingleAsync(row => row.PartitionOrdinal == partitionOrdinal, cancellationToken);
+            if (partition.ExpiresAtUtcTicks is not { } expires || expires < DateTimeOffset.UtcNow.UtcTicks - TimeSpan.TicksPerSecond / 2)
+                return;
+            await Task.Delay(100, cancellationToken);
+        }
     }
 
     private static async Task<EtlConnectorBatchRecord> ReadJsonlBatchAsync(IServiceProvider services, string batchId,

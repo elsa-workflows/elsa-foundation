@@ -2,7 +2,7 @@ import React, { useId } from "react";
 import type { EtlColumnType, EtlHttpJsonSource, EtlHttpPagination, EtlJsonField, EtlJsonlSource } from "../etlTypes";
 
 /** Edits JSON Pointer fields; HTTP JSON sources also get their records pointer and pagination. */
-export function EtlHttpJsonSourceFieldsEditor<T extends EtlHttpJsonSource | EtlJsonlSource>({ source, maxFields, disabled, onChange }: {
+export function EtlJsonSourceFieldsEditor<T extends EtlHttpJsonSource | EtlJsonlSource>({ source, maxFields, disabled, onChange }: {
   source: T;
   maxFields: number;
   disabled: boolean;

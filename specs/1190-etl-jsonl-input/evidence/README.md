@@ -9,7 +9,7 @@ The driver is [`jsonl_workbench_journey.py`](jsonl_workbench_journey.py). It ran
 - Run 1 at `9b7c6df4d`, on an ephemeral port.
 - Run 2 at `724bb5c00`, which only adds the driver's `--port` and `--studio-origin` options, on owned port 5391 so a Studio could attach. Its summary records that revision.
 
-Both runs passed every check.
+Both runs passed every check; only run 2 kept its summary. The journey was not re-run after the main merge (`0ee760f35`) or the review fixes (`c51023ed8`: record-buffer bound, exception rename), which the unit, worker and process tests cover at head.
 
 The driver:
 
@@ -24,7 +24,7 @@ It stops only the process it started. Run 2's derived summary is [`workbench-jou
 | Case | Input | Native outcome | Run | Partitions |
 |---|---|---|---|---|
 | clean | BOM, a blank line, CRLF, unterminated last line, 4 records | `Completed` through `Done` only | `succeeded`, 4 accepted, outputs Ada/Bram/Cleo/Dee | `[1,3)` and `[3,5)`, both at their end |
-| dirty | 7 lines: 2 valid, then one each of invalid JSON, non-object, wrong type, missing required, duplicate property | `Completed` through `BusinessError` only | `businessError` / `etl.rows-rejected`, 2 accepted, 5 rejected | `[1,5)` and `[5,8)`, both at their end |
+| dirty | 7 lines: Ada first and Eve last, with one each of invalid JSON, non-object, wrong type, missing required and duplicate property between them | `Completed` through `BusinessError` only | `businessError` / `etl.rows-rejected`, 2 accepted, 5 rejected | `[1,5)` and `[5,8)`, both at their end |
 
 Further results from both runs:
 
@@ -43,7 +43,8 @@ Further results from both runs:
 During run 2, an owned `Elsa.Studio.Web` (built from the same commit) ran on 127.0.0.1:5392 against the owned Workbench. The built-in browser signed in with the local test account.
 
 - [`studio/live-jsonl-draft-source.jpg`](studio/live-jsonl-draft-source.jpg): the saved definition opens with the **JSON Lines file** source kind, the source file binding and its two JSON Pointer fields.
-- [`studio/live-jsonl-runs.jpg`](studio/live-jsonl-runs.jpg) and [`studio/live-jsonl-run-inspection.jpg`](studio/live-jsonl-run-inspection.jpg): the runs list, and the dirty run's inspection. The inspection shows **Source type: JSON Lines**, 7 source records, 2 accepted and 5 rejected, the retained source identity, and both file partitions (`File range 1–5 (next 5)`, `File range 5–8 (next 8)`).
+- [`studio/live-jsonl-runs.jpg`](studio/live-jsonl-runs.jpg) and [`studio/live-jsonl-run-inspection.jpg`](studio/live-jsonl-run-inspection.jpg): the runs list, and the top of the dirty run's inspection (7 source records, 2 accepted, 5 rejected, nothing outstanding).
+- [`studio/live-jsonl-run-inspection.txt`](studio/live-jsonl-run-inspection.txt): the same inspection's full page text, captured from the browser. It shows **Source type: JSON Lines**, the retained source identity and both file partitions (`File range 1–5 (next 5)`, `File range 5–8 (next 8)`), which lie below the screenshot's fold.
 
 Both owned processes were stopped afterwards. The owner's own Workbench on 5095 was not touched.
 
@@ -73,7 +74,7 @@ The replacement:
 
 | Mutation | Tests failed while mutated |
 |---|---|
-| Indexer emits blank lines as records | 3 of 11 framing cases |
+| Indexer emits blank lines as records | 3 of 11 indexer tests |
 | Bad lines fail the batch instead of routing | 1 of 1 |
 | Zero-record settlement removed (FR-011) | 5 of 5 (store CSV and JSON Lines, worker empty, blank-only and header-only CSV) |
 | R10 span check disabled | 2 of 5 forged-index cases |

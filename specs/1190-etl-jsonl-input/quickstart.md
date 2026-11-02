@@ -3,7 +3,7 @@
 ## Focused tests
 
 ```bash
-dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --filter "FullyQualifiedName~Jsonl|FullyQualifiedName~ZeroRecord"
+dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj --filter "FullyQualifiedName~Jsonl|FullyQualifiedName~Zero_record|FullyQualifiedName~Empty_file_preparation|FullyQualifiedName~One_source_file_approval|FullyQualifiedName~Persisted_v2_artifacts_keep"
 pnpm --dir Studio --filter @elsa-workflows/studio-etl test
 pnpm --dir Studio test:browser -- etl-connector-authoring
 ```
