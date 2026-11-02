@@ -302,7 +302,7 @@ public static class AgentApi
             }
         }
         if (context.RequestServices.GetRequiredService<IAgentTurnRegistry>().IsActive(sessionId)
-            || context.RequestServices.GetRequiredService<IAgentTurnStateStore>().Find(sessionId) is not null)
+            || await context.RequestServices.GetRequiredService<IAgentTurnStateStore>().FindAsync(sessionId, context.RequestAborted) is not null)
         {
             await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.session.busy", "Finish or resolve the current turn before sending another prompt.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
             return;

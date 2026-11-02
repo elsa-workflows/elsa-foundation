@@ -165,14 +165,14 @@ public sealed class AgentCompositionTests
         // The replacements carried the lease and the retained pause; the owner's claims still govern policy.
         Assert.Equal((1, 1), (registry.Registers, registry.Unregisters));
         Assert.Equal(1, store.Saves);
-        Assert.NotNull(store.Find(session.Id));
+        Assert.NotNull(await store.FindAsync(session.Id));
         Assert.Equal(AgentSessionPolicyOutcome.Busy, (await ChangeAsync(policy, session, AgentAutonomyMode.FullAuto, 1)).Outcome);
         Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
         Assert.True((await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value!.Executed);
         Assert.Equal(AgentSessionPolicyOutcome.Busy, (await ChangeAsync(policy, session, AgentAutonomyMode.FullAuto, 1)).Outcome);
 
         Assert.Equal(AgentStreamEventKind.Completed, (await Collect(streaming.StreamAsync(session.Id)))[^1].Kind);
-        Assert.Null(store.Find(session.Id));
+        Assert.Null(await store.FindAsync(session.Id));
         Assert.Equal((2, 2), (registry.Registers, registry.Unregisters));
         var changed = await ChangeAsync(policy, session, AgentAutonomyMode.FullAuto, 1);
         Assert.Equal(AgentSessionPolicyOutcome.Succeeded, changed.Outcome);
@@ -442,14 +442,14 @@ public sealed class AgentCompositionTests
         private int _saves;
         public int Saves => Volatile.Read(ref _saves);
 
-        public void Save(AgentPausedTurn state)
+        public async Task SaveAsync(AgentPausedTurn state, CancellationToken cancellationToken = default)
         {
-            inner.Save(state);
+            await inner.SaveAsync(state, cancellationToken);
             Interlocked.Increment(ref _saves);
         }
 
-        public AgentPausedTurn? Find(string sessionId) => inner.Find(sessionId);
-        public void Remove(string sessionId) => inner.Remove(sessionId);
+        public Task<AgentPausedTurn?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindAsync(sessionId, cancellationToken);
+        public Task RemoveAsync(string sessionId, CancellationToken cancellationToken = default) => inner.RemoveAsync(sessionId, cancellationToken);
     }
 
     private static void AssertSingleDefaults(IServiceProvider services, bool hasProviderConflict = false)

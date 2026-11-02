@@ -89,3 +89,31 @@ internal sealed class DefaultAgentSessionPolicyService(IServiceProvider services
             services.GetRequiredService<IAgentProposalService>());
     }
 }
+
+/// <summary>Whether a restart can recover a composition's sessions.</summary>
+internal enum AgentDurableRecoverySupport
+{
+    Supported,
+    Unsupported
+}
+
+/// <summary>
+/// Durable recovery is supported only when the default owner participates with every default lifecycle service, keeps
+/// the paused turn on its own session record, and writes through a record store that fences every write. A replaced
+/// <see cref="IAgentTurnStateStore"/> or a store that cannot fence keeps today's in-process behaviour but is Unsupported.
+/// </summary>
+internal sealed class AgentDurableRecovery(IServiceProvider services)
+{
+    public AgentDurableRecoverySupport Evaluate()
+    {
+        var sessions = services.GetRequiredService<IAgentSessionService>();
+        var owner = AgentSessionPolicyParticipation.SameOwner(sessions as InMemoryAgentSessionService, sessions,
+            services.GetRequiredService<IAgentStreamingService>(),
+            services.GetRequiredService<IAgentToolInvoker>(),
+            services.GetRequiredService<IAgentProposalService>());
+        return owner is not null && owner.RecordStore.SupportsFencing
+            && services.GetRequiredService<IAgentTurnStateStore>() is InMemoryAgentTurnStateStore { Owner: { } pauses } && ReferenceEquals(pauses, owner)
+            ? AgentDurableRecoverySupport.Supported
+            : AgentDurableRecoverySupport.Unsupported;
+    }
+}

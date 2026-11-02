@@ -445,7 +445,7 @@ public sealed class AgentSessionPolicyTests
         var events = await Collect(fixture.Streaming.StreamAsync(session.Id, cancellation.Token));
 
         Assert.Equal(AgentStreamEventKind.TurnCancelled, events[^1].Kind);
-        Assert.Null(fixture.Scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().Find(session.Id));
+        Assert.Null(await fixture.Scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>().FindAsync(session.Id));
         Assert.Null(fixture.Owner.FindPause(session.Id));
         Assert.Equal(AgentSessionPolicyOutcome.Busy, await fixture.ProbeAsync(session));
 

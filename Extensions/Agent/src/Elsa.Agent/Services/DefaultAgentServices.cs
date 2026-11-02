@@ -295,6 +295,33 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         lock (row) return row.Find(PauseKey);
     }
 
+    /// <summary>
+    /// Records the paused turn on its session's record and, in the same transition, the session's Pause claim, so the
+    /// recorded pause and the claim that keeps its policy never come apart.
+    /// </summary>
+    internal Task SavePausedTurnAsync(AgentPausedTurn state, CancellationToken cancellationToken = default)
+        => CommitAsync<bool>(state.SessionId, () => throw new InvalidOperationException($"Agent session '{state.SessionId}' was not found."),
+            row => new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { PausedTurn = state }, () =>
+            {
+                row.PausedTurn = state;
+                EnsurePause(row);
+            }), cancellationToken);
+
+    /// <summary>The session's recorded paused turn, after hydrating the session; null when there is none.</summary>
+    internal async Task<AgentPausedTurn?> FindPausedTurnAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (await RowAsync(sessionId, cancellationToken) is not { } row)
+            return null;
+        lock (row)
+            return row.PausedTurn;
+    }
+
+    /// <summary>Removes the session's recorded paused turn. Its Pause claim is released by the continuation that observed it.</summary>
+    internal Task RemovePausedTurnAsync(string sessionId, CancellationToken cancellationToken = default)
+        => CommitAsync<bool>(sessionId, () => false, row => row.PausedTurn is null
+            ? new(false)
+            : new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { RemovePausedTurn = true }, () => row.PausedTurn = null), cancellationToken);
+
     /// <summary>Releases exactly this token. A released or superseded token is a no-op.</summary>
     internal void Release(AgentSessionClaim claim)
     {

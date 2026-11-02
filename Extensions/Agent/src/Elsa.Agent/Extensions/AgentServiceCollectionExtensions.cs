@@ -51,7 +51,8 @@ public static class AgentServiceCollectionExtensions
         // Scoped so tools may depend on per-request services without being captured by a singleton.
         services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();
         services.TryAddSingleton<IAgentTurnRegistry, AgentTurnRegistry>();
-        services.TryAddSingleton<IAgentTurnStateStore, InMemoryAgentTurnStateStore>();
+        // The default keeps the paused turn on the default owner's session record; any other session service gets a local map.
+        services.TryAddSingleton<IAgentTurnStateStore>(sp => new InMemoryAgentTurnStateStore(sp.GetRequiredService<IAgentSessionService>() as InMemoryAgentSessionService));
         services.AddOptions<AgentTurnOptions>();
         services.AddOptions<AgentContextOptions>().Validate(options => options.SourceTimeout > TimeSpan.Zero
             && options.SourceTimeout <= TimeSpan.FromMilliseconds(uint.MaxValue - 1),
@@ -60,6 +61,7 @@ public static class AgentServiceCollectionExtensions
         services.TryAddScoped<IAgentStreamingService>(AgentRegistrationValidator.Create<DefaultAgentTurnOrchestrator>);
         // Preview: scoped because participation is checked against the scoped lifecycle services.
         services.TryAddScoped<IAgentSessionPolicyService>(AgentRegistrationValidator.Create<DefaultAgentSessionPolicyService>);
+        services.TryAddScoped<AgentDurableRecovery>();
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();
 
         return services;

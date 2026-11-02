@@ -1,6 +1,8 @@
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Agent.Tests;
 
@@ -119,10 +121,97 @@ public sealed class AgentSessionOwnerWriteThroughTests
         Assert.Equal(("workspace-1", "session-0"), (recorded.Workspace, recorded.ContinuedFrom));
     }
 
+    // ---- T006: the default paused-turn store lives on the owner's record ----
+
+    [Fact]
+    public async Task Saving_the_default_pause_records_it_on_the_session_and_claims_the_pause_in_one_step()
+    {
+        using var root = AgentTestServices.Create();
+        using var scope = root.CreateScope();
+        var owner = Assert.IsType<InMemoryAgentSessionService>(scope.ServiceProvider.GetRequiredService<IAgentSessionService>());
+        var pauses = Assert.IsType<InMemoryAgentTurnStateStore>(scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>());
+        Assert.Same(owner, pauses.Owner);
+        var session = await CreateAsync(owner);
+        var paused = new AgentPausedTurn(session.Id, "turn-1", "proposal-1", "call-1", "tool", [new(AgentRole.User, "hello")], 1);
+
+        await pauses.SaveAsync(paused);
+
+        Assert.NotNull(owner.FindPause(session.Id));
+        Assert.Equal(AgentSessionPolicyOutcome.Busy,
+            (await owner.ChangeAutonomyAsync(new(session.Id, session.ActorId, session.TenantId, AgentAutonomyMode.Manual, 1))).Outcome);
+        var recorded = (await owner.RecordStore.LoadAsync(session.Id))!.PausedTurn;
+        Assert.Equal(AgentInvocationIntegrity.Digest(paused), AgentInvocationIntegrity.Digest(recorded));
+
+        // After the first owner releases its lease, a host over the same store finds the recorded pause and records its removal.
+        await owner.RecordStore.ReleaseOwnershipAsync(session.Id, (await owner.RecordStore.LoadAsync(session.Id))!.Owner!);
+        var restarted = new InMemoryAgentTurnStateStore(new InMemoryAgentSessionService(new InMemoryAgentAuditStore(), recordStore: owner.RecordStore));
+        Assert.Equal(AgentInvocationIntegrity.Digest(paused), AgentInvocationIntegrity.Digest(await restarted.FindAsync(session.Id)));
+        await restarted.RemoveAsync(session.Id);
+        Assert.Null((await owner.RecordStore.LoadAsync(session.Id))!.PausedTurn);
+    }
+
+    // ---- T004/T006: durable recovery support ----
+
+    [Fact]
+    public void Durable_recovery_is_supported_by_the_default_composition()
+    {
+        using var root = AgentTestServices.Create();
+        using var scope = root.CreateScope();
+
+        Assert.Equal(AgentDurableRecoverySupport.Supported, scope.ServiceProvider.GetRequiredService<AgentDurableRecovery>().Evaluate());
+    }
+
+    [Theory]
+    [InlineData("turn-state")]
+    [InlineData("unfenced-store")]
+    [InlineData("session-service")]
+    public async Task Durable_recovery_is_unsupported_for_a_replaced_pause_store_an_unfenced_record_store_or_a_replaced_owner(string replacement)
+    {
+        using var root = AgentTestServices.Create(services =>
+        {
+            if (replacement == "turn-state")
+                services.Replace(ServiceDescriptor.Singleton<IAgentTurnStateStore>(_ => new InMemoryAgentTurnStateStore()));
+            else if (replacement == "unfenced-store")
+                services.Replace(ServiceDescriptor.Singleton<IAgentSessionRecordStore>(_ => new UnfencedRecordStore(new InMemoryAgentSessionRecordStore())));
+            else
+                services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => new AgentSessionPolicyTests.ForwardingSessions(
+                    new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>(), sp.GetRequiredService<TimeProvider>()))));
+        });
+        using var scope = root.CreateScope();
+        var services = scope.ServiceProvider;
+
+        Assert.Equal(AgentDurableRecoverySupport.Unsupported, services.GetRequiredService<AgentDurableRecovery>().Evaluate());
+        // The in-process behaviour is unchanged: a session is created and read back.
+        var sessions = services.GetRequiredService<IAgentSessionService>();
+        var session = await sessions.CreateAsync(new("tenant-1", "actor-1", "conversation-1", "provider", "explain", null, AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        Assert.Equal(session.Id, (await sessions.FindAsync(session.Id))!.Id);
+    }
+
     internal static Task<AgentSession> CreateAsync(InMemoryAgentSessionService owner) => owner.CreateAsync(new("tenant-1", "actor-1", "conversation-1",
         "provider", "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
 
     internal static AgentMessageCreateRequest Prompt(string content) => new(AgentRole.User, content, AgentMessageStatus.Pending, null, [], []);
+
+    /// <summary>A store that keeps every record but cannot guard its writes on owner and fence.</summary>
+    private sealed class UnfencedRecordStore(IAgentSessionRecordStore inner) : IAgentSessionRecordStore
+    {
+        private readonly RefusingRecordStore _forward = new(inner);
+        public bool SupportsFencing => false;
+        public Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default)
+            => _forward.CreateAsync(record, ownerToken, cancellationToken);
+        public Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default) => _forward.LoadAsync(sessionId, cancellationToken);
+        public Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)
+            => _forward.AcquireOwnershipAsync(sessionId, ownerToken, cancellationToken);
+        public Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default)
+            => _forward.ReleaseOwnershipAsync(sessionId, fence, cancellationToken);
+        public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default)
+            => _forward.WriteAsync(write, cancellationToken);
+        public Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default)
+            => _forward.FindProposalSessionAsync(proposalId, cancellationToken);
+        public Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
+            => _forward.ListOwnedAsync(query, cancellationToken);
+    }
 
     /// <summary>A store whose writes can be refused as if another process had taken the session over.</summary>
     internal sealed class RefusingRecordStore(IAgentSessionRecordStore inner) : IAgentSessionRecordStore

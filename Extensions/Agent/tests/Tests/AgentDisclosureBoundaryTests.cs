@@ -182,7 +182,7 @@ public sealed class AgentDisclosureBoundaryTests
             Assert.True((await fixture.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
             accepted = await fixture.Proposals.FindResultAsync(proposal.Id);
             Assert.NotNull(accepted?.Receipt);
-            pause = fixture.Pauses.Find(session.Id);
+            pause = await fixture.Pauses.FindAsync(session.Id);
             Assert.NotNull(pause);
         }
         else
@@ -200,7 +200,7 @@ public sealed class AgentDisclosureBoundaryTests
 
         if (receiptPause)
         {
-            Assert.Equal(pause, fixture.Pauses.Find(session.Id));
+            Assert.Equal(pause, await fixture.Pauses.FindAsync(session.Id));
             Assert.Equal(accepted, await fixture.Proposals.FindResultAsync(pause!.ProposalId));
             Assert.Equal(1, fixture.Tool.Executions);
         }

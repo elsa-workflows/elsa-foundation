@@ -59,12 +59,33 @@ internal sealed class AgentTurnRegistry : IAgentTurnRegistry
     }
 }
 
-internal sealed class InMemoryAgentTurnStateStore : IAgentTurnStateStore
+/// <summary>
+/// The default paused-turn store. Bound to the default session owner, it keeps the paused turn on the owner's session
+/// record, so saving the pause also records the Pause claim. Without an owner it is a process-local map.
+/// </summary>
+internal sealed class InMemoryAgentTurnStateStore(InMemoryAgentSessionService? owner = null) : IAgentTurnStateStore
 {
     private readonly ConcurrentDictionary<string, AgentPausedTurn> _states = new(StringComparer.Ordinal);
-    public void Save(AgentPausedTurn state) => _states[state.SessionId] = state;
-    public AgentPausedTurn? Find(string sessionId) => _states.GetValueOrDefault(sessionId);
-    public void Remove(string sessionId) => _states.TryRemove(sessionId, out _);
+
+    /// <summary>The owner whose session records hold the paused turns, or null for the process-local map.</summary>
+    internal InMemoryAgentSessionService? Owner => owner;
+
+    public Task SaveAsync(AgentPausedTurn state, CancellationToken cancellationToken = default)
+    {
+        if (owner is not null) return owner.SavePausedTurnAsync(state, cancellationToken);
+        _states[state.SessionId] = state;
+        return Task.CompletedTask;
+    }
+
+    public Task<AgentPausedTurn?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
+        => owner is not null ? owner.FindPausedTurnAsync(sessionId, cancellationToken) : Task.FromResult(_states.GetValueOrDefault(sessionId));
+
+    public Task RemoveAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (owner is not null) return owner.RemovePausedTurnAsync(sessionId, cancellationToken);
+        _states.TryRemove(sessionId, out _);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>The active generic engine. Modules own preparation/effects; providers own their SDK protocol.</summary>
@@ -106,7 +127,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             yield break;
         }
 
-        var turnId = boundary.Call("find-paused-turn", () => stateStore.Find(sessionId), cancellationToken)?.TurnId ?? NewId();
+        var turnId = (await boundary.CallAsync("find-paused-turn", () => stateStore.FindAsync(sessionId, cancellationToken), cancellationToken))?.TurnId ?? NewId();
         // The foreground claim precedes registration and every policy read for this turn or continuation.
         // Its snapshot replaces the earlier lookup as the turn's approval authority.
         var foreground = _owner is null ? null : await _owner.AcquireAsync(sessionId, AgentSessionClaimKind.Foreground, CancellationToken.None);
@@ -149,8 +170,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
         AgentError? disclosureStop = null;
         Task<T> TrackAsync<T>(Func<Task<T>> pending)
             => boundary.CallAsync("admit-disclosure", pending, token);
-        AgentError? TrackPause(Func<AgentError?> action)
-            => boundary.Call("save-paused-turn", action, token);
+        Task<AgentError?> TrackPauseAsync(Func<Task<AgentError?>> action)
+            => boundary.CallAsync("save-paused-turn", action, token);
         try
         {
             var preparationCancelled = false;
@@ -170,7 +191,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             {
                 // An already accepted receipt remains resumable. A cancelled new prompt must not
                 // strand the session's pending-message gate while an abandoned source finishes.
-                paused = boundary.Call("find-cancelled-pause", () => stateStore.Find(sessionId)) is not null;
+                paused = await boundary.CallAsync("find-cancelled-pause", () => stateStore.FindAsync(sessionId, CancellationToken.None)) is not null;
                 if (!paused)
                 {
                     var cancelledPrompt = (await boundary.CallAsync("list-cancelled-prompts", () => sessions.ListMessagesAsync(sessionId, CancellationToken.None)))
@@ -357,7 +378,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     if (item.Kind == AgentStreamEventKind.ProposalCreated && item.Payload is AgentActionProposal proposal)
                     {
                         paused = true;
-                        var pauseError = TrackPause(() => SavePause(sessionId, turnId, source, proposal, prepared.History, prepared.Context, 0, observedResults, disclosures.Snapshots));
+                        var pauseError = await TrackPauseAsync(() => SavePauseAsync(sessionId, turnId, source, proposal, prepared.History, prepared.Context, 0, observedResults, disclosures.Snapshots));
                         if (pauseError is not null)
                         {
                             yield return Error(pauseError.Code, pauseError.Message, pauseError.StatusCode);
@@ -529,7 +550,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     {
                         var proposal = dispatch.Proposal!;
                         paused = true;
-                        var pauseError = TrackPause(() => SavePause(sessionId, turnId, source, proposal, history, prepared.Context, step + 1, observedResults, disclosures.Snapshots));
+                        var pauseError = await TrackPauseAsync(() => SavePauseAsync(sessionId, turnId, source, proposal, history, prepared.Context, step + 1, observedResults, disclosures.Snapshots));
                         if (pauseError is not null)
                         {
                             yield return Error(pauseError.Code, pauseError.Message, pauseError.StatusCode);
@@ -586,7 +607,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     {
                         try
                         {
-                            stateStore.Remove(sessionId);
+                            await stateStore.RemoveAsync(sessionId, CancellationToken.None);
                             // The continuation consumed the paused proposal's outcome. A client-scope
                             // uncertainty retained its claim until now; the observed pause follows it.
                             if (foreground is not null && pausedProposalId is not null) _owner!.ReleaseProposal(sessionId, pausedProposalId);
@@ -880,7 +901,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         Action<AgentMessage, bool, string?> rememberSource)
     {
         var messages = await sessions.ListMessagesAsync(session.Id, cancellationToken);
-        if (stateStore.Find(session.Id) is { } paused)
+        if (await stateStore.FindAsync(session.Id, cancellationToken) is { } paused)
         {
             var source = messages.FirstOrDefault(x => x.Id == paused.SourceMessageId);
             if (source is null) return PreparedTurn.Fail(Error("agent.turn.source_missing", "The pending turn's source message is unavailable.", 409));
@@ -1110,7 +1131,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         return tools;
     }
 
-    private AgentError? SavePause(string sessionId, string turnId, AgentMessage source, AgentActionProposal proposal,
+    private async Task<AgentError?> SavePauseAsync(string sessionId, string turnId, AgentMessage source, AgentActionProposal proposal,
         IReadOnlyList<AgentTurnMessage> history, IReadOnlyCollection<AgentContextAttachment> context, int step,
         IReadOnlyList<AgentToolResult> results, IReadOnlyList<AgentDisclosureSnapshot> disclosures)
     {
@@ -1124,8 +1145,9 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 DisclosureHistory = AgentDisclosureHistory.Freeze(disclosures)
             };
             state = state with { DisclosureHistoryFingerprint = AgentDisclosureHistory.PauseFingerprint(state) };
-            stateStore.Save(state);
-            var retained = stateStore.Find(sessionId);
+            // The pause is retained whatever happens to the turn's token; a cancelled turn still keeps its paused operation.
+            await stateStore.SaveAsync(state, CancellationToken.None);
+            var retained = await stateStore.FindAsync(sessionId, CancellationToken.None);
             if (retained is not null && PauseHistoryMatches(retained)
                 && AgentInvocationIntegrity.Digest(retained) == AgentInvocationIntegrity.Digest(state)) return null;
         }

@@ -1073,22 +1073,24 @@ public sealed partial class AgentCumulativeDisclosureTests
         internal Exception? ThrowOnRemove;
         internal Exception? ThrowOnFind;
         internal int RemoveCalls;
-        public void Save(AgentPausedTurn value)
+        public Task SaveAsync(AgentPausedTurn value, CancellationToken cancellationToken = default)
         {
             if (ThrowOnSave is { } failure) throw failure;
             state = value;
+            return Task.CompletedTask;
         }
-        public AgentPausedTurn? Find(string sessionId)
+        public Task<AgentPausedTurn?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
         {
             if (ThrowOnFind is { } failure) throw failure;
-            return state is not null && state.SessionId == sessionId
-                ? state with { DisclosureHistory = ChangeHistory(state.DisclosureHistory, Mutation) } : null;
+            return Task.FromResult(state is not null && state.SessionId == sessionId
+                ? state with { DisclosureHistory = ChangeHistory(state.DisclosureHistory, Mutation) } : null);
         }
-        public void Remove(string sessionId)
+        public Task RemoveAsync(string sessionId, CancellationToken cancellationToken = default)
         {
             RemoveCalls++;
             if (ThrowOnRemove is { } failure) throw failure;
             if (state?.SessionId == sessionId) state = null;
+            return Task.CompletedTask;
         }
     }
 
