@@ -116,8 +116,10 @@ export function RuntimeValueEvidenceContent({
   const canResolve = !!scope && !!evidenceId && supportedCaptureMode && capturedState && permissionAllowsResolution && !snapshot.failure;
   const resolutionIdentity = JSON.stringify([runtimeValueContextId(scope?.context), scope?.workflowExecutionId, scope?.activityExecutionId, evidenceId, captureModeKey]);
   const [requestedSensitiveIdentity, setRequestedSensitiveIdentity] = useState<string | null>(null);
-  const [retryRequest, setRetryRequest] = useState<{ identity: string; sequence: number } | null>(null);
-  const retrySequence = retryRequest?.identity === resolutionIdentity ? retryRequest.sequence : 0;
+  const [retryRequest, setRetryRequest] = useState({ identity: resolutionIdentity, sequence: 0 });
+  // Forget the previous occurrence's override before rendering the destination, including A → B → A.
+  if (retryRequest.identity !== resolutionIdentity) setRetryRequest({ identity: resolutionIdentity, sequence: 0 });
+  const retrySequence = retryRequest.identity === resolutionIdentity ? retryRequest.sequence : 0;
   const retryResolution = () => setRetryRequest(previous => ({ identity: resolutionIdentity,
     sequence: (previous?.identity === resolutionIdentity ? previous.sequence : 0) + 1 }));
   const [resolution, setResolution] = useState<RuntimeValueResolutionState | null>(null);

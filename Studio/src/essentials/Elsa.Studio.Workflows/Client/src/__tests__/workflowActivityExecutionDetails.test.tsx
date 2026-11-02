@@ -1418,6 +1418,12 @@ it("uses the next occurrence's prepared value immediately after retrying a previ
   expect(container.textContent).toContain("Prepared next value");
   expect(container.textContent).not.toContain("Resolving captured value");
   expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+  const returningPrepared: PreparedAttachedExecution = { ...prepared, values: new Map([[runtimeValuePayloadKey(snapshot),
+    { status: "ready", payload: { kind: "string", preview: "Prepared returning value" } }]]) };
+  rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} prepared={returningPrepared} />);
+  expect(container.textContent).toContain("Prepared returning value");
+  expect(container.textContent).not.toContain("Resolving captured value");
+  expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
 });
 
 describe("WorkflowIncidentList", () => {
