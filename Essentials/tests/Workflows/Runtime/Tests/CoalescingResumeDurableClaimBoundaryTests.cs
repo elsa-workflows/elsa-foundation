@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Channels;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -227,6 +228,58 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
     }
 
+    /// <summary>
+    /// Another deliverer holds a durable continuation when the drain begins, and delivers it only after the drain's first
+    /// pass has filled the overlay from the durable queue. The overlay never shows that work, so the drain must start a
+    /// fresh segment from durable state rather than report quiescence and leave the step to the sweep (#3659).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    public async Task Ordinary_segment_drains_work_a_competing_delivery_queued_after_the_overlay_was_filled(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromMinutes(10), mode);
+
+        // The drain ran schedule-1 from its overlay and now polls for the held continuation. Deliver it as the other
+        // deliverer would: queue the step durably, then complete the claim.
+        var poll = await race.Clock.NextTimerAsync(due => due == TimeSpan.FromMilliseconds(10), race.Timeout);
+        await race.Shared.Queue.EnqueueAsync(race.Held);
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await race.Commits.CompleteClaimAsync(
+            new RuntimePostCommitOutboxClaimCompletion(
+                race.OtherClaim,
+                new RuntimePostCommitOutboxDeliveryResult(race.OtherClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now))));
+        race.Clock.Advance(poll);
+
+        await race.AssertDrainedBothStepsAsync();
+    }
+
+    /// <summary>
+    /// The other deliverer died holding the continuation. Once its claim lapses the drain takes the item back through the
+    /// durable claim path, which an active segment would route to its overlay and never find (#3659).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    public async Task Ordinary_segment_takes_back_a_continuation_whose_deliverer_died(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromSeconds(1), mode);
+
+        // Fire each poll until the claim lapses.
+        while (true)
+        {
+            var poll = race.Clock.NextTimerAsync(due => due <= TimeSpan.FromSeconds(1), race.Timeout);
+            if (await Task.WhenAny(race.Draining, poll) == race.Draining)
+                break;
+            race.Clock.Advance(await poll);
+        }
+
+        await race.AssertDrainedBothStepsAsync();
+        Assert.Equal(Now + TimeSpan.FromSeconds(1), race.Clock.GetUtcNow());
+        var continuation = await race.Commits.FindAsync(race.OtherClaim.OutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, continuation?.Status);
+        Assert.Equal(2, continuation?.DeliveryFencingToken);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(1)]
@@ -451,7 +504,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         ProbeRecorder probe,
         WorkflowDrainOrchestratorOptions? drainOptions = null,
         ExternalOutboxDeliveryProbe? externalOutboxDelivery = null,
-        bool visibilitySnapshots = false)
+        bool visibilitySnapshots = false,
+        PersistenceMode mode = PersistenceMode.Balanced)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(shared.TimeProvider);
@@ -462,7 +516,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             : new QueueWithoutVisibility(shared.Queue));
         services.AddSingleton<ISchedulerStateStore>(shared.SchedulerStateStore);
         services.AddSingleton(shared.CommitState);
-        services.AddSingleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(PersistenceMode.Balanced));
+        services.AddSingleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(mode));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         services.RemoveAll<IWorkflowSchedulerWorkHandler>();
         services.AddSingleton(probe);
@@ -555,6 +609,101 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public InMemoryWorkflowSchedulerWorkQueue Queue { get; } = new();
         public InMemorySchedulerStateStore SchedulerStateStore { get; } = new();
         public InMemoryRuntimeCheckpointStoreState CommitState { get; } = new();
+    }
+
+    /// <summary>
+    /// A coalesced drain of schedule-1 while another deliverer holds the durable continuation that queues schedule-2.
+    /// </summary>
+    private sealed class HeldContinuationRace : IAsyncDisposable
+    {
+        private readonly ServiceProvider _provider;
+        private readonly AsyncServiceScope _scope;
+        private readonly CancellationTokenSource _timeout = new(TimeSpan.FromSeconds(10));
+
+        private HeldContinuationRace(ServiceProvider provider, SharedPersistence shared, TimerClock clock, ProbeRecorder probe)
+        {
+            _provider = provider;
+            _scope = provider.CreateAsyncScope();
+            Shared = shared;
+            Clock = clock;
+            Probe = probe;
+            Commits = InnerCommitStore(_scope.ServiceProvider);
+        }
+
+        public SharedPersistence Shared { get; }
+        public TimerClock Clock { get; }
+        public ProbeRecorder Probe { get; }
+        public InMemoryRuntimeCheckpointCommitStore Commits { get; }
+        public RuntimeSchedulerWorkItem Held { get; } = ScheduleWork("schedule-2", 2);
+        public RuntimePostCommitOutboxClaim OtherClaim { get; private set; } = null!;
+        public Task<RuntimeSchedulerDrainResult> Draining { get; private set; } = null!;
+        public CancellationToken Timeout => _timeout.Token;
+
+        public static async Task<HeldContinuationRace> StartAsync(TimeSpan claimVisibility, PersistenceMode mode)
+        {
+            var clock = new TimerClock(Now);
+            var shared = new SharedPersistence(clock);
+            var probe = new ProbeRecorder(deferFirstResume: false);
+            var race = new HeldContinuationRace(BuildProvider(shared, probe, mode: mode), shared, clock, probe);
+            await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+            await race.Commits.AddPendingForTestingAsync(new RuntimePostCommitOutboxItem(
+                "outbox-held",
+                SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(race.Held, "activity-held", race.Held, Now),
+                RuntimePostCommitOutboxStatus.Pending,
+                Now,
+                Now,
+                RuntimePostCommitRetryPolicy.None));
+            race.OtherClaim = Assert.Single(await race.Commits.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "other-continuation-worker",
+                Now,
+                claimVisibility,
+                limit: 1,
+                WorkflowExecutionId,
+                RuntimePostCommitIntentKinds.EnqueueSchedulerWork)));
+            race.Draining = race._scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask();
+            return race;
+        }
+
+        public async Task AssertDrainedBothStepsAsync()
+        {
+            var result = await Draining.WaitAsync(Timeout);
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+            Assert.Equal(["schedule-1", "schedule-2"], result.Items.Select(item => item.WorkItemId));
+            Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+            Assert.Equal(new long?[] { null, 1 }, Probe.ScheduleObservedVersions);
+            Assert.Equal(2L, (await Shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+            Assert.Empty(await Shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _scope.DisposeAsync();
+            await _provider.DisposeAsync();
+            _timeout.Dispose();
+        }
+    }
+
+    /// <summary>A fake clock that reports every timer the code under test parks on, so the test can fire it.</summary>
+    private sealed class TimerClock(DateTimeOffset start) : FakeTimeProvider(start)
+    {
+        private readonly Channel<TimeSpan> _timers = Channel.CreateUnbounded<TimeSpan>();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            _timers.Writer.TryWrite(dueTime);
+            return timer;
+        }
+
+        // Other timers (claim renewals) park too; skip those the match rejects.
+        public async Task<TimeSpan> NextTimerAsync(Func<TimeSpan, bool> match, CancellationToken cancellationToken)
+        {
+            TimeSpan next;
+            do next = await _timers.Reader.ReadAsync(cancellationToken);
+            while (!match(next));
+            return next;
+        }
     }
 
     private sealed class ProbeRecorder(
