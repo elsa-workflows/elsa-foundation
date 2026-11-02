@@ -62,6 +62,9 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max backoff interval (minutes)", Description = "Upper bound the sweep interval widens to under sustained failure.", Category = "Runtime", DefaultValue = "5")]
     public double MaxBackoffIntervalMinutes { get; set; } = 5;
 
+    [ManifestSetting(DisplayName = "Inline dispatch wait (seconds)", Description = "How long a sweep waits for one dispatched command before leaving it to finish on its own, capped by a third of the lease per sweep.", Category = "Runtime", DefaultValue = "1")]
+    public double InlineDispatchWaitSeconds { get; set; } = 1;
+
     [ManifestSetting(DisplayName = "Max executions per sweep", Description = "Hard cap on executions claimed and re-driven per sweep, bounding dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
     public int MaxExecutionsPerSweep
     {
@@ -105,6 +108,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         {
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
+            options.InlineDispatchWait = TimeSpan.FromSeconds(InlineDispatchWaitSeconds);
             options.MaxExecutionsPerSweep = MaxExecutionsPerSweep;
             options.TransportLeaseBatchSize = TransportLeaseBatchSize;
         });
