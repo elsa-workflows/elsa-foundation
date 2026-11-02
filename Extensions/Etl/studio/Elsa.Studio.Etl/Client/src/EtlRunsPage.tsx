@@ -5,6 +5,7 @@ import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/stu
 import {
   cancelEtlRun,
   classifyEtlApiError,
+  completeEtlRun,
   EtlApiError,
   getEtlRun,
   invalidateEtlApiCapabilityCache,
@@ -65,6 +66,7 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
   const [partitionsMoreFailure, setPartitionsMoreFailure] = useState<RequestFailure | null>(null);
   const [refreshSelection, setRefreshSelection] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [cancelFailure, setCancelFailure] = useState<RequestFailure | null>(null);
 
@@ -101,6 +103,7 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     setPartitionsFailure(null);
     setPartitionsMoreFailure(null);
     setCancelling(false);
+    setCompleting(false);
     setCancelMessage(null);
     setCancelFailure(null);
     void loadFirstRunsPage(context, generation, true);
@@ -277,6 +280,7 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     selectedRunRef.current = runId;
     setSelectedRunId(runId);
     setCancelling(false);
+    setCompleting(false);
     setCancelMessage(null);
     setCancelFailure(null);
   }
@@ -344,6 +348,46 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     }
   }
 
+  /** Asks a continuous run to drain its shards and settle; it shares the cancel operation guard so the two never overlap. */
+  async function completeSelectedRun() {
+    const run = visibleDetail;
+    if (!run || !isActive(run) || !isContinuous(run) || cancelOperation.current) return;
+    const requestContext = context;
+    const runId = run.runId;
+    const operation = {};
+    cancelOperation.current = operation;
+    setCompleting(true);
+    setCancelMessage(null);
+    setCancelFailure(null);
+    try {
+      const confirmed = await dialogs.confirm({
+        message: `Complete ETL run ${runId}? Each shard processes what its feed holds now, then the run settles.`,
+        confirmLabel: "Complete run"
+      });
+      if (!confirmed || !isCurrentOperation(requestContext, runId, operation)) return;
+
+      const controller = new AbortController();
+      cancelController.current?.abort();
+      cancelController.current = controller;
+      const result = await completeEtlRun(requestContext, runId, controller.signal);
+      if (controller.signal.aborted || !isCurrentOperation(requestContext, runId, operation)) return;
+
+      setCancelMessage(result.result === "accepted" ? "Completion requested. The run settles once every shard has caught up."
+        : result.result === "alreadyRequested" ? "Completion was already requested."
+          : result.result === "terminal" ? "The run has already settled."
+            : "Only continuous runs can be completed.");
+      setRefreshSelection(value => value + 1);
+    } catch (error) {
+      if (currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation)
+        setCancelFailure(failureOf(error));
+    } finally {
+      if (currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation) {
+        cancelOperation.current = null;
+        setCompleting(false);
+      }
+    }
+  }
+
   function isCurrentOperation(requestContext: StudioEndpointContext, runId: string, operation: object) {
     return currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation;
   }
@@ -381,7 +425,11 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
         {visibleDetail ? <>
           <div className="etl-run-actions">
             <h2>Run inspection</h2>
-            {isActive(visibleDetail) ? <button type="button" className="etl-cancel-run" disabled={cancelling} onClick={() => void cancelSelectedRun()}>
+            {isActive(visibleDetail) && isContinuous(visibleDetail) && !visibleDetail.connector?.completionRequestedAt
+              ? <button type="button" className="etl-complete-run" disabled={cancelling || completing} onClick={() => void completeSelectedRun()}>
+                {completing ? "Completing…" : "Complete run"}
+              </button> : null}
+            {isActive(visibleDetail) ? <button type="button" className="etl-cancel-run" disabled={cancelling || completing} onClick={() => void cancelSelectedRun()}>
               {cancelling ? "Cancelling…" : "Cancel run"}
             </button> : null}
           </div>
@@ -433,6 +481,10 @@ function failureOf(error: unknown): RequestFailure {
     error.code === "etl.capability-unavailable" || error.code === "etl.capability-version-unsupported"
   );
   return { kind: classifyEtlApiError(error), missingCapability };
+}
+
+function isContinuous(run: EtlRunDetailView) {
+  return run.connector?.mode === "continuous";
 }
 
 function isActive(run: EtlRunDetailView) {

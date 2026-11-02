@@ -51,6 +51,8 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
     {run.connector ? <section aria-label="Connector output progress">
       <h3>Connector output progress</h3>
       <dl className="etl-facts">
+        <dt>Run mode</dt><dd>{run.connector.mode === "continuous" ? "Continuous" : "Finite"}</dd>
+        {run.connector.completionRequestedAt ? <><dt>Completion requested</dt><dd><time dateTime={run.connector.completionRequestedAt}>{run.connector.completionRequestedAt}</time></dd></> : null}
         <dt>Source type</dt><dd>{kindLabel(run.connector.sourceKind)}</dd>
         <dt>Main output type</dt><dd>{outputKindLabel(run.connector.mainKind)}</dd>
         <dt>Error output type</dt><dd>{outputKindLabel(run.connector.errorKind)}</dd>
@@ -151,7 +153,9 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
               : `HTTP page ${partition.http!.pageSequence}, next item ${partition.http!.nextItem} of ${partition.http!.pageRecordCount ?? "unknown count"}; ${partition.http!.exhausted ? "source exhausted" : "not yet exhausted"}`;
           return <tr key={partition.partitionOrdinal}>
             <th scope="row">{partition.partitionOrdinal}</th>
-            <td>{sourcePosition}{partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
+            <td>{sourcePosition}{partition.nextPollAt
+              ? <><br />Caught up; polls again at <time dateTime={partition.nextPollAt}>{partition.nextPollAt}</time></>
+              : partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
             <td>{claim}{partition.claimExpiresAt ? <><br /><time dateTime={partition.claimExpiresAt}>{partition.claimExpiresAt}</time></> : null}</td>
             <td>{partition.http?.fetch ? <RetryProgress retry={partition.http.fetch} /> : "No fetch retry scheduled"}</td>
             <td>{partition.owedBatch ? <OwedOutput owed={partition.owedBatch} /> : "None"}</td>
