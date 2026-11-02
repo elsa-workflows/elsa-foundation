@@ -3,8 +3,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// A durable record of a scheduler work handler crash. When a handler throws, the drainer no longer drops the
 /// already-dequeued work item silently: it records the fault here (honoring <see cref="Contracts.IRuntimeDomainRetryPolicy"/>)
-/// so an operator or a recovery pump can inspect poisoned work and, when the policy asks to retry, the item is
-/// re-enqueued instead of lost.
+/// so an operator or a recovery pump can inspect poisoned work. A retry the queue holds is
+/// <see cref="RuntimeSchedulerPoisonDisposition.RetryScheduled"/>; everything else is
+/// <see cref="RuntimeSchedulerPoisonDisposition.Poisoned"/>. <c>docs/runtime-fault-behavior.md</c> maps each case.
 /// </summary>
 public sealed record RuntimeSchedulerPoisonRecord
 {
@@ -77,7 +78,10 @@ public sealed record RuntimeSchedulerPoisonRecord
 
 public enum RuntimeSchedulerPoisonDisposition
 {
-    /// <summary>The retry policy declined to retry; the work item is parked for inspection/intervention.</summary>
+    /// <summary>
+    /// No retry is held: the policy declined, threw, or asked for a <c>RetryAfter</c> that was not released. The work
+    /// item is parked for inspection/intervention.
+    /// </summary>
     Poisoned,
 
     /// <summary>

@@ -22,6 +22,7 @@ using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -477,6 +478,51 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
     }
 
+    [Fact]
+    public async Task AddWorkflowRuntime_ResumptionSweepReDrivesAReleasedRetryAfterOnceItIsDue()
+    {
+        // #3275 end to end: the drainer tests stop at backlog discovery listing the released item. Here the composed
+        // RuntimeResumptionService finds it only once the delay has passed and re-drives it through the actor mailbox
+        // and the composed drainer, so the faulted step runs again and leaves the queue.
+        var clock = new FakeTimeProvider(Now);
+        var delay = TimeSpan.FromMinutes(5);
+        var handler = new FaultingOnceInvokeActivityHandler();
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(delay));
+        services.AddSingleton<IWorkflowSchedulerWorkHandler>(handler);
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddPersistenceModes();
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await queue.EnqueueAsync(new RuntimeSchedulerWorkItem(
+            "work-1", "wfexec-retry", "command-1", WorkflowExecutionCommandKind.InvokeActivity, "envelope-1", "idempotency-1", Now, Now));
+        using (var scope = provider.CreateScope())
+            Assert.True((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerDrainer>()
+                .DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-retry"))).StoppedOnFault);
+
+        clock.Advance(delay - TimeSpan.FromSeconds(1));
+        using (var scope = provider.CreateScope())
+            Assert.Empty((await scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>()
+                .SweepAsync(new RuntimeResumptionSweepRequest())).Dispatches);
+        Assert.Equal(1, handler.InvocationCount);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        using (var scope = provider.CreateScope())
+        {
+            var dispatch = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>()
+                .SweepAsync(new RuntimeResumptionSweepRequest())).Dispatches);
+            Assert.Equal(("wfexec-retry", RuntimeResumptionDispatchOutcome.Accepted), (dispatch.WorkflowExecutionId, dispatch.Outcome));
+        }
+
+        Assert.Equal(2, handler.InvocationCount);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-retry"))).Items);
+    }
+
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
         WorkflowExecutionPartition? partition = null,
@@ -541,6 +587,19 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+    }
+
+    private sealed class FaultingOnceInvokeActivityHandler : IWorkflowSchedulerWorkHandler
+    {
+        private int _invocationCount;
+        public int InvocationCount => Volatile.Read(ref _invocationCount);
+        public string Name => nameof(FaultingOnceInvokeActivityHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref _invocationCount) == 1
+                ? throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.")
+                : ValueTask.CompletedTask;
     }
 
     private sealed class ReplacementStartPolicy : IWorkflowExecutableStartPolicy

@@ -202,7 +202,10 @@ types are filtered out ahead of it and re-thrown untouched, because none of them
 about this item:
 
 - `OperationCanceledException`, a real cancel or shutdown. The item must stay queued.
-- `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison.
+- `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison. A temporarily
+  unavailable step whose delayed release the queue refuses throws it too, even with no successor: a coalescing segment
+  that a boundary deactivated, and whose durable head has since moved, refuses that way. The step stays queued for a
+  later drain.
 - `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
 - `RuntimeStaleFencingTokenException`, where a commit was refused because another node now owns the run. The work

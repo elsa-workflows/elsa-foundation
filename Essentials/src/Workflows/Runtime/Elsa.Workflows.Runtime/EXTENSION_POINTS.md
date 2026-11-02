@@ -411,7 +411,7 @@ wait. These tests prove the public SDK hook reaches both Test Drive surfaces.
 ### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
 - **Signature:** `Decide(RuntimeDomainRetryRequest request)`.
-- **Usage:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents.
+- **Usage and dependents:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents. `WorkflowSchedulerDrainer` asks it when a scheduler work handler crashes, passing the prior failure count from `IWorkflowSchedulerPoisonStore` in `RuntimeDomainRetryRequest.FailureCount`, so a policy can bound its retries. The drainer honors `RetryAfter` only for a step kind with delayed release, on a host that composes a resumption re-driver, for a fault not caused by a checkpoint rule, and for a delay that ends by `DateTimeOffset.MaxValue`; any other `RetryAfter`, or one the queue refuses to release, is recorded `Poisoned`. A policy that throws is recorded `Poisoned` with retry mode `PolicyFailed`. The full table is in [`docs/runtime-fault-behavior.md`](../../../../../docs/runtime-fault-behavior.md).
 - **Default implementation:** `NoopRuntimeDomainRetryPolicy` *(explicit do-not-retry baseline; workflow/activity retry policy providers replace this)*.
 
 ### `IRuntimeFaultCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*

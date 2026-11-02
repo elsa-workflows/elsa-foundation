@@ -479,6 +479,46 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_WhenAnInactiveCoalescingSegmentRefusesAnUnavailableRelease_ThrowsClaimLostAndKeepsTheItemQueued()
+    {
+        // The same refusal on the temporarily-unavailable arm. The session used to drop the overlay claim and throw an
+        // InvalidOperationException from its release; it now refuses while the claim still owns the item, so the
+        // drainer throws claim-lost for the refused release. Nothing is acknowledged or poisoned, and the durable copy
+        // stays queued for a later drain to re-drive.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner), accessor);
+        var session = new RuntimeCoalescingSession("wfexec-1", inner, new PersistenceModeOptions());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new AlwaysFaultingSchedulerWorkHandler(
+            _ => new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable."),
+            async item =>
+            {
+                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+                session.Deactivate();
+                Assert.True(await inner.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId));
+                await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
+                await inner.EnqueueAsync(item);
+            });
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            poisonStore: poisonStore);
+        await inner.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+
+        InvalidOperationException exception;
+        using (accessor.Push(session))
+            exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1)).AsTask());
+
+        Assert.Contains("was lost during 'release after temporary unavailability' with status 'Stale'", exception.Message);
+        Assert.Equal(1, handler.InvocationCount);
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(["work-1", "work-2"], (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task DrainAsync_RepeatedHandlerCrash_AccumulatesFailureCount()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
