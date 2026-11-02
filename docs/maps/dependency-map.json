@@ -21597,6 +21597,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Scheduling",
           "path": "Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
         },
