@@ -29,6 +29,8 @@ export interface StudioWorkspaceTabHandle {
   readonly location: string;
   /** Whether the tab is active right now. Unlike `active`, this is current inside async callbacks. */
   isActive(): boolean;
+  /** Marks a background tab as holding pending work, so it is kept mounted and closes only with notice. */
+  markPendingWork(): void;
   setTitle(title: StudioWorkspaceTabTitle | null): void;
 }
 
@@ -57,7 +59,8 @@ export function useStudioRouteLocation(): URL {
  * Returns a function that runs navigation only while this screen's tab is active. History and the address
  * bar belong to the active tab, so a background tab whose request completes (a create that opens the new
  * resource, say) must not write them: the action is held and runs when the tab returns, the latest one
- * winning. Outside a workspace tab it runs at once.
+ * winning, and the tab is marked as holding pending work so it stays mounted until then. Outside a
+ * workspace tab it runs at once.
  */
 export function useStudioWorkspaceWhenActive() {
   const tab = useStudioWorkspaceTab();
@@ -73,8 +76,12 @@ export function useStudioWorkspaceWhenActive() {
   });
   return useCallback((action: () => void) => {
     const current = tabRef.current;
-    if (!current || current.isActive()) action();
-    else heldRef.current = action;
+    if (!current || current.isActive()) {
+      action();
+      return;
+    }
+    heldRef.current = action;
+    current.markPendingWork();
   }, []);
 }
 

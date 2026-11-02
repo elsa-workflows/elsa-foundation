@@ -1,4 +1,4 @@
-import { qualifyStudioBackendPath, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
+import { qualifyStudioBackendPath, useStudioWorkspaceTab, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
@@ -130,8 +130,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   // A create can finish while this screen's workspace tab is in the background; opening the new
   // definition then waits for the tab to return instead of taking over the active tab.
   const whenActive = useStudioWorkspaceWhenActive();
+  const workspaceTab = useStudioWorkspaceTab();
+  const workspaceTabRef = useRef(workspaceTab);
+  workspaceTabRef.current = workspaceTab;
   // Retired dialogs can still finish writes. Their callbacks belong to the originating authority/context.
   const workGenerationRef = useRef(0);
+  const workScopeRef = useRef<{ authorityRevision: number; context: StudioEndpointContext } | null>(null);
   const renderGeneration = workGenerationRef.current;
   const isCurrentGeneration = () => renderGeneration === workGenerationRef.current;
   const handledHomeCreateRequestRef = useRef<string | null>(null);
@@ -581,12 +585,20 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const renderResultRows = isCurrentData || hasPreviousData;
 
   useLayoutEffect(() => {
-    workGenerationRef.current += 1;
-    setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false);
-    createInFlightRef.current = false; setCreating(false);
-    setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
-    setLastSuccess(null); setRequestError(null);
-    return () => { workGenerationRef.current += 1; };
+    // A workspace tab mounts its effects again when it returns; only a new authority or context resets
+    // the work in progress, so the create dialog and an in-flight create survive the round trip.
+    const scope = workScopeRef.current;
+    if (!scope || scope.authorityRevision !== authorityRevision || scope.context !== context) {
+      workScopeRef.current = { authorityRevision, context };
+      workGenerationRef.current += 1;
+      setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false);
+      createInFlightRef.current = false; setCreating(false);
+      setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
+      setLastSuccess(null); setRequestError(null);
+    }
+    // Outside a workspace tab teardown is an unmount, which retires in-flight work. Inside one it may be
+    // the tab going to the background; navigation held for a tab that then closes is dropped with it.
+    return () => { if (!workspaceTabRef.current) workGenerationRef.current += 1; };
   }, [authorityRevision, context]);
 
   useEffect(() => {

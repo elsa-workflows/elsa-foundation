@@ -71,7 +71,7 @@ function Harness() {
   controller = useWorkspaceTabs({ scope, qualifyPath: path => path, resourceKeyOf, titleOf: () => "Order flow", contentRef });
   return (
     <main ref={contentRef}>
-      <WorkspaceTabPanels baseId="ws" tabs={controller.state.tabs} activeId={controller.state.activeId} renderScreen={renderScreen} titleOf={() => "Screen"} setTitle={controller.setTitle} isActive={controller.isActive} onCloseTab={controller.close} />
+      <WorkspaceTabPanels baseId="ws" tabs={controller.state.tabs} activeId={controller.state.activeId} renderScreen={renderScreen} titleOf={() => "Screen"} setTitle={controller.setTitle} isActive={controller.isActive} markPendingWork={controller.markPendingWork} onCloseTab={controller.close} />
     </main>
   );
 }
@@ -158,6 +158,10 @@ describe("workspace tabs", () => {
     expect(currentLocation()).toBe("/list");
     expect(controller.activeTab.location).toBe("/list");
     expect(controller.state.tabs.find(tab => tab.id === editorTab)?.location).toBe("/editor?definition=a");
+    // The held navigation keeps the tab mounted however many other tabs are visited meanwhile.
+    expect(controller.state.tabs.find(tab => tab.id === editorTab)?.guarded).toBe(true);
+    for (let index = 0; index < 7; index++) await act(async () => controller.open(`/list?page=${index}`));
+    expect(controller.state.tabs.find(tab => tab.id === editorTab)?.retained).toBe(true);
 
     await act(async () => controller.activate(editorTab));
     expect(currentLocation()).toBe("/editor?definition=a&draft=d1");

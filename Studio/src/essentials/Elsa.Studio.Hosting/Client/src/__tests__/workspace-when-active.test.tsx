@@ -26,7 +26,7 @@ afterEach(async () => {
 describe("useStudioWorkspaceWhenActive", () => {
   it("holds navigation from a background tab until it returns, after the screen's listeners are back", async () => {
     let active = true;
-    const handle: StudioWorkspaceTabHandle = { id: "a", active: true, location: "/a", isActive: () => active, setTitle: () => {} };
+    const handle: StudioWorkspaceTabHandle = { id: "a", active: true, location: "/a", isActive: () => active, markPendingWork: vi.fn(), setTitle: () => {} };
     const heard = vi.fn();
     let whenActive: (action: () => void) => void = () => {};
     function Screen() {
@@ -53,6 +53,7 @@ describe("useStudioWorkspaceWhenActive", () => {
     whenActive(first);
     whenActive(latest);
     expect(latest).not.toHaveBeenCalled();
+    expect(handle.markPendingWork).toHaveBeenCalled();
 
     active = true;
     await update(() => root.render(tab("visible")));

@@ -13,6 +13,7 @@ export interface WorkspaceTabPanelsProps {
   titleOf(tab: WorkspaceTab): string;
   setTitle(id: string, title: StudioWorkspaceTabTitle | null): void;
   isActive(id: string): boolean;
+  markPendingWork(id: string): void;
   onCloseTab(id: string): void;
 }
 
@@ -22,7 +23,7 @@ export interface WorkspaceTabPanelsProps {
  * stop polling, drop subscriptions and stop listening to history and navigation guards until they
  * return. Tabs that were restored or released stay unmounted until visited.
  */
-export function WorkspaceTabPanels({ baseId, tabs, activeId, renderScreen, titleOf, setTitle, isActive, onCloseTab }: WorkspaceTabPanelsProps) {
+export function WorkspaceTabPanels({ baseId, tabs, activeId, renderScreen, titleOf, setTitle, isActive, markPendingWork, onCloseTab }: WorkspaceTabPanelsProps) {
   return (
     <>
       {tabs.filter(tab => tab.retained || tab.id === activeId).map(tab => (
@@ -35,6 +36,7 @@ export function WorkspaceTabPanels({ baseId, tabs, activeId, renderScreen, title
           renderScreen={renderScreen}
           setTitle={setTitle}
           isActive={isActive}
+          markPendingWork={markPendingWork}
           onCloseTab={onCloseTab}
         />
       ))}
@@ -42,8 +44,8 @@ export function WorkspaceTabPanels({ baseId, tabs, activeId, renderScreen, title
   );
 }
 
-function WorkspaceTabPanel({ baseId, tab, active, title, renderScreen, setTitle, isActive, onCloseTab }: { baseId: string; tab: WorkspaceTab; active: boolean; title: string; renderScreen(location: string): React.ReactNode; setTitle(id: string, title: StudioWorkspaceTabTitle | null): void; isActive(id: string): boolean; onCloseTab(id: string): void }) {
-  const handle = useMemo<StudioWorkspaceTabHandle>(() => ({ id: tab.id, active, location: tab.location, isActive: () => isActive(tab.id), setTitle: value => setTitle(tab.id, value) }), [active, isActive, setTitle, tab.id, tab.location]);
+function WorkspaceTabPanel({ baseId, tab, active, title, renderScreen, setTitle, isActive, markPendingWork, onCloseTab }: { baseId: string; tab: WorkspaceTab; active: boolean; title: string; renderScreen(location: string): React.ReactNode; setTitle(id: string, title: StudioWorkspaceTabTitle | null): void; isActive(id: string): boolean; markPendingWork(id: string): void; onCloseTab(id: string): void }) {
+  const handle = useMemo<StudioWorkspaceTabHandle>(() => ({ id: tab.id, active, location: tab.location, isActive: () => isActive(tab.id), markPendingWork: () => markPendingWork(tab.id), setTitle: value => setTitle(tab.id, value) }), [active, isActive, markPendingWork, setTitle, tab.id, tab.location]);
   // Background tabs re-render only for their own state; a new shell render does not reach them.
   const screen = useMemo(() => renderScreen(tab.location), [renderScreen, tab.location]);
   return (

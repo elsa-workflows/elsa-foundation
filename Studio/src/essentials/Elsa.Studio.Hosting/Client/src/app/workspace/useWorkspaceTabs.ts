@@ -374,6 +374,13 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   }, [contentRef, state.activeId]);
 
   const isActive = useCallback((id: string) => stateRef.current.activeId === id, []);
+  // A background screen holding navigation until it returns keeps its tab mounted, like unsaved work.
+  const markPendingWork = useCallback((id: string) => {
+    const current = stateRef.current;
+    const tab = current.tabs.find(candidate => candidate.id === id);
+    if (!tab || tab.guarded || id === current.activeId) return;
+    commit(updateTab(current, id, { guarded: true }));
+  }, [commit]);
 
   const activeTab = getActiveTab(state);
   return useMemo(() => ({
@@ -392,6 +399,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
     move: (id: string, toIndex: number) => commit(moveTab(stateRef.current, id, toIndex)),
     setTitle,
     isActive,
+    markPendingWork,
     screenKeyOf
-  }), [activeTab, close, closeAll, closeOthers, commit, isActive, navigate, notice, open, screenKeyOf, setTitle, state, switchTo]);
+  }), [activeTab, close, closeAll, closeOthers, commit, isActive, markPendingWork, navigate, notice, open, screenKeyOf, setTitle, state, switchTo]);
 }

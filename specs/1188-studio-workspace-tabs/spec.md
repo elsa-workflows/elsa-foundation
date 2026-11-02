@@ -49,8 +49,9 @@ Resource bounds:
 
 Because effects mount again when a tab returns, screens that seed editable state from a load-on-mount
 effect must load once per resource. The workflow editor's data hook, Feature Management's catalog
-refresh, Theme Builder's store load and draft seeding, and the Activity Definition upgrade workbench's plan
-load now do.
+refresh, Theme Builder's store load and draft seeding, the Activity Definition upgrade workbench's plan
+load, and the workflow definition list's scope reset (which closed an open create dialog and dropped an
+in-flight create) now do.
 Without that, returning to a tab replaced the unsaved draft and its undo history with the server copy
 (found during live qualification). Audited and unaffected: the Activity Definitions pages (TanStack
 queries; drafts seed `useState` once), the Backends form (local state only), and Appearance, Modules
@@ -128,8 +129,9 @@ A hidden tab can also finish async work that navigates: a create that opens what
 upgrade plan that records itself in the address. History belongs to the active tab, so such a write
 would move the active tab to another screen without asking its guards. `useStudioWorkspaceWhenActive()`
 returns a function that runs navigation at once while the tab is active and otherwise holds it until
-the tab returns (the latest held navigation wins), after the screen's own listeners are back. The
-handle's `isActive()` answers for the current moment, inside async callbacks too. Activity Definitions
+the tab returns (the latest held navigation wins), after the screen's own listeners are back. Holding
+marks the tab as holding pending work, so it is not released meanwhile. The handle's `isActive()`
+answers for the current moment, inside async callbacks too. Activity Definitions
 navigation, the upgrade workbench's plan address and the workflow definition create flow use it.
 
 ### Opening tabs
@@ -163,7 +165,9 @@ the document, so no tab is reinterpreted against another backend.
 
 - A screen that writes history from an async callback without `useStudioWorkspaceWhenActive()` still
   writes the active tab's address if its tab went to the background first. The flows above that
-  navigate after a request use it; other history writes come from user actions or effects.
+  navigate after a request use it; other history writes come from user actions or effects. A tab
+  released before its request even completes (five other tabs visited during one request) remounts
+  from its address and drops the held navigation.
 - Across browser sessions only the location, pin, title and scroll offset are restored; graph
   viewport, selection and undo history live only in memory, as the issue scopes.
 - Split views, docking, tab groups, preview tabs and cross-device sync are out of scope.

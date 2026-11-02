@@ -558,6 +558,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
           titleOf={tabTitleOf}
           setTitle={workspace.setTitle}
           isActive={workspace.isActive}
+          markPendingWork={workspace.markPendingWork}
           onCloseTab={workspace.close}
         />
       </ShellFrame>
