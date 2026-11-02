@@ -10,14 +10,7 @@ public sealed record BpmnWorkBindingRequest(
     string? Value = null,
     string? WorkflowDefinitionId = null,
     bool WaitForCompletion = true,
-    ActivityNode? NestedProcess = null,
-    BpmnRetainedActivity? RetainedActivity = null);
-
-/// <summary>
-/// An exact Elsa activity binding an exported document carried for an otherwise unbound task. <see cref="Activity"/> is
-/// null with a <see cref="Problem"/> when the retained value was unreadable.
-/// </summary>
-public sealed record BpmnRetainedActivity(ActivityNode? Activity, string? Problem);
+    ActivityNode? NestedProcess = null);
 
 public enum BpmnWorkBindingKind
 {

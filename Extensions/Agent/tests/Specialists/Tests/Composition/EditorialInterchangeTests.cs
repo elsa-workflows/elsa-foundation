@@ -19,47 +19,53 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Agent.Specialists.Tests.Composition;
 
 /// <summary>
-/// The editorial BPMN process leaves the host as a portable document and comes back through the visible catalog:
-/// the imported authored process compiles, with the shipped BPMN structure handler, into the graph that runs the
-/// same revision loop and admits one human decision after a restart. A missing agent version is refused.
+/// The editorial BPMN process leaves the host as a portable document without its bound work: agent and review
+/// bindings, with their inputs, never travel in shared XML. Import reports every bound task as requiring an explicit
+/// binding and refuses to execute; once the importing author binds each task to an exact version, the shipped BPMN
+/// structure handler compiles and remaps the imported graph, which runs the same revision loop and admits one human
+/// decision after a restart.
 /// </summary>
 public sealed class EditorialInterchangeTests
 {
     private const string Reviewer = "reviewer-ada";
     private const string GateVersionId = "sample.editorial-gate@1.0.0";
     private const string ReviewVersionId = "elsa.human-review@1.0.0";
+    private static readonly string[] BoundTasks = ["gate", "write", "check", "proofread", "human-review"];
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public async Task An_exported_and_reimported_process_keeps_exact_agent_versions_and_runs_the_revision_loop()
+    public async Task An_imported_process_runs_only_after_the_author_binds_each_task_explicitly()
     {
         await using var host = await EditorialHost.StartAsync("bpmn-interchange", new(
             [EditorialCompositionTests.Article("Moss gardens grow slowly."), EditorialCompositionTests.Article("Moss gardens reward patience.")],
             [EditorialCompositionTests.Review("changes_requested", "Lead with the reward."), EditorialCompositionTests.Review("approved", "Ready.")]));
         host.Subjects.Grant(Reviewer);
         BpmnImportResult? imported = null;
-        string[] bound = [];
+        var xml = "";
 
         var (executable, _, _) = await EditorialExecutable.BuildAsync(DateTimeOffset.UtcNow.AddHours(1), bpmn: true, reauthor: async (graph, copywriter, proofreader) =>
         {
-            var authored = Authored(graph, copywriter, proofreader);
-            bound = [copywriter, proofreader];
+            var versions = Versions(copywriter, proofreader);
             await using var services = Interchange(new Catalog([GateVersionId, ReviewVersionId, copywriter, proofreader]));
-            imported = await services.GetRequiredService<IBpmnDocumentImporter>().ImportAsync(new BpmnDocumentExporter().Export(authored));
-            var handler = services.GetServices<IActivityStructureHandler>().Single(x => x.Kind == BpmnProcessActivity.StructureKind);
-            // Publication places each authored child under its executable identity; the handler remaps the graph to match.
+            xml = new BpmnDocumentExporter().Export(Authored(graph, versions));
+            imported = await services.GetRequiredService<IBpmnDocumentImporter>().ImportAsync(xml);
+
+            // The author binds each imported task to its exact version; publication then places each authored child
+            // under its executable identity, and the handler remaps the graph to match.
             var placed = graph.Elements.Where(x => x.ChildNodeId is not null).ToDictionary(x => x.ElementId, x => x.ChildNodeId!, StringComparer.Ordinal);
-            var authoredToExecutable = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!.Elements
-                .Where(x => x.ChildNodeId is not null).ToDictionary(x => x.ChildNodeId!, x => placed[x.ElementId], StringComparer.Ordinal);
-            var compiled = handler.RemapExecutableStructure(handler.CompileExecutableStructure(imported.ProcessNode), authoredToExecutable);
+            var rebound = Rebind(imported.ProcessNode, versions);
+            var handler = services.GetServices<IActivityStructureHandler>().Single(x => x.Kind == BpmnProcessActivity.StructureKind);
+            var compiled = handler.RemapExecutableStructure(handler.CompileExecutableStructure(rebound),
+                placed.ToDictionary(x => AuthorNodeId(x.Key), x => x.Value, StringComparer.Ordinal));
             return new ExecutableActivityStructure(compiled.Kind, compiled.SchemaVersion, compiled.Payload);
         });
 
         Assert.NotNull(imported);
-        Assert.True(imported.Analysis.CanExecute);
-        var activities = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!.Activities;
-        Assert.Equal(bound.Append(GateVersionId).Append(ReviewVersionId).Order(StringComparer.Ordinal).ToArray(), activities.Select(x => x.ActivityVersionId).Distinct().Order(StringComparer.Ordinal).ToArray(),
-            StringComparer.Ordinal);
+        Assert.DoesNotContain("elsa:activity", xml, StringComparison.Ordinal);
+        Assert.False(imported.Analysis.CanExecute);
+        foreach (var task in BoundTasks)
+            Assert.Contains(imported.Analysis.Capabilities, x => x.ElementId == task && x.Availability == BpmnImportCapabilityAvailability.RequiresBinding);
+        Assert.Empty(imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!.Activities);
 
         await host.StartRunAsync(executable);
         await host.PumpAsync();
@@ -79,46 +85,38 @@ public sealed class EditorialInterchangeTests
         Assert.Equal(4, host.Model.Calls.Count);
     }
 
-    [Fact]
-    public async Task A_document_naming_an_agent_version_the_host_cannot_see_is_refused_without_substitution()
+    private static Dictionary<string, string> Versions(string copywriter, string proofreader) => new(StringComparer.Ordinal)
     {
-        var (_, copywriter, proofreader) = await EditorialExecutable.BuildAsync(DateTimeOffset.UtcNow.AddHours(1), bpmn: true);
-        var graph = await GraphAsync();
-        await using var services = Interchange(new Catalog([GateVersionId, ReviewVersionId, copywriter]));
+        ["gate"] = GateVersionId, ["check"] = GateVersionId, ["write"] = copywriter, ["proofread"] = proofreader, ["human-review"] = ReviewVersionId
+    };
 
-        var imported = await services.GetRequiredService<IBpmnDocumentImporter>().ImportAsync(new BpmnDocumentExporter().Export(Authored(graph, copywriter, proofreader)));
-
-        Assert.False(imported.Analysis.CanExecute);
-        Assert.Contains(imported.Analysis.Capabilities, x => x.ElementId == "proofread" && x.Availability == BpmnImportCapabilityAvailability.Unsupported);
-        var activities = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!.Activities;
-        Assert.Contains(activities, x => x.ActivityVersionId == proofreader);
-    }
-
-    private static async Task<BpmnStructure> GraphAsync()
-    {
-        BpmnStructure? captured = null;
-        await EditorialExecutable.BuildAsync(DateTimeOffset.UtcNow.AddHours(1), bpmn: true, reauthor: (graph, _, _) =>
-        {
-            captured = graph;
-            return Task.FromResult(new ExecutableActivityStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(graph)));
-        });
-        return captured!;
-    }
+    private static string AuthorNodeId(string elementId) => "author-" + elementId;
 
     /// <summary>The authored process an author would save: each task bound to its exact activity version.</summary>
-    private static ActivityNode Authored(BpmnStructure graph, string copywriter, string proofreader)
+    private static ActivityNode Authored(BpmnStructure graph, IReadOnlyDictionary<string, string> versions)
     {
-        var versions = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["gate"] = GateVersionId, ["check"] = GateVersionId, ["write"] = copywriter, ["proofread"] = proofreader, ["human-review"] = ReviewVersionId
-        };
         var activities = graph.Elements.Where(x => x.ChildNodeId is not null)
             .Select(x => new ActivityNode(x.ChildNodeId!, versions[x.ElementId], [], []))
             .ToArray();
-        var structure = new BpmnAuthoredStructure(activities, graph.Elements, graph.SequenceFlows);
-        return new ActivityNode("editorial-flowchart", BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId, [], [],
-            new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
+        return Process(new BpmnAuthoredStructure(activities, graph.Elements, graph.SequenceFlows));
     }
+
+    /// <summary>What the importing author does in the designer: bind each imported task to an exact version.</summary>
+    private static ActivityNode Rebind(ActivityNode imported, IReadOnlyDictionary<string, string> versions)
+    {
+        var structure = imported.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!;
+        var elements = structure.Elements.Select(x => versions.ContainsKey(x.ElementId)
+            ? new BpmnElement(x.ElementId, x.ElementType, x.Name, AuthorNodeId(x.ElementId), x.LaneId, x.DefaultFlowId, x.EventDefinitions, x.Properties,
+                x.AttachedToRef, x.CancelActivity, x.LoopCharacteristics, x.IsForCompensation, x.CompensationHandlerElementId, x.IsTransaction,
+                x.TriggeredByEvent, x.ListenerNodeId)
+            : x).ToArray();
+        var activities = versions.Select(x => new ActivityNode(AuthorNodeId(x.Key), x.Value, [], [])).ToArray();
+        return Process(new BpmnAuthoredStructure(activities, elements, structure.SequenceFlows));
+    }
+
+    private static ActivityNode Process(BpmnAuthoredStructure structure) =>
+        new("editorial-flowchart", BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId, [], [],
+            new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
 
     private static ServiceProvider Interchange(Catalog catalog)
     {

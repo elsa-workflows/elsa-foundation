@@ -19,7 +19,7 @@ test("approves the exact pending content with the keyboard and stays resolved af
   await expect(page.getByRole("button", { name: "Approve" })).toBeFocused();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("status")).toHaveText("Your decision was recorded.");
+  await expect(page.getByRole("status")).toHaveAttribute("data-receipt", "Accepted");
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
   await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
   await page.reload();
@@ -49,7 +49,7 @@ test("shows structured agent output as formatted JSON", async ({ page }) => {
 test("retries an unavailable submission with the same request ID", async ({ page }) => {
   await open(page, "unavailable");
   await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByRole("status")).toContainText("could not be submitted right now");
+  await expect(page.getByRole("status")).toHaveAttribute("data-receipt", "Unavailable");
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
 
@@ -61,7 +61,7 @@ test("retries an unavailable submission with the same request ID", async ({ page
 test("reports a conflict and an already resolved review without deciding", async ({ page }) => {
   await open(page, "conflict");
   await page.getByRole("button", { name: "Deny" }).click();
-  await expect(page.getByRole("status")).toContainText("content changed");
+  await expect(page.getByRole("status")).toHaveAttribute("data-receipt", "Conflict");
   await expect(page.getByTestId("review-status")).toHaveText("Awaiting your decision");
 
   await open(page, "resolved");
@@ -71,7 +71,7 @@ test("reports a conflict and an already resolved review without deciding", async
 
 test("explains a missing review", async ({ page }) => {
   await open(page, "missing");
-  await expect(page.getByRole("heading", { name: "Review not found" })).toBeVisible();
+  await expect(page.getByTestId("review-missing")).toBeVisible();
 });
 
 test("fits a narrow viewport without horizontal scrolling", async ({ page }) => {

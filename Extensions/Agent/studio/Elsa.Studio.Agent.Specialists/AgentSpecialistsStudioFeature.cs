@@ -14,9 +14,9 @@ namespace Elsa.Studio.Agent.Specialists;
     DisplayName = "Agents Studio module",
     Description = "Contributes the human review page for exact content awaiting a decision in a workflow."
 )]
-public sealed class AgentSpecialistsStudioFeature : IShellFeature
+public class AgentSpecialistsStudioFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
     }
 }

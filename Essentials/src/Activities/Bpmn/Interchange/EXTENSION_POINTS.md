@@ -35,13 +35,6 @@
   nested/listener CanStartWorkflow=false, unavailable/unknown reporting and catalog validation; token
   routing remains in the released interpreter.
 
-Ordinary bound work outside the standard BPMN profile, such as a published user-defined agent or a
-`HumanReview` on a task, is exported as its exact authored node in the `elsa:activity` vendor attribute. Import
-hands that node to the binder through `BpmnWorkBindingRequest.RetainedActivity`. The default binder rebinds it as
-written, and the catalog path resolves that exact version ID or reports it Unsupported, never substituting another
-version. An unreadable value is refused with an actionable reason. Profile activities (Delay, Event, PublishEvent,
-DispatchWorkflow, nested processes) keep their BPMN-native representation.
-
 Synchronous conversion retains legacy placeholder version references and reports unverified mappings
 as Unknown. The registered HTTP endpoints use the asynchronous catalog path: it resolves visible,
 active recommended 1.0.0 profile versions (including build metadata) to their real catalog IDs, preserving the existing contracts

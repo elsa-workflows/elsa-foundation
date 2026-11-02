@@ -82,18 +82,6 @@ public sealed class BpmnDocumentExporter : IBpmnDocumentExporter
                             workflowDefinitionId!)
                     ]);
             }
-            else if (child is not null && BpmnPortableBinding.IsPortableHost(element.ElementType) && BpmnPortableBinding.Problem(child) is null)
-            {
-                // Portable bound work on a plain task (a published user-defined agent, a review, any activity version with
-                // literal non-sensitive inputs) rides the vendor namespace as its exact authored node, so import can rebind
-                // the same version and inputs or refuse it against the visible catalog. Anything else stays unbound.
-                extensions = new LibModel.BpmnExtensions(ForeignAttributes:
-                [
-                    new LibModel.BpmnForeignAttribute(
-                        new LibModel.BpmnQName(LibInterchange.BpmnXmlNames.VendorNamespaceName, BpmnDocumentImporter.BoundActivityAttributeName),
-                        JsonSerializer.Serialize(child, BpmnDocumentImporter.BoundActivitySerializerOptions))
-                ]);
-            }
 
             elements.Add(new LibModel.BpmnElement(
                 element.ElementId,

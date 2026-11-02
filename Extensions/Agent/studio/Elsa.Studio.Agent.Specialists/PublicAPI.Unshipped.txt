@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.Agent.Specialists.AgentSpecialistsStudioFeature
+Elsa.Studio.Agent.Specialists.AgentSpecialistsStudioFeature.AgentSpecialistsStudioFeature() -> void
+virtual Elsa.Studio.Agent.Specialists.AgentSpecialistsStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

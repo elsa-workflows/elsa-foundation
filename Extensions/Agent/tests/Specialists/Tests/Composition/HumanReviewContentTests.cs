@@ -34,8 +34,10 @@ public sealed class HumanReviewContentTests
         var compact = JsonDocument.Parse("""{"a":"é","b":[1,2]}""").RootElement;
         var pretty = JsonDocument.Parse("{\n  \"a\" : \"é\",\n  \"b\" : [ 1, 2 ]\n}").RootElement;
         var reordered = JsonDocument.Parse("""{"b":[1,2],"a":"é"}""").RootElement;
+        var escaped = JsonDocument.Parse("""{"a":"\u00e9","b":[1,2]}""").RootElement;
 
         Assert.Equal(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(pretty));
+        Assert.Equal(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(escaped));
         Assert.NotEqual(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(reordered));
         Assert.False(HumanReview.ContentFits(JsonDocument.Parse("null").RootElement));
     }

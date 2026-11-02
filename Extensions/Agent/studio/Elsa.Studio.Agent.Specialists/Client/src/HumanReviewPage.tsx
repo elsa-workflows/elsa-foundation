@@ -71,7 +71,7 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
 
   if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading review…</p></StudioPage>;
   if (load.kind === "missing")
-    return <StudioPage><StudioResultState title="Review not found" description="No visible review matches this link. It may belong to another tenant or no longer exist." /></StudioPage>;
+    return <StudioPage data-testid="review-missing"><StudioResultState title="Review not found" description="No visible review matches this link. It may belong to another tenant or no longer exist." /></StudioPage>;
   if (load.kind === "error")
     return <StudioPage><StudioResultState tone="danger" title="Review unavailable" description={load.message}
       actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /></StudioPage>;

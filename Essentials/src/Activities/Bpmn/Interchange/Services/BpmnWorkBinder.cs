@@ -47,11 +47,6 @@ internal sealed class BpmnWorkBinder : IBpmnWorkBinder
         };
         if (activity is not null)
             return new(activity, BpmnImportCapabilityAvailability.Available, "Foundation supplied the required activity binding.");
-        // An exported exact binding is rebound as written; the catalog session then verifies that version is visible.
-        if (request.Kind == BpmnWorkBindingKind.UnboundTask && request.RetainedActivity is { } retained)
-            return retained.Activity is { } bound
-                ? new(bound, BpmnImportCapabilityAvailability.Available, "The document carries an exact Elsa activity binding.")
-                : new(null, BpmnImportCapabilityAvailability.Unsupported, $"{retained.Problem} Bind the task's activity explicitly.");
         if (request.Kind is BpmnWorkBindingKind.UnboundTask or BpmnWorkBindingKind.CallProcess)
             return new(null, BpmnImportCapabilityAvailability.RequiresBinding, request.Kind == BpmnWorkBindingKind.CallProcess
                 ? $"Call activity '{request.ElementId}' imported unbound; bind a DispatchWorkflow activity to execute it."
