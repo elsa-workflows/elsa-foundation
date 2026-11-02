@@ -61,7 +61,7 @@ test("runtime summary preserves waiting, faults and observation warnings", async
 });
 
 test("the composed editor Runtime panel follows its real execution observer", async ({ page }) => {
-  await page.goto("/?mode=activity-duplicate-editor&run-canvas=unique&execution-motion=causal&theme=light&backend=fixture-backend");
+  await page.goto("/?mode=activity-duplicate-editor&run-canvas=unique&execution-motion=causal&theme=light&backend=fixture-backend&runtime-summary");
   await page.getByRole("button", { name: "Test Run", exact: true }).click();
   await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
   await page.getByRole("tab", { name: "Runtime", exact: true }).click();
