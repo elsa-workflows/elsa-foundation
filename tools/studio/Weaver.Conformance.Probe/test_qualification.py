@@ -13,7 +13,9 @@ from autonomy_journeys import MATRIX_QUALIFICATION, MODE_QUALIFICATION, autonomy
 from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
 from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceError, validate_complete_witness, validate_report,
                       witness_gaps, witness_manifest)
+from restart_journeys import RESTART_QUALIFICATION
 from test_autonomy_journeys import complete_autonomy_section
+from test_restart_journeys import complete_restart_section
 
 
 class QualificationTests(unittest.TestCase):
@@ -159,7 +161,7 @@ class QualificationTests(unittest.TestCase):
 
 
 def complete_witness_report(base):
-    """Extend the synthetic original38 report with the four current-authority and 26 autonomy records."""
+    """Extend the synthetic original38 report with the four current-authority, 26 autonomy and 20 + 1 restart records."""
     report = copy.deepcopy(base.report)
     report["witnessManifest"] = witness_manifest()
     names = sorted(AUTHORITY_CASES)
@@ -167,6 +169,7 @@ def complete_witness_report(base):
         "source": base.source, "caseIDs": names, "stages": [],
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed"})} for name in names]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
+    report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
     return report
 
@@ -185,10 +188,12 @@ class CompleteWitnessTests(unittest.TestCase):
         with self.assertRaises(EvidenceError):
             validate_complete_witness(report, self.base.root, self.base.controls)
 
-    def test_manifest_is_original38_plus_four_plus_thirteen_per_actual_adapter(self):
+    def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 26, 68), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
-                                           len(manifest["autonomyCases"]), manifest["expectedCaseCount"]))
+        self.assertEqual((38, 4, 26, 20, 1, 89), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+                                                  len(manifest["autonomyCases"]), len(manifest["restartCases"]),
+                                                  len(manifest["restartControls"]), manifest["expectedCaseCount"]))
+        self.assertEqual(10, len({name.split("-", 1)[1] for name in manifest["restartCases"]}))
         self.assertTrue(all(name.split("-", 1)[0] in ("copilot", "anthropic") for name in manifest["autonomyCases"]))
         self.assertEqual(13, len({name.split("-", 1)[1] for name in manifest["autonomyCases"]}))
 
@@ -235,6 +240,11 @@ class CompleteWitnessTests(unittest.TestCase):
             "foreign-owner": lambda r: autonomy(r).update(ownerAfter={"path": "/elsewhere/owner.json", "sha256": "0" * 64}),
             "no-correlation": lambda r: autonomy(r)["correlation"].pop("proposalId"),
             "section-absent": lambda r: r.pop(MATRIX_QUALIFICATION),
+            "restart-section-absent": lambda r: r.pop(RESTART_QUALIFICATION),
+            "restart-case-missing": lambda r: r[RESTART_QUALIFICATION]["cases"].pop(),
+            "restart-wrong-cause": lambda r: r[RESTART_QUALIFICATION]["cases"][0]["outcome"].update(executions=2),
+            "restart-control-unobserved": lambda r: r[RESTART_QUALIFICATION].update(control={"id": "restart-without-durable-store", "status": "unobserved"}),
+            "restart-changed-evidence": lambda r: r[RESTART_QUALIFICATION]["cases"][0].update(evidence=[{**r[RESTART_QUALIFICATION]["cases"][0]["evidence"][0], "sha256": "0" * 64}]),
             "section-failed": lambda r: r[MATRIX_QUALIFICATION].update(status="failed"),
             "section-foreign-source": lambda r: r[MATRIX_QUALIFICATION].update(source="b" * 40),
             "diagnostic-mode-section": lambda r: r.update({MODE_QUALIFICATION: {"status": "passed"}}),
@@ -253,6 +263,7 @@ class CompleteWitnessTests(unittest.TestCase):
             "original-missing": lambda r: r["cases"].pop(),
             "manifest-absent": lambda r: r.pop("witnessManifest"),
             "manifest-shrunk": lambda r: r["witnessManifest"].update(autonomyCases=r["witnessManifest"]["autonomyCases"][:8]),
+            "manifest-without-restarts": lambda r: r["witnessManifest"].pop("restartCases"),
             "matrix-stage-missing": lambda r: r["stages"].pop(),
             "matrix-stage-repeated": lambda r: r["stages"].append(copy.deepcopy(r["stages"][-1])),
             "failed-stage": lambda r: r["stages"][0].update(exitCode=1),

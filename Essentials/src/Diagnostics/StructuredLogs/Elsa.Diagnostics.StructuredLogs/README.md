@@ -99,5 +99,5 @@ All store/source contracts are overridable — see [`EXTENSION_POINTS.md`](EXTEN
 
 `StructuredLogsApiCapabilitySource` implements the API Capabilities `IApiCapabilitySource` seam. It advertises
 `elsa.api.structured-logs` contract 1 with shell-relative links for the configured recent, sources and stream routes.
-The [owning seam catalog](../../../Api/Capabilities/EXTENSION_POINTS.md) defines registration and compatibility;
+The [owning seam catalog](../../../Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md) defines registration and compatibility;
 this declaration neither grants permissions nor changes feature enablement.

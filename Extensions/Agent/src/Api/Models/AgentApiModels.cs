@@ -23,7 +23,15 @@ public sealed record AgentBootstrapResponse(
     IReadOnlyCollection<string> Modes,
     IReadOnlyCollection<AgentCapabilityResponse> Capabilities,
     AgentProviderDiagnosticsResponse? Provider,
-    AgentPolicySummaryResponse Policy);
+    AgentPolicySummaryResponse Policy)
+{
+    /// <summary>
+    /// Preview (#3441): what a host restart does to this server's Weaver sessions: <c>durable</c> (they are recovered),
+    /// <c>processLifetime</c> (they survive reloads while the process lives; a restart ends them) or <c>unsupported</c>
+    /// (this composition cannot recover them).
+    /// </summary>
+    public string Recovery { get; init; } = "unsupported";
+}
 
 public sealed record AgentPolicySummaryResponse(
     bool ContextVisibility,
@@ -68,6 +76,12 @@ public sealed class AgentCreateSessionRequest
 
     public AgentSurfaceRequest ActiveSurface { get; init; } = new();
     public AgentClientContextRequest ClientContext { get; init; } = new();
+
+    /// <summary>Preview: the Studio backend the session belongs to. It only narrows the owner's session list.</summary>
+    public string? Workspace { get; init; }
+
+    /// <summary>Preview: the session this one continues past a limit. Only the link is recorded; nothing is carried over.</summary>
+    public string? ContinuedFrom { get; init; }
 }
 
 public sealed class AgentSurfaceRequest
@@ -106,6 +120,13 @@ public sealed record AgentSessionDetailsResponse(
     /// <summary>Preview: the session's acknowledged policy; absent only when the composition cannot read it back.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AgentSessionPolicyResponse? Policy { get; init; }
+
+    /// <summary>
+    /// Preview (#3441): the documented session limit the session reached (<c>snapshots</c> or <c>bytes</c>); omitted when it
+    /// reached none. A client offers continuation in a new, linked session.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LimitReached { get; init; }
 }
 
 /// <summary>
@@ -159,6 +180,52 @@ public sealed record AgentMessageViewModelResponse(
 {
     /// <summary>Preview: the policy revision the owner accepted this message under, when it owns revisions.</summary>
     public long? AcceptedPolicyRevision { get; init; }
+
+    /// <summary>
+    /// Preview (#3441): the public session policy (mode, ceiling, allowed modes and revision) the owner accepted this
+    /// message under; omitted when the owner did not attribute it. Revisions are per session, so a reopened session names
+    /// each message's mode from this record rather than from a revision number seen elsewhere.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+
+    /// <summary>Preview: why a cancelled message stopped (<c>interrupted</c>, <c>withdrawn</c> or <c>user-stop</c>); absent otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StatusReason { get; init; }
+}
+
+/// <summary>Preview: the query of the owner-scoped session list (<c>GET /_elsa/agent/sessions</c>).</summary>
+public sealed class AgentSessionListQueryRequest
+{
+    /// <summary>Narrows the owner's sessions to one workspace.</summary>
+    public string? Workspace { get; init; }
+
+    /// <summary>At most this many sessions, 1 to 100; 20 when absent.</summary>
+    public int? Take { get; init; }
+
+    /// <summary>The <c>next</c> cursor of a previous page; only older sessions are returned.</summary>
+    public string? Before { get; init; }
+}
+
+/// <summary>Preview: one page of the caller's own sessions, newest first.</summary>
+/// <param name="Next">The cursor for the next older page, or null when this page is the last.</param>
+public sealed record AgentSessionListResponse(IReadOnlyCollection<AgentSessionSummaryResponse> Items, string? Next);
+
+/// <summary>Preview: one of the caller's sessions, as the owning store summarizes it.</summary>
+public sealed record AgentSessionSummaryResponse(
+    string Id,
+    string? Title,
+    string Status,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt,
+    int PendingReviewCount,
+    string? RecoveryState);
+
+/// <summary>Preview: the owner's statement about an uncertain client operation. It is never a receipt.</summary>
+public sealed class AgentClientInvocationResolutionRequest
+{
+    /// <summary><c>applied</c>, <c>notApplied</c> or <c>unknown</c>.</summary>
+    public string? Claim { get; init; }
 }
 
 public sealed record AgentMessageAcceptedResponse(
@@ -195,6 +262,9 @@ public sealed record AgentAcceptedMessageResponse(
 
     /// <summary>Preview: the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
     public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+
+    /// <summary>Preview: why a cancelled message stopped (<c>interrupted</c>, <c>withdrawn</c> or <c>user-stop</c>).</summary>
+    public string? StatusReason { get; init; }
 }
 
 public sealed class AgentSessionRouteRequest
@@ -368,8 +438,22 @@ public static class AgentApiMapping
     public static AgentMessageViewModelResponse ToViewModel(this AgentMessage message)
         => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString())
         {
-            AcceptedPolicyRevision = message.AcceptedPolicy?.Revision
+            AcceptedPolicyRevision = message.AcceptedPolicy?.Revision,
+            AcceptedPolicy = message.AcceptedPolicy?.ToResponse(),
+            StatusReason = message.StatusReason
         };
+
+    public static AgentSessionSummaryResponse ToResponse(this AgentSessionSummary summary)
+        => new(summary.Id, summary.Title, summary.Status.ToContractString(), summary.UpdatedAt, summary.ExpiresAt, summary.PendingReviewCount, summary.RecoveryState);
+
+    /// <summary>Parses a wire owner statement (<c>applied</c>, <c>notApplied</c> or <c>unknown</c>); null when unset or unrecognized.</summary>
+    public static AgentOwnerResolutionClaim? ParseResolutionClaim(string? claim) => claim?.Trim() switch
+    {
+        "applied" => AgentOwnerResolutionClaim.Applied,
+        "notApplied" => AgentOwnerResolutionClaim.NotApplied,
+        "unknown" => AgentOwnerResolutionClaim.Unknown,
+        _ => null
+    };
 
     /// <summary>Projects an accepted domain message for the client; the frozen policy stays with the owner for attribution.</summary>
     public static AgentMessageAcceptedResponse ToAcceptedResponse(this AgentMessage message, IReadOnlyCollection<AgentViolation> warnings)
@@ -395,7 +479,8 @@ public static class AgentApiMapping
                 ToolResults = message.ToolResults,
                 HasDisclosureProvenance = message.HasDisclosureProvenance,
                 DisclosureHistory = message.DisclosureHistory,
-                AcceptedPolicy = message.AcceptedPolicy?.ToResponse()
+                AcceptedPolicy = message.AcceptedPolicy?.ToResponse(),
+                StatusReason = message.StatusReason
             },
             warnings);
 
