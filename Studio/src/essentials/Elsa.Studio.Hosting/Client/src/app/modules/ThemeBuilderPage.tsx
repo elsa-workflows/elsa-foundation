@@ -75,12 +75,13 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const assetInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  // Load once. A background workspace tab mounts its effects again when it returns, and a reload would
-  // reseed the theme draft below from the store and discard unsaved edits.
-  const storeLoadedRef = useRef(false);
+  // Load until a store has arrived. A background workspace tab mounts its effects again when it returns:
+  // reloading a loaded store would reseed the theme draft below and discard unsaved edits, while a load
+  // that failed is retried.
+  const storeRef = useRef(store);
+  storeRef.current = store;
   useEffect(() => {
-    if (storeLoadedRef.current) return;
-    storeLoadedRef.current = true;
+    if (storeRef.current) return;
     void loadStore();
   }, []);
 
@@ -284,7 +285,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     return (
       <section className="studio-page theme-builder-page">
         <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>Loading Theme Store definitions.</>} />
-        <SkeletonRows rows={6} label="Loading themes" />
+        {!store && error ? (
+          <StudioAlert tone="danger">
+            {error}{" "}
+            <StudioButton type="button" className="studio-button" onClick={() => void loadStore()}>
+              <RefreshCcw size={15} /> Retry
+            </StudioButton>
+          </StudioAlert>
+        ) : <SkeletonRows rows={6} label="Loading themes" />}
       </section>
     );
   }

@@ -94,4 +94,25 @@ describe("theme management with an empty selectable default", () => {
     expect(requestStudioNavigation("/theme-builder", "/", "close")).toBe(false);
     expect(requestStudioNavigation("/theme-builder", "/")).toBe(true);
   });
+
+  it("shows a failed Theme Store load with Retry and retries when a background tab returns", async () => {
+    let calls = 0;
+    const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
+    const context = { http: { getJson: async () => { calls += 1; if (calls === 1) throw new Error("Theme Store unavailable"); return { themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }; } } } as unknown as StudioEndpointContext;
+    const api = { host: context, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const page = (mode: "visible" | "hidden") => <ThemeProvider storeContext={context}><React.Activity mode={mode}><ThemeBuilderPage api={api} /></React.Activity></ThemeProvider>;
+    await update(() => root.render(page("visible")));
+    const failedLoads = calls;
+    expect(container.textContent).toContain("Theme Store unavailable");
+    expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent?.includes("Retry"))).toBe(true);
+
+    await update(() => root.render(page("hidden")));
+    await update(() => root.render(page("visible")));
+    expect(calls).toBeGreaterThan(failedLoads);
+    expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBeTruthy();
+    const loaded = calls;
+    await update(() => root.render(page("hidden")));
+    await update(() => root.render(page("visible")));
+    expect(calls).toBe(loaded);
+  });
 });
