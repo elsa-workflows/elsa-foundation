@@ -5,7 +5,9 @@
 [spec 1189](../../../../../specs/1189-weaver-recovery/spec.md)). It implements the Preview
 `IAgentSessionRecordStore` and replaces the audit sink, reader and ownership together. The default
 session owner is not replaced: it writes through this store and hydrates from it, so session policy,
-autonomy and durable recovery stay supported. The package carries EF Core and Relational APIs; the
+autonomy and durable recovery stay supported. Replacing a lifecycle service (session, streaming, invoker or
+proposal) or `IAgentTurnStateStore` while this store is selected fails shell activation
+(`AgentDurableRecoveryValidator`), because such a composition cannot recover what it records. The package carries EF Core and Relational APIs; the
 host supplies its selected engine. Enable shell feature `FoundationAgentEntityFrameworkCore` (it
 depends on `FoundationAgentAbstractions` and `Secrets`), or register directly:
 

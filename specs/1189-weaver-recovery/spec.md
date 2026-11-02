@@ -89,7 +89,7 @@ Only a present, authenticated user's current permissions can cause disclosure or
 - **An expired session is found after a restart.** It is closed, not reopened.
 - **A receipt arrives for an operation the restarted host recorded as Uncertain.** It is reconciled to the original operation. A receipt that conflicts with the recorded binding is refused.
 - **The user reconnects while settlement of the same session is in progress.** Both see one consistent state, and neither duplicates work.
-- **The host has replaced the session, streaming, invoker or proposal service.** Recovery is supported only through the documented boundary. Otherwise it reports itself unsupported and creates no shadow state.
+- **The host has replaced the session, streaming, invoker or proposal service.** Recovery is supported only through the documented boundary. Otherwise it reports itself unsupported and creates no shadow state; with a durable store selected, such a composition fails activation rather than run partly durable.
 - **An autonomy change is requested while restored claims are still held.** It receives the documented busy outcome until the claims settle.
 
 ## Requirements

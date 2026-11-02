@@ -69,7 +69,7 @@ Two changes in the existing code:
 
 **Decision:** The contract becomes `SaveAsync`, `FindAsync` and `RemoveAsync`. This is a Major change, accepted before GA under ADR 0080 D4, on the same basis as the prior leaf (`specs/1186-weaver-effects/contracts/session-policy.md` §4.2).
 - The default implementation keeps the paused turn on the owner's session row. Saving the pause therefore also records the Pause claim, which closes the gap between `SavePause` (`AgentTurnServices.cs:1116`) and `EnsurePause` (`:599`).
-- A replacement turn-state store keeps autonomy support through explicit `EnsurePause`, but durable recovery reports Unsupported for that composition.
+- A replacement turn-state store keeps autonomy support through explicit `EnsurePause`, but cannot recover paused turns: with the in-memory record store the composition reports `unsupported`, and with a durable store selected it fails shell activation (`AgentDurableRecoveryValidator`, self-review round 2).
 
 Affected call sites:
 - `AgentTurnServices.cs:109`, `:172`, `:578`, `:872`, `:1116-1117`; `TrackPause` (`:151`) and its callers `:349` and `:521`.

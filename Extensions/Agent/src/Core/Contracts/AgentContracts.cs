@@ -87,8 +87,9 @@ public interface IAgentSessionPolicyService
 public interface IAgentSessionRecordStore
 {
     /// <summary>
-    /// Whether every write is guarded on the current owner and fence. A store that cannot fence keeps the in-process
-    /// behaviour but makes durable recovery Unsupported, because a stale process could then continue a turn.
+    /// Whether every write is guarded on the current owner and fence. A store that cannot fence cannot back durable
+    /// recovery, because a stale process could then continue a turn: selecting one fails shell activation
+    /// (the Agent durable-recovery validator).
     /// </summary>
     bool SupportsFencing { get; }
 

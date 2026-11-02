@@ -104,7 +104,9 @@ internal enum AgentDurableRecoverySupport
 /// <summary>
 /// Durable recovery is supported only when the default owner participates with every default lifecycle service, keeps
 /// the paused turn on its own session record, and writes through a record store that fences every write. A replaced
-/// <see cref="IAgentTurnStateStore"/> or a store that cannot fence keeps today's in-process behaviour but is Unsupported.
+/// <see cref="IAgentTurnStateStore"/> or a store that cannot fence is Unsupported: with the in-memory default it keeps the
+/// in-process behaviour and bootstrap reports <c>unsupported</c>; with a durable store selected, <see cref="AgentDurableRecoveryValidator"/>
+/// fails shell activation.
 /// </summary>
 internal sealed class AgentDurableRecovery(IServiceProvider services)
 {
