@@ -23,7 +23,15 @@ public sealed record AgentBootstrapResponse(
     IReadOnlyCollection<string> Modes,
     IReadOnlyCollection<AgentCapabilityResponse> Capabilities,
     AgentProviderDiagnosticsResponse? Provider,
-    AgentPolicySummaryResponse Policy);
+    AgentPolicySummaryResponse Policy)
+{
+    /// <summary>
+    /// Preview (#3441): what a host restart does to this server's Weaver sessions: <c>durable</c> (they are recovered),
+    /// <c>processLifetime</c> (they survive reloads while the process lives; a restart ends them) or <c>unsupported</c>
+    /// (this composition cannot recover them).
+    /// </summary>
+    public string Recovery { get; init; } = "unsupported";
+}
 
 public sealed record AgentPolicySummaryResponse(
     bool ContextVisibility,

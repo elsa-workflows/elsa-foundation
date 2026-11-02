@@ -148,7 +148,10 @@ public static class AgentApi
                 AgentPolicy.Default.AutonomyMode.ToContractString(),
                 AgentPolicy.Default.MaxAutonomyMode.ToContractString(),
                 AgentPolicy.Default.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
-                AgentPolicy.Default.RetentionLabel));
+                AgentPolicy.Default.RetentionLabel))
+        {
+            Recovery = context.RequestServices.GetService<Elsa.Agent.Services.AgentDurableRecovery>()?.Describe() ?? Elsa.Agent.Services.AgentRecoveryModes.Unsupported
+        };
         await WriteAsync(context, AgentApiResponse<AgentBootstrapResponse>.Success(response), AgentJsonContext.Default.AgentApiResponseAgentBootstrapResponse);
     }
 

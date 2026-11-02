@@ -1,6 +1,8 @@
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Services;
 
@@ -117,5 +119,52 @@ internal sealed class AgentDurableRecovery(IServiceProvider services)
             && services.GetRequiredService<IAgentTurnStateStore>() is InMemoryAgentTurnStateStore { Owner: { } pauses } && ReferenceEquals(pauses, owner)
             ? AgentDurableRecoverySupport.Supported
             : AgentDurableRecoverySupport.Unsupported;
+    }
+
+    /// <summary>Whether a record store other than the process-lifetime default is selected (for example, the EF store).</summary>
+    public bool DurableStoreSelected => services.GetService<IAgentSessionRecordStore>() is { } store and not InMemoryAgentSessionRecordStore;
+
+    /// <summary>
+    /// What a restart does to this composition's sessions, as bootstrap reports it: <c>durable</c> (a durable store backs a
+    /// supported composition), <c>processLifetime</c> (the in-memory default: sessions survive reloads while the process
+    /// lives, and a restart ends them) or <c>unsupported</c> (the composition cannot recover its sessions).
+    /// </summary>
+    public string Describe() => Evaluate() == AgentDurableRecoverySupport.Unsupported ? AgentRecoveryModes.Unsupported
+        : DurableStoreSelected ? AgentRecoveryModes.Durable : AgentRecoveryModes.ProcessLifetime;
+}
+
+/// <summary>The bootstrap <c>recovery</c> values.</summary>
+internal static class AgentRecoveryModes
+{
+    public const string Durable = "durable";
+    public const string ProcessLifetime = "processLifetime";
+    public const string Unsupported = "unsupported";
+}
+
+/// <summary>
+/// At shell activation, warns when a durable record store is selected but the composition cannot use it for recovery (a
+/// replaced session, streaming, invoker, proposal or turn-state service, or a store that cannot fence): sessions then
+/// behave as in-process ones. Reporting never blocks activation.
+/// </summary>
+internal sealed class AgentRecoverySupportReporter(IServiceScopeFactory scopes, ILogger<AgentRecoverySupportReporter>? logger = null) : IShellInitializer
+{
+    public Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var recovery = scope.ServiceProvider.GetRequiredService<AgentDurableRecovery>();
+            if (recovery.DurableStoreSelected && recovery.Evaluate() == AgentDurableRecoverySupport.Unsupported)
+                logger?.LogWarning("A durable agent session record store is configured, but this composition does not support durable recovery " +
+                    "(a session, streaming, invoker, proposal or paused-turn service is replaced, or the store cannot fence). " +
+                    "Weaver sessions are not recovered after a restart.");
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            // A composition that cannot resolve its lifecycle services reports that from its own consumer.
+            logger?.LogDebug("Durable agent recovery support could not be evaluated at activation ({FailureType}).", failure.GetType().Name);
+        }
+        return Task.CompletedTask;
     }
 }

@@ -65,6 +65,7 @@ public static class AgentServiceCollectionExtensions
         // Preview: scoped because participation is checked against the scoped lifecycle services.
         services.TryAddScoped<IAgentSessionPolicyService>(AgentRegistrationValidator.Create<DefaultAgentSessionPolicyService>);
         services.TryAddScoped<AgentDurableRecovery>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer, AgentRecoverySupportReporter>());
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();
 
         return services;

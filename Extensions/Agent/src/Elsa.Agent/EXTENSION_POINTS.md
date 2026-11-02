@@ -174,7 +174,9 @@ are the default participants of one owner (as in #3440), `IAgentTurnStateStore` 
 paused turn on the owner's record, so saving the pause records the Pause claim) and the record store
 `SupportsFencing`. A replaced `IAgentTurnStateStore` (now `SaveAsync`, `FindAsync`, `RemoveAsync`) keeps
 autonomy support but makes durable recovery Unsupported; so does a store that cannot fence. Configuring the
-EF feature gives the owner a durable store and does not replace it.
+EF feature gives the owner a durable store and does not replace it. Bootstrap reports the composition's support as
+`recovery` (`durable`, `processLifetime` for the in-memory default, or `unsupported`), and shell activation logs a
+warning when a durable store is configured into an Unsupported composition.
 
 **Ownership.** Each process has one owner token. Hydration takes ownership when the record has no live
 owner, its lease lapsed or this process owns it; a takeover increments the fence. Every write is guarded on
