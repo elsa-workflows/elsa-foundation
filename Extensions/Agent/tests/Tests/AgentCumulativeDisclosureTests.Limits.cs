@@ -24,10 +24,38 @@ public sealed partial class AgentCumulativeDisclosureTests
         Assert.Equal((BudgetExceeded, "snapshots", 409), (count?.Code, count?.Limit, count?.StatusCode));
 
         var sized = new AgentDisclosureHistory();
-        Assert.Null(sized.Add([HistoryAttachment("first", new { value = "retained" })], []));
-        var size = sized.Add([HistoryAttachment("too-large", new { value = new string('x', AgentDisclosureHistory.MaximumBytes) })], []);
+        Assert.Null(sized.Add([HistoryAttachment("first", new { value = new string('x', AgentDisclosureHistory.MaximumBytes / 2) })], []));
+        var size = sized.Add([HistoryAttachment("second", new { value = new string('y', AgentDisclosureHistory.MaximumBytes / 2) })], []);
         Assert.Equal((BudgetExceeded, "bytes", 409), (size?.Code, size?.Limit, size?.StatusCode));
         Assert.Contains("session limit", size!.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_single_snapshot_larger_than_any_session_can_record_is_refused_without_naming_a_session_limit()
+    {
+        var history = new AgentDisclosureHistory();
+        Assert.Null(history.Add([HistoryAttachment("first", new { value = "retained" })], []));
+
+        var refused = history.Add([HistoryAttachment("too-large", new { value = new string('x', AgentDisclosureHistory.MaximumBytes) })], []);
+
+        Assert.Equal((BudgetExceeded, AgentDisclosureHistory.SnapshotTooLarge, 409), (refused?.Code, refused?.Limit, refused?.StatusCode));
+        Assert.DoesNotContain("session limit", refused!.Message, StringComparison.OrdinalIgnoreCase);
+        // Nothing was counted against the session: a later snapshot of ordinary size is admitted.
+        Assert.Null(history.Add([HistoryAttachment("ordinary", new { value = "fits" })], []));
+    }
+
+    [Fact]
+    public async Task A_completed_turn_clears_a_recorded_session_limit()
+    {
+        using var fixture = new Fixture(true, Script.Answer);
+        await SeedRetainedHistory(fixture, 1);
+        var owner = (InMemoryAgentSessionService)fixture.Services.GetRequiredService<IAgentSessionService>();
+        await owner.RecordLimitAsync(fixture.Session!.Id, "bytes");
+        await fixture.Post("An ordinary request");
+
+        Assert.Equal(AgentStreamEventKind.Completed, (await fixture.Stream())[^1].Kind);
+
+        Assert.Null((await owner.FindAsync(fixture.Session.Id))!.LimitReached);
     }
 
     [Fact]

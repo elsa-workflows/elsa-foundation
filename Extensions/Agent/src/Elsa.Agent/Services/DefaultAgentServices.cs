@@ -308,6 +308,15 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Session = limited }, () => row.Session = limited);
         }, cancellationToken);
 
+    /// <summary>Clears a recorded session limit once a later turn completed; nothing is written when none is recorded.</summary>
+    internal Task ClearLimitAsync(string sessionId, CancellationToken cancellationToken = default)
+        => CommitAsync<bool>(sessionId, () => false, row =>
+        {
+            if (row.Session.LimitReached is null) return new(false);
+            var cleared = row.Session with { LimitReached = null, UpdatedAt = _clock.GetUtcNow() };
+            return new(true, new AgentSessionRecordWrite(row.Session.Id, row.Fence) { Session = cleared }, () => row.Session = cleared);
+        }, cancellationToken);
+
     /// <summary>Acquires an unkeyed claim under the session write gate; null when the session is not recorded.</summary>
     internal Task<AgentSessionClaim?> AcquireAsync(string sessionId, AgentSessionClaimKind kind, CancellationToken cancellationToken = default)
     {

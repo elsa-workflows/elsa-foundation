@@ -146,9 +146,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
             // A refusal at a documented session limit is recorded on the session before it is reported, so a reload shows the
             // limit and its continuation without another refused prompt. Recording is best effort: the refusal is reported
             // either way, and a later refused prompt records it again.
-            if (item.Error?.Limit is { } limit && _owner is not null)
+            if (item.Error?.Limit is { } limit && AgentDisclosureHistory.IsSessionLimit(limit) && _owner is not null)
             {
                 try { await _owner.RecordLimitAsync(sessionId, limit, CancellationToken.None); }
+                catch (Exception failure) when (failure is not OperationCanceledException) { }
+            }
+            // A turn that completes admitted everything it disclosed, so the session is no longer at a limit.
+            else if (item.Kind == AgentStreamEventKind.Completed && _owner is not null)
+            {
+                try { await _owner.ClearLimitAsync(sessionId, CancellationToken.None); }
                 catch (Exception failure) when (failure is not OperationCanceledException) { }
             }
             yield return item;

@@ -35,6 +35,12 @@ internal sealed class AgentDisclosureHistory
             if (_identities.Contains(recorded.Digest)) return null;
             if (_snapshots.Count >= MaximumSnapshots)
                 return LimitReached("snapshots", "64 distinct disclosure snapshots");
+            // One snapshot larger than any session can record is refused on its own; a new session would not help, so it
+            // names no session limit and nothing is counted against this session.
+            if (recorded.Size > MaximumBytes)
+                return new("agent.context.disclosure_budget_exceeded",
+                    "This context is larger than one conversation can record (8 MiB), so it was not disclosed. Narrow it and try again; this conversation is unchanged.", 409)
+                { Limit = SnapshotTooLarge };
             if (_bytes + recorded.Size > MaximumBytes)
                 return LimitReached("bytes", "8 MiB of recorded disclosure");
             _identities.Add(recorded.Digest);
@@ -48,6 +54,12 @@ internal sealed class AgentDisclosureHistory
             return new("agent.history.provenance_unavailable", "Complete immutable disclosure history could not be retained.", 409);
         }
     }
+
+    /// <summary>The <see cref="AgentError.Limit"/> of one snapshot larger than any session can record; not a session limit.</summary>
+    internal const string SnapshotTooLarge = "snapshot-too-large";
+
+    /// <summary>Whether <paramref name="limit"/> names a documented session limit, which the session records.</summary>
+    internal static bool IsSessionLimit(string? limit) => limit is "snapshots" or "bytes";
 
     /// <summary>
     /// The documented session limit outcome. Nothing is evicted, reset or replayed: every recorded outcome and the complete
