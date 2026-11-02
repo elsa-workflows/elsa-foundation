@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -70,6 +70,23 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
         Assert.True(publication is not null, $"No active publication of '{definitionId}'. Log: {string.Join(" | ", Host.Warnings.Entries)}");
         Assert.Equal(definitionId, publication.Value.Reference.DefinitionId);
         Assert.Equal(Elsa3ImportHost.TenantId, publication.Value.Reference.TenantId);
+    }
+
+    [Theory]
+    [InlineData("caller")]
+    [InlineData("http-hello")]
+    [InlineData("approval")]
+    [InlineData("inner")]
+    public async Task Each_published_workflow_has_one_draft_cloned_from_its_published_version(string definitionId)
+    {
+        var publication = await Host.ActivePublicationAsync(definitionId);
+        var drafts = await Host.ReadAsync(services => services
+            .GetRequiredService<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionDraftStore>()
+            .ListByWorkflowDefinitionIdAsync(definitionId));
+
+        Assert.NotNull(publication);
+        var draft = Assert.Single(drafts);
+        Assert.Equal(publication.Value.Workflow.VersionId, draft.SourceVersionId);
     }
 
     [Fact]

@@ -1,4 +1,7 @@
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
@@ -26,7 +29,8 @@ internal enum WorkflowPublicationStatus
 /// Publishes the newest imported version of each workflow definition at most once (spec 235 research R-6). A version
 /// its target slot has published before (an <see cref="PublicationStatus.Active"/> or <see cref="PublicationStatus.Retired"/>
 /// record, or the record the slot serves) is left alone, so a start never takes back a slot an operator moved, and a
-/// re-exported newer version is published.
+/// re-exported newer version is published. A published definition without a draft gets one cloned from that version,
+/// so it opens in the designer; one that has a draft keeps it.
 /// </summary>
 internal sealed class ImportedWorkflowPublisher(
     IPublicationPolicyStore policyStore,
@@ -34,6 +38,8 @@ internal sealed class ImportedWorkflowPublisher(
     IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore recordStore,
     IRequestSender requestSender,
+    IWorkflowDefinitionDraftStore draftStore,
+    ICloneDraftFromVersionCommand cloneDraft,
     TimeProvider timeProvider,
     ILogger<ImportedWorkflowPublisher> logger)
 {
@@ -46,8 +52,33 @@ internal sealed class ImportedWorkflowPublisher(
         foreach (var newest in versions
                      .GroupBy(version => version.WorkflowDefinitionId, StringComparer.Ordinal)
                      .Select(group => group.OrderByDescending(version => SemVer(version.Version)).First()))
-            results[newest.SourceVersionId] = await PublishOnceAsync(newest, tenantId, cancellationToken);
+        {
+            var status = await PublishOnceAsync(newest, tenantId, cancellationToken);
+            if (status != WorkflowPublicationStatus.Failed)
+                await EnsureDraftAsync(newest, cancellationToken);
+            results[newest.SourceVersionId] = status;
+        }
         return results;
+    }
+
+    private async Task EnsureDraftAsync(ReusableActivityImportedWorkflowVersion version, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await draftStore.FindByWorkflowDefinitionIdAsync(version.WorkflowDefinitionId, cancellationToken) is not null)
+                return;
+            await cloneDraft.Execute(new DesignOperationKey($"elsa3-import-draft:{version.WorkflowVersionId}"), version.WorkflowVersionId, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception,
+                "Creating a draft of imported workflow '{DefinitionId}' version {Version} failed; it runs, but does not open in the designer: {Message}",
+                version.WorkflowDefinitionId, version.Version, exception.Message);
+        }
     }
 
     private async Task<WorkflowPublicationStatus> PublishOnceAsync(
