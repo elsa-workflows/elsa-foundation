@@ -36,7 +36,7 @@ public sealed class AgentSessionOwnerWriteThroughTests
         var current = (await store.LoadAsync(session.Id))!.Owner!;
         Assert.NotEqual(original.OwnerToken, current.OwnerToken);
         Assert.Equal(original.Fence + 1, current.Fence);
-        await Assert.ThrowsAsync<AgentContributionException>(() => first.AddMessageAsync(session.Id, Prompt("stale")));
+        Assert.Equal(AgentSessionOwnershipException.OwnershipLost, (await Assert.ThrowsAsync<AgentSessionOwnershipException>(() => first.AddMessageAsync(session.Id, Prompt("stale")))).Code);
         Assert.Empty(await restarted.ListMessagesAsync(session.Id));
     }
 
@@ -81,7 +81,7 @@ public sealed class AgentSessionOwnerWriteThroughTests
         var session = await CreateAsync(owner);
         store.Refuse = true;
 
-        await Assert.ThrowsAsync<AgentContributionException>(() => owner.AddMessageAsync(session.Id, Prompt("hello")));
+        await Assert.ThrowsAsync<AgentSessionOwnershipException>(() => owner.AddMessageAsync(session.Id, Prompt("hello")));
         store.Refuse = false;
 
         // The refused write evicted the row; the next operation hydrates the recorded state, which has no message.

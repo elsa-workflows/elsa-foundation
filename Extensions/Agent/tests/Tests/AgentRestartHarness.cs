@@ -26,7 +26,7 @@ internal sealed class AgentRestartHarness : IDisposable
 
     private readonly Action<IServiceCollection>? _configure;
 
-    public ProposalTestClock Clock { get; } = new();
+    public RestartTestClock Clock { get; } = new();
     public IAgentSessionRecordStore Store { get; }
     public RecoveryModuleTool Module { get; } = new();
     public HeldTurnProvider Provider { get; } = new();
@@ -212,4 +212,31 @@ internal sealed class HeldTurnProvider : IAgentProvider
 
     public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default) => _inner.ApproveToolAsync(request, cancellationToken);
     public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) => _inner.GetDiagnosticsAsync(cancellationToken);
+}
+
+/// <summary>
+/// The harness clock: time moves only when a test advances it, and timers never fire on their own, so background lease
+/// renewal runs only when a test calls it. Timer creations are counted.
+/// </summary>
+internal sealed class RestartTestClock : TimeProvider
+{
+    private DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private int _timers;
+
+    public int Timers => Volatile.Read(ref _timers);
+    public override DateTimeOffset GetUtcNow() => _now;
+    public void Advance(TimeSpan value) => _now += value;
+
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+    {
+        Interlocked.Increment(ref _timers);
+        return new InertTimer();
+    }
+
+    private sealed class InertTimer : ITimer
+    {
+        public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+        public void Dispose() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }

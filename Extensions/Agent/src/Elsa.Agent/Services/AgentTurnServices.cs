@@ -57,6 +57,18 @@ internal sealed class AgentTurnRegistry : IAgentTurnRegistry
     {
         lock (_gate) return _active.ContainsKey(sessionId);
     }
+
+    /// <summary>Cancels the session's registered turn, whatever its identity; false when none is registered.</summary>
+    internal bool CancelSession(string sessionId)
+    {
+        string turnId;
+        lock (_gate)
+        {
+            if (!_active.TryGetValue(sessionId, out var active)) return false;
+            turnId = active.TurnId;
+        }
+        return Cancel(sessionId, turnId);
+    }
 }
 
 /// <summary>

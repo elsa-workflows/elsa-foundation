@@ -28,9 +28,11 @@ namespace Elsa.Agent.Services;
 /// </para>
 /// </remarks>
 internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null,
-    IAgentSessionRecordStore? recordStore = null, InMemoryAgentProposalStore? proposalStore = null)
-    : IAgentSessionService, IAgentSessionPolicyParticipant
+    IAgentSessionRecordStore? recordStore = null, InMemoryAgentProposalStore? proposalStore = null, IAgentTurnRegistry? turns = null)
+    : IAgentSessionService, IAgentSessionPolicyParticipant, IDisposable
 {
+    /// <summary>How often leases of sessions with a running turn or a dispatched execution are renewed in the background.</summary>
+    internal static readonly TimeSpan RenewalInterval = TimeSpan.FromSeconds(10);
     private const long InitialPolicyRevision = 1;
     private const string PauseKey = "pause";
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -38,6 +40,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     private readonly string _ownerToken = NewId();
     private readonly ConcurrentDictionary<string, SessionRow> _rows = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
+    private ITimer? _renewal;
 
     InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => this;
 
@@ -246,6 +249,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
     {
         if (kind is AgentSessionClaimKind.Prompt or AgentSessionClaimKind.Proposal or AgentSessionClaimKind.Pause)
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "Keyed claims are acquired through their owning transition.");
+        if (kind == AgentSessionClaimKind.Foreground) EnsureRenewal();
         return CommitAsync<AgentSessionClaim?>(sessionId, () => null, row => new(row.NewClaim(kind, null)), cancellationToken);
     }
 
@@ -272,6 +276,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             // An expired pre-dispatch claim no longer counts as busy, so it cannot authorize dispatch.
             if (claim.Deadline is { } deadline && deadline <= _clock.GetUtcNow()) return new(false);
             claim.Dispatched = true;
+            EnsureRenewal();
             return new(true);
         }, cancellationToken);
 
@@ -484,7 +489,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         if (ownership.Outcome == AgentSessionRecordOutcome.NotFound)
             return null;
         if (!ownership.Succeeded || ownership.Fence is null)
-            throw new AgentContributionException($"Agent session '{sessionId}' is owned by another process.");
+            throw new AgentSessionOwnershipException(sessionId, AgentSessionOwnershipException.OwnedElsewhere,
+                "Another host process currently owns this session's work. Retry after its lease lapses.", ownership.LeaseExpiresAt);
         if (await _store.LoadAsync(sessionId, cancellationToken) is not { } record)
             return null;
 
@@ -496,6 +502,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         lock (row) RebuildClaims(row, recovery.Record);
         LoadProposals(recovery.Record);
         row = _rows.GetOrAdd(sessionId, row);
+        bool renew;
+        lock (row) renew = row.NeedsRenewal;
+        if (renew) EnsureRenewal();
         foreach (var settled in recovery.Audits)
             await auditSink.EmitAsync(settled, CancellationToken.None);
         return row;
@@ -597,8 +606,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         if (written.Succeeded) return;
         if (written.Outcome is AgentSessionRecordOutcome.OwnershipLost or AgentSessionRecordOutcome.NotFound)
         {
-            if (row is not null) _rows.TryRemove(new KeyValuePair<string, SessionRow>(sessionId, row));
-            throw new AgentContributionException($"Agent session '{write.SessionId}' is no longer owned by this process; nothing was applied.");
+            if (row is not null) LoseOwnership(sessionId, row);
+            throw new AgentSessionOwnershipException(sessionId, AgentSessionOwnershipException.OwnershipLost,
+                "This host process lost the session's ownership to another process; nothing was applied.");
         }
         throw new AgentContributionException($"Agent session '{write.SessionId}' could not record the transition ({written.Outcome}); nothing was applied.");
     }
@@ -628,6 +638,53 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             gate.Release();
             if (notRecorded) ForgetGate(sessionId, gate);
         }
+    }
+
+    /// <summary>
+    /// Renews the lease of every loaded session that has a running turn or a dispatched execution, as the background
+    /// timer does. A session whose ownership moved is lost: its row is evicted and its running turn cancelled.
+    /// </summary>
+    internal async Task RenewLeasesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var (sessionId, row) in _rows.ToArray())
+        {
+            AgentSessionFence fence;
+            lock (row)
+            {
+                if (!row.NeedsRenewal) continue;
+                fence = row.Fence;
+            }
+            var renewed = await _store.AcquireOwnershipAsync(sessionId, _ownerToken, cancellationToken);
+            if (!renewed.Succeeded || renewed.Fence != fence)
+                LoseOwnership(sessionId, row);
+        }
+    }
+
+    /// <summary>Whether the background lease renewal is running.</summary>
+    internal bool RenewalActive => Volatile.Read(ref _renewal) is not null;
+
+    public void Dispose() => Interlocked.Exchange(ref _renewal, null)?.Dispose();
+
+    private void EnsureRenewal()
+    {
+        if (Volatile.Read(ref _renewal) is not null) return;
+        var timer = _clock.CreateTimer(_ => _ = RenewInBackgroundAsync(), null, RenewalInterval, RenewalInterval);
+        if (Interlocked.CompareExchange(ref _renewal, timer, null) is not null) timer.Dispose();
+    }
+
+    private async Task RenewInBackgroundAsync()
+    {
+        // Renewal is best effort: a lease it fails to extend is detected by the next guarded write instead.
+        try { await RenewLeasesAsync(); }
+        catch (Exception) { }
+    }
+
+    /// <summary>Evicts a row whose ownership moved: its claims become no-ops, and the session's running turn is cancelled.</summary>
+    private void LoseOwnership(string sessionId, SessionRow row)
+    {
+        _rows.TryRemove(new KeyValuePair<string, SessionRow>(sessionId, row));
+        // Only the default registry can cancel by session; a replaced registry's turn fails at its next guarded write.
+        if (turns is AgentTurnRegistry registry) registry.CancelSession(sessionId);
     }
 
     private SemaphoreSlim Gate(string sessionId) => _gates.GetOrAdd(sessionId, _ => new(1, 1));
@@ -705,6 +762,10 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             if (claim.Key is { } key && _keyed.TryGetValue(key, out var bound) && ReferenceEquals(bound, claim))
                 _keyed.Remove(key);
         }
+
+        /// <summary>A running turn or a dispatched execution needs its lease kept alive while it works.</summary>
+        public bool NeedsRenewal => _claims.Any(claim => claim.Kind == AgentSessionClaimKind.Foreground
+            || claim.Kind == AgentSessionClaimKind.Proposal && claim.Dispatched);
 
         // A pre-dispatch proposal past its prepared deadline can never be dispatched, so it is not busy.
         public bool IsBusy(DateTimeOffset now) => _claims.Any(claim => claim.Kind != AgentSessionClaimKind.Proposal

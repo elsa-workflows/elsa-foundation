@@ -72,7 +72,7 @@ public static class AgentApi
         Func<HttpContext, Task> dispatch,
         int successStatus = StatusCodes.Status200OK)
     {
-        var builder = api.MapUnboundOperation(method, pattern, operation, responseType, successStatus, null, dispatch)
+        var builder = api.MapUnboundOperation(method, pattern, operation, responseType, successStatus, null, context => DispatchAsync(context, dispatch))
             .RequirePermission(permission);
         if (requestType is not null)
         {
@@ -83,6 +83,31 @@ public static class AgentApi
                     ? ["*/*", "application/json"]
                     : ["application/json"], requestType, false));
         }
+    }
+
+    /// <summary>
+    /// Any route on a session another process owns answers 409 agent.session.owned_elsewhere with a retry hint; a session
+    /// this process lost during the call answers 409 agent.session.ownership_lost. Nothing was applied in either case.
+    /// </summary>
+    private static async Task DispatchAsync(HttpContext context, Func<HttpContext, Task> dispatch)
+    {
+        try { await dispatch(context); }
+        catch (Exception failure) when (AgentSessionOwnershipException.Find(failure) is { } ownership && !context.Response.HasStarted)
+        {
+            if (RetryAfterSeconds(context, ownership) is { } seconds)
+                context.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await WriteAsync(context, AgentApiResponse<AgentSessionPolicyResponse>.Failure(OwnershipError(ownership)),
+                AgentJsonContext.Default.AgentApiResponseAgentSessionPolicyResponse, StatusCodes.Status409Conflict);
+        }
+    }
+
+    private static AgentError OwnershipError(AgentSessionOwnershipException ownership) => new(ownership.Code, ownership.Message, StatusCodes.Status409Conflict);
+
+    private static long? RetryAfterSeconds(HttpContext context, AgentSessionOwnershipException ownership)
+    {
+        if (ownership.RetryAt is not { } retryAt) return null;
+        var now = (context.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow();
+        return Math.Max(1, (long)Math.Ceiling((retryAt - now).TotalSeconds));
     }
 
     private static async Task HandleBootstrapAsync(HttpContext context)
@@ -435,6 +460,11 @@ public static class AgentApi
         {
             await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
                 await WriteEventAsync(context, item);
+        }
+        catch (Exception failure) when (AgentSessionOwnershipException.Find(failure) is { } ownership)
+        {
+            // Ownership is reported to the session's owner explicitly; the turn's recorded state is unchanged here.
+            await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, OwnershipError(ownership), DateTimeOffset.UtcNow));
         }
         catch (AgentContributionException failure)
         {

@@ -22,3 +22,29 @@ public sealed class AgentSessionPolicyChangedException(string sessionId, long ex
     public long ExpectedRevision { get; } = expectedRevision;
     public long CurrentRevision { get; } = currentRevision;
 }
+
+/// <summary>
+/// Preview: another process owns the session's active work (<see cref="OwnedElsewhere"/>, retryable after
+/// <see cref="RetryAt"/>), or this process lost that ownership while acting (<see cref="OwnershipLost"/>). Nothing
+/// was applied by the refused operation.
+/// </summary>
+public sealed class AgentSessionOwnershipException(string sessionId, string code, string message, DateTimeOffset? retryAt = null)
+    : InvalidOperationException(message)
+{
+    public const string OwnedElsewhere = "agent.session.owned_elsewhere";
+    public const string OwnershipLost = "agent.session.ownership_lost";
+
+    public string SessionId { get; } = sessionId;
+    public string Code { get; } = code;
+    /// <summary>When the other owner's lease lapses, for a retry hint; null when unknown.</summary>
+    public DateTimeOffset? RetryAt { get; } = retryAt;
+
+    /// <summary>The ownership refusal anywhere in a causal chain, including wrapped and aggregated causes.</summary>
+    public static AgentSessionOwnershipException? Find(Exception? exception) => exception switch
+    {
+        null => null,
+        AgentSessionOwnershipException ownership => ownership,
+        AggregateException aggregate => aggregate.InnerExceptions.Select(Find).FirstOrDefault(x => x is not null),
+        _ => Find(exception.InnerException)
+    };
+}
