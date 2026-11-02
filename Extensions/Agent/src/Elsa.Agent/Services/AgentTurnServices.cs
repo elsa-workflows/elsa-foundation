@@ -111,7 +111,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
     {
         var boundary = new TurnBoundary(sessionId);
         var session = await boundary.CallAsync("find-session", () => sessions.FindAsync(sessionId, cancellationToken), cancellationToken);
-        if (session is null || session.ExpiresAt <= DateTimeOffset.UtcNow)
+        if (session is null || session.Status != AgentSessionStatus.Active || session.ExpiresAt <= DateTimeOffset.UtcNow)
         {
             yield return Error("agent.session.unavailable", "The session is missing or expired.", 404);
             yield break;

@@ -138,8 +138,18 @@ internal sealed class InMemoryAgentProposalService(
     public Task<AgentActionProposal?> FindAsync(string proposalId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        store.Proposals.TryGetValue(proposalId, out var proposal);
-        return Task.FromResult(proposal);
+        return LookupAsync(proposalId, cancellationToken);
+    }
+
+    /// <summary>
+    /// The proposal from the process-local store. After a restart or eviction, the session that records it is
+    /// hydrated first (which loads and settles its proposals); hydration takes no proposal gate.
+    /// </summary>
+    private async Task<AgentActionProposal?> LookupAsync(string proposalId, CancellationToken cancellationToken)
+    {
+        if (store.Proposals.TryGetValue(proposalId, out var proposal)) return proposal;
+        if (_owner is null || !await _owner.HydrateProposalAsync(proposalId, cancellationToken)) return null;
+        return store.Proposals.GetValueOrDefault(proposalId);
     }
 
     public async Task<AgentResult<AgentActionProposal>> ApproveAsync(string proposalId, string actorId, string? expectedRevision = null,
@@ -285,7 +295,8 @@ internal sealed class InMemoryAgentProposalService(
     public async Task<AgentResult<AgentProposalExecutionResult>> AcknowledgeAsync(string sessionId, string invocationId, string actorId,
         AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)
     {
-        if (!store.InvocationProposals.TryGetValue(invocationId, out var proposalId))
+        if (!store.InvocationProposals.TryGetValue(invocationId, out var proposalId)
+            && (_owner is null || !await _owner.HydrateSessionAsync(sessionId, cancellationToken) || !store.InvocationProposals.TryGetValue(invocationId, out proposalId)))
             return AgentResult<AgentProposalExecutionResult>.Failure("agent.invocation.not_found", "The retained invocation was not found; it cannot be replayed.", 404);
         var gate = Gate(proposalId);
         await gate.WaitAsync(cancellationToken);
@@ -346,8 +357,8 @@ internal sealed class InMemoryAgentProposalService(
     {
         if (store.Results.TryGetValue(proposalId, out var available))
             return available;
-        if (!store.Proposals.TryGetValue(proposalId, out var current) || current.Status != AgentActionProposalStatus.AwaitingClient)
-            return null;
+        if (await LookupAsync(proposalId, cancellationToken) is not { Status: AgentActionProposalStatus.AwaitingClient })
+            return store.Results.GetValueOrDefault(proposalId);
         var gate = Gate(proposalId);
         await gate.WaitAsync(cancellationToken);
         try
@@ -369,7 +380,7 @@ internal sealed class InMemoryAgentProposalService(
 
     private async Task<(AgentActionProposal? Proposal, AgentError? Error)> AccessAsync(string proposalId, string actorId, CancellationToken cancellationToken)
     {
-        if (!store.Proposals.TryGetValue(proposalId, out var proposal))
+        if (await LookupAsync(proposalId, cancellationToken) is not { } proposal)
             return (null, new("agent.proposal.not_found", "The proposal was not found.", 404));
         var session = await sessions.FindAsync(proposal.SessionId, cancellationToken);
         if (session is null || session.ActorId != actorId || proposal.PreparedInvocation is { } prepared &&
@@ -465,7 +476,7 @@ internal sealed class InMemoryAgentProposalService(
     /// Executed (validated receipt), Denied, Expired, Failed (refused), Cancelled and server-scope Uncertain settle.
     /// AwaitingClient retains its claim; client-scope Uncertain retains it until the originating continuation consumes it.
     /// </summary>
-    private static bool Settled(AgentActionProposal proposal) => proposal.Status switch
+    internal static bool Settled(AgentActionProposal proposal) => proposal.Status switch
     {
         AgentActionProposalStatus.Executed or AgentActionProposalStatus.Denied or AgentActionProposalStatus.Expired
             or AgentActionProposalStatus.Failed or AgentActionProposalStatus.Cancelled => true,
@@ -483,7 +494,7 @@ internal sealed class InMemoryAgentProposalService(
     /// Under the proposal gate: records the one pre-dispatch expiry (zero effect), releases the proposal claim
     /// and emits its single correlated audit event. Later attempts observe the retained Expired status.
     /// </summary>
-    private async Task ExpireBeforeDispatchAsync(AgentActionProposal proposal, string actorId)
+    private async Task ExpireBeforeDispatchAsync(AgentActionProposal proposal, string? actorId)
     {
         var expired = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
         await TransitionAsync(expired);
@@ -514,8 +525,12 @@ internal sealed class InMemoryAgentProposalService(
     private static bool RevisionMatches(AgentActionProposal proposal, string? expected) => string.Equals(proposal.PreparedInvocation?.Target?.Revision ?? proposal.BaseRevision, expected, StringComparison.Ordinal);
     private static bool IsTerminal(AgentActionProposalStatus status) => status is AgentActionProposalStatus.Executed or AgentActionProposalStatus.Failed
         or AgentActionProposalStatus.Denied or AgentActionProposalStatus.Cancelled or AgentActionProposalStatus.Expired or AgentActionProposalStatus.Uncertain;
-    /// <summary>Every proposal record correlates the session, proposal, prepared invocation, turn and tool call.</summary>
     private Task AuditAsync(AgentActionProposal proposal, AgentAuditEventKind kind, string? actorId, string summary, CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? outcome = null)
+        => auditSink.EmitAsync(Event(proposal, kind, actorId, summary, clock.GetUtcNow(), outcome), cancellationToken);
+
+    /// <summary>Every proposal record correlates the session, proposal, prepared invocation, turn and tool call.</summary>
+    internal static AgentAuditEvent Event(AgentActionProposal proposal, AgentAuditEventKind kind, string? actorId, string summary, DateTimeOffset now,
         IReadOnlyDictionary<string, string>? outcome = null)
     {
         var metadata = new Dictionary<string, string>
@@ -530,8 +545,11 @@ internal sealed class InMemoryAgentProposalService(
         }
         foreach (var (key, value) in outcome ?? new Dictionary<string, string>())
             metadata[key] = value;
-        return auditSink.EmitAsync(new(AgentProviderPrimitives.NewId(), kind, proposal.SessionId, actorId, summary, clock.GetUtcNow(), metadata), cancellationToken);
+        return new(AgentProviderPrimitives.NewId(), kind, proposal.SessionId, actorId, summary, now, metadata);
     }
+
+    internal static IReadOnlyDictionary<string, string> PreDispatchExpiryOutcome => PreDispatchExpiry;
+    internal static IReadOnlyDictionary<string, string> PendingClientDeadlineOutcome => PendingClientDeadline;
 }
 
 /// <summary>The duplicate-detection keys of one prepared tool call, recorded together with its proposal.</summary>
@@ -542,4 +560,63 @@ internal sealed record AgentProposalInsertion(AgentActionProposal? Proposal, boo
 {
     /// <summary>The turn already owns another call's mutation; nothing was recorded.</summary>
     public static AgentProposalInsertion TurnMutationRefused { get; } = new(null, false);
+}
+
+/// <summary>
+/// Zero-effect lifecycle settlement of recorded proposals found when their session is hydrated (research R4). It
+/// never executes, dispatches or replays anything, and is attributed to recovery, not to a user.
+/// </summary>
+internal static class AgentProposalRecovery
+{
+    /// <summary>The audit metadata key that attributes a lifecycle outcome; recovery outcomes carry <see cref="Recovery"/>.</summary>
+    internal const string SettledBy = "settledBy";
+    internal const string Recovery = "recovery";
+
+    internal sealed record Settlement(AgentProposalRecord Record, string Summary, IReadOnlyDictionary<string, string> Outcome);
+
+    /// <summary>
+    /// A pending or approved operation past its deadline becomes Expired once, with zero effect. An operation that was
+    /// Executing becomes Uncertain, and a dispatched client request past its deadline becomes Uncertain, never Expired.
+    /// Anything else is left as recorded.
+    /// </summary>
+    internal static Settlement? Settle(AgentProposalRecord record, DateTimeOffset now)
+    {
+        var proposal = record.Proposal;
+        if (proposal.PreparedInvocation is not { } prepared) return null;
+        if (proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited or AgentActionProposalStatus.Approved
+            && prepared.ExpiresAt <= now)
+            return new(record with { Proposal = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = now } },
+                "The prepared operation expired before dispatch; no effect occurred.", Attributed(InMemoryAgentProposalService.PreDispatchExpiryOutcome));
+        if (proposal.Status == AgentActionProposalStatus.Executing)
+            return Uncertain(record, prepared, now, "The process stopped after dispatch, before an outcome was recorded. Its effect is uncertain and will not be replayed.",
+                "The operation was dispatched when the process stopped; its effect is uncertain.", new Dictionary<string, string>
+                {
+                    ["dispatch"] = prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState ? "client" : "server", ["effect"] = "possible"
+                });
+        if (proposal.Status == AgentActionProposalStatus.AwaitingClient && prepared.ExpiresAt <= now)
+            return Uncertain(record, prepared, now, "The client request expired without an admitted receipt. Its effect is uncertain and will not be replayed.",
+                "The pending client request reached its deadline without an admitted receipt; its effect is uncertain.",
+                InMemoryAgentProposalService.PendingClientDeadlineOutcome);
+        return null;
+    }
+
+    /// <summary>The settlement's single correlated audit record, with no actor.</summary>
+    internal static AgentAuditEvent Audit(Settlement settlement, DateTimeOffset now)
+        => InMemoryAgentProposalService.Event(settlement.Record.Proposal, AgentAuditEventKind.ProposalFailed, null, settlement.Summary, now, settlement.Outcome);
+
+    private static Settlement Uncertain(AgentProposalRecord record, AgentPreparedToolInvocation prepared, DateTimeOffset now, string result, string audit,
+        IReadOnlyDictionary<string, string> outcome)
+    {
+        var value = DefaultAgentActionProposalExecutor.Uncertain(record.Proposal, result);
+        var stamped = AgentResultProvenance.Stamp(value.ToolResult!, prepared);
+        return new(record with
+        {
+            Proposal = record.Proposal with { Status = AgentActionProposalStatus.Uncertain, UpdatedAt = now, Result = stamped.Payload },
+            Execution = AgentResult<AgentProposalExecutionResult>.Success(value with { ToolResult = stamped }),
+            Result = stamped
+        }, audit, Attributed(outcome));
+    }
+
+    private static IReadOnlyDictionary<string, string> Attributed(IReadOnlyDictionary<string, string> outcome)
+        => new Dictionary<string, string>(outcome) { [SettledBy] = Recovery };
 }

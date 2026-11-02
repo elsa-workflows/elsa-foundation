@@ -28,7 +28,7 @@ namespace Elsa.Agent.Services;
 /// </para>
 /// </remarks>
 internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, TimeProvider? clock = null, IAgentAuditOwnership? auditOwnership = null,
-    IAgentSessionRecordStore? recordStore = null)
+    IAgentSessionRecordStore? recordStore = null, InMemoryAgentProposalStore? proposalStore = null)
     : IAgentSessionService, IAgentSessionPolicyParticipant
 {
     private const long InitialPolicyRevision = 1;
@@ -402,7 +402,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             if (row is not null)
                 lock (row) fence = row.Fence;
             var planned = plan(fence);
-            if (row is not null && planned.Write is { } write) await WriteThroughAsync(row, write);
+            if (row is not null && planned.Write is { } write) await WriteThroughAsync(sessionId, row, write);
             planned.Apply?.Invoke();
             return planned.Result;
         }
@@ -474,18 +474,117 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             throw new AgentContributionException($"Agent session '{sessionId}' is owned by another process.");
         if (await _store.LoadAsync(sessionId, cancellationToken) is not { } record)
             return null;
-        return _rows.GetOrAdd(sessionId, new SessionRow(record, ownership.Fence));
+
+        // Recovery settles what the recorded facts already decide, in one write, before anything acts on the row.
+        var recovery = Recover(record, ownership.Fence, _clock.GetUtcNow());
+        if (recovery.Write is { } write)
+            await WriteThroughAsync(sessionId, null, write);
+        var row = new SessionRow(recovery.Record, ownership.Fence);
+        lock (row) RebuildClaims(row, recovery.Record);
+        LoadProposals(recovery.Record);
+        row = _rows.GetOrAdd(sessionId, row);
+        foreach (var settled in recovery.Audits)
+            await auditSink.EmitAsync(settled, CancellationToken.None);
+        return row;
     }
 
+    /// <summary>
+    /// The zero-effect outcomes the recorded facts decide at hydration (research R4): an expired session is closed, a
+    /// prompt that was streaming without a pause is interrupted, and overdue or in-flight proposals settle. Settlement
+    /// takes no proposal gate; it applies only to the recorded status it read.
+    /// </summary>
+    private (AgentSessionRecord Record, AgentSessionRecordWrite? Write, IReadOnlyList<AgentAuditEvent> Audits) Recover(
+        AgentSessionRecord record, AgentSessionFence fence, DateTimeOffset now)
+    {
+        AgentSession? closed = null;
+        if (record.Session.Status == AgentSessionStatus.Active && record.Session.ExpiresAt is { } expires && expires <= now)
+            closed = record.Session with { Status = AgentSessionStatus.Expired, UpdatedAt = now };
+        var interrupted = record.Messages
+            .Where(x => x.Status == AgentMessageStatus.Streaming && x.Id != record.PausedTurn?.SourceMessageId)
+            .Select(x => x with { Status = AgentMessageStatus.Cancelled, CompletedAt = now, StatusReason = AgentMessageStatusReasons.Interrupted })
+            .ToArray();
+        var settlements = record.Proposals.Select(x => AgentProposalRecovery.Settle(x, now)).OfType<AgentProposalRecovery.Settlement>().ToArray();
+        if (closed is null && interrupted.Length == 0 && settlements.Length == 0)
+            return (record, null, []);
+
+        var messages = record.Messages.Select(x => interrupted.FirstOrDefault(y => y.Id == x.Id) ?? x).ToArray();
+        var proposals = record.Proposals.Select(x => settlements.FirstOrDefault(y => y.Record.Proposal.Id == x.Proposal.Id)?.Record ?? x).ToArray();
+        var recovered = record with { Session = closed ?? record.Session, Messages = messages, Proposals = proposals };
+        var audits = settlements.Select(x => AgentProposalRecovery.Audit(x, now)).ToArray();
+        return (recovered, new AgentSessionRecordWrite(record.Session.Id, fence)
+        {
+            Session = closed, Messages = interrupted, Proposals = settlements.Select(x => x.Record).ToArray()
+        }, audits);
+    }
+
+    /// <summary>
+    /// Rebuilds the claims the recorded facts imply (research R4): a Prompt claim per pending prompt, the Pause claim of
+    /// a paused turn, and a Proposal claim per unsettled prepared proposal with its deadline, dispatched when its request
+    /// already left. Foreground and Preparation claims never survive a process.
+    /// </summary>
+    private static void RebuildClaims(SessionRow row, AgentSessionRecord record)
+    {
+        foreach (var prompt in record.Messages.Where(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending))
+            row.Bind(row.NewClaim(AgentSessionClaimKind.Prompt, null), PromptKey(prompt.Id));
+        if (record.PausedTurn is not null)
+            EnsurePause(row);
+        foreach (var proposal in record.Proposals.Select(x => x.Proposal))
+        {
+            if (proposal.PreparedInvocation is not { } prepared || InMemoryAgentProposalService.Settled(proposal)) continue;
+            var claim = row.NewClaim(AgentSessionClaimKind.Proposal, prepared.ExpiresAt);
+            claim.Dispatched = proposal.Status is AgentActionProposalStatus.Executing or AgentActionProposalStatus.AwaitingClient
+                or AgentActionProposalStatus.Uncertain;
+            row.Bind(claim, ProposalKey(proposal.Id));
+        }
+    }
+
+    /// <summary>Loads the session's recorded proposals, outcomes and duplicate-detection keys into the process-local proposal store.</summary>
+    private void LoadProposals(AgentSessionRecord record)
+    {
+        if (proposalStore is null) return;
+        lock (proposalStore.Mutation)
+        {
+            foreach (var recorded in record.Proposals)
+            {
+                var proposal = recorded.Proposal;
+                proposalStore.Proposals[proposal.Id] = proposal;
+                if (recorded.Execution is { } execution) proposalStore.Executions[proposal.Id] = execution;
+                if (recorded.Result is { } result) proposalStore.Results[proposal.Id] = result;
+                if (recorded.AcknowledgementDigest is { } digest && proposal.PreparedInvocation is { } prepared)
+                    proposalStore.Acknowledgements[prepared.InvocationId] = digest;
+            }
+            foreach (var key in record.Keys)
+            {
+                var index = key.Kind switch
+                {
+                    AgentSessionKeyKinds.Call => proposalStore.CallProposals,
+                    AgentSessionKeyKinds.Invocation => proposalStore.InvocationProposals,
+                    AgentSessionKeyKinds.TurnMutation => proposalStore.TurnMutations,
+                    AgentSessionKeyKinds.CallInput => proposalStore.CallInputs,
+                    _ => null
+                };
+                if (index is not null) index[key.Key] = key.Value;
+            }
+        }
+    }
+
+    /// <summary>Hydrates the session that records a proposal this owner has not loaded; false when no recorded session holds it.</summary>
+    internal async Task<bool> HydrateProposalAsync(string proposalId, CancellationToken cancellationToken = default)
+        => await _store.FindProposalSessionAsync(proposalId, cancellationToken) is { } sessionId && await RowAsync(sessionId, cancellationToken) is not null;
+
+    /// <summary>Hydrates a session this owner has not loaded; false when it is not recorded.</summary>
+    internal async Task<bool> HydrateSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+        => await RowAsync(sessionId, cancellationToken) is not null;
+
     /// <summary>Awaits one record write; an owner or fence that is no longer current evicts the row and applies nothing.</summary>
-    private async Task WriteThroughAsync(SessionRow row, AgentSessionRecordWrite write)
+    private async Task WriteThroughAsync(string sessionId, SessionRow? row, AgentSessionRecordWrite write)
     {
         // A planned write always completes, so the store and the applied change never diverge on cancellation.
         var written = await _store.WriteAsync(write, CancellationToken.None);
         if (written.Succeeded) return;
         if (written.Outcome is AgentSessionRecordOutcome.OwnershipLost or AgentSessionRecordOutcome.NotFound)
         {
-            _rows.TryRemove(new KeyValuePair<string, SessionRow>(write.SessionId, row));
+            if (row is not null) _rows.TryRemove(new KeyValuePair<string, SessionRow>(sessionId, row));
             throw new AgentContributionException($"Agent session '{write.SessionId}' is no longer owned by this process; nothing was applied.");
         }
         throw new AgentContributionException($"Agent session '{write.SessionId}' could not record the transition ({written.Outcome}); nothing was applied.");
@@ -504,7 +603,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
                 return missing();
             AgentSessionTransition<T> planned;
             lock (row) planned = plan(row);
-            if (planned.Write is { } write) await WriteThroughAsync(row, write);
+            if (planned.Write is { } write) await WriteThroughAsync(sessionId, row, write);
             if (planned.Apply is { } apply)
                 lock (row) apply();
             return planned.Result;
@@ -716,4 +815,15 @@ internal sealed class DefaultAgentProviderRegistry : IAgentProviderRegistry
 internal static class AgentIds
 {
     public static string NewId() => ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow);
+}
+
+/// <summary>Why a cancelled message stopped (<see cref="AgentMessage.StatusReason"/>).</summary>
+internal static class AgentMessageStatusReasons
+{
+    /// <summary>The process stopped while the prompt's turn was streaming.</summary>
+    public const string Interrupted = "interrupted";
+    /// <summary>The owner withdrew a prompt that never started.</summary>
+    public const string Withdrawn = "withdrawn";
+    /// <summary>The owner stopped the running turn.</summary>
+    public const string UserStop = "user-stop";
 }
