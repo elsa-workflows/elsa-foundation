@@ -62,6 +62,7 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { NotificationCenter } from "./ui/feedback/NotificationCenter";
 import { ToastHost } from "./ui/feedback/ToastHost";
 import { notificationController, notificationStorage } from "./notifications";
 import { notificationScopeKey } from "./notificationStorage";
@@ -480,6 +481,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
         assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
+        notificationAction={<NotificationCenter navigate={navigateTo} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
       >
@@ -540,6 +542,7 @@ export function ShellFrame({
   title,
   backendBaseUrl,
   assistantAction,
+  notificationAction,
   themeAction,
   accountAction,
   backendAction,
@@ -553,6 +556,7 @@ export function ShellFrame({
   title: string;
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
+  notificationAction?: React.ReactNode;
   themeAction?: React.ReactNode;
   accountAction?: React.ReactNode;
   backendAction?: React.ReactNode;
@@ -864,6 +868,7 @@ export function ShellFrame({
             <h1>{title}</h1>
           </div>
           <div className="topbar-actions">
+            {notificationAction}
             {assistantAction}
             {branding.showHelpLink ? <a href={branding.helpUrl ?? "https://github.com/elsa-workflows/elsa-foundation"} aria-label={branding.helpUrl ? "Help" : "GitHub"}>
               {branding.helpUrl ? <CircleHelp size={18} /> : <Github size={18} />}

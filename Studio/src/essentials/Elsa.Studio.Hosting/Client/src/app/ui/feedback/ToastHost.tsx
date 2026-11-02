@@ -1,7 +1,8 @@
 import React, { useState, useSyncExternalStore } from "react";
-import { AlertTriangle, CheckCircle2, Info, Loader2, X, XCircle } from "lucide-react";
-import { notificationToastDurationMs, type StudioNotificationController, type StudioNotificationEntry, type StudioNotificationLevel } from "../../../sdk";
+import { X } from "lucide-react";
+import { notificationToastDurationMs, type StudioNotificationController, type StudioNotificationEntry } from "../../../sdk";
 import { notificationController } from "../../notifications";
+import { NotificationLevelIcon, runNotificationAction } from "./notificationShared";
 import { useNoticeTimer } from "./useNoticeTimer";
 
 const maxVisibleToasts = 3;
@@ -65,24 +66,13 @@ function Toast({ entry, controller, navigate }: { entry: StudioNotificationEntry
 
   const runAction = () => {
     if (!action) return;
-    const reportFailure = (error: unknown) => {
-      controller.api.notify({
-        level: "error",
-        title: `${action.label} failed`,
-        message: error instanceof Error ? error.message : String(error)
-      });
-    };
-    try {
-      void Promise.resolve(action.run()).catch(reportFailure);
-    } catch (error) {
-      reportFailure(error);
-    }
+    runNotificationAction(controller, action);
     controller.hideToast(id);
   };
 
   return (
     <div className="studio-toast" data-level={level} {...timerHandlers}>
-      <span className="studio-toast-icon" aria-hidden="true"><ToastIcon level={level} /></span>
+      <span className="studio-toast-icon" aria-hidden="true"><NotificationLevelIcon level={level} /></span>
       <div className="studio-toast-body">
         <div className="studio-toast-title">{entry.title}</div>
         {entry.message ? <div className="studio-toast-message">{entry.message}</div> : null}
@@ -104,14 +94,4 @@ function Toast({ entry, controller, navigate }: { entry: StudioNotificationEntry
       </button>
     </div>
   );
-}
-
-function ToastIcon({ level }: { level: StudioNotificationLevel }) {
-  switch (level) {
-    case "success": return <CheckCircle2 size={18} />;
-    case "warning": return <AlertTriangle size={18} />;
-    case "error": return <XCircle size={18} />;
-    case "progress": return <Loader2 size={18} className="studio-toast-spinner" />;
-    default: return <Info size={18} />;
-  }
 }
