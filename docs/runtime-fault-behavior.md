@@ -252,6 +252,8 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,
      which throws claim-lost and records nothing, as for any lost claim. A coalescing segment that a boundary
      deactivated, and whose durable head has since moved, refuses this way while the drain still owns the item.
+     So does one whose boundary consumed the step and committed durably but then failed to remove it from the
+     queue: the effect is durable, and the acknowledgement removes the copy the failed removal left behind.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 

@@ -307,10 +307,10 @@ public sealed class RuntimeCheckpointCommitter
     // consumes nothing itself: the session buffers it, or folds it into an immediate write at its activity cap or at a
     // boundary, and advances the queue through its overlay. The work's effect is durable all the same, or becomes so at
     // the flush, so the drainer must not release the item to run again (#3275). Resolved before the store call, which can
-    // end the session. An attempt claim, like a retaining checkpoint, comes before the work it guards and settles nothing.
+    // end the session. A retaining checkpoint, such as an attempt claim before the work it guards, settles nothing; a
+    // non-retaining attempt claim, such as background admission's, is the work's effect like any other checkpoint.
     private string? ResolveCoalescedEffectWorkItemId(RuntimeCheckpointCommit commit) =>
         !commit.RetainSchedulerWork &&
-        !StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed) &&
         _consumedWorkClaimAccessor?.PendingConsume is { } pending &&
         StringComparer.Ordinal.Equals(pending.WorkflowExecutionId, commit.WorkflowExecutionId) &&
         _coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId)

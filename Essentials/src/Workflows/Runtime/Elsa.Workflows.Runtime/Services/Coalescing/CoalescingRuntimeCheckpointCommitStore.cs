@@ -124,7 +124,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             }
             catch
             {
-                AbandonAfterDurableCommit(session);
+                AbandonAfterDurableCommit(session, consumedInFlightClaims: true);
                 throw;
             }
 
@@ -179,6 +179,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
         }
 
         var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit);
+        var consumesInFlightClaims = !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit));
         if (session.HasBufferedChanges)
         {
             var foldedState = session.FoldBufferedStateChangesWith(commit.StateChanges);
@@ -212,13 +213,13 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                 // surviving as a durable duplicate (see AdvanceInnerQueueAsync). A retaining checkpoint or
                 // pre-activation attempt boundary keeps it for redrive.
                 await session.AdvanceInnerQueueAsync(
-                    consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
+                    consumeInFlightClaims: consumesInFlightClaims,
                     cancellationToken,
                     preserveActiveFusedScheduleAnchors: continueAfterBoundary);
             }
             catch
             {
-                AbandonAfterDurableCommit(session);
+                AbandonAfterDurableCommit(session, consumesInFlightClaims);
                 throw;
             }
 
@@ -242,13 +243,13 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
             }
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
             await session.AdvanceInnerQueueAsync(
-                consumeInFlightClaims: !commit.RetainSchedulerWork && (!continueAfterBoundary || !IsAttemptClaim(commit)),
+                consumeInFlightClaims: consumesInFlightClaims,
                 cancellationToken,
                 preserveActiveFusedScheduleAnchors: continueAfterBoundary);
         }
         catch
         {
-            AbandonAfterDurableCommit(session);
+            AbandonAfterDurableCommit(session, consumesInFlightClaims);
             throw;
         }
 
@@ -262,8 +263,12 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     // does. When that reconciliation fails, the drain records the failure against the in-flight item and carries on to
     // its quiescence flush (#2601). Ending the segment here keeps that flush from re-applying the now older buffered
     // state over the newer durable state, and stops the overlay from standing in for a durable queue it no longer tracks.
-    private static void AbandonAfterDurableCommit(RuntimeCoalescingSession session)
+    // A commit that consumed the in-flight items carried their effect, so they are recorded consumed even though the
+    // advance may not have removed their durable copies: the drainer must not release one to run again (#3275).
+    private static void AbandonAfterDurableCommit(RuntimeCoalescingSession session, bool consumedInFlightClaims)
     {
+        if (consumedInFlightClaims)
+            session.RecordInFlightClaimsConsumed();
         session.ClearBuffer();
         session.Deactivate();
     }
