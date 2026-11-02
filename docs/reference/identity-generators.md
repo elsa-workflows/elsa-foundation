@@ -70,8 +70,9 @@ services.AddIdentityGenerator(IdentityGeneratorKind.Snowflake, options =>
 Workflow execution, command, envelope and activity execution ids come from a separate seam,
 `IRuntimeExecutionIdGenerator`, not from `IIdentityGenerator`. Since #3601 its default is a 32-character UUIDv7 hex
 id. Earlier preview builds used 11-character Base62 ids, which `ShortRuntimeExecutionIdGenerator` still produces
-when selected explicitly. Ownership lease, heartbeat, folded-checkpoint and commit ids were also Base62 before #3601;
-they are now UUIDv7 whichever generator is selected. Already persisted ids are kept as they are, so rows written by
+when selected explicitly. Ownership lease and heartbeat ids, and the folded drain's checkpoint and commit ids, were also Base62 before #3601;
+they are now UUIDv7 whichever generator is selected. Most other commit and checkpoint ids are deterministic strings
+derived from the work they record, such as `commit:<work item id>:cancel`. Already persisted ids are kept as they are, so rows written by
 earlier preview builds keep their Base62 ids.
 
 The two formats do not share an ordinal order: a UUIDv7 id and an older Base62 id do not sort by creation time
