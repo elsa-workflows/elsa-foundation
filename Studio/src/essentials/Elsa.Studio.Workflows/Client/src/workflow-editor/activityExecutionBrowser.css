@@ -37,3 +37,6 @@
 
 .wf-execution-scope-occurrence .wf-execution-list-container { overflow: auto; box-sizing: border-box; margin-top: 0; }
 .wf-execution-scope-occurrence .wf-execution-list { max-height: none; overflow: visible; }
+
+.wf-execution-transition { min-height: 2.5rem; padding: 0.4rem 1rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); box-sizing: border-box; }
+.wf-execution-transition button { margin-inline-start: 0.5rem; }

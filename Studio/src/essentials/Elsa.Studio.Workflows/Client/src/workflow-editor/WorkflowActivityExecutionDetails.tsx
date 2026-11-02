@@ -14,6 +14,7 @@ import { CopyValueButton } from "./executableShared";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
+import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 
@@ -58,8 +59,10 @@ export function WorkflowActivityExecutionDetails({
   focusInputKey = null,
   onSelectEvidence,
   refreshKey = 0,
-  compact = false
+  compact = false,
+  prepared
 }: {
+  prepared?: PreparedAttachedExecution;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -75,6 +78,8 @@ export function WorkflowActivityExecutionDetails({
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
   const selectedContextIdentity = runtimeValueContextId(context);
+  const preparedInspection = prepared?.contextIdentity === selectedContextIdentity && prepared?.inspection?.workflowExecutionId === selectedWorkflowExecutionId
+    && prepared.inspection.activityExecutionId === selectedActivityExecutionId ? prepared.inspection : null;
   const [inspectionState, setInspectionState] = useState<ActivityExecutionInspectionState>({
     activityExecutionId: null,
     workflowExecutionId: null,
@@ -98,7 +103,8 @@ export function WorkflowActivityExecutionDetails({
     const activityExecutionId = selectedActivityExecutionId;
     const workflowExecutionId = selectedWorkflowExecutionId;
     let running = false;
-    let confirmed: number | null = null;
+    let confirmed: number | null = preparedInspection ? requestedRevision.current : null;
+    if (preparedInspection) setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection: preparedInspection, error: "" });
     const load = async () => {
       if (running || controller.signal.aborted || confirmed === requestedRevision.current) return;
       running = true;
@@ -126,7 +132,7 @@ export function WorkflowActivityExecutionDetails({
     };
     const start = () => { void load(); }; refreshInspection.current = start; start();
     return () => { controller.abort(); if (refreshInspection.current === start) refreshInspection.current = null; };
-  }, [context, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
+  }, [context, preparedInspection, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
   // Live revisions coalesce behind the current exact read; identity changes still cancel it immediately.
   useEffect(() => { refreshInspection.current?.(); }, [refreshKey]);
 
@@ -135,14 +141,15 @@ export function WorkflowActivityExecutionDetails({
     inspectionState.workflowExecutionId === selectedWorkflowExecutionId &&
     inspectionState.contextIdentity === selectedContextIdentity
       ? inspectionState
+      : preparedInspection ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection: preparedInspection, error: "" }
       : selectedActivityExecutionId && selectedWorkflowExecutionId
         ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" }
         : { activityExecutionId: null, workflowExecutionId: null, contextIdentity: selectedContextIdentity, status: "idle", inspection: null, error: "" };
   const resolutionScope = useMemo(
     () => selectedActivityExecutionId && selectedWorkflowExecutionId
-      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId }
+      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, preparedValues: preparedInspection ? prepared?.values : undefined }
       : null,
-    [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
+    [context, prepared, preparedInspection, selectedActivityExecutionId, selectedWorkflowExecutionId]);
 
   if (!activity) {
     return (

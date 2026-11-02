@@ -115,6 +115,13 @@ explains the user journey.
 - Pause following pauses observation, with last-confirmed wording. Disconnection is explicit and
   commands require current evidence. Automatic retries are bounded and never redispatch a workflow.
   Stop remains pending until Runtime confirms a terminal execution state.
+- Attached-editor occurrence navigation keeps the confirmed inspector, scope and applicable canvas
+  evidence visible while preparing the requested destination. A reserved status line identifies the
+  previous evidence during loading or a retryable failure. Scope, core inspection, navigation and
+  automatically displayed non-sensitive captured values commit together; sensitive values still
+  require explicit reveal. Keep existing focus and applicable disclosures. Superseded reads cannot
+  replace a newer choice, and denied/missing access or changed backend, run or attachment identity
+  clears retained evidence immediately. Initial loading remains explicit.
 - Returning to editing restores the separate draft. In-page historical snapshot inspection is read
   only. Explicit reload restoration rechecks access, identity, expiry and the freshly loaded design;
   a changed design offers the existing run viewer instead of attaching incompatible evidence.

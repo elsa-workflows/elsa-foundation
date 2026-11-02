@@ -453,11 +453,12 @@ export function WorkflowEditor({
   } = canvas;
   const runSelection = useAttachedExecutionSelection({ context, attachmentId: JSON.stringify([testRun?.view.testRunId, testRun?.view.artifactId, testRun?.draftSignature]),
     workflowExecutionId: testRun?.view.workflowExecutionId ?? "", nodeId: inspectedNode?.nodeId ?? null,
+    canvasOwnerId: scopeOwner?.nodeId, visibleNodeIds: authoringNodes.map(node => node.data.runtimeNodeId ?? node.id),
     enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
       && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
   const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
   const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, observation, snapshotView: editorDoc.pinned, draftSignature: editableDraft ? getDraftSignature(editableDraft) : "", catalog, nodes: authoringNodes, edges: authoringEdges, mode: scope?.slot.mode, selectedNodeId,
-    ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
+    ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution, prepared: runSelection.prepared?.canvas,
     onOpenIncident: (incidentId, targetNodeId) => {
       const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
       const execution = runCanvas.activities.find(item => item.activityExecutionId === incident?.activityExecutionId);

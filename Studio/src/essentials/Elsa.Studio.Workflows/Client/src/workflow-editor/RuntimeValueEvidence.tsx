@@ -15,6 +15,22 @@ export interface RuntimeValueEvidenceResolutionScope {
   context: StudioEndpointContext;
   workflowExecutionId: string;
   activityExecutionId: string;
+  preparedValues?: ReadonlyMap<string, PreparedRuntimeValue>;
+}
+
+export interface PreparedRuntimeValue { payload: unknown }
+
+export function runtimeValuePayloadKey(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  return JSON.stringify([snapshot.evidenceId?.trim(), snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase()]);
+}
+
+export function canAutomaticallyResolveValue(snapshot: ActivityExecutionInspectionValueSnapshot) {
+  const mode = snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase();
+  const state = (snapshot.captureState ?? snapshot.state)?.replace(/[^a-z]/gi, "").toLowerCase();
+  return !snapshot.isSensitive && !!snapshot.evidenceId?.trim() && !snapshot.failure
+    && (snapshot.accessState ?? snapshot.access)?.toLowerCase() === "resolutionavailable"
+    && (mode === "payload" || mode === "diagnosticsnapshot")
+    && (!state || state === "payloadcaptured" || state === "diagnosticsnapshotcaptured" || (!snapshot.captureState && state === "captured"));
 }
 
 const RuntimeValueEvidenceResolutionContext = createContext<RuntimeValueEvidenceResolutionScope | null>(null);
@@ -104,9 +120,10 @@ export function RuntimeValueEvidenceContent({
   const [resolution, setResolution] = useState<RuntimeValueResolutionState | null>(null);
   const explicitlyRequested = snapshot.isSensitive && requestedSensitiveIdentity === resolutionIdentity;
   const shouldResolve = canResolve && (!snapshot.isSensitive || explicitlyRequested);
+  const preparedValue = shouldResolve && !snapshot.isSensitive && retrySequence === 0 ? scope?.preparedValues?.get(runtimeValuePayloadKey(snapshot)) : undefined;
 
   useEffect(() => {
-    if (!shouldResolve || !scope || !evidenceId) return;
+    if (!shouldResolve || !scope || !evidenceId || preparedValue) return;
 
     const controller = new AbortController();
     setResolution({ identity: resolutionIdentity, status: "loading" });
@@ -133,14 +150,15 @@ export function RuntimeValueEvidenceContent({
     );
 
     return () => controller.abort();
-  }, [evidenceId, resolutionIdentity, retrySequence, scope, shouldResolve, snapshot.captureMode]);
+  }, [evidenceId, preparedValue, resolutionIdentity, retrySequence, scope, shouldResolve, snapshot.captureMode]);
 
   const hasInlinePayload = !permissionAllowsResolution && snapshot.payload !== undefined;
   const diagnosticSnapshot = permissionAllowsResolution
     ? null
     : snapshot.snapshot ?? (snapshot.captureMode === "DiagnosticSnapshot" && hasInlinePayload ? snapshot.payload : null);
   const hasPayload = snapshot.captureMode === "Payload" && hasInlinePayload;
-  const currentResolution = resolution?.identity === resolutionIdentity ? resolution : null;
+  const currentResolution: RuntimeValueResolutionState | null = preparedValue ? { identity: resolutionIdentity, status: "ready", payload: preparedValue.payload }
+    : resolution?.identity === resolutionIdentity ? resolution : null;
   const protectedAccess = ["redacted", "permissionhidden", "permission-hidden", "resolutionpermissionrequired", "unavailable"].includes(accessKey);
   const canShowSensitiveValue = snapshot.isSensitive && canResolve;
   const invalidResolutionMetadata = permissionAllowsResolution && (!evidenceId || !supportedCaptureMode || !capturedState);
