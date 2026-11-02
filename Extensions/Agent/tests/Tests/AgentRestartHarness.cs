@@ -126,6 +126,9 @@ internal sealed class RecoveryModuleTool : IAgentTool
     public int Dispatches => Volatile.Read(ref _dispatches);
     /// <summary>How many effects the owning module actually applied, across every host.</summary>
     public int Effects => Volatile.Read(ref _effects);
+    /// <summary>How many times the owning module prepared an operation, across every host.</summary>
+    public int Preparations => Volatile.Read(ref _preparations);
+    private int _preparations;
     public string Revision { get; private set; } = "revision-1";
     /// <summary>The installed tool's current risk; raising it requires a new review.</summary>
     public AgentRisk Risk { get; set; } = AgentRisk.ReviewRequired;
@@ -142,8 +145,11 @@ internal sealed class RecoveryModuleTool : IAgentTool
         => (_hold = (new(TaskCreationOptions.RunContinuationsAsynchronously), new(TaskCreationOptions.RunContinuationsAsynchronously))).Value;
 
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
-        => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with
+    {
+        Interlocked.Increment(ref _preparations);
+        return Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with
         { Target = new("test.module", "test.resource", "resource-1", Revision) }));
+    }
 
     public async Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {
