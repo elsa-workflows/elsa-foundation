@@ -1180,6 +1180,8 @@ Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.DefinitionId.in
 Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.Equals(Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun? other) -> bool
 Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.Inputs.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>?
 Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.Inputs.init -> void
+Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.Layout.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableLayoutRecord!>!
+Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.Layout.init -> void
 Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.SnapshotId.get -> string!
 Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.SnapshotId.init -> void
 Elsa.Workflows.Publishing.Api.Requests.StartWorkflowDraftTestRun.Start.get -> Elsa.Workflows.Publishing.Api.Requests.WorkflowTestRunStartSelection?
