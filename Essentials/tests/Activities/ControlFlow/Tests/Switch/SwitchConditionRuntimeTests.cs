@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Expressions;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
@@ -67,6 +69,44 @@ public sealed class SwitchConditionRuntimeTests
         Assert.Equal("ExpressionEvaluationFailed", incident.Metadata[RuntimeMetadataKeys.InputFailureCode]);
         Assert.Equal(SwitchActivity.ConditionInputKey("b"), incident.Metadata[RuntimeMetadataKeys.InputKey]);
     }
+
+    [Theory]
+    [InlineData(true, true, false, "Approved")]
+    [InlineData(false, true, false, "Rejected")]
+    [InlineData(false, false, false, "Default")]
+    [InlineData(true, true, true, "Approved")]
+    public async Task Flowchart_follows_the_selected_case_outcome_after_its_optional_branch(bool first, bool second, bool emptyFirst, string outcome)
+    {
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services =>
+            {
+                new ActivitiesControlFlowFeature().ConfigureServices(services);
+                new ActivitiesFlowchartFeature().ConfigureServices(services);
+            })
+            .WithProbeLeaf().Build("graph-invocation", "switch-invocation", "branch-or-target", "target-invocation");
+        var switchNode = Executable(first, second, emptyFirst).RootActivity;
+        var outcomes = new[] { "Approved", "Rejected", "Default" };
+        var children = new[] { switchNode }.Concat(outcomes.Select(name => WorkflowExecutionHarness.NewProbeNode("after-" + name))).ToArray();
+        var connections = outcomes.Select(name => new FlowchartConnection(new FlowchartEndpoint("switch", name), new FlowchartEndpoint("after-" + name))).ToArray();
+        var root = new ExecutableNode("graph", "graph", typeof(Elsa.Activities.Flowchart.Activities.Flowchart).FullName!, "1.0.0",
+            descriptorType: typeof(FlowchartDescriptor).FullName!, descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(), metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(Elsa.Activities.Flowchart.Activities.Flowchart.ActivitiesSlotName, children)],
+            structure: new ExecutableActivityStructure("elsa.flowchart.structure", "1.0.0", JsonSerializer.SerializeToElement(new FlowchartStructure(connections, "switch"))));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(root));
+
+        var target = run.AssertCompleted("after-" + outcome);
+        var selected = run.AssertCompleted("switch");
+        Assert.Equal(selected.InvocationId, target.SchedulingActivityExecutionId);
+        run.AssertOutcomes("switch", outcome);
+        run.AssertDidNotRun(outcomes.Where(name => name != outcome).Select(name => "after-" + name).ToArray());
+        if (emptyFirst) run.AssertDidNotRun("approved", "rejected", "fallback");
+        else run.AssertCompleted(outcome == "Default" ? "fallback" : outcome.ToLowerInvariant());
+        run.AssertWorkflowCompleted();
+    }
+
+    private sealed record FlowchartDescriptor;
 
     private static RuntimeInputBinding Expression(string id, string source) => new(
         SwitchActivity.ConditionInputKey(id), new ValueTypeDescriptor("Boolean"), ValueProtectionPolicy.InstanceInline,
