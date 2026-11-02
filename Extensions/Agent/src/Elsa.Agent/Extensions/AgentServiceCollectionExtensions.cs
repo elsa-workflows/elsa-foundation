@@ -33,7 +33,8 @@ public static class AgentServiceCollectionExtensions
         services.TryAddScoped<IAgentContextCollector>(AgentRegistrationValidator.Create<DefaultAgentContextCollector>);
         services.TryAddScoped<IAgentCapabilityCatalog, DefaultAgentCapabilityCatalog>();
         // Preview: the owner writes through the record store; at most one store is registered (validated).
-        services.TryAddSingleton<IAgentSessionRecordStore>(sp => new InMemoryAgentSessionRecordStore(sp.GetRequiredService<TimeProvider>()));
+        // A durable store is chosen with SelectAgentSessionRecordStore, which replaces only this default.
+        AgentPersistenceSelection.TryAddDefaultSessionRecordStore(services, sp => new InMemoryAgentSessionRecordStore(sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IAgentSessionService, InMemoryAgentSessionService>();
         // The process-wide store holds data only; current authority/tools are resolved by scoped facades.
         services.TryAddSingleton<InMemoryAgentProposalStore>();
@@ -43,10 +44,9 @@ public static class AgentServiceCollectionExtensions
         services.TryAddScoped<IAgentActionProposalExecutor>(AgentRegistrationValidator.Create<DefaultAgentActionProposalExecutor>);
         services.TryAddScoped<IAgentToolAuthorizer, UnavailableAgentToolAuthorizer>();
         services.TryAddSingleton<InMemoryAgentAuditStore>();
-        services.TryAddSingleton<IAgentAuditSink>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
-        services.TryAddSingleton<IAgentAuditReader>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
-        // Preview: the session owner associates ownership with the same store; the store has no dependencies.
-        services.TryAddSingleton<IAgentAuditOwnership>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
+        // Preview: the sink, reader and ownership are one store's facets; the session owner associates ownership with
+        // the same store. A durable store is chosen with SelectAgentAuditStore, which replaces the three together.
+        AgentPersistenceSelection.TryAddDefaultAuditStore<InMemoryAgentAuditStore>(services);
         services.TryAddSingleton<IAgentFeedbackService, InMemoryAgentFeedbackService>();
         // Scoped so tools may depend on per-request services without being captured by a singleton.
         services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();

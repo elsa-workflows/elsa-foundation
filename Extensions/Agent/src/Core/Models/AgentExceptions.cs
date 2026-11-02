@@ -54,13 +54,24 @@ public sealed class AgentSessionOwnershipException(string sessionId, string code
 /// snapshot whose text no longer matches its digest. Nothing was hydrated, settled or changed; the session is
 /// unavailable until its record is repaired. <see cref="Reason"/> names what failed verification.
 /// </summary>
-public sealed class AgentSessionUnavailableException(string sessionId, string reason)
-    : InvalidOperationException($"The recorded state of agent session '{sessionId}' is unavailable ({reason}); nothing was changed.")
+public sealed class AgentSessionUnavailableException : InvalidOperationException
 {
     public const string Code = "agent.session.unavailable_state";
 
-    public string SessionId { get; } = sessionId;
-    public string Reason { get; } = reason;
+    public AgentSessionUnavailableException(string sessionId, string reason) : this(sessionId, reason, null)
+    {
+    }
+
+    /// <param name="innerException">The store or decoding failure that made the recorded state unavailable, if any.</param>
+    public AgentSessionUnavailableException(string sessionId, string reason, Exception? innerException)
+        : base($"The recorded state of agent session '{sessionId}' is unavailable ({reason}); nothing was changed.", innerException)
+    {
+        SessionId = sessionId;
+        Reason = reason;
+    }
+
+    public string SessionId { get; }
+    public string Reason { get; }
 
     /// <summary>The unavailable-state refusal anywhere in a causal chain, including wrapped and aggregated causes.</summary>
     public static AgentSessionUnavailableException? Find(Exception? exception) => exception switch

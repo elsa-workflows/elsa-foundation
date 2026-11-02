@@ -9,6 +9,9 @@
     <Project Path="Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/src/Persistence/">
+    <Project Path="Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/src/Specialists/">
     <Project Path="Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
