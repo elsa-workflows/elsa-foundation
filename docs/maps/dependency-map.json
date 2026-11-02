@@ -690,6 +690,26 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.Anthropic",
+          "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Api",
+          "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.AzureOpenAI",
+          "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Design",
+          "path": "Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.Review.Api",
           "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
         },
@@ -13861,6 +13881,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.Api",
+          "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.AzureOpenAI",
           "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj"
         },
@@ -22834,6 +22859,75 @@
       ]
     },
     {
+      "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj",
+      "name": "Elsa.Agent.Specialists.Api",
+      "kind": "source",
+      "domain": "Elsa.Agent",
+      "sub_domain": "Specialists.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Agent.Specialists.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Connections",
+          "path": "Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Core",
+          "path": "Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.1"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj",
       "name": "Elsa.Agent.Specialists.AzureOpenAI",
       "kind": "source",
@@ -23966,6 +24060,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Specialists.Anthropic",
           "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Api",
+          "path": "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj"
         },
         {
           "type": "internal",
