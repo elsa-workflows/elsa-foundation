@@ -164,7 +164,15 @@ public enum AgentProviderRiskProfile
     PrivilegedExecution
 }
 
-public sealed record AgentError(string Code, string Message, int StatusCode = 400);
+public sealed record AgentError(string Code, string Message, int StatusCode = 400)
+{
+    /// <summary>
+    /// Preview: which documented session limit an <c>agent.context.disclosure_budget_exceeded</c> refusal reached,
+    /// <c>snapshots</c> (64 distinct snapshots) or <c>bytes</c> (8 MiB of recorded disclosure); null for every other error.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Limit { get; init; }
+}
 
 public sealed record AgentResult<T>(T? Value, AgentError? Error)
 {

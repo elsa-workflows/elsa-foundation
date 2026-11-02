@@ -18,6 +18,7 @@ the complete package proof pass with durable recovery configured, as the prior l
 | `AgentMessage.StatusReason` | Additive | `interrupted`, `withdrawn` or `user-stop` for Cancelled |
 | `AgentDisclosureSnapshotRecord`, `AgentMessageRecord`, `AgentPausedTurnRecord`; `AgentSessionRecord.Snapshots`, `AgentSessionRecordWrite.Snapshots` | Preview models of the record-store port | Each distinct snapshot is recorded once per session as its digest and byte-identical canonical JSON text. Messages and the paused turn hold ordered digests; `DeliveryFingerprint`, the message history fingerprint and the pause fingerprint are stored verbatim and re-verified at hydration |
 | `AgentSessionUnavailableException` (`agent.session.unavailable_state`) | Additive, Preview | Thrown at hydration when recorded state fails verification, with a `Reason`; nothing is settled and the lease taken is released |
+| `AgentError.Limit` | Additive, Preview | `snapshots` or `bytes` on `agent.context.disclosure_budget_exceeded`; omitted from JSON otherwise. The turn passes the recorded refusal through whole, so the stream and the API carry it |
 | `AgentAuditEventKind.ProposalResolved` | Additive, Preview | The owner's resolution of an uncertain client operation, correlated like every proposal audit record, with its `claim` |
 | Audit sink, reader and ownership | Existing contracts, replaced together by the EF feature | A duplicate of the trio fails the registration validator. `settledBy` is a metadata key |
 

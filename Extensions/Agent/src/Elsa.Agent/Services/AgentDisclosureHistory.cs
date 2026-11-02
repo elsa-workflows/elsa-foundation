@@ -33,8 +33,10 @@ internal sealed class AgentDisclosureHistory
             var snapshot = Freeze(new AgentDisclosureSnapshot(context, results));
             var recorded = Record(snapshot);
             if (_identities.Contains(recorded.Digest)) return null;
-            if (_snapshots.Count >= MaximumSnapshots || _bytes + recorded.Size > MaximumBytes)
-                return new("agent.context.disclosure_budget_exceeded", "The complete transcript disclosure history exceeds the supported bound. Start a fresh session; no dependency was discarded.", 409);
+            if (_snapshots.Count >= MaximumSnapshots)
+                return LimitReached("snapshots", "64 distinct disclosure snapshots");
+            if (_bytes + recorded.Size > MaximumBytes)
+                return LimitReached("bytes", "8 MiB of recorded disclosure");
             _identities.Add(recorded.Digest);
             _snapshots.Add(snapshot);
             _bytes += recorded.Size;
@@ -46,6 +48,15 @@ internal sealed class AgentDisclosureHistory
             return new("agent.history.provenance_unavailable", "Complete immutable disclosure history could not be retained.", 409);
         }
     }
+
+    /// <summary>
+    /// The documented session limit outcome. Nothing is evicted, reset or replayed: every recorded outcome and the complete
+    /// provenance stay, and the session stays readable. A continuation session carries over only a link to this one.
+    /// </summary>
+    private static AgentError LimitReached(string limit, string bound)
+        => new("agent.context.disclosure_budget_exceeded",
+            $"Session limit reached: this conversation has recorded {bound}. Continue in a new session; nothing recorded here was discarded.", 409)
+        { Limit = limit };
 
     internal AgentError? Add(IEnumerable<AgentDisclosureSnapshot> snapshots)
     {

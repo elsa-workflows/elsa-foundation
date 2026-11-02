@@ -254,7 +254,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             observedResults.AddRange(prepared.DisclosureResults);
             if (boundary.Call("retain-disclosure-history", () => disclosures.Add(prepared.DisclosureHistory), token) is { } retainedError)
             {
-                yield return Error(retainedError.Code, retainedError.Message, retainedError.StatusCode);
+                yield return Error(retainedError);
                 yield break;
             }
             checkpoint.History = disclosures.Snapshots;
@@ -367,7 +367,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     ?? boundary.Call("retain-provider-snapshot", () => disclosures.Add(prepared.Context, prepared.PendingResults), token);
                 if (dependencyError is not null)
                 {
-                    yield return Error(dependencyError.Code, dependencyError.Message, dependencyError.StatusCode);
+                    yield return Error(dependencyError);
                     yield break;
                 }
                 var checkpointCancelled = false;
@@ -383,7 +383,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 }
                 if (checkpointError is not null)
                 {
-                    yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
+                    yield return Error(checkpointError);
                     yield break;
                 }
                 // The checkpoint write ended the pass; the provider call ends this one.
@@ -393,13 +393,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 if (!currentTools.Succeeded || currentTools.Value is null)
                 {
                     var error = currentTools.Error!;
-                    yield return Error(error.Code, error.Message, error.StatusCode);
+                    yield return Error(error);
                     yield break;
                 }
                 tools = currentTools.Value;
                 if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, harnessPass, token)) is { } postWriteDenial)
                 {
-                    yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
+                    yield return Error(postWriteDenial);
                     yield break;
                 }
                 paused = false;
@@ -416,7 +416,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     if (boundary.CallbackFailure is { } callbackFailure) ExceptionDispatchInfo.Capture(callbackFailure).Throw();
                     if (next.Cancelled)
                     {
-                        yield return disclosureStop is { } denial ? Error(denial.Code, denial.Message, denial.StatusCode)
+                        yield return disclosureStop is { } denial ? Error(denial)
                             : Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, maxSteps));
                         yield break;
                     }
@@ -435,7 +435,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         var pauseError = await TrackPauseAsync(() => SavePauseAsync(sessionId, turnId, source, proposal, prepared.History, prepared.Context, 0, observedResults, disclosures.Snapshots));
                         if (pauseError is not null)
                         {
-                            yield return Error(pauseError.Code, pauseError.Message, pauseError.StatusCode);
+                            yield return Error(pauseError);
                             yield break;
                         }
                         // Stop this SDK loop before another tool can be requested. Its pending
@@ -453,7 +453,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 if (journalError is not null)
                 {
                     disclosureStop = journalError;
-                    yield return Error(journalError.Code, journalError.Message, journalError.StatusCode);
+                    yield return Error(journalError);
                     yield break;
                 }
                 completed = true;
@@ -467,7 +467,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             {
                 if (token.IsCancellationRequested)
                 {
-                    yield return disclosureStop is { } denial ? Error(denial.Code, denial.Message, denial.StatusCode)
+                    yield return disclosureStop is { } denial ? Error(denial)
                         : Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, maxSteps));
                     yield break;
                 }
@@ -483,14 +483,14 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 {
                     var denial = refreshed.Error!;
                     yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution([], [new("host", denial.Code, denial.Message, true)]));
-                    yield return Error(denial.Code, denial.Message, denial.StatusCode);
+                    yield return Error(denial);
                     yield break;
                 }
                 prepared = prepared with { Context = refreshed.Value.Attachments, Diagnostics = refreshed.Value.Diagnostics };
                 tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token);
                 if (disclosures.Add(prepared.Context, pending) is { } boundError)
                 {
-                    yield return Error(boundError.Code, boundError.Message, boundError.StatusCode);
+                    yield return Error(boundError);
                     yield break;
                 }
                 var checkpointCancelled = false;
@@ -506,7 +506,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 }
                 if (checkpointError is not null)
                 {
-                    yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
+                    yield return Error(checkpointError);
                     yield break;
                 }
                 // The checkpoint write ended the step's pass; everything is admitted again until the provider call.
@@ -516,13 +516,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 if (!currentTools.Succeeded || currentTools.Value is null)
                 {
                     var error = currentTools.Error!;
-                    yield return Error(error.Code, error.Message, error.StatusCode);
+                    yield return Error(error);
                     yield break;
                 }
                 tools = currentTools.Value;
                 if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, providerPass, token)) is { } postWriteDenial)
                 {
-                    yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
+                    yield return Error(postWriteDenial);
                     yield break;
                 }
                 paused = false;
@@ -557,7 +557,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                             if (clarificationJournalError is not null)
                             {
                                 disclosureStop = clarificationJournalError;
-                                yield return Error(clarificationJournalError.Code, clarificationJournalError.Message, clarificationJournalError.StatusCode);
+                                yield return Error(clarificationJournalError);
                                 yield break;
                             }
                             completed = true;
@@ -574,7 +574,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     if (finalJournalError is not null)
                     {
                         disclosureStop = finalJournalError;
-                        yield return Error(finalJournalError.Code, finalJournalError.Message, finalJournalError.StatusCode);
+                        yield return Error(finalJournalError);
                         yield break;
                     }
                     completed = true;
@@ -601,7 +601,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         if (boundary.CallbackFailure is { } callbackFailure) ExceptionDispatchInfo.Capture(callbackFailure).Throw();
                         if (observedDispatch is null)
                         {
-                            yield return disclosureStop is { } denial ? Error(denial.Code, denial.Message, denial.StatusCode)
+                            yield return disclosureStop is { } denial ? Error(denial)
                                 : Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, maxSteps));
                             yield break;
                         }
@@ -614,7 +614,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         var pauseError = await TrackPauseAsync(() => SavePauseAsync(sessionId, turnId, source, proposal, history, prepared.Context, step + 1, observedResults, disclosures.Snapshots));
                         if (pauseError is not null)
                         {
-                            yield return Error(pauseError.Code, pauseError.Message, pauseError.StatusCode);
+                            yield return Error(pauseError);
                             yield break;
                         }
                         yield return new(NewId(), AgentStreamEventKind.ProposalCreated, null, proposal.Id, null, DateTimeOffset.UtcNow, AgentResultKind.Proposal, proposal);
@@ -636,7 +636,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             if (limitJournalError is not null)
             {
                 disclosureStop = limitJournalError;
-                yield return Error(limitJournalError.Code, limitJournalError.Message, limitJournalError.StatusCode);
+                yield return Error(limitJournalError);
                 yield break;
             }
             completed = true;
@@ -1187,7 +1187,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
     }
 
     private static PreparedTurn Rejected(AgentMessage source, AgentError error)
-        => new(source, [], [], 0, [], false, Error(error.Code, error.Message, error.StatusCode))
+        => new(source, [], [], 0, [], false, Error(error))
         { Diagnostics = [new("host", error.Code, error.Message, true)] };
 
     private static PreparedTurn Rejected(AgentMessage source, string code, string message, int status)
@@ -1292,6 +1292,9 @@ internal sealed class DefaultAgentTurnOrchestrator(
         => _owner is not null
             ? _owner.TrySetMessageStatusAsync(sessionId, messageId, expected, status, status == AgentMessageStatus.Cancelled ? reason : null, CancellationToken.None)
             : sessions.SetMessageStatusAsync(sessionId, messageId, status, CancellationToken.None);
+
+    /// <summary>A recorded refusal, passed through whole so its details (such as a session limit) reach the caller.</summary>
+    private static AgentStreamEvent Error(AgentError error) => new(NewId(), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow, AgentResultKind.Error);
 
     private static AgentStreamEvent Error(string code, string message, int status) => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, status), DateTimeOffset.UtcNow, AgentResultKind.Error);
 
