@@ -157,6 +157,13 @@ public static class AgentApi
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentCreateSessionRequest);
         if (request is null)
             return;
+        if (request.Workspace is { Length: > AgentSessionCreateRequest.MaxWorkspaceLength } || request.ContinuedFrom is { Length: > AgentSessionCreateRequest.MaxContinuedFromLength })
+        {
+            await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Failure(new("agent.session.invalid_request",
+                $"A workspace is at most {AgentSessionCreateRequest.MaxWorkspaceLength} characters and a continued session identity at most {AgentSessionCreateRequest.MaxContinuedFromLength}.", 400)),
+                AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse, 400);
+            return;
+        }
         var activeSurface = request.ActiveSurface ?? new AgentSurfaceRequest();
         var clientContext = request.ClientContext ?? new AgentClientContextRequest();
         var metadata = request.Metadata ?? new Dictionary<string, string>();

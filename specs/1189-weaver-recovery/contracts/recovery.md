@@ -29,6 +29,7 @@ the complete package proof pass with durable recovery configured, as the prior l
 
 | Route | Success | Refusals |
 | --- | --- | --- |
+| `POST /_elsa/agent/sessions` (existing) `{ workspace?, continuedFrom? }` | As today; the workspace and the continuation link are stamped on the session | Adds 400 `agent.session.invalid_request` for a workspace over 256 characters or a `continuedFrom` over 128 (`AgentSessionCreateRequest.MaxWorkspaceLength`, `MaxContinuedFromLength`); nothing is recorded or associated |
 | `GET /_elsa/agent/sessions?workspace=&take=&before=` | 200 `{ items: AgentSessionSummary[], next }`; `take` defaults to 20 and is clamped to 1..100 | 400 for a `take` or `before` this server did not issue; 403 `agent.actor.unresolved`; 409 `agent.session.query_unsupported` |
 | `GET /_elsa/agent/sessions/{id}/proposals` | 200 proposals with status, preview and deadline | Shared session-authorization 404 and 403 |
 | `POST /_elsa/agent/sessions/{id}/messages/{messageId}/withdraw` | 200 message, Cancelled with reason `withdrawn` | 404 and 403; 404 `agent.message.not_found`; 409 `agent.message.not_pending` |

@@ -50,6 +50,11 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
 
     public async Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default)
     {
+        // Refused before any audit owner is associated or anything recorded, whatever the record store.
+        if (request.Workspace is { Length: > AgentSessionCreateRequest.MaxWorkspaceLength })
+            throw new ArgumentException($"The workspace exceeds {AgentSessionCreateRequest.MaxWorkspaceLength} characters.", nameof(request));
+        if (request.ContinuedFrom is { Length: > AgentSessionCreateRequest.MaxContinuedFromLength })
+            throw new ArgumentException($"The continued session identity exceeds {AgentSessionCreateRequest.MaxContinuedFromLength} characters.", nameof(request));
         var now = _clock.GetUtcNow();
         var session = new AgentSession(
             NewId(),

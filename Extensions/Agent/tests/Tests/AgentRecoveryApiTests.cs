@@ -78,6 +78,30 @@ public sealed class AgentRecoveryApiTests
         AgentRecoveryApi.AssertFailure(refused, refusedBody, 409, "agent.session.query_unsupported");
     }
 
+    [Fact]
+    public async Task A_create_request_whose_workspace_or_continuation_link_exceeds_its_limit_is_refused_before_anything_is_recorded()
+    {
+        using var harness = Harness();
+        var owner = AgentRecoveryApi.Principal("actor-1", "tenant-1");
+        var audits = harness.Host.Services.GetRequiredService<IAgentAuditReader>();
+
+        var (workspace, workspaceBody) = await AgentRecoveryApi.SendAsync(harness.Host, "CreateSession", owner,
+            body: new { conversationId = "conversation", workspace = new string('w', AgentSessionCreateRequest.MaxWorkspaceLength + 1) });
+        AgentRecoveryApi.AssertFailure(workspace, workspaceBody, 400, "agent.session.invalid_request");
+        var (link, linkBody) = await AgentRecoveryApi.SendAsync(harness.Host, "CreateSession", owner,
+            body: new { conversationId = "conversation", continuedFrom = new string('s', AgentSessionCreateRequest.MaxContinuedFromLength + 1) });
+        AgentRecoveryApi.AssertFailure(link, linkBody, 400, "agent.session.invalid_request");
+
+        Assert.Empty(Ids(await ListAsync(harness.Host, owner, "")));
+        Assert.Empty(await audits.ListAsync());
+        // The owner refuses the same values whatever its record store, before it associates an audit owner.
+        await Assert.ThrowsAsync<ArgumentException>(() => harness.Host.Sessions.CreateAsync(new("tenant-1", "actor-1", "conversation", DeterministicAgentProvider.Id,
+            "explain", null, AgentPolicy.Default, new Dictionary<string, string>()) { Workspace = new string('w', AgentSessionCreateRequest.MaxWorkspaceLength + 1) }));
+        Assert.Empty(Ids(await ListAsync(harness.Host, owner, "")));
+        // Values at the limit are accepted.
+        Assert.NotNull(await CreateAsync(harness, "actor-1", "tenant-1", new string('w', AgentSessionCreateRequest.MaxWorkspaceLength)));
+    }
+
     // ---- GET /sessions/{id}/proposals ----
 
     [Fact]

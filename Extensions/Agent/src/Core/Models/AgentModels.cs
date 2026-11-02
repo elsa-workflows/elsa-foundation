@@ -450,6 +450,12 @@ public sealed record AgentSessionCreateRequest(
     AgentPolicy? Policy,
     IReadOnlyDictionary<string, string> Metadata)
 {
+    /// <summary>Preview: the longest <see cref="Workspace"/> a session records, in characters.</summary>
+    public const int MaxWorkspaceLength = 256;
+
+    /// <summary>Preview: the longest <see cref="ContinuedFrom"/> link a session records, in characters.</summary>
+    public const int MaxContinuedFromLength = 128;
+
     /// <summary>Preview: the workspace to stamp on the new session. It only narrows owner-scoped lists.</summary>
     public string? Workspace { get; init; }
     /// <summary>Preview: the session this one continues past a limit. Only the link is recorded.</summary>
