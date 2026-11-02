@@ -11001,6 +11001,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Primitives",
           "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
         },
