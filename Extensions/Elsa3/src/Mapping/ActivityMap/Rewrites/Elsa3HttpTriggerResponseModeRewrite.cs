@@ -61,7 +61,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         }
 
         // A bare memory slot: a synthesized workflow variable stands in for it (D-13).
-        var synthesized = $"elsa3.http.{Elsa3ConversionDiagnostics.NodeId(context.Activity)}.{suffix}";
+        var synthesized = $"http.{Elsa3ConversionDiagnostics.NodeId(context.Activity)}.{suffix}";
         if (!definition.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.Id, synthesized)))
             definition.Variables.Add(new Elsa3Variable { Id = synthesized, Name = synthesized, TypeName = "Object" });
         context.Plan.MemoryAliases[memoryId] = synthesized;
@@ -88,7 +88,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
             return;
         }
 
-        var nodeId = $"{Elsa3ConversionDiagnostics.NodeId(endpoint)}.elsa3-http-{suffix}";
+        var nodeId = $"{Elsa3ConversionDiagnostics.NodeId(endpoint)}.http-{suffix}";
         var source =
             "(function (values) { var shaped = {}; for (var key in values) { var list = values[key]; " +
             "shaped[key] = list.length === 0 ? null : list.length === 1 ? list[0] : list; } return shaped; })" +
