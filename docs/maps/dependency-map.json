@@ -21344,6 +21344,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.ControlFlow",
+          "path": "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.DispatchWorkflow.Runtime",
           "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj"
         },
@@ -21371,6 +21376,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Distributed",
           "path": "Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Testing",
+          "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
           "type": "internal",
