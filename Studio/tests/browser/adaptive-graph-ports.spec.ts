@@ -8,6 +8,8 @@ const target = (page: Page, id = "write-two") => node(page, id).locator(".target
 const side = (handle: Locator, value: string) => expect(handle).toHaveAttribute("data-handlepos", value);
 
 async function drag(page: Page, element: Locator, dx: number, dy: number) {
+  // Hover waits for actionability, including the canvas's initial fit/measurement settling.
+  await element.hover();
   const box = (await element.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
