@@ -147,6 +147,41 @@ function trimOpenTabs(tabs: WorkspaceTab[], activeId: string) {
   return tabs.filter(tab => !closable.includes(tab.id));
 }
 
+/**
+ * Folds tabs that show the same resource into one, so two editors never hold one draft. Restoration
+ * runs before routes can name resources, so a deep link or a restored set can carry duplicates until
+ * this runs. The active tab survives (a deep link wins) and takes the earliest duplicate's place and pin;
+ * otherwise a mounted tab, else the earliest, survives. A mounted duplicate may hold edits and is kept.
+ */
+export function mergeDuplicateResources(state: WorkspaceState, keyOf: (location: string) => string | null): WorkspaceState {
+  const groups = new Map<string, WorkspaceTab[]>();
+  for (const tab of state.tabs) {
+    const key = keyOf(tab.location);
+    if (key) groups.set(key, [...(groups.get(key) ?? []), tab]);
+  }
+  let tabs = state.tabs;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const survivor = group.find(tab => tab.id === state.activeId) ?? group.find(tab => tab.retained) ?? group[0];
+    const dropped = group.filter(tab => tab !== survivor && !tab.retained);
+    if (dropped.length === 0) continue;
+    const members = new Set([survivor.id, ...dropped.map(tab => tab.id)]);
+    const merged: WorkspaceTab = {
+      ...survivor,
+      pinned: survivor.pinned || dropped.some(tab => tab.pinned),
+      title: survivor.title ?? dropped.find(tab => tab.title)?.title
+    };
+    let placed = false;
+    tabs = tabs.flatMap(tab => {
+      if (!members.has(tab.id)) return [tab];
+      if (placed) return [];
+      placed = true;
+      return [merged];
+    });
+  }
+  return tabs === state.tabs ? state : { tabs: normalizeOrder(tabs), activeId: state.activeId };
+}
+
 /** Identity used to match "already open" for explicit opens when the route names no resource. */
 export function defaultLocationKey(location: string) {
   const url = new URL(location, "http://studio.invalid");

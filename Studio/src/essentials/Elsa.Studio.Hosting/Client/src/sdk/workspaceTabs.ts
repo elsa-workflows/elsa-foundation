@@ -43,7 +43,8 @@ export function useStudioWorkspaceTab() {
 /**
  * The location this screen shows. The address bar belongs to the active tab, so a screen that reads its
  * location while rendering uses this instead of `window.location`: a background tab can still render
- * (a request resolves, the registry refreshes) while another tab owns the address.
+ * (a request resolves, the registry refreshes) while another tab owns the address. It returns a new
+ * `URL` on every render, so depend on `.pathname`, `.search` or a parameter, never the object itself.
  */
 export function useStudioRouteLocation(): URL {
   const tab = useStudioWorkspaceTab();

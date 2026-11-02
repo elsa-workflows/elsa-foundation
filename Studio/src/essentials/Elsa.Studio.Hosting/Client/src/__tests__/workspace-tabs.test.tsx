@@ -230,6 +230,35 @@ describe("workspace tabs", () => {
     expect(openStudioWorkspaceTab("//evil.test")).toBe(false);
   });
 
+  it("folds a deep link into the restored tab that already shows its resource", async () => {
+    window.localStorage.setItem(workspaceStorageKey(scope), JSON.stringify({
+      version: 1,
+      activeId: "list",
+      tabs: [{ id: "list", location: "/list" }, { id: "draft", location: "/editor?definition=a&folderId=f", pinned: true }]
+    }));
+    await mount("/editor?definition=a");
+    expect(controller.state.tabs.map(tab => [tab.location, tab.pinned])).toEqual([["/editor?definition=a", true], ["/list", false]]);
+    expect(controller.activeTab.location).toBe("/editor?definition=a");
+    expect(container.querySelectorAll(".editor")).toHaveLength(1);
+  });
+
+  it("focuses the tab that shows a resource when Back lands on a closed tab for it", async () => {
+    await mount("/editor?definition=a");
+    const closedTab = controller.state.activeId;
+    await act(async () => controller.open("/list"));
+    await act(async () => controller.close(closedTab));
+    await act(async () => controller.open("/editor?definition=a"));
+    const editorTab = controller.state.activeId;
+    expect(editorTab).not.toBe(closedTab);
+    await act(async () => controller.activate(controller.state.tabs.find(tab => tab.location === "/list")!.id));
+    // Back across the list's entries lands on the closed tab's entry for the same resource.
+    window.history.replaceState({ "elsa.studio.workspaceTab": closedTab }, "", "/editor?definition=a");
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state })));
+    expect(controller.state.activeId).toBe(editorTab);
+    expect(controller.state.tabs.filter(tab => tab.location.startsWith("/editor"))).toHaveLength(1);
+    expect(container.querySelectorAll(".editor")).toHaveLength(1);
+  });
+
   it("restores open tabs for the same user and backend", async () => {
     await mount("/editor?definition=a");
     await act(async () => controller.open("/list"));

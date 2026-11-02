@@ -82,14 +82,20 @@ export function ActivityUpgradeWorkbenchPage({
   const requestedPlanId = locationSeed.planId ?? (hasNewSelectionSeed ? null : persisted?.planId) ?? null;
   const activePlanId = plan?.planId ?? null;
 
+  // Load each requested plan once. A background workspace tab mounts its effects again when it returns;
+  // reloading would replace the reviewed plan and clear its stale-evidence flag.
+  const loadedPlanRequestRef = useRef<{ context: StudioEndpointContext; planId: string } | null>(null);
   useEffect(() => {
     if (!requestedPlanId) return;
+    const loaded = loadedPlanRequestRef.current;
+    if (loaded?.context === context && loaded.planId === requestedPlanId) return;
     const controller = new AbortController();
     setBusy("load");
     setError(null);
     void getActivityUpgradePlan(context, requestedPlanId, controller.signal).then(
       loaded => {
         if (controller.signal.aborted) return;
+        loadedPlanRequestRef.current = { context, planId: requestedPlanId };
         setPlan(loaded);
         setReviewedEvidenceStale(false);
         setBusy(null);

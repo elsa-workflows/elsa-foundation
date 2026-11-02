@@ -48,8 +48,10 @@ Resource bounds:
   tab**, and the strip and other tabs keep working.
 
 Because effects mount again when a tab returns, screens that seed editable state from a load-on-mount
-effect must load once per resource. The workflow editor's data hook and Feature Management's catalog
-refresh now do; without that, returning to a tab replaced the unsaved draft and its undo history with
+effect must load once per resource. The workflow editor's data hook, Feature Management's catalog
+refresh, Theme Builder's store load and the Activity Definition upgrade workbench's plan load now do.
+Audited and unaffected: the Activity Definitions pages (TanStack queries; drafts seed `useState` once),
+the Backends form (local state only), Appearance, Modules and Package feeds (no editable server draft); without that, returning to a tab replaced the unsaved draft and its undo history with
 the server copy (found during live qualification). React Flow also rebuilds its pan-zoom from
 `defaultViewport` and resets its store on effect teardown, so every Workflows canvas renders
 `RetainFlowViewport`, which records each settled pan/zoom and restores it when the canvas returns.
@@ -93,6 +95,12 @@ A route may declare `workspace.resourceKey(location)`. Two tabs never show the s
 navigating to one already open elsewhere focuses that tab, so a hidden editor and a visible one never
 write the same draft. Lists return no key and may be open several times. An explicit open of a list
 focuses an identical open list (path and sorted query).
+
+Tabs are restored before routes are registered, so a deep link or the restored set can briefly hold two
+tabs for one resource. As soon as routes can name resources the shell folds them: the active tab (the
+deep link) survives in the earliest duplicate's place and pin, and a mounted duplicate, which may hold
+edits, is never dropped. Back onto a closed tab whose resource is open elsewhere focuses that tab instead
+of reopening a second editor.
 
 Workflows declares keys for workflow definitions (`definition`), workflow templates (`template`),
 Activity Definition drafts/versions (`definition` + `draft`/`version`) and upgrade plans (`plan`).

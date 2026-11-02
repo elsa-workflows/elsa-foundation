@@ -75,7 +75,12 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const assetInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // Load once. A background workspace tab mounts its effects again when it returns, and a reload would
+  // reseed the theme draft below from the store and discard unsaved edits.
+  const storeLoadedRef = useRef(false);
   useEffect(() => {
+    if (storeLoadedRef.current) return;
+    storeLoadedRef.current = true;
     void loadStore();
   }, []);
 

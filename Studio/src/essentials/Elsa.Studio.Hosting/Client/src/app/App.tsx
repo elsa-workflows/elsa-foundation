@@ -1272,7 +1272,7 @@ export function Diagnostics({
                 <a
                   className="diagnostics-task-link"
                   href={qualifyStudioBackendPath(destination.path)}
-                    onClick={event => {
+                  onClick={event => {
                     if (event.defaultPrevented) return;
                     if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(destination.path)) {
                       event.preventDefault();

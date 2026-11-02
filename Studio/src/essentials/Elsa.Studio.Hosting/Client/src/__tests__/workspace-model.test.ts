@@ -5,6 +5,7 @@ import {
   defaultLocationKey,
   insertTab,
   maxRetainedBackgroundTabs,
+  mergeDuplicateResources,
   moveTab,
   removeTabs,
   setPinned,
@@ -60,6 +61,25 @@ describe("workspace tab model", () => {
     const retainedBackground = state.tabs.filter(tab => tab.id !== state.activeId && tab.retained);
     expect(retainedBackground).toHaveLength(maxRetainedBackgroundTabs);
     expect(state.tabs.find(tab => tab.id === "t2")?.retained).toBe(true);
+  });
+
+  it("folds tabs that show one resource into the active tab, keeping the earliest place and pin", () => {
+    const keyOf = (location: string) => new URL(location, "http://studio.invalid").searchParams.get("definition");
+    let state = workspace("/runs", "/editor?definition=x&folderId=f", "/editor?definition=x");
+    state = setPinned(state, "t2", true);
+    state = updateTab(state, "t2", { retained: false, title: { title: "Order flow", screenKey: "k" } });
+    state = activateTab(state, "t3");
+    const merged = mergeDuplicateResources(state, keyOf);
+    expect(merged.tabs.map(tab => [tab.id, tab.location, tab.pinned])).toEqual([["t3", "/editor?definition=x", true], ["t1", "/runs", false]]);
+    expect(merged.activeId).toBe("t3");
+    expect(merged.tabs[0].title?.title).toBe("Order flow");
+    expect(mergeDuplicateResources(merged, keyOf)).toBe(merged);
+  });
+
+  it("never drops a mounted duplicate, which may hold edits", () => {
+    const keyOf = (location: string) => new URL(location, "http://studio.invalid").searchParams.get("definition");
+    const state = workspace("/editor?definition=x", "/editor?definition=x&folderId=f");
+    expect(mergeDuplicateResources(state, keyOf)).toBe(state);
   });
 
   it("matches locations by path and sorted query, ignoring the backend qualifier", () => {

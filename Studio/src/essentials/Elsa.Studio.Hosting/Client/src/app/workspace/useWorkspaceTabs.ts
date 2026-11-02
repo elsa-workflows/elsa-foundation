@@ -17,6 +17,7 @@ import {
   homeLocation,
   insertTab,
   locationPathname,
+  mergeDuplicateResources,
   moveTab,
   neighbourOf,
   removeTabs,
@@ -262,9 +263,14 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
       const entryTabId = readHistoryTabId(window.history.state);
       if (entryTabId && entryTabId !== current.activeId) {
         event.stopImmediatePropagation();
+        const owner = findShowing(location, { matchLists: false });
         if (current.tabs.some(tab => tab.id === entryTabId)) {
           // The entry belongs to a tab that is still open: return to that tab as it is now.
           switchTo(entryTabId, "replace");
+        } else if (owner) {
+          // The closed tab's resource is open elsewhere: focus that tab rather than open a second editor.
+          if (owner.id !== current.activeId) switchTo(owner.id, "replace");
+          else writeAddress(owner, "replace");
         } else {
           // The entry belongs to a closed tab: Back reopens it at that address.
           const reopened = createTab(location, Date.now(), entryTabId);
@@ -291,7 +297,14 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
     };
     window.addEventListener("popstate", onPopState, { capture: true });
     return () => window.removeEventListener("popstate", onPopState, { capture: true });
-  }, [accept, findShowing, switchTo]);
+  }, [accept, findShowing, switchTo, writeAddress]);
+
+  // Tabs are restored before routes are registered, so a deep link or the restored set can hold two tabs
+  // for one resource. Fold them as soon as routes can name resources, before the duplicate mounts.
+  useLayoutEffect(() => {
+    const next = mergeDuplicateResources(stateRef.current, resourceKeyOf);
+    if (next !== stateRef.current) commit(next);
+  }, [commit, resourceKeyOf]);
 
   useEffect(() => {
     const onRequest = (event: Event) => {
