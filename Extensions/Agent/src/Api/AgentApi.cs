@@ -161,12 +161,12 @@ public static class AgentApi
     /// </summary>
     private static string DescribeRecovery(HttpContext context)
     {
-        try { return context.RequestServices.GetService<Elsa.Agent.Services.AgentDurableRecovery>()?.Describe() ?? Elsa.Agent.Services.AgentRecoveryModes.Unsupported; }
+        try { return context.RequestServices.GetService<IAgentRecoverySupport>()?.Describe() ?? AgentRecoveryModes.Unsupported; }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
             context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger(OwnerId)
                 .LogDebug("Durable agent recovery support could not be evaluated ({FailureType}).", failure.GetType().Name);
-            return Elsa.Agent.Services.AgentRecoveryModes.Unsupported;
+            return AgentRecoveryModes.Unsupported;
         }
     }
 

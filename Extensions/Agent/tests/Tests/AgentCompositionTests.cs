@@ -271,6 +271,7 @@ public sealed class AgentCompositionTests
     [InlineData(typeof(IAgentAuditSink))]
     [InlineData(typeof(IAgentAuditReader))]
     [InlineData(typeof(IAgentAuditOwnership))]
+    [InlineData(typeof(IAgentRecoverySupport))]
     public void A_second_record_store_or_audit_registration_refuses_the_default_lifecycle_services(Type contract)
     {
         using var root = AgentTestServices.Create(services => AddSecond(services, contract));
@@ -313,6 +314,7 @@ public sealed class AgentCompositionTests
         if (contract == typeof(IAgentSessionRecordStore)) services.AddSingleton<IAgentSessionRecordStore>(_ => new InMemoryAgentSessionRecordStore());
         else if (contract == typeof(IAgentAuditSink)) services.AddSingleton<IAgentAuditSink>(_ => new InMemoryAgentAuditStore());
         else if (contract == typeof(IAgentAuditReader)) services.AddSingleton<IAgentAuditReader>(_ => new InMemoryAgentAuditStore());
+        else if (contract == typeof(IAgentRecoverySupport)) services.AddScoped<IAgentRecoverySupport, DefaultAgentRecoverySupport>();
         else services.AddSingleton<IAgentAuditOwnership>(_ => new InMemoryAgentAuditStore());
     }
 

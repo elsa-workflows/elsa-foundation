@@ -240,6 +240,28 @@ public interface IAgentStreamingService
     IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Preview: what a host restart does to this composition's Weaver sessions, as bootstrap reports it. Overridable, at most
+/// one; normally not replaced, because only the default can see whether the default session owner participates with every
+/// default lifecycle service over a fencing record store.
+/// </summary>
+public interface IAgentRecoverySupport
+{
+    /// <summary>One of the <see cref="AgentRecoveryModes"/> values.</summary>
+    string Describe();
+}
+
+/// <summary>Preview: the values of <see cref="IAgentRecoverySupport.Describe"/> and of the bootstrap <c>recovery</c> field.</summary>
+public static class AgentRecoveryModes
+{
+    /// <summary>A store other than the in-memory default backs a supported composition: sessions are recovered after a restart.</summary>
+    public const string Durable = "durable";
+    /// <summary>The in-memory default: sessions survive reloads while the process lives, and a restart ends them.</summary>
+    public const string ProcessLifetime = "processLifetime";
+    /// <summary>The composition cannot recover its sessions, or its support could not be evaluated.</summary>
+    public const string Unsupported = "unsupported";
+}
+
 public interface IAgentFeedbackService
 {
     Task<AgentFeedback> AddAsync(AgentFeedback feedback, CancellationToken cancellationToken = default);

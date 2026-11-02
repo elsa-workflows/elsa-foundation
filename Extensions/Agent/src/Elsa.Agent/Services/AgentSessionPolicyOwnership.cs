@@ -144,12 +144,10 @@ internal sealed class AgentDurableRecovery(IServiceProvider services)
         : DurableStoreSelected ? AgentRecoveryModes.Durable : AgentRecoveryModes.ProcessLifetime;
 }
 
-/// <summary>The bootstrap <c>recovery</c> values.</summary>
-internal static class AgentRecoveryModes
+/// <summary>The default <see cref="IAgentRecoverySupport"/>: the composition's <see cref="AgentDurableRecovery"/>.</summary>
+internal sealed class DefaultAgentRecoverySupport(AgentDurableRecovery recovery) : IAgentRecoverySupport
 {
-    public const string Durable = "durable";
-    public const string ProcessLifetime = "processLifetime";
-    public const string Unsupported = "unsupported";
+    public string Describe() => recovery.Describe();
 }
 
 /// <summary>

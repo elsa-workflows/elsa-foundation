@@ -20,8 +20,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Agent.Tests" />
     <InternalsVisibleTo Include="Elsa.Agent.Persistence.Tests" />
-    <!-- The API reports the composition's durable-recovery support (AgentDurableRecovery) on bootstrap. -->
-    <InternalsVisibleTo Include="Elsa.Agent.Api" />
   </ItemGroup>
 
 </Project>

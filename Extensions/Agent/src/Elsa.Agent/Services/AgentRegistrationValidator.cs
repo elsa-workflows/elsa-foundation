@@ -20,6 +20,9 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
         count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentSessionRecordStore));
         if (count > 1)
             throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentSessionRecordStore).FullName}' allows at most one registration, but found {count}. Select a replacement with services.SelectAgentSessionRecordStore(...), which replaces the existing default.");
+        count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentRecoverySupport));
+        if (count > 1)
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentRecoverySupport).FullName}' allows at most one registration, but found {count}. Replace the existing default instead of adding another.");
         foreach (var contract in AuditTrio)
         {
             count = registrations.Count(descriptor => descriptor.ServiceType == contract);
