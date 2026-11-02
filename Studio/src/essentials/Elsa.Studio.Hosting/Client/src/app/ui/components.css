@@ -736,13 +736,23 @@ html[data-theme-material] .studio-toast {
   font-size: var(--studio-body-size);
 }
 
+/* Title and Close share the first row; the list actions sit below so the header fits at 320px. */
 .studio-notification-header {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   border-bottom: 1px solid var(--studio-border);
-  padding: 10px 12px 10px 16px;
+  padding: 10px 12px 8px 16px;
+}
+
+.studio-notification-header-actions {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: -8px;
 }
 
 .studio-notification-title {

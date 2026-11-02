@@ -75,11 +75,13 @@ export function NotificationCenter({ navigate, controller = notificationControll
         <Dialog.Content className="studio-notification-center" aria-describedby={undefined}>
           <div className="studio-notification-header">
             <Dialog.Title ref={headingRef} className="studio-notification-title" tabIndex={-1}>Notifications</Dialog.Title>
-            <button type="button" className="studio-notification-header-button" disabled={unreadCount === 0} onClick={markAllRead}>Mark all read</button>
-            <button type="button" className="studio-notification-header-button" disabled={entries.length === 0} onClick={dismissAll}>Dismiss all</button>
             <Dialog.Close className="studio-notification-close" aria-label="Close notifications" title="Close">
               <X size={16} aria-hidden="true" />
             </Dialog.Close>
+            <div className="studio-notification-header-actions">
+              <button type="button" className="studio-notification-header-button" disabled={unreadCount === 0} onClick={markAllRead}>Mark all read</button>
+              <button type="button" className="studio-notification-header-button" disabled={entries.length === 0} onClick={dismissAll}>Dismiss all</button>
+            </div>
           </div>
           <NotificationList entries={entries} controller={controller} navigate={navigate} now={now} headingRef={headingRef} onClose={() => changeOpen(false)} />
         </Dialog.Content>
