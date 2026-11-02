@@ -244,6 +244,22 @@ internal sealed class InMemoryAgentProposalService(
                 : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
             actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);
 
+    /// <summary>
+    /// Retries every operation of the session whose outcome could not be recorded. A retry that fails again leaves it
+    /// unsettled (its claim keeps the session busy) for a later access; it never fails the caller.
+    /// </summary>
+    internal async Task ReconcileSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        foreach (var proposalId in store.Unsettled.Where(x => x.Value == sessionId).Select(x => x.Key).ToArray())
+        {
+            try { await ReconcileGatedAsync(proposalId, cancellationToken); }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                logger?.LogError("An unsettled operation of agent session {SessionId} could not be settled yet ({FailureType}).", sessionId, failure.GetType().Name);
+            }
+        }
+    }
+
     /// <summary><see cref="ReconcileAsync"/> for a caller that does not hold the proposal gate.</summary>
     private async Task ReconcileGatedAsync(string proposalId, CancellationToken cancellationToken)
     {
@@ -540,8 +556,7 @@ internal sealed class InMemoryAgentProposalService(
     {
         if (_owner is not null && !await _owner.HydrateSessionAsync(sessionId, cancellationToken))
             return AgentResult<IReadOnlyList<AgentActionProposal>>.Failure("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
-        foreach (var unsettled in store.Unsettled.Where(x => x.Value == sessionId).Select(x => x.Key).ToArray())
-            await ReconcileGatedAsync(unsettled, cancellationToken);
+        await ReconcileSessionAsync(sessionId, cancellationToken);
         var now = clock.GetUtcNow();
         foreach (var overdue in store.Proposals.Values.Where(x => x.SessionId == sessionId && x.Status == AgentActionProposalStatus.AwaitingClient
                      && x.PreparedInvocation?.ExpiresAt <= now).Select(x => x.Id).ToArray())

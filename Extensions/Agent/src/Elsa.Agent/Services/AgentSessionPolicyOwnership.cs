@@ -75,11 +75,20 @@ internal sealed class DefaultAgentSessionPolicyService(IServiceProvider services
         return Owner() is { } owner ? owner.GetPolicyAsync(sessionId, actorId, tenantId, cancellationToken) : Task.FromResult(Unsupported);
     }
 
-    public Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default)
+    public async Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        return Owner() is { } owner ? owner.ChangeAutonomyAsync(request, cancellationToken) : Task.FromResult(Unsupported);
+        if (Owner() is not { } owner) return Unsupported;
+        // An operation whose outcome could not be recorded still holds its dispatched claim; it is settled from its record
+        // first (proposal gate before session gate), so the busy check sees what the record says. Only for a defined mode
+        // and the session's own actor and tenant, so the #3440 refusal order is unchanged and a foreign caller settles nothing.
+        if (Enum.IsDefined(request.RequestedMode)
+            && services.GetRequiredService<IAgentProposalService>() is InMemoryAgentProposalService proposals
+            && await owner.FindOwnerAsync(request.SessionId, cancellationToken) is { } sessionOwner
+            && sessionOwner.ActorId == request.ActorId && sessionOwner.TenantId == request.TenantId)
+            await proposals.ReconcileSessionAsync(request.SessionId, cancellationToken);
+        return await owner.ChangeAutonomyAsync(request, cancellationToken);
     }
 
     // Participants are resolved lazily so that an unrelated provider conflict surfaces from its own consumer.

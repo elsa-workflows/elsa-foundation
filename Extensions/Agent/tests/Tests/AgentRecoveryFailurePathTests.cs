@@ -108,6 +108,24 @@ public sealed class AgentRecoveryFailurePathTests
     }
 
     [Fact]
+    public async Task An_autonomy_change_retries_an_unsettled_outcome_before_it_answers_busy()
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        store.FailNextWrites(write => write.Proposals.Any(x => x.Proposal.Status is AgentActionProposalStatus.Executed or AgentActionProposalStatus.Uncertain), 2);
+        Assert.Equal("uncertain", (await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Status);
+
+        // Nobody reads the operation again; the store has recovered, so the policy change settles it and is not busy.
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, (await host.ProbeAsync(session)).Outcome);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+        Assert.Equal(1, harness.Module.Dispatches);
+    }
+
+    [Fact]
     public async Task An_unrecorded_outcome_settles_only_its_own_operation_and_leaves_other_live_work_running()
     {
         var client = new ProposalClientTool();
