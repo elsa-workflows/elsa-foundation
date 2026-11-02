@@ -80,6 +80,10 @@ public enum RuntimeSchedulerPoisonDisposition
     /// <summary>The retry policy declined to retry; the work item is parked for inspection/intervention.</summary>
     Poisoned,
 
-    /// <summary>The retry policy asked to retry; the work item was (or will be) re-driven at <c>NextRetryAt</c>.</summary>
+    /// <summary>
+    /// The retry policy asked to retry and the queue holds the retry. <c>RetryNow</c> re-enqueued the work item.
+    /// <c>RetryAfter</c> released it until <c>NextRetryAt</c>, after which the resumption sweep re-drives it. A
+    /// <c>RetryAfter</c> the queue cannot delay is recorded as <see cref="Poisoned"/> instead.
+    /// </summary>
     RetryScheduled
 }

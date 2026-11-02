@@ -326,8 +326,44 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Fact]
-    public async Task DrainAsync_WithRetryAfterPolicy_RecordsRetryScheduledWithoutImmediateReEnqueue()
+    public async Task DrainAsync_WithRetryAfterPolicy_ReleasesTheItemUntilItIsDueThenRunsItAgain()
     {
+        // #3275: RetryAfter used to ack-delete the item and record a NextRetryAt that nothing read, so the step stalled
+        // silently. The claimed item is now released with the policy's delay: it stays queued as the only copy, is not
+        // claimable before the delay, and runs again once due (the resumption sweep re-drives claimable work).
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var time = new FakeTimeProvider(_now);
+        var handler = new AlwaysFaultingSchedulerWorkHandler();
+        var delay = TimeSpan.FromMinutes(5);
+        var drainer = NewDrainer(queue, poisonStore, new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")), time, handler);
+        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, record.Disposition);
+        Assert.Equal(_now + delay, record.NextRetryAt);
+        Assert.Collection(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")), item => Assert.Equal("work-1", item.WorkItemId));
+
+        time.Advance(delay - TimeSpan.FromSeconds(1));
+        var early = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        Assert.Empty(early.Items);
+        Assert.Equal(1, handler.InvocationCount);
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        var due = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        Assert.Equal("work-1", Assert.Single(due.Items).WorkItemId);
+        Assert.Equal(2, handler.InvocationCount);
+        Assert.Equal(2, Assert.Single(await poisonStore.ListAsync("wfexec-1")).FailureCount);
+    }
+
+    [Fact]
+    public async Task DrainAsync_WithRetryAfterPolicy_ForWorkThatCannotBeDelayed_PoisonsInsteadOfParkingSilently()
+    {
+        // RunSchedulerWork has no delayed release, so the queue cannot hold the retry. #3275: it is poisoned (projected
+        // as a blocking incident) rather than recorded as RetryScheduled with a NextRetryAt that nothing would act on.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
         var delay = TimeSpan.FromMinutes(5);
@@ -335,14 +371,13 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.True(result.StoppedOnFault);
         var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
-        Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, record.Disposition);
-        Assert.Equal(_now + delay, record.NextRetryAt);
-        // Not immediately re-enqueued: honoring the delay is left to the resumption sweep (W2 follow-up).
-        Assert.Empty(remaining);
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Null(record.NextRetryAt);
+        Assert.Equal(nameof(RuntimeDomainRetryMode.RetryAfter), record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode]);
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -430,11 +465,13 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     private WorkflowSchedulerDrainer NewDrainer(
         InMemoryWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerPoisonStore poisonStore,
-        IRuntimeDomainRetryPolicy retryPolicy) =>
+        IRuntimeDomainRetryPolicy retryPolicy,
+        FakeTimeProvider? timeProvider = null,
+        IWorkflowSchedulerWorkHandler? handler = null) =>
         TestSchedulerDrainer.Create(
             queue,
-            [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
-            new FakeTimeProvider(_now),
+            [handler ?? new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider ?? new FakeTimeProvider(_now),
             pauseGate: null,
             workflowExecutionStateStore: null,
             pipelineDispatcher: null,
