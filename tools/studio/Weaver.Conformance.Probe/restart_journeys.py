@@ -3,15 +3,21 @@
 The backend consumer runs the packaged durable session store (`FoundationAgentEntityFrameworkCore` on SQLite, a
 per-run database under the owned output root) and the driver restarts its own host process between phases
 (runtime.RestartableServer). Every case runs once on each actual adapter, Copilot's delegated loop and Anthropic's
-host-driven loop, through the same deterministic protocol factories as the rest of the witness. Three restarts per
+host-driven loop, through the same deterministic protocol factories as the rest of the witness. Seven restarts per
 adapter carry the ten boundaries:
 
-* graceful: idle, pending review and approved-before-dispatch before their deadline, a receipt recorded while the
-  turn is paused, and a second client of the same owner beside a foreign actor;
+* graceful, one restart per case: idle, pending review and approved-before-dispatch before their deadline, a receipt
+  recorded while the turn is paused, and a second client of the same owner beside a foreign actor. Each of these
+  applies one effect to the same native owner (the seed user's status card), so each gets its own restart: its owner
+  reads bracket only its own effect, and its reviewed operation stays bound to the revision it was prepared against;
 * abrupt (the owned process group is killed): a server write dispatched and held at the module's native write
   rendezvous, and a provider turn held at the protocol fixture's pre-call gate;
 * after-deadline (stopped before, started after the prepared deadline, on the real clock): pending review,
   approved-before-dispatch and an uncertain client operation the owner then resolves.
+
+The abrupt and after-deadline cases leave their owner unchanged, so each of those phases shares one restart. A graceful
+stop releases the leases its sessions hold, so a recovered request after a graceful restart is never answered
+`agent.session.owned_elsewhere`; only an abrupt stop's leases have to lapse.
 
 A native negative control first restarts the same host on the in-memory default store, where the pending review must
 be lost. Each case asserts the recovered outcome, the execution count at the module's independent native owner
@@ -69,6 +75,9 @@ PHASE_ORDER = {
 }
 check(all(set(PHASE_ORDER[phase]) == {key for key, kind in RESTART_CASES.items() if kind == phase} for phase in PHASES),
       "Every restart case belongs to exactly one phase")
+# One host restart per group, in this order on each adapter. Every graceful case applies an effect to the same native
+# owner, so each one is alone in its group; the abrupt and after-deadline cases leave the owner unchanged and share theirs.
+RESTART_GROUPS = tuple((GRACEFUL, (key,)) for key in PHASE_ORDER[GRACEFUL]) + ((ABRUPT, PHASE_ORDER[ABRUPT]), (AFTER_DEADLINE, PHASE_ORDER[AFTER_DEADLINE]))
 # Driver-owned expected outcomes; each record states its observed outcome and any other value fails.
 EXPECTED_OUTCOMES = {
     "idle": {"restart": GRACEFUL, "session": "same", "history": "retained", "policy": "same", "continuation": "completed",
@@ -94,6 +103,11 @@ EXPECTED_OUTCOMES = {
                       "concurrentExecute": "retained", "continuation": "completed", "executions": 1, "settledBy": []},
 }
 check(set(EXPECTED_OUTCOMES) == set(RESTART_CASES), "Every restart case needs one driver-owned expected outcome")
+check(sorted(key for _, keys in RESTART_GROUPS for key in keys) == sorted(RESTART_CASES)
+      and all(RESTART_CASES[key] == phase for phase, keys in RESTART_GROUPS for key in keys),
+      "Every restart case runs in exactly one restart group of its own phase")
+check(all(len(keys) == 1 for _, keys in RESTART_GROUPS if any(EXPECTED_OUTCOMES[key]["executions"] for key in keys)),
+      "A case with an effect at the shared native owner needs a restart of its own, so no other effect falls between its owner reads")
 PROPOSAL_KEYS = ("sessionId", "commandId", "proposalId", "invocationId", "toolCallId")
 CORRELATION_KEYS = {key: PROPOSAL_KEYS for key in RESTART_CASES}
 CORRELATION_KEYS.update({"idle": ("sessionId", "commandId", "continuationCommandId"),
@@ -260,6 +274,9 @@ def _restart(root, o, expected):
          and isinstance(stopped.get("runtimeCacheFiles"), dict) and not any(stopped["runtimeCacheFiles"].values())
          and isinstance(record.get("stoppedAt"), (int, float)) and isinstance(record.get("startedAt"), (int, float))
          and record["stoppedAt"] <= record["startedAt"], "restart.process", "The stopped generation did not end as declared with empty runtime caches")
+    if expected != ABRUPT:
+        need(o.get("ownedElsewhereAttempts", 0) == 0 and not any(name.startswith("ownedElsewhere") for name in o["refs"]),
+             "restart.lease_not_released", "A graceful stop left its session lease held: the recovered request answered agent.session.owned_elsewhere")
     return record
 
 
@@ -859,8 +876,9 @@ PREPARERS = {"idle": _prepare_idle, "pending-review-before-deadline": _pending, 
              "provider-turn-in-progress": _prepare_in_progress, "owner-resolution": _prepare_owner_resolution, "second-client": _pending}
 
 
-def _await_owner(t, session):
-    """Read the recovered session; a stopped generation's live lease answers owned_elsewhere until it lapses."""
+def _await_owner(t, session, *, tolerate):
+    """Read the recovered session. A killed generation's live lease answers owned_elsewhere until it lapses (tolerate);
+    a graceful stop released it, so there the first owned_elsewhere is returned at once for the case to refuse."""
     attempts = []
     deadline = time.monotonic() + OWNED_ELSEWHERE_LIMIT_SECONDS
     while True:
@@ -871,6 +889,8 @@ def _await_owner(t, session):
             return response, observed_at, attempts
         code = ((response.json() or {}).get("error") or {}).get("code")
         need(code == "agent.session.owned_elsewhere", "restart.ownership", "The recovered session answered " + str(code))
+        if not tolerate:
+            return response, observed_at, attempts
         need(time.monotonic() < deadline, "restart.ownership", "The stopped generation's lease never lapsed")
         hint = str(response.headers.get("retry-after", ""))
         delay = float(hint) if re.fullmatch(r"\d+(\.\d+)?", hint) else 1.0
@@ -882,7 +902,12 @@ def _begin(runtime, state, restart, name):
     o["refs"]["restart"] = restart["ref"]
     o["fromGeneration"], o["toGeneration"] = restart["fromGeneration"], restart["toGeneration"]
     t = runtime.transport(name + "-recovered")
-    response, observed_at, attempts = _await_owner(t, o["sessionId"])
+    graceful = restart.get("kind") != "abrupt"
+    response, observed_at, attempts = _await_owner(t, o["sessionId"], tolerate=not graceful)
+    if graceful and response.status == 409:
+        o["refs"]["ownedElsewhere0"], o["ownedElsewhereAttempts"] = response.receipt, 1
+        raise RestartCaseFailure("restart.lease_not_released: A graceful stop left its session lease held: the recovered request answered "
+                                 "agent.session.owned_elsewhere", "restart.lease_not_released")
     o["refs"]["recoveredSession"] = response.receipt
     o["refs"].update({"ownedElsewhere" + str(index): reference for index, reference in enumerate(attempts[:-1])})
     o["recoveredAt"], o["ownedElsewhereAttempts"] = observed_at, len(attempts) - 1
@@ -1061,12 +1086,15 @@ def _arm_rendezvous(runtime, provider):
     return (control, receipt), applied["evidence"]
 
 
-def _run_phase(runtime, host, provider, phase):
+def _run_phase(runtime, host, provider, phase, keys=None):
+    """Prepare the group's cases in order, restart the host once, then recover and verify every prepared case."""
+    keys = PHASE_ORDER[phase] if keys is None else tuple(keys)
+    check(keys and all(RESTART_CASES.get(key) == phase for key in keys), "A restart group holds only cases of its own phase")
     run, records, states = runtime.run, [], {}
     rendezvous = None
     if phase == ABRUPT:
         rendezvous, _ = _arm_rendezvous(runtime, provider)
-    for key in PHASE_ORDER[phase]:
+    for key in keys:
         name = "restart-" + provider + "-" + key
         try:
             run.assert_immutable_inputs()
@@ -1102,7 +1130,8 @@ def _run_phase(runtime, host, provider, phase):
             return {"waitedUntil": target, "deadlines": sorted(deadlines)}
         return None
 
-    restart = _restart_host(runtime, host, provider + "-" + phase, phase, while_stopped=while_stopped)
+    reason = provider + "-" + phase + ("" if keys == PHASE_ORDER[phase] else "-" + "-".join(keys))
+    restart = _restart_host(runtime, host, reason, phase, while_stopped=while_stopped)
     for key, state in states.items():
         observation = None
         try:
@@ -1189,8 +1218,8 @@ def _run_restart_inventory(runtime, host, scope):
         run.save()
         for provider in PROVIDERS:
             runtime.select_provider(provider)
-            for phase in PHASES:
-                records, restart = _run_phase(runtime, host, provider, phase)
+            for phase, keys in RESTART_GROUPS:
+                records, restart = _run_phase(runtime, host, provider, phase, keys)
                 section["cases"].extend(records)
                 section["restarts"].append(restart["ref"])
                 run.save()

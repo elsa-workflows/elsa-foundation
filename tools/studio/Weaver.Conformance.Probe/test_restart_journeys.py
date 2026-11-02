@@ -13,7 +13,8 @@ from case_records import retained
 from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_agent_store
 import restart_journeys as rj
 from restart_journeys import (ABRUPT, AFTER_DEADLINE, CONTROL_ID, CORRELATION_KEYS, EXPECTED_CASES, EXPECTED_CONTROL, EXPECTED_OUTCOMES,
-                              GRACEFUL, PHASE_ORDER, RESTART_CASES, RestartCaseFailure, require_restart_inventory, restart_manifest_gaps)
+                              GRACEFUL, PHASE_ORDER, RESTART_CASES, RESTART_GROUPS, RestartCaseFailure, require_restart_inventory,
+                              restart_manifest_gaps)
 from test_lifecycle_journeys import COMMAND, INVOCATION, PROPOSAL, SESSION, TURN, WITNESS, Native, http, owner, sse
 
 EXPIRES = "2026-11-02T10:05:00.1234567+00:00"
@@ -214,6 +215,10 @@ class RestartVerifierTests(unittest.TestCase):
                 Case(self.case_root("replayed-" + name), "receipt-recorded-paused",
                      change={part: lambda value: value.update(revision="rev-3")}).verify(self.root)
             self.assertEqual("restart.effect_replayed", raised.exception.cause)
+        # T033's shape: another case's effect on the shared owner after the idle receipt is never one execution.
+        with self.assertRaises(RestartCaseFailure) as raised:
+            Case(self.case_root("idle-beyond-receipt"), "idle", change={"ownerAfter": lambda value: value.update(revision="rev-3", size="medium")}).verify(self.root)
+        self.assertEqual("restart.effect_replayed", raised.exception.cause)
         with self.assertRaises(RestartCaseFailure) as raised:
             Case(self.case_root("dispatched-applied"), "dispatched-without-receipt",
                  change={"ownerAfter": lambda value: value.update(revision="rev-2", size="small")}).verify(self.root)
@@ -235,11 +240,23 @@ class RestartVerifierTests(unittest.TestCase):
             "graceful-exit-claimed-abrupt": ("dispatched-without-receipt", {"restart": lambda part: part["stoppedProcess"].update(exitCode=0)}, {}, "restart.process"),
             "runtime-cache-written": ("receipt-recorded-paused", {"restart": lambda part: part["stoppedProcess"]["runtimeCacheFiles"].update(NUGET_PACKAGES=["x"])}, {}, "restart.process"),
             "wrong-phase": ("receipt-recorded-paused", {"restart": lambda part: part.update(phase=AFTER_DEADLINE)}, {}, "restart.kind"),
+            "graceful-lease-held": ("idle", {}, {"ownedElsewhereAttempts": 1}, "restart.lease_not_released"),
+            "after-deadline-lease-held": ("pending-review-after-deadline", {}, {"ownedElsewhereAttempts": 2}, "restart.lease_not_released"),
         }
         for name, (key, change, overrides, cause) in controls.items():
             with self.subTest(control=name), self.assertRaises(RestartCaseFailure) as raised:
                 Case(self.case_root(name), key, change=change).verify(self.root, **overrides)
             self.assertEqual(cause, raised.exception.cause)
+
+    def test_only_an_abrupt_stop_may_leave_a_lease_to_lapse(self):
+        record = Case(self.case_root("abrupt-lapse"), "dispatched-without-receipt").verify(self.root, ownedElsewhereAttempts=2)
+        self.assertEqual(2, record["ownedElsewhereAttempts"])
+        case = Case(self.case_root("graceful-retained-refusal"), "receipt-recorded-paused")
+        observation = case.observation()
+        observation["refs"]["ownedElsewhere0"] = observation["refs"]["recoveredSession"]
+        with self.assertRaises(RestartCaseFailure) as raised:
+            rj.VERIFIERS["receipt-recorded-paused"](self.root, observation, WITNESS, "copilot")
+        self.assertEqual("restart.lease_not_released", raised.exception.cause)
 
     def test_a_dispatch_that_was_not_held_or_a_replayed_uncertain_execution_fails(self):
         controls = {
@@ -424,14 +441,50 @@ class RestartOrchestrationTests(unittest.TestCase):
             return lambda root, o, witness, provider: {"id": provider + "-" + key, "caseKey": key, "status": "passed"}
         return ({key: prepare(key) for key in RESTART_CASES}, {key: recover(key) for key in RESTART_CASES}, {key: verify(key) for key in RESTART_CASES})
 
-    def phase(self, phase, failing=()):
+    def phase(self, phase, failing=(), keys=None):
         preparers, recoverers, verifiers = self.runners(failing)
         from unittest.mock import patch
         with patch.dict(rj.PREPARERS, preparers), patch.dict(rj.RECOVERERS, recoverers), patch.dict(rj.VERIFIERS, verifiers), \
                 patch.object(rj, "_arm_rendezvous", return_value=((self.root / "control.json", self.root / "receipt.json"), [])), \
                 patch.object(rj.time, "sleep"), patch.object(rj.time, "time", return_value=DEADLINE + 10):
             self.runtime.witness = WITNESS
-            return rj._run_phase(self.runtime, self.host, "copilot", phase)
+            return rj._run_phase(self.runtime, self.host, "copilot", phase, keys)
+
+    def test_every_case_with_an_owner_effect_gets_a_restart_of_its_own(self):
+        effects = {key for key, outcome in EXPECTED_OUTCOMES.items() if outcome["executions"]}
+        self.assertEqual(set(PHASE_ORDER[GRACEFUL]), effects)
+        self.assertEqual([(GRACEFUL, (key,)) for key in PHASE_ORDER[GRACEFUL]] + [(ABRUPT, PHASE_ORDER[ABRUPT]), (AFTER_DEADLINE, PHASE_ORDER[AFTER_DEADLINE])],
+                         list(RESTART_GROUPS))
+        for key in PHASE_ORDER[GRACEFUL]:
+            with self.subTest(key=key):
+                self.order.clear()
+                records, restart = self.phase(GRACEFUL, keys=(key,))
+                self.assertEqual([("prepare", key), ("restart", "copilot-graceful-" + key, False), ("recover", key)], self.order)
+                self.assertEqual(["copilot-" + key], [record["id"] for record in records])
+        with self.assertRaises(RuntimeError):
+            self.phase(GRACEFUL, keys=("dispatched-without-receipt",))
+
+    def test_a_graceful_recovery_refuses_a_held_lease_at_once_and_only_an_abrupt_one_waits_for_it_to_lapse(self):
+        from unittest.mock import patch
+        held = SimpleNamespace(status=409, receipt={"held": True}, headers={"retry-after": "1"},
+                               json=lambda: {"error": {"code": "agent.session.owned_elsewhere"}})
+        free = SimpleNamespace(status=200, receipt={"free": True})
+        for kind, expected in (("graceful", "restart.lease_not_released"), ("abrupt", None)):
+            with self.subTest(kind=kind):
+                transport = SimpleNamespace(session=Mock(side_effect=[held, free]))
+                self.runtime.transport = Mock(return_value=transport)
+                state = {"o": {"sessionId": SESSION, "refs": {}}}
+                restart = {"ref": {"restart": kind}, "kind": kind, "fromGeneration": 1, "toGeneration": 2}
+                with patch.object(rj.time, "sleep"):
+                    if expected:
+                        with self.assertRaises(RestartCaseFailure) as raised:
+                            rj._begin(self.runtime, state, restart, "case")
+                        self.assertEqual(expected, raised.exception.cause)
+                        self.assertEqual(1, transport.session.call_count)
+                        self.assertEqual((1, {"held": True}), (state["o"]["ownedElsewhereAttempts"], state["o"]["refs"]["ownedElsewhere0"]))
+                    else:
+                        _, o = rj._begin(self.runtime, state, restart, "case")
+                        self.assertEqual((1, {"free": True}, {"held": True}), (o["ownedElsewhereAttempts"], o["refs"]["recoveredSession"], o["refs"]["ownedElsewhere0"]))
 
     def test_each_phase_prepares_in_order_restarts_once_then_recovers_every_prepared_case(self):
         for phase in (GRACEFUL, ABRUPT, AFTER_DEADLINE):
@@ -457,7 +510,7 @@ class RestartOrchestrationTests(unittest.TestCase):
         self.assertNotIn(("recover", "second-client"), self.order)
         self.assertEqual(1, sum(isinstance(item, tuple) and item[0] == "restart" for item in self.order))
 
-    def test_the_inventory_runs_the_control_then_the_store_then_three_phases_per_actual_adapter(self):
+    def test_the_inventory_runs_the_control_then_the_store_then_seven_restart_groups_per_actual_adapter(self):
         from unittest.mock import patch
         def control(runtime, host):
             self.order.append("control")
@@ -465,15 +518,15 @@ class RestartOrchestrationTests(unittest.TestCase):
         def store(runtime, host):
             self.order.append("store")
             return {"database": str(self.root / "missing.db")}
-        def phase(runtime, host, provider, kind):
-            self.order.append((provider, kind))
+        def phase(runtime, host, provider, kind, keys):
+            self.order.append((provider, kind) + ((keys[0],) if kind == GRACEFUL else ()))
             return [], {"ref": {"synthetic": kind}}
         with patch.object(rj, "_control", side_effect=control), patch.object(rj, "_enable_store", side_effect=store), \
                 patch.object(rj, "_run_phase", side_effect=phase), patch.object(rj, "private_json"):
             with self.assertRaises(RuntimeError):  # Synthetic phases record no cases, so the gate refuses.
                 rj.qualify_witness_restarts(self.runtime, self.host)
-        self.assertEqual(["control", "store", "select-copilot", ("copilot", GRACEFUL), ("copilot", ABRUPT), ("copilot", AFTER_DEADLINE),
-                          "select-anthropic", ("anthropic", GRACEFUL), ("anthropic", ABRUPT), ("anthropic", AFTER_DEADLINE)], self.order)
+        groups = lambda provider: [(provider, GRACEFUL, key) for key in PHASE_ORDER[GRACEFUL]] + [(provider, ABRUPT), (provider, AFTER_DEADLINE)]
+        self.assertEqual(["control", "store", "select-copilot", *groups("copilot"), "select-anthropic", *groups("anthropic")], self.order)
         section = self.run.report[rj.RESTART_QUALIFICATION]
         self.assertEqual("failed", section["status"])
         self.assertFalse(self.run.report["independentPackageWitness"])

@@ -88,6 +88,13 @@ qualifier. Every case asserts three things against retained native bytes:
 - the audit `settledBy` values for the case's proposal or session: `["recovery"]` for a recovery
   settlement with no actor, and `[]` otherwise.
 
+Each graceful case gets a restart of its own, because every one of them applies one effect to the same native
+owner (the seed user's status card): its owner reads bracket only its own effect, and its reviewed operation stays
+bound to the revision it was prepared against. The abrupt cases share one restart, and so do the after-deadline cases;
+neither changes the owner. A graceful stop releases the leases its sessions hold (the default owner's shell
+terminator), so after a graceful or after-deadline restart a recovered request answered
+`agent.session.owned_elsewhere` fails the case (`restart.lease_not_released`); only an abrupt stop's leases lapse.
+
 | Case key | Restart | Native observation and owner |
 | --- | --- | --- |
 | `idle` | graceful | A completed automatic size effect, then a restart. The same session, history, acknowledged policy and revision and the stored receipt read back, and a new prompt completes. One execution, no settlement. |
