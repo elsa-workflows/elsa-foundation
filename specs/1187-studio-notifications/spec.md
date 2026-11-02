@@ -1,6 +1,6 @@
 # Studio notifications: toasts and Notification Center
 
-**Status**: Draft — owner-approved design, awaiting spec review
+**Status**: Implemented — [#3634](https://github.com/elsa-workflows/elsa-foundation/pull/3634)
 **Issue**: [#3631](https://github.com/elsa-workflows/elsa-foundation/issues/3631)
 **Program bucket**: none/free-flow
 
