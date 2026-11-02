@@ -47,6 +47,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
     internal DrainControlContext? DrainControls { private get; init; }
     internal RuntimeExecutionProtocolSelector? ModelProtocols { private get; init; }
+
+    /// <summary>
+    /// Whether something re-drives work released with a future visibility: an <c>IWorkflowDispatchDurabilityEvidence</c>
+    /// naming <c>Resumption</c>, the same signal the router uses before parking shed work (#1320). Without it a
+    /// <c>RetryAfter</c> is poisoned rather than released to wait for a sweep nobody runs.
+    /// </summary>
+    internal bool HasResumptionRedriver { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
@@ -372,9 +379,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 activity.SetStatus(ActivityStatusCode.Error, faultInfo.ExceptionType);
             }
 
-            // Ack-delete BEFORE poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
-            // drainer stays alive and records the item to the poison store. The source item must therefore be removed
-            // from the durable queue here, before HandleHandlerCrashAsync records poison / honors a RetryNow re-enqueue;
+            // Ack-delete before poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
+            // drainer stays alive and records the item to the poison store. Only the retry decision is read first. The
+            // source item must therefore be removed from the durable queue here, before HandleHandlerCrashAsync records
+            // poison / honors a RetryNow re-enqueue;
             // otherwise the still-queued source item would be re-driven by the sweep AND re-enqueued by RetryNow, and a
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
@@ -385,20 +393,21 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison
             // recording entirely. Skip the ack but still record poison and return the Faulted result.
             //
-            // RetryAfter (#3275) is the exception: where the claim can carry a delay, the item is released with the
-            // policy's delay instead, exactly like temporarily unavailable work. It stays the only copy, becomes
-            // claimable when due, and the resumption sweep's backlog discovery re-drives it. Elsewhere it is poisoned.
+            // RetryAfter (#3275) is the exception: where the claim can carry a delay and a resumption sweep is
+            // composed to re-drive it, the item is released with the policy's delay instead, exactly like temporarily
+            // unavailable work. It stays the only copy, becomes claimable when due, and the sweep's backlog discovery
+            // re-drives it. A release the queue refuses (a coalescing segment that already consumed the item, say)
+            // falls back to the acknowledgement; everything not released is poisoned.
             var retry = await DecideRetryAsync(workItem, faultInfo, cancellationToken);
             DateTimeOffset? releasedUntil = null;
-            if (retry.Decision?.Mode == RuntimeDomainRetryMode.RetryAfter && CanReleaseWithDelay(workItem, renewal))
+            if (retry.Decision?.Mode == RuntimeDomainRetryMode.RetryAfter && HasResumptionRedriver &&
+                !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal))
             {
                 var visibleAt = retry.Now + (retry.Decision.Delay ?? TimeSpan.Zero);
-                var release = await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken);
-                if (!release.Succeeded)
-                    throw NewClaimLost(renewal.Current, "release for a scheduled retry", release.Status);
-                releasedUntil = visibleAt;
+                if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
+                    releasedUntil = visibleAt;
             }
-            else if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
+            if (releasedUntil is null && _consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
 
             await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, retry, releasedUntil, cancellationToken);
@@ -416,23 +425,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
     }
 
-    // A dispatched handler threw. The caller has already removed the source item from the durable queue, or, for an
-    // honored RetryAfter, released it with the policy's delay, so without this record a removed item would be dropped:
-    // no retry, no record, no incident. The default policy (Noop → DoNotRetry) parks it as Poisoned (safe, no loop).
-    // RetryNow re-enqueues immediately through the queue's public contract; because the source item was ack-deleted
-    // first, that is the *only* requeue, so poison delivery stays bounded. RetryAfter is RetryScheduled only when the
-    // caller released the item (releasedUntil): the queue then holds its single copy until NextRetryAt, and the
-    // resumption sweep re-drives it once claimable. A RetryAfter the queue cannot delay (a kind without delayed release,
-    // a legacy provider, or an item a commit already consumed) is Poisoned, so it surfaces as a blocking incident instead
-    // of waiting on a re-drive nothing performs (#3275). This lives entirely in the fault path — it does not change
-    // claim/pause/dispatch ordering.
-    //
-    // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
-    // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
-    // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
-    //
-    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — the caller has already ack-deleted
-    // the item, so returning early would drop it silently. The store is required by construction instead.
     private async ValueTask<RetryDecisionContext> DecideRetryAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeFaultInfo faultInfo,
@@ -440,12 +432,22 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     {
         var now = _timeProvider.GetUtcNow();
         var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
-        var decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
-            workflowExecutionId: workItem.WorkflowExecutionId,
-            activityExecutionId: null,
-            failureType: faultInfo.ExceptionType,
-            failureCount: existing?.FailureCount ?? 0,
-            requestedAt: now));
+        RuntimeDomainRetryDecision? decision;
+        try
+        {
+            decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                activityExecutionId: null,
+                failureType: faultInfo.ExceptionType,
+                failureCount: existing?.FailureCount ?? 0,
+                requestedAt: now));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A policy that cannot decide must not leave the item claimed to loop on every lapse: it is poisoned, and
+            // so surfaces as an incident, exactly as with no policy.
+            decision = null;
+        }
         return new(now, existing, decision);
     }
 
@@ -460,6 +462,25 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         renewal is not null && _consumedWorkClaimAccessor?.WasConsumedDurably != true &&
         (_schedulerWorkQueue is not IRuntimeSchedulerWorkDeferralCapability capability || capability.CanDefer(renewal.Current));
 
+    // A dispatched handler threw. The caller has already removed the source item from the durable queue, or, for an
+    // honored RetryAfter, released it with the policy's delay, so without this record a removed item would be dropped:
+    // no retry, no record, no incident. The default policy (Noop → DoNotRetry) parks it as Poisoned (safe, no loop).
+    // RetryNow re-enqueues immediately through the queue's public contract; because the source item was ack-deleted
+    // first, that is the *only* requeue, so poison delivery stays bounded. RetryAfter is RetryScheduled only when the
+    // caller released the item (releasedUntil): the queue then holds its single copy until NextRetryAt, and the
+    // resumption sweep re-drives it once claimable. A RetryAfter that was not released (no resumption sweep composed, a
+    // kind without delayed release, a legacy provider, an item a commit already consumed, a refused release, or a
+    // checkpoint-rule fault) is Poisoned, so it surfaces as a blocking incident instead of waiting on a re-drive nothing
+    // performs (#3275). A policy that throws counts as no decision. This lives entirely in the fault path — it does not change
+    // claim/pause/dispatch ordering.
+    //
+    // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
+    // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
+    // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
+    //
+    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — unless it released a scheduled
+    // retry, the caller has already ack-deleted the item, so returning early would drop it silently. The store is
+    // required by construction instead.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,

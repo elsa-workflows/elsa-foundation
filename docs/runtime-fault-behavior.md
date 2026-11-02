@@ -27,7 +27,7 @@ flowchart TB
     end
 ```
 
-In every case the drain stops. `RetryAfter` keeps the step only where the queue can delay its claim. Elsewhere it is poisoned, so it is never parked silently ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)).
+In every case the drain stops. `RetryAfter` keeps the step only where the queue can delay its claim and the resumption sweep is composed to re-drive it. Otherwise it is poisoned, so a `RetryAfter` never leaves a step parked with nothing to run it ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)).
 
 ## Words you will meet
 
@@ -225,19 +225,29 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
    be redelivered forever. (A process crash never reaches this line, which is exactly the redrive
    safety the claim protocol provides.) The ack is skipped when a checkpoint commit inside this
    dispatch already consumed the item durably.
-   - **Exception: an honored `RetryAfter`.** Where the step can be released with a delay, the claim
-     is released until `now + delay` instead of deleted. This uses the same rule as temporarily
-     unavailable work: a delayed-release step kind, a live claim not yet consumed by a commit, and a
-     queue that can persist the delay. The step stays the only queued copy. It is not claimable
-     before the delay ends, and the resumption sweep's backlog discovery then re-drives it.
+   - **Exception: an honored `RetryAfter`.** The claim is released until `now + delay` instead of
+     deleted, but only when all of these hold:
+     - the same delayed-release rule as temporarily unavailable work: a step kind that supports it
+       (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
+       `DeliverChildControl`, `Checkpoint`), a live claim not yet consumed by a commit, and a queue
+       that can persist the delay;
+     - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
+       `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
+     - the fault was not caused by a checkpoint rule.
+
+     The step stays the only queued copy. It is not claimable before the delay ends, and the
+     resumption sweep's backlog discovery then re-drives it. While it waits, the execution's later
+     queued steps wait behind it, because the queue serves each execution in order. If the queue
+     refuses the release, the item is acknowledged and poisoned instead.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 
 | Retry mode | Disposition | Requeue |
 | --- | --- | --- |
 | `RetryNow` | `RetryScheduled` | re-enqueued immediately through the queue contract |
-| `RetryAfter`, step released | `RetryScheduled` | the released step runs again once `NextRetryAt` passes, when the sweep re-drives it; each later failure asks the policy again with a higher failure count |
-| `RetryAfter`, step cannot be delayed | `Poisoned` | none; shown as a blocking incident like `DoNotRetry` ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
+| `RetryAfter`, step released | `RetryScheduled` | the released step runs again once `NextRetryAt` passes, when the sweep re-drives it; each later failure asks the policy again with a higher failure count, so a policy can bound the retries |
+| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, and checkpoint-rule faults ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
+| a policy that throws | `Poisoned` | none; treated as no decision |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
 5. Returns a `Faulted` work-item result. `DrainAsync` breaks out of its loop, and the orchestrator's
