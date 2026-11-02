@@ -6,6 +6,7 @@ import { focusIfConnected, NotificationLevelIcon, notificationLevelLabel, runNot
 import { useNoticeTimer } from "./useNoticeTimer";
 
 const maxVisibleToasts = 3;
+const zeroWidthSpace = "\u200B";
 
 export interface ToastHostProps {
   navigate(path: string): void;
@@ -61,7 +62,7 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
       const region = changed.level === "error" ? "assertive" : "polite";
       const text = announcementText(changed);
       // Screen readers ignore a live region whose text did not change; alternate a zero-width space so a repeat is announced.
-      next[region] = text === announcements[region] ? `${text}​` : text;
+      next[region] = text === announcements[region] ? `${text}${zeroWidthSpace}` : text;
     }
     setAnnouncements(next);
   }
