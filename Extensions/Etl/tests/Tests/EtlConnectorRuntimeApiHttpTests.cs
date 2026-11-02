@@ -3,7 +3,9 @@ using System.Text.Json;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design;
+using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Runtime.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -235,6 +237,13 @@ public sealed partial class EtlRuntimeApiHttpTests
         var errors = Output(EtlOutputRoute.Error, errorKind);
         Assert.Equal(EtlStoreStatus.Applied,
             (await store.RetainConnectorBatchOutputAsync(lease, batchId, new(1, 1, 0, main, errors))).Status);
+        if (!csvErrors)
+        {
+            // Rewrite the effect columns exactly as the prior writer did, (int)route.Kind: those rows must read back unchanged.
+            var context = services.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>();
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE elsa_etl_connector_batches SET MainEffectKind = {(int)EtlConnectorKind.Http}, ErrorEffectKind = {(int)EtlConnectorKind.Jsonl} WHERE BatchId = {batchId}");
+        }
 
         using (var retained = await ReadConnectorPartitionAsync(host, "owed-progress"))
         {

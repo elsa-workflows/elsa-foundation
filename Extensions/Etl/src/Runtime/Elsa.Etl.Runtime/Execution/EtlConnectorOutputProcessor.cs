@@ -152,6 +152,7 @@ internal sealed class EtlConnectorOutputProcessor
     {
         var maxBytes = pipeline.Limits.MaxOutputBatchBytes;
         var mainIsCsv = pipeline.Routes.Main is EtlCsvDestination;
+        var mainIsArray = pipeline.Routes.Main is EtlHttpDestination;
         using var main = new RouteBodyBuilder(RouteFormatFor(pipeline.Routes.Main), maxBytes,
             mainIsCsv ? EtlCsvRouteWriter.Header(pipeline.Mapping.Select(field => field.Name).ToArray()) : null);
         using var errors = new RouteBodyBuilder(RouteFormatFor(pipeline.Routes.Errors), maxBytes,
@@ -178,7 +179,10 @@ internal sealed class EtlConnectorOutputProcessor
                 continue;
             }
 
-            var transformed = transformer.Transform(record.Row!, mainIsCsv ? csvTransformBound : remainingBytes);
+            // A JSON array's first element also carries its reserved closing bracket; bounding the row by one byte less
+            // rejects an over-limit first row instead of failing the batch when it is appended.
+            var transformed = transformer.Transform(record.Row!, mainIsCsv ? csvTransformBound
+                : mainIsArray && main.IsEmpty ? remainingBytes - 1 : remainingBytes);
             switch (transformed.Disposition)
             {
                 case EtlRowDisposition.Accepted when mainIsCsv:
@@ -481,6 +485,8 @@ internal sealed class EtlConnectorOutputProcessor
         private readonly MemoryStream _stream = new();
         private long _count;
         private bool _finished;
+
+        public bool IsEmpty => _count == 0;
 
         public long AppendRecord(ReadOnlyMemory<byte> jsonlLine, long remainingOutputBytes)
         {

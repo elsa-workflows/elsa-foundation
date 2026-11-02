@@ -252,7 +252,7 @@ public sealed partial class EtlRuntimeStoreTests
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
         var admission = ConnectorAdmission("inspection-corrupt-kind", new("tenant-a", "inspection-corrupt-kind"), httpShardIds: ["shard-a"]);
         var (_, batch, _) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
-        // The column holds the delivery mechanism (1 HTTP, 2 file) since spec 1190's CSV delivery; these values predate it unchanged.
+        // The column holds the delivery mechanism (1 HTTP, 2 file) since spec 1191's CSV delivery; these values predate it unchanged.
         await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET MainEffectKind = {FileEffectMechanism} WHERE BatchId = {batch.BatchId}");
 
         var inspector = (IEtlConnectorRuntimeInspector)database.CreateStore(context);

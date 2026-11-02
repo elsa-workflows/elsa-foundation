@@ -18,11 +18,12 @@ public sealed partial class EtlRuntimeJourneyTests
     private const string CsvJourneySource = "id,name\n1,Ada\n2,skip\n99,unknown\n3,Bram\n";
 
     [Theory]
-    [InlineData("csv", true)]
-    [InlineData("jsonl", true)]
-    [InlineData("http", true)]
-    [InlineData("csv", false)]
-    public async Task Shared_worker_publishes_csv_files_with_a_header_per_batch(string sourceKind, bool csvErrors)
+    [InlineData("csv", "csv", "csv")]
+    [InlineData("jsonl", "csv", "csv")]
+    [InlineData("http", "csv", "csv")]
+    [InlineData("csv", "csv", "jsonl")]
+    [InlineData("csv", "jsonl", "csv")]
+    public async Task Shared_worker_publishes_csv_files_with_a_header_per_batch(string sourceKind, string mainKind, string errorKind)
     {
         await using var files = new RuntimeFiles(sourceKind == "jsonl"
             ? "{\"id\":1,\"name\":\"Ada\"}\n{\"id\":2,\"name\":\"skip\"}\n{\"id\":99,\"name\":\"unknown\"}\n{\"id\":3,\"name\":\"Bram\"}\n"
@@ -36,20 +37,25 @@ public sealed partial class EtlRuntimeJourneyTests
             })));
         var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, configureRuntime: runtime =>
             ConfigureConnectorBindings(runtime, files.Scope, endpoint, csvSource: sourceKind != "http", httpMain: false, httpErrors: false));
-        var pipeline = CsvRoutePipeline(sourceKind, csvErrors);
-        var invocation = ConnectorInvocation(files.Scope, $"csv-routes-{sourceKind}", pipeline);
+        var pipeline = CsvRoutePipeline(sourceKind, errorKind == "csv", mainKind == "csv");
+        var invocation = ConnectorInvocation(files.Scope, $"csv-routes-{sourceKind}-{mainKind}-{errorKind}", pipeline);
 
         await files.AdmitAsync(host, invocation);
         var run = await files.WaitForTerminalAsync(host, invocation.RunId);
 
         Assert.Equal(EtlRunStatus.BusinessError, run.Status);
         Assert.Equal((2, 1, 1, 0, 0), (run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords, run.OutstandingRecords, run.OutstandingBytes));
-        var main = ReadCsvRoute(files.OutputRoot, "name,category");
-        // One record per batch: each accepted record is its own file, and every file carries the header.
-        Assert.Equal(2, main.Files);
-        Assert.Equal(["Ada,one", "Bram,three"], main.Rows.Order().ToArray());
-        Assert.Empty(Directory.EnumerateFiles(files.OutputRoot, "*.jsonl"));
-        if (csvErrors)
+        if (mainKind == "csv")
+        {
+            var main = ReadCsvRoute(files.OutputRoot, "name,category");
+            // One record per batch: each accepted record is its own file, and every file carries the header.
+            Assert.Equal(2, main.Files);
+            Assert.Equal(["Ada,one", "Bram,three"], main.Rows.Order().ToArray());
+            Assert.Empty(Directory.EnumerateFiles(files.OutputRoot, "*.jsonl"));
+        }
+        else
+            Assert.Equal(2, Directory.EnumerateFiles(files.OutputRoot, "*.jsonl").Count());
+        if (errorKind == "csv")
         {
             var errors = ReadCsvRoute(files.ErrorRoot, "recordOrdinal,code,field");
             Assert.Equal(1, errors.Files);
@@ -61,7 +67,7 @@ public sealed partial class EtlRuntimeJourneyTests
         var inspection = Assert.IsType<EtlConnectorRunInspection>(await scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeInspector>()
             .FindConnectorInspectionAsync(files.Scope, invocation.RunId));
         Assert.Equal((2, 1), (inspection.AcceptedMainEffects, inspection.AcceptedErrorEffects));
-        Assert.Equal(EtlConnectorKind.Csv, inspection.Run.Bindings.Main.Kind);
+        Assert.Equal(mainKind == "csv" ? EtlConnectorKind.Csv : EtlConnectorKind.Jsonl, inspection.Run.Bindings.Main.Kind);
     }
 
     [Fact]
@@ -163,7 +169,7 @@ public sealed partial class EtlRuntimeJourneyTests
         }
     }
 
-    private static EtlPipelineV2 CsvRoutePipeline(string sourceKind, bool csvErrors)
+    private static EtlPipelineV2 CsvRoutePipeline(string sourceKind, bool csvErrors, bool csvMain = true)
     {
         var baseline = EtlV2TestPipelines.Create();
         EtlSource source = sourceKind switch
@@ -177,7 +183,8 @@ public sealed partial class EtlRuntimeJourneyTests
         {
             Source = source,
             Lookup = new("lookup", EtlTestPipelines.Create().LookupSchema, "id", "id"),
-            Routes = new(new EtlCsvDestination("output"), csvErrors ? new EtlCsvDestination("errors") : new EtlJsonlDestination("errors")),
+            Routes = new(csvMain ? new EtlCsvDestination("output") : new EtlJsonlDestination("output"),
+                csvErrors ? new EtlCsvDestination("errors") : new EtlJsonlDestination("errors")),
             Mapping = [new("name", EtlFieldOrigin.Source, "name"), new("category", EtlFieldOrigin.Lookup, "category")],
             Filters = [new("name", EtlComparison.NotEqual, JsonSerializer.SerializeToElement("skip"))],
             Limits = baseline.Limits with { FilePartitionCount = 2, MaxBatchRecords = 1 }

@@ -21,6 +21,10 @@ public sealed class EtlCsvRouteWriterTests
     [InlineData(" nbsp", "\" nbsp\"")]
     [InlineData("in side", "in side")]
     [InlineData("=SUM(A1)", "=SUM(A1)")]
+    [InlineData("+1", "+1")]
+    [InlineData("-1", "-1")]
+    [InlineData("@user", "@user")]
+    [InlineData("   ", "\"   \"")]
     [InlineData("Zoë 東京", "Zoë 東京")]
     public void Strings_are_quoted_only_when_they_need_it(string value, string expected) =>
         Assert.Equal(expected, EtlCsvRouteWriter.Text(value));
@@ -28,17 +32,18 @@ public sealed class EtlCsvRouteWriterTests
     [Fact]
     public void Record_rows_keep_mapping_order_and_exact_scalar_text()
     {
-        var json = "{\"name\":\"a,b\",\"count\":-9223372036854775808,\"amount\":1.50,\"active\":true,\"note\":null,\"empty\":\"\"}\n";
+        var json = "{\"name\":\"a,b\",\"count\":-9223372036854775808,\"max\":9223372036854775807,\"amount\":1.50,\"active\":true,\"note\":null,\"empty\":\"\"}\n";
 
-        var row = Encoding.UTF8.GetString(EtlCsvRouteWriter.RecordRow(Encoding.UTF8.GetBytes(json), 6));
+        var row = Encoding.UTF8.GetString(EtlCsvRouteWriter.RecordRow(Encoding.UTF8.GetBytes(json), 7));
 
-        Assert.Equal("\"a,b\",-9223372036854775808,1.50,true,,\"\"\r\n", row);
+        Assert.Equal("\"a,b\",-9223372036854775808,9223372036854775807,1.50,true,,\"\"\r\n", row);
     }
 
     [Fact]
     public void Headers_and_error_rows_use_the_string_rule()
     {
-        Assert.Equal("id,\"a,b\",\"say \"\"x\"\"\"\r\n", Encoding.UTF8.GetString(EtlCsvRouteWriter.Header(["id", "a,b", "say \"x\""])));
+        Assert.Equal("id,\"a,b\",\"say \"\"x\"\"\",\"two\nlines\"\r\n",
+            Encoding.UTF8.GetString(EtlCsvRouteWriter.Header(["id", "a,b", "say \"x\"", "two\nlines"])));
         Assert.Equal("recordOrdinal,code,field\r\n", Encoding.UTF8.GetString(EtlCsvRouteWriter.ErrorHeader()));
         Assert.Equal("7,etl.invalid-value,\"a,b\"\r\n", Encoding.UTF8.GetString(EtlCsvRouteWriter.ErrorRow(new EtlRowError(7, "a,b", "etl.invalid-value"))));
         Assert.Equal("3,etl.jsonl.record-invalid,\r\n", Encoding.UTF8.GetString(EtlCsvRouteWriter.ErrorRow(new EtlRowError(3, null, "etl.jsonl.record-invalid"))));
@@ -69,7 +74,8 @@ public sealed class EtlCsvRouteWriterTests
         var rows = new[]
         {
             "{\"name\":\"line\\nbreak, \\\"quoted\\\" \",\"count\":42,\"amount\":-0.0100,\"active\":false}",
-            "{\"name\":\" Zoë 東京\",\"count\":null,\"amount\":79228162514264337593543950335,\"active\":true}"
+            "{\"name\":\" Zoë 東京\",\"count\":null,\"amount\":79228162514264337593543950335,\"active\":true}",
+            "{\"name\":\"\",\"count\":9223372036854775807,\"amount\":0,\"active\":null}"
         };
         var bytes = EtlCsvRouteWriter.Header(schema.Select(column => column.Name).ToArray())
             .Concat(rows.SelectMany(row => EtlCsvRouteWriter.RecordRow(Encoding.UTF8.GetBytes(row), schema.Length))).ToArray();
@@ -93,5 +99,9 @@ public sealed class EtlCsvRouteWriterTests
         Assert.Null(typed[1]["count"].Value);
         Assert.Equal(decimal.MaxValue, typed[1]["amount"].Value);
         Assert.Equal(true, typed[1]["active"].Value);
+        // An empty string is written as "" but, like an empty field, the CSV source reads it as null.
+        Assert.Null(typed[2]["name"].Value);
+        Assert.Equal(long.MaxValue, typed[2]["count"].Value);
+        Assert.Null(typed[2]["active"].Value);
     }
 }
