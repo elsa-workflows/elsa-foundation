@@ -10,203 +10,237 @@
 
 ## Context
 
-Today every v2 connector run is finite:
+Every v2 connector run is finite today:
 - the partition plan is fixed when preparation commits;
-- an HTTP shard completes when a page returns no continuation;
-- the run settles itself once every partition is complete;
+- an HTTP shard ends when its current retained page has no continuation (an exhausted position);
+- the run settles itself once every partition is exhausted and nothing is outstanding;
 - the native `RunEtl` activity waits for that single terminal result.
 
-The finite half of the criterion is met by file and HTTP runs that span two or more leased partitions. The continuous half has no implementation, and every ETL document still calls itself finite.
+The finite half of the criterion is met by file and HTTP runs over two or more leased partitions. The continuous half has no implementation.
 
-This slice adds one continuous mode for an HTTP cursor feed. The pipeline's HTTP shards are its partitions:
-- Each shard reads pages as it does today.
-- When a shard catches up, it does not complete. It waits for a poll interval, then requests the same cursor again.
-- The run continues until its model is asked to stop.
-  - **Completion** drains every shard to caught-up, then settles through the existing outcome rules.
-  - **Cancellation** settles `Cancelled` as it does today.
+This slice adds one continuous mode, for an HTTP cursor feed. The pipeline's HTTP shards are its partitions.
+- **Reading.** Each shard reads pages as it does today.
+- **Catching up.** When a shard catches up, it records nothing but a wait. Its poll journal is cleared, its reservations are released and the partition waits for the poll interval before requesting the same cursor again.
+- **Ending.** The run continues until its model is asked to stop:
+  - **Completion** drains each shard to caught-up. The final caught-up response is then retained as the shard's last page, so the shard ends through the existing exhausted path. The run settles through the existing outcome rules.
+  - **Cancellation** settles `Cancelled`, as today.
 
-The worker, lease, fence, effect and acceptance machinery stays unchanged. A continuous run still processes bounded batches over leased partitions, never one workflow per record.
+The worker, lease, fence, effect, acceptance and settlement machinery is reused unchanged. A continuous run processes bounded batches over leased partitions, never one workflow per record.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Keep ingesting from a cursor feed (Priority: P1)
 
-An author publishes a pipeline that reads an HTTP cursor feed, with two host-configured shards, and runs it continuously. Records the feed gains after the run starts are delivered to the routes without starting a new run.
+An author publishes a pipeline that reads an HTTP cursor feed through two host-configured shards, and runs it continuously. Records that the feed gains after the run starts reach the routes without a new run.
 
 **Why this priority**: this is the continuous behaviour the criterion asks for.
 
-**Independent Test**: start a continuous run against a local feed with two shards. Append records to each shard over time, and check that every appended record is delivered exactly once to the routes while the run stays `Running`.
+**Independent Test**: start a continuous run against a local feed with two shards, then append records to each shard over time. Every appended record must reach the routes, accepted exactly once, while the run stays `Running`.
 
 **Acceptance Scenarios**:
 
-1. **Given** a continuous run whose two shards have caught up, **When** the feed appends records to one shard, **Then** that shard's next poll delivers them and the other shard keeps idling. The run stays `Running`.
-2. **Given** a shard that is caught up, **When** it polls repeatedly with nothing new, **Then** no page, request, batch or retained byte is added for those polls. Only the shard's wait time and its poll journal change.
+1. **Given** a continuous run whose two shards have caught up, **When** the feed appends records to one shard, **Then** that shard's next poll delivers them, the other shard keeps idling, and the run stays `Running`.
+2. **Given** a caught-up shard, **When** it polls again with nothing new, **Then** after the store records that poll:
+   - the shard's page, request and batch counts are unchanged;
+   - its retained input, output and metadata bytes are unchanged;
+   - its input and source-metadata reservations are back at zero;
+   - only the shard's next-poll time has moved.
 3. **Given** the same pipeline without a run policy, **When** it runs, **Then** it behaves exactly as today: finite, with the same artifact bytes, identities and outcomes.
 
 ### User Story 2 — Complete or cancel a continuous run (Priority: P1)
 
-An operator, or a workflow, ends a continuous run. Completion processes what the feed holds when the request is made and then settles. Cancellation stops it.
+An operator ends a continuous run.
+- Completion processes what the feed holds when the request is made, then settles.
+- Cancellation stops the run.
 
-**Why this priority**: the criterion requires model-owned completion and cancellation. Without them a continuous run cannot end.
+**Why this priority**: the criterion requires model-owned completion and cancellation, and a continuous run cannot end without them.
 
-**Independent Test**: request completion of a running continuous run while one shard idles and the other has records waiting, then check:
-- both shards drain;
-- the run settles `Succeeded`;
-- the native workflow resumes through `Done`.
-
-Cancel a second run and check that it settles `Cancelled`.
+**Independent Test**:
+1. Request completion while one shard idles and the other has records waiting.
+2. Check that both shards drain, the run settles `Succeeded`, and the native workflow resumes through `Done`.
+3. Cancel a second run and check that it settles `Cancelled`.
 
 **Acceptance Scenarios**:
 
 1. **Given** a continuous run, **When** completion is requested, **Then**:
-   - idling shards poll again without waiting for their interval;
-   - each shard completes at its next caught-up response;
-   - the run settles `Succeeded`, or `BusinessError` if any record was rejected.
-2. **Given** a completion request, **When** it is repeated, **Then** it is idempotent.
-3. **Given** a terminal run, **When** completion is requested, **Then** the request is refused with a terminal status and changes nothing.
-4. **Given** a finite run, **When** completion is requested, **Then** the request is refused and the run is unchanged.
-5. **Given** a continuous run with a completion request, **When** it is cancelled before it drains, **Then** it settles `Cancelled`, because the first terminal outcome wins.
+   - idling shards become due at once;
+   - each shard ends at its first caught-up response from an attempt started after the request;
+   - the run settles `Succeeded`, or `BusinessError` with `etl.rows-rejected` if any record was rejected.
+2. **Given** a caught-up response from an attempt started before the completion request, **When** the store records it, **Then** the shard is due again at once rather than ended, so that records appended in between are not lost.
+3. **Given** a completion request, **When** it is repeated, **Then** it is idempotent.
+4. **Given** a terminal run, **When** completion is requested, **Then** the result is `terminal`, and nothing changes.
+5. **Given** a finite run, **When** completion is requested, **Then** the result is `notContinuous`, and nothing changes.
+6. **Given** a continuous run with a completion request, **When** it is cancelled before it drains, **Then** it settles `Cancelled`, because the first terminal outcome wins.
 
 ### User Story 3 — Recover a continuous run after worker loss (Priority: P1)
 
-A worker dies while a shard is fetching, reading a page, delivering it, or idling. A replacement continues from the shard's durable cursor.
+A worker dies mid-poll or mid-batch, and a replacement continues from the shard's durable cursor.
 
-**Why this priority**: the criterion requires resumable cursors; a continuous run is long-lived and must outlive workers.
+**Why this priority**: the criterion requires resumable cursors, and a long-lived run must outlive its workers.
 
-**Independent Test**: in real worker processes over one runtime store, kill a worker:
-- after a page is captured and before acceptance;
-- while a shard idles.
+**Independent Test**: in real worker processes over one runtime store:
+- kill a worker after a non-empty page is captured and before acceptance;
+- kill a worker while its idle poll's attempt is in flight.
 
-In both cases, check that the replacement continues from the durable cursor without losing or duplicating accepted records.
+Check that the replacement continues without losing or duplicating accepted records.
 
 **Acceptance Scenarios**:
 
 1. **Given** a worker killed after a non-empty page is captured, **When** a replacement claims the shard, **Then** it replays that page from the immutable page cache and does not fetch it again.
-2. **Given** a worker killed while its shard idles, **When** the shard becomes due, **Then** any worker polls the same cursor. Nothing from before the kill is repeated.
-3. **Given** a caught-up response that was not yet recorded when the worker died, **When** the shard is claimed again, **Then** the poll happens again. That is safe because a caught-up response carries no records.
+2. **Given** a worker killed during an idle poll's attempt, **When** the attempt expires and a replacement claims the shard, **Then** the poll is retried under the existing uncertain-attempt rules. This is safe, because a caught-up response carries no records.
+3. **Given** a shard between polls, **Then** it has no owner, because its lease was released. Any worker may claim it once it is due.
 
 ### User Story 4 — Author and operate a continuous run in Studio (Priority: P2)
 
-An author turns on continuous mode and sets a poll interval. An operator inspecting the run sees that it is continuous, sees which shards are idling and until when, and can request completion.
+An author turns on continuous mode and sets a poll interval. An operator sees that a run is continuous, which shards are idling and until when, and can request completion.
 
-**Why this priority**: the parent needs Studio authoring and inspection; completion needs a visible action next to Cancel.
+**Why this priority**: the parent requires Studio authoring and inspection, and completion needs a visible action next to Cancel.
 
-**Independent Test**:
-- A component test and a browser test cover the authoring controls.
-- A real browser, against owned hosts, shows a continuous run's inspection and requests its completion.
+**Independent Test**: component and browser tests cover the authoring controls. A real browser, against owned hosts, shows a continuous run's inspection and requests its completion.
 
 **Acceptance Scenarios**:
 
-1. **Given** an HTTP pipeline, **When** the author turns on continuous mode, **Then** they set a poll interval in seconds, and the saved artifact carries the run policy.
-2. **Given** a file source, **When** the author views the run controls, **Then** continuous mode is not offered.
+1. **Given** an HTTP source with token or next-link pagination, **When** the author turns on continuous mode, **Then** they can set the poll interval in seconds, and the saved artifact carries the run policy.
+2. **Given** a file source or single-page pagination, **Then** continuous mode is not offered.
 3. **Given** a running continuous run, **When** an operator inspects it, **Then**:
    - the run is labelled "Continuous";
-   - each idling shard shows when it polls next;
-   - a "Complete run" action appears next to "Cancel run".
+   - an idling shard shows "Polls again at …", which is distinct from a retry wait's "Eligible after …";
+   - "Complete run" is offered next to "Cancel run";
+   - once completion is requested, the run reads "Completion requested".
 
 ### User Story 5 — Run it from a workflow on a real host (Priority: P2)
 
-A native Flowchart starts a continuous run, and the run is later completed through the runtime API. The workflow resumes with the run's outcome.
+A native Flowchart starts a continuous run, which is later completed through the runtime API. The workflow resumes with the run's outcome.
 
-**Independent Test**: an actual Workbench journey driver, against a local cursor-feed server with two shards:
-1. Start the run.
-2. Append records twice.
-3. Check delivery and idle polling.
-4. Request completion, then check that the Flowchart ends through `Done`.
+**Independent Test**: an actual Workbench journey driver against a local cursor-feed server with two shards:
+1. start the run;
+2. append records twice;
+3. check delivery and idle polling;
+4. request completion and check that the Flowchart ends through `Done`.
 
 A second run is cancelled and ends `Cancelled`.
 
 ### Edge Cases
 
-- **A caught-up response** is an HTTP 200 page with zero records whose continuation is either absent or resolves to the request it answers.
-  - It is not published to the page cache, and it does not advance the cursor.
-  - It resets the shard's poll journal and schedules the next poll for one interval later.
-  - A page with records always advances: a continuation that does not move still fails with `etl.http.pagination-cycle`.
-- **A page with records and no continuation** ends that shard as it does today, because the feed has declared its end. The run continues while any other shard is live. A run whose every shard has ended settles as a finite run would.
-- **A zero-record page whose continuation moves** advances immediately, as it does today. It is not a caught-up response.
-- **Single-page pagination** has no cursor to resume from, so it is refused for continuous mode at validation with `etl.continuous-pagination-unsupported`.
-- **File sources** (CSV and JSON Lines) are refused for continuous mode with `etl.continuous-source-unsupported`. Their inputs are pinned immutable snapshots.
-- **Retries and rate limits** inside one poll keep their existing attempt and deadline rules. A caught-up response starts the next poll with a fresh journal, so idle time never spends retry budget.
-- **A completion request** arriving while a shard holds an owed batch or an attached page does not interrupt it. The shard completes at its next caught-up response, after that work is accepted.
-- **A shard that ended**, because a page had records and no continuation, stays complete. Completion does not reopen it.
-- **The poll interval** is between 1 and 86,400 seconds. Values outside that range are refused at validation.
-- **Lifetime budgets**: until compaction lands, the following still accumulate per accepted non-empty page:
+- **What a caught-up response is.** In a continuous run, an HTTP 200 page is caught up when it has zero records and its continuation is either absent or resolves to the request it answers. Resolution uses the same URI equality as the pagination-cycle check.
+  - Classification happens after decoding and before continuation resolution, so a caught-up page never reaches `etl.http.pagination-cycle`.
+  - Before recording a non-final caught-up response, the acquirer re-reads the page cache. A page that a predecessor published wins.
+- **A page with records always advances.**
+  - If its continuation does not move, it still fails with `etl.http.pagination-cycle`.
+  - If it has no continuation, the feed has declared that shard's end, and the shard ends as today. The feed contract therefore requires a continuation on every non-empty page for a shard to stay live. The README and the Studio help state this.
+- **A zero-record page whose continuation moves** advances as today, but in a continuous run the next request waits for one poll interval. This prevents a hot loop. Such a page consumes one page of budget per poll; the README states this.
+- **Unsupported configurations** are refused at validation:
+  - single-page pagination, with `etl.continuous-pagination-unsupported`;
+  - file sources (CSV and JSON Lines), with `etl.continuous-source-unsupported`;
+  - a poll interval outside 1 to 86,400 seconds, with `etl.continuous-poll-interval-invalid`.
+- **Retries and rate limits** within one poll keep the existing attempt and deadline rules. Because a caught-up response clears the journal, idle time never spends retry budget. A feed outage longer than the fetch deadline (`DeadlineSeconds`, 900 by default) still fails the run. The README states this.
+- **A completion request during work.** A shard holding an owed batch or an attached page is not interrupted. It ends at its first qualifying caught-up response after that work is accepted.
+- **A completion request during preparation** is recorded. The shards it creates poll at once and drain as usual.
+- **An exhausted shard stays exhausted.** Completion does not reopen it, and a run whose every shard is exhausted settles as a finite run would.
+- **Clock.** A shard's next-poll time is the store's own time when it records the caught-up response, plus the interval. Claims compare against the same store clock.
+- **Cost of an idle poll.** Each poll claims the partition, and every claim audits the shard's retained history. A poll adds no state, but its cost grows with that history until compaction lands.
+- **Fairness.** Claims are ordered by run creation time, so a long-lived continuous run's due shards are claimed before shards of newer runs. Due shards are claimed only once their interval has passed, so idle shards hold no worker slots.
+- **Lifetime budgets.** Until compaction lands, these still accumulate for each accepted non-empty page:
   - pages and requests;
   - batches;
   - retained input, metadata and output bytes.
 
-  A continuous run that reaches `MaxPagesPerPartition` or a retention budget settles with the existing failure codes. Caught-up polls consume none of these.
-- **Mixed-version fleets**: a runtime without this slice refuses a continuous artifact, because unknown members are disallowed. All workers in a scope must run this slice before any continuous run is admitted. That is the same rule specs 1190 and 1191 state for their new shapes.
+  A continuous run that reaches `MaxPagesPerPartition` or a retention budget fails with the existing codes. Caught-up polls consume none of these budgets.
+- **Mixed-version fleets.** A runtime without this slice refuses a continuous artifact, because unknown members are disallowed. All workers in a scope must run this slice before a continuous run is admitted. This is the same rule specs 1190 and 1191 state.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001** A v2 pipeline may carry an optional run policy. Absent means finite.
-  - When present it states continuous mode and a poll interval in seconds.
-  - A pipeline without the policy serializes byte-identically to today, so artifact hashes, invocation fingerprints, batch IDs and request and page identities are unchanged.
-- **FR-002** The policy is validated wherever it is read: the design compiler, the executable reader and the runtime codec.
-  - It is refused for file sources (`etl.continuous-source-unsupported`).
-  - It is refused for single-page pagination (`etl.continuous-pagination-unsupported`).
-  - An out-of-range interval is refused (`etl.continuous-poll-interval-invalid`).
-- **FR-003** A continuous HTTP run plans its partitions exactly as a finite run does: one per host-pinned shard, two or more when the host configures them. Each partition is leased, fenced and heartbeat-renewed independently.
-- **FR-004** In a continuous run, a caught-up response (defined under Edge Cases) is recorded by the store in one transaction under the current lease and fence. It:
-  - closes the attempt with a caught-up outcome;
-  - replaces the request's poll journal with a fresh one;
-  - sets the partition's next-eligible time to the response time plus the poll interval;
-  - releases the lease.
+- **FR-001** A v2 pipeline may carry an optional run policy holding continuous mode and a poll interval in seconds. Without it the run is finite.
+  - The policy is an init-only property, omitted from serialization when null, following the default-budget precedent in `EtlArtifactV2Json`. The positional record's public constructor is unchanged.
+  - A pipeline without the policy therefore serializes byte-identically to today, so its artifact hash, invocation fingerprint, and batch, request and page identities are unchanged.
+  - An explicit `null` on read is accepted as absent.
+- **FR-002** The policy is validated wherever the pipeline is read: the design compiler, the executable reader and the runtime codec. The error codes are those listed in Edge Cases.
+- **FR-003** A continuous HTTP run plans its partitions exactly as a finite one does: one per host-pinned shard, two or more when the host configures them. Each is leased, fenced and heartbeat-renewed independently.
+- **FR-004** The acquirer classifies a caught-up response as described in Edge Cases.
+  - Without a qualifying completion request, it records the response through a new store transition.
+  - The transition first validates the attempt as capture does: it must be the latest attempt under the current fence, received within `[StartedAt, min(ExpiresAt, Deadline))`, and not after the store's time.
+  - Then, in one transaction, it:
+    - clears the request's poll journal;
+    - releases the request's, partition's and connector run's input reservation, fetch metadata and source-metadata reserve;
+    - sets the partition's next-eligible time to the store's time plus the interval;
+    - releases the lease.
 
-  It adds no page, request or batch row, and no retained or reserved bytes. Metadata accounting moves from the old journal to the new one, and every existing accounting invariant still holds.
-- **FR-005** A due idle partition is claimable by any worker, which issues a new attempt for the same request identity. Request, page and batch identities for non-empty pages are derived as today, so replay and duplicate detection are unchanged.
-- **FR-006** `POST /etl/runs/{runId}/complete` records a durable completion request on a running continuous run, under the same authorization as cancel.
-  - It returns:
-    - `accepted` the first time;
-    - `alreadyRequested` on a repeat;
-    - `terminal` for a settled run;
-    - `notContinuous` for a finite run, which is refused.
-  - The request clears every idle partition's next-eligible time, so each polls promptly.
-- **FR-007** With completion requested, a caught-up response completes its partition instead of re-arming it. Once every partition is complete and nothing is outstanding, the existing completion rules settle the run: `Succeeded`, or `BusinessError` with `etl.rows-rejected`. The terminal result and outbox are written in that same transaction.
-- **FR-008** Cancellation and fault settlement are unchanged for continuous runs, and the first terminal outcome wins over a pending completion request.
-- **FR-009** The native `RunEtl` activity is unchanged:
-  - it waits for the single terminal result;
-  - a continuous run keeps it suspended until the run settles;
-  - outcomes map as today.
-- **FR-010** The runtime API and inspection report:
+    It adds no page, request or batch row.
+  - The execution's subsequent release then returns `LeaseLost`, which is expected and treated as a clean exit.
+- **FR-005** The audit invariants accept the idle state.
+  - In a continuous run, a partition with no owed batch, no attached page, a cleared journal and a next-eligible time is idle, and that time is valid.
+  - In a finite run, the existing invariant is unchanged: the next-eligible time equals the waiting journal's time, or is null.
+  - When an idle shard becomes due, a worker begins a fresh journal for the same request identity, exactly as for a first fetch.
+- **FR-006** With a qualifying completion request, the acquirer retains the caught-up response as the shard's final page instead.
+  - A qualifying request is one made at or before the attempt's start time.
+  - The response is decoded with its continuation normalized to absent: a caught-up continuation is a no-op by definition. The cache applies the same normalization on every read, so replay is deterministic.
+  - It is published, captured and attached, then advanced through the existing empty-page path, which exhausts the shard.
+  - A caught-up response from an earlier attempt is recorded as in FR-004, but the partition becomes due at once.
+- **FR-007** `POST /etl/runs/{id}/complete` records a durable completion request on a continuous run, under a new `etl/runs:complete` permission.
+  - It is described by an `etl-run-complete` resource entry, alongside `etl-run-cancel`.
+  - It is implemented by a new `IEtlRuntimeOperations` member that has a default body.
+  - It returns `200` with an `EtlRunCompletionView` whose result is one of:
+    - `accepted`: the run is preparing or running;
+    - `alreadyRequested`;
+    - `terminal`;
+    - `notContinuous`;
+    - `notFound`.
+  - On `accepted`, it clears the next-eligible time of every idle partition in the same transaction. Partitions waiting on a retry are left alone.
+- **FR-008** Once every partition is exhausted and nothing is outstanding, the existing completion rules settle the run: `Succeeded`, or `BusinessError` with `etl.rows-rejected`. The terminal result and outbox are written in the same transaction, as today.
+- **FR-009** Cancellation and fault settlement are unchanged, and the first terminal outcome wins over a pending completion request.
+- **FR-010** The native `RunEtl` activity is unchanged.
+  - It waits for the single terminal result, so a continuous run keeps it suspended until the run settles.
+  - Outcomes map as today.
+- **FR-011** The runtime API and inspection add:
   - the run mode, `finite` or `continuous`;
-  - whether completion has been requested;
-  - each partition's next-poll time while it idles.
-- **FR-011** In Studio:
-  - The connector editor offers continuous mode, with a poll interval, for HTTP sources only.
-  - Run inspection labels a continuous run, shows when each idling shard polls next, and offers "Complete run" next to "Cancel run" while the run is running and continuous.
-- **FR-012** Persistence stays compatible:
-  - New state lives in additive nullable columns, so prior rows read unchanged. One example is the completion-request time on the connector run.
-  - Prior writers' rows are captured before the format changes.
-  - The run status, terminal outcome and position enumerations gain no members.
-- **FR-013** The ETL README, the Core README and the affected `EXTENSION_POINTS.md` files describe continuous mode, completion, the caught-up contract a feed must follow, and the lifetime-budget limit.
+  - the completion-request time;
+  - for an idle partition, its next-poll time, as a field distinct from the existing retry-wait `notBefore`.
+
+  Existing fields are unchanged.
+- **FR-012** Studio:
+  - The connector editor offers continuous mode and a poll interval for HTTP sources with token or next-link pagination only.
+  - Run inspection labels a continuous run and shows each idle shard's next poll. It offers "Complete run" next to "Cancel run" while a continuous run is preparing or running, and shows "Completion requested" afterwards.
+- **FR-013** Persistence remains compatible.
+  - The completion-request time is a new nullable column on `elsa_etl_connector_runs`, added by a new SQLite runtime migration and model snapshot. Prior rows read it as null.
+  - Before the column is added, rows from the prior writers (finite file and HTTP runs) are captured and read back unchanged.
+  - The run status, terminal outcome, fetch phase and position enumerations gain no members. Position and fetch JSON shapes are unchanged.
+  - The module `SchemaVersion` changes only if the repository's migration rules require it for an additive nullable column. The plan records which rule applies.
+- **FR-014** The ETL README, the Core README and the affected `EXTENSION_POINTS.md` files describe:
+  - continuous mode;
+  - completion;
+  - the feed contract;
+  - the idle-poll cost;
+  - the deadline and lifetime-budget limits.
 
 ### Key Entities
 
-- **Run policy**: optional pipeline member holding the mode and the poll interval.
-- **Caught-up outcome**: a fetch outcome that re-arms, or with completion requested completes, a partition without a page.
+- **Run policy**: an optional pipeline member holding the mode and the poll interval.
+- **Idle partition**: in a continuous run, a partition with no owed batch, no attached page and a cleared journal, whose next-eligible time is set.
 - **Completion request**: a nullable time on the connector run.
-- **Idle partition**: incomplete, with no owed batch and no attached page, and a future next-eligible time.
+- **Final caught-up page**: the retained, zero-record page whose continuation is normalized to absent, and which ends a draining shard.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001** A continuous run with two shards delivers every record appended after it started, accepted exactly once across both shards. Over 20 or more caught-up polls, page, request, batch and retained-byte counts do not change.
-- **SC-002** Completion drains and settles `Succeeded`, then the native Flowchart resumes through `Done`. Cancellation settles `Cancelled`. Completion of a finite or terminal run is refused.
-- **SC-003** In real worker processes, a kill after capture replays from the page cache, and a kill while idling resumes from the same cursor, each with exact accounting.
+- **SC-001** A continuous run with two shards delivers every record appended after it started, each accepted exactly once across both shards. After each of 20 or more caught-up polls, every count and byte total named in US1 scenario 2 is back at its pre-poll value.
+- **SC-002**
+  - Completion drains the run and settles it `Succeeded`, and the native Flowchart resumes through `Done`.
+  - A caught-up response from an attempt started before the completion request does not end the shard.
+  - Cancellation settles `Cancelled`.
+  - Completion of a finite or a terminal run is refused.
+- **SC-003** In real worker processes, a kill after capture replays the page from the cache, and a kill during an idle poll's attempt retries the poll. Accounting is exact in both cases.
 - **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof.
-- **SC-005** Studio authoring and inspection, including "Complete run", work in a real browser against owned hosts, with no axe violations at 320 px and 1024 px.
-- **SC-006** An actual Workbench journey shows continuous delivery, idle polling, completion and cancellation end to end.
-- **SC-007** Finite pipelines keep their artifact bytes and identities. The whole ETL suite passes unchanged apart from intended additions.
+- **SC-005** Studio authoring and inspection, including "Complete run", work in a real browser against owned hosts, with no axe violations at 320px and 1024px.
+- **SC-006** An actual Workbench journey shows continuous delivery, idle polling, completion and cancellation.
+- **SC-007** Finite pipelines keep their artifact bytes and identities. The whole ETL suite passes, changed only by intended additions.
 
 ## Assumptions and boundaries
 
-- **Feed contract.** The feed is a cursor feed. Re-requesting a cursor returns the records after it. When nothing is new, the feed returns an empty page whose continuation is absent or the same cursor. Feeds that cannot meet this, such as a collection that re-lists everything, are not continuous sources.
-- **Bounded state is a follow-up.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime is unbounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
-- **Native completion is out of scope.** A workflow cannot request completion through an activity in this slice. The runtime API and Studio can, and native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
-- **Other continuous sources come later.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.
-- **Deferred:** Orleans, the task-runner host, log CDC, distributed shuffle, windows and stream joins remain deferred.
+- **Feed contract.** The feed is a cursor feed: re-requesting a cursor returns the records after it, and every non-empty page carries a continuation. When nothing is new, the feed returns an empty page whose continuation is absent or is the same cursor. A collection that re-lists everything is not a continuous source.
+- **Bounded state.** Compacting accepted pages, requests, batches and retained bytes, so that a continuous run's lifetime and idle-poll cost are unbounded, is a separate follow-up slice. Criterion 1 is checked only after it lands.
+- **Native completion.** No workflow activity requests completion in this slice; the runtime API and Studio do. Native cancellation already works. A native completion activity belongs with the BPMN and Studio criterion.
+- **Other continuous sources.** RabbitMQ, SQL watermarks and file-drop folders get their own slices.
+- **Deferred.** Orleans, the task-runner host, log CDC, distributed shuffle, windows and stream joins remain deferred.
