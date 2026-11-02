@@ -1,4 +1,4 @@
-# Candidate session policy and lifecycle contract
+# Session policy and lifecycle contract
 
 **Status: Frozen for #3440 (T026), preview API.** This records the surface implemented by
 T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum, after these proofs passed on `7fc0a3c2e`:
@@ -200,7 +200,7 @@ earlier results.
 **Participation.** `ChangeAutonomyAsync` and readback live on the public scoped
 `IAgentSessionPolicyService`. `IAgentSessionService` gains no new members, and claims stay internal.
 The [replacement guidance](#replacement-guidance) lists which replacements keep the update supported.
-Supported, unsupported and forwarding replacements are qualified in the package-composed shell by
+Supported, unsupported and forwarding replacements are qualified by deterministic component tests in an in-process CShells shell built from project references, not packed packages, by
 T019 (`AgentCompositionTests`).
 
 ## Lifecycle outcomes (T013–T014, T020)
@@ -280,7 +280,7 @@ Rechecked against framework v6.1.0 and Elsa v6.3.0.
   single-implementation contracts registered with `TryAdd*`. Unsupported compositions refuse
   explicitly rather than falling back. As for every Agent contract except `IAgentToolAuthorizer`
   (`AgentRegistrationValidator`), the kind is declared only in the catalog and a second additive
-  registration is not diagnosed at startup. See [Open items](#open-items-before-freeze).
+  registration is not diagnosed at startup. See [Registration decision](#registration-decision).
 - **§2.22.1 catalog.** The Agent catalog is updated in this unit for the new contracts, the new
   reader member and the participation rules.
 - **§2.23.3 visibility.** The new Core types are public because host and persistence authors
@@ -314,10 +314,21 @@ Rechecked against framework v6.1.0 and Elsa v6.3.0.
 `AgentEndpointActor.CanAccess` still has three production callers. `IAgentAuditReader.ListAsync`
 remains a public, trusted in-process member; removing it would be a Major change outside this leaf.
 
-## Open items before freeze
+## Registration decision
 
-- Decide whether the new replacement contracts join `AgentRegistrationValidator`'s single-registration
-  check (§2.6.2) or stay with the domain's existing undiagnosed `TryAdd*` behavior.
+The new replacement contracts follow the Agent domain's existing `TryAdd*` registration. Startup
+diagnoses duplicates only for `IAgentToolAuthorizer`. Diagnosing two new contracts alone would leave
+the domain inconsistent, so the Agent-wide §2.6.2 gap is tracked in
+[#3633](https://github.com/elsa-workflows/elsa-foundation/issues/3633).
+
+## Ceiling
+
+"The administrator's current allowed modes/ceiling" (FR-006) is the session's owning `AgentPolicy`:
+`MaxAutonomyMode` and `AllowedAutonomyModes`, supplied by the host when the session is created.
+The HTTP create route uses `AgentPolicy.Default`, which has a FullAuto ceiling. The update clamps to
+the owning policy's current ceiling, and that clamp is covered by component tests on sessions created
+with a restrictive policy. No runtime surface for changing an administrator ceiling exists in this
+leaf or before it, and no native case runs with a ceiling below FullAuto.
 
 ## Separately packaged module
 

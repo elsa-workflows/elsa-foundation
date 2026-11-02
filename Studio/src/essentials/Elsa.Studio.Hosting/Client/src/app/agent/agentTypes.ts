@@ -82,13 +82,13 @@ export interface AgentCreateSessionResponse {
   title?: string;
   contextAttachments: StudioAgentContextAttachment[];
   /**
-   * Experimental (#3440, not frozen): the server-acknowledged session policy. Absent only when the backend
+   * Preview (#3440): the server-acknowledged session policy. Absent only when the backend
    * composition cannot read it back; such a session cannot change its autonomy.
    */
   policy?: AgentSessionPolicy;
 }
 
-/** Experimental (#3440, not frozen): a session's acknowledged effective autonomy, its ceiling and the owner's revision. */
+/** Preview (#3440): a session's acknowledged effective autonomy, its ceiling and the owner's revision. */
 export interface AgentSessionPolicy {
   autonomyMode: AgentAutonomyMode;
   maxAutonomyMode: AgentAutonomyMode;
@@ -96,7 +96,7 @@ export interface AgentSessionPolicy {
   revision: number;
 }
 
-/** Experimental (#3440, not frozen): a conditional autonomy-only change against the last acknowledged revision. */
+/** Preview (#3440): a conditional autonomy-only change against the last acknowledged revision. */
 export interface AgentAutonomyUpdateRequest {
   autonomyMode: AgentAutonomyMode;
   expectedRevision: number;

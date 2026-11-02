@@ -1,6 +1,6 @@
 # Validation guide
 
-All commands are recipes until their actual source-bound receipts are recorded on #3440 and its PR.
+Actual source-bound receipts for these commands are recorded on #3440 and PR #3612.
 Use normal build-slot scheduling, new owned output roots and unique local versions. Check machine
 load before interpreting timing failures. Do not use existing developer credentials or change a
 provider configuration to obtain deterministic protocol evidence.

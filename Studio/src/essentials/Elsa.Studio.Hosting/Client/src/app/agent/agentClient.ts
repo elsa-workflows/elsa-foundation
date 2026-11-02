@@ -27,7 +27,7 @@ export interface AgentClient {
   /** Reads the authoritative session detail, including its acknowledged policy when the backend owns one. */
   getSession(sessionId: string): Promise<AgentSessionDetailResponse>;
   /**
-   * Experimental (#3440, not frozen): one conditional autonomy-only change. Resolves with the acknowledged policy;
+   * Preview (#3440): one conditional autonomy-only change. Resolves with the acknowledged policy;
    * refusals reject with an {@link AgentApiError} carrying the server's code, and carry no policy data.
    */
   updateAutonomy(sessionId: string, request: AgentAutonomyUpdateRequest): Promise<AgentSessionPolicy>;

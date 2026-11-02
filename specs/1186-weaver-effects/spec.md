@@ -150,4 +150,26 @@ A user can understand expiry, denial, application and uncertainty through correl
 | Authoritative receipts and both loops | FR-011/012/017/018; stories1/2 |
 | Atomic Undo, races, duplicates and cancellation | FR-007/009/012–015; stories2–4 |
 
-The original candidate follow-through is retained in FR-007/009 (admission), FR-013 (expiry) and FR-015 (scoped audit). No acceptance item is complete at specification time.
+The original candidate follow-through is retained in FR-007/009 (admission), FR-013 (expiry) and FR-015 (scoped audit).
+
+### Acceptance evidence
+
+There are three evidence categories:
+- **Component:** deterministic tests on real default services.
+- **Protocol:** deterministic provider-protocol native evidence, using the actual Copilot and Anthropic adapters with packaged consumers.
+- **Live:** live-provider evidence. None was claimed.
+
+| #3440 acceptance | Evidence | Category |
+| --- | --- | --- |
+| Owning executors; explicit refusal when unsupported | `AgentProposalTests`, `AgentToolInvokerTests`; native size, visibility and workflow effects; `authority-refusal-continuation` and `stale-target-continuation` | Component + Protocol |
+| Exact review binding; distinct proposed, approved, applied and persisted states | `AgentProposalTests` (T013), `AgentProposalOrderingTests`; `reviewed-size-control`, `visibility-review-control` and `workflow-review-control` | Component + Protocol |
+| Current authority, policy, risk and effective server autonomy; client mode cannot disagree with session policy | `AgentSessionPolicyTests`, `AgentSessionAutonomyApiTests`, `AgentLifecycleOutcomeDisclosureTests`, Studio `WeaverSurface`/`agentClient` tests; four mode cases per adapter (T006 causal baseline, then T012), `busy-policy-lifecycle` | Component + Protocol |
+| Correlated receipts; results and denials return to the originating turn on both loops | `denied-result-continuation`, `interrupted-after-effect`, `duplicate-effect-delivery` and the automatic receipt controls on both adapters | Protocol |
+| Atomic Undo, races, duplicates, cancellation | `AgentProposalOrderingTests`, `AgentSessionAdmissionTests`, `AgentTurnOrchestratorTests` (T016–T018); `cancel-before-effect`, `duplicate-effect-delivery`, `workflow-review-control` | Component + Protocol |
+| Deterministic message admission (follow-through) | `AgentSessionAdmissionTests`, `AgentApiCurrentSurfaceTests` (T016) | Component |
+| Correlated expiry evidence (follow-through) | `AgentProposalTests` expiry cases (T020) | Component |
+| Owner-scoped audit (follow-through) | `AgentAuditOwnershipTests`, `AgentAuditApiTests` (T021/T022) | Component |
+
+The complete independent package witness requires every native case above. Exact heads, counts
+and hashes are recorded on #3440. The normal composed Studio gate is the complete Studio browser
+suite (T024).
