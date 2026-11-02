@@ -304,4 +304,18 @@ describe("agent stream recovery outcomes", () => {
       { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
     ]);
   });
+
+  it.each(["snapshots", "bytes"])("keeps the %s session limit detail and drops an unknown one", async limit => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", statusCode: 409, limit } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "rows" } })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+    ]);
+  });
 });

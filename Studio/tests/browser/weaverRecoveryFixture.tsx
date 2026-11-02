@@ -16,7 +16,7 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaver.cs
 // agent client; only the transport and the turn stream are simulated.
 type Message = { id: string; role: string; content: string; status: string; statusReason?: string };
 type Proposal = { id: string; title: string; summary: string; risk: string; status: string; baseRevision: string; resourceTarget: unknown; preparedInvocation?: StudioAgentPreparedInvocation; ownerResolution?: { claim: string; actorId: string }; result?: unknown };
-type Session = { id: string; owner: string; workspace?: string; title: string; status: string; updatedAt: string; messages: Message[]; proposals: Proposal[]; paused?: boolean };
+type Session = { id: string; owner: string; workspace?: string; continuedFrom?: string; title: string; status: string; updatedAt: string; messages: Message[]; proposals: Proposal[]; paused?: boolean };
 type Store = { next: number; sessions: Session[]; log: string[] };
 
 const params = new URLSearchParams(window.location.search);
@@ -80,7 +80,7 @@ function route(method: string, path: string, body: Record<string, unknown> = {})
       policy: { contextVisibility: true, defaultAutonomyMode: "manual", maxAutonomyMode: "fullAuto", allowedAutonomyModes: ["manual", "autoReadOnly", "fullAuto"] } } };
   }
   if (parts[0] === "sessions" && parts.length === 1 && method === "POST") {
-    const session: Session = { id: `agt_${++store.next}`, owner: user, workspace: body.workspace as string | undefined, title: "Studio assistant", status: "active", updatedAt: new Date().toISOString(), messages: [], proposals: [] };
+    const session: Session = { id: `agt_${++store.next}`, owner: user, workspace: body.workspace as string | undefined, continuedFrom: body.continuedFrom as string | undefined, title: "Studio assistant", status: "active", updatedAt: new Date().toISOString(), messages: [], proposals: [] };
     store.sessions.push(session); store.log.push("create");
     return done({ sessionId: session.id, status: "active", policy });
   }
@@ -164,6 +164,12 @@ const subscribeStream: typeof subscribeAgentSessionStream = (_context, url, onEv
     prompt.status = "streaming"; write(store);
     emit({ type: "turn-started", turnId: `turn_${prompt.id}`, maxSteps: 4 });
     await tick();
+    if (prompt.content.includes("[limit]")) {
+      // The documented session limit: the turn stops before the provider, and everything recorded stays.
+      prompt.status = "failed"; write(store);
+      emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit: "bytes", message: "Session limit reached: this conversation has recorded 8 MiB of recorded disclosure." });
+      return;
+    }
     if (prompt.content.includes("[drop]")) {
       emit({ type: "message-delta", messageId: replyId, content: "Partial answer" });
       await tick();

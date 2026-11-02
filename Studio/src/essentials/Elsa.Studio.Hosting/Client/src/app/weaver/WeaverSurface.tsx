@@ -179,6 +179,9 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
           {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
             <button type="button" disabled={session.reopening} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
           ) : null}
+          {notice.kind === "limit" ? (
+            <button type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</button>
+          ) : null}
         </div>
       ) : null}
       {offered.length > 0 ? (
@@ -223,6 +226,8 @@ function describeRecoveryNotice(notice: WeaverRecoveryNotice): string {
       return `The conversation could not be read. Nothing was changed. ${notice.message}`;
     case "action-refused":
       return notice.message;
+    case "limit":
+      return `Session limit reached. This conversation has recorded ${notice.limit === "bytes" ? "8 MiB of disclosed context" : notice.limit === "snapshots" ? "64 distinct context snapshots" : "the most context it can keep"}. It stays readable and nothing was discarded; continue in a new session, which carries over only a link to this one.`;
   }
 }
 

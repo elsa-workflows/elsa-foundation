@@ -22,10 +22,12 @@ import type {
   AgentRecordedMessage,
   AgentRecordedProposal,
   AgentSessionDetailResponse,
+  AgentSessionLimit,
   AgentSessionPolicy,
   AgentSessionSummary,
   AgentStreamEvent
 } from "../agent/agentTypes";
+import { SESSION_LIMIT_REACHED } from "../agent/agentTypes";
 import { clearSessionHint, readSessionHint, weaverSessionScope, writeSessionHint } from "./weaverSessionHint";
 
 export type WeaverChatState = "idle" | "streaming" | "awaiting-review" | "awaiting-confirmation";
@@ -96,7 +98,9 @@ export type WeaverRecoveryNotice =
   | { kind: "not-found"; sessionId: string }
   | { kind: "closed"; sessionId: string; status: string }
   | { kind: "lost"; sessionId: string; message: string }
-  | { kind: "action-refused"; message: string };
+  | { kind: "action-refused"; message: string }
+  /** The session reached a documented limit; it stays readable and may be continued in a new, linked session. */
+  | { kind: "limit"; sessionId: string; limit?: AgentSessionLimit };
 
 export interface UseWeaverSessionOptions {
   api: ElsaStudioModuleApi;
@@ -161,6 +165,8 @@ export interface UseWeaverSession {
   resolveProposal(proposal: AgentActionProposal, claim: AgentOwnerResolutionClaim): void;
   /** Leaves the shown session without changing it; the next prompt starts a new conversation. */
   startNewConversation(): void;
+  /** After a session limit: starts a new session that carries over only a link to the limited one. */
+  continueInNewSession(): void;
 }
 
 const ASSISTANT_PLACEHOLDER = "Awaiting assistant response…";
@@ -349,7 +355,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     }
   }, [acceptPolicy, attributeMessages]);
 
-  const ensureSession = useCallback(async (generation: number) => {
+  const ensureSession = useCallback(async (generation: number, continuedFrom?: string) => {
     if (sessionIdRef.current) return sessionIdRef.current;
     const requested = draftAutoApplyModeRef.current;
     creatingSessionsRef.current++;
@@ -359,7 +365,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         autonomyMode: requested,
         activeSurface: surface,
         clientContext: { studioVersion: api.host.hostVersion, sdkVersion: api.host.sdkVersion, moduleIds: [] },
-        ...(sessionScope ? { workspace: sessionScope.workspace } : {})
+        ...(sessionScope ? { workspace: sessionScope.workspace } : {}),
+        ...(continuedFrom ? { continuedFrom } : {})
       });
       if (generation === turnGenerationRef.current) {
         sessionIdRef.current = response.sessionId;
@@ -552,6 +559,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         finishTurn();
         break;
       case "error":
+        // A session limit is a documented outcome with its own continuation, not a failure of this turn's work.
+        if (event.code === SESSION_LIMIT_REACHED && sessionIdRef.current) setRecoveryNotice({ kind: "limit", sessionId: sessionIdRef.current, ...(event.limit ? { limit: event.limit } : {}) });
         // A disclosure refusal must never leave an earlier admission displayed as current.
         setAttachments([]);
         clearContextDiagnostics();
@@ -1054,6 +1063,26 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     }
   }), [agentClient, reopenSession, updateProposal, withProposalDecision]);
 
+  const continueInNewSession = useCallback(() => void withProposalDecision("continue-session", async () => {
+    const notice = recoveryNotice;
+    if (notice?.kind !== "limit" || chatState === "streaming" || sessionIdRef.current !== notice.sessionId) return;
+    const previous = notice.sessionId;
+    const generation = ++turnGenerationRef.current;
+    recoveryGenerationRef.current++;
+    if (sessionScope) clearSessionHint(sessionScope.storageKey, previous);
+    sessionIdRef.current = null; setSessionId(null); streamRef.current?.close(); streamRef.current = null;
+    policyScopeRef.current = null; setAutonomyUpdate(null); setSessionPolicy(null); setAutonomyUnsupported(null); setAutoApplyNotice(null);
+    // Nothing is carried over: no history, context or proposal. Context is disclosed again under fresh admission.
+    setMessages([]); setProposals([]); setTimeline([]); setPlan([]); setToolResults([]); setAttachments([]); clearContextDiagnostics();
+    setError(null); setRecoveryNotice(null); finishTurn();
+    try {
+      await ensureSession(generation, previous);
+      if (generation === turnGenerationRef.current) setMessages([{ id: `continued-${previous}`, role: "system", content: "Continued from a conversation that reached its session limit. Only a link to it was carried over; it stays readable from the recent conversations.", status: "completed", noticeCode: "continued-from" }]);
+    } catch (error) {
+      if (generation === turnGenerationRef.current) setRecoveryNotice({ kind: "lost", sessionId: previous, message: getAgentErrorMessage(error) });
+    }
+  }), [chatState, clearContextDiagnostics, ensureSession, recoveryNotice, sessionScope, setAutonomyUnsupported, setAutonomyUpdate, setSessionPolicy, withProposalDecision]);
+
   const startNewConversation = useCallback(() => {
     if (chatState === "streaming") return;
     recoveryGenerationRef.current++;
@@ -1114,7 +1143,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     startRecordedTurn,
     withdrawMessage,
     resolveProposal,
-    startNewConversation
+    startNewConversation,
+    continueInNewSession
   };
 }
 

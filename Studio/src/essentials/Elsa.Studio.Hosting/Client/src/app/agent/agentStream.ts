@@ -279,7 +279,9 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
     case "error": {
       const error = readObject<Record<string, unknown>>(event, "error") ?? readObject<Record<string, unknown>>(data, "error");
       const code = readString(error, "code");
-      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed."), ...(code ? { code } : {}) };
+      const limit = readString(error, "limit");
+      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed."), ...(code ? { code } : {}),
+        ...(limit === "snapshots" || limit === "bytes" ? { limit } : {}) };
     }
     case "conversation.error":
     case "conversation.failed":

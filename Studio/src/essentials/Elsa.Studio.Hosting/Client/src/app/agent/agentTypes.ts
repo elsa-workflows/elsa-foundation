@@ -120,6 +120,12 @@ export interface AgentSessionDetailResponse {
   messages: AgentRecordedMessage[];
 }
 
+/** Preview (#3441): which documented session limit a disclosure-budget refusal reached. */
+export type AgentSessionLimit = "snapshots" | "bytes";
+
+/** Preview (#3441): the code of the documented session limit outcome. */
+export const SESSION_LIMIT_REACHED = "agent.context.disclosure_budget_exceeded";
+
 /** Preview (#3441): why a cancelled message stopped. A dropped stream records no reason. */
 export type AgentMessageStatusReason = "interrupted" | "withdrawn" | "user-stop";
 
@@ -297,7 +303,7 @@ export type AgentStreamEvent =
   | { type: "message-completed"; messageId: string }
   | { type: "turn-cancelled"; turnId: string }
   | { type: "provider-notice"; code: string; message: string }
-  | { type: "error"; message: string; code?: string };
+  | { type: "error"; message: string; code?: string; limit?: AgentSessionLimit };
 
 export interface AgentFeedbackRequest {
   rating: "positive" | "negative";

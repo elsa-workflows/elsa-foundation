@@ -329,6 +329,34 @@ describe("Weaver session recovery", () => {
     view.unmount();
   });
 
+  it.each([["snapshots", "64 distinct context snapshots"], ["bytes", "8 MiB of disclosed context"]] as const)("shows the %s session limit and continues in a new session that carries over only a link", async (limit, wording) => {
+    const server = fakeServer();
+    const view = mount(server, "ada");
+    await flush();
+    typeAndSend(view.container, "Keep going");
+    await flush();
+    const limited = server.lastSessionId();
+    view.emit({ type: "error", code: "agent.context.disclosure_budget_exceeded", limit, message: "Session limit reached." });
+    await flush();
+    const notice = view.container.querySelector('[data-kind="limit"]');
+    expect(notice?.textContent).toContain(`Session limit reached. This conversation has recorded ${wording}.`);
+    expect(server.client.createSession).toHaveBeenCalledTimes(1);
+    click(buttonIn(notice, "Continue in a new session"));
+    await flush();
+    expect(server.client.createSession).toHaveBeenCalledTimes(2);
+    const request = server.client.createSession.mock.calls[1][0];
+    expect(request).toMatchObject({ continuedFrom: limited, workspace: "studio:primary" });
+    expect(Object.keys(request).sort()).toEqual(["activeSurface", "autonomyMode", "clientContext", "continuedFrom", "mode", "workspace"]);
+    const continued = server.lastSessionId();
+    expect(continued).not.toBe(limited);
+    expect(view.container.textContent).not.toContain("Keep going");
+    expect(view.container.textContent).toContain("Only a link to it was carried over");
+    expect(localStorage.getItem(weaverSessionScope(readyApi("ada"))!.storageKey)).toBe(continued);
+    expect(server.client.sendMessage).toHaveBeenCalledTimes(1);
+    expect(view.container.querySelector('[data-kind="limit"]')).toBeNull();
+    view.unmount();
+  });
+
   it("keeps working when browser storage throws", async () => {
     const server = fakeServer();
     const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });

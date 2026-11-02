@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Weaver session recovery journeys (#3441 T022) over a durable fake Agent backend that survives reloads and is
 // shared by tabs of one browser context. Requests go through the real Studio agent client.
-type FixtureWindow = { weaverFixture: { seed(sessions: unknown[]): string[]; log(): string[]; release(): void; state(): { sessions: { id: string; messages: { id: string; status: string; statusReason?: string }[]; proposals: { id: string; status: string; ownerResolution?: { claim: string } }[] }[] }; target: unknown } };
+type FixtureWindow = { weaverFixture: { seed(sessions: unknown[]): string[]; log(): string[]; release(): void; state(): { sessions: { id: string; continuedFrom?: string; messages: { id: string; status: string; statusReason?: string }[]; proposals: { id: string; status: string; ownerResolution?: { claim: string } }[] }[] }; target: unknown } };
 
 async function open(page: Page, query = "") {
   await page.goto(`/weaver-recovery.html${query}`);
@@ -164,6 +164,27 @@ test("another user's session is never listed or opened", async ({ page }) => {
   await open(page, "?user=ada");
   await expect(dock(page).getByText("Grace's private question")).toHaveCount(0);
   await expect(dock(page).getByRole("list", { name: "Recent conversations" })).toHaveCount(0);
+});
+
+test("a session limit is explained and continues in a new session that carries over only a link", async ({ page }) => {
+  await open(page);
+  await send(page, "Keep reading everything [limit]");
+  const notice = dock(page).locator('[data-kind="limit"]');
+  await expect(notice).toContainText("Session limit reached. This conversation has recorded 8 MiB of disclosed context.");
+  await notice.getByRole("button", { name: "Continue in a new session" }).click();
+  await expect(dock(page).getByText("Only a link to it was carried over")).toBeVisible();
+  await expect(dock(page).getByText("Keep reading everything [limit]")).toHaveCount(0);
+  const sessions = await page.evaluate(() => (window as unknown as FixtureWindow).weaverFixture.state().sessions);
+  expect(sessions.map(item => [item.id, item.continuedFrom ?? null, item.messages.length])).toEqual([["agt_1", null, 1], ["agt_2", "agt_1", 0]]);
+
+  // The new session is the one a reload returns to; the limited one stays readable from the list.
+  await page.reload();
+  await expect(dock(page).getByRole("button", { name: "New conversation" })).toBeVisible();
+  await expect(dock(page).getByText("Keep reading everything [limit]")).toHaveCount(0);
+  await dock(page).getByRole("button", { name: "New conversation" }).click();
+  await dock(page).getByRole("list", { name: "Recent conversations" }).getByRole("button").last().click();
+  await expect(dock(page).getByText("Keep reading everything [limit]")).toBeVisible();
+  expect((await log(page)).filter(entry => entry === "create")).toHaveLength(2);
 });
 
 test("the recovery list and outcomes fit a narrow viewport", async ({ page }) => {
