@@ -1,6 +1,6 @@
 {
   "sourceRevision": "e11275eb75662fb27da1da692117f974e28ba955",
-  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records. The round-3 revert of the superseded-attempt deferral changed only the idle-invariant line, which was re-recorded at its own revision. Round 4 re-recorded the two mutations whose failing tests round 3 edited. No other recorded original or failing test changed.",
+  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records. The round-3 revert of the superseded-attempt deferral changed only the idle-invariant line, which was re-recorded at its own revision. Round 4 re-recorded the two mutations whose failing tests round 3 edited, and round 5 recorded the connector-store mutation at its own revision. No other recorded original or failing test changed.",
   "mutations": [
     {
       "mutation": "validator-guard",
@@ -235,10 +235,10 @@
         "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Completion_reports_not_continuous_without_a_connector_store_and_unavailable_for_legacy_operations"
       ],
       "restored": "Passed!  - Failed:     0, Passed:     1",
-      "original": "        if (services.GetService<IEtlConnectorRuntimeStore>() is not { } connectors)\n            return new(\"notContinuous\");\n        var status = await connectors.",
-      "mutated_text": "        var connectors = Required<IEtlConnectorRuntimeStore>();\n        var status = await connectors.",
-      "round": 4,
-      "sourceRevision": "e1a6bcaf7ee746df4a57f7647e7a37d74e7d0c8d"
+      "original": "        if (run.Invocation.Artifact.FormatVersion != EtlArtifactV2Json.FormatVersion)\n            return new(\"notContinuous\");\n",
+      "mutated_text": "",
+      "round": 5,
+      "sourceRevision": "a41c556a404b1a49ea4ab9dcd716d808b75b6fa5"
     },
     {
       "mutation": "complete-offered-for-every-run",

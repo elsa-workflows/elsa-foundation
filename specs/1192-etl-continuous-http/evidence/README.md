@@ -84,7 +84,7 @@ This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from
 
 ## Bite-proofs (SC-004)
 
-[`bite-proofs.json`](bite-proofs.json) records every mutation at `e11275eb7`, with the failing test names, except the idle-invariant mutation, re-recorded at `4065f7856` after the round-3 revert changed its line, and the moving-cursor and completion-after-terminal mutations, re-recorded at `3d227c08c` after round 3 edited their tests. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
+[`bite-proofs.json`](bite-proofs.json) records every mutation at `e11275eb7`, with the failing test names, except the idle-invariant mutation, re-recorded at `4065f7856` after the round-3 revert changed its line, the moving-cursor and completion-after-terminal mutations, re-recorded at `3d227c08c` after round 3 edited their tests, and the connector-store mutation, recorded at `a41c556a4`. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
 
 | Mutation | Failing tests |
 |---|---|
@@ -106,7 +106,7 @@ This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from
 | A caught-up receipt before the attempt started is accepted | 1/1 |
 | Completion is accepted for a finite run | 1/1 |
 | A retry wait reports a next poll | 1/1 |
-| Completion without a connector store reports unavailable instead of `notContinuous` (round 4, at `e1a6bcaf7`) | 1/1 |
+| A v1 run on a provider without a connector store reports unavailable instead of `notContinuous` (round 5, at `a41c556a4`) | 1/1 |
 | Studio offers Complete run for every running run | 1/14 |
 
 **Tested without a bite-proof:** cancellation winning over a pending completion (it reuses the unchanged first-terminal settlement); the stale-attempt refusal of a caught-up record; the pagination and interval codes of the shared rule (the bite-proof covers the file-source code); completion accepted during preparation; the 404 for a foreign scope; `notContinuous` taking precedence for a settled finite run; the 503 for a v2 run without a connector store and the legacy operations default; the API's `mode` and `completionRequestedAt` projection; the completion migration's null column and CHECK; the editor's visibility rule; Studio's inspection labels (run mode, completion requested, "Next poll at" apart from "Eligible after") and the post-completion message.
