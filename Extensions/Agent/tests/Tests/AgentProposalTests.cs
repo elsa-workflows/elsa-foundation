@@ -446,6 +446,24 @@ public sealed class AgentProposalTests
     }
 
     [Fact]
+    public async Task A_proposal_without_a_prepared_invocation_never_holds_the_session_busy()
+    {
+        // Review round 1: a direct AddAsync of an unprepared proposal awaiting review acquired a deadline-less
+        // claim that no transition of this engine could settle, so autonomy changes stayed busy forever.
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalMutationTool());
+        var now = fixture.Clock.GetUtcNow();
+        var proposal = await fixture.Proposals.AddAsync(new("legacy-awaiting", fixture.Session.Id, null, "legacy", "legacy", "Legacy", "No executor",
+            AgentRisk.ReviewRequired, null, [], [], [], null, [], null, null, true, AgentActionProposalStatus.AwaitingApproval, null, null, now, now));
+
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
+        Assert.True((await fixture.Proposals.ApproveAsync(proposal.Id, ProposalFixture.Actor)).Succeeded);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
+        Assert.Equal("agent.proposal.executor_unavailable", (await fixture.Proposals.ExecuteAsync(proposal.Id, ProposalFixture.Actor)).Error?.Code);
+        Assert.Equal(0, fixture.Mutation!.DispatchCalls);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
+    }
+
+    [Fact]
     public async Task Denied_operation_cannot_execute_and_completed_operation_cannot_be_denied()
     {
         using var deniedFixture = await ProposalFixture.CreateAsync(new ProposalMutationTool());
@@ -955,6 +973,8 @@ internal sealed class ProposalMutationTool : IAgentTool
     public bool FailAfterEffect { get; init; }
     public bool CancelAfterEffect { get; init; }
     public bool Malformed { get; init; }
+    /// <summary>After dispatch, refuses with this module-authored failure code (for example the engine's cancellation code).</summary>
+    public string? RefuseAfterDispatchWith { get; init; }
     public TaskCompletionSource? Started { get; init; }
     public TaskCompletionSource? Release { get; init; }
     public AgentToolDescriptor Descriptor => new("test_mutate", "Update resource", "Updates one owned test resource.", AgentToolMutability.Mutating,
@@ -975,6 +995,7 @@ internal sealed class ProposalMutationTool : IAgentTool
         if (invocation.Target!.Revision != Revision) return AgentResult<AgentToolResult>.Failure("test.stale", "The resource changed after review.", 409);
         Started?.TrySetResult();
         if (Release is not null) await Release.Task.WaitAsync(cancellationToken);
+        if (RefuseAfterDispatchWith is { } code) return AgentResult<AgentToolResult>.Failure(code, "The module refused after dispatch.", 409);
         ExecuteCalls++;
         if (NoopWithoutReceipt) return AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "A misleading success."));
         Value = invocation.Arguments.GetProperty("value").GetString()!;

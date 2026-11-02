@@ -43,8 +43,11 @@ internal sealed class InMemoryAgentProposalService(
             || proposal.Status is not (AgentActionProposalStatus.Draft or AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Edited)))
             throw new AgentContributionException("A review-required operation must be inserted awaiting review; only an approval decision records approval.");
         // The proposal claim exists before the store can expose the proposal, so a preparation claim can
-        // hand off to it without an idle gap. Direct callers are covered the same way.
-        var claim = _owner?.AcquireProposal(proposal.SessionId, proposal.PreparedInvocation?.ExpiresAt);
+        // hand off to it without an idle gap. Direct callers are covered the same way. A proposal without a
+        // prepared invocation is never claimed: ExecuteAsync refuses it before dispatch, so its outcome cannot
+        // depend on policy, and a claim with no deadline and no reachable settling transition would hold the
+        // session busy forever.
+        var claim = proposal.PreparedInvocation is { } claimed ? _owner?.AcquireProposal(proposal.SessionId, claimed.ExpiresAt) : null;
         var inserted = false;
         try
         {
@@ -343,7 +346,9 @@ internal sealed class InMemoryAgentProposalService(
         if (proposal.PreparedInvocation is { } original && outcome.Value?.ToolResult is { } observedResult)
             outcome = outcome with { Value = outcome.Value with { ToolResult = AgentResultProvenance.Stamp(observedResult, original) } };
         var value = outcome.Value;
-        var cancelled = !outcome.Succeeded && outcome.Error?.Code == DefaultAgentActionProposalExecutor.CancelledBeforeDispatchCode;
+        // Only the executor's own engine-owned signal is a pre-dispatch cancellation; a module returning the same
+        // public code after dispatch is an ordinary refusal (Failed, refused lifecycle, claim released).
+        var cancelled = DefaultAgentActionProposalExecutor.IsCancelledBeforeDispatch(outcome);
         var status = cancelled ? AgentActionProposalStatus.Cancelled
             : !outcome.Succeeded ? AgentActionProposalStatus.Failed
             : value?.Executed == true ? AgentActionProposalStatus.Executed

@@ -10,6 +10,17 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
     /// <summary>A known zero-effect cancellation observed before the owning module or client was dispatched.</summary>
     internal const string CancelledBeforeDispatchCode = "agent.proposal.cancelled";
 
+    /// <summary>
+    /// The engine-owned signal for <see cref="CancelledBeforeDispatchCode"/>. Classification compares this exact
+    /// instance, never the public code: a module can return any failure code after dispatch, but it cannot
+    /// produce this private instance, so a module-authored "cancelled" failure stays an ordinary refusal.
+    /// </summary>
+    private static readonly AgentError CancelledBeforeDispatch = new(CancelledBeforeDispatchCode,
+        "Execution was cancelled before dispatch to the owning module. No effect occurred.", 409);
+
+    /// <summary>True only for this executor's own pre-dispatch cancellation result.</summary>
+    internal static bool IsCancelledBeforeDispatch<T>(AgentResult<T> result) => ReferenceEquals(result.Error, CancelledBeforeDispatch);
+
     public async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
         (IAgentTool? Tool, AgentError? Error) resolved;
@@ -18,8 +29,7 @@ internal sealed class DefaultAgentActionProposalExecutor(AgentPreparedInvocation
         try { resolved = await resolver.ResolveAsync(proposal, cancellationToken); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return AgentResult<AgentProposalExecutionResult>.Failure(CancelledBeforeDispatchCode,
-                "Execution was cancelled before dispatch to the owning module. No effect occurred.", 409);
+            return new(null, CancelledBeforeDispatch);
         }
         if (resolved.Error is { } error)
             return AgentResult<AgentProposalExecutionResult>.Failure(error.Code, error.Message, error.StatusCode);

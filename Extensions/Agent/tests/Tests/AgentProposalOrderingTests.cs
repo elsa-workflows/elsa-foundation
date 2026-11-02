@@ -188,6 +188,32 @@ public sealed class AgentProposalOrderingTests
     }
 
     [Fact]
+    public async Task A_module_returning_the_cancellation_code_after_dispatch_is_an_ordinary_refusal()
+    {
+        // Review round 1: the public failure code alone must not classify a post-dispatch module outcome as
+        // the engine's zero-effect "cancelled before dispatch".
+        var tool = new ProposalMutationTool { RefuseAfterDispatchWith = DefaultAgentActionProposalExecutor.CancelledBeforeDispatchCode };
+        var (fixture, _) = await CreateAsync(tool);
+        using var __ = fixture;
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+
+        var refused = await fixture.ExecuteAsync(proposal);
+
+        Assert.False(refused.Succeeded);
+        Assert.Equal(1, tool.DispatchCalls);
+        Assert.Equal(AgentActionProposalStatus.Failed, (await fixture.Proposals.FindAsync(proposal.Id))!.Status);
+        var lifecycle = await fixture.Proposals.FindResultAsync(proposal.Id);
+        AssertLifecycle(lifecycle, proposal, "refused");
+        Assert.Equal("The owning executor refused application before reporting an effect.", lifecycle!.Content);
+        Assert.DoesNotContain("cancelled before dispatch", lifecycle.Content, StringComparison.OrdinalIgnoreCase);
+        // A refusal settles: the claim is released and the retained refusal is never redispatched.
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, await ProbeAsync(fixture));
+        await fixture.ExecuteAsync(proposal);
+        Assert.Equal(1, tool.DispatchCalls);
+    }
+
+    [Fact]
     public async Task Cancellation_after_module_dispatch_is_uncertain_and_never_replayed()
     {
         var started = Barrier();
