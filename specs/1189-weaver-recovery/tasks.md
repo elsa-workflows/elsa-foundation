@@ -2,9 +2,15 @@
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [contract](contracts/recovery.md) and [quickstart](quickstart.md). The spec has passed two independent review rounds and the plan one planning review.
 
-**Status**: Draft, pending an independent task review.
+**Status**: Approved for implementation after an independent task review on 2026-11-02. Its verified findings are incorporated:
+- each task now compiles on its own;
+- the gated owner callers are listed;
+- the restart harness round-trips records and has a negative control;
+- the coverage gaps are tasked: idle restart, decidable review, the SC-001 matrix, late and conflicting receipts, deduplication after restart, recoverable-state documentation, ciphertext proof, closed sessions, busy-while-restored, Unsupported compositions, workspace and `ContinuedFrom`, and the foreign-user list;
+- the §2.23 registration and wrapping tests, causal controls for the two known defects, and the JSON context are added;
+- the false overlap with US3 is corrected.
 
-Write risk-based tests alongside each increment, with causal red/green controls for changed behaviour, as in spec 1186. The constitutions declare no global TDD cadence; under the owner's delegated technical authority, the causal-control discipline applies to every changed behaviour. Keep existing valid behaviour and tests; change existing tests only where a contract becomes async, and say so. A task is checked only after its actual outcome is verified. Restart tests dispose a host and build a new one over the same record store. They use the existing fake clock and barriers, never sleeps.
+Write risk-based tests alongside each increment, with causal red/green controls for changed behaviour, as in spec 1186. The constitutions declare no global TDD cadence; under the owner's delegated technical authority, the causal-control discipline applies to every changed behaviour. Keep existing valid behaviour and tests. Change existing tests only where a contract or an internal owner method they call becomes async or gated, and list those edits in the commit. A task is checked only after its actual outcome is verified. Restart tests dispose a host and build a new one over the same record store. They use the existing fake clock and barriers, never sleeps.
 
 ## Phase 1: Setup
 
@@ -19,22 +25,32 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - `IAgentSessionRecordStore`, covering hydrate, guarded write, ownership, unique keys, proposal-to-session lookup and the owned list;
   - `AgentSessionOwnerQuery` and `AgentSessionSummary`;
   - `AgentMessage.StatusReason`;
-  - the async `IAgentTurnStateStore`.
+  - `Workspace` and `ContinuedFrom` on `AgentSessionCreateRequest` and `AgentSession`.
+
+  The async `IAgentTurnStateStore` change belongs to T006, so this task compiles on its own.
 
   Record the public surface in `Extensions/Agent/src/Elsa.Agent/PublicAPI.Unshipped.txt` where it applies.
-- [ ] T004 Implement the default in-memory record store and register it in `Extensions/Agent/src/Elsa.Agent/Extensions/AgentServiceCollectionExtensions.cs`. Extend `Extensions/Agent/src/Elsa.Agent/Services/AgentRegistrationValidator.cs` so that registering a second `IAgentSessionRecordStore`, or a second audit trio, fails with a clear diagnostic. Add a registration test for each in `Extensions/Agent/tests/Tests/`.
+- [ ] T004 Implement the default in-memory record store and register it in `Extensions/Agent/src/Elsa.Agent/Extensions/AgentServiceCollectionExtensions.cs`. Extend `Extensions/Agent/src/Elsa.Agent/Services/AgentRegistrationValidator.cs` so that registering a second `IAgentSessionRecordStore`, or a second audit trio, fails with a clear diagnostic. Add a registration test for each in `Extensions/Agent/tests/Tests/AgentCompositionTests.cs`. Durable recovery reports Unsupported when `IAgentTurnStateStore` is replaced or the store cannot fence. Add a test for that too.
+
+  The default store round-trips records by serializing on write and on hydrate, so a test can never pass because an old host and a new host share mutable objects.
 - [ ] T005 Route `InMemoryAgentSessionService` in `DefaultAgentServices.cs` through an async per-session write gate, then an awaited store write, then the monitor. Requirements:
   - Hydration is single-flight.
   - Claim acquisition (Prompt, Foreground, Preparation, Proposal, Pause) and `ChangeAutonomy` serialize on the gate.
   - `MarkProposalDispatched` and every other internal method hydrate first.
   - Message status changes are compare-and-set on the expected status.
 
-  Keep every #3440 refusal and outcome order. Update the callers in `AgentTurnServices.cs`, `AgentToolInvoker.cs` and `AgentProposalServices.cs`.
-- [ ] T006 Make `IAgentTurnStateStore` async everywhere it is called (research R2), including `Api/AgentApi.cs`. The default store keeps the paused turn on the owner's row, so saving the pause also records the Pause claim. Adapt only the async call sites in the existing tests, and list them in the commit message.
+  Keep every #3440 refusal and outcome order. Update the callers in:
+  - `AgentTurnServices.cs`, `AgentToolInvoker.cs`, `AgentProposalServices.cs` and `AgentSessionPolicyOwnership.cs` (`:71,78`);
+  - the tests `AgentSessionPolicyTests.cs` (`:200-228`) and `AgentSessionAutonomyApiTests.cs` (`:205`).
+
+  Add causal red-then-green tests for the unloaded-row `MarkProposalDispatched` defect.
+- [ ] T006 Change `IAgentTurnStateStore` in `Core/Contracts/AgentTurnContracts.cs` to `SaveAsync`, `FindAsync` and `RemoveAsync`. In the same commit, update every caller (research R2): `AgentTurnServices.cs`, `Api/AgentApi.cs`, the default registration in `AgentServiceCollectionExtensions.cs`, and the 17 test references. The default store keeps the paused turn on the owner's row, so saving the pause also records the Pause claim. Adapt only the async call sites in the existing tests, and list them in the commit message.
 - [ ] T007 Make the call-key, turn-mutation and call-input registration in `AgentToolInvoker.cs` a single store insert. Make the durable transitions in `AgentProposalServices.cs` awaited writes:
   - Executing is written before the executor runs.
   - AwaitingClient is written before the envelope is returned.
   - `StoreOutcome` is written as one aggregate.
+
+  Add a causal red-then-green test for the non-atomic three-step key insert.
 - [ ] T008 Run the complete Agent suite and require all 737 existing tests plus the new ones to pass. Add barrier tests that prove:
   - a claim acquired during an in-flight policy write reads the new revision;
   - concurrent first hydrations settle once;
@@ -44,14 +60,22 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 **Independent test**: Restart at all six story 2 boundaries, before and after each deadline. Count executions at the owning fixture.
 
-- [ ] T009 [US2] Add a restart-simulation harness to `Extensions/Agent/tests/Tests/` that disposes and rebuilds the host over one shared in-memory record store. Add a causal red control showing that, on the current code, a pending review does not survive a restart.
+- [ ] T009 [US2] Add a restart-simulation harness to `Extensions/Agent/tests/Tests/` that disposes and rebuilds the host over one shared in-memory record store. Add these controls:
+  - A causal red control: on the current code, a pending review does not survive a restart.
+  - A negative control: deliberately skip one awaited write, and a restart test must fail.
+
+  Own the SC-001 matrix: the six boundaries, before and after each deadline, with execution counts. That includes story 2.1 (idle restart) and story 2.2 (a review stays decidable before its deadline).
 - [ ] T010 [US2] Rebuild claims at hydrate (research R4) in `DefaultAgentServices.cs`:
   - Prompt, from a Pending message;
   - Pause, from the paused turn;
   - Proposal, with deadline and dispatched flag;
   - a Streaming message with no pause becomes Cancelled with reason `interrupted`.
 
-  Add one test per row of the data-model transition table.
+  Also:
+  - an expired session is closed at hydrate;
+  - an autonomy change returns busy while restored claims are held.
+
+  Add one test for each claim-rebuild row and for the interrupted row of the data-model transition table.
 - [ ] T011 [US2] Implement lazy settlement in `AgentProposalServices.cs`:
   - compare-and-set on status and version, with no proposal gates, during hydrate;
   - `ExpireBeforeDispatchAsync` accepts a null actor;
@@ -59,9 +83,12 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - Executing becomes Uncertain;
   - AwaitingClient past its deadline becomes Uncertain, never Expired.
 
-  Add tests for zero effect, a single Expired record and correlation.
-- [ ] T012 [US2] Add the story 2.3 recheck to `ExecuteAsync`. The stamped `PolicyRevision` must equal the current revision; otherwise refuse with 409 `agent.proposal.policy_stale`. The approval binding, the module's exact target and revision, current authority, validation, risk and policy must all still permit it, and the deadline must not have passed. Otherwise record Expired or a zero-effect Failed. Add a refusal test for each condition and an execute-once test after a restart.
-- [ ] T013 [US2] Prove that a paused turn with a recorded receipt continues once after a restart and reports the receipt to the provider without re-executing. Prove that an identical retry of an accepted message returns the original message after a restart. Both cases use the stored fingerprints verbatim.
+  Add a test for each settlement row of the transition table, covering:
+  - zero effect, a single Expired record and correlation;
+  - a late truthful receipt after restart-Uncertain reconciles once;
+  - a conflicting receipt is refused (FR-007, story 2.4).
+- [ ] T012 [US2] Add the story 2.3 recheck to `ExecuteAsync`. The stamped `PolicyRevision` must equal the current revision; otherwise refuse with 409 `agent.proposal.policy_stale`. The approval binding, the module's exact target and revision, current authority, validation, risk and policy must all still permit it, and the deadline must not have passed. Otherwise record Expired or a zero-effect Failed. Map `policy_stale` in `Api/AgentApi.cs`. Add a refusal test for each condition and an execute-once test after a restart.
+- [ ] T013 [US2] Prove that a paused turn with a recorded receipt continues once after a restart and reports the receipt to the provider without re-executing. Prove that an identical retry of an accepted message returns the original message after a restart. Both cases use the stored fingerprints verbatim. Prove that duplicate call, call-input and acknowledgement keys deduplicate after a restart (FR-009).
 - [ ] T014 [US2] Implement owner token, fence and lease (research R5):
   - every guarded write extends the lease;
   - background renewal runs while Foreground is held or an execution is dispatched;
@@ -73,7 +100,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 - [ ] T015 [US2] Make provider behaviour after an interruption explicit (FR-021).
   - In `Extensions/Agent/src/GitHubCopilot/Services/GitHubCopilotAgentProvider.cs`, emit `agent.provider.github_copilot.conversation_reset` when the resume falls back to a new session, and record it on the turn.
   - In `AgentTurnServices.cs` provider-history assembly, exclude Cancelled, interrupted and withdrawn prompts and their Failed partial assistant text. Keep recorded Tool receipts.
-  - Document both behaviours in the provider READMEs.
+  - Document both behaviours in the Copilot README and in a new `Extensions/Agent/src/Anthropic/README.md`.
   - Add causal tests for each provider.
 
 ## Phase 4: US4 — Recover only under current authority (P1)
@@ -92,8 +119,8 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - Withdraw is compare-and-set from Pending, and is refused while a turn is registered.
   - Resolution records the owner's statement, and a later receipt supersedes it.
 
-  Add API tests covering each refusal code and owner scoping with `take=1`.
-- [ ] T019 [US1] Add the list, proposals, withdraw and resolution calls to `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` and `agentTypes.ts`, with Vitest coverage.
+  Add `[JsonSerializable]` entries for the new request and response types in `Extensions/Agent/src/Api/AgentJsonContext.cs`. Stamp `Workspace` and `ContinuedFrom` from the create request. Add API tests covering each refusal code and owner scoping with `take=1`.
+- [ ] T019 [US1] Add the list, proposals, withdraw and resolution calls, plus `workspace` and `continuedFrom` on create, to `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` and `agentTypes.ts`, with Vitest coverage.
 - [ ] T020 [US1] In `weaver/useWeaverSession.ts` and `weaver/WeaverSurface.tsx`:
   - Remember `lastSessionId` under the user-and-backend scope key, inside try/catch.
   - Reopen from the server list or the details, and load proposals.
@@ -101,7 +128,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - Offer explicit Start, withdraw, execute, decide and resolve actions. Never open the stream automatically.
 
   Add Vitest coverage for reload, dock reopen, the second tab and a foreign session.
-- [ ] T021 [US1] Make unsaved-target availability module-owned. The client adapter contract in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/` reports target availability. An undispatched client operation whose target or adapter is gone is refused with zero effect, and a dispatched one stays Uncertain. Extend the probe fixture module `tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/Client/src/module.tsx`.
+- [ ] T021 [US1] Make unsaved-target availability module-owned. The client tool contract in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts` (`executeClient`, around line 1295) and `app/agent/clientInvocationRunner.ts` report target availability. Record the public SDK change in the contract's SemVer table. Add Vitest coverage. An undispatched client operation whose target or adapter is gone is refused with zero effect, and a dispatched one stays Uncertain. Extend the probe fixture module `tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/Client/src/module.tsx`.
 - [ ] T022 [US1] Add Playwright journeys under `Studio/tests/browser/`:
   - reload with a pending review;
   - dock reopen;
@@ -109,7 +136,8 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - Start and withdraw of a not-started prompt;
   - owner resolution;
   - a second tab;
-  - limit continuation.
+  - limit continuation;
+  - a foreign user's session list.
 
 ## Phase 6: US3 — Bounded, continuable long sessions (P2, plan step 3)
 
@@ -117,7 +145,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 - [ ] T023 [US3] Record a causal baseline in `Extensions/Agent/tests/Tests/`. Measure stored snapshot volume and owner admissions per pass on the current code, and show that they grow quadratically.
 - [ ] T024 [US3] Store snapshots by digest. Messages and the paused turn hold ordered digest references, with their fingerprints stored verbatim. Hydration re-verifies the digests and the history-match checks, and returns `unavailable_state` on mismatch. Changes go in `AgentDisclosureHistory.cs` and `AgentTurnServices.cs`. Add the `AdmissionPass` set from research R3, passed along explicitly, never stored on a field, and discarded at each write, provider call or tool execution. The baseline from T023 turns green, and re-admission after each write is kept.
-- [ ] T025 [US3] Give the two limits (64 distinct snapshots, 8 MiB) distinct `limit` details. Add Studio's "session limit reached" outcome and continuation, which creates a new session with `ContinuedFrom` and carries nothing else over. Add tests at the API, Studio and Playwright levels.
+- [ ] T025 [US3] Run after T022, because it shares Studio files with T020 and T022. Give the two limits (64 distinct snapshots, 8 MiB) distinct `limit` details. Add Studio's "session limit reached" outcome and continuation, which creates a new session with `ContinuedFrom` and carries nothing else over. Cover the limit reached mid-turn (story 3.3) and prove that provenance is never erased, the budget never reset and nothing replayed (story 3.5). Add tests at the API, Studio and Playwright levels.
 
 ## Phase 7: Durable EF store (plan step 4)
 
@@ -138,10 +166,13 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - the proposal-to-session lookup;
   - the owner list and audit;
   - unreadable state;
-  - the restart boundaries from T010–T014 run against SQLite.
+  - the restart boundaries from T010–T014 run against SQLite;
+  - protected columns hold ciphertext, and no credential or provider object is stored (FR-003);
+  - codec, `JsonException` and `DbUpdateException` failures are wrapped into the FR-018 unavailable outcome (§2.23.5);
+  - a registration test for `FoundationAgentEntityFrameworkCore`: provider selection, the audit-trio replacement, and the explicit selection that throws on a second selection.
 
   Register both projects in `tools/ci/test-tiers.json` (tier, container suite, EF shard).
-- [ ] T029 Update documentation: `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md` (record store, async turn state, audit trio, participation with durable backing, recovery outcomes) and the root `EXTENSION_POINTS.md`. Regenerate the maps and solution filters, and verify Workbench profile membership in `tools/solution-filters/profiles.json`.
+- [ ] T029 Update documentation: what is and isn't recoverable (FR-001), in `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md` (record store, async turn state, audit trio, participation with durable backing, recovery outcomes) and the root `EXTENSION_POINTS.md`. Regenerate the maps and solution filters, and verify Workbench profile membership in `tools/solution-filters/profiles.json`.
 
 ## Phase 8: Qualification and freeze (plan step 7)
 
@@ -167,12 +198,12 @@ T001–T002 → Phase 2 (T003–T008) → US2 (T009–T015) → US4 (T016–T017
 
 - US4 depends on the owner seams and the settlement from US2.
 - US1's API (T018) depends on hydrate and settlement. Its Studio work (T019–T022) depends on T018.
-- US3 depends only on Phase 2 and can overlap US1's Studio work, because the files are separate.
+- T023–T024 depend only on Phase 2 and can overlap US1's Studio work (T019–T022), because the files are separate. T025 runs after T022.
 - The EF phase depends on the final aggregate shape from US2 and US3.
 - Qualification depends on everything before it.
 
 **Parallel opportunities:**
-- T019 and T021 (client and SDK) can run beside T023 and T024 (backend history).
+- [P] T019 and T021 (client and SDK) can run beside T023 and T024 (backend history).
 - T027 and T028 can run in parallel once T026 settles the model.
 
 Shared owner files (`DefaultAgentServices.cs`, `AgentTurnServices.cs`, `AgentProposalServices.cs`) are changed sequentially. At most two subagents are active alongside the root, with one implementation lane.
