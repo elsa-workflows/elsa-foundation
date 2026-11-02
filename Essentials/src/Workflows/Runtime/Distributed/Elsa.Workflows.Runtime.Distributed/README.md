@@ -77,14 +77,21 @@ when it does, under the item's latest lease.
 All of one sweep's waits for local work, across every persistence scope, share a budget of a third of the placement
 lease. That includes passivating or handing off an execution whose drain is still running. Such a hand-off or
 passivation finishes on its own, and until it does, later sweeps neither hand the execution off again nor renew, claim
-or lease it. However many executions are busy, the sweep keeps renewing
-every placement the node holds. Without that, another node would claim a busy execution once its placement lease
+or lease it. However many executions are busy, the sweep keeps renewing every placement the node holds, except one it
+is handing off or passivating. Without that, another node would claim a busy execution once its placement lease
 lapsed, take over its runtime ownership and run the same workflow. That takeover is deliberately immediate: it does not
 wait for the old owner's lease to expire, which keeps recovery fast, so keeping placement renewed is what stops two
 nodes from running one execution (#3667).
 
+That leaves one gap (#3678). A hand-off or passivation waits for the drain's turn to end, and nothing asks the drain to
+yield to it. A drain that keeps making progress on a draining member, or on one that no longer meets the execution's
+requirement, never ends its turn. Its placement lapses after one lease, another member claims it, and both run the
+execution until fencing stops the old drain.
+
 An execution with a drain this pump left running gets no inline wait:
-- A Cancel for it is delivered at once, reaches the drain's mailbox, and the drain yields to it.
+- A Cancel for it is dispatched without waiting, reaches the drain's mailbox, and the drain yields to it. A Cancel
+  forwarded from another node waits in the transport until this node's next sweep (`SweepInterval`, default 10
+  seconds), which delivers it.
 - Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
   the pump releases the leases of exactly those commands and the next sweep dispatches them. A command dispatched
   earlier that came back deferred or rejected keeps its lease until it lapses.

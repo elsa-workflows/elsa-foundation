@@ -246,9 +246,11 @@ cancelled caller removes its waiting signal. If the drain had already yielded an
 caller cancels before it acquires the mailbox, or its turn answers `Duplicate`, `Rejected` or `Deferred`), the remaining
 scheduler work stays durably queued and continues when the sweep's backlog discovery re-drives it, not immediately. An
 idle drain adds no database read for this check. Distributed placement uses the configured local mailbox on the owning
-node; forwarding still has to deliver Cancel to that mailbox. The yield signal is internal to the default in-process
-provider: a custom actor provider that wraps the registered `InProcessWorkflowExecutionActorProvider` keeps the handoff,
-and an independent provider does not get it.
+node. A Cancel sent through another node takes effect once the owner's next placement pump sweep delivers it to that
+mailbox, up to `SweepInterval` later; the sweep does not wait for the running drain (see the
+[distributed delivery contract](../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/README.md#delivery-contract)).
+The yield signal is internal to the default in-process provider: a custom actor provider that wraps the registered
+`InProcessWorkflowExecutionActorProvider` keeps the handoff, and an independent provider does not get it.
 
 **Acknowledging an inline parent decision.** The completion pump's current item remains in the working queue while
 its handler runs. Once that exact fenced, non-retaining decision has physically committed, queue advance acknowledges
