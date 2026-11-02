@@ -104,10 +104,47 @@ public sealed partial class EtlRuntimeApiHttpTests
         var finitePermit = (await store.BeginConnectorHttpSourceAsync(finiteLease, Guid.NewGuid().ToString("N"))).Permit!;
         Assert.Equal(EtlStoreStatus.Invalid, (await store.RecordConnectorHttpCaughtUpAsync(finiteLease, finitePermit, DateTimeOffset.UtcNow)).Status);
 
-        // Completion is recorded during preparation; the shards it creates then drain as usual.
+        // Completion can be recorded while the run is still preparing.
         var preparing = EtlRuntimeFixtures.ConnectorAdmission("continuous-preparing", scope, continuous, ["private-shard-one"]);
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(preparing)).Status);
         Assert.Equal(EtlRunCompletionOutcome.Accepted, await store.RequestConnectorRunCompletionAsync(scope, preparing.Invocation.RunId));
+    }
+
+    [Fact]
+    public async Task A_caught_up_record_keeps_the_journal_while_a_superseded_attempt_can_still_answer()
+    {
+        await using var host = await EtlDesignApiTestHost.StartRuntimeAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var continuous = EtlV2TestPipelines.Create() with { Continuous = new EtlContinuousRunPolicy(1) };
+        var admission = EtlRuntimeFixtures.ConnectorAdmission("continuous-superseded", scope, continuous, ["private-shard-one"]);
+        await using var services = host.Host.Services.CreateAsyncScope();
+        var store = services.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>();
+        var db = services.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>();
+        Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);
+        var preparation = Assert.IsType<EtlPreparationLease>(await store.ClaimConnectorPreparationAsync(scope, "preparer"));
+        Assert.Equal(EtlStoreStatus.Applied, await store.CommitConnectorPreparationAsync(preparation, new(null, null)));
+
+        // The predecessor's attempt is superseded when its lease expires; it could still deliver a page until it expires.
+        var predecessor = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "predecessor"));
+        var superseded = (await store.BeginConnectorHttpSourceAsync(predecessor, Guid.NewGuid().ToString("N"))).Permit!;
+        await db.Database.ExecuteSqlRawAsync("UPDATE elsa_etl_connector_partitions SET ExpiresAtUtcTicks = {0};",
+            DateTimeOffset.UtcNow.AddSeconds(-1).UtcTicks);
+        var successor = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "successor"));
+        Assert.Null((await store.BeginConnectorHttpSourceAsync(successor, Guid.NewGuid().ToString("N"))).Permit);
+        await Task.Delay(TimeSpan.FromSeconds(1.2));
+        var live = (await store.BeginConnectorHttpSourceAsync(successor, Guid.NewGuid().ToString("N"))).Permit!;
+
+        Assert.Equal(new EtlHttpCaughtUpResult(EtlStoreStatus.Applied, false),
+            await store.RecordConnectorHttpCaughtUpAsync(successor, live, DateTimeOffset.UtcNow));
+
+        db.ChangeTracker.Clear();
+        var partition = await db.ConnectorPartitions.AsNoTracking().SingleAsync();
+        var request = await db.ConnectorHttpRequests.AsNoTracking().SingleAsync(row => row.PageSequence == partition.CurrentRequestSequence);
+        Assert.NotNull(request.FetchJson);
+        Assert.True(partition.NotBeforeUtcTicks >= superseded.ExpiresAt.UtcTicks);
+        var inspected = Assert.Single(await services.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeInspector>()
+            .ListConnectorPartitionsAsync(scope, admission.Invocation.RunId, -1, 10));
+        Assert.Null(inspected.NextPollAt);
     }
 
     [Fact]

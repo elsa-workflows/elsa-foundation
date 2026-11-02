@@ -104,7 +104,7 @@ An author turns on continuous mode and sets a poll interval. An operator sees th
 2. **Given** a file source or single-page pagination, **Then** continuous mode is not offered.
 3. **Given** a running continuous run, **When** an operator inspects it, **Then**:
    - the run is labelled "Continuous";
-   - an idling shard shows "Polls again at …", which is distinct from a retry wait's "Eligible after …";
+   - an idling shard shows "Next poll at …", which is distinct from a retry wait's "Eligible after …";
    - "Complete run" is offered next to "Cancel run";
    - once completion is requested, the run reads "Completion requested".
 
@@ -206,7 +206,7 @@ A second run is cancelled and ends `Cancelled`.
   - Run inspection labels a continuous run and shows each idle shard's next poll. It offers "Complete run" next to "Cancel run" while a continuous run is preparing or running, and shows "Completion requested" afterwards.
 - **FR-013** Persistence remains compatible.
   - The completion-request time is a new nullable column on `elsa_etl_connector_runs`, added by a new SQLite runtime migration and model snapshot. Prior rows read it as null.
-  - Before the column is added, rows from the prior writers (finite file and HTTP runs) are captured and read back unchanged.
+  - Before the column is added, a prior writer's finite HTTP run is captured and read back unchanged.
   - The run status, terminal outcome, fetch phase and position enumerations gain no members. Position and fetch JSON shapes are unchanged.
   - The module `SchemaVersion` changes only if the repository's migration rules require it for an additive nullable column. Research R5 records the rule that applies: additive migrations keep `"1.0.0"`.
 - **FR-014** The ETL README, the Core README and the affected `EXTENSION_POINTS.md` files describe:

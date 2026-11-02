@@ -10,7 +10,7 @@ Spec: [spec.md](spec.md). Plan: [plan.md](plan.md). Tasks are ordered by depende
   - the policy round-trips;
   - a finite artifact's root members and content hash equal the finite writer's (the invocation fingerprint derives from that hash);
   - an explicit `null` reads as finite;
-  - each error code is produced at each of the three sites.
+  - every error code is produced by the shared rule and by the compiler; the reader refuses the pagination and interval codes, and runtime admission refuses them with an `ArgumentException`.
 
 ## Phase 2 — Persistence (FR-005, FR-007, FR-013)
 
@@ -73,7 +73,7 @@ Spec: [spec.md](spec.md). Plan: [plan.md](plan.md). Tasks are ordered by depende
 - [x] T018 Studio changes:
   - types and `completeRun` in the API client;
   - the editor switch and the interval field;
-  - the inspection labels and "Polls again at";
+  - the inspection labels and "Next poll at";
   - the "Complete run" action, shown only when the host reports a continuous run and resolving `etl-run-complete` only when used;
   - "Eligible after" shown only when `nextPollAt` is null.
 - [x] T019 [P] Vitest tests for the editor's visibility rules and the policy shape, the inspection labels and the action. Playwright tests for continuous authoring at 320px and 1024px with axe.
@@ -88,9 +88,9 @@ Spec: [spec.md](spec.md). Plan: [plan.md](plan.md). Tasks are ordered by depende
 ## Phase 7 — Docs and evidence (FR-014, SC-004–SC-006)
 
 - [x] T021 [P] Docs:
-  - the ETL README section "Continuous runs", covering the feed contract, completion, the idle-poll cost, the deadline and the lifetime budgets;
+  - the ETL README section "Continuous HTTP runs", covering the feed contract, completion, the idle-poll cost, the deadline and the lifetime budgets;
   - the Core README;
-  - the Core and Runtime/Api `EXTENSION_POINTS.md`.
+  - the Core, Runtime/Api and Studio `EXTENSION_POINTS.md`.
 - [x] T022 Run the feed server and the Workbench journey driver on an owned host, and record the summary JSON.
 - [x] T023 Real-browser inspection and completion against the owned hosts, recorded as screenshots.
 - [x] T024 Record the bite-proofs in `bite-proofs.json`: those listed in the plan, plus R11's:

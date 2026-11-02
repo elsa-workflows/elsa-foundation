@@ -154,7 +154,7 @@ export function EtlConnectorPartitionTable({ partitions, now = Date.now() }: {
           return <tr key={partition.partitionOrdinal}>
             <th scope="row">{partition.partitionOrdinal}</th>
             <td>{sourcePosition}{partition.nextPollAt
-              ? <><br />Caught up; polls again at <time dateTime={partition.nextPollAt}>{partition.nextPollAt}</time></>
+              ? <><br />Next poll at <time dateTime={partition.nextPollAt}>{partition.nextPollAt}</time></>
               : partition.notBefore ? <><br />Eligible after <time dateTime={partition.notBefore}>{partition.notBefore}</time></> : null}</td>
             <td>{claim}{partition.claimExpiresAt ? <><br /><time dateTime={partition.claimExpiresAt}>{partition.claimExpiresAt}</time></> : null}</td>
             <td>{partition.http?.fetch ? <RetryProgress retry={partition.http.fetch} /> : "No fetch retry scheduled"}</td>

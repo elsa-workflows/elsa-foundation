@@ -98,7 +98,9 @@ internal sealed partial class EfEtlRuntimeStore
             // A continuous shard that caught up idles with a cleared journal and its next poll time (spec 1192).
             var idle = pipeline.Continuous is not null && currentFetch is null && http.Page is null && !http.Exhausted &&
                        row.NotBeforeUtcTicks > 0;
-            if (row.NotBeforeUtcTicks != sourceNotBefore && !idle)
+            // A continuous shard deferring a caught-up record waits at least its retry time, until a superseded attempt expires.
+            var deferred = pipeline.Continuous is not null && sourceNotBefore is { } retryAt && row.NotBeforeUtcTicks > retryAt;
+            if (row.NotBeforeUtcTicks != sourceNotBefore && !idle && !deferred)
                 throw new InvalidDataException("The source-fetch retry eligibility differs from its request journal.");
         }
         var currentRow = await HttpPageRowAsync(row, http.PageSequence, cancellationToken);

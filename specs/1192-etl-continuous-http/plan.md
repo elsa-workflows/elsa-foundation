@@ -84,7 +84,7 @@ A completion request causes each shard's next qualifying caught-up response to b
   - A moving empty page is followed by the interval.
   - Drain settles `Succeeded` and `BusinessError`.
   - Cancellation wins over a pending completion.
-- **Migration.** Prior rows from the finite file and HTTP writers read back unchanged after the migration, and the new column is null.
+- **Migration.** A prior-writer finite HTTP run reads back unchanged after the migration, and the new column is null.
 - **API.** Every completion result and its authorization are covered. The inspection fields are covered.
 - **Worker processes.** A kill after capture causes a cache replay. A kill during an idle poll's attempt causes the poll to be retried. Two shards are leased independently.
 - **Bite-proofs** for:

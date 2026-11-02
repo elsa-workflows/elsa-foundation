@@ -160,8 +160,8 @@ internal sealed partial class EfEtlRuntimeStore
         row.PositionJson = positionJson;
         row.Completed = next.Exhausted;
         // A continuous feed that moves its cursor without records waits one interval before its next request, so it
-        // cannot spin; a requested completion drains without waiting (spec 1192).
-        if (advance && !next.Exhausted && state.Pipeline.Continuous is { } continuous && connector.CompletionRequestedAtUtcTicks is null)
+        // cannot spin, also while a requested completion drains (spec 1192).
+        if (advance && !next.Exhausted && state.Pipeline.Continuous is { } continuous)
             row.NotBeforeUtcTicks = checked(NowTicks() + TimeSpan.FromSeconds(continuous.PollIntervalSeconds).Ticks);
         row.Revision = checked(row.Revision + 1);
         run.UpdatedAtUtcTicks = NowTicks();

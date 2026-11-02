@@ -125,12 +125,12 @@ It accepts only an `EtlHttpJsonSource` with token or next-link pagination, and a
 - **Editor.** `EtlConnectorPipelineEditor` gets a "Run continuously" switch and a poll-interval number field. They are shown only when the source is `httpJson` with token or next-link pagination. Turning the switch off removes the property.
 - **Run inspection.**
   - `EtlRunInspection` shows "Continuous" and "Completion requested".
-  - Each idle partition shows "Polls again at …", which is distinct from "Eligible after".
+  - Each idle partition shows "Next poll at …", which is distinct from "Eligible after".
   - `EtlRunsPage` gets "Complete run" next to "Cancel run", calling `etlApi.completeRun`.
 
 ## R10. Evidence
 
-- **Feed server.** A local cursor-feed server, written in Python with only the standard library, serves two shards. Records can be appended over HTTP, and each shard's GET with `after=<cursor>` returns the records after that cursor.
+- **Feed server.** A local cursor-feed server, written in Python with only the standard library, serves two shards from the driver's own process. The driver appends records in-process, and each shard's GET with `?cursor=n` returns the records after position `n`.
 - **Journey driver.** The Workbench journey driver, derived from spec 1191's, drives the feed, the run, completion and cancellation, and reads the runtime API to count pages, requests and bytes across idle polls.
 - **Worker-process journeys** reuse `Elsa.Etl.WorkerHost` with the existing `AfterReservation` / `BeforeAcceptance` gates. They add a staging pause around an idle poll's attempt, either a transport delay or a new test gate.
 
@@ -145,7 +145,7 @@ An independent plan review found no blockers. Its findings change the decisions 
 
   A closed-uncertain, `Captured` or `Failed` journal is refused, so a failed request is never revived and a capture receipt is never discarded. There is one refusal test per phase.
 - **R2, the cache's continuous flag.** `EtlHttpPageCache` keeps `pipeline.Continuous`, and the shared site that normalizes it is `NormalizeContinuation` (used by both read and publish). Constructing a cache for a continuous pipeline without a request builder is refused.
-- **Publish conflict.** In a continuous run the same `(pageSequence, request)` cache identity can legitimately receive different bodies over time. For example, a predecessor publishes its final empty page after a successor's re-read. When `PublishAsync` reports a conflict in a continuous run, the acquirer re-reads the winning manifest and passes it to `CaptureAsync`, where the store validates its provenance. A finite run still fails, as today. The race is tested.
+- **Publish conflict.** In a continuous run the same `(pageSequence, request)` cache identity can legitimately receive different bodies over time. For example, a predecessor publishes its final empty page after a successor's re-read. When `PublishAsync` reports a conflict in a continuous run, the acquirer re-reads the winning manifest and passes it to `CaptureAsync`, where the store validates its provenance. A finite run still fails, as today. This recovery is implemented but not exercised by a test.
 - **R8, inspection.**
   - `NextPollAt` is set only for an idle partition, and equals its `NotBefore`.
   - Studio shows "Eligible after" only when `nextPollAt` is null.
@@ -162,7 +162,7 @@ An independent plan review found no blockers. Its findings change the decisions 
   - Studio shows "Complete run" only when the host reports a continuous run, and resolves `etl-run-complete` only when the action is used, so a Studio talking to an older host never needs the relation.
 - **Migration test.** It follows `EtlConnectorSourceMigrationTests`:
   1. migrate to `20261021170000_ConnectorInspectionEffects`;
-  2. insert prior-writer finite file and HTTP rows with raw SQL;
+  2. seed a prior-writer finite HTTP run with the existing legacy seeder (no file run);
   3. migrate to latest;
   4. read the rows back through the store, unchanged, with a null column;
   5. assert `HasPendingModelChanges()` is false.

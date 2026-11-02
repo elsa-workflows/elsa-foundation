@@ -76,10 +76,10 @@ describe("ETL run inspection", () => {
         owedBatch: null, acceptedMainEffects: 1, acceptedErrorEffects: 0 }
     ]} />));
     const rows = Array.from(container.querySelectorAll("tbody tr")).map(row => row.textContent ?? "");
-    expect(rows[0]).toContain("Caught up; polls again at 2026-11-02T18:01:00Z");
+    expect(rows[0]).toContain("Next poll at 2026-11-02T18:01:00Z");
     expect(rows[0]).not.toContain("Eligible after");
     expect(rows[1]).toContain("Eligible after 2026-11-02T18:00:30Z");
-    expect(rows[1]).not.toContain("polls again");
+    expect(rows[1]).not.toContain("Next poll at");
   });
 
   it("labels a connector run without a reported mode as finite", () => {

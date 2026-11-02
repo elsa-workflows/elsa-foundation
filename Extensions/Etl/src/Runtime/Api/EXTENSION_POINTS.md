@@ -7,9 +7,10 @@ Domain: `Elsa.Etl`
 implementation derives scope from a validated normalized principal and the host's ordinary persistence scope. Route
 and query values cannot set tenant or partition authority. The API requires `etl/runs:read` for inspection,
 `etl/runs:cancel` for cancellation and `etl/runs:complete` to request completion of a continuous run; it returns
-bounded summaries and never exposes host file paths, binding handles, artifact payloads, native result addresses, output object keys or worker owner identities. Run detail includes
-retained source/lookup revisions and expected digests; prepared snapshot digests/lengths describe the last
-verified preparation, not a fresh integrity check. They remain absent before the relevant admission/preparation.
+bounded summaries and never exposes host file paths, binding handles, artifact payloads, native result addresses,
+output object keys or worker owner identities. Run detail includes retained source/lookup revisions and expected
+digests; prepared snapshot digests/lengths describe the last verified preparation, not a fresh integrity check. They
+remain absent before the relevant admission/preparation.
 
 `EtlRunBindingAliasesView.Lookup` is nullable for v2 runs without a lookup, and their `LookupInput` is absent.
 The v1 topology still requires its lookup. Consumers must preserve that distinction rather than fabricate an alias.

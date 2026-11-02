@@ -48,7 +48,7 @@ Real worker and store, against a loopback cursor feed (`EtlRuntimeJourneyTests.C
 - **Drain race.** The poll interval is an hour. A poll that read the feed before the completion request answers caught up after the request. The shard is re-armed rather than ended, so a record appended in between is still delivered, and idle shards are woken.
 - **Cancellation and refusals.** Cancellation settles `Cancelled`, also when a completion is pending but has not drained. At the store, completion reports `terminal`, `notContinuous` or `notFound` for a settled, finite or unknown run.
 - **Business error.** A drained run with one rejected record settles `BusinessError` with `etl.rows-rejected`.
-- **Moving cursor.** A cursor that moves without records waits one interval: two shards made at most eight requests in five seconds.
+- **Moving cursor.** A cursor that moves without records waits one interval: with a 2 s interval, consecutive requests on each shard were at least 1.5 s apart (a hot loop would be milliseconds apart).
 - **Finite unchanged.** A finite run still fails `etl.http.pagination-cycle` on an empty page that repeats its cursor.
 
 `EtlContinuousRuntimeApiHttpTests` covers the completion endpoint:
@@ -66,7 +66,7 @@ The fixture-backed Playwright spec authors a continuous run (Run continuously, 3
 
 Vitest covers:
 - the editor's visibility rules;
-- the inspection labels, with an idle shard's "polls again at" kept apart from a retry wait's "Eligible after";
+- the inspection labels, with an idle shard's "Next poll at" kept apart from a retry wait's "Eligible after";
 - the Complete run action, which appears only for a preparing or running continuous run that has not yet requested completion, and never for a host that does not report a mode.
 
 ## Real browser against the owned hosts (SC-005, US4)

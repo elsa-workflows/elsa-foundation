@@ -15,10 +15,11 @@ internal sealed partial class EfEtlRuntimeStore
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var run = await FindRunRowAsync(scope, runId, cancellationToken);
         if (run is null) return EtlRunCompletionOutcome.NotFound;
-        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlRunCompletionOutcome.Terminal;
+        // A finite run reports NotContinuous whether or not it has settled, so the answer does not race its settlement.
         var connector = await ConnectorRowAsync(key, cancellationToken);
         if (connector is null || EtlConnectorRecordCodec.Pipeline(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson)).Continuous is null)
             return EtlRunCompletionOutcome.NotContinuous;
+        if (run.Status >= (int)EtlRunStatus.Succeeded) return EtlRunCompletionOutcome.Terminal;
         if (connector.CompletionRequestedAtUtcTicks is not null) return EtlRunCompletionOutcome.AlreadyRequested;
 
         var now = NowTicks();

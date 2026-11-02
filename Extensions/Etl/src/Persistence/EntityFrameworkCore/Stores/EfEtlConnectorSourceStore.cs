@@ -61,6 +61,22 @@ internal sealed partial class EfEtlRuntimeStore
         if (connector.CompletionRequestedAtUtcTicks is { } requested && requested <= attempt.StartedAt.UtcTicks)
             return new(EtlStoreStatus.Applied, true);
 
+        // A superseded attempt (closed uncertain by a successor's fence) may still deliver a page before it expires.
+        // Clearing the journal now would leave that late page without provenance, so keep the journal and wait it out.
+        var supersededUntil = fetch.Attempts.Take(fetch.Attempts.Count - 1)
+            .Where(record => record.Outcome is null && record.Attempt.ExpiresAt.UtcTicks > now)
+            .Select(record => (long?)record.Attempt.ExpiresAt.UtcTicks).Max();
+        if (supersededUntil is { } until &&
+            EtlHttpSourceFetchTransitions.DeferCaughtUp(fetch, EtlRuntimeRecordCodec.ReadUtc(now), state.Pipeline.Http) is not null)
+        {
+            await tx.DisposeAsync();
+            var deferred = await MutateConnectorHttpSourceAsync(lease, (current, _, policy, at) =>
+                EtlHttpSourceFetchTransitions.DeferCaughtUp(current!, at, policy) is { } waiting
+                    ? new(EtlStoreStatus.Applied, waiting, null)
+                    : new(EtlStoreStatus.Conflict, current, null), cancellationToken, notBeforeFloorUtcTicks: until);
+            return new(deferred.Status, false);
+        }
+
         // The request returns to its never-fetched state: nothing about an empty, unmoved response needs retaining.
         var metadataRelease = checked(request.FetchMetadataBytes + request.SourceMetadataReserveBytes);
         var inputRelease = request.InputReservationBytes;
@@ -90,7 +106,7 @@ internal sealed partial class EfEtlRuntimeStore
 
     private async ValueTask<EtlConnectorHttpSourceFetchResult> MutateConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         Func<EtlConnectorHttpSourceFetch?, EtlConnectorHttpPosition, EtlHttpPolicy, DateTimeOffset, EtlConnectorHttpSourceFetchResult> transition,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, long? notBeforeFloorUtcTicks = null)
     {
         ArgumentNullException.ThrowIfNull(lease);
         db.ChangeTracker.Clear();
@@ -175,7 +191,9 @@ internal sealed partial class EfEtlRuntimeStore
         request.MetadataBytes = checked(request.MetadataBytes + metadataDelta);
         partition.MetadataBytes = checked(partition.MetadataBytes + metadataDelta);
         partition.SourceInputReservedBytes = checked(partition.SourceInputReservedBytes + inputDelta);
-        partition.NotBeforeUtcTicks = fetch.NotBefore?.UtcTicks;
+        partition.NotBeforeUtcTicks = fetch.NotBefore?.UtcTicks is { } retryAt && notBeforeFloorUtcTicks is { } floor
+            ? Math.Max(retryAt, floor)
+            : fetch.NotBefore?.UtcTicks;
         partition.Revision = checked(partition.Revision + 1);
         connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes + metadataDelta);
         connector.SourceInputReservedBytes = checked(connector.SourceInputReservedBytes + inputDelta);

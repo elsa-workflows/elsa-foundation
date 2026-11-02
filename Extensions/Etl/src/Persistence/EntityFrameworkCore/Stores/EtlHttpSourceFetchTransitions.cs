@@ -180,6 +180,18 @@ internal static class EtlHttpSourceFetchTransitions
             : EtlStoreStatus.Applied;
     }
 
+    /// <summary>
+    /// Records a caught-up response while an earlier, superseded attempt could still deliver a page: the live attempt is
+    /// closed as uncertain under the ordinary retry schedule, keeping the journal so a late page from the superseded
+    /// attempt can still be captured. Null when the schedule cannot retry; the caller then clears the journal.
+    /// </summary>
+    internal static EtlConnectorHttpSourceFetch? DeferCaughtUp(EtlConnectorHttpSourceFetch fetch, DateTimeOffset now,
+        EtlHttpPolicy policy)
+    {
+        var deferred = CloseUncertain(fetch, now, policy, deadlineReached: false);
+        return deferred.Phase == EtlConnectorHttpSourceFetchPhase.Waiting ? deferred : null;
+    }
+
     internal static EtlConnectorHttpSourceFetchResult Capture(EtlConnectorHttpSourceFetch fetch,
         EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page, DateTimeOffset responseReceivedAtUtc,
         DateTimeOffset now, EtlHttpPolicy policy)

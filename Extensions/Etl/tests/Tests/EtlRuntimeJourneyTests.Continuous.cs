@@ -28,14 +28,12 @@ public sealed partial class EtlRuntimeJourneyTests
         var invocation = ConnectorInvocation(files.Scope, "continuous-drain", ContinuousPipeline(pollIntervalSeconds: 1));
         await files.AdmitAsync(host, invocation);
 
-        await WaitForIdleAsync(host.Services, files.Scope, invocation.RunId, accepted: 1);
-        var before = await ContinuousStateAsync(host.Services, files.Scope, invocation.RunId);
+        var before = await WaitForIdleStateAsync(host.Services, files.Scope, invocation.RunId, accepted: 1);
         var polled = feed.CaughtUpResponses;
         await WaitUntilAsync(() => feed.CaughtUpResponses >= polled + 20, TimeSpan.FromSeconds(30));
-        await WaitForIdleAsync(host.Services, files.Scope, invocation.RunId, accepted: 1);
 
         // Twenty or more caught-up polls retain no page, request, batch or byte.
-        Assert.Equal(before, await ContinuousStateAsync(host.Services, files.Scope, invocation.RunId));
+        Assert.Equal(before, await WaitForIdleStateAsync(host.Services, files.Scope, invocation.RunId, accepted: 1));
         Assert.Equal(EtlRunStatus.Running, (await FindRunAsync(host.Services, files.Scope, invocation.RunId))!.Status);
 
         feed.Append("b", 2, "Bram");
@@ -114,12 +112,20 @@ public sealed partial class EtlRuntimeJourneyTests
         await files.AdmitAsync(host, invocation);
 
         await WaitUntilAsync(() => feed.RequestTimes("a").Count >= 3 && feed.RequestTimes("b").Count >= 3, TimeSpan.FromSeconds(60));
+        var beforeCompletion = new[] { "a", "b" }.ToDictionary(shard => shard, shard => feed.RequestTimes(shard).Count);
+        // Completion makes each waiting shard due once; a moving cursor then keeps its interval, since only a caught-up
+        // response ends a shard.
+        Assert.Equal(EtlRunCompletionOutcome.Accepted, await RequestCompletionAsync(host.Services, files.Scope, invocation.RunId));
+        await WaitUntilAsync(() => feed.RequestTimes("a").Count >= beforeCompletion["a"] + 3 &&
+                                   feed.RequestTimes("b").Count >= beforeCompletion["b"] + 3, TimeSpan.FromSeconds(60));
 
         // Each shard waits its two-second interval between requests (a hot loop would be milliseconds apart).
         foreach (var shard in new[] { "a", "b" })
         {
             var times = feed.RequestTimes(shard);
-            Assert.All(times.Zip(times.Skip(1)), pair => Assert.True(pair.Second - pair.First >= TimeSpan.FromSeconds(1.5)));
+            var woken = beforeCompletion[shard];
+            foreach (var window in new[] { times.Take(woken).ToArray(), times.Skip(woken).ToArray() })
+                Assert.All(window.Zip(window.Skip(1)), pair => Assert.True(pair.Second - pair.First >= TimeSpan.FromSeconds(1.5)));
         }
         Assert.Equal(EtlRunStatus.Running, (await FindRunAsync(host.Services, files.Scope, invocation.RunId))!.Status);
     }
@@ -210,34 +216,50 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     /// <summary>Waits until every shard idles (cleared journal, scheduled poll, no lease) with the given accepted count.</summary>
-    private static async Task WaitForIdleAsync(IServiceProvider services, EtlScope scope, string runId, long accepted)
+    private static Task WaitForIdleAsync(IServiceProvider services, EtlScope scope, string runId, long accepted) =>
+        WaitUntilAsync(async () =>
+        {
+            await using var operation = services.CreateAsyncScope();
+            return await IsIdleAsync(operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>(), scope, runId, accepted);
+        }, TimeSpan.FromSeconds(30));
+
+    private static async ValueTask<bool> IsIdleAsync(EtlRuntimeDbContext db, EtlScope scope, string runId, long accepted)
     {
         var scopeKey = EtlRuntimeIdentity.ScopeKey(scope);
         var runKey = EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id");
+        var run = await db.Runs.AsNoTracking().SingleOrDefaultAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
+        var partitions = await db.ConnectorPartitions.AsNoTracking()
+            .Where(row => row.ScopeKey == scopeKey && row.RunKey == runKey).ToListAsync();
+        // Earlier requests keep their captured journals; only each shard's current request must be cleared.
+        var current = await db.ConnectorHttpRequests.AsNoTracking()
+            .Where(row => row.ScopeKey == scopeKey && row.RunKey == runKey && row.FetchJson != null)
+            .Select(row => new { row.PartitionOrdinal, row.PageSequence }).ToListAsync();
+        var journals = current.Count(request => partitions.Any(partition =>
+            partition.PartitionOrdinal == request.PartitionOrdinal && partition.CurrentRequestSequence == request.PageSequence));
+        return run?.AcceptedRecords == accepted && partitions.Count == 2 && journals == 0 &&
+               partitions.All(row => row.NotBeforeUtcTicks is not null && row.Owner is null && row.OwedBatchId is null);
+    }
+
+    /// <summary>Waits for an idle snapshot and returns its totals, both read in one transaction so a poll cannot interleave.</summary>
+    private static async Task<string> WaitForIdleStateAsync(IServiceProvider services, EtlScope scope, string runId, long accepted)
+    {
+        string? state = null;
         await WaitUntilAsync(async () =>
         {
             await using var operation = services.CreateAsyncScope();
             var db = operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>();
-            var run = await db.Runs.AsNoTracking().SingleOrDefaultAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
-            var partitions = await db.ConnectorPartitions.AsNoTracking()
-                .Where(row => row.ScopeKey == scopeKey && row.RunKey == runKey).ToListAsync();
-            // Earlier requests keep their captured journals; only each shard's current request must be cleared.
-            var current = await db.ConnectorHttpRequests.AsNoTracking()
-                .Where(row => row.ScopeKey == scopeKey && row.RunKey == runKey && row.FetchJson != null)
-                .Select(row => new { row.PartitionOrdinal, row.PageSequence }).ToListAsync();
-            var journals = current.Count(request => partitions.Any(partition =>
-                partition.PartitionOrdinal == request.PartitionOrdinal && partition.CurrentRequestSequence == request.PageSequence));
-            return run?.AcceptedRecords == accepted && partitions.Count == 2 && journals == 0 &&
-                   partitions.All(row => row.NotBeforeUtcTicks is not null && row.Owner is null && row.OwedBatchId is null);
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            if (!await IsIdleAsync(db, scope, runId, accepted)) return false;
+            state = await ContinuousStateAsync(db, scope, runId);
+            return true;
         }, TimeSpan.FromSeconds(30));
+        return state!;
     }
 
-    private static async Task<string> ContinuousStateAsync(IServiceProvider services, EtlScope scope, string runId)
+    private static async Task<string> ContinuousStateAsync(EtlRuntimeDbContext db, EtlScope scope, string runId)
     {
         var scopeKey = EtlRuntimeIdentity.ScopeKey(scope);
         var runKey = EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id");
-        await using var operation = services.CreateAsyncScope();
-        var db = operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>();
         var connector = await db.ConnectorRuns.AsNoTracking().SingleAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
         var pages = await db.ConnectorHttpPages.AsNoTracking().CountAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
         var requests = await db.ConnectorHttpRequests.AsNoTracking().CountAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
