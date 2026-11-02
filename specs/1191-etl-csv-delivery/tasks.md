@@ -4,10 +4,10 @@
 
 ## Phase 1 — Model, identity and validation
 
-- [ ] T001 `EtlCsvDestination` with the `csv` discriminator, and the public API entries (`Core/EtlPipelineV2.cs`, `Core/PublicAPI.Unshipped.txt`). FR-001.
-- [ ] T002 Kind-aware `ConnectorFileOutputKey` overload; the JSON Lines result is unchanged (`Core/Runtime/EtlRuntimeIdentity.cs`). FR-008, FR-009.
-- [ ] T003 Compiler and executable-reader `csv` destination cases (`Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs`, `Runtime/.../Hosting/EtlConnectorExecutableReader.cs`). FR-002.
-- [ ] T004 Tests:
+- [x] T001 `EtlCsvDestination` with the `csv` discriminator, and the public API entries (`Core/EtlPipelineV2.cs`, `Core/PublicAPI.Unshipped.txt`). FR-001.
+- [x] T002 Kind-aware `ConnectorFileOutputKey` overload; the JSON Lines result is unchanged (`Core/Runtime/EtlRuntimeIdentity.cs`). FR-008, FR-009.
+- [x] T003 Compiler and executable-reader `csv` destination cases (`Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs`, `Runtime/.../Hosting/EtlConnectorExecutableReader.cs`). FR-002.
+- [x] T004 Tests:
   - artifact round trip;
   - compiler acceptance and refusals;
   - reader acceptance;
@@ -18,8 +18,8 @@
 
 ## Phase 2 — CSV body writer
 
-- [ ] T005 `EtlCsvRouteWriter`: header, record rows from the transformer's JSON objects, error rows, quoting and formatting. Row size is bounded by the caller (T008) (`Runtime/.../Output/EtlCsvRouteWriter.cs`). FR-004 to FR-007.
-- [ ] T006 Writer tests:
+- [x] T005 `EtlCsvRouteWriter`: header, record rows from the transformer's JSON objects, error rows, quoting and formatting. Row size is bounded by the caller (T008) (`Runtime/.../Output/EtlCsvRouteWriter.cs`). FR-004 to FR-007.
+- [x] T006 Writer tests:
   - the formatting matrix;
   - header quoting;
   - error rows;
@@ -29,8 +29,8 @@
 
 ## Phase 3 — Output path, bindings and persistence
 
-- [ ] T007 `CsvOutput` chunk format and store (`Output/IFileChunkPublisher.cs`, `Output/FileChunkPublisherFactory.cs`, the `EtlConnectorOutputProcessorTests` factory, and `tests/WorkerHost/StagingPausePublisherFactory.cs` so the pause gate maps the new format). R7.
-- [ ] T008 Output processor:
+- [x] T007 `CsvOutput` chunk format and store (`Output/IFileChunkPublisher.cs`, `Output/FileChunkPublisherFactory.cs`, the `EtlConnectorOutputProcessorTests` factory, and `tests/WorkerHost/StagingPausePublisherFactory.cs` so the pause gate maps the new format). R7.
+- [x] T008 Output processor:
   - the route body builder by kind;
   - the CSV row bound and the memory-only transformer bound (research R2);
   - the kind-aware verification store (research R7a trap);
@@ -38,7 +38,7 @@
   - CSV dispatch to file publication, with the kind's publisher, verification store and key.
 
   (`Execution/EtlConnectorOutputProcessor.cs`.) FR-004, FR-008.
-- [ ] T008a Output processor tests (`EtlConnectorOutputProcessorTests`):
+- [x] T008a Output processor tests (`EtlConnectorOutputProcessorTests`):
   - a CSV row at the limit and one byte over, header counted;
   - the header absent when the first row is rejected, and carried by the first row that fits;
   - a size rejection whose CSV error row cannot fit fails the batch;
@@ -48,8 +48,8 @@
   - a conflicting file at the key refused (`etl.effect-conflict`).
 
   FR-004 to FR-008.
-- [ ] T009 Binding resolution for a CSV destination (`Bindings/HostConnectorBindings.cs`). FR-003.
-- [ ] T010 Persistence:
+- [x] T009 Binding resolution for a CSV destination (`Bindings/HostConnectorBindings.cs`). FR-003.
+- [x] T010 Persistence:
   - the codec destination case;
   - one mechanism-mapping function for the output store's write and its replay comparison, plus the kind whitelist;
   - acceptance-store publication recording and delivered checks for both file kinds;
@@ -57,8 +57,8 @@
   - a DbContext comment.
 
   (`EtlConnectorRecordCodec.cs`, `EfEtlConnectorOutputStore.cs`, `EfEtlConnectorAcceptanceStore.cs`, `EfEtlConnectorRuntimeInspector.cs`, `EtlRuntimeDbContext.cs`.) FR-008, FR-009, FR-010.
-- [ ] T011 Runtime API effect view accepts CSV (`Runtime/Api/EtlRuntimeOperations.Connectors.cs`). FR-010.
-- [ ] T012 Tests (`EtlConnectorOutputStoreTests`, `EtlConnectorAcceptanceStoreTests`, `HostConnectorBindingsTests`, `EtlConnectorRuntimeApiHttpTests`):
+- [x] T011 Runtime API effect view accepts CSV (`Runtime/Api/EtlRuntimeOperations.Connectors.cs`). FR-010.
+- [x] T012 Tests (`EtlConnectorOutputStoreTests`, `EtlConnectorAcceptanceStoreTests`, `HostConnectorBindingsTests`, `EtlConnectorRuntimeApiHttpTests`):
   - mechanism value 2 for a CSV effect, on write and on replay read;
   - a CSV route stored as 1 throws `InvalidDataException`;
   - prior-writer rows unchanged;
@@ -71,18 +71,18 @@
 
 ## Phase 4 — Worker journeys and recovery
 
-- [ ] T013 Worker journeys: CSV → CSV, HTTP → CSV, JSON Lines → CSV, and mixed routes, with every published file parsed. They use `MaxBatchRecords = 1`, so every file carries its header. They check that no main file exists for an all-rejected batch and no error file for an all-accepted one. One output approval is shared by a JSON Lines pipeline and a CSV pipeline (`EtlRuntimeJourneyTests.Csv.cs`). SC-001.
-- [ ] T014 Child-process recovery with CSV routes at `BeforeAcceptance` (higher fence, no second file, zero accounting), plus a run whose existing conflicting file makes it fault (`EtlRuntimeJourneyTests.Csv.cs`). SC-003.
+- [x] T013 Worker journeys: CSV → CSV, HTTP → CSV, JSON Lines → CSV, and mixed routes, with every published file parsed. They use `MaxBatchRecords = 1`, so every file carries its header. They check that no main file exists for an all-rejected batch and no error file for an all-accepted one. One output approval is shared by a JSON Lines pipeline and a CSV pipeline (`EtlRuntimeJourneyTests.Csv.cs`). SC-001.
+- [x] T014 Child-process recovery with CSV routes at `BeforeAcceptance` (higher fence, no second file, zero accounting), plus a run whose existing conflicting file makes it fault (`EtlRuntimeJourneyTests.Csv.cs`). SC-003.
 
 ## Phase 5 — Studio
 
-- [ ] T015 Destination type, route option, file picker label, stage text, profile text and the inspection output label (`etlTypes.ts`, `components/EtlConnectorPipelineEditor.tsx`, `authoringProfiles.tsx`, `EtlRunInspection.tsx`). FR-010.
-- [ ] T016 Vitest (`__tests__/connector-pipeline-editor.test.tsx`, and `__tests__/runInspection.test.tsx` for the "CSV file" output type and a published CSV effect) and Playwright (`Studio/tests/browser/etl-connector-authoring.spec.ts`). SC-005.
+- [x] T015 Destination type, route option, file picker label, stage text, profile text and the inspection output label (`etlTypes.ts`, `components/EtlConnectorPipelineEditor.tsx`, `authoringProfiles.tsx`, `EtlRunInspection.tsx`). FR-010.
+- [x] T016 Vitest (`__tests__/connector-pipeline-editor.test.tsx`, and `__tests__/runInspection.test.tsx` for the "CSV file" output type and a published CSV effect) and Playwright (`Studio/tests/browser/etl-connector-authoring.spec.ts`). SC-005.
 
 ## Phase 6 — Real host, docs, review
 
-- [ ] T017 Copy the spec 1190 Workbench driver to `specs/1191-etl-csv-delivery/evidence/` and give it CSV routes, run it, and keep the summary (`specs/1191-etl-csv-delivery/evidence/`). SC-006.
-- [ ] T018 Real-browser observation of a CSV route and its inspection. SC-005.
-- [ ] T019 Bite-proofs, including reverting the publication verification store to `_jsonlStore`. SC-002.
-- [ ] T020 Docs: `Extensions/Etl/README.md`, `src/Core/README.md`, the Design and Studio `EXTENSION_POINTS.md` destination lists, `src/Runtime/Api/EXTENSION_POINTS.md:38`, and the JSONL-only doc comments named in the plan. FR-011.
-- [ ] T021 Whole suites (SC-004), then the review loop to convergence or its cap. Then the gate-evidence comment and spec `**Status**: Implemented` in this PR.
+- [x] T017 Copy the spec 1190 Workbench driver to `specs/1191-etl-csv-delivery/evidence/` and give it CSV routes, run it, and keep the summary (`specs/1191-etl-csv-delivery/evidence/`). SC-006.
+- [x] T018 Real-browser observation of a CSV route and its inspection. SC-005.
+- [x] T019 Bite-proofs, including reverting the publication verification store to `_jsonlStore`. SC-002.
+- [x] T020 Docs: `Extensions/Etl/README.md`, `src/Core/README.md`, the Design and Studio `EXTENSION_POINTS.md` destination lists, `src/Runtime/Api/EXTENSION_POINTS.md:38`, and the JSONL-only doc comments named in the plan. FR-011.
+- [x] T021 Whole suites (SC-004), then the review loop to convergence or its cap. Then the gate-evidence comment and spec `**Status**: Implemented` in this PR.
