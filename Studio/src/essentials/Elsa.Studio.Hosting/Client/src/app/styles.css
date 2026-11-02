@@ -718,6 +718,15 @@ html[data-theme-material][data-sidebar-color] .sidebar {
   color: var(--sidebar-foreground);
 }
 
+/*
+ * A pinned sidebar color paints the active item with --studio-nav-active, the same role as the
+ * hover above, so hover takes the pinned surface's quieter tint. Same specificity as the rule
+ * above: workspace styles, top navigation and material panels keep their own hover.
+ */
+html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
+  background: var(--studio-surface-muted);
+}
+
 .nav-section a:focus-visible {
   outline: 2px solid var(--studio-focus);
   outline-offset: 2px;

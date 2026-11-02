@@ -286,10 +286,12 @@ test.describe("shell user menu", () => {
       await themeTrigger.focus();
       await page.keyboard.press("Enter");
       const themeMenu = page.locator(".theme-dropdown");
+      // Light and Dark also name Sidebar color options, so modes are read from the Appearance group.
+      const appearanceGroup = themeMenu.getByRole("group", { name: "Appearance", exact: true });
       const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
       await expect(themeMenu).toBeVisible();
       for (const mode of ["Light", "Dark", "Dim", "High contrast"]) {
-        await expect(themeMenu.getByRole("menuitemradio", { name: mode })).toBeVisible();
+        await expect(appearanceGroup.getByRole("menuitemradio", { name: mode, exact: true })).toBeVisible();
       }
       const themeBounds = await themeMenu.boundingBox();
       expect(themeBounds).not.toBeNull();
@@ -298,10 +300,13 @@ test.describe("shell user menu", () => {
       for (const navigation of ["Theme default", "Left", "Top"]) {
         await expect(navigationGroup.getByRole("menuitemradio", { name: navigation })).toBeVisible();
       }
-      await expect(themeMenu.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
-      await themeMenu.getByRole("menuitemradio", { name: "Dark" }).click();
+      for (const sidebarColor of ["Theme default", "Light", "Dark"]) {
+        await expect(themeMenu.getByRole("group", { name: "Sidebar color", exact: true }).getByRole("menuitemradio", { name: sidebarColor, exact: true })).toBeVisible();
+      }
+      await expect(appearanceGroup.getByRole("menuitemradio", { name: "Light", exact: true })).toHaveAttribute("aria-checked", "true");
+      await appearanceGroup.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "dark");
-      await expect(themeMenu.getByRole("menuitemradio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+      await expect(appearanceGroup.getByRole("menuitemradio", { name: "Dark", exact: true })).toHaveAttribute("aria-checked", "true");
       for (const navigation of ["Top", "Theme default", "Left"]) {
         await navigationGroup.getByRole("menuitemradio", { name: navigation }).click();
         await expect(navigationGroup.getByRole("menuitemradio", { name: navigation })).toHaveAttribute("aria-checked", "true");
@@ -312,9 +317,9 @@ test.describe("shell user menu", () => {
         expect(afterNavigation.frame.scrollLeft).toBe(before.frame.scrollLeft);
         expect(afterNavigation.content.left).toBe(before.content.left);
       }
-      await themeMenu.getByRole("menuitemradio", { name: "High contrast" }).click();
+      await appearanceGroup.getByRole("menuitemradio", { name: "High contrast", exact: true }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "high-contrast");
-      await expect(themeMenu.getByRole("menuitemradio", { name: "High contrast" })).toHaveAttribute("aria-checked", "true");
+      await expect(appearanceGroup.getByRole("menuitemradio", { name: "High contrast", exact: true })).toHaveAttribute("aria-checked", "true");
       await page.keyboard.press("Escape");
       await expect(page.getByRole("menu")).toHaveCount(0);
       await expect(themeTrigger).toBeFocused();
@@ -349,14 +354,17 @@ test.describe("shell user menu", () => {
     await page.keyboard.press("Enter");
     const themeMenu = page.locator(".theme-dropdown");
     const workspaceGroup = themeMenu.getByRole("group", { name: "Workspace style", exact: true });
+    // Light and Dark also name Sidebar color options, so modes are read from the Appearance group.
+    const appearanceGroup = themeMenu.getByRole("group", { name: "Appearance", exact: true });
+    const groupOf = (name: string) => ["Light", "Dark", "Dim", "High contrast"].includes(name) ? appearanceGroup : workspaceGroup;
     const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
     await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
     for (const name of ["Minimal", "Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light"]) {
       await page.keyboard.press("ArrowDown");
-      await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+      await expect(groupOf(name).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
     await page.keyboard.press("ArrowDown");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Dark", exact: true })).toBeFocused();
+    await expect(appearanceGroup.getByRole("menuitemradio", { name: "Dark", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dark");
 
@@ -364,7 +372,7 @@ test.describe("shell user menu", () => {
     await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
     for (const name of ["Minimal", "Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
       await page.keyboard.press("ArrowDown");
-      await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+      await expect(groupOf(name).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
     await page.keyboard.press("ArrowDown");
     await expect(themeMenu.getByRole("menuitem", { name: "Follow system appearance", exact: true })).toBeFocused();
