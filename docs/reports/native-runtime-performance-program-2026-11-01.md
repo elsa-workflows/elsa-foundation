@@ -714,3 +714,20 @@ After the 2,178-file archive was verified, the database container and task direc
 transfer token) were removed from the runner, the added NSG rule was deleted (remaining rules equal the original), the
 task resource group with both workers and its storage was deleted, and the runner was deallocated again. No
 task-tagged resource or running VM remains. See `fixture-cleanup-i68.json`.
+
+### Rebuilt backend REST end-to-end suite
+
+The repository's PowerShell REST suite (107 `Test-*.ps1` scripts) ran against a freshly built Workbench from this
+branch, using the README's whole-suite loop on a dedicated port. **79 passed**: 77 in the run, plus DelayDeadline (its
+first run collided with the external server's port) and SharedPersistence (9/9; the first run met an empty `.nuplane`
+store left in the Debug output by this session's own server run, and main passes the same test). Of the remainder:
+
+- 22 are owned qualification scripts that need their own mandatory parameters, so the generic loop cannot run them.
+- 3 are package-qualified separately, as the README states.
+- ValueCapture is a **pre-existing stale test**: it fails identically on main, because its expected input list omits
+  SendHttpRequest's `Connection` input.
+- FileBasedDeployment hits a cross-platform harness defect: PowerShell passes `$null` as an empty environment value on
+  macOS, so its unconfigured launch fails to bind `PublishOnReconcile`.
+- ServerLifecycleGuard is environmental: a .NET-tool PowerShell reports `dotnet` as its own executable.
+
+None of these involve runtime code changed here. Per-script outcomes are in `e2e-rest-summary.json`.
