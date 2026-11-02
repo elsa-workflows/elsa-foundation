@@ -85,8 +85,8 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
 - [ ] T024 [US2] Extract neutral BPMN semantic models/identities into `Essentials/src/Activities/Bpmn/Core/`, preserving JSON/aliases/schema and justified neutral type forwarders.
 - [ ] T025 [US2] Move authored structure/handler to `Essentials/src/Activities/Bpmn/Design/`, remove Design references from runtime, specialize Interchange and update `Essentials/apps/Elsa.Workbench/` shell manifests without losing authoring registration.
 - [ ] T026 [US2] Preserve compiled-state readers, runtime/interchange/authoring tests and explicit pre-GA authored-type API migration in `Essentials/tests/Activities/Bpmn/` and `Essentials/src/Activities/Bpmn/` catalogs/docs.
-- [ ] T027 [US2] Deliver the generic exact authorized native `HumanReview` wait/decision endpoint (agents are user-defined; the editorial process is a sample, not product code) and pre-claim `ActivityResumeValidating` guard with claimed-replay validation in `Extensions/Agent/src/Specialists/` per `contracts/editorial.md`; prove Sequence/Flowchart ports, rejected-review article/comments feedback, three-round exhaustion, approve/deny, restart and duplicate/foreign/changed/late-decision refusal in `Extensions/Agent/tests/Specialists/Composition/` using real publication/bookmark APIs.
-- [ ] T028 [US2] Deliver the generic exact review page under `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/` and prove the same revision loop/human approve/deny/restart/duplicate scenarios through BPMN bound children, save/reload/export/import and explicit unsupported refusal in `Studio/tests/browser/` and `Extensions/Agent/tests/Specialists/Composition/`.
+- [ ] T027 [US2] Deliver the generic exact authorized native `HumanReview` wait/decision endpoint (agents are user-defined; the editorial process is a sample, not product code) and pre-claim `ActivityResumeValidating` guard with claimed-replay validation in `Extensions/Agent/src/Specialists/` per `contracts/human-review.md` (sample: `contracts/editorial.md`); prove Sequence/Flowchart ports, rejected-review article/comments feedback, three-round exhaustion, approve/deny, restart and duplicate/foreign/changed/late-decision refusal in `Extensions/Agent/tests/Specialists/Composition/` using real publication/bookmark APIs.
+- [ ] T028 [US2] Deliver the generic exact review page under `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/` and prove the same revision loop/human approve/deny/restart/duplicate scenarios through BPMN bound children, save/reload/export/import and explicit unsupported refusal in `Studio/tests/browser/` and `Extensions/Agent/tests/Specialists/Composition/`. Delivered in M4: the page, its browser cases, native BPMN bound-children journeys, and an export → import journey in which bound agent and review work never travels in shared XML, import refuses execution with every bound task reported as requiring an explicit binding, and the author's exact rebinding compiles and remaps through the BPMN structure handler and runs the loop (`EditorialBpmnTests`, `EditorialInterchangeTests`), per `contracts/human-review.md`. M4 runs from composed executables over really published specialists; saving, reloading and publishing the process as a workflow definition and the browser import refusal move to T036, and binding-preserving interchange to T063. Deferred to M5: Studio-driven authoring (T030), the occurrence link to the page (T034).
 - [ ] T029 [US2] Replace the research BPMN gap only after a fresh normal package consumer proves zero Design/Publishing assemblies and no mutable lookup in `tools/agents/conformance/`; retain authoring-only/combined profiles.
 
 ## Phase 5 — Studio author/test/publish/use/inspect (US7; M5)
@@ -100,7 +100,8 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
 - [ ] T033 [US7] Implement module-owned playground with fresh/continue, capability diagnostics, partial-vs-accepted output and truthful stop/uncertainty in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistPlayground.tsx`.
 - [ ] T034 [US7] Reuse generic publication/history/lifecycle in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistHistory.tsx`; add exact occurrence links through the owning Studio SDK/shared inspector contribution with no hardcoded specialist branch.
 - [ ] T035 [US7] Implement permitted turn/process timeline/result/usage/approval/incident views in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistInvocationPage.tsx`, including completed/not-applied and unknown outcome.
-- [ ] T036 [US7] Prove real create/edit/test/publish/picker/use/inspect/history, conflict/save/undo, denied/read-only/source-owned, keyboard/narrow and runtime occurrence behavior in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/__tests__/` and `Studio/tests/browser/specialist-agents.spec.ts`.
+- [ ] T036 [US7] Prove real create/edit/test/publish/picker/use/inspect/history, conflict/save/undo, denied/read-only/source-owned, keyboard/narrow and runtime occurrence behavior, plus the native and BPMN editorial process saved, reloaded and published as a workflow definition (including an imported BPMN process rebound and resolved through publication) and the browser-level BPMN import refusal, in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/__tests__/` and `Studio/tests/browser/specialist-agents.spec.ts`.
+- [ ] T063 [US2] (scheduled in M5) Carry exact task bindings through BPMN export/import fail closed in `Essentials/src/Activities/Bpmn/Interchange/`: export resolves each bound version's input definitions through the catalog and omits any binding with a definition-sensitive, credential, non-literal or unresolvable input (reporting the omission per element); import proposes a retained binding with its activity version and input keys and keeps `CanExecute` false until the author confirms it; prove both in Interchange tests and the editorial interchange journey.
 
 ## Phase 6 — Saved evaluations and comparison (US6; M5)
 
@@ -168,7 +169,7 @@ actual prerequisite contracts. M7 qualifies all earlier work and does not invent
 User-story order follows concrete infrastructure dependencies, not a promise that P2 value is needed
 before every P1 operator test. Each story's independent test can use seeded earlier capabilities.
 Deliver complete narrow leaves under the owning epics, one active implementation leaf plus review lane;
-do not open60 issues or promote the entire backlog to Ready.
+do not open 61 issues or promote the entire backlog to Ready.
 
 Independent-file opportunities within an authorized work unit: schema validation vs provider query
 tests (US1); durable Connections vs journal tests after Core settles (US3); native vs interchange
@@ -185,7 +186,7 @@ not permission to exceed Program WIP or run simultaneous solution builds.
 | FR-003 | T003–T004,T014–T017,T031–T033 | A1,A2,A13 |
 | FR-004 | T009–T011,T032–T033 | A2 |
 | FR-005–FR-006 | T006,T011–T013,T027,T034 | A3 |
-| FR-007–FR-008 | T024–T029,T036 | A4,A5 |
+| FR-007–FR-008 | T024–T029,T036,T063 | A4,A5 |
 | FR-009 | T003,T006,T011,T017,T022 | A2,A4 |
 | FR-010–FR-014 | T018–T023,T032–T035 | A6,A8,A9 |
 | FR-015–FR-017 | T041–T046 | A7,A8 |
@@ -205,3 +206,12 @@ protected-content retention for terminal-owner OutcomeUnknown and abandoned Clai
 turns with a bounded resolution or retention ceiling. Preserve unknown/no-inference-retry semantics,
 conversation pins, diagnostic metadata and replay refusal. The current M3 sweep deliberately pins
 these states; documenting this limitation does not satisfy that M7 acceptance item.
+
+### M4 review follow-up owned by M7
+
+A cookie request from an externally signed-in user decides as its canonical Elsa user (`elsa.identity.user_id`), but
+a first-party bearer minted from that session names the provider subject and carries no user ID claim, so such a
+caller is refused (`Forbidden`) rather than misattributed. No production external sign-in path is wired today. M7
+#3527 must make the issued token, the session service and every subject-scoped store agree on one subject for
+external sign-ins (with migration for anything saved under the provider subject) before external deciders are
+supported.

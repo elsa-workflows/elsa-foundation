@@ -1,0 +1,32 @@
+.agent-review__content,
+.agent-review__notes,
+.agent-review__decision {
+  margin-top: var(--studio-space-4, 16px);
+}
+.agent-review__text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.agent-review__json {
+  overflow: auto;
+  padding: var(--studio-space-3, 12px);
+  border-radius: var(--studio-radius-md, 6px);
+  background: var(--studio-surface-muted);
+}
+.agent-review__decision {
+  display: grid;
+  gap: var(--studio-space-2, 8px);
+  max-width: 48rem;
+}
+.agent-review__decision textarea {
+  min-height: 5rem;
+  font: inherit;
+}
+.agent-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--studio-space-2, 8px);
+}
+.agent-review__receipt {
+  margin-top: var(--studio-space-3, 12px);
+}

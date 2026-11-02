@@ -394,6 +394,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ConnectionsApiFeature).Assembly,
             typeof(ConnectionsDesignFeature).Assembly,
             typeof(ConnectionsWorkflowsFeature).Assembly,
+            // The generic human review wait for user-defined agents and its decision API.
+            typeof(Elsa.Agent.Specialists.Review.SpecialistsReviewFeature).Assembly,
+            typeof(Elsa.Agent.Specialists.Review.Api.SpecialistsReviewApiFeature).Assembly,
             // Opt-in finite ETL authoring, native execution and independent runtime inspection.
             typeof(Elsa.Etl.Design.EtlDesignFeature).Assembly,
             typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature).Assembly,

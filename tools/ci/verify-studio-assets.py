@@ -23,6 +23,7 @@ EXPECTED_ASSETS = (
     "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/sdk/index.js",
     "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard/module.js",
     "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js",
+    "Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/wwwroot/studio/modules/agent-specialists/module.js",
     "Extensions/Attention/studio/Elsa.Studio.Attention/wwwroot/studio/modules/attention/module.js",
     "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/wwwroot/studio/modules/console-stream/module.js",
     "Extensions/Connections/studio/Elsa.Studio.Connections/wwwroot/studio/modules/connections/module.js",
