@@ -716,6 +716,11 @@ public sealed record AgentSessionRecord(AgentSession Session)
     public IReadOnlyList<AgentProposalRecord> Proposals { get; init; } = [];
     /// <summary>The recorded duplicate-detection keys.</summary>
     public IReadOnlyList<AgentSessionUniqueKey> Keys { get; init; } = [];
+    /// <summary>
+    /// Audit records a recorded recovery settlement still owes: written with the settlement and cleared once emitted, so a
+    /// process that stops between the two emits them at the session's next hydration instead of losing them.
+    /// </summary>
+    public IReadOnlyList<AgentAuditEvent> PendingAudits { get; init; } = [];
     /// <summary>The current owner, or null when no process owns the aggregate.</summary>
     public AgentSessionFence? Owner { get; init; }
     /// <summary>When the current owner's lease lapses, in the store's time.</summary>
@@ -750,6 +755,8 @@ public sealed record AgentSessionRecordWrite(string SessionId, AgentSessionFence
     public IReadOnlyList<AgentProposalRecord> Proposals { get; init; } = [];
     /// <summary>Keys to insert. A key already recorded with the same value is kept; a different value refuses the whole write.</summary>
     public IReadOnlyList<AgentSessionUniqueKey> Keys { get; init; } = [];
+    /// <summary>The audit records the aggregate owes (<see cref="AgentSessionRecord.PendingAudits"/>), or null to keep them; empty clears them.</summary>
+    public IReadOnlyList<AgentAuditEvent>? PendingAudits { get; init; }
 }
 
 /// <summary>Preview: the disposition of a record store operation.</summary>

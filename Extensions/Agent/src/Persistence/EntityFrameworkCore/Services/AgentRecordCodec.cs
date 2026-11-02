@@ -23,6 +23,7 @@ internal sealed class AgentRecordCodec(ISecretValueProtector protector)
     public const string ContextPurpose = "elsa.agent.context/1";
     public const string ProposalPurpose = "elsa.agent.proposal/1";
     public const string AuditPurpose = "elsa.agent.audit/1";
+    public const string PendingAuditsPurpose = "elsa.agent.pending-audits/1";
 
     /// <summary>Serializes <paramref name="value"/> and protects it for one row. A value that cannot be serialized throws before anything is written.</summary>
     public string Protect<T>(string purpose, string owner, string id, T value) => ProtectText(purpose, owner, id, JsonSerializer.Serialize(value, ValueOptions));

@@ -671,10 +671,14 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             throw;
         }
 
-        // Recovery settles what the recorded facts already decide, in one write, before anything acts on the row.
+        // Recovery settles what the recorded facts already decide, in one write, before anything acts on the row. The audit
+        // records a settlement owes are written with it (with any an earlier hydration recorded but did not get to emit),
+        // and cleared only once emitted, so a process that stops in between never loses them.
         var recovery = Recover(record, history.Messages, ownership.Fence, _clock.GetUtcNow());
+        var audits = record.PendingAudits.Concat(recovery.Audits).ToArray();
         if (recovery.Write is { } write)
         {
+            write = write with { PendingAudits = audits };
             try { await WriteThroughAsync(sessionId, null, write); }
             // A lost ownership is no longer this process's lease to give back; any other refusal or store failure settled
             // nothing, so the lease this hydration took is released, as a failed load releases it.
@@ -692,8 +696,14 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         bool renew;
         lock (row) renew = row.NeedsRenewal;
         if (renew) EnsureRenewal();
-        foreach (var settled in recovery.Audits)
-            await auditSink.EmitAsync(settled, CancellationToken.None);
+        if (audits.Length > 0)
+        {
+            foreach (var settled in audits)
+                await auditSink.EmitAsync(settled, CancellationToken.None);
+            AgentSessionFence fence;
+            lock (row) fence = row.Fence;
+            await WriteThroughAsync(sessionId, row, new AgentSessionRecordWrite(sessionId, fence) { PendingAudits = [] });
+        }
         return row;
     }
 

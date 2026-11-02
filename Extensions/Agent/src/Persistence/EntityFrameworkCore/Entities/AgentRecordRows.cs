@@ -29,6 +29,8 @@ internal sealed class AgentSessionRow
     public string Payload { get; set; } = "";
     /// <summary>Protected <c>AgentPausedTurnRecord</c>, or null when no turn is paused.</summary>
     public string? PausedTurnPayload { get; set; }
+    /// <summary>Protected audit records a recorded recovery settlement still owes, or null when it owes none.</summary>
+    public string? PendingAuditsPayload { get; set; }
 }
 
 internal sealed class AgentMessageRow

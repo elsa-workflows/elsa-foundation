@@ -110,7 +110,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                     NextSequence = table.Column<long>(type: "bigint", nullable: false),
                     SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
                     Payload = table.Column<string>(type: "text", nullable: false),
-                    PausedTurnPayload = table.Column<string>(type: "text", nullable: true)
+                    PausedTurnPayload = table.Column<string>(type: "text", nullable: true),
+                    PendingAuditsPayload = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {

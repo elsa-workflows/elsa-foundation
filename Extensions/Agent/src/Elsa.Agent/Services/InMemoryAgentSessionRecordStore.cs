@@ -34,6 +34,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         foreach (var snapshot in record.Snapshots) created.Snapshots.TryAdd(snapshot.Digest, Serialize(snapshot));
         foreach (var attachment in record.Context) created.Context.Add(attachment.Id, Serialize(attachment));
         created.PausedTurn = record.PausedTurn is null ? null : Serialize(record.PausedTurn);
+        created.PendingAudits = record.PendingAudits.Count == 0 ? null : Serialize(record.PendingAudits);
         foreach (var proposal in record.Proposals) created.Proposals.Upsert(proposal.Proposal.Id, Serialize(proposal), proposal.Proposal.Status, Deadline(proposal));
         // A key repeated within one create keeps its first value, as a write does.
         foreach (var key in record.Keys) created.Keys.TryAdd((key.Kind, key.Key), key.Value);
@@ -63,6 +64,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
                 Snapshots = aggregate.Snapshots.Values.Select(Deserialize<AgentDisclosureSnapshotRecord>).ToArray(),
                 Context = aggregate.Context.Values.Select(Deserialize<AgentContextAttachment>).ToArray(),
                 PausedTurn = aggregate.PausedTurn is null ? null : Deserialize<AgentPausedTurnRecord>(aggregate.PausedTurn),
+                PendingAudits = aggregate.PendingAudits is null ? [] : Deserialize<AgentAuditEvent[]>(aggregate.PendingAudits),
                 Proposals = aggregate.Proposals.Entries
                     .Select(x => Deserialize<AgentProposalRecord>(x.Json) with { Version = aggregate.Proposals.VersionOf(x.Id) }).ToArray(),
                 Keys = aggregate.Keys.Select(x => new AgentSessionUniqueKey(x.Key.Kind, x.Key.Key, x.Value)).ToArray(),
@@ -115,6 +117,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         var snapshots = write.Snapshots.Select(x => (x.Digest, Json: Serialize(x))).ToArray();
         var context = write.Context.Select(x => (x.Id, Json: Serialize(x))).ToArray();
         var paused = write.PausedTurn is null ? null : Serialize(write.PausedTurn);
+        var pendingAudits = write.PendingAudits is not { Count: > 0 } owed ? null : Serialize(owed);
         var proposals = write.Proposals.Select(x => (x.Proposal.Id, x.Proposal.Status, x.Version, Deadline: Deadline(x), Json: Serialize(x))).ToArray();
         lock (_gate)
         {
@@ -144,6 +147,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
             foreach (var (id, json) in context) aggregate.Context.TryAdd(id, json);
             if (paused is not null) aggregate.PausedTurn = paused;
             else if (write.RemovePausedTurn) aggregate.PausedTurn = null;
+            if (write.PendingAudits is not null) aggregate.PendingAudits = pendingAudits;
             foreach (var (id, status, _, deadline, json) in proposals)
             {
                 aggregate.Proposals.Upsert(id, json, status, deadline);
@@ -234,6 +238,7 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         public Ordered Snapshots { get; } = new();
         public Ordered Context { get; } = new();
         public string? PausedTurn { get; set; }
+        public string? PendingAudits { get; set; }
         public Ordered Proposals { get; } = new();
         public Dictionary<(string Kind, string Key), string> Keys { get; } = new();
         public AgentSessionFence? Owner { get; set; }

@@ -110,7 +110,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                     NextSequence = table.Column<long>(type: "bigint", nullable: false),
                     SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, collation: "Latin1_General_100_BIN2"),
                     Payload = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PausedTurnPayload = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    PausedTurnPayload = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PendingAuditsPayload = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {

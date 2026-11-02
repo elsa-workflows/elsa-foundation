@@ -388,6 +388,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<string>("PendingAuditsPayload")
+                        .HasColumnType("longtext");
+
                     b.Property<long?>("PolicyRevision")
                         .HasColumnType("bigint");
 

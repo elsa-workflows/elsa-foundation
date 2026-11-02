@@ -9,6 +9,7 @@ internal sealed partial class EfAgentSessionRecordStore
 {
     private const string SessionRowId = "session";
     private const string PausedTurnRowId = "paused-turn";
+    private const string PendingAuditsRowId = "pending-audits";
 
     /// <summary>
     /// Protects every payload of one create or write and derives its plain columns. Identities are grouped as the default
@@ -65,7 +66,9 @@ internal sealed partial class EfAgentSessionRecordStore
             .Select(key => new EncodedKey(Bounded(key.Kind, AgentModelBuilderExtensions.KindLength, "key kind"), key.Key, AgentRecordCodec.Hash(key.Key), key.Value))
             .ToArray();
         var paused = write.PausedTurn is null ? null : codec.Protect(AgentRecordCodec.PausedTurnPurpose, sessionId, PausedTurnRowId, write.PausedTurn);
-        return new(session, messages, snapshots, context, proposals, keys, paused);
+        var pendingAudits = write.PendingAudits is not { Count: > 0 } owed ? null
+            : codec.Protect(AgentRecordCodec.PendingAuditsPurpose, sessionId, PendingAuditsRowId, owed.ToArray());
+        return new(session, messages, snapshots, context, proposals, keys, paused) { WritesPendingAudits = write.PendingAudits is not null, PendingAudits = pendingAudits };
     }
 
     /// <summary>Authenticates and decodes one consistent read, checking every plain column against its protected record.</summary>
@@ -124,10 +127,12 @@ internal sealed partial class EfAgentSessionRecordStore
         }).ToArray();
         var paused = row.PausedTurnPayload is null ? null
             : codec.Unprotect<AgentPausedTurnRecord>(AgentRecordCodec.PausedTurnPurpose, sessionId, PausedTurnRowId, row.PausedTurnPayload);
+        IReadOnlyList<AgentAuditEvent> pendingAudits = row.PendingAuditsPayload is null ? []
+            : codec.Unprotect<AgentAuditEvent[]>(AgentRecordCodec.PendingAuditsPurpose, sessionId, PendingAuditsRowId, row.PendingAuditsPayload);
 
         return new AgentSessionRecord(session)
         {
-            Messages = messages, Snapshots = snapshots, Context = context, PausedTurn = paused, Proposals = proposals, Keys = keys,
+            Messages = messages, Snapshots = snapshots, Context = context, PausedTurn = paused, Proposals = proposals, Keys = keys, PendingAudits = pendingAudits,
             Owner = new(row.OwnerToken, row.Fence),
             LeaseExpiresAt = Time(row.LeaseExpiresAtUtcTicks),
             Version = row.Version
@@ -163,7 +168,12 @@ internal sealed partial class EfAgentSessionRecordStore
         IReadOnlyList<EncodedContext> Context,
         IReadOnlyList<EncodedProposal> Proposals,
         IReadOnlyList<EncodedKey> Keys,
-        string? PausedTurn);
+        string? PausedTurn)
+    {
+        /// <summary>Whether the write sets the owed audit records (to <see cref="PendingAudits"/>, null clearing them).</summary>
+        public bool WritesPendingAudits { get; init; }
+        public string? PendingAudits { get; init; }
+    }
 
     private sealed record EncodedMessage(string Id, int Role, int Status, string? StatusReason, string Payload)
     {

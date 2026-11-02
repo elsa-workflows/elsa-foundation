@@ -118,7 +118,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.MySql
                     NextSequence = table.Column<long>(type: "bigint", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin"),
                     Payload = table.Column<string>(type: "longtext", nullable: false),
-                    PausedTurnPayload = table.Column<string>(type: "longtext", nullable: true)
+                    PausedTurnPayload = table.Column<string>(type: "longtext", nullable: true),
+                    PendingAuditsPayload = table.Column<string>(type: "longtext", nullable: true)
                 },
                 constraints: table =>
                 {

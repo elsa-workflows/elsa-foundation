@@ -362,6 +362,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.SqlServer
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PendingAuditsPayload")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<long?>("PolicyRevision")
                         .HasColumnType("bigint");
 

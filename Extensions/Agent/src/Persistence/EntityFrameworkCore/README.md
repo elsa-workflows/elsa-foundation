@@ -39,11 +39,11 @@ application changes or enlists in an application transaction.
 
 | Table | Holds |
 | --- | --- |
-| `elsa_agent_sessions` | Owner columns (actor, tenant, workspace), list columns (title, status, update and expiry time), policy revision, `ContinuedFrom`, owner token, fence, lease and version; the protected session and paused turn |
+| `elsa_agent_sessions` | Owner columns (actor, tenant, workspace), list columns (title, status, update and expiry time), policy revision, `ContinuedFrom`, the reached session limit, owner token, fence, lease and version; the protected session, paused turn and the audit records a recovery settlement still owes |
 | `elsa_agent_messages` | One protected `AgentMessageRecord` per message, with role, status and status reason |
 | `elsa_agent_disclosure_snapshots` | Each distinct snapshot once per session: digest, size and the protected canonical text |
 | `elsa_agent_context` | Each context attachment once per session, protected, keyed by the SHA-256 of its identity |
-| `elsa_agent_proposals` | One protected `AgentProposalRecord` per proposal, with status and its record version |
+| `elsa_agent_proposals` | One protected `AgentProposalRecord` per proposal, with status, prepared deadline and its record version |
 | `elsa_agent_call_keys` | The call, invocation, turn-mutation and call-input keys, keyed by SHA-256 of the key |
 | `elsa_agent_audit`, `elsa_agent_audit_owners` | Protected audit records and the first-wins owner association that scopes audit queries |
 | `elsa_agent_audit_sequence` | One counter row that allocates audit append positions |

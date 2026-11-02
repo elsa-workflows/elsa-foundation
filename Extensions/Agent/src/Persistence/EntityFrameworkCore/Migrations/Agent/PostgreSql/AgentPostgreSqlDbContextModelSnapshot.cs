@@ -359,6 +359,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.PostgreSql
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("PendingAuditsPayload")
+                        .HasColumnType("text");
+
                     b.Property<long?>("PolicyRevision")
                         .HasColumnType("bigint");
 

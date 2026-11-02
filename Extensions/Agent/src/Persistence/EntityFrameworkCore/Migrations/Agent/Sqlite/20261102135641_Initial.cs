@@ -110,7 +110,8 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                     NextSequence = table.Column<long>(type: "INTEGER", nullable: false),
                     SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     Payload = table.Column<string>(type: "TEXT", nullable: false),
-                    PausedTurnPayload = table.Column<string>(type: "TEXT", nullable: true)
+                    PausedTurnPayload = table.Column<string>(type: "TEXT", nullable: true),
+                    PendingAuditsPayload = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {

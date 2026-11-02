@@ -330,6 +330,9 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Migrations.Agent.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PendingAuditsPayload")
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("PolicyRevision")
                         .HasColumnType("INTEGER");
 

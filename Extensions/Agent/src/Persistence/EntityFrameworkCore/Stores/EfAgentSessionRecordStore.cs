@@ -39,7 +39,7 @@ internal sealed partial class EfAgentSessionRecordStore(
         var encoded = EncodeOrRefuse(sessionId, "create", new AgentSessionRecordWrite(sessionId, new(ownerToken, 0))
         {
             Session = record.Session, Messages = record.Messages, Snapshots = record.Snapshots, Context = record.Context,
-            PausedTurn = record.PausedTurn, Proposals = record.Proposals, Keys = record.Keys
+            PausedTurn = record.PausedTurn, Proposals = record.Proposals, Keys = record.Keys, PendingAudits = record.PendingAudits
         }, refuseDuplicateContext: true);
         return await GuardRetryAsync(sessionId, "create", () => Retry.RunUntilSettledAsync<AgentSessionRecordResult>(null, async () =>
         {
@@ -60,6 +60,7 @@ internal sealed partial class EfAgentSessionRecordStore(
                 session.LeaseExpiresAtUtcTicks = (now + leaseDuration).UtcTicks;
                 session.Version = 1;
                 session.PausedTurnPayload = encoded.PausedTurn;
+                session.PendingAuditsPayload = encoded.PendingAudits;
                 db.Add(session);
                 foreach (var message in encoded.Messages) db.Add(message.Row(sessionId, sequence++));
                 foreach (var snapshot in encoded.Snapshots) db.Add(snapshot.Row(sessionId, sequence++));
@@ -251,6 +252,7 @@ internal sealed partial class EfAgentSessionRecordStore(
                 var session = encoded.Session;
                 var paused = encoded.PausedTurn;
                 var removePaused = paused is null && write.RemovePausedTurn;
+                var (writesPendingAudits, pendingAudits) = (encoded.WritesPendingAudits, encoded.PendingAudits);
                 var next = sequence;
                 var applied = await db.Set<AgentSessionRow>().Where(x => x.SessionId == sessionId && x.Version == row.Version)
                     .ExecuteUpdateAsync(setters =>
@@ -265,6 +267,7 @@ internal sealed partial class EfAgentSessionRecordStore(
                                 .SetProperty(x => x.Payload, session.Payload);
                         if (paused is not null) setters.SetProperty(x => x.PausedTurnPayload, paused);
                         else if (removePaused) setters.SetProperty(x => x.PausedTurnPayload, (string?)null);
+                        if (writesPendingAudits) setters.SetProperty(x => x.PendingAuditsPayload, pendingAudits);
                     }, cancellationToken);
                 if (applied != 1)
                     throw new InvalidOperationException($"Agent session '{sessionId}' changed while this write held its row lock.");

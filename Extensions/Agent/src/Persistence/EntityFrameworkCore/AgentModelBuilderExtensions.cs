@@ -46,6 +46,7 @@ public static class AgentModelBuilderExtensions
             entity.Property(x => x.SchemaVersion).HasMaxLength(SchemaVersionLength).IsRequired();
             entity.Property(x => x.Payload).HasColumnType(payloadType).IsRequired();
             entity.Property(x => x.PausedTurnPayload).HasColumnType(payloadType);
+            entity.Property(x => x.PendingAuditsPayload).HasColumnType(payloadType);
             // Owner first, then the list order and its cursor; the limit applies after both.
             entity.HasIndex(x => new { x.TenantId, x.ActorId, x.UpdatedAtUtcTicks, x.SessionId });
         });
