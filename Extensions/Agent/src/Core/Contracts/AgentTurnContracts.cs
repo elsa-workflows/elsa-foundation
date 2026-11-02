@@ -47,11 +47,22 @@ public sealed record AgentPausedTurn(
 }
 
 /// <summary>Stores paused-turn state keyed by session, enabling resume-after-approval.</summary>
+/// <remarks>
+/// The default keeps the paused turn on the default session owner's record, so saving the pause also records the
+/// session's Pause claim and the pause survives with the session. A replacement keeps autonomy support, because the
+/// orchestrator still claims the pause explicitly, but it cannot recover paused turns: with the in-memory record store the
+/// composition reports durable recovery unsupported, and with a durable record store selected it fails shell activation.
+/// Only the default orchestrator's continuation releases the Pause claim that saving through the default store takes,
+/// so with a replaced orchestrator autonomy is Unsupported in that composition (the session policy participation rule).
+/// </remarks>
 public interface IAgentTurnStateStore
 {
-    void Save(AgentPausedTurn state);
+    /// <summary>Records the session's paused turn, replacing any earlier one.</summary>
+    Task SaveAsync(AgentPausedTurn state, CancellationToken cancellationToken = default);
 
-    AgentPausedTurn? Find(string sessionId);
+    /// <summary>The session's paused turn, or null when none is recorded.</summary>
+    Task<AgentPausedTurn?> FindAsync(string sessionId, CancellationToken cancellationToken = default);
 
-    void Remove(string sessionId);
+    /// <summary>Removes the session's paused turn; a no-op when none is recorded.</summary>
+    Task RemoveAsync(string sessionId, CancellationToken cancellationToken = default);
 }

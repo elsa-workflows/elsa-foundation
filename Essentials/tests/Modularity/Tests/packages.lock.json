@@ -1140,6 +1140,17 @@
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
+      "elsa.agent.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Agent": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.agent.specialists.anthropic": {
         "type": "Project",
         "dependencies": {
@@ -2122,6 +2133,7 @@
           "Elsa.Agent.Api": "[4.0.0-dev, )",
           "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Agent.GitHubCopilot": "[4.0.0-dev, )",
+          "Elsa.Agent.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Agent.Specialists.Anthropic": "[4.0.0-dev, )",
           "Elsa.Agent.Specialists.Api": "[4.0.0-dev, )",
           "Elsa.Agent.Specialists.AzureOpenAI": "[4.0.0-dev, )",

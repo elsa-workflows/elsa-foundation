@@ -141,6 +141,7 @@
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
       "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
       "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "Extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj",
       "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj",
       "Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj",
       "Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj",

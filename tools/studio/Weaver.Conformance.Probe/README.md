@@ -111,3 +111,26 @@ the run fails. Only that passing run sets `independentPackageWitness`. `export_e
 python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
   --output /absolute/new-owned-complete-witness --version 4.0.0-weaver3440.local3
 ```
+
+### Restart inventory over the packaged durable store (#3441 T031)
+
+After the autonomy matrix, the same complete witness appends the
+[mandatory native restart inventory](../../../specs/1189-weaver-recovery/contracts/recovery.md#4-mandatory-native-restart-inventory).
+The backend consumer references `Elsa.Agent.Persistence.EntityFrameworkCore` and `Elsa.Secrets` from the candidate feed, so
+its common published baseline already contains them, but nothing selects them until this phase. The driver owns the backend
+through `runtime.RestartableServer`, one owned origin with a separate receipt, log and empty runtime caches for every
+generation. It first restarts the host on the in-memory default and requires the pending review to be lost
+(`restart-without-durable-store`). Then, while no generation runs, `consumers.enable_durable_agent_store` selects
+`FoundationAgentEntityFrameworkCore` on SQLite over a new database under the run's output root. `restart_journeys.py` then runs
+three restarts per actual adapter: graceful, abrupt (the owned process group is killed while a write is held at the module's
+native rendezvous and a provider turn is held at the pre-call gate), and after-deadline (stopped before and started after the
+prepared deadline on the real clock, about five minutes). Ten cases per adapter assert the recovered outcome, the execution
+count at the independent native owner and the audit `settledBy` values. A failed case keeps its precise cause and the rest
+still run. The Studio host keeps running throughout; consumer no-source/no-frontend and cleanup rules are unchanged.
+`witness_manifest()` is now 38 + 4 + 26 + 20 restart cases + 1 restart control = 89. `validate_complete_witness` refuses a
+report without the passed restart section, and only a run that passes everything sets `independentPackageWitness`.
+
+```sh
+python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
+  --output /absolute/new-owned-weaver3441-proof --version 4.0.0-weaver3441.local1
+```
