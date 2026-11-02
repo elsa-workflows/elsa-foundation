@@ -8,8 +8,12 @@ public sealed class LoginPageOptions
     public string Description { get; set; } = "Bring your ideas to life, one thoughtful workflow at a time.";
     public string? LogoUrl { get; set; }
     public string? ImageUrl { get; set; }
-    /// <summary>Bundled artwork: ember, tidal, daybreak or canopy.</summary>
-    public string Artwork { get; set; } = "ember";
+    /// <summary>
+    /// Bundled artwork: river-to-sea, open-architecture, flowing-ribbons, paper-landscape, creative-studio,
+    /// botanical-growth, constellation, miniature-world, glass-and-light or unfolding-map (default).
+    /// The existing ember, tidal, daybreak and canopy choices remain available. ImageUrl takes precedence.
+    /// </summary>
+    public string Artwork { get; set; } = LoginArtwork.Default;
     /// <summary>split, reverse, immersive or editorial.</summary>
     public string Layout { get; set; } = "split";
     /// <summary>linen, tidal, daybreak or canopy; independent of layout and artwork.</summary>

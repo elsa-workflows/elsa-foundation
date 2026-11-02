@@ -56,7 +56,7 @@ public static class AspNetCoreIdentityApi
     private static async Task HandleLoginArtworkAsync(HttpContext context)
     {
         var name = context.Request.RouteValues["name"]?.ToString();
-        if (name is not ("ember.jpg" or "tidal.jpg" or "daybreak.jpg" or "canopy.jpg" or "elsa-logo.png"))
+        if (name != "elsa-logo.png" && !LoginArtwork.IsBundledFile(name))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
