@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: Draft
+**Status**: In progress
 
 **Input**: The JSON Lines half of the file-connector criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908) ("CSV and JSON Lines file ingestion/delivery have explicit positions, replay, parsing/validation and destination-idempotency behavior"), in [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). Scope follows the [25 October research checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6393884289) and the [claim](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6578657843).
 

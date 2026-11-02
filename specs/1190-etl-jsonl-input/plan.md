@@ -75,7 +75,7 @@ No violations, so Complexity Tracking is empty.
   - Refuse more than `int.MaxValue` records with `etl.source-too-many-records`; the indexer takes an injectable record ceiling so the refusal is unit-testable.
   - The digest check is the same for both kinds.
 - `Preparation/EtlJsonlLineIndexer.cs` (new, internal): a streaming byte scanner implementing the R5 framing. It writes `(ordinal, start, end)` entries through `EtlConnectorCsvSupport.WriteIndexEntry`, starting with the sentinel.
-- `Json/EtlJsonRecordReader.cs` (new, internal; moved from `Http/EtlJsonPageReader.cs`):
+- `Http/EtlJsonRecordReader.cs` (new, internal, beside `EtlJsonPointer`; moved from `Http/EtlJsonPageReader.cs`):
   - `ReadFields(JsonElement record, IReadOnlyList<EtlJsonField>, IReadOnlyList<EtlJsonPointer>, int recordOrdinal)` covers pointer resolution, required/null handling and scalar typing, and returns a typed row or a field error. It has no size check: HTTP keeps its `rawBytes > MaxRecordBytes` check in the page reader, and JSON Lines classifies oversize from the index before parsing.
   - `TryReadExactDecimal`.
   - `ValidateDocument` throws one neutral internal exception for duplicate names. HTTP maps it to `etl.http.duplicate-property` and its existing `InvalidOperationException` decoder failures to `etl.http.page-invalid`; JSON Lines maps both to `etl.jsonl.record-invalid`.
