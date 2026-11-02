@@ -1,7 +1,7 @@
 # Studio notifications: toasts and Notification Center
 
 **Status**: Draft — owner-approved design, awaiting spec review
-**Issue**: none yet
+**Issue**: [#3631](https://github.com/elsa-workflows/elsa-foundation/issues/3631)
 **Program bucket**: none/free-flow
 
 ## Problem
@@ -70,7 +70,10 @@ export interface StudioNotificationApi {
 - Lifetime is host policy, not a module option: `info` and `success` toasts dismiss after 8 s,
   `warning` after 12 s; `error` and `progress` toasts stay until dismissed or updated.
 - `track()` publishes a `progress` notification, resolves it to `success` or `error`, and returns
-  the original promise result or rejection unchanged.
+  the original promise result or rejection unchanged, also when a message formatter throws.
+- `update(patch)` leaves absent keys untouched; a key present with value `undefined` clears that
+  field.
+- An action runs at most once: the host clears it from the entry before running it.
 - `link.path` is a Studio route opened through host navigation. External URLs are not supported.
 - `action` callbacks are not persisted. After reload the entry keeps its link but loses its action.
 - Modules can only publish. Reading, marking read and clearing belong to the host UI.
@@ -93,7 +96,8 @@ export interface StudioNotificationApi {
 - All storage access is wrapped in try/catch; when storage is unavailable the store runs in memory.
 - When the identity or backend key changes, the store flushes the current list and loads the list
   for the new key. Sign-out flushes and clears the in-memory list.
-- A `storage` event listener merges changes from other Studio tabs.
+- A `storage` event listener merges changes from other Studio tabs (three-way against the last
+  known list while a local write is pending); only a fresh load maps `progress` to "status unknown".
 
 ### Host UI
 
@@ -116,7 +120,9 @@ All components live in `Elsa.Studio.Hosting/Client/src/app/ui/feedback/`.
   with level icon, title, message, relative time (absolute on hover), link, action when still
   available and dismiss. Unread entries carry an accent bar. Opening the Center does not mark
   entries read; clicking an entry or "Mark all read" does. Escape closes it and focus returns to the
-  bell. It has an empty state.
+  bell. It has an empty state and a Close button. While it is open, toasts are suppressed (the list
+  already shows every entry) and new entries are still announced.
+- Toasts and the sheet sit below the shell header, measured into `--studio-shell-header-bottom`.
 - Styling uses the `--studio-*` token contract in `Studio/docs/design-tokens.md`; no new tokens
   unless review finds a gap.
 
