@@ -136,10 +136,11 @@ last-registered service of those four returns `Unsupported`, with no shadow defa
 and turns keep their existing behavior. `IAgentTurnRegistry` and `IAgentTurnStateStore` replacements
 stay supported because the orchestrator holds the claims around their calls. Only the default
 registry's busy refusal is known to precede a write, so a replacement registry's refusal or
-registration failure leaves the foreground claim held: every autonomy change on that session returns
-`agent.session.busy` until the session expires. Likewise, an accepted prompt that never reaches a
-terminal status (for example after a process crash before its stream starts) keeps its prompt claim;
-that prompt already blocked new prompts before #3440, and a persistent store must resolve it. `IAgentActionProposalExecutor` is not a participant.
+registration failure leaves the foreground claim held: every current-revision autonomy change on that
+session, including a no-op, returns `agent.session.busy` until the session expires (then
+`agent.session.closed`) or the process restarts. Likewise, an accepted prompt that never reaches a
+terminal status (for example, a prompt whose stream is never opened) keeps its prompt claim; that
+prompt already blocked new prompts before #3440. `IAgentActionProposalExecutor` is not a participant.
 Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled; any
 failure a replacement returns, including the `agent.proposal.cancelled` code, is recorded as a Failed
 zero-effect refusal.

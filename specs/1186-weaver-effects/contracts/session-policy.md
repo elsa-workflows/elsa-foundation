@@ -59,8 +59,8 @@ Readback and attribution:
 
 - Create-session and session-detail responses gain an additive `policy` object of the same shape.
   It is omitted only when the composition cannot read it back (Unsupported). Clients treat an
-  absent `policy` as "no server-owned autonomy setting": the selector is unavailable, and an update
-  would return `agent.session.autonomy_unsupported`.
+  absent `policy` as "no server-owned autonomy setting": the selector is unavailable, and a
+  well-formed update returns 409 `agent.session.autonomy_unsupported`.
 - Each session-detail message view gains `acceptedPolicyRevision`. It is always serialized, as
   `null` when the installed store does not own revisions.
 - The accepted-prompt response projects the domain `AgentMessage` through `AgentAcceptedMessageResponse`:
@@ -272,7 +272,7 @@ decorator or an additive last-registered service all count as replacements.
 
 | Replacement | Effect |
 | --- | --- |
-| `IAgentTurnRegistry`, `IAgentTurnStateStore` | Stay supported: the orchestrator holds the claims around their calls, and they need no new members (qualified by T019). Only the default registry's busy refusal is known to precede a write, so a replacement registry's refusal or failure leaves the session conservatively busy for policy changes until restart (#3441) |
+| `IAgentTurnRegistry`, `IAgentTurnStateStore` | Stay supported: the orchestrator holds the claims around their calls, and they need no new members (qualified by T019). Only the default registry's busy refusal is known to precede a write, so a replacement registry's refusal or failure leaves the session conservatively busy for current-revision policy changes until the session expires or the process restarts (recovery is #3441) |
 | `IAgentSessionService`, `IAgentStreamingService`, `IAgentToolInvoker`, `IAgentProposalService`, including forwarding decorators | Readback and update return Unsupported: 409 `agent.session.autonomy_unsupported`, and create/detail omit `policy`. No default shadow state is created; admission and turns keep their existing behavior |
 | `IAgentActionProposalExecutor` | Not a participant; the proposal service holds the claims around it. Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled. A replacement cannot signal Cancelled, so any failure it returns, including the `agent.proposal.cancelled` code, is recorded as a Failed refusal with zero effect. Not separately qualified by T019 |
 | `IAgentSessionPolicyService` | A replacement cannot join the internal default claims. It must own the same ordering against all admitted work, or return Unsupported. Per-turn wrappers are not registrations and are unaffected |
