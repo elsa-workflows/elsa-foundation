@@ -141,6 +141,14 @@ internal sealed class InMemoryAgentProposalService(
         return LookupAsync(proposalId, cancellationToken);
     }
 
+    /// <summary>The owning session from the process-local store, or else from the record store; nothing is hydrated.</summary>
+    public async Task<string?> FindSessionIdAsync(string proposalId, CancellationToken cancellationToken = default)
+    {
+        if (store.Proposals.TryGetValue(proposalId, out var proposal)) return proposal.SessionId;
+        return _owner is null ? (await LookupAsync(proposalId, cancellationToken))?.SessionId
+            : await _owner.FindProposalSessionAsync(proposalId, cancellationToken);
+    }
+
     /// <summary>
     /// The proposal from the process-local store. After a restart or eviction, the session that records it is
     /// hydrated first (which loads and settles its proposals); hydration takes no proposal gate.

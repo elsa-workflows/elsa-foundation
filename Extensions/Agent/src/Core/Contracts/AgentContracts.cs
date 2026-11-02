@@ -21,6 +21,14 @@ public interface IAgentSessionService
     Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Preview: the session's owner, or null when it is not found. Callers authorize on it before anything hydrates the
+    /// session, takes its ownership or settles its recorded work, so a foreign caller causes none of those. The default
+    /// reads <see cref="FindAsync"/>; the default session owner reads the record store's plain owner columns instead.
+    /// </summary>
+    async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+        => await FindAsync(sessionId, cancellationToken) is { } session ? new(session.ActorId, session.TenantId) : null;
 }
 
 /// <summary>
@@ -92,6 +100,14 @@ public interface IAgentSessionRecordStore
     /// throw <see cref="ArgumentException"/> for a blank actor or tenant and a limit outside 1..<see cref="AgentSessionOwnerQuery.MaxTake"/>.
     /// </summary>
     Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The plain owner columns of one recorded session, or null when it is not recorded. This read takes no ownership,
+    /// extends no lease and writes nothing, so authorization can run on it before any hydration. The default reads
+    /// <see cref="LoadAsync"/>; a store that protects its payloads overrides it to read the owner columns only.
+    /// </summary>
+    async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+        => await LoadAsync(sessionId, cancellationToken) is { } record ? new(record.Session.ActorId, record.Session.TenantId) : null;
 }
 
 public interface IAgentPolicyEvaluator
@@ -163,6 +179,13 @@ public interface IAgentProposalService
         AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default);
 
     Task<AgentToolResult?> FindResultAsync(string proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Preview: the session that owns the proposal, or null when it is not found, resolved without hydrating that
+    /// session, so the caller can authorize on the session's owner first. The default reads <see cref="FindAsync"/>.
+    /// </summary>
+    async Task<string?> FindSessionIdAsync(string proposalId, CancellationToken cancellationToken = default)
+        => (await FindAsync(proposalId, cancellationToken))?.SessionId;
 }
 
 public interface IAgentStreamingService

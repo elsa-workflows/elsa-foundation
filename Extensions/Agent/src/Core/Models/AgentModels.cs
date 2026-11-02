@@ -707,6 +707,12 @@ public sealed record AgentSessionSummary(
 public sealed record AgentSessionSummaryPage(IReadOnlyList<AgentSessionSummary> Items, string? Next);
 
 /// <summary>
+/// Preview: a recorded session's plain owner columns. Authorization reads them before anything decodes a payload,
+/// hydrates the session or takes its ownership.
+/// </summary>
+public sealed record AgentSessionOwner(string ActorId, string TenantId);
+
+/// <summary>
 /// Preview: an explicit provider outcome shown to the user as a <see cref="AgentStreamEventKind.Progress"/> event, such
 /// as a provider conversation that could not be resumed and was replaced by a new one. The orchestrator records it on
 /// the turn's audit trail. It never counts as an accepted outcome.

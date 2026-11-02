@@ -95,6 +95,22 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             return row.Session;
     }
 
+    /// <summary>
+    /// The owner of a loaded row, or else the record store's plain owner columns. Nothing is hydrated, no ownership is
+    /// taken and nothing is written, so a caller authorized on it cannot cause settlement or a takeover.
+    /// </summary>
+    public async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (_rows.TryGetValue(sessionId, out var row))
+            lock (row)
+                return new(row.Session.ActorId, row.Session.TenantId);
+        return await _store.FindOwnerAsync(sessionId, cancellationToken);
+    }
+
+    /// <summary>The session that records a proposal, read from the record store without hydrating it.</summary>
+    internal Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default)
+        => _store.FindProposalSessionAsync(proposalId, cancellationToken);
+
     public async Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
     {
         if (await RowAsync(sessionId, cancellationToken) is not { } loaded)

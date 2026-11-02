@@ -180,6 +180,15 @@ internal sealed class InMemoryAgentSessionRecordStore(TimeProvider? clock = null
         }
     }
 
+    public Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+            return Task.FromResult(_sessions.TryGetValue(sessionId, out var aggregate)
+                ? new AgentSessionOwner(aggregate.Index.ActorId, aggregate.Index.TenantId)
+                : null);
+    }
+
     private static AgentSessionRecordResult Owned(Aggregate aggregate)
         => new(AgentSessionRecordOutcome.Succeeded) { Fence = aggregate.Owner, LeaseExpiresAt = aggregate.LeaseExpiresAt };
 
