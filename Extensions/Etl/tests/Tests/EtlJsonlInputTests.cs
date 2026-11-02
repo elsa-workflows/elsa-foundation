@@ -174,7 +174,9 @@ public sealed class EtlJsonlInputTests
             "{\"id\":3,\"name\":{\"first\":\"Ada\"}}",
             "{\"id\":4,\"name\":[\"Ada\"]}",
             "{\"id\":5,\"name\":\"N\",\"meta\":{\"k\":1,\"k\":2}}",
-            "{\"id\":6,\"name\":\"Dec\",\"amount\":1.00000000000000000000000000001}"
+            "{\"id\":6,\"name\":\"Dec\",\"amount\":1.00000000000000000000000000001}",
+            "{\"id\":7,\"name\":\"T\",}",
+            "{\"id\":8 /*c*/,\"name\":\"C\"}"
         };
         var source = files.WriteBytes("source.jsonl", Utf8(string.Join("\n", lines) + "\n"));
         var baseline = JsonlPipeline(maxBatchRecords: 100);
@@ -189,15 +191,16 @@ public sealed class EtlJsonlInputTests
         var prepared = await PrepareAsync(files, pipeline, source, admission);
         await using var builder = await EtlConnectorInputBatchBuilder.OpenAsync(files.SnapshotRoot, admission, prepared, 0);
 
-        var batch = (await builder.BuildNextAsync(new EtlConnectorFilePosition(1, 8, 1))).Batch!;
+        var batch = (await builder.BuildNextAsync(new EtlConnectorFilePosition(1, 10, 1))).Batch!;
 
+        // Trailing commas and comments are not JSON, so those lines are invalid records too.
         Assert.Equal(new string?[]
             {
                 null, "etl.record-too-large", "etl.invalid-value", "etl.invalid-value", "etl.invalid-value",
-                "etl.jsonl.record-invalid", "etl.invalid-value"
+                "etl.jsonl.record-invalid", "etl.invalid-value", "etl.jsonl.record-invalid", "etl.jsonl.record-invalid"
             },
             batch.Records.Select(record => record.Error?.Code));
-        Assert.Equal(new string?[] { null, null, "id", "name", "name", null, "amount" }, batch.Records.Select(record => record.Error?.Field));
+        Assert.Equal(new string?[] { null, null, "id", "name", "name", null, "amount", null, null }, batch.Records.Select(record => record.Error?.Field));
 
         // CR-only line ends are not record terminators: the whole file is one line and one invalid record.
         using var crFiles = new TestRoot();

@@ -9,7 +9,7 @@ The driver is [`jsonl_workbench_journey.py`](jsonl_workbench_journey.py). It ran
 - Run 1 at `9b7c6df4d`, on an ephemeral port.
 - Run 2 at `724bb5c00`, which only adds the driver's `--port` and `--studio-origin` options, on owned port 5391 so a Studio could attach. Its summary records that revision.
 
-Both runs passed every check; only run 2 kept its summary. The journey was not re-run after the main merge (`0ee760f35`) or the review fixes (`c51023ed8`: record-buffer bound, exception rename), which the unit, worker and process tests cover at head.
+Both runs passed every check; only run 2 kept its summary. The journey was not re-run after the main merge (`0ee760f35`) or the review fixes (`c51023ed8`: record-buffer bound, exception rename; `657b5cd9f` and later: tests, a comment and a Studio component rename), which the unit, worker and process tests cover at head.
 
 The driver:
 
@@ -70,7 +70,7 @@ The replacement:
 
 ## Bite-proofs (SC-002, SC-004)
 
-[`bite-proofs.json`](bite-proofs.json) records eight mutations at `c51023ed8`, with each failing test named. For each, the focused tests failed with the mutation in place and passed again once the file was restored from git:
+[`bite-proofs.json`](bite-proofs.json) records eight mutations at `c51023ed8` and two more (marked round 3) on the round-3 test change, with each failing test named. For each, the focused tests failed with the mutation in place and passed again once the file was restored from git:
 
 | Mutation | Tests failed while mutated |
 |---|---|
@@ -82,6 +82,8 @@ The replacement:
 | R10 line-start check disabled | 1 of 5 |
 | Record limit off by one (`> max + 1`) | 1 of 1 (the max+1 line parses instead of being too large) |
 | Record ceiling off by one (`>=`) | 1 of 1 (exactly-at-ceiling preparation refused) |
+| JSON Lines parse allows trailing commas | 1 of 1 |
+| JSON Lines parse skips comments | 1 of 1 |
 
 Disabling the span check fails only 2 of its 3 targeted cases: the third forged index is still refused, by the gap check, so that test stays green.
 
@@ -89,7 +91,8 @@ Disabling the span check fails only 2 of its 3 targeted cases: the third forged 
 
 Run locally; CI covers the exact head:
 
-- `Elsa.Etl.Tests` at `c51023ed8` (after review round 1): 1058/1058 passed, 0 skipped; `--list-tests` gives 1058; 181.6 s wall time on a loaded shared machine. At `7ecec65ad`: 1056/1056.
+- `Elsa.Etl.Tests` at `657b5cd9f` (after review round 2): 1060/1060 passed, 0 skipped; `--list-tests` gives 1060; 187.5 s wall time on a loaded shared machine. Earlier: 1058/1058 at `c51023ed8`, 1056/1056 at `7ecec65ad`.
+- The golden-hash theory `EtlV2ArtifactIdentityTests.Persisted_v2_artifacts_keep_their_canonical_hash_per_source_kind`, copied unchanged onto an untouched `origin/main` checkout (`eb2df8548`), passes there (3/3 in the class), so the pinned CSV and HTTP JSON hashes are main's, not values captured on this branch.
 - Architecture guard at `7ecec65ad`: 609/609.
 - `Elsa.Maps.Generator -- check` and `test-tiers-check`: pass.
 - Studio ETL client: typecheck clean; Vitest 70/70.

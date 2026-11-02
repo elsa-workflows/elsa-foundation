@@ -34,7 +34,7 @@ Both constitutions and the review checklist were loaded.
 |---|---|
 | §E2.2 / §E2.2.3 Design↔Runtime split, deployment shapes | Pass. Runtime changes take no Design reference; runtime-only execution is unchanged. |
 | §E2.6 Executable-always-runs, artifact-only runtime | Pass. A JSON Lines run needs only the artifact, its pins and the retained snapshot. |
-| §E6 Type naming R1–R8 | Pass with one recorded exception. New types: `EtlJsonlSource`, `EtlJsonlLineIndexer`, `EtlJsonRecordReader`. **R4 exception:** `…Source` is reserved for "returns on request"; `EtlJsonlSource` is a member of the existing closed `EtlSource` declaration set beside `EtlCsvSource` and `EtlHttpJsonSource`, and renaming the set is out of scope. The wire discriminator `jsonl` matches the existing destination kind string. `EtlPreparedCsvInput` keeps its public name (research R3). |
+| §E6 Type naming R1–R8 | Pass with one recorded exception. New types: `EtlJsonlSource`, `EtlJsonlLineIndexer`, `EtlJsonRecordReader`, `EtlDuplicatePropertyException` (internal), and the Studio component `EtlJsonFieldsEditor` (renamed from `EtlHttpJsonSourceFieldsEditor` because it now edits both JSON sources); all within four components. **R4 exception:** `…Source` is reserved for "returns on request"; `EtlJsonlSource` is a member of the existing closed `EtlSource` declaration set beside `EtlCsvSource` and `EtlHttpJsonSource`, and renaming the set is out of scope. The wire discriminator `jsonl` matches the existing destination kind string. `EtlPreparedCsvInput` keeps its public name (research R3). |
 | §2.21.1 Tests describing valid behaviour still pass | One existing test, `Empty_csv_preparation_can_settle_shared_terminal_success`, encodes the zero-record gap by settling by hand. It is rewritten to assert automatic settlement, with the reason recorded (FR-011). |
 | §2.22.1 Extension-point catalog in the same unit | No extension point is added; the source kind is a closed polymorphic set. FR-011 adds an obligation to the existing optional `IEtlConnectorRuntimeStore.CommitConnectorPreparationAsync`, so `Extensions/Etl/src/Core/EXTENSION_POINTS.md` and the method documentation state it. `Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md:16` describes the authoring surface as "HTTP or CSV sources" and is updated in the same unit (T027). |
 | §2.23.1–§2.23.2 Registration and behaviour tests | Behaviour tests per FR; no new registration. |
@@ -110,7 +110,7 @@ No violations; one recorded naming exception (R4). Recorded debt: the shared `Et
   - A "JSON Lines file" option.
   - The binding picker filters Source approvals of kind `csv`, labelled "Source file binding".
   - The kind switch carries fields across, as the existing CSV↔HTTP switch does.
-- `EtlJsonSourceFieldsEditor.tsx` (renamed from `EtlHttpJsonSourceFieldsEditor.tsx`, since it now edits both JSON sources): accepts a JSON Lines source, rendering only the fields table (no records pointer or pagination).
+- `EtlJsonFieldsEditor.tsx` (renamed from `EtlHttpJsonSourceFieldsEditor.tsx`, since it now edits both JSON sources): accepts a JSON Lines source, rendering only the fields table (no records pointer or pagination).
 - `PipelineBindingSelect.tsx`: an optional `subjectLabel` prop overrides the role and kind wording, so the JSON Lines picker reads "Source file" rather than "Source CSV".
 - Pipeline editor summary labels and run inspection empty-state text name JSON Lines where they name only CSV/HTTP.
 

@@ -104,6 +104,32 @@
       "restored": "Passed!  - Failed:     0, Passed:     1",
       "original": "            if (scanner.RecordCount > maxRecords)",
       "mutated_text": "            if (scanner.RecordCount >= maxRecords)"
+    },
+    {
+      "mutation": "jsonl-trailing-commas",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_classifies_boundary_values",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_classifies_boundary_values_nested_duplicates_and_cr_only_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                AllowTrailingCommas = false,\n                CommentHandling = JsonCommentHandling.Disallow,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "mutated_text": "                AllowTrailingCommas = true,\n                CommentHandling = JsonCommentHandling.Disallow,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "round": 3
+    },
+    {
+      "mutation": "jsonl-comments",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+      "filter": "FullyQualifiedName~Batch_classifies_boundary_values",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlJsonlInputTests.Batch_classifies_boundary_values_nested_duplicates_and_cr_only_files"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "                AllowTrailingCommas = false,\n                CommentHandling = JsonCommentHandling.Disallow,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "mutated_text": "                AllowTrailingCommas = false,\n                CommentHandling = JsonCommentHandling.Skip,\n                MaxDepth = _pipeline.Http.MaxJsonDepth",
+      "round": 3
     }
   ]
 }

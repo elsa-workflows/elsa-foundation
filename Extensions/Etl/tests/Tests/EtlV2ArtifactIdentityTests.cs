@@ -26,8 +26,8 @@ public sealed class EtlV2ArtifactIdentityTests
         Assert.False(restored.Artifact.Pipeline.GetProperty("http").TryGetProperty("maxRetainedMetadataBytes", out _));
     }
 
-    // Spec 1190 adds the "jsonl" source kind. Pinning the canonical bytes' hash of the existing kinds proves the addition
-    // leaves CSV and HTTP JSON artifacts, and so their artifact ids, unchanged.
+    // Spec 1190 adds the "jsonl" source kind. These hashes of the canonical artifact bytes were verified on origin/main
+    // before the addition, so they pin that CSV and HTTP JSON artifacts, and so their artifact ids, stay unchanged.
     [Theory]
     [InlineData("httpJson", "25cdcf9e8b97ac27d4f403d2158f0d468a47e8b47bfd677b69487ba13872dc21")]
     [InlineData("csv", "f2634391e2dd6fe33de1dff277c83562744e527ca4fac2c5800f9f1e280e5f5f")]

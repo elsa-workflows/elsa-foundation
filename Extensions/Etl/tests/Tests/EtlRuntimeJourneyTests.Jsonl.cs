@@ -54,6 +54,10 @@ public sealed partial class EtlRuntimeJourneyTests
             .FindConnectorRunAsync(files.Scope, invocation.RunId));
         Assert.Equal(EtlConnectorKind.Jsonl, retained.Bindings.Source.Kind);
         Assert.Equal(4, retained.Prepared!.File!.RecordCount);
+        // The fully filtered "skip" batch and the error-only batch publish no main effect.
+        var inspection = Assert.IsType<EtlConnectorRunInspection>(await scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeInspector>()
+            .FindConnectorInspectionAsync(files.Scope, invocation.RunId));
+        Assert.Equal((2, 1), (inspection.AcceptedMainEffects, inspection.AcceptedErrorEffects));
         Assert.EndsWith(".jsonl", retained.Prepared.File.Source.Key);
     }
 

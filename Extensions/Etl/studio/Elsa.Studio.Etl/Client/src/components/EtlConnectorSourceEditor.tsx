@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 import type { EtlConnectorBindingSummary, EtlSourceV2 } from "../etlTypes";
-import { EtlJsonSourceFieldsEditor } from "./EtlJsonSourceFieldsEditor";
+import { EtlJsonFieldsEditor } from "./EtlJsonFieldsEditor";
 import { PipelineBindingSelect } from "./PipelineBindingSelect";
 import { SchemaEditor } from "./SchemaEditor";
 
@@ -92,7 +92,7 @@ export function EtlConnectorSourceEditor({
           onChange={schema => onChange({ ...source, schema })}
         />
       ) : (
-        <EtlJsonSourceFieldsEditor source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
+        <EtlJsonFieldsEditor source={source} maxFields={maxFields} disabled={disabled} onChange={onChange} />
       )}
     </section>
   );

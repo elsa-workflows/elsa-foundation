@@ -50,7 +50,7 @@
 
 ## Phase 5 — Studio (US1, US4)
 
-- [x] T021 [P] Types, source-kind option, binding filter, fields editor reuse, labels (`etlTypes.ts`, `EtlConnectorSourceEditor.tsx`, `EtlJsonSourceFieldsEditor.tsx` (renamed from `EtlHttpJsonSourceFieldsEditor.tsx`), `PipelineBindingSelect.tsx`, the pipeline editor and budgets labels). FR-009, FR-010.
+- [x] T021 [P] Types, source-kind option, binding filter, fields editor reuse, labels (`etlTypes.ts`, `EtlConnectorSourceEditor.tsx`, `EtlJsonFieldsEditor.tsx` (renamed from `EtlHttpJsonSourceFieldsEditor.tsx`), `PipelineBindingSelect.tsx`, the pipeline editor and budgets labels). FR-009, FR-010.
 - [x] T022 [P] Tests, written first against T021's intended behaviour. SC-005.
   - Vitest for the kind switch, the binding filter and label (`__tests__/connector-pipeline-editor.test.tsx`). Run inspection needed no change: its `JSON Lines` kind label already existed.
   - Extend `Studio/tests/browser/etl-connector-authoring.spec.ts` with a JSON Lines source; its existing `csv` Source approval serves as the source file.
