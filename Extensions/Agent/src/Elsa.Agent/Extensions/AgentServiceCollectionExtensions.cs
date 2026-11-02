@@ -32,6 +32,8 @@ public static class AgentServiceCollectionExtensions
         services.TryAddScoped<IAgentContextSanitizer, DefaultAgentContextSanitizer>();
         services.TryAddScoped<IAgentContextCollector>(AgentRegistrationValidator.Create<DefaultAgentContextCollector>);
         services.TryAddScoped<IAgentCapabilityCatalog, DefaultAgentCapabilityCatalog>();
+        // Preview: the owner writes through the record store; at most one store is registered (validated).
+        services.TryAddSingleton<IAgentSessionRecordStore>(sp => new InMemoryAgentSessionRecordStore(sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IAgentSessionService, InMemoryAgentSessionService>();
         // The process-wide store holds data only; current authority/tools are resolved by scoped facades.
         services.TryAddSingleton<InMemoryAgentProposalStore>();

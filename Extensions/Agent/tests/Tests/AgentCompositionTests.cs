@@ -230,6 +230,66 @@ public sealed class AgentCompositionTests
             (await later.ServiceProvider.GetRequiredService<IAgentSessionPolicyService>().GetAsync(session.Id, session.ActorId, session.TenantId)).Outcome);
     }
 
+    // ---- #3441 T004: the record store and the audit trio are single replacement contracts ----
+
+    [Theory]
+    [InlineData(typeof(DuplicateRecordStoreProbeFeature), typeof(IAgentSessionRecordStore))]
+    [InlineData(typeof(DuplicateAuditSinkProbeFeature), typeof(IAgentAuditSink))]
+    [InlineData(typeof(DuplicateAuditReaderProbeFeature), typeof(IAgentAuditReader))]
+    [InlineData(typeof(DuplicateAuditOwnershipProbeFeature), typeof(IAgentAuditOwnership))]
+    public async Task A_second_record_store_or_audit_registration_aborts_shell_activation_with_a_replacement_diagnostic(Type feature, Type contract)
+    {
+        await using var root = BuildRoot([feature]);
+
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
+
+        var diagnostic = string.Join(" ", ExceptionChain(failure).Select(x => x.Message));
+        Assert.Contains(contract.FullName!, diagnostic);
+        Assert.Contains("at most one registration", diagnostic);
+        Assert.Contains("Replace", diagnostic);
+    }
+
+    [Theory]
+    [InlineData(typeof(IAgentSessionRecordStore))]
+    [InlineData(typeof(IAgentAuditSink))]
+    [InlineData(typeof(IAgentAuditReader))]
+    [InlineData(typeof(IAgentAuditOwnership))]
+    public void A_second_record_store_or_audit_registration_refuses_the_default_lifecycle_services(Type contract)
+    {
+        using var root = AgentTestServices.Create(services => AddSecond(services, contract));
+        using var scope = root.CreateScope();
+
+        var failure = Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService<IAgentProposalService>());
+
+        Assert.Contains(contract.FullName!, failure.Message);
+        Assert.Contains("at most one registration", failure.Message);
+    }
+
+    private static void AddSecond(IServiceCollection services, Type contract)
+    {
+        if (contract == typeof(IAgentSessionRecordStore)) services.AddSingleton<IAgentSessionRecordStore>(_ => new InMemoryAgentSessionRecordStore());
+        else if (contract == typeof(IAgentAuditSink)) services.AddSingleton<IAgentAuditSink>(_ => new InMemoryAgentAuditStore());
+        else if (contract == typeof(IAgentAuditReader)) services.AddSingleton<IAgentAuditReader>(_ => new InMemoryAgentAuditStore());
+        else services.AddSingleton<IAgentAuditOwnership>(_ => new InMemoryAgentAuditStore());
+    }
+
+    public abstract class DuplicateRegistrationProbeFeature(Type contract) : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services) => AddSecond(services, contract);
+    }
+
+    [ShellFeature("AgentDuplicateRecordStoreProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateRecordStoreProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentSessionRecordStore));
+
+    [ShellFeature("AgentDuplicateAuditSinkProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateAuditSinkProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentAuditSink));
+
+    [ShellFeature("AgentDuplicateAuditReaderProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateAuditReaderProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentAuditReader));
+
+    [ShellFeature("AgentDuplicateAuditOwnershipProbe", DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) })]
+    public sealed class DuplicateAuditOwnershipProbeFeature() : DuplicateRegistrationProbeFeature(typeof(IAgentAuditOwnership));
+
     private static Task<AgentSessionPolicyResult> ChangeAsync(IAgentSessionPolicyService policy, AgentSession session, AgentAutonomyMode mode, long expectedRevision)
         => policy.ChangeAutonomyAsync(new(session.Id, session.ActorId, session.TenantId, mode, expectedRevision));
 

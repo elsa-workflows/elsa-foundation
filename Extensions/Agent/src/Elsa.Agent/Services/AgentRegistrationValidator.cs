@@ -9,11 +9,23 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
 {
     internal bool Owns(IServiceCollection collection) => ReferenceEquals(registrations, collection);
 
+    // The audit sink, reader and ownership are one store's facets; a durable replacement replaces all three together.
+    private static readonly Type[] AuditTrio = [typeof(IAgentAuditSink), typeof(IAgentAuditReader), typeof(IAgentAuditOwnership)];
+
     public void Validate()
     {
         var count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentToolAuthorizer));
         if (count != 1)
             throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentToolAuthorizer).FullName}' requires exactly one registration, but found {count}. Use services.Replace(...) to replace its existing implementation.");
+        count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentSessionRecordStore));
+        if (count > 1)
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentSessionRecordStore).FullName}' allows at most one registration, but found {count}. Use services.Replace(...) to replace its existing implementation.");
+        foreach (var contract in AuditTrio)
+        {
+            count = registrations.Count(descriptor => descriptor.ServiceType == contract);
+            if (count > 1)
+                throw new InvalidOperationException($"Agent replacement contract '{contract.FullName}' allows at most one registration, but found {count}. Replace the audit sink, reader and ownership together with services.Replace(...).");
+        }
     }
 
     public Task InitializeAsync(CancellationToken cancellationToken)

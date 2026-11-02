@@ -41,6 +41,59 @@ public interface IAgentSessionPolicyService
     Task<AgentSessionPolicyResult> ChangeAutonomyAsync(AgentSessionAutonomyChangeRequest request, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Preview replacement contract: the record of every session aggregate behind the default session owner. At most
+/// one implementation may be registered; replace the default with <c>services.Replace(...)</c>.
+/// </summary>
+/// <remarks>
+/// The default session owner writes through this store before it applies a change in memory, and hydrates a
+/// session from it before acting on a session it has not loaded. One aggregate covers the session (policy, revision
+/// and ownership), its messages and context, the paused turn, its proposals with their outcomes, and the
+/// duplicate-detection keys. Each write is atomic and is guarded on the writer's owner token and fence; the same
+/// write extends the owner's lease, or re-acquires a lapsed lease that no other owner took over. Implementations
+/// return copies: a caller never shares mutable state with the store.
+/// </remarks>
+public interface IAgentSessionRecordStore
+{
+    /// <summary>
+    /// Whether every write is guarded on the current owner and fence. A store that cannot fence keeps the in-process
+    /// behaviour but makes durable recovery Unsupported, because a stale process could then continue a turn.
+    /// </summary>
+    bool SupportsFencing { get; }
+
+    /// <summary>Records a new aggregate owned by <paramref name="ownerToken"/>; refuses an identity that is already recorded.</summary>
+    Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one aggregate for hydration, or null when it is not recorded.</summary>
+    Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Takes ownership when the aggregate has no owner, its lease has lapsed, or <paramref name="ownerToken"/> already
+    /// owns it. A takeover increments the fence. A live lease held by another owner returns
+    /// <see cref="AgentSessionRecordOutcome.OwnedElsewhere"/>.
+    /// </summary>
+    Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default);
+
+    /// <summary>Releases the lease when <paramref name="fence"/> is still current; otherwise a no-op.</summary>
+    Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes one transition atomically when its fence is current, inserting its keys all or nothing, and extends
+    /// the lease. A stale fence returns <see cref="AgentSessionRecordOutcome.OwnershipLost"/>; a key recorded with a
+    /// different value returns <see cref="AgentSessionRecordOutcome.KeyConflict"/>. Neither changes anything.
+    /// </summary>
+    Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default);
+
+    /// <summary>The session that owns a proposal, or null when the proposal is not recorded.</summary>
+    Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The recorded sessions of the query's actor and tenant, filtered before ordering and the limit. Implementations
+    /// throw <see cref="ArgumentException"/> for a blank actor or tenant and a limit outside 1..<see cref="AgentSessionOwnerQuery.MaxTake"/>.
+    /// </summary>
+    Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default);
+}
+
 public interface IAgentPolicyEvaluator
 {
     ValueTask<AgentPolicyDecision> EvaluateAvailabilityAsync(AgentPolicy policy, CancellationToken cancellationToken = default);

@@ -195,6 +195,9 @@ public sealed record AgentAcceptedMessageResponse(
 
     /// <summary>Preview: the public policy the owner accepted this message under, or null when it does not own revisions.</summary>
     public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+
+    /// <summary>Preview: why a cancelled message stopped (<c>interrupted</c>, <c>withdrawn</c> or <c>user-stop</c>).</summary>
+    public string? StatusReason { get; init; }
 }
 
 public sealed class AgentSessionRouteRequest
@@ -395,7 +398,8 @@ public static class AgentApiMapping
                 ToolResults = message.ToolResults,
                 HasDisclosureProvenance = message.HasDisclosureProvenance,
                 DisclosureHistory = message.DisclosureHistory,
-                AcceptedPolicy = message.AcceptedPolicy?.ToResponse()
+                AcceptedPolicy = message.AcceptedPolicy?.ToResponse(),
+                StatusReason = message.StatusReason
             },
             warnings);
 
