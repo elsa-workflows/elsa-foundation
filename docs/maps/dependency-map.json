@@ -13832,6 +13832,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review.Api",
+          "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review",
+          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Workflows",
           "path": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj"
         },
@@ -23154,6 +23164,169 @@
       ]
     },
     {
+      "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj",
+      "name": "Elsa.Agent.Specialists.Review.Api",
+      "kind": "source",
+      "domain": "Elsa.Agent",
+      "sub_domain": "Specialists.Review.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Agent.Specialists.Review.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review",
+          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj",
+      "name": "Elsa.Agent.Specialists.Review",
+      "kind": "source",
+      "domain": "Elsa.Agent",
+      "sub_domain": "Specialists.Review",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Agent.Specialists.Review",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Core",
+          "path": "Essentials/src/Locking/Core/Elsa.Locking.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Core",
+          "path": "Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
       "path": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
       "name": "Elsa.Agent.Workflows",
       "kind": "source",
@@ -23330,6 +23503,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Primitives",
           "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
         },
@@ -23345,8 +23523,23 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Connections",
           "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
         },
         {
           "type": "internal",
@@ -23380,6 +23573,21 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Testing",
+          "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.Anthropic",
           "path": "Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj"
         },
@@ -23407,6 +23615,21 @@
           "type": "internal",
           "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
           "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review.Api",
+          "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review",
+          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
         },
         {
           "type": "external",
