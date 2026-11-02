@@ -74,3 +74,4 @@ The stream route is unchanged. Opening it starts the latest Pending prompt or th
 | Record-store port, list query, summaries, `StatusReason`, new routes and codes | Minor (additive) |
 | Anthropic provider history excludes non-accepted turns | Behaviour change, recorded |
 | The Copilot resume fallback becomes an explicit event | Behaviour change, recorded |
+| Studio SDK `StudioHttpError.retryAfterSeconds` (the response's `Retry-After` hint; a trailing optional constructor parameter) | Minor (additive), public SDK |

@@ -2388,7 +2388,16 @@ export async function readStudioHttpErrorMessage(response: Response) {
 
 export async function createStudioHttpError(response: Response) {
   const error = await readStudioHttpError(response);
-  return new StudioHttpError(response.status, error.message, error.validationErrors, error.payload);
+  return new StudioHttpError(response.status, error.message, error.validationErrors, error.payload, readRetryAfterSeconds(response.headers.get("retry-after")));
+}
+
+/** A `Retry-After` value (delta seconds or an HTTP date) as whole seconds from now; null when absent or unreadable. */
+function readRetryAfterSeconds(value: string | null, now = Date.now()): number | null {
+  const text = value?.trim();
+  if (!text) return null;
+  if (/^\d+$/.test(text)) return Number(text);
+  const at = Date.parse(text);
+  return Number.isFinite(at) ? Math.max(0, Math.ceil((at - now) / 1000)) : null;
 }
 
 async function readStudioHttpError(response: Response): Promise<{ message: string; validationErrors: StudioValidationErrors | null; payload: unknown | null }> {
@@ -2538,7 +2547,9 @@ export class StudioHttpError extends Error {
     public readonly status: number,
     message: string,
     public readonly validationErrors: StudioValidationErrors | null = null,
-    public readonly payload: unknown | null = null
+    public readonly payload: unknown | null = null,
+    /** The response's `Retry-After` hint in whole seconds, when it sent a readable one. */
+    public readonly retryAfterSeconds: number | null = null
   ) {
     super(message);
     this.name = "StudioHttpError";
