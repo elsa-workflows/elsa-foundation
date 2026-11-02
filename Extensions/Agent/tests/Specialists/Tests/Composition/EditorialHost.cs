@@ -318,7 +318,12 @@ internal static class EditorialExecutable
             new("comments-key", "Comments", new("String"), false, true, "elsa.json")
         ]);
 
-    public static async Task<(WorkflowExecutable Executable, string CopywriterVersion, string ProofreaderVersion)> BuildAsync(DateTimeOffset deadline, int maxRounds = 3, bool bpmn = false)
+    /// <param name="reauthor">
+    /// Optional: receives the native BPMN process graph with the exact specialist versions and returns the executable
+    /// structure to run instead, so a test can route the process through authoring, export, import and compilation.
+    /// </param>
+    public static async Task<(WorkflowExecutable Executable, string CopywriterVersion, string ProofreaderVersion)> BuildAsync(DateTimeOffset deadline, int maxRounds = 3, bool bpmn = false,
+        Func<BpmnStructure, string, string, Task<ExecutableActivityStructure>>? reauthor = null)
     {
         var copywriter = await SpecialistPublicationTests.PublishAndPlaceSpecialistAsync(Copywriter, CopywriterNodeOrigin,
             new Dictionary<string, RuntimeInputBinding>
@@ -350,7 +355,7 @@ internal static class EditorialExecutable
         var writer = copywriter.Placement.Root;
         var reader = proofreader.Placement.Root;
         var flowchartContract = ClrActivityContractTestBuilder.BuildContract(typeof(FlowchartActivity));
-        var flowchart = bpmn ? Bpmn(gate, writer, check, reader, review) : new ExecutableNode("editorial-flowchart", "authored-editorial-flowchart", typeof(FlowchartActivity).FullName!, "1.0.0",
+        var flowchart = bpmn ? await Bpmn(gate, writer, check, reader, review, reauthor is null ? null : x => reauthor(x, copywriter.DefinitionVersionId, proofreader.DefinitionVersionId)) : new ExecutableNode("editorial-flowchart", "authored-editorial-flowchart", typeof(FlowchartActivity).FullName!, "1.0.0",
             WellKnownRuntimeActivityConsumers.ClrActivity, flowchartContract.DescriptorPayload, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, [gate, writer, check, reader, review])],
             structure: new ExecutableActivityStructure(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion,
@@ -394,7 +399,8 @@ internal static class EditorialExecutable
     /// The same placed specialists, gates and review as bound children of a native BPMN process. Outcome-named flows
     /// route each child's completion; the reviewer's flow back to the gate is a loop that mints a fresh iteration.
     /// </summary>
-    private static ExecutableNode Bpmn(ExecutableNode gate, ExecutableNode writer, ExecutableNode check, ExecutableNode reader, ExecutableNode review)
+    private static async Task<ExecutableNode> Bpmn(ExecutableNode gate, ExecutableNode writer, ExecutableNode check, ExecutableNode reader, ExecutableNode review,
+        Func<BpmnStructure, Task<ExecutableActivityStructure>>? reauthor)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(typeof(BpmnProcessActivity));
         var structure = new BpmnStructure(
@@ -425,7 +431,9 @@ internal static class EditorialExecutable
             WellKnownRuntimeActivityConsumers.ClrActivity, contract.DescriptorPayload,
             new Dictionary<string, RuntimeInputBinding> { [canStart.Key] = Literal(canStart.Key, canStart.Type, false) }, new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(BpmnProcessActivity.ActivitiesSlotName, [gate, writer, check, reader, review])],
-            structure: new ExecutableActivityStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure)),
+            structure: reauthor is null
+                ? new ExecutableActivityStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure))
+                : await reauthor(structure),
             activityContract: contract);
     }
 

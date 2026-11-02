@@ -1141,6 +1141,34 @@
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
+      "elsa.agent.specialists.review": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.agent.specialists.review.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Agent.Specialists.Review": "[4.0.0-dev, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
       "elsa.agent.workflows": {
         "type": "Project",
         "dependencies": {
@@ -1988,6 +2016,8 @@
           "Elsa.Agent.Api": "[4.0.0-dev, )",
           "Elsa.Agent.Core": "[4.0.0-dev, )",
           "Elsa.Agent.GitHubCopilot": "[4.0.0-dev, )",
+          "Elsa.Agent.Specialists.Review": "[4.0.0-dev, )",
+          "Elsa.Agent.Specialists.Review.Api": "[4.0.0-dev, )",
           "Elsa.Agent.Workflows": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Attention.Api": "[4.0.0-dev, )",
