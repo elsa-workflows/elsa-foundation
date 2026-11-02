@@ -62,6 +62,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
     private readonly Dictionary<string, BacklogRotation> _rotations = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, DetachedDispatch> _detached = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, Task> _releasing = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, HeldCommand> _held = new(StringComparer.Ordinal);
 
     public ExecutionPlacementPumpTask(
         IWorkflowExecutionActorProvider actorProvider,
@@ -374,20 +375,28 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                         throw new InvalidOperationException("A leased command transport item must carry a lease token.");
 
                     // Still dispatching from an earlier sweep, whose transport lease has lapsed since: keep that one
-                    // dispatch and let it acknowledge under this lease rather than queue the command a second time.
+                    // dispatch and let it acknowledge under this lease rather than queue the command a second time. One
+                    // that was delivered and has already given up acknowledging is acknowledged here instead.
                     var detachedKey = DetachedKey(expectedPartition, item.TransportItemId);
                     if (_detached.TryGetValue(detachedKey, out var running))
                     {
-                        running.LeaseToken = item.LeaseToken.Value;
+                        if (!running.TryMoveTo(item.LeaseToken.Value) &&
+                            await transport.AckAsync(executionId, item.TransportItemId, placementService.NodeId, item.LeaseToken.Value, _timeProvider.GetUtcNow(), cancellationToken))
+                            acked++;
                         continue;
                     }
 
                     // A busy execution's mailbox already holds a command waiting behind its drain; another would only wait
-                    // there too. It stays leased and is dispatched once the drain ends and its lease lapses. A Cancel
-                    // always goes through: the drain yields to it at its next step.
+                    // there too. It stays leased, under a record of this lease, and is released when the drain ends. A
+                    // Cancel always goes through: the drain yields to it at its next step.
                     if (busy && item.Envelope.Command.Kind != WorkflowExecutionCommandKind.Cancel)
+                    {
+                        _held[detachedKey] = new HeldCommand(executionKey, item.TransportItemId, item.LeaseToken.Value);
                         continue;
+                    }
 
+                    // An earlier hold of this item is superseded by this lease.
+                    _held.TryRemove(detachedKey, out _);
                     dispatched++;
                     var dispatch = DispatchAsync(executionId, item.Envelope, placementService, cancellationToken).AsTask();
 
@@ -772,7 +781,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         string ownerId,
         TransportAccess transport)
     {
-        var detached = new DetachedDispatch(executionKey) { LeaseToken = item.LeaseToken!.Value };
+        var detached = new DetachedDispatch(executionKey, item.LeaseToken!.Value);
         _detached[key] = detached;
         _ = CompleteAsync();
 
@@ -782,13 +791,17 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
             {
                 if (IsDelivered(await dispatch))
                 {
+                    // The sweep may lease the item again while an ack runs; acknowledge under that lease instead. Once
+                    // this gives up, a sweep that leases the item again before the entry is removed acknowledges it.
                     var leaseToken = detached.LeaseToken;
-                    var acked = await AckAsync(leaseToken);
-                    // The sweep may have leased the item again while this ack ran; acknowledge under that lease instead.
-                    if (!acked && detached.LeaseToken != leaseToken)
-                        acked = await AckAsync(detached.LeaseToken);
-                    if (!acked)
-                        Logger.LogDebug("Command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} finished after its lease moved on; it is re-driven and deduplicated.", item.TransportItemId, executionId);
+                    while (!await AckAsync(leaseToken))
+                    {
+                        if (detached.TryGiveUp(leaseToken, out leaseToken))
+                        {
+                            Logger.LogDebug("Command transport item {TransportItemId} for workflow execution {WorkflowExecutionId} finished after its lease moved on; it is re-driven and deduplicated.", item.TransportItemId, executionId);
+                            break;
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -811,7 +824,9 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
             {
                 // Commands the sweep held back while this drain ran stay leased to this node, whatever this command's
                 // outcome. Make them visible now, so the next sweep, or the execution's new owner, dispatches them
-                // rather than wait out their lease. An undelivered command keeps its own lease, as it would in the sweep.
+                // rather than wait out their lease. Only those: an undelivered command keeps its own lease, as it would
+                // in the sweep, and so does one a sweep leased since. One held after this takes the record waits out
+                // its lease.
                 if (!_detached.Values.Any(running => running.ExecutionKey == executionKey))
                     await ReleaseHeldAsync();
             }
@@ -824,35 +839,72 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
             }
         }
 
-        ValueTask<bool> ReleaseHeldAsync() =>
-            transport.UseAsync(async leases =>
+        // A release is a compare-and-set on the recorded lease, so an item leased again since stays leased.
+        async ValueTask ReleaseHeldAsync()
+        {
+            var held = _held.Where(entry => entry.Value.ExecutionKey == executionKey && _held.TryRemove(entry)).Select(entry => entry.Value).ToArray();
+            if (held.Length == 0)
+                return;
+
+            await transport.UseAsync(async leases =>
             {
                 var now = _timeProvider.GetUtcNow();
-                foreach (var held in await leases.ListLeasedAsync(ownerId, now, _pumpOptions.Value.TransportLeaseBatchSize, executionId))
-                {
-                    if (held.TransportItemId != item.TransportItemId)
-                        await leases.ReleaseLeaseAsync(executionId, held.TransportItemId, ownerId, held.LeaseToken!.Value, now);
-                }
+                foreach (var command in held)
+                    await leases.ReleaseLeaseAsync(executionId, command.TransportItemId, ownerId, command.LeaseToken, now);
                 return true;
             });
+        }
 
         ValueTask<bool> AckAsync(long leaseToken) =>
             transport.UseAsync(leases => leases.AckAsync(executionId, item.TransportItemId, ownerId, leaseToken, _timeProvider.GetUtcNow()));
     }
 
     /// <summary>A dispatch a sweep stopped waiting for, and the lease it acknowledges under when it finishes.</summary>
-    private sealed class DetachedDispatch(string executionKey)
+    private sealed class DetachedDispatch(string executionKey, long leaseToken)
     {
-        private long _leaseToken;
+        private readonly Lock _sync = new();
+        private long _leaseToken = leaseToken;
+        private bool _gaveUp;
 
         public string ExecutionKey { get; } = executionKey;
 
         public long LeaseToken
         {
-            get => Interlocked.Read(ref _leaseToken);
-            set => Interlocked.Exchange(ref _leaseToken, value);
+            get
+            {
+                lock (_sync)
+                    return _leaseToken;
+            }
+        }
+
+        /// <summary>Moves the acknowledgement to a newer lease of the item. Fails once the delivered dispatch gave up
+        /// acknowledging, and the caller acknowledges under its lease instead.</summary>
+        public bool TryMoveTo(long newer)
+        {
+            lock (_sync)
+            {
+                if (_gaveUp)
+                    return false;
+                _leaseToken = newer;
+                return true;
+            }
+        }
+
+        /// <summary>Gives up acknowledging after an ack under <paramref name="tried"/> failed, unless a newer lease
+        /// arrived meanwhile, which <paramref name="next"/> then carries.</summary>
+        public bool TryGiveUp(long tried, out long next)
+        {
+            lock (_sync)
+            {
+                next = _leaseToken;
+                _gaveUp = next == tried;
+                return _gaveUp;
+            }
         }
     }
+
+    /// <summary>A command a sweep held back behind a running drain, under the lease it holds it with.</summary>
+    private sealed record HeldCommand(string ExecutionKey, string TransportItemId, long LeaseToken);
 
     /// <summary>What one sweep may still spend waiting for local work.</summary>
     private sealed class SweepWaitBudget(TimeSpan total)

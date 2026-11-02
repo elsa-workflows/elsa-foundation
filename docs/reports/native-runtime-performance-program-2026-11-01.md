@@ -705,8 +705,10 @@ Cancelling a **progressing** drain on another node did **not** qualify, and no C
 - Before the fence fix, `c1`'s loop was poisoned on node A (one incident, rows stalled at 1,618); `c2` never formed
   the cluster, because its control folders already existed.
 
-The main build showed the same stalled sender in its single run. Local cooperative Cancel of a progressing drain
-remains covered by the in-process tests only; cross-node behaviour is recorded on #2831 as open.
+The main build showed the same stalled sender in its single run. Local cooperative Cancel of a progressing drain was
+covered by the in-process tests only. #3669 addresses the cross-node case (#2831): the placement pump no longer waits
+for a dispatched drain, so it keeps renewing placement and delivers a forwarded Cancel to the drain's mailbox. In its
+two-node runs, placement stayed on node A and the progressing loop was cancelled in 3 to 13 s, three times out of three.
 
 ### Second fixture cleanup
 

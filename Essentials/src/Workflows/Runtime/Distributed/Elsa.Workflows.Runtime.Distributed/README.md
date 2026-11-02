@@ -83,10 +83,14 @@ lapsed, take over its runtime ownership and run the same workflow. That takeover
 wait for the old owner's lease to expire, which keeps recovery fast, so keeping placement renewed is what stops two
 nodes from running one execution (#3667).
 
-An execution whose drain is still running gets no inline wait:
+An execution with a drain this pump left running gets no inline wait:
 - A Cancel for it is delivered at once, reaches the drain's mailbox, and the drain yields to it.
 - Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
-  their leases are released and the next sweep dispatches them.
+  the pump releases the leases of exactly those commands and the next sweep dispatches them. A command dispatched
+  earlier that came back deferred or rejected keeps its lease until it lapses.
+
+A drain the pump did not leave running, such as one for a command routed straight to the local mailbox, is not
+tracked. The pump's next dispatch for that execution is waited for like any other, then left running.
 
 An item whose transport lease lapses while its dispatch still runs is leased again but not dispatched twice.
 
