@@ -62,7 +62,7 @@
 - [x] T025 Bite-proofs for framing, line-error routing and zero-record settlement, recorded in `evidence/`. SC-002, SC-004.
 - [x] T026 Whole ETL test project with `--list-tests` count comparison; architecture guard; `Elsa.Maps.Generator -- check`; Studio ETL client tests. SC-004.
 - [x] T027 Docs: `Extensions/Etl/README.md`, `src/Core/README.md` and `studio/Elsa.Studio.Etl/EXTENSION_POINTS.md` source-kind lists. FR-001, §2.22.1.
-- [x] T028 Review loop (correctness, standards, spec lenses with adversarial verification): rounds 1–3 stopped at their cap unconverged; round 4 re-reviewed the round-3 fixes and the loop continued until a round left no findings; gate-evidence PR comment; set spec `**Status**: Implemented` in this PR. Marking the PR ready, requesting review and the #2908/#2892/Project #62 status updates follow outside this diff.
+- [x] T028 Review loop (correctness, standards, spec lenses with adversarial verification): rounds 1–3 stopped at their cap unconverged; round 4 re-reviewed the round-3 fixes, found no code findings and four documentation inaccuracies, fixed through #3668 because #3657 was in auto-merge; gate-evidence PR comment; set spec `**Status**: Implemented` in this PR. Marking the PR ready, requesting review and the #2908/#2892/Project #62 status updates follow outside this diff.
 
 ## Dependencies
 
