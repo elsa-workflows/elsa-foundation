@@ -100,8 +100,7 @@ internal sealed class Elsa3FolderImportTask(
 
         var publishableIds = publishable.ToHashSet(StringComparer.Ordinal);
         var workflows = (result.Workflows ?? []).Where(workflow => publishableIds.Contains(workflow.SourceVersionId)).ToArray();
-        var publications = await services.GetRequiredService<ImportedWorkflowPublisher>().PublishAsync(
-            workflows, scope.Value, cancellationToken, sourceVersionId => Elsa3DesignerLayout.Records(inputsById[sourceVersionId].Definition));
+        var publications = await services.GetRequiredService<ImportedWorkflowPublisher>().PublishAsync(workflows, scope.Value, cancellationToken);
         // A workflow whose publication fails stays imported, and the next start tries again (FR-012); it is reported as
         // a skip, so strict mode fails on it (FR-015).
         foreach (var sourceVersionId in publications.Where(entry => entry.Value == WorkflowPublicationStatus.Failed).Select(entry => entry.Key))
