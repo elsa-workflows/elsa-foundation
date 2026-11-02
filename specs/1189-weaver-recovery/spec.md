@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: In progress
+**Status**: Implemented
 
 **Input**: [Feature #3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441), M2 ([#3431](https://github.com/elsa-workflows/elsa-foundation/issues/3431)) of [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428). The owner authorizes autonomous delivery of the five acceptance criteria, the #3514 Code Review follow-through recorded on the issue, and the remaining M0–M5 roadmap. Prerequisite #3440 is verified Done ([closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6570028483)).
 
@@ -201,3 +201,28 @@ Only a present, authenticated user's current permissions can cause disclosure or
 | Bound long-session history cost | FR-009/014/015; story 3 |
 | Deliberate snapshot limit with Studio outcome and continuation | FR-016; story 3 |
 | Foreground versus recovery authority | FR-012/013; story 4 |
+
+### Acceptance evidence
+
+Evidence categories:
+- **C**: deterministic component tests on the real default services and the EF store.
+- **P**: deterministic provider-protocol native evidence. It uses the actual Copilot (delegated) and Anthropic (host-driven) adapters, with packaged consumers on the packaged EF store over SQLite, restarted by the driver.
+- **Live**: live-provider evidence. None is claimed.
+
+The final source is `23dc6bd4a`. Every run listed is recorded on #3441, including the failed attempts.
+
+| #3441 item | Evidence |
+| --- | --- |
+| Supported recovery through existing persistence boundaries | C: `AgentRecoveryRestartTests` (both loops), `EfAgentSessionRecordStoreTests`, `AgentRecordStoreProviderTests` (PostgreSQL 16, SQL Server 2022, MySQL 8.4), `AgentCompositionTests`, `WorkbenchAgentDurableStoreTests`. P: 20 restart cases |
+| Durable decisions, exact requests and receipts; no secrets, SDK objects or hidden reasoning | C: `EfAgentProtectionTests`, `AgentRecoveryDeduplicationTests`. P: `receipt-recorded-paused`, `approved-before-dispatch-*` |
+| Reconnect, restarts, retries, duplicates and late results | C: `AgentRecoveryRestartTests`, `AgentRecoveryFailurePathTests`, `WeaverRecovery.test.tsx`, `weaver-recovery.spec.ts`. P: `idle`, `pending-review-*`, `dispatched-without-receipt`, `provider-turn-in-progress`, `second-client` |
+| No silent repeat; explicit uncertainty and unavailable targets | C: `AgentRecoveryExecutionTests`, `clientInvocationRunner` tests. P: `dispatched-without-receipt`, `owner-resolution`, and the in-memory negative control |
+| One execution owner (Program #2892) | C: turns stay coupled to their stream, and no detached owner exists. Boundary cross-linked on #2912 |
+| Bounded history cost | C: `AgentDisclosureVolumeTests` (the T023 baseline failed first; T024 makes it pass) |
+| Deliberate limits with a Studio outcome and continuation | C: limit tests at turn, store, API, Vitest and Playwright level |
+| Foreground versus recovery authority | C: `AgentRecoveryAuthorityTests`, `AgentRecoveryAuthorizationTests` |
+
+Final-head proofs:
+- **Composed Studio:** 927 tests, 921 passed and 0 failed.
+- **Complete package witness:** 89 cases, with `independentPackageWitness:true`.
+- **Full affected suites:** listed in tasks.md T030.

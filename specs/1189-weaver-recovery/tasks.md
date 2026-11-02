@@ -232,22 +232,59 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 ## Phase 8: Qualification and freeze (plan step 7)
 
-- [ ] T030 Run all affected suites as whole projects:
+- [x] T030 Run all affected suites as whole projects:
   - Agent, Persistence, and ProviderTests with `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`;
   - the probe, Studio Vitest, typecheck and lint;
   - the architecture guard and maps.
 
   Record the counts and any existing skips.
+
+  Verified on merged head `1b28472c3`, then on `23dc6bd4a` for the CS0436 fix:
+
+  | Suite | Result |
+  | --- | --- |
+  | Agent | 936/936 |
+  | Persistence (SQLite) | 95/95 |
+  | Agent ProviderTests, matrix required, real containers | 3/3 |
+  | EF Migrations | 508/508 |
+  | Migrations ProviderTests | 32/32 |
+  | Workbench | 64/64 |
+  | Architecture | 610/610 |
+  | Maps | current |
+  | Probe unit tests | OK; `node --check` passes |
+  | Studio Vitest | 1054/1054 |
+  | Typecheck | exit 0 |
+  | Lint | 0 errors |
+
+  - The Workbench run excludes `WorkbenchCompensationSampleTests`, which needs the separately built compensation sample and is unrelated.
+  - The Agent API Release build shows only main's existing warnings (IDE0019 ×2, SYSLIB1034 ×4). The CS0436 warnings introduced by an internals grant were removed in `23dc6bd4a`.
 - [x] T031 Extend `tools/studio/Weaver.Conformance.Probe/` so its consumers configure the packaged EF store on SQLite and restart their own host processes between phases. Define the restart inventory in `contracts/recovery.md`: each story 2 boundary on each actual adapter, plus the owner-resolution and second-tab journeys. Add oracle and negative controls.
 
   Verified (wiring and unit tests): commit `20a598f7e`. The backend consumer references the packaged store and Secrets; `consumers.enable_durable_agent_store` selects `FoundationAgentEntityFrameworkCore` on SQLite over a per-run database while no host generation runs, and `runtime.RestartableServer` restarts the owned backend (graceful, abrupt or after the real deadline) on one origin with a receipt, log and empty caches per generation. Section 4 of the contract defines the ten restart cases on each actual adapter (second-tab as a second signed-in client of the owner beside a foreign actor) and the in-memory negative control; the complete witness is now 89 (38 + 4 + 26 + 20 + 1), and `validate_complete_witness` and the export refuse a report without the passed restart section. The probe suite passes 268/268 (21 new tests: every verifier's oracle on both adapters, and refusals of a skipped settlement write, a replayed effect, a second continuation, a recovery outside its deadline window, a missing restart, a wrong stop kind, a populated cache and a replayed uncertain operation), and `node --check browser.mjs` passes. The inventory has not run natively; its first native observation is the complete witness in T033.
-- [ ] T032 Run the normal composed Studio proof with the Workbench configured for the EF store, alone at low load: the complete browser suite plus the recovery journeys.
+- [x] T032 Run the normal composed Studio proof with the Workbench configured for the EF store, alone at low load: the complete browser suite plus the recovery journeys.
 
   Preparation: commit `d1fbe589d` references the store from the Workbench, opt-in (the stock shells do not list it). Listing `FoundationAgentEntityFrameworkCore` with `Provider` and `ConnectionString` in the shell enables it; `WorkbenchAgentDurableStoreTests` (2/2) shows the stock shell keeps it disabled and that SQLite composes, migrates and serves the owner list. The Workbench solution filter now contains the store.
+
+  Verified on `23dc6bd4a`, run alone, from a clean, exact checkout on an owned port:
+  - The complete Studio browser suite discovered and reported 927 tests: 921 passed, 0 failed, 0 flaky, and 6 opt-in screenshot cases skipped. That includes `weaver-recovery.spec.ts`.
+  - The port was closed afterwards, and the source was still exact and clean.
+  - `results.json` SHA-256 is `8c6d5e4651401a1a030364e431e93546efac1b49d341bdaf31cddecb3915d8fb`.
+
+  The browser suite runs Studio against the repository's mocked browser backends. The durable composition itself is proved by `WorkbenchAgentDurableStoreTests` and by the package witness's driver-restarted host on the packaged EF store.
 - [x] T033 Run the complete independent package witness from committed source: the original 38 cases, the 4 current-authority cases, the 26 autonomy and lifecycle cases, and the new restart inventory. Run it alone at low load.
 
-  Verified: attempt 3 on `d014b2dc8` passed all 89 cases with `independentPackageWitness` true; report SHA-256 `f79661dda0a13c23edf8a5b2b12b7f4c5ea35a5ff223478332125041f21f6d3f`. Attempts 1 and 2 failed and are recorded on #3441; their fixes are `4899dcb9a`, `b1b3c5a61` and `d014b2dc8`. The witness is run again on the final head before T034 freezes the contract.
-- [ ] T034 Freeze `contracts/recovery.md` as Preview after T032 and T033 pass. Write its SemVer section from the actual delivered surface, set the spec to Implemented, write the acceptance-to-evidence table, and update `quickstart.md`.
+  Verified: attempt 3 on `d014b2dc8` passed all 89 cases with `independentPackageWitness` true; report SHA-256 `f79661dda0a13c23edf8a5b2b12b7f4c5ea35a5ff223478332125041f21f6d3f`. Attempts 1 and 2 failed and are recorded on #3441; their fixes are `4899dcb9a`, `b1b3c5a61` and `d014b2dc8`. The witness was then run again on the final head `23dc6bd4a`:
+  - Attempt 1 (`4.0.0-weaver3441.20261102.2`) failed in the original `browser-consumed-intent-remount` journey. A 30 s `waitForURL` timed out after a feature apply; the source and machine-load evidence are on #3441.
+  - Attempt 2 (`4.0.0-weaver3441.20261102.3`, run alone, about 16 min) passed all 89 cases, with `independentPackageWitness` true:
+    - 38 original cases: 16 passed, 22 recognized expected-negatives;
+    - 4/4 current-authority cases;
+    - 26/26 autonomy cases;
+    - 20/20 restart cases, plus the in-memory control;
+    - 152/152 stages.
+  - Report SHA-256 `93d16706045acf7f75404529247629475c58dfeef6a5289eea0a8b6130066caa`.
+- [x] T034 Freeze `contracts/recovery.md` as Preview after T032 and T033 pass. Write its SemVer section from the actual delivered surface, set the spec to Implemented, write the acceptance-to-evidence table, and update `quickstart.md`.
+
+  Verified: the contract is frozen for #3441 as Preview at `23dc6bd4a`, and its §5 SemVer section matches the delivered surface (round 2–4 reviews). The spec is Implemented, with an acceptance-evidence table. `quickstart.md` describes the 89-case witness that ran.
 - [ ] T035 Open or update the draft PR. Attach the gate and causal evidence, and keep the `pr:` receipt and the Program, M2 and Project checkpoints current without claiming Done.
 - [ ] T036 Converge independent non-author review over the whole PR diff and the issue and PR threads. Lenses: correctness, standards, and acceptance against this spec. Keep the review rounds on the PR. Mark the PR ready and request Code Review.
 - [ ] T037 Refresh the reviewed head, main, org rules, claims and required checks. Merge only through Code Review at the exact reviewed head, and keep #3441 In review until resulting main is verified.

@@ -1,7 +1,11 @@
-# Contract: Weaver recovery (#3441, candidate)
+# Contract: Weaver recovery (#3441, preview)
 
-**Status**: A candidate. It is not frozen. It freezes only after the normal composed Studio proof and
-the complete package proof pass with durable recovery configured, as the prior leaf did.
+**Status**: Frozen for #3441 as Preview API. It was frozen after these proofs passed on the final source
+`23dc6bd4a`:
+- the normal composed Studio proof;
+- the complete independent package witness, with durable recovery configured on the packaged EF store.
+
+Pre-GA it may still change under ADR 0080.
 
 ## 1. Extension surface (Agent Core)
 
