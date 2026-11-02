@@ -35,6 +35,17 @@ internal sealed class InMemoryAgentProposalService(
     InMemoryAgentSessionService? IAgentSessionPolicyParticipant.PolicyOwner => _owner;
 
     public async Task<AgentActionProposal> AddAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
+        => (await InsertAsync(proposal, null, cancellationToken)).Proposal!;
+
+    /// <summary>Whether this service records its proposals in <paramref name="proposalStore"/>.</summary>
+    internal bool Uses(InMemoryAgentProposalStore proposalStore) => ReferenceEquals(store, proposalStore);
+
+    /// <summary>
+    /// Inserts a proposal and, for a prepared tool call, its call, invocation, turn-mutation and call-input keys as one
+    /// recorded insert: either every key and the proposal are recorded, or nothing is. A turn that already owns another
+    /// call's mutation is refused before anything is recorded; a duplicate call returns the original proposal.
+    /// </summary>
+    internal async Task<AgentProposalInsertion> InsertAsync(AgentActionProposal proposal, AgentPreparedCallKeys? call, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         // A human decision is recorded only by ApproveAsync. A review-required insertion that already carries
@@ -52,31 +63,63 @@ internal sealed class InMemoryAgentProposalService(
         var inserted = false;
         try
         {
-            if (claim is not null && proposal.PolicyRevision is { } stamped && stamped != claim.State.Revision)
-                throw new AgentSessionPolicyChangedException(proposal.SessionId, stamped, claim.State.Revision);
-            lock (store.Mutation)
+            var insertion = await CommitAsync<AgentProposalInsertion>(proposal.SessionId, fence =>
             {
-                if (proposal.PreparedInvocation is { } prepared)
+                lock (store.Mutation)
                 {
-                    var call = AgentInvocationIntegrity.Digest(new { prepared.SessionId, prepared.TurnId, prepared.ToolCallId });
-                    if (store.CallProposals.TryGetValue(call, out var existingId))
+                    if (call is { } owned && store.TurnMutations.TryGetValue(owned.TurnKey, out var turnCall) && turnCall != owned.CallKey)
+                        return new(AgentProposalInsertion.TurnMutationRefused);
+                    if (claim is not null && proposal.PolicyRevision is { } stamped && stamped != claim.State.Revision)
+                        throw new AgentSessionPolicyChangedException(proposal.SessionId, stamped, claim.State.Revision);
+                    if (proposal.PreparedInvocation is not { } prepared)
+                    {
+                        if (store.Proposals.ContainsKey(proposal.Id))
+                            throw new AgentContributionException("A proposal identity is already registered.");
+                        return new(new(proposal, true), Write(fence, proposal.SessionId, Record(proposal)), () =>
+                        {
+                            lock (store.Mutation) store.Proposals.TryAdd(proposal.Id, proposal);
+                        });
+                    }
+                    var callKey = AgentInvocationIntegrity.Digest(new { prepared.SessionId, prepared.TurnId, prepared.ToolCallId });
+                    if (store.CallProposals.TryGetValue(callKey, out var existingId))
                     {
                         var existing = store.Proposals[existingId];
                         if (existing.PreparedInvocation?.ApprovalDigest != prepared.ApprovalDigest)
                             throw new AgentContributionException("A duplicate tool call supplied conflicting prepared arguments or target.");
-                        return existing;
+                        return new(new(existing, false));
                     }
                     if (store.InvocationProposals.ContainsKey(prepared.InvocationId))
                         throw new AgentContributionException("A prepared invocation identity is already owned by another proposal.");
-                    if (!store.Proposals.TryAdd(proposal.Id, proposal))
+                    if (store.Proposals.ContainsKey(proposal.Id))
                         throw new AgentContributionException("A proposal identity is already registered.");
-                    store.InvocationProposals[prepared.InvocationId] = proposal.Id;
-                    store.CallProposals[call] = proposal.Id;
+                    List<AgentSessionUniqueKey> keys =
+                    [
+                        new(AgentSessionKeyKinds.Call, callKey, proposal.Id),
+                        new(AgentSessionKeyKinds.Invocation, prepared.InvocationId, proposal.Id)
+                    ];
+                    if (call is { } registered)
+                    {
+                        keys.Add(new(AgentSessionKeyKinds.TurnMutation, registered.TurnKey, registered.CallKey));
+                        keys.Add(new(AgentSessionKeyKinds.CallInput, registered.CallKey, registered.InputDigest));
+                    }
+                    return new(new(proposal, true), Write(fence, proposal.SessionId, Record(proposal), keys), () =>
+                    {
+                        lock (store.Mutation)
+                        {
+                            store.Proposals.TryAdd(proposal.Id, proposal);
+                            store.InvocationProposals[prepared.InvocationId] = proposal.Id;
+                            store.CallProposals[callKey] = proposal.Id;
+                            if (call is { } applied)
+                            {
+                                store.TurnMutations.TryAdd(applied.TurnKey, applied.CallKey);
+                                store.CallInputs.TryAdd(applied.CallKey, applied.InputDigest);
+                            }
+                        }
+                    });
                 }
-                else if (!store.Proposals.TryAdd(proposal.Id, proposal))
-                    throw new AgentContributionException("A proposal identity is already registered.");
-                inserted = true;
-            }
+            });
+            if (!insertion.Inserted) return insertion;
+            inserted = true;
             if (claim is not null)
             {
                 inserted = _owner!.BindProposal(claim, proposal.Id);
@@ -89,7 +132,7 @@ internal sealed class InMemoryAgentProposalService(
             if (claim is not null && !inserted) _owner!.Release(claim);
         }
         await AuditAsync(proposal, AgentAuditEventKind.ProposalCreated, null, "A prepared operation was proposed.", cancellationToken);
-        return proposal;
+        return new(proposal, true);
     }
 
     public Task<AgentActionProposal?> FindAsync(string proposalId, CancellationToken cancellationToken = default)
@@ -128,7 +171,7 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", "This operation is not awaiting review.", 409);
             var now = clock.GetUtcNow();
             var approved = proposal with { Status = AgentActionProposalStatus.Approved, ApprovedBy = actorId, ApprovedAt = now, UpdatedAt = now };
-            store.Proposals[proposalId] = approved;
+            await TransitionAsync(approved);
             await AuditAsync(approved, AgentAuditEventKind.ProposalApproved, actorId, "The exact prepared operation was approved.", cancellationToken);
             return AgentResult<AgentActionProposal>.Success(approved);
         }
@@ -150,7 +193,7 @@ internal sealed class InMemoryAgentProposalService(
             {
                 var uncertain = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                     "The client request was already dispatched. Denial cannot establish whether a local effect occurred; the request will not be replayed."));
-                StoreOutcome(proposal, uncertain);
+                await StoreOutcomeAsync(proposal, uncertain);
                 await AuditAsync(store.Proposals[proposalId], AgentAuditEventKind.ToolInvoked, actorId,
                     "Denial arrived after client dispatch; its effect remains uncertain.", CancellationToken.None);
                 return AgentResult<AgentActionProposal>.Success(store.Proposals[proposalId]);
@@ -158,9 +201,8 @@ internal sealed class InMemoryAgentProposalService(
             if (IsTerminal(proposal.Status))
                 return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", "The operation is already closed.", 409);
             var denied = proposal with { Status = AgentActionProposalStatus.Denied, UpdatedAt = clock.GetUtcNow() };
-            if (proposal.PreparedInvocation is { } prepared)
-                store.Results[proposalId] = DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "denied", "The reviewed operation was denied before dispatch.");
-            Transition(denied);
+            await TransitionAsync(denied, proposal.PreparedInvocation is { } prepared
+                ? DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "denied", "The reviewed operation was denied before dispatch.") : null);
             await AuditAsync(denied, AgentAuditEventKind.ProposalDenied, actorId, "The operation was denied before dispatch.", cancellationToken);
             return AgentResult<AgentActionProposal>.Success(denied);
         }
@@ -212,8 +254,9 @@ internal sealed class InMemoryAgentProposalService(
                 await ExpireBeforeDispatchAsync(proposal, actorId);
                 return Expired<AgentProposalExecutionResult>();
             }
+            // Executing is recorded before the executor runs, so a restart can never mistake a dispatch for "not started".
             var executing = proposal with { Status = AgentActionProposalStatus.Executing, UpdatedAt = clock.GetUtcNow() };
-            store.Proposals[proposalId] = executing;
+            await TransitionAsync(executing);
             AgentResult<AgentProposalExecutionResult> result;
             try
             {
@@ -230,7 +273,7 @@ internal sealed class InMemoryAgentProposalService(
                 result = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
             }
-            result = StoreOutcome(executing, result);
+            result = await StoreOutcomeAsync(executing, result);
             await AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
                     : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
                 actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);
@@ -286,13 +329,12 @@ internal sealed class InMemoryAgentProposalService(
             if (!completion.Succeeded || completion.Value is null)
                 completion = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                     "Client completion validation is unavailable. Its reported effect remains uncertain and will not be replayed."));
-            completion = StoreOutcome(proposal, completion);
             // An unvalidated application report cannot poison the slot for a later valid receipt.
             // Completion validation never executes the effect, so reconsidering such a report is safe.
-            if (completionValidated && completion.Succeeded && (completion.Value?.Executed == true
-                || acknowledgement.Outcome == AgentClientOutcome.Refused && completion.Value?.Status == "refused"
-                || acknowledgement.Outcome == AgentClientOutcome.Uncertain && completion.Value?.Status == "uncertain"))
-                store.Acknowledgements[invocationId] = digest;
+            // The accepted acknowledgement is recorded in the same write as the outcome it produced.
+            completion = await StoreOutcomeAsync(proposal, completion, stored => completionValidated && stored.Succeeded && (stored.Value?.Executed == true
+                || acknowledgement.Outcome == AgentClientOutcome.Refused && stored.Value?.Status == "refused"
+                || acknowledgement.Outcome == AgentClientOutcome.Uncertain && stored.Value?.Status == "uncertain") ? digest : null);
             await AuditAsync(store.Proposals[proposalId], completion.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted : AgentAuditEventKind.ProposalFailed,
                 actorId, completion.Value?.Executed == true ? "The originating client supplied an admitted local effect receipt." : "The reported client outcome is refused or uncertain.", CancellationToken.None);
             return completion;
@@ -336,7 +378,13 @@ internal sealed class InMemoryAgentProposalService(
         return (proposal, null);
     }
 
-    private AgentResult<AgentProposalExecutionResult> StoreOutcome(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> outcome)
+    /// <summary>
+    /// Records an execution outcome as one aggregate write: the retained outcome, its result or lifecycle envelope, the
+    /// accepted acknowledgement (when <paramref name="acknowledgement"/> names one) and the proposal status. The claim is
+    /// released afterwards when the outcome no longer depends on policy.
+    /// </summary>
+    private async Task<AgentResult<AgentProposalExecutionResult>> StoreOutcomeAsync(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult> outcome,
+        Func<AgentResult<AgentProposalExecutionResult>, string?>? acknowledgement = null)
     {
         if (outcome.Value?.Executed == true && (proposal.PreparedInvocation is not { } preparedInvocation
             || outcome.Value.ToolResult is not { } observed
@@ -356,26 +404,62 @@ internal sealed class InMemoryAgentProposalService(
             : value?.Status == "awaiting-client" ? AgentActionProposalStatus.AwaitingClient
             : value?.Status == "uncertain" ? AgentActionProposalStatus.Uncertain
             : AgentActionProposalStatus.Failed;
-        store.Executions[proposal.Id] = outcome;
-        if (value?.ToolResult is { } result)
-            store.Results[proposal.Id] = result;
-        else if (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared)
+        var result = value?.ToolResult
             // Module disclosure owners admit only denied/refused/uncertain lifecycle envelopes; a cancellation
             // before dispatch is a zero-effect refusal of the original invocation.
-            store.Results[proposal.Id] = DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", cancelled
-                ? "The operation was cancelled before dispatch to its owning module. No effect occurred."
-                : "The owning executor refused application before reporting an effect.");
-        Transition(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload });
+            ?? (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared
+                ? DefaultAgentActionProposalExecutor.LifecycleResult(prepared, "refused", cancelled
+                    ? "The operation was cancelled before dispatch to its owning module. No effect occurred."
+                    : "The owning executor refused application before reporting an effect.")
+                : null);
+        await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
+            result, outcome, acknowledgement?.Invoke(outcome));
         return outcome;
     }
 
-    /// <summary>Stores the proposal state, then releases its claim when the outcome no longer depends on policy.</summary>
-    private void Transition(AgentActionProposal proposal)
+    /// <summary>
+    /// Records one proposal transition (status, and optionally its result, outcome and accepted acknowledgement) as one
+    /// awaited write, applies it, then releases the proposal's claim when the outcome no longer depends on policy.
+    /// </summary>
+    private async Task TransitionAsync(AgentActionProposal proposal, AgentToolResult? result = null,
+        AgentResult<AgentProposalExecutionResult>? execution = null, string? acknowledgement = null)
     {
-        store.Proposals[proposal.Id] = proposal;
+        var invocationId = proposal.PreparedInvocation?.InvocationId;
+        await CommitAsync(proposal.SessionId, fence => new AgentSessionTransition<bool>(true,
+            Write(fence, proposal.SessionId, Record(proposal, execution, result, acknowledgement)), () =>
+            {
+                if (execution is not null) store.Executions[proposal.Id] = execution;
+                if (result is not null) store.Results[proposal.Id] = result;
+                if (acknowledgement is not null && invocationId is not null) store.Acknowledgements[invocationId] = acknowledgement;
+                store.Proposals[proposal.Id] = proposal;
+            }));
         if (_owner is not null && Settled(proposal))
             _owner.ReleaseProposal(proposal.SessionId, proposal.Id);
     }
+
+    /// <summary>
+    /// Runs one proposal transition through the owner: session write gate, awaited record write, then apply. Without
+    /// the default owner the change is applied in memory only. A planned transition always completes.
+    /// </summary>
+    private Task<T> CommitAsync<T>(string sessionId, Func<AgentSessionFence?, AgentSessionTransition<T>> plan)
+    {
+        if (_owner is not null) return _owner.CommitAsync(sessionId, plan, CancellationToken.None);
+        var planned = plan(null);
+        planned.Apply?.Invoke();
+        return Task.FromResult(planned.Result);
+    }
+
+    private static AgentSessionRecordWrite? Write(AgentSessionFence? fence, string sessionId, AgentProposalRecord record, IReadOnlyList<AgentSessionUniqueKey>? keys = null)
+        => fence is null ? null : new(sessionId, fence) { Proposals = [record], Keys = keys ?? [] };
+
+    /// <summary>The proposal's complete record after a transition; members the transition does not change keep their retained values.</summary>
+    private AgentProposalRecord Record(AgentActionProposal proposal, AgentResult<AgentProposalExecutionResult>? execution = null,
+        AgentToolResult? result = null, string? acknowledgement = null) => new(proposal)
+    {
+        Execution = execution ?? store.Executions.GetValueOrDefault(proposal.Id),
+        Result = result ?? store.Results.GetValueOrDefault(proposal.Id),
+        AcknowledgementDigest = acknowledgement ?? (proposal.PreparedInvocation is { } prepared ? store.Acknowledgements.GetValueOrDefault(prepared.InvocationId) : null)
+    };
 
     /// <summary>
     /// Executed (validated receipt), Denied, Expired, Failed (refused), Cancelled and server-scope Uncertain settle.
@@ -402,7 +486,7 @@ internal sealed class InMemoryAgentProposalService(
     private async Task ExpireBeforeDispatchAsync(AgentActionProposal proposal, string actorId)
     {
         var expired = proposal with { Status = AgentActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
-        Transition(expired);
+        await TransitionAsync(expired);
         await AuditAsync(expired, AgentAuditEventKind.ProposalFailed, actorId, "The prepared operation expired before dispatch; no effect occurred.",
             CancellationToken.None, PreDispatchExpiry);
     }
@@ -413,7 +497,7 @@ internal sealed class InMemoryAgentProposalService(
     /// </summary>
     private async Task<AgentResult<AgentProposalExecutionResult>> SettlePendingClientAsync(AgentActionProposal proposal, string? actorId, bool deadline, string summary)
     {
-        var outcome = StoreOutcome(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal, summary)));
+        var outcome = await StoreOutcomeAsync(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal, summary)));
         await AuditAsync(store.Proposals[proposal.Id], AgentAuditEventKind.ProposalFailed, actorId, deadline
                 ? "The pending client request reached its deadline without an admitted receipt; its effect is uncertain."
                 : "The pending client request lost its reviewed contract or authority; its effect is uncertain.",
@@ -448,4 +532,14 @@ internal sealed class InMemoryAgentProposalService(
             metadata[key] = value;
         return auditSink.EmitAsync(new(AgentProviderPrimitives.NewId(), kind, proposal.SessionId, actorId, summary, clock.GetUtcNow(), metadata), cancellationToken);
     }
+}
+
+/// <summary>The duplicate-detection keys of one prepared tool call, recorded together with its proposal.</summary>
+internal sealed record AgentPreparedCallKeys(string TurnKey, string CallKey, string InputDigest);
+
+/// <summary>The outcome of a proposal insertion: the inserted or original proposal, or a refused turn mutation.</summary>
+internal sealed record AgentProposalInsertion(AgentActionProposal? Proposal, bool Inserted)
+{
+    /// <summary>The turn already owns another call's mutation; nothing was recorded.</summary>
+    public static AgentProposalInsertion TurnMutationRefused { get; } = new(null, false);
 }
