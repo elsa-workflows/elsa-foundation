@@ -705,3 +705,10 @@ public sealed record AgentSessionSummary(
 /// <summary>Preview: one page of owner-scoped session summaries.</summary>
 /// <param name="Next">The cursor for the next older page, or null when this page is the last.</param>
 public sealed record AgentSessionSummaryPage(IReadOnlyList<AgentSessionSummary> Items, string? Next);
+
+/// <summary>
+/// Preview: an explicit provider outcome shown to the user as a <see cref="AgentStreamEventKind.Progress"/> event, such
+/// as a provider conversation that could not be resumed and was replaced by a new one. The orchestrator records it on
+/// the turn's audit trail. It never counts as an accepted outcome.
+/// </summary>
+public sealed record AgentProviderNotice(string Code, string Label);

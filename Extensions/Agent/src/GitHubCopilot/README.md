@@ -70,11 +70,26 @@ Elsa `AgentSession.Id` is used as the Copilot SDK session ID. Elsa stores only
 provider-neutral session state. Copilot conversation/runtime state remains owned
 by the SDK under its configured base directory or external runtime.
 
+## After an interrupted turn
+
+Copilot owns its conversation. Elsa sends only the latest prompt, and Copilot keeps the earlier turns under its own
+state directory or runtime. That state is provider-owned, not Elsa's recorded state.
+
+- When a turn is interrupted, for example by a host restart, Elsa records the prompt as Cancelled with the reason
+  `interrupted`. Copilot may still hold output or tool calls from that turn in its own history. Elsa never counts them
+  as accepted outcomes; only the receipts Elsa recorded are accepted.
+- The next turn resumes the Copilot session with the Elsa session ID (ADR 0022). If Copilot cannot resume it, the
+  provider creates a new Copilot session with the same ID. For a session with earlier turns, this is an explicit
+  outcome: the stream carries a `Progress` event whose payload is an `AgentProviderNotice` with code
+  `agent.provider.github_copilot.conversation_reset`, and the orchestrator records it on the turn's audit trail as a
+  `ProviderDiagnostic` record with the code and turn ID. Earlier turns stay in Elsa's transcript, but the new Copilot
+  conversation does not hold them. A first turn, which has no earlier conversation, is not a reset.
+
 ## Streaming
 
 The provider maps SDK text, tool lifecycle and errors to generic stream events. Installed tools execute through Elsa's invoker. Their full typed result (type ID, schema version, JSON payload and any owning-resource receipt) is returned to the SDK and emitted as `ContributedResult` / `ModuleResult`; provider code does not decode resource-specific payloads.
 
-A pending reviewed mutation returns an explicit `executed=false` proposal outcome. Review and browser application occur through the generic API, followed by the owning module's admitted acknowledgement. A receipt continuation contains the completed result, advertises no tools and does not replay the original mutation prompt. The candidate supports this foreground manual-review lifecycle in memory; cross-restart recovery remains unavailable.
+A pending reviewed mutation returns an explicit `executed=false` proposal outcome. Review and browser application occur through the generic API, followed by the owning module's admitted acknowledgement. A receipt continuation contains the completed result, advertises no tools and does not replay the original mutation prompt. The pending review, its receipt and the paused turn are recorded through the session owner's record store. With a durable record store configured, the continuation runs once after a host restart; the default in-memory store lasts only as long as the process.
 
 The fallback host-driven path accepts only generic message, error and tool-call envelopes. Model-authored resource JSON cannot create an applied module result.
 

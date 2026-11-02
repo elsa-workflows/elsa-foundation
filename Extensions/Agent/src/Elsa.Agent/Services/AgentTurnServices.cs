@@ -112,7 +112,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
     IAgentToolAuthorizer authorizer,
     IAgentContextCollector contextCollector,
     IAgentPolicyEvaluator policyEvaluator,
-    IOptions<AgentTurnOptions> options) : IAgentStreamingService, IAgentSessionPolicyParticipant
+    IOptions<AgentTurnOptions> options,
+    IAgentAuditSink? auditSink = null) : IAgentStreamingService, IAgentSessionPolicyParticipant
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly InMemoryAgentSessionService? _owner = sessions as InMemoryAgentSessionService;
@@ -384,6 +385,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     var item = next.Item!;
                     if (item.Kind is AgentStreamEventKind.Started or AgentStreamEventKind.Completed)
                         continue;
+                    if (item.Payload is AgentProviderNotice harnessNotice)
+                        await boundary.CallAsync("record-provider-notice", () => RecordNoticeAsync(sessionId, turnId, provider.ProviderId, harnessNotice), token);
                     if (item.Kind == AgentStreamEventKind.MessageDelta) assistant.Append(item.Content);
                     if (item.Kind == AgentStreamEventKind.ContributedResult)
                         yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution(prepared.Context, prepared.Diagnostics));
@@ -497,6 +500,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         if (!next.Moved) break;
                         var item = next.Item!;
                         if (item.Kind is AgentStreamEventKind.Started or AgentStreamEventKind.Completed) continue;
+                        if (item.Payload is AgentProviderNotice stepNotice)
+                            await boundary.CallAsync("record-provider-notice", () => RecordNoticeAsync(sessionId, turnId, provider.ProviderId, stepNotice), token);
                         if (item.Kind == AgentStreamEventKind.ToolCallRequested && item.Payload is AgentToolCallRequest call) calls.Add(call);
                         if (item.Kind == AgentStreamEventKind.MessageDelta) { stepText.Append(item.Content); assistant.Append(item.Content); }
                         yield return item;
@@ -972,7 +977,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
         if (inherited.Error is not null) return Rejected(latest, inherited.Error);
         var current = await AdmitAsync(session, latest.Context, [], false, false, cancellationToken);
         if (!current.Succeeded || current.Value is null) return Rejected(latest, current.Error!);
-        var initial = messages.Where(x => x.Role is AgentRole.User or AgentRole.Assistant or AgentRole.System or AgentRole.Tool)
+        var initial = AcceptedProviderHistory(messages)
             .Where(x => x.Role != AgentRole.Assistant || x.Content.Length > 0 || x.DisclosureHistory is null)
             .Select(x => x.Role == AgentRole.Tool && x.ToolResults.Count == 1
                 ? new AgentTurnMessage(x.Role, JsonSerializer.Serialize(x.ToolResults[0], JsonOptions), x.ToolResults[0].ToolCallId, x.ToolResults[0].ToolName)
@@ -980,6 +985,32 @@ internal sealed class DefaultAgentTurnOrchestrator(
         return new(latest, initial, [], 0, current.Value.Attachments, false, null)
         { Diagnostics = current.Value.Diagnostics, DisclosureHistory = inherited.History };
     }
+
+    /// <summary>
+    /// The transcript a provider may treat as accepted conversation (FR-021): a Cancelled prompt (interrupted, withdrawn or
+    /// stopped) and the Failed partial assistant text of its turn are left out; they stay in Elsa's transcript. Recorded
+    /// tool receipts are real accepted outcomes and stay in.
+    /// </summary>
+    private static IEnumerable<AgentMessage> AcceptedProviderHistory(IEnumerable<AgentMessage> messages)
+    {
+        var excludedTurn = false;
+        foreach (var message in messages.Where(x => x.Role is AgentRole.User or AgentRole.Assistant or AgentRole.System or AgentRole.Tool))
+        {
+            if (message.Role == AgentRole.User)
+            {
+                excludedTurn = message.Status == AgentMessageStatus.Cancelled;
+                if (excludedTurn) continue;
+            }
+            else if (excludedTurn && message.Role == AgentRole.Assistant && message.Status == AgentMessageStatus.Failed)
+                continue;
+            yield return message;
+        }
+    }
+
+    /// <summary>Records an explicit provider outcome on the turn's audit trail, correlated to the session and turn.</summary>
+    private Task RecordNoticeAsync(string sessionId, string turnId, string providerId, AgentProviderNotice notice)
+        => auditSink?.EmitAsync(new(NewId(), AgentAuditEventKind.ProviderDiagnostic, sessionId, null, notice.Label, DateTimeOffset.UtcNow,
+            new Dictionary<string, string> { ["code"] = notice.Code, ["turnId"] = turnId, ["providerId"] = providerId }), CancellationToken.None) ?? Task.CompletedTask;
 
     private async Task<AgentError?> AuthorizeHistoryAsync(AgentSession session, IEnumerable<AgentMessage> messages, CancellationToken token)
     {

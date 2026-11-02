@@ -61,6 +61,7 @@ public sealed class GitHubCopilotAgentProvider(
         await using var client = clientFactory.Create(BuildClientRequest(readiness));
         IGitHubCopilotSession? session = null;
         AgentStreamEvent? setupError = null;
+        AgentStreamEvent? reset = null;
 
         try
         {
@@ -79,6 +80,7 @@ public sealed class GitHubCopilotAgentProvider(
             try
             {
                 session = await client.CreateSessionAsync(BuildSessionRequest(context.SessionId), cancellationToken);
+                if (HasPriorConversation(context.History)) reset = ConversationReset();
             }
             catch (Exception createEx) when (createEx is not OperationCanceledException)
             {
@@ -98,11 +100,26 @@ public sealed class GitHubCopilotAgentProvider(
             yield break;
         }
 
+        // The SDK conversation that held earlier turns could not be resumed; this turn continues in a new one (FR-021).
+        if (reset is not null)
+            yield return reset;
+
         await using (session)
         {
             await foreach (var item in session.SendAsync(BuildTurnPrompt(context), cancellationToken))
                 yield return MapStreamEvent(item, context);
         }
+    }
+
+    /// <summary>The explicit outcome of a resume that fell back to a new SDK conversation for a session with earlier turns.</summary>
+    public const string ConversationResetCode = "agent.provider.github_copilot.conversation_reset";
+
+    private static bool HasPriorConversation(IReadOnlyList<AgentTurnMessage> history) => history.Count > 1;
+
+    private static AgentStreamEvent ConversationReset()
+    {
+        const string label = "GitHub Copilot could not resume this session's earlier conversation. This turn continues in a new Copilot conversation; earlier turns stay in Elsa's transcript.";
+        return new(NewId(), AgentStreamEventKind.Progress, label, null, null, DateTimeOffset.UtcNow, null, new AgentProviderNotice(ConversationResetCode, label));
     }
 
     // GitHub Copilot owns its own multi-step agent loop (tools, reasoning, plan, MCP, permissions). When the
@@ -146,6 +163,7 @@ public sealed class GitHubCopilotAgentProvider(
         await using var client = clientFactory.Create(BuildClientRequest(readiness));
         IGitHubCopilotSession? session = null;
         AgentStreamEvent? setupError = null;
+        AgentStreamEvent? reset = null;
 
         try
         {
@@ -163,6 +181,7 @@ public sealed class GitHubCopilotAgentProvider(
             try
             {
                 session = await client.CreateSessionAsync(BuildSessionRequest(request.SessionId, aiFunctions), cancellationToken);
+                if (HasPriorConversation(request.History)) reset = ConversationReset();
             }
             catch (Exception createEx) when (createEx is not OperationCanceledException)
             {
@@ -181,6 +200,10 @@ public sealed class GitHubCopilotAgentProvider(
             yield return Error("agent.provider.github_copilot.session_failed", "GitHub Copilot session could not be created.", 503);
             yield break;
         }
+
+        // The SDK conversation that held earlier turns could not be resumed; this turn continues in a new one (FR-021).
+        if (reset is not null)
+            yield return reset;
 
         await using (session)
         {

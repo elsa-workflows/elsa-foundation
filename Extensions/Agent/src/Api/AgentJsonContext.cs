@@ -45,4 +45,5 @@ public partial class AgentJsonContext : JsonSerializerContext;
 [JsonSerializable(typeof(AgentToolCallRequest))]
 [JsonSerializable(typeof(AgentToolCallOutcome))]
 [JsonSerializable(typeof(AgentPlanUpdate))]
+[JsonSerializable(typeof(AgentProviderNotice))]
 public partial class AgentSseJsonContext : JsonSerializerContext;
