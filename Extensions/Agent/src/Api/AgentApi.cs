@@ -150,9 +150,24 @@ public static class AgentApi
                 AgentPolicy.Default.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
                 AgentPolicy.Default.RetentionLabel))
         {
-            Recovery = context.RequestServices.GetService<Elsa.Agent.Services.AgentDurableRecovery>()?.Describe() ?? Elsa.Agent.Services.AgentRecoveryModes.Unsupported
+            Recovery = DescribeRecovery(context)
         };
         await WriteAsync(context, AgentApiResponse<AgentBootstrapResponse>.Success(response), AgentJsonContext.Default.AgentApiResponseAgentBootstrapResponse);
+    }
+
+    /// <summary>
+    /// The composition's durable-recovery support. A composition whose lifecycle services cannot be resolved reports
+    /// unsupported, as the activation report does, so bootstrap still answers with its diagnostics.
+    /// </summary>
+    private static string DescribeRecovery(HttpContext context)
+    {
+        try { return context.RequestServices.GetService<Elsa.Agent.Services.AgentDurableRecovery>()?.Describe() ?? Elsa.Agent.Services.AgentRecoveryModes.Unsupported; }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger(OwnerId)
+                .LogDebug("Durable agent recovery support could not be evaluated ({FailureType}).", failure.GetType().Name);
+            return Elsa.Agent.Services.AgentRecoveryModes.Unsupported;
+        }
     }
 
     private static async Task HandleCreateSessionAsync(HttpContext context)

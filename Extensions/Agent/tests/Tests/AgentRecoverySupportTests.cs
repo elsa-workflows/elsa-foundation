@@ -29,6 +29,23 @@ public sealed class AgentRecoverySupportTests
         Assert.Equal(expected, JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("recovery").GetString());
     }
 
+    [Fact]
+    public async Task Bootstrap_reports_unsupported_when_the_composition_cannot_be_evaluated()
+    {
+        using var harness = new AgentRestartHarness(configure: services =>
+        {
+            services.AddRouting().AddElsaEndpoints();
+            services.Replace(ServiceDescriptor.Singleton<IAgentTurnStateStore>(_ => throw new InvalidOperationException("The paused-turn store is misconfigured.")));
+        });
+
+        var (status, body) = await AgentRecoveryApi.SendAsync(harness.Host, "Bootstrap", AgentRecoveryApi.Principal("actor-1", "tenant-1"));
+
+        Assert.Equal(200, status);
+        var data = JsonDocument.Parse(body).RootElement.GetProperty("data");
+        Assert.Equal("unsupported", data.GetProperty("recovery").GetString());
+        Assert.True(data.GetProperty("enabled").GetBoolean());
+    }
+
     [Theory]
     [InlineData("durable-replaced-pauses", true)]
     [InlineData("durable", false)]
