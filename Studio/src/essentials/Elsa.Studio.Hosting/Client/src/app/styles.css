@@ -1140,18 +1140,19 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   overflow-y: auto;
 }
 
-.content > section {
+.content > section,
+.content > .studio-workspace-panel > section {
   width: 100%;
 }
 
-.content:has(> .wf-editor) {
+.content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) {
   padding: 0;
   overflow: hidden;
 }
 
 /* Run detail is a route-owned workbench. Keep list pages on the normal padded/scrolling
    surface while this one consumes the shell cell left above the bottom panel. */
-.content:has(> .wf-page--run-workbench) {
+.content:has(> .wf-page--run-workbench, > .studio-workspace-panel:not([hidden]) > .wf-page--run-workbench) {
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -1159,7 +1160,8 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   overflow: hidden;
 }
 
-.content > .wf-page--run-workbench {
+.content > .wf-page--run-workbench,
+.content > .studio-workspace-panel > .wf-page--run-workbench {
   min-height: 0;
   min-width: 0;
   flex: 1;

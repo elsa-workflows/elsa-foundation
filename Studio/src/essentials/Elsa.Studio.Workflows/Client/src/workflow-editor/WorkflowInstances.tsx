@@ -74,6 +74,7 @@ import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
 import "./minimalRunInspection.css";
+import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -2094,6 +2095,7 @@ function ReadOnlyWorkflowFlow({
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
       <Controls />
+      <RetainFlowViewport />
     </ReactFlow>
   );
 }

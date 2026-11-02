@@ -7,6 +7,7 @@ import {
   usePermissions,
   studioBackendCapabilitiesChangedEvent,
   studioNavigationRequestedEvent,
+  type StudioNavigationRequest,
   notifyStudioNavigationGuardReleased,
   type AuthSession,
   type ElsaStudioModuleApi,
@@ -492,7 +493,12 @@ export function FeatureManagementPage() {
   const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, filterText, loading, applying, status, error, enabledRoots, stateCauses } = hostState;
   const completionMessage = featureCompletion?.hostId === activeHost.id && featureCompletion.targetKey === activeHost.key ? featureCompletion.message : status;
 
+  // Load once. A background workspace tab mounts its effects again when it returns, and a refresh
+  // would replace an unapplied feature draft with the server catalog.
+  const initialRefreshRef = useRef(false);
   useEffect(() => {
+    if (initialRefreshRef.current) return;
+    initialRefreshRef.current = true;
     for (const host of hosts) {
       void refreshHost(host.id, false);
     }
@@ -534,6 +540,8 @@ export function FeatureManagementPage() {
     const guard = (event:Event) => {
       if (Object.values(hostStates).some(state => state.applying || isDirty(state.catalog,state.draft))) {
         event.preventDefault();
+        // A probe only asks whether unsaved work exists; it must not change what the page shows.
+        if ((event as CustomEvent<StudioNavigationRequest>).detail?.intent === "probe") return;
         updateHostState(activeHost.id,state => ({...state,error:"Review and apply, or reset, the current feature draft before leaving this backend."}));
       }
     };

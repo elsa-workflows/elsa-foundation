@@ -1,5 +1,6 @@
 import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
+import { useStudioRouteLocation, useStudioWorkspaceTitle } from "@elsa-workflows/studio-sdk";
 import type { StudioContributionAvailability, StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
@@ -179,8 +180,10 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   expressionEditors?: StudioExpressionEditorContribution[];
   navigate(path: string): void;
 }) {
-  const workflowExecutionId = readWorkflowExecutionIdFromUrl();
-  const searchParams = new URLSearchParams(window.location.search);
+  // A background workspace tab can render while another tab owns the address bar.
+  const routeLocation = useStudioRouteLocation();
+  const workflowExecutionId = readWorkflowExecutionIdFromUrl(routeLocation.pathname);
+  const searchParams = routeLocation.searchParams;
   // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
   // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
   // same initial URL because the detail view may replace its query while the operator moves between activities.
@@ -188,13 +191,14 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
     initialSelection.current = {
       workflowExecutionId,
-      activityExecutionId: readRunSelection(window.location.search),
+      activityExecutionId: readRunSelection(routeLocation.search),
       returnTo: searchParams.get("returnTo")
     };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;
   const requestedInspectorTab = searchParams.get("tab");
+  useStudioWorkspaceTitle(workflowExecutionId ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}` : null, "Execution");
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"
     : requestedInspectorTab === "details"
@@ -254,7 +258,7 @@ function readExecutableInspectorLocation() {
   };
 }
 
-function readWorkflowExecutionIdFromUrl() {
-  const match = /^\/workflows\/instances\/([^/]+)$/.exec(window.location.pathname);
+function readWorkflowExecutionIdFromUrl(pathname = window.location.pathname) {
+  const match = /^\/workflows\/instances\/([^/]+)$/.exec(pathname);
   return match ? decodeURIComponent(match[1]) : "";
 }
