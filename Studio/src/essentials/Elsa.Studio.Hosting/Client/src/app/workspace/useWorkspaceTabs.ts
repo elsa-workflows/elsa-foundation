@@ -56,6 +56,10 @@ export interface WorkspaceTabsController {
   setPinned(id: string, pinned: boolean): void;
   move(id: string, toIndex: number): void;
   setTitle(id: string, title: StudioWorkspaceTabTitle | null): void;
+  /** Whether the tab is active now; read inside async callbacks, unlike `state.activeId` from a render. */
+  isActive(id: string): boolean;
+  /** Marks a background tab as holding pending work, so it is kept mounted and closes only with notice. */
+  markPendingWork(id: string): void;
   screenKeyOf(location: string): string;
 }
 
