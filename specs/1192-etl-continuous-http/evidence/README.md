@@ -83,7 +83,7 @@ This receipt ran at `e3dcb4c63`. Later review rounds changed the idle label from
 
 ## Bite-proofs (SC-004)
 
-[`bite-proofs.json`](bite-proofs.json) records every mutation at `e11275eb7`, with the failing test names. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
+[`bite-proofs.json`](bite-proofs.json) records every mutation at `e11275eb7`, with the failing test names, except the idle-invariant mutation, re-recorded at `4065f7856` after the round-3 revert changed its line. For each one the focused tests failed with the mutation in place and passed again after the file was restored from git.
 
 | Mutation | Failing tests |
 |---|---|

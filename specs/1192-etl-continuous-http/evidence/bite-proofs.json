@@ -1,6 +1,6 @@
 {
   "sourceRevision": "e11275eb75662fb27da1da692117f974e28ba955",
-  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records.",
+  "method": "Each mutation replaces exact original text, runs the focused filter, restores the file with git checkout, and reruns the filter. Recorded once for the round-2 head, replacing earlier per-round records. The round-3 revert of the superseded-attempt deferral changed only the idle-invariant line, which was re-recorded at its own revision; no other recorded original changed.",
   "mutations": [
     {
       "mutation": "validator-guard",
@@ -61,8 +61,10 @@
         "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_complete_requires_its_permission_wakes_only_idle_shards_and_reports_each_result"
       ],
       "restored": "Passed!  - Failed:     0, Passed:     1",
-      "original": "if (row.NotBeforeUtcTicks != sourceNotBefore && !idle && !deferred)",
-      "mutated_text": "if (row.NotBeforeUtcTicks != sourceNotBefore && !deferred)"
+      "original": "if (row.NotBeforeUtcTicks != sourceNotBefore && !idle)",
+      "mutated_text": "if (row.NotBeforeUtcTicks != sourceNotBefore)",
+      "round": 3,
+      "sourceRevision": "4065f78561fd43962eabd98a498a89c9bb8a089e"
     },
     {
       "mutation": "final-ignores-attempt-start",
@@ -207,18 +209,6 @@
       "restored": "Passed!  - Failed:     0, Passed:     1",
       "original": "        if (connector is null || EtlConnectorRecordCodec.Pipeline(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson)).Continuous is null)\n            return EtlRunCompletionOutcome.NotContinuous;\n",
       "mutated_text": "        if (connector is null)\n            return EtlRunCompletionOutcome.NotContinuous;\n"
-    },
-    {
-      "mutation": "superseded-attempt-cleared",
-      "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs",
-      "filter": "DisplayName~A_caught_up_record_keeps",
-      "mutated": "Failed!  - Failed:     1, Passed:     0",
-      "failedTests": [
-        "Elsa.Etl.Tests.EtlRuntimeApiHttpTests.A_caught_up_record_keeps_the_journal_while_a_superseded_attempt_can_still_answer"
-      ],
-      "restored": "Passed!  - Failed:     0, Passed:     1",
-      "original": "        if (supersededUntil is { } until &&",
-      "mutated_text": "        if (false && supersededUntil is { } until &&"
     },
     {
       "mutation": "next-poll-on-retry-wait",
