@@ -7,7 +7,7 @@ Every receipt names the source revision it ran on. Each section states its limit
 The driver is [`continuous_workbench_journey.py`](continuous_workbench_journey.py), derived from spec 1191's driver (which stays unchanged as that spec's evidence).
 
 **Setup.**
-- Source `e3dcb4c63`, clean tree. Debug Workbench built from that commit (.NET SDK 10.0.402), Python 3.14.
+- Source `bb665fa53`, clean tree. Debug Workbench built from that commit (.NET SDK 10.0.402), Python 3.14. The first run at `e3dcb4c63` passed the same checks.
 - The Workbench ran on an ephemeral loopback port that the driver started and later stopped.
 - The driver serves its own two-shard cursor feed from the same process: `?cursor=n` returns a shard's records after position `n`.
 - It publishes a continuous HTTP → JSON Lines pipeline (poll interval 1 s) through the design API and runs it from a native Flowchart's `RunEtl` activity.
@@ -17,7 +17,7 @@ The derived summary is [`workbench-journey-summary.json`](workbench-journey-summ
 | Check | Result |
 |---|---|
 | The live run reports `running` and connector mode `continuous` | passed |
-| The driver waited for at least 20 caught-up polls after the first idle (27 caught-up responses over the whole case). Both shards' page sequences were still `[1, 0]` afterwards: no page was retained. Byte and row totals across polls are checked in-process, below | passed |
+| The driver waited for at least 20 caught-up polls after the first idle (26 caught-up responses over the whole case). Both shards' page sequences were still `[1, 0]` afterwards: no page was retained. Byte and row totals across polls are checked in-process, below | passed |
 | `Ada` was in the feed before the run. `Bram` and `Cleo` were appended to different shards while it was live. Each reached the main route exactly once | passed |
 | `POST /etl/runs/{id}/complete` returned `accepted`, then `alreadyRequested` | passed |
 | The run settled `succeeded` (3 accepted). The Flowchart completed through `Done` and not `BusinessError` | passed |

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "spec": "1192-etl-continuous-http",
-  "sourceRevision": "e3dcb4c63a56a73c4cd5a60d5004b234fba3f42c",
+  "sourceRevision": "bb665fa53bb0ef8a020a7c472be56c37d5119884",
   "workingTreeDirty": false,
-  "workbenchAssemblySha256": "98ea64a11041443247f6a164f7d2ee743920e8f501d9bce1fe21715d061d6d61",
+  "workbenchAssemblySha256": "39e9fad8dbb70106d71f2fe342f9a1758b4b18b010c2bf1b03f649424b3d2b13",
   "cases": {
     "complete": {
-      "definition": "continuous-complete-2cb42c47",
-      "selection": "etl1:continuous-complete-2cb42c47:1:a31ffdb0c3fbe5ddf51f19409de67f12212cc76df1e96d332b8f50099e304192",
+      "definition": "continuous-complete-44c3d325",
+      "selection": "etl1:continuous-complete-44c3d325:1:a31ffdb0c3fbe5ddf51f19409de67f12212cc76df1e96d332b8f50099e304192",
       "workflowStatus": "Completed",
       "executedNodes": [
         "after-done",
@@ -32,7 +32,7 @@
         1,
         0
       ],
-      "caughtUpResponses": 27,
+      "caughtUpResponses": 26,
       "completion": {
         "result": "accepted"
       },
@@ -53,7 +53,7 @@
         "acceptedMainEffects": 3,
         "acceptedErrorEffects": 0,
         "mode": "continuous",
-        "completionRequestedAt": "2026-11-02T17:26:17.906216+00:00"
+        "completionRequestedAt": "2026-11-02T17:57:17.559522+00:00"
       },
       "mainNames": [
         "Ada",
@@ -63,7 +63,7 @@
       "hostPathInInspection": false
     },
     "cancel": {
-      "definition": "continuous-cancel-be004e99",
+      "definition": "continuous-cancel-eb37e8ee",
       "workflowStatus": "Cancelled",
       "cancellation": "cancelled",
       "completionAfterCancel": {
