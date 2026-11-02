@@ -1326,7 +1326,9 @@ async function consumedIntentRemount() {
   const appliedResponse = await applied;
   need(appliedResponse.status() === 200, "The native Studio feature apply was refused.");
   await expect.poll(() => moduleEvents.length).toBe(1);
-  await page.waitForURL(studioRoute("/"), { waitUntil: "domcontentloaded" });
+  // Workspace restoration can leave Home before a URL waiter observes it.
+  // The document epoch is the retirement boundary; route/backend checks follow below.
+  await page.waitForFunction(previous => performance.timeOrigin !== previous, timeOrigin);
   expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(timeOrigin);
   // Apply retires its document, so Chromium may release the old response body.
   // Read the owning catalog after navigation; the serving generation is checked below.
