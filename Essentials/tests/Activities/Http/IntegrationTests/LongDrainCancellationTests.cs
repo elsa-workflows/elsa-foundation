@@ -1,10 +1,14 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using WhileActivity = Elsa.Activities.While.Activities.While;
 
 namespace Elsa.Activities.Http.IntegrationTests;
@@ -118,12 +122,14 @@ public sealed class LongDrainCancellationTests
     {
         var probe = new LoopProbe { Continued = new(TaskCreationOptions.RunContinuationsAsynchronously) };
         var withdraw = new WithdrawCancelOnYield();
+        var actorWarnings = new ActorWarnings();
         await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, 50, services =>
         {
             ReferenceWorkflowRuns.ComposeHost(services);
             services.AddSingleton(probe);
             services.AddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
             services.AddSingleton<IWorkflowSchedulerDrainObserver>(withdraw);
+            services.AddSingleton<ILoggerProvider>(actorWarnings);
         });
         var body = ReferenceWorkflows.Clr("body", replaySafe ? typeof(ReplaySafeBody) : typeof(ProgressingBody), []);
         var loop = ReferenceWorkflows.Clr("loop", typeof(WhileActivity), [("Condition", true)],
@@ -183,6 +189,8 @@ public sealed class LongDrainCancellationTests
             await ReferenceWorkflowRuns.AssertNothingLeftToDrainAsync(fixture);
             Assert.Equal(WorkflowExecutionStatus.Cancelled, (await fixture.WorkflowExecutionAsync(executionId)).Status);
             Assert.Equal(2, probe.Calls);
+            // The re-drive's turn ended cleanly when its drain yielded to the real Cancel: a re-drive that fails is logged.
+            Assert.Empty(actorWarnings.Messages);
         }
         finally
         {
@@ -238,17 +246,39 @@ public sealed class LongDrainCancellationTests
     [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
     public sealed class ReplaySafeBody(LoopProbe probe) : ProgressingBody(probe);
 
-    // Cancels the waiting Cancel's token from inside the yielded turn, before the mailbox is released to it.
+    // Cancels the waiting Cancel's token from inside the yielded turn, before the mailbox is released to it. It does so
+    // once: the test disposes that token afterwards, and the re-drive's drain later yields to the real Cancel.
     private sealed class WithdrawCancelOnYield : IWorkflowSchedulerDrainObserver
     {
-        public CancellationTokenSource? Waiter { get; set; }
+        private CancellationTokenSource? waiter;
+        public CancellationTokenSource Waiter { set => waiter = value; }
         public List<RuntimeSchedulerDrainResult> Results { get; } = [];
         public async ValueTask OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)
         {
             lock (Results)
                 Results.Add(result);
-            if (result.StopReason == RuntimeSchedulerDrainStopReason.Yielded && Waiter is { } waiter)
-                await waiter.CancelAsync();
+            if (result.StopReason == RuntimeSchedulerDrainStopReason.Yielded && Interlocked.Exchange(ref waiter, null) is { } withdrawn)
+                await withdrawn.CancelAsync();
+        }
+    }
+
+    // Records what the in-process actor logs at Warning or above, such as a re-drive that failed.
+    private sealed class ActorWarnings : ILoggerProvider
+    {
+        public ConcurrentQueue<string> Messages { get; } = new();
+        public ILogger CreateLogger(string categoryName) =>
+            categoryName == typeof(InProcessWorkflowExecutionActorProvider).FullName ? new Logger(Messages) : NullLogger.Instance;
+        public void Dispose() { }
+
+        private sealed class Logger(ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (IsEnabled(logLevel))
+                    messages.Enqueue($"{formatter(state, exception)} {exception}");
+            }
         }
     }
 

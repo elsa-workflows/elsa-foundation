@@ -426,11 +426,12 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 using var controlScope = _drainControls?.Push(_workflowExecutionId,
                     envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel ? null : _drainControl);
                 var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
-                // A Cancel turn never yields (its control is null), so completing one settles any earlier yield, and so
-                // does a drain that ran. A turn that drained nothing (no drain requested, or shed) leaves it as it was.
+                // A Cancel turn never yields (its control is null), so completing one settles any earlier yield. Any other
+                // turn leaves it as it was, even one whose drain ran: that drain's session reads only its own overlay, so
+                // it did not run the yielded segment's flushed continuations, and only the re-drive delivers them.
                 if (processResult.StopReason == RuntimeSchedulerDrainStopReason.Yielded)
                     Interlocked.Exchange(ref _strandedYield, 1);
-                else if (envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel || processResult is { DrainPerformed: true, Shed: false })
+                else if (envelope.Command.Kind == WorkflowExecutionCommandKind.Cancel)
                     Interlocked.Exchange(ref _strandedYield, 0);
 
                 // Admission shed (RB1, #1235). Deferred is the truthful status either way, but the two refusals differ
@@ -512,6 +513,8 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
 
         // The yielding turn sets the flag before it checks for waiters, and a leaving waiter unregisters before it
         // checks the flag. Both are full fences, so whichever runs last sees both, and the exchange lets only one re-drive.
+        // Only a Cancel that ran clears it otherwise, so a turn that takes the mailbox before a leaving waiter checks
+        // cannot hide the yield from that check, and that turn's own check finds it too.
         private void RedriveIfYieldStranded()
         {
             if (_drainControl.IsPending || Status != WorkflowExecutionActorStatus.Active)

@@ -105,13 +105,20 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         Assert.False(processor.Redriven.Task.IsCompleted);
     }
 
-    [Fact]
-    public async Task A_turn_that_drained_nothing_keeps_the_yield_for_a_later_withdrawn_cancel()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_turn_other_than_a_cancel_keeps_the_yield_for_a_later_withdrawn_cancel(bool firstDrains)
     {
         using var drain = await StartYieldingDrainAsync();
         var (processor, agent, timeout) = (drain.Processor, drain.Agent, drain.Timeout);
-        // Mailbox waiters are served in order: two commands that drain nothing, then the Cancel the drain yields to.
+        // Mailbox waiters are served in order: two commands, then the Cancel the drain yields to. The first either drains
+        // nothing or runs a drain to quiescence. A real drain yields while that Cancel waits; one runs past it only when the
+        // Cancel leaves just before, which is what lets a turn take the mailbox before the leaving waiter's own check.
+        // That drain did not deliver the yielded segment's flushed continuations, so it must not settle the yield.
         processor.GatedKey = "wfexec-1:command-3";
+        if (firstDrains)
+            processor.DrainingKey = "wfexec-1:command-2";
         var first = agent.EnqueueAsync(NewEnvelope(2), timeout.Token).AsTask();
         var second = agent.EnqueueAsync(NewEnvelope(3), timeout.Token).AsTask();
         using var waiterToken = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
@@ -119,7 +126,7 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         await processor.YieldObserved.Task.WaitAsync(timeout.Token);
         processor.Release.TrySetResult();
 
-        // The first command has completed without draining; the Cancel withdraws while the second still holds the mailbox.
+        // The first command has completed; the Cancel withdraws while the second still holds the mailbox.
         await first.WaitAsync(timeout.Token);
         await processor.GatedEntered.Task.WaitAsync(timeout.Token);
         await waiterToken.CancelAsync();
@@ -261,7 +268,8 @@ public sealed partial class RuntimeInProcessAgentProviderTests
     }
 
     // The first scheduler turn yields once a Cancel waits, holding the mailbox until the test releases it. A turn whose
-    // source is the yield re-drive is reported, and fails or answers as set; any other later scheduler turn drains nothing.
+    // source is the yield re-drive is reported, and fails or answers as set; any other later scheduler turn drains nothing,
+    // or runs a drain to quiescence when its key is the draining key.
     private sealed class YieldingControlProcessor(DrainControlContext controls) : IWorkflowExecutionCommandExecutor
     {
         private int schedulerTurns;
@@ -273,6 +281,7 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         public TaskCompletionSource CancelEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource? CancelGate { get; set; }
         public string? GatedKey { get; set; }
+        public string? DrainingKey { get; set; }
         public TaskCompletionSource GatedEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Exception? RedriveFailure { get; set; }
@@ -304,7 +313,9 @@ public sealed partial class RuntimeInProcessAgentProviderTests
                     GatedEntered.TrySetResult();
                     await Gate.Task.WaitAsync(cancellationToken);
                 }
-                return WorkflowExecutionCommandProcessResult.NoDrain;
+                return envelope.IdempotencyKey == DrainingKey
+                    ? new(true, RuntimeSchedulerDrainStopReason.Quiesced, false, false, null)
+                    : WorkflowExecutionCommandProcessResult.NoDrain;
             }
             Entered.TrySetResult();
             while (!controls.ShouldYield(envelope.WorkflowExecutionId))
