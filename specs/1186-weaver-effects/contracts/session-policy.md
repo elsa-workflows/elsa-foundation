@@ -5,7 +5,7 @@ T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum 
 - the normal composed Studio gate (T024): the complete browser suite;
 - the complete independent package witness (T025): 38 original, 4 current-authority and 26 per-adapter autonomy cases.
 
-Both first passed on `7fc0a3c2e`. They are rerun on the final reviewed head after the review fixes.
+Both first passed on `7fc0a3c2e`. They will be rerun on the final reviewed head after the review fixes; T026 stays open until that run is recorded.
 #3440 records the exact heads, counts and hashes of every run, passing or failing.
 
 The members stay preview (pre-GA) API under ADR 0080 D4, and the source marks them "Preview". A later change needs its own scoped contract decision. It is not a new module-specific orchestration path. The live domain catalog,
@@ -213,8 +213,9 @@ T019 (`AgentCompositionTests`).
 | Deny before dispatch | Denied | Success with the denied proposal | Lifecycle envelope `denied`; zero effect |
 | Prepared deadline passes before dispatch (AwaitingApproval, Edited or Approved), seen by Approve, Execute or the dispatch mark | Expired, recorded once | 409 `agent.proposal.expired`, repeated unchanged for later Approve and Execute | One `ProposalFailed` record with `dispatch=none`, `effect=none` |
 | Cancellation during the current-authority recheck, before module or client dispatch, including turn cancellation before automatic dispatch | Cancelled | 409 `agent.proposal.cancelled`, repeated unchanged | Lifecycle envelope `refused`, zero-effect summary |
-| The executor throws, is cancelled after module dispatch, or reports success without a valid owning-resource receipt | Uncertain | Uncertain result; never replayed | Lifecycle envelope `uncertain` |
-| The executor returns a failure, including a replacement returning the `agent.proposal.cancelled` code | Failed | The returned failure | Lifecycle envelope `refused`, zero-effect summary |
+| The executor throws, is cancelled after module dispatch, or reports an executed effect without a valid owning-resource receipt | Uncertain | Uncertain result; never replayed | Lifecycle envelope `uncertain` |
+| Any other failure the executor returns, including a replacement returning the `agent.proposal.cancelled` code or the current-authority recheck returning `agent.proposal.expired` | Failed | The returned failure | Lifecycle envelope `refused`, zero-effect summary |
+| A replacement reports success with no executed effect and an unrecognised status | Failed | The returned value | No lifecycle envelope |
 | AwaitingClient reaches its deadline without an admitted receipt | Uncertain, never Expired | Uncertain result; the request is never reissued | `ProposalFailed` with `dispatch=client`, `effect=possible`, `deadline=pending-client` |
 | AwaitingClient loses its reviewed contract or authority on a repeated execute | Uncertain | Uncertain result | `ProposalFailed` with `dispatch=client`, `effect=possible` |
 | A validated receipt arrives for AwaitingClient or client-scope Uncertain | Executed | Accepted receipt; a duplicate identical acknowledgement returns it, a conflicting one is refused | `ProposalExecuted` |
