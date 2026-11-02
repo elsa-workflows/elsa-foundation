@@ -5,7 +5,7 @@ T007–T022 and documented by T023. T026 freezes it as the demonstrated minimum 
 - the normal composed Studio gate (T024): the complete browser suite;
 - the complete independent package witness (T025): 38 original, 4 current-authority and 26 per-adapter autonomy cases.
 
-Both first passed on `7fc0a3c2e`. They will be rerun on the final reviewed head after the review fixes; T026 stays open until that run is recorded.
+Both first passed on `7fc0a3c2e` and passed again on the final reviewed source `904671134`, after the review fixes. Later commits change documentation only.
 #3440 records the exact heads, counts and hashes of every run, passing or failing.
 
 The members stay preview (pre-GA) API under ADR 0080 D4, and the source marks them "Preview". A later change needs its own scoped contract decision. It is not a new module-specific orchestration path. The live domain catalog,

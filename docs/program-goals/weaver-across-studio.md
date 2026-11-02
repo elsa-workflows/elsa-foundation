@@ -82,7 +82,7 @@ inventory also includes workflow library folders, tags and saved views added on 
 admission/ownership barriers, correlated expiry and owner-scoped audit are implemented. Spec 1186 is
 Implemented and its session-policy contract is frozen as preview API. The normal composed Studio
 gate (the complete browser suite) and the complete independent package witness first passed on
-`7fc0a3c2e`. They will be rerun on the final reviewed head; #3440 records every run. The
+`7fc0a3c2e` and again on the final reviewed source `904671134`; #3440 records every run. The
 witness covered the original 38 cases, the 4 current-authority cases, and all 13 lifecycle cases on
 each actual adapter. This is deterministic provider-protocol evidence, not live-provider evidence.
 Independent review, exact-head required checks, merge and resulting-main verification remain
