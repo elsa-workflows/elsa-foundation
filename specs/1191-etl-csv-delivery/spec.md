@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: In progress
+**Status**: Implemented — [PR #3668](https://github.com/elsa-workflows/elsa-foundation/pull/3668); [evidence](evidence/README.md)
 
 **Input**: The CSV delivery half of the file-connector criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908) ("CSV and JSON Lines file ingestion/delivery have explicit positions, replay, parsing/validation and destination-idempotency behavior"), in [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). [Claim](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6580829972). Together with [spec 1190](../1190-etl-jsonl-input/spec.md) (JSON Lines input) it completes the criterion's four directions: CSV and JSON Lines, each for ingestion and delivery.
 

@@ -111,6 +111,20 @@
       "restored": "Passed!  - Failed:     0, Passed:     2",
       "original": "if (total > Math.Min(maxBytes - _stream.Length, remainingOutputBytes))",
       "mutated_text": "if (total > Math.Min(maxBytes - _stream.Length, remainingOutputBytes) + 1)"
+    },
+    {
+      "mutation": "http-first-row-unbounded",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+      "filter": "FullyQualifiedName~An_http_main_first_row",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlRuntimeStoreTests.An_http_main_first_row_that_fills_the_allowance_is_rejected_not_the_batch"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": ": mainIsArray && main.IsEmpty ? remainingBytes - 1 : remainingBytes);",
+      "mutated_text": ": remainingBytes);",
+      "round": 1,
+      "sourceRevision": "1b46b4574e431a326124190defcaa812695a2cfa"
     }
   ]
 }

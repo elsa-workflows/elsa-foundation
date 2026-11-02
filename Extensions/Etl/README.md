@@ -26,7 +26,7 @@ field names on the main route, `recordOrdinal,code,field` on the error route. Va
 typed values. The CSV bytes, header included, are what the batch output limit bounds; a row that does not fit is
 rejected as `etl.output-too-large`. Retention, effect identity, create-only `.csv` publication, verification and fenced
 acceptance are the JSON Lines file path. The connector store's effect columns record the delivery mechanism (HTTP or
-file), so CSV needed no migration.
+file), so CSV needed no migration. A single-column mapping writes a null as an empty line; Elsa's CSV reader reads it as one null field, but many external readers skip blank lines. An HTTP route's closing bracket is reserved with its first element, so a file route filling the output limit can no longer fail the batch.
 
 [Native continuation](../../specs/996-http-etl/evidence/http-native-checkpoint.md),
 [process recovery](../../specs/996-http-etl/evidence/http-process-checkpoint.md),

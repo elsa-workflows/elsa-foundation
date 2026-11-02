@@ -14,7 +14,7 @@
   - the JSON Lines output key unchanged for a fixed effect id, plus a distinct `.csv` key;
   - golden hashes unchanged.
 
-  (`EtlArtifactV2JsonTests`, `EtlArtifactCompilerV2Tests`, `EtlConnectorExecutableReaderTests`, `EtlRuntimeIdentityTests`, and `EtlV2ArtifactIdentityTests` for the golden hashes; the kind-aware key overload throws for HTTP.) FR-001, FR-002, FR-009, SC-004.
+  (`EtlArtifactCompilerV2Tests.Csv_destinations_compile_on_either_route_and_validate_their_alias` for compile, round trip and refusal, `EtlConnectorExecutableReaderTests.Reader_accepts_csv_destinations`, `EtlRuntimeIdentityTests.Connector_file_keys_keep_the_jsonl_key_and_add_a_csv_extension`, and the unchanged `EtlV2ArtifactIdentityTests` golden hashes; the kind-aware key overload throws for HTTP.) FR-001, FR-002, FR-009, SC-004.
 
 ## Phase 2 — CSV body writer
 
@@ -38,7 +38,7 @@
   - CSV dispatch to file publication, with the kind's publisher, verification store and key.
 
   (`Execution/EtlConnectorOutputProcessor.cs`.) FR-004, FR-008.
-- [x] T008a Output processor tests (`EtlConnectorOutputProcessorTests`):
+- [x] T008a Output processor tests (`EtlConnectorCsvOutputTests.cs`, a partial of `EtlRuntimeStoreTests`), including an HTTP main whose over-limit first row is rejected rather than failing the batch:
   - a CSV row at the limit and one byte over, header counted;
   - the header absent when the first row is rejected, and carried by the first row that fits;
   - a size rejection whose CSV error row cannot fit fails the batch;
@@ -58,7 +58,7 @@
 
   (`EtlConnectorRecordCodec.cs`, `EfEtlConnectorOutputStore.cs`, `EfEtlConnectorAcceptanceStore.cs`, `EfEtlConnectorRuntimeInspector.cs`, `EtlRuntimeDbContext.cs`.) FR-008, FR-009, FR-010.
 - [x] T011 Runtime API effect view accepts CSV (`Runtime/Api/EtlRuntimeOperations.Connectors.cs`). FR-010.
-- [x] T012 Tests (`EtlConnectorOutputStoreTests`, `EtlConnectorAcceptanceStoreTests`, `HostConnectorBindingsTests`, `EtlConnectorRuntimeApiHttpTests`):
+- [x] T012 Tests (`EtlConnectorCsvOutputTests`, `HostConnectorBindingsTests`, `EtlConnectorRuntimeApiHttpTests` (its `csvErrors` case refuses a `.jsonl` key for a CSV route; its JSONL case rewrites the effect columns as the prior writer did and reads them back), `EtlConnectorRuntimeInspectorTests`):
   - mechanism value 2 for a CSV effect, on write and on replay read;
   - a CSV route stored as 1 throws `InvalidDataException`;
   - prior-writer rows unchanged;
@@ -85,4 +85,4 @@
 - [x] T018 Real-browser observation of a CSV route and its inspection. SC-005.
 - [x] T019 Bite-proofs, including reverting the publication verification store to `_jsonlStore`. SC-002.
 - [x] T020 Docs: `Extensions/Etl/README.md`, `src/Core/README.md`, the Design and Studio `EXTENSION_POINTS.md` destination lists, `src/Runtime/Api/EXTENSION_POINTS.md:38`, and the JSONL-only doc comments named in the plan. FR-011.
-- [x] T021 Whole suites (SC-004), then the review loop to convergence or its cap. Then the gate-evidence comment and spec `**Status**: Implemented` in this PR.
+- [x] T021 Whole suites (SC-004), the review loop with its findings recorded in the gate-evidence comment, and spec `**Status**: Implemented` in this PR. Marking the PR ready, requesting review and the #2908, #2892 and Project #62 updates follow outside this diff.
