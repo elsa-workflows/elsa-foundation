@@ -108,6 +108,79 @@ public sealed class AgentRecoveryFailurePathTests
     }
 
     [Fact]
+    public async Task A_committed_outcome_found_by_a_later_reconcile_is_audited_exactly_once()
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        // The outcome write commits and then reports a failure, and the reload right after it fails too.
+        store.CommitThenThrowNextWrite(write => write.Proposals.Any(x => x.Proposal.Status == AgentActionProposalStatus.Executed));
+        store.FailNextLoad();
+        Assert.Equal("uncertain", (await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Status);
+
+        // The next access finds the real outcome on the record and audits it, attributed to recovery.
+        Assert.Equal(AgentActionProposalStatus.Executed, (await host.Proposals.FindAsync(proposal.Id))!.Status);
+        await host.Proposals.FindAsync(proposal.Id);
+        var executed = Assert.Single(await host.AuditAsync(session), x => x.Kind == AgentAuditEventKind.ProposalExecuted);
+        Assert.Null(executed.ActorId);
+        Assert.Equal(AgentProposalRecovery.Recovery, executed.Metadata.GetValueOrDefault(AgentProposalRecovery.SettledBy));
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, (await host.ProbeAsync(session)).Outcome);
+        Assert.Equal(1, harness.Module.Effects);
+    }
+
+    [Fact]
+    public async Task A_committed_outcome_whose_audit_failed_is_still_returned_and_its_audit_retried()
+    {
+        var sink = new FailOnceAuditSink();
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)),
+            services => services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink>(sp => sink.Bind(sp.GetRequiredService<InMemoryAgentAuditStore>()))));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        store.CommitThenThrowNextWrite(write => write.Proposals.Any(x => x.Proposal.Status == AgentActionProposalStatus.Executed));
+        sink.FailNext(AgentAuditEventKind.ProposalExecuted);
+
+        Assert.True((await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Executed);
+        Assert.DoesNotContain(await host.AuditAsync(session), x => x.Kind == AgentAuditEventKind.ProposalExecuted);
+
+        await host.Proposals.FindAsync(proposal.Id);
+        await host.Proposals.FindAsync(proposal.Id);
+        Assert.Single(await host.AuditAsync(session), x => x.Kind == AgentAuditEventKind.ProposalExecuted);
+    }
+
+    [Theory]
+    [InlineData("foreign-actor", AgentSessionPolicyOutcome.NotFound)]
+    [InlineData("foreign-tenant", AgentSessionPolicyOutcome.NotFound)]
+    [InlineData("undefined-mode", AgentSessionPolicyOutcome.InvalidMode)]
+    public async Task A_refused_autonomy_change_settles_nothing(string caller, AgentSessionPolicyOutcome refusal)
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        store.FailNextWrites(write => write.Proposals.Any(x => x.Proposal.Status is AgentActionProposalStatus.Executed or AgentActionProposalStatus.Uncertain), 2);
+        Assert.Equal("uncertain", (await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Status);
+
+        var (actor, tenant, mode) = caller switch
+        {
+            "foreign-actor" => ("actor-2", session.TenantId, AgentAutonomyMode.AutoReadOnly),
+            "foreign-tenant" => (session.ActorId, "tenant-2", AgentAutonomyMode.AutoReadOnly),
+            _ => (session.ActorId, session.TenantId, (AgentAutonomyMode)99)
+        };
+        Assert.Equal(refusal, (await host.Policy.ChangeAutonomyAsync(new(session.Id, actor, tenant, mode, 1))).Outcome);
+
+        Assert.Equal(AgentActionProposalStatus.Executing, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+        Assert.True(host.ProposalStore.Unsettled.ContainsKey(proposal.Id));
+    }
+
+    [Fact]
     public async Task An_autonomy_change_retries_an_unsettled_outcome_before_it_answers_busy()
     {
         using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
@@ -269,6 +342,11 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
     /// <summary>The next ownership acquisition throws.</summary>
     public void FailNextAcquire() => Volatile.Write(ref _failAcquire, 1);
 
+    private int _failLoad;
+
+    /// <summary>The next load throws, as an unavailable store would.</summary>
+    public void FailNextLoad() => Volatile.Write(ref _failLoad, 1);
+
     private (Func<AgentSessionRecordWrite, bool> Condition, AgentSessionRecordOutcome Outcome)? _refuseWrite;
     private (TaskCompletionSource Entered, TaskCompletionSource Release)? _holdAcquire;
 
@@ -326,7 +404,9 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
 
     public Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default)
         => inner.CreateAsync(record, ownerToken, cancellationToken);
-    public Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default) => inner.LoadAsync(sessionId, cancellationToken);
+    public Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default)
+        => Interlocked.Exchange(ref _failLoad, 0) == 1 ? throw new InvalidOperationException("The record store is unavailable for this read.")
+            : inner.LoadAsync(sessionId, cancellationToken);
     public Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default)
         => inner.ReleaseOwnershipAsync(sessionId, fence, cancellationToken);
     public Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default)
@@ -334,4 +414,33 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
     public Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
         => inner.ListOwnedAsync(query, cancellationToken);
     public Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindOwnerAsync(sessionId, cancellationToken);
+}
+
+/// <summary>Forwards to the host's audit store; the next record of one kind can be made to fail before it is recorded.</summary>
+internal sealed class FailOnceAuditSink : IAgentAuditSink
+{
+    private IAgentAuditSink _inner = null!;
+    private AgentAuditEventKind? _fail;
+
+    public FailOnceAuditSink Bind(IAgentAuditSink inner)
+    {
+        _inner = inner;
+        return this;
+    }
+
+    public void FailNext(AgentAuditEventKind kind)
+    {
+        lock (this) _fail = kind;
+    }
+
+    public Task EmitAsync(AgentAuditEvent auditEvent, CancellationToken cancellationToken = default)
+    {
+        lock (this)
+            if (_fail == auditEvent.Kind)
+            {
+                _fail = null;
+                throw new InvalidOperationException("The audit sink is unavailable.");
+            }
+        return _inner.EmitAsync(auditEvent, cancellationToken);
+    }
 }

@@ -239,10 +239,40 @@ internal sealed class InMemoryAgentProposalService(
     }
 
     /// <summary>The single audit record of an execution's recorded outcome.</summary>
-    private Task AuditOutcomeAsync(string proposalId, AgentResult<AgentProposalExecutionResult> result, string actorId)
+    private Task AuditOutcomeAsync(string proposalId, AgentResult<AgentProposalExecutionResult> result, string? actorId,
+        IReadOnlyDictionary<string, string>? metadata = null)
         => AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
                 : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
-            actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);
+            actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.",
+            CancellationToken.None, metadata);
+
+    private static readonly IReadOnlyDictionary<string, string> RecoveredOutcome = new Dictionary<string, string>
+        { [AgentProposalRecovery.SettledBy] = AgentProposalRecovery.Recovery };
+
+    /// <summary>
+    /// Audits an outcome a reconcile found already recorded. An audit that cannot be emitted leaves the operation unsettled,
+    /// so its next access reconciles it again and emits the owed record then (attributed to recovery); it never fails the caller.
+    /// </summary>
+    private async Task AuditOwedOutcomeAsync(string proposalId, AgentResult<AgentProposalExecutionResult> outcome, string? actorId,
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        try { await AuditOutcomeAsync(proposalId, outcome, actorId, metadata); }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            if (store.Proposals.TryGetValue(proposalId, out var proposal)) store.Unsettled[proposalId] = proposal.SessionId;
+            logger?.LogError("The audit of a recorded outcome could not be emitted yet ({FailureType}); it is retried on the operation's next access.", failure.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    /// Under the proposal gate: <see cref="ReconcileAsync"/>, then the audit of an outcome the record already held, with no
+    /// actor and <c>settledBy=recovery</c>: a real effect is audited once even when its own write failed to answer.
+    /// </summary>
+    private async Task ReconcileAndAuditAsync(string proposalId)
+    {
+        if (await ReconcileAsync(proposalId) is { } recorded)
+            await AuditOwedOutcomeAsync(proposalId, recorded, null, RecoveredOutcome);
+    }
 
     /// <summary>
     /// Retries every operation of the session whose outcome could not be recorded. A retry that fails again leaves it
@@ -266,7 +296,7 @@ internal sealed class InMemoryAgentProposalService(
         if (!store.Unsettled.ContainsKey(proposalId)) return;
         var gate = Gate(proposalId);
         await gate.WaitAsync(cancellationToken);
-        try { await ReconcileAsync(proposalId); }
+        try { await ReconcileAndAuditAsync(proposalId); }
         finally { gate.Release(); }
     }
 
@@ -466,7 +496,8 @@ internal sealed class InMemoryAgentProposalService(
                     // outcome on the record: it is returned and audited as if the write had answered.
                     if (await ReconcileAsync(proposalId) is { } recordedOutcome)
                     {
-                        await AuditOutcomeAsync(proposalId, recordedOutcome, actorId);
+                        // The recorded outcome is the answer even if its audit cannot be emitted now; that audit is then owed.
+                        await AuditOwedOutcomeAsync(proposalId, recordedOutcome, actorId, null);
                         return recordedOutcome;
                     }
                 }
@@ -654,7 +685,7 @@ internal sealed class InMemoryAgentProposalService(
     private async Task<(AgentActionProposal? Proposal, long Version, AgentError? Error)> AccessAsync(string proposalId, string actorId, CancellationToken cancellationToken)
     {
         // An operation whose outcome this process could not record is brought in line with its record before any decision.
-        await ReconcileAsync(proposalId);
+        await ReconcileAndAuditAsync(proposalId);
         if (await LookupAsync(proposalId, cancellationToken) is not { } found)
             return (null, 0, new("agent.proposal.not_found", "The proposal was not found.", 404));
         var session = await sessions.FindAsync(found.SessionId, cancellationToken);
