@@ -994,16 +994,6 @@ public sealed class RuntimeCoalescingSession
         return result;
     }
 
-    /// <summary>
-    /// Records every in-flight claim as consumed after a commit that carried their effect landed but the queue advance
-    /// that removes them failed. A durable copy may survive; a release is refused, and completing the claim removes it.
-    /// </summary>
-    internal void RecordInFlightClaimsConsumed()
-    {
-        foreach (var claim in _overlayClaims.Keys)
-            _durablyConsumedWorkItemIds.Add(claim.Item.WorkItemId);
-    }
-
     private RuntimeSchedulerWorkItem? _pumpedWorkItem;
     private bool _pumpedEffectCommitted;
 

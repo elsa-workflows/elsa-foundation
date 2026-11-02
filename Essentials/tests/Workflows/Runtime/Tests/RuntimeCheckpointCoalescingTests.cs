@@ -191,11 +191,8 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
         Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync("wfexec-1"));
     }
 
-    private static RuntimeSchedulerWorkItem NewReconciliationWorkItem(
-        string workflowExecutionId,
-        long sequence,
-        WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.ScheduleActivity) =>
-        new($"work-{sequence}", workflowExecutionId, $"command-{sequence}", kind,
+    private static RuntimeSchedulerWorkItem NewReconciliationWorkItem(string workflowExecutionId, long sequence) =>
+        new($"work-{sequence}", workflowExecutionId, $"command-{sequence}", WorkflowExecutionCommandKind.ScheduleActivity,
             $"envelope-{sequence}", $"idempotency-{sequence}", Now, Now, sequence);
 
     private sealed class LegacySchedulerWorkQueue : IWorkflowSchedulerWorkQueue
@@ -441,55 +438,6 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, Assert.Single(innerStore.ListCommits()).Commit.Checkpoint.Name);
         Assert.False(session.HasBufferedChanges);
         Assert.False(session.IsActive);
-    }
-
-    // #3275: the same failure after a boundary that consumed the in-flight claim. Its effect is durable but its durable
-    // copy survives, so the inactive session refuses to release the claim, and completing it removes that copy. A
-    // retaining boundary consumed nothing, so its claim is still released with its delay.
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BoundaryReconciliationFailure_RefusesToReleaseTheInFlightClaimOnlyWhenTheBoundaryConsumedIt(bool retainSchedulerWork)
-    {
-        const string workflowExecutionId = "wfexec-1";
-        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
-        await innerQueue.EnqueueAsync(NewReconciliationWorkItem(workflowExecutionId, 10, WorkflowExecutionCommandKind.InvokeActivity));
-        await innerQueue.EnqueueAsync(NewReconciliationWorkItem(workflowExecutionId, 20));
-        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
-        var session = new RuntimeCoalescingSession(
-            workflowExecutionId,
-            innerQueue,
-            new PersistenceModeOptions());
-        var store = new CoalescingRuntimeCheckpointCommitStore(
-            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
-            new FixedCoalescingSessionAccessor(session));
-        var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(
-            new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "drain-owner", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(5)),
-            CancellationToken.None));
-        Assert.Equal("work-10", claim.Item.WorkItemId);
-        await session.EnqueueOverlayAsync(NewReconciliationWorkItem(workflowExecutionId, 30), CancellationToken.None);
-        Assert.True(await innerQueue.DeleteAsync(workflowExecutionId, "work-20"));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.CommitAsync(
-            NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.WorkflowSuspended) with { RetainSchedulerWork = retainSchedulerWork },
-            new(RuntimeCheckpointPersistenceMode.Immediate)));
-        Assert.False(session.IsActive);
-
-        var visibleAt = DateTimeOffset.UtcNow.AddDays(1);
-        var release = await session.ReleaseOverlayClaimAsync(claim, visibleAt, CancellationToken.None);
-
-        if (retainSchedulerWork)
-        {
-            Assert.True(release.Succeeded);
-            var released = Assert.Single((await innerQueue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).Items,
-                entry => entry.Item.WorkItemId == "work-10");
-            Assert.Equal(visibleAt, released.VisibleAfter);
-            return;
-        }
-
-        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, release.Status);
-        Assert.True((await session.CompleteOverlayClaimAsync(claim, CancellationToken.None)).Succeeded);
-        Assert.Equal(["work-30"], (await innerQueue.ListAllAsync(workflowExecutionId, CancellationToken.None)).Select(item => item.WorkItemId));
     }
 
     // The committer validated each commit on its own, but a boundary flush folds the buffered segment into a new commit that

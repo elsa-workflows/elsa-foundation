@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -159,7 +160,6 @@ public sealed class RuntimeCheckpointCommitter
         // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
         // session's overlay queue + AdvanceInnerQueueAsync stay authoritative on durable queue advance in that mode.
         var consumedWorkItems = ResolveConsumedWorkItems(commit);
-        var coalescedWorkItemId = ResolveCoalescedEffectWorkItemId(commit);
 
         var stateChanges = commit.StateChanges;
         if (postCommitOutbox.Count > 0)
@@ -178,6 +178,11 @@ public sealed class RuntimeCheckpointCommitter
         // materialized work must refuse rather than disappear; equivalent representations retain the ordinary one-row form.
         if (postCommitOutbox.Count > 0 && commit.StateChanges.PostCommitOutbox.Count > 0)
             commitToPersist = commitToPersist with { StateChanges = commitToPersist.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
+
+        // #3275: from here the commit may become durable, even if the store call then throws or a coalescing segment only
+        // buffers it, so a faulted dispatch can no longer prove it left no effect. Recorded before the call, whatever
+        // follows, for the drainer's RetryAfter release.
+        RuntimeSchedulerDispatchFrame.RecordCheckpointAttempt(commitToPersist);
 
         // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
@@ -207,8 +212,6 @@ public sealed class RuntimeCheckpointCommitter
             // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
             foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
                 _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
-            if (coalescedWorkItemId is not null)
-                _consumedWorkClaimAccessor?.MarkEffectCoalesced(coalescedWorkItemId);
         }
 
         // The durable outbox item is now committed and authoritative. If a
@@ -302,20 +305,6 @@ public sealed class RuntimeCheckpointCommitter
 
         return [pending];
     }
-
-    // The coalesced counterpart of the consume above. While a session owns the execution a non-retaining checkpoint
-    // consumes nothing itself: the session buffers it, or folds it into an immediate write at its activity cap or at a
-    // boundary, and advances the queue through its overlay. The work's effect is durable all the same, or becomes so at
-    // the flush, so the drainer must not release the item to run again (#3275). Resolved before the store call, which can
-    // end the session. A retaining checkpoint, such as an attempt claim before the work it guards, settles nothing; a
-    // non-retaining attempt claim, such as background admission's, is the work's effect like any other checkpoint.
-    private string? ResolveCoalescedEffectWorkItemId(RuntimeCheckpointCommit commit) =>
-        !commit.RetainSchedulerWork &&
-        _consumedWorkClaimAccessor?.PendingConsume is { } pending &&
-        StringComparer.Ordinal.Equals(pending.WorkflowExecutionId, commit.WorkflowExecutionId) &&
-        _coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId)
-            ? pending.WorkItemId
-            : null;
 
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {

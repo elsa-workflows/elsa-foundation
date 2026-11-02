@@ -12,7 +12,7 @@ internal class QueueWithoutVisibility(InMemoryWorkflowSchedulerWorkQueue inner)
     public bool SupportsTargetedDeletion => true;
     public bool SupportsClaimableBacklogDiscovery => true;
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem item, CancellationToken token = default) => inner.EnqueueAsync(item, token);
-    public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) => inner.ListAsync(query, token);
+    public virtual ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) => inner.ListAsync(query, token);
     public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string id, CancellationToken token = default) => inner.DequeueAsync(id, token);
     public virtual ValueTask<bool> DeleteAsync(string id, string workId, CancellationToken token = default) => inner.DeleteAsync(id, workId, token);
     public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken token = default) => inner.ListPendingWorkflowExecutionIdsAsync(limit, token);

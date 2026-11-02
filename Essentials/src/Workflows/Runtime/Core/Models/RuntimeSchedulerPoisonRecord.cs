@@ -86,7 +86,8 @@ public enum RuntimeSchedulerPoisonDisposition
 
     /// <summary>
     /// The retry policy asked to retry and the queue holds the retry. <c>RetryNow</c> re-enqueued the work item.
-    /// <c>RetryAfter</c> released it until <c>NextRetryAt</c>, after which the resumption sweep re-drives it. Any
+    /// <c>RetryAfter</c> released it until <c>NextRetryAt</c>, after which the resumption sweep re-drives it; until then
+    /// it holds back the execution's later queued work, because the queue serves each execution in order. Any
     /// <c>RetryAfter</c> that was not released is recorded as <see cref="Poisoned"/> instead, for example when the queue
     /// cannot delay it, no resumption sweep is composed, or the queue refuses the release; a policy that throws is
     /// <see cref="Poisoned"/> too. <c>docs/runtime-fault-behavior.md</c> lists every case.

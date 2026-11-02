@@ -28,17 +28,6 @@ public interface IRuntimeConsumedSchedulerWorkClaimAccessor
     void MarkConsumedDurably(string workItemId);
 
     /// <summary>
-    /// Whether a coalescing session took a non-retaining checkpoint of the pending claim's work during the current
-    /// dispatch. The session buffers it, or folds it into an immediate durable write, and advances the queue itself, so
-    /// <see cref="WasConsumedDurably"/> stays <see langword="false"/>; the work's effect is durable all the same, or
-    /// becomes so at the session's flush, and running the item again would repeat it.
-    /// </summary>
-    bool WasEffectCoalesced { get; }
-
-    /// <summary>Records that a coalescing session took a non-retaining checkpoint of the pending claim's work.</summary>
-    void MarkEffectCoalesced(string workItemId);
-
-    /// <summary>
     /// Opens a consume attempt for <paramref name="workItemId"/> around the store call that carries its deletion;
     /// dispose the returned handle when the attempt settles either way. Between those two points the item may already
     /// be gone from the queue while <see cref="MarkConsumedDurably"/> has not run yet, so

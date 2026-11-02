@@ -458,6 +458,45 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_WithRetryAfterPolicy_WhenTheAcknowledgementAfterASuccessfulDispatchFails_PoisonsWithoutRunningTheStepAgain()
+    {
+        // #3275: the handler returned, so its effect is durable, and only the acknowledgement after it failed. That
+        // failure lands in the same fault arm as a handler fault, and a RetryAfter used to release the completed step to
+        // run again. Only a fault the handler itself threw is released. This one takes the path it always took: the
+        // fault arm acknowledges again and records it, and with the retry not held the record is Poisoned.
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new FailFirstCompleteWorkQueue(inner);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var time = new FakeTimeProvider(_now);
+        var handler = new SucceedingSchedulerWorkHandler();
+        var delay = TimeSpan.FromMinutes(5);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler],
+            time,
+            faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions())),
+            poisonStore: poisonStore,
+            retryPolicy: new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after")),
+            consumedWorkClaimAccessor: new RuntimeConsumedSchedulerWorkClaimAccessor(),
+            hasResumptionRedriver: true);
+        await inner.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.ResumeBookmark));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(queue.CompleteFailed);
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+        Assert.Null(record.NextRetryAt);
+        Assert.Empty(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+
+        time.Advance(delay);
+        Assert.Empty((await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"))).Items);
+        Assert.Equal(1, handler.InvocationCount);
+    }
+
+    [Fact]
     public async Task DrainAsync_WithRetryAfterPolicy_WhenAnInactiveCoalescingSegmentRefusesTheRelease_AcksAndPoisonsTheItem()
     {
         // A handler crosses a durable boundary that deactivates the coalescing overlay, and the durable head then moves.
@@ -831,6 +870,45 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) =>
             new(RuntimeSchedulerWorkClaimTransitionResult.Stale);
         public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(ConsumedSchedulerWorkItem consumed, CancellationToken cancellationToken = default) => inner.ConsumeClaimedAsync(consumed, cancellationToken);
+    }
+
+    // Times out the first claim completion, as a provider whose acknowledgement times out would.
+    private sealed class FailFirstCompleteWorkQueue(IWorkflowSchedulerWorkQueue inner) : IWorkflowSchedulerWorkQueue
+    {
+        public bool CompleteFailed { get; private set; }
+        public bool SupportsClaimTransitions => inner.SupportsClaimTransitions;
+        public bool SupportsClaimValidation => inner.SupportsClaimValidation;
+        public bool SupportsTargetedDeletion => inner.SupportsTargetedDeletion;
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) => inner.EnqueueAsync(workItem, cancellationToken);
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) => inner.ListAsync(query, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => inner.DequeueAsync(workflowExecutionId, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) => inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) => inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(RuntimeSchedulerWorkClaimRequest request, CancellationToken cancellationToken = default) => inner.ClaimAsync(request, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> RenewClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) => inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ReleaseClaimAsync(RuntimeSchedulerWorkClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) => inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(ConsumedSchedulerWorkItem consumed, CancellationToken cancellationToken = default) => inner.ConsumeClaimedAsync(consumed, cancellationToken);
+
+        public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> CompleteClaimAsync(RuntimeSchedulerWorkClaim claim, CancellationToken cancellationToken = default)
+        {
+            if (CompleteFailed)
+                return inner.CompleteClaimAsync(claim, cancellationToken);
+            CompleteFailed = true;
+            throw new TimeoutException("The acknowledgement timed out.");
+        }
+    }
+
+    private sealed class SucceedingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(SucceedingSchedulerWorkHandler);
+        public int InvocationCount { get; private set; }
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class StubRetryPolicy(RuntimeDomainRetryDecision decision) : IRuntimeDomainRetryPolicy

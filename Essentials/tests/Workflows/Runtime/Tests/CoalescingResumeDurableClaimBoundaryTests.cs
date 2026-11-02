@@ -564,6 +564,143 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Single(probe.InvokeSessionActive);
     }
 
+    [Fact]
+    public async Task Retry_after_is_not_released_when_a_continuing_attempt_claim_boundary_lands_but_its_reconciliation_fails()
+    {
+        // #3275 for a non-retaining attempt claim the segment continues past, as background admission commits one. The
+        // boundary lands durably with its continuation, then the reconciliation after it fails reading the durable
+        // queue, so the store abandons the segment and rethrows. The attempt claim is the work's effect, but this
+        // boundary consumes no in-flight claim, so nothing recorded it, and invoke-1 is still the durable head: the
+        // inactive segment would release it with its delay, and the sweep would run it again over its committed effect.
+        // It went to the store, so it is acknowledged and poisoned instead, and no copy is left to run.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var queue = new ArmedListFailureQueue(shared.Queue);
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            invokeCheckpointName: RuntimeCheckpointNames.ActivityAttemptClaimed, invokeEnqueuesCompletion: true,
+            beforeInvokeCommit: () => queue.Armed = true);
+        await using var provider = BuildProvider(shared, probe, retryAfter: RetryDelay, queue: queue);
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal("invoke-1", Assert.Single(result.Items).WorkItemId);
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(queue.ListTimedOut);
+            Assert.True(Assert.Single(probe.InvokeSessionActive));
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+            Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+            Assert.Null(record.NextRetryAt);
+            Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+                item => item.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed);
+        }
+
+        Assert.DoesNotContain(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)),
+            item => item.WorkItemId == "invoke-1");
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.DoesNotContain(retried.Items, item => item.WorkItemId == "invoke-1");
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+    }
+
+    [Fact]
+    public async Task Retry_after_is_not_released_when_the_inner_commit_lands_and_then_throws_in_an_active_segment()
+    {
+        // #3275 for an ambiguous store call: the boundary's inner commit lands durably and then throws, as an
+        // acknowledgement that times out after the transaction committed does. The throw comes before the coalescing
+        // store's own recovery and before the committer learns of the commit, so nothing after the fact can tell the
+        // effect landed; it used to be released, and the sweep ran invoke-1 again over its committed effect. The attempt
+        // is recorded before the store call, so the item is acknowledged and poisoned.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            invokeCheckpointName: RuntimeCheckpointNames.ActivitySuspended);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay,
+            decorateInnerCommitStore: inner => new ThrowAfterCommitStore(inner, RuntimeCheckpointNames.ActivitySuspended));
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(Assert.Single(probe.InvokeSessionActive));
+            Assert.True(Assert.IsType<ThrowAfterCommitStore>(scope.ServiceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value).Threw);
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+            Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+            Assert.Null(record.NextRetryAt);
+            Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+                item => item.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivitySuspended);
+        }
+
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Empty(retried.Items);
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retry_after_sees_a_checkpoint_a_resume_commits_through_a_scope_of_its_own(bool retainingCommit)
+    {
+        // #3275: WorkflowResumeBookmarkSchedulerWorkHandler commits through a committer it resolves from a fresh DI scope,
+        // whose scoped claim accessor holds no pending claim, so nothing scoped to the drain sees that commit. The
+        // dispatch frame flows with the call instead, so a resume that commits a non-retaining checkpoint and then
+        // faults is acknowledged and poisoned, while a retaining one is still released.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, resumeCommitsInOwnScopeThenFaults: retainingCommit);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay);
+        await shared.Queue.EnqueueAsync(ResumeWork("resume-1", 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            var queued = (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+            if (retainingCommit)
+            {
+                Assert.Equal((RuntimeSchedulerPoisonDisposition.RetryScheduled, Now + RetryDelay), (record.Disposition, record.NextRetryAt));
+                var retained = Assert.Single(queued);
+                Assert.Equal(("resume-1", Now + RetryDelay), (retained.Item.WorkItemId, retained.VisibleAfter));
+                return;
+            }
+
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+            Assert.Null(record.NextRetryAt);
+            Assert.Empty(queued);
+        }
+
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Empty(retried.Items);
+        }
+
+        Assert.Equal(1, probe.OwnScopeResumeRuns);
+        Assert.Equal(1L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+    }
+
     [Theory]
     [InlineData(WorkflowExecutionCommandKind.InvokeActivity, false)]
     [InlineData(WorkflowExecutionCommandKind.CompleteActivity, false)]
@@ -625,7 +762,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         bool visibilitySnapshots = false,
         TimeSpan? retryAfter = null,
         PersistenceMode mode = PersistenceMode.Balanced,
-        IWorkflowSchedulerWorkQueue? queue = null)
+        IWorkflowSchedulerWorkQueue? queue = null,
+        Func<IRuntimeCheckpointCommitStore, IRuntimeCheckpointCommitStore>? decorateInnerCommitStore = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(shared.TimeProvider);
@@ -648,6 +786,16 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(delay));
             services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(new WorkflowDispatchDurabilityEvidence(
                 WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
+        }
+        if (decorateInnerCommitStore is not null)
+        {
+            var inner = services.Single(descriptor => descriptor.ServiceType == typeof(CoalescingInner<IRuntimeCheckpointCommitStore>));
+            services.Remove(inner);
+            services.Add(new ServiceDescriptor(
+                typeof(CoalescingInner<IRuntimeCheckpointCommitStore>),
+                serviceProvider => new CoalescingInner<IRuntimeCheckpointCommitStore>(decorateInnerCommitStore(
+                    ((CoalescingInner<IRuntimeCheckpointCommitStore>)inner.ImplementationFactory!(serviceProvider)).Value)),
+                inner.Lifetime));
         }
         if (externalOutboxDelivery is not null)
             ReplaceOutboxProcessorWithExternalDeliveryProbe(services, externalOutboxDelivery);
@@ -685,7 +833,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     private static InMemoryRuntimeCheckpointCommitStore InnerCommitStore(IServiceProvider serviceProvider) =>
-        serviceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value as InMemoryRuntimeCheckpointCommitStore ??
+        InMemoryCommits(serviceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
+
+    private static InMemoryRuntimeCheckpointCommitStore InMemoryCommits(IRuntimeCheckpointCommitStore store) =>
+        (store is ThrowAfterCommitStore decorated ? decorated.Inner : store) as InMemoryRuntimeCheckpointCommitStore ??
         throw new InvalidOperationException("The coalescing probe requires the in-memory checkpoint store.");
 
     private static RuntimeSchedulerWorkItem ScheduleWork(string workItemId, long sequence) => Work(
@@ -746,7 +897,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         bool faultInvoke = false,
         bool? commitBeforeInvokeFault = null,
         bool scheduleEnqueuesInvoke = false,
-        string invokeCheckpointName = "CoalescingProbe")
+        string invokeCheckpointName = "CoalescingProbe",
+        bool? resumeCommitsInOwnScopeThenFaults = null,
+        bool invokeEnqueuesCompletion = false,
+        Action? beforeInvokeCommit = null)
     {
         private bool _didDefer;
         private bool _didEnqueueScheduleSuffix;
@@ -763,6 +917,13 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         // The schedule enqueues invoke-1 as its continuation, and each records its own activity so a cap can fold them.
         public bool ScheduleEnqueuesInvoke => scheduleEnqueuesInvoke;
         public string InvokeCheckpointName => invokeCheckpointName;
+        // The invoke's checkpoint enqueues complete-1 as its continuation.
+        public bool InvokeEnqueuesCompletion => invokeEnqueuesCompletion;
+        public Action? BeforeInvokeCommit => beforeInvokeCommit;
+        // Null resumes normally; otherwise the resume commits through a committer from a DI scope of its own, as
+        // WorkflowResumeBookmarkSchedulerWorkHandler does, retaining its item when true, and then faults.
+        public bool? ResumeCommitsInOwnScopeThenFaults => resumeCommitsInOwnScopeThenFaults;
+        public int OwnScopeResumeRuns { get; set; }
 
         public bool ShouldDeferResume()
         {
@@ -811,6 +972,55 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
         public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
             inner.ListWithVisibilityAsync(query, token);
+    }
+
+    // Fails the first durable listing once armed, as a provider read that times out mid-reconciliation does.
+    private sealed class ArmedListFailureQueue(InMemoryWorkflowSchedulerWorkQueue inner)
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+    {
+        public bool Armed { get; set; }
+        public bool ListTimedOut { get; private set; }
+
+        public override ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default)
+        {
+            if (!Armed)
+                return base.ListAsync(query, token);
+            Armed = false;
+            ListTimedOut = true;
+            throw new TimeoutException("The durable queue timed out listing tracked work.");
+        }
+
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
+            inner.ListWithVisibilityAsync(query, token);
+    }
+
+    // Lands the named checkpoint in the inner store once and then throws, as an acknowledgement that times out after the
+    // transaction committed does.
+    private sealed class ThrowAfterCommitStore(IRuntimeCheckpointCommitStore inner, string checkpointName) : IRuntimeCheckpointCommitStore
+    {
+        public IRuntimeCheckpointCommitStore Inner => inner;
+        public bool Threw { get; private set; }
+        public bool SupportsModelCheckpoint => inner.SupportsModelCheckpoint;
+        public bool CanCommitModelState(IRuntimeModelExecutionReader reader) => inner.CanCommitModelState(reader);
+        public bool SupportsModelParentAdmission => inner.SupportsModelParentAdmission;
+        public bool SupportsModelAdmission => inner.SupportsModelAdmission;
+        public bool CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+            IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => inner.CanCommitModelAdmission(reader, executions, activities, outbox);
+        public bool SupportsExactBookmarkResume => inner.SupportsExactBookmarkResume;
+        public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
+            IActivityExecutionStateStore activities) => inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
+
+        public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CommitAsync(commit, decision, cancellationToken);
+            if (Threw || commit.Checkpoint.Name != checkpointName)
+                return result;
+            Threw = true;
+            throw new TimeoutException("The commit acknowledgement timed out after the transaction committed.");
+        }
     }
 
     private sealed class ExternalOutboxDeliveryProbe
@@ -893,11 +1103,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         CoalescingInner<IWorkflowSchedulerWorkQueue> innerQueue,
         CoalescingInner<IRuntimeCheckpointCommitStore> innerCommitStore,
         TimeProvider timeProvider,
+        IServiceScopeFactory scopeFactory,
         ProbeRecorder probe) : IWorkflowSchedulerWorkHandler
     {
-        private readonly InMemoryRuntimeCheckpointCommitStore _commits =
-            innerCommitStore.Value as InMemoryRuntimeCheckpointCommitStore ??
-            throw new InvalidOperationException("The coalescing probe requires the in-memory checkpoint store.");
+        private readonly InMemoryRuntimeCheckpointCommitStore _commits = InMemoryCommits(innerCommitStore.Value);
 
         public string Name => nameof(CoalescingProbeHandler);
 
@@ -918,10 +1127,26 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
                     var invoke = probe.ScheduleEnqueuesInvoke
                         ? Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 2), activityExecutionId: "activity-invoke-1",
                             checkpointName: probe.InvokeCheckpointName)
-                        : Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 1), checkpointName: probe.InvokeCheckpointName);
+                        : Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 1), probe.InvokeEnqueuesCompletion
+                            ? [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                                workItem, "activity-invoke-1", Work("complete-1", WorkflowExecutionCommandKind.CompleteActivity, 2), Now)]
+                            : null, checkpointName: probe.InvokeCheckpointName);
+                    probe.BeforeInvokeCommit?.Invoke();
                     await committer.CommitAsync(invoke with { RetainSchedulerWork = retain }, cancellationToken);
                 }
                 throw new InvalidOperationException($"The probe faulted after invoking {workItem.WorkItemId}.");
+            }
+
+            if (probe.ResumeCommitsInOwnScopeThenFaults is { } retainResume && workItem.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            {
+                probe.OwnScopeResumeRuns++;
+                await using (var resumeScope = scopeFactory.CreateAsyncScope())
+                {
+                    var resume = Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 1));
+                    await resumeScope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>()
+                        .CommitAsync(resume with { RetainSchedulerWork = retainResume }, cancellationToken);
+                }
+                throw new InvalidOperationException($"The probe faulted after resuming {workItem.WorkItemId}.");
             }
 
             if (workItem.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity)

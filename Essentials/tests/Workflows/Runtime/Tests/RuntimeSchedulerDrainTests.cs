@@ -1667,10 +1667,6 @@ public sealed class RuntimeSchedulerDrainTests
 
         public void MarkConsumedDurably(string workItemId) => inner.MarkConsumedDurably(workItemId);
 
-        public bool WasEffectCoalesced => inner.WasEffectCoalesced;
-
-        public void MarkEffectCoalesced(string workItemId) => inner.MarkEffectCoalesced(workItemId);
-
         public IDisposable BeginConsumeAttempt(string workItemId) => inner.BeginConsumeAttempt(workItemId);
 
         public bool IsConsumeInFlightOrDurable(string workItemId) => Observe(inner.IsConsumeInFlightOrDurable(workItemId));

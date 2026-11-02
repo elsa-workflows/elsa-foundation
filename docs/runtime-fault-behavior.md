@@ -232,15 +232,20 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
    safety the claim protocol provides.) The ack is skipped when a checkpoint commit inside this
    dispatch already consumed the item durably.
    - **Exception: an honored `RetryAfter`.** The claim is released until `now + delay` instead of
-     deleted, but only when all of these hold:
+     deleted only on positive evidence that running the step again repeats nothing: the handler itself
+     threw, and no non-retaining checkpoint was attempted during the dispatch. Anything else is
+     acknowledged and poisoned as before. In full, all of these must hold:
+     - the handler threw. A failed acknowledgement after the handler returned lands in this arm too,
+       but the step's effect is durable by then, so it is acknowledged again and poisoned;
+     - the dispatch sent no non-retaining checkpoint of its execution to the checkpoint store. The
+       attempt is recorded before the store call, whichever DI scope the committer came from, because
+       the checkpoint can be durable even when the call throws, and a coalescing segment that only
+       buffers it commits it at its flush. A retaining checkpoint does not count: it keeps the step
+       queued for redrive by design;
      - the same delayed-release rule as temporarily unavailable work: a step kind that supports it
        (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
        `DeliverChildControl`, `Checkpoint`), a live claim not yet consumed by a commit, and a queue
        that can persist the delay;
-     - no non-retaining checkpoint of this dispatch went to an active coalescing segment. Outside a
-       segment such a commit consumes the claimed item. Inside one it consumes nothing: the segment
-       buffers it for its flush, or commits it at once at its activity cap or at a boundary. Either way
-       the effect is durable, so releasing the step would run it again;
      - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
        `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
      - the fault was not caused by a checkpoint rule;
@@ -252,8 +257,6 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,
      which throws claim-lost and records nothing, as for any lost claim. A coalescing segment that a boundary
      deactivated, and whose durable head has since moved, refuses this way while the drain still owns the item.
-     So does one whose boundary consumed the step and committed durably but then failed to remove it from the
-     queue: the effect is durable, and the acknowledgement removes the copy the failed removal left behind.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 
@@ -261,7 +264,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 | --- | --- | --- |
 | `RetryNow` | `RetryScheduled` | re-enqueued immediately through the queue contract |
 | `RetryAfter`, step released | `RetryScheduled` | the released step runs again once `NextRetryAt` passes, when the sweep re-drives it; each later failure asks the policy again with a higher failure count, so a policy can bound the retries |
-| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, a step whose effect a commit or a coalescing segment already took, checkpoint-rule faults, a release the queue refuses, and a delay past `DateTimeOffset.MaxValue` ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
+| `RetryAfter`, not released | `Poisoned` | none; shown as a blocking incident like `DoNotRetry`. This covers `Start`, `ScheduleActivity`, `StartActivity` and other kinds without delayed release, hosts without the resumption sweep, a failed acknowledgement after the handler returned, a dispatch that attempted a non-retaining checkpoint, checkpoint-rule faults, a release the queue refuses, and a delay past `DateTimeOffset.MaxValue` ([#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275)) |
 | a policy that throws | `Poisoned` | none; treated as no decision, with retry mode `PolicyFailed` and the exception type in the record's metadata |
 | `DoNotRetry`, `Fault`, or no policy | `Poisoned` | none |
 
@@ -463,6 +466,7 @@ Changing the catalog default only affects workflows published afterwards.
 | handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / stale-fence / cancellation excluded | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
 | the retry decision is read before the ack, and a policy that throws counts as no decision | `WorkflowSchedulerDrainer.DecideRetryAsync` |
 | ack-before-poison, and the release of an honored `RetryAfter` in its place | `WorkflowSchedulerDrainer.DispatchAsync` (fault arm), `CanReleaseWithDelay` |
+| a non-retaining checkpoint attempt is recorded before the store call, on the dispatch's async flow | `RuntimeSchedulerDispatchFrame`, `RuntimeCheckpointCommitter.CommitAsync` |
 | the retry-mode ladder that turns the decision into a record | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |

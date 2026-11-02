@@ -271,6 +271,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             ? _consumedWorkClaimAccessor.Begin(ConsumedSchedulerWorkItem.FromClaim(claim))
             : null;
 
+        // #3275: the positive evidence a RetryAfter release needs, that this dispatch sent no non-retaining checkpoint to
+        // the store. Open only where such a release is possible: a claimed item on a host that composes a re-driver.
+        using var dispatchFrame = claim is not null && HasResumptionRedriver
+            ? RuntimeSchedulerDispatchFrame.Open(workItem.WorkflowExecutionId)
+            : null;
+        var handlerReturned = false;
+
         // The dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
         // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
         // tracing is inactive.
@@ -292,6 +299,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                     ? _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, dispatchCancellationToken)
                     : handler.HandleAsync(workItem, dispatchCancellationToken),
                 cancellationToken);
+            handlerReturned = true;
 
             // The handler's effect is now durable. On the atomic path a checkpoint commit already deleted the claimed item
             // inside its unit-of-work, so the separate acknowledgement is redundant and skipped;
@@ -396,19 +404,19 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // RetryAfter (#3275) is the exception: where the claim can carry a delay and a resumption sweep is
             // composed to re-drive it, the item is released with the policy's delay instead, exactly like temporarily
             // unavailable work. It stays the only copy, becomes claimable when due, and the sweep's backlog discovery
-            // re-drives it. An item whose effect a coalescing session took is not released: the session buffered that
-            // non-retaining checkpoint or already committed it, where outside a session the commit would have consumed
-            // the item, so it is acknowledged through the overlay and poisoned like one. A release the queue
-            // refuses (a coalescing segment that already consumed the item, or an inactive one whose durable head
-            // moved, say) falls back to the acknowledgement; everything not released is poisoned. So is a delay that
-            // ends past the last representable time: no queue can persist it, and releasing it anyway would park the
-            // step for good.
+            // re-drives it. The release needs positive evidence that running the item again repeats nothing: the
+            // handler itself threw, rather than the acknowledgement after it returned, and the dispatch frame saw no
+            // non-retaining checkpoint go to the store. A checkpoint that went may be durable whether or not the call
+            // returned, a coalescing segment may hold it for its flush, and a handler may commit through a scope of
+            // its own, so none of that is inferred after the fact. A release the queue refuses (an inactive
+            // coalescing segment whose durable head moved, say) falls back to the acknowledgement; everything not
+            // released is poisoned. So is a delay that ends past the last representable time: no queue can persist it,
+            // and releasing it anyway would park the step for good.
             var retry = await DecideRetryAsync(workItem, faultInfo, cancellationToken);
             DateTimeOffset? releasedUntil = null;
-            if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && HasResumptionRedriver &&
-                delay <= DateTimeOffset.MaxValue - retry.Now &&
-                !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal) &&
-                _consumedWorkClaimAccessor?.WasEffectCoalesced != true)
+            if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && !handlerReturned &&
+                dispatchFrame is { NonRetainingCheckpointAttempted: false } && delay <= DateTimeOffset.MaxValue - retry.Now &&
+                !RuntimeCheckpointCommitValidationException.IsCauseOf(exception) && CanReleaseWithDelay(workItem, renewal))
             {
                 var visibleAt = retry.Now + delay;
                 if ((await _schedulerWorkQueue.ReleaseClaimAsync(renewal!.Current, visibleAt, cancellationToken)).Succeeded)
@@ -479,11 +487,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // first, that is the *only* requeue, so poison delivery stays bounded. RetryAfter is RetryScheduled only when the
     // caller released the item (releasedUntil): the queue then holds its single copy until NextRetryAt, and the
     // resumption sweep re-drives it once claimable. A RetryAfter that was not released (no resumption sweep composed, a
-    // kind without delayed release, a legacy provider, an item a commit already consumed or whose effect a coalescing
-    // session took, a refused release, a delay past the last representable time, or a checkpoint-rule fault) is
-    // Poisoned, so it surfaces as a blocking incident instead of waiting on a re-drive nothing performs (#3275). A
-    // policy that throws counts as no decision. This lives entirely in the fault path — it does not change
-    // claim/pause/dispatch ordering.
+    // kind without delayed release, a legacy provider, a fault after the handler returned, a dispatch that sent a
+    // non-retaining checkpoint to the store, a refused release, a delay past the last representable time, or a
+    // checkpoint-rule fault) is Poisoned, so it surfaces as a blocking incident instead of waiting on a re-drive nothing
+    // performs (#3275). A policy that throws counts as no decision. This lives entirely in the fault path — it does not
+    // change claim/pause/dispatch ordering.
     //
     // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
     // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
