@@ -37,10 +37,10 @@ All contracts below have layer badge **Core — `Elsa.Agent.Core`**. Defaults ar
 | [`IAgentAuditSink`](../Core/Contracts/AgentContracts.cs) | `InMemoryAgentAuditStore`, singleton shared with reader | `EmitAsync(AgentAuditEvent)` returns `Task` | Supply audit persistence/forwarding. Sessions, context, tools, proposals, feedback and provider diagnostics emit records. |
 | [`IAgentAuditReader`](../Core/Contracts/AgentContracts.cs) | Same `InMemoryAgentAuditStore` | `ListAsync(sessionId?, take?)` returns `Task<IReadOnlyCollection<AgentAuditEvent>>` (trusted, unscoped, in-process); preview default member `ListOwnedAsync(AgentAuditOwnerQuery)` returns `Task<AgentAuditQueryResult>`, `Unsupported` by default | Supply audit queries consistent with the sink. The API audit route reads only through `ListOwnedAsync`; a reader that does not implement it makes the route answer 409 `agent.audit.query_unsupported`. |
 | [`IAgentAuditOwnership`](../Core/Contracts/AgentContracts.cs) *(preview, #3440)* | Same `InMemoryAgentAuditStore`, singleton | `AssociateAsync(sessionId, actorId, tenantId)` returns `Task<bool>`; first association wins | Replace together with the reader so association and owner query stay coherent. The default session service associates each session before emitting any record for it. |
-
-The audit sink, reader and ownership are one store's facets and are replaced together, with `services.SelectAgentAuditStore(...)` (`AgentPersistenceSelection`), which replaces the three default facets at once and throws on a second selection; a second registration of any of the three fails `AgentRegistrationValidator`. `EfAgentAuditStore` (`Elsa.Agent.Persistence.EntityFrameworkCore`) persists the records and the owner association, so owner-scoped audit reads keep answering for recovered sessions; `settledBy` (`user` or `recovery`) is a metadata key.
 | [`IAgentProviderRegistry`](../Core/Contracts/AgentContracts.cs) | `DefaultAgentProviderRegistry`, scoped | `Active: IAgentProvider?` | Replace provider selection only while preserving the single-active-provider contract. Orchestrator/API consume it; multiple installed providers fail with `AgentHarnessConflictException`. |
 | [`IAgentProvider`](../Core/Contracts/AgentContracts.cs) | No provider in base registration | Provider/session identity, `CreateSessionAsync`, `ContinueTurnAsync(AgentTurnContext)`, approval and diagnostics | Install one provider adapter through its feature. The orchestrator consumes it; zero providers is unavailable, never a deterministic production fallback. |
+
+The audit sink, reader and ownership are one store's facets and are replaced together, with `services.SelectAgentAuditStore(...)` (`AgentPersistenceSelection`), which replaces the three default facets at once and throws on a second selection; a second registration of any of the three fails `AgentRegistrationValidator`. `EfAgentAuditStore` (`Elsa.Agent.Persistence.EntityFrameworkCore`) persists the records and the owner association, so owner-scoped audit reads keep answering for recovered sessions; `settledBy` (`user` or `recovery`) is a metadata key.
 
 `Elsa.Agent.Api` calls `services.AddFoundationAgentApi()` to replace the fail-closed `IAgentToolAuthorizer` with scoped `HttpAgentToolAuthorizer`. It uses the current normalized authenticated principal/tenant and exactly one `IPermissionAuthorizationService`, checking the descriptor's required permissions against the prepared target. Custom/non-HTTP hosts must install an equivalent current-authority replacement; installing a tool alone grants no execution authority.
 
@@ -163,7 +163,9 @@ never returns a record without an ownership association. A custom session servic
 
 The [recovery contract](../../../../specs/1189-weaver-recovery/contracts/recovery.md) (a candidate until its
 qualification) records the wire shape, refusal codes and SemVer classification; this section keeps the
-extension rules.
+extension rules. Workflow-runtime agent continuation and its recovery stay with Program #2892 (leaf #2912) and
+Program #3519; this store owns only the durability of Weaver foreground sessions, reviews and receipts, and adds no
+detached turn owner.
 
 **Record store and participation.** The default session owner writes every transition through
 `IAgentSessionRecordStore` before applying it in memory, and hydrates a session it has not loaded before

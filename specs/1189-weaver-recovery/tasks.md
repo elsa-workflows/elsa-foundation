@@ -244,7 +244,9 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 - [ ] T032 Run the normal composed Studio proof with the Workbench configured for the EF store, alone at low load: the complete browser suite plus the recovery journeys.
 
   Preparation: commit `d1fbe589d` references the store from the Workbench, opt-in (the stock shells do not list it). Listing `FoundationAgentEntityFrameworkCore` with `Provider` and `ConnectionString` in the shell enables it; `WorkbenchAgentDurableStoreTests` (2/2) shows the stock shell keeps it disabled and that SQLite composes, migrates and serves the owner list. The Workbench solution filter now contains the store.
-- [ ] T033 Run the complete independent package witness from committed source: the original 38 cases, the 4 current-authority cases, the 26 autonomy and lifecycle cases, and the new restart inventory. Run it alone at low load.
+- [x] T033 Run the complete independent package witness from committed source: the original 38 cases, the 4 current-authority cases, the 26 autonomy and lifecycle cases, and the new restart inventory. Run it alone at low load.
+
+  Verified: attempt 3 on `d014b2dc8` passed all 89 cases with `independentPackageWitness` true; report SHA-256 `f79661dda0a13c23edf8a5b2b12b7f4c5ea35a5ff223478332125041f21f6d3f`. Attempts 1 and 2 failed and are recorded on #3441; their fixes are `4899dcb9a`, `b1b3c5a61` and `d014b2dc8`. The witness is run again on the final head before T034 freezes the contract.
 - [ ] T034 Freeze `contracts/recovery.md` as Preview after T032 and T033 pass. Write its SemVer section from the actual delivered surface, set the spec to Implemented, write the acceptance-to-evidence table, and update `quickstart.md`.
 - [ ] T035 Open or update the draft PR. Attach the gate and causal evidence, and keep the `pr:` receipt and the Program, M2 and Project checkpoints current without claiming Done.
 - [ ] T036 Converge independent non-author review over the whole PR diff and the issue and PR threads. Lenses: correctness, standards, and acceptance against this spec. Keep the review rounds on the PR. Mark the PR ready and request Code Review.

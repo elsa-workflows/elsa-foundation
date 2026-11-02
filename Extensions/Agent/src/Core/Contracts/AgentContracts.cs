@@ -72,7 +72,9 @@ public interface IAgentSessionPolicyService
 
 /// <summary>
 /// Preview replacement contract: the record of every session aggregate behind the default session owner. At most
-/// one implementation may be registered; replace the default with <c>services.Replace(...)</c>.
+/// one implementation may be registered; select a replacement with
+/// <c>services.SelectAgentSessionRecordStore(...)</c> (<c>Elsa.Agent.Extensions.AgentPersistenceSelection</c>), which
+/// replaces only the process-local default and refuses a second selection.
 /// </summary>
 /// <remarks>
 /// The default session owner writes through this store before it applies a change in memory, and hydrates a
@@ -242,11 +244,23 @@ public interface IAgentFeedbackService
     Task<AgentFeedback> AddAsync(AgentFeedback feedback, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Replacement contract, at most one: the append facet of the audit store. The sink, <see cref="IAgentAuditReader"/>
+/// and <see cref="IAgentAuditOwnership"/> are one store's facets and are replaced together, with
+/// <c>services.SelectAgentAuditStore(...)</c> (<c>Elsa.Agent.Extensions.AgentPersistenceSelection</c>); a second
+/// registration of any facet fails the Agent registration validator.
+/// </summary>
 public interface IAgentAuditSink
 {
     Task EmitAsync(AgentAuditEvent auditEvent, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Replacement contract, at most one: the query facet of the audit store. It is replaced together with
+/// <see cref="IAgentAuditSink"/> and <see cref="IAgentAuditOwnership"/>, with <c>services.SelectAgentAuditStore(...)</c>
+/// (<c>Elsa.Agent.Extensions.AgentPersistenceSelection</c>); a second registration of any facet fails the Agent
+/// registration validator.
+/// </summary>
 public interface IAgentAuditReader
 {
     /// <summary>A trusted, unscoped read for in-process callers. It is not an authorization boundary.</summary>

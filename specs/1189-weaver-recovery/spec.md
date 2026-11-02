@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: Draft
+**Status**: In progress
 
 **Input**: [Feature #3441](https://github.com/elsa-workflows/elsa-foundation/issues/3441), M2 ([#3431](https://github.com/elsa-workflows/elsa-foundation/issues/3431)) of [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428). The owner authorizes autonomous delivery of the five acceptance criteria, the #3514 Code Review follow-through recorded on the issue, and the remaining M0–M5 roadmap. Prerequisite #3440 is verified Done ([closeout](https://github.com/elsa-workflows/elsa-foundation/issues/3440#issuecomment-6570028483)).
 

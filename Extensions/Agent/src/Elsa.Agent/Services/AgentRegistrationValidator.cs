@@ -19,12 +19,12 @@ internal sealed class AgentRegistrationValidator(IServiceCollection registration
             throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentToolAuthorizer).FullName}' requires exactly one registration, but found {count}. Use services.Replace(...) to replace its existing implementation.");
         count = registrations.Count(descriptor => descriptor.ServiceType == typeof(IAgentSessionRecordStore));
         if (count > 1)
-            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentSessionRecordStore).FullName}' allows at most one registration, but found {count}. Use services.Replace(...) to replace its existing implementation.");
+            throw new InvalidOperationException($"Agent replacement contract '{typeof(IAgentSessionRecordStore).FullName}' allows at most one registration, but found {count}. Select a replacement with services.SelectAgentSessionRecordStore(...), which replaces the existing default.");
         foreach (var contract in AuditTrio)
         {
             count = registrations.Count(descriptor => descriptor.ServiceType == contract);
             if (count > 1)
-                throw new InvalidOperationException($"Agent replacement contract '{contract.FullName}' allows at most one registration, but found {count}. Replace the audit sink, reader and ownership together with services.Replace(...).");
+                throw new InvalidOperationException($"Agent replacement contract '{contract.FullName}' allows at most one registration, but found {count}. Select the audit sink, reader and ownership together with services.SelectAgentAuditStore(...), which replaces the three defaults at once.");
         }
     }
 
