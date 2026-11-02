@@ -84,6 +84,120 @@ describe("notification controller", () => {
     expect(controller.getEntries()[0]).toMatchObject({ message: "More detail", read: true, toasting: false });
   });
 
+  it("update into an outcome level from any other level re-raises", () => {
+    const controller = createController();
+    const handle = controller.api.notify({ level: "info", title: "Queued" });
+    controller.hideToast(handle.id);
+    controller.markRead(handle.id);
+
+    handle.update({ level: "warning", title: "Slow" });
+    expect(controller.getEntries()[0]).toMatchObject({ level: "warning", read: false, toasting: true });
+
+    controller.hideToast(handle.id);
+    controller.markRead(handle.id);
+    handle.update({ level: "warning", title: "Still slow" });
+    expect(controller.getEntries()[0]).toMatchObject({ title: "Still slow", read: true, toasting: false });
+  });
+
+  it("a terminal update re-raises an entry another tab turned into a warning", () => {
+    const controller = createController();
+    const live = controller.api.notify({ level: "progress", title: "Importing" });
+    controller.replaceEntries(controller.getEntries().map(e => ({ ...e, level: "warning" as const, read: true })));
+    controller.hideToast(live.id);
+
+    live.update({ level: "success", title: "Imported" });
+
+    expect(controller.getEntries()[0]).toMatchObject({ level: "success", read: false, toasting: true });
+  });
+
+  it("update clears an optional field passed as undefined and keeps an omitted one", () => {
+    const controller = createController();
+    const handle = controller.api.notify({ level: "progress", title: "Importing", message: "3 of 10", link: { label: "Open", path: "/a" } });
+
+    handle.update({ title: "Importing more" });
+    expect(controller.getEntries()[0]).toMatchObject({ message: "3 of 10", link: { label: "Open", path: "/a" } });
+
+    handle.update({ level: "success", title: "Imported", message: undefined });
+    const [updated] = controller.getEntries();
+    expect(updated).toMatchObject({ level: "success", title: "Imported", link: { label: "Open", path: "/a" } });
+    expect("message" in updated).toBe(false);
+  });
+
+  it("level and title cannot be cleared", () => {
+    const controller = createController();
+    const handle = controller.api.notify({ level: "info", title: "Kept" });
+
+    handle.update({ level: undefined, title: undefined });
+
+    expect(controller.getEntries()[0]).toMatchObject({ level: "info", title: "Kept" });
+  });
+
+  it("unknown levels are shown as info", () => {
+    const controller = createController();
+    const handle = controller.api.notify({ level: "critical" as never, title: "From a newer module" });
+    expect(controller.getEntries()[0].level).toBe("info");
+
+    handle.update({ level: "fatal" as never });
+    expect(controller.getEntries()[0].level).toBe("info");
+  });
+
+  it("keeps only the newest fifty entries in memory", () => {
+    const storage = createFakeStorage();
+    const controller = createController({ storage });
+    controller.setScope("s");
+
+    for (let index = 0; index < 55; index++) controller.api.notify({ level: "info", title: `n${index}` });
+
+    expect(controller.getEntries()).toHaveLength(50);
+    expect(controller.getEntries()[0].title).toBe("n54");
+    expect(controller.getEntries()[49].title).toBe("n5");
+    expect(storage.save).toHaveBeenLastCalledWith("s", controller.getEntries());
+  });
+
+  it("clearAction removes an action so it cannot run again", () => {
+    const controller = createController();
+    const handle = controller.api.notify({ level: "success", title: "Deleted", action: { label: "Restore", run: vi.fn() } });
+
+    controller.clearAction(handle.id);
+
+    expect(controller.getEntries()[0].action).toBeUndefined();
+    expect(() => controller.clearAction("missing")).not.toThrow();
+  });
+
+  it("suppressing toasts hides them, keeps new entries quiet and does not resurrect them", () => {
+    const controller = createController();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    const shown = controller.api.notify({ level: "error", title: "Shown" });
+
+    controller.setToastsSuppressed(true);
+    expect(controller.getToastsSuppressed()).toBe(true);
+    expect(controller.getEntries()[0]).toMatchObject({ id: shown.id, toasting: false });
+
+    const quiet = controller.api.notify({ level: "success", title: "While open" });
+    const working = controller.api.notify({ level: "progress", title: "Working" });
+    working.update({ level: "error", title: "Failed" });
+    expect(controller.getEntries()[0]).toMatchObject({ id: working.id, read: false, toasting: false });
+    expect(controller.getEntries().find(e => e.id === quiet.id)).toMatchObject({ read: false, toasting: false });
+
+    controller.setToastsSuppressed(false);
+    expect(controller.getEntries().every(e => !e.toasting)).toBe(true);
+    controller.api.notify({ level: "info", title: "After close" });
+    expect(controller.getEntries()[0]).toMatchObject({ title: "After close", toasting: true });
+  });
+
+  it("toggling suppression notifies subscribers even without toasts", () => {
+    const controller = createController();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    controller.setToastsSuppressed(true);
+    controller.setToastsSuppressed(true);
+    controller.setToastsSuppressed(false);
+
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
   it("update and dismiss after dismissal are no-ops", () => {
     const controller = createController();
     const handle = controller.api.notify({ level: "info", title: "gone" });
@@ -121,6 +235,32 @@ describe("notification controller", () => {
 
     expect(controller.getEntries()).toHaveLength(1);
     expect(controller.getEntries()[0]).toMatchObject({ level: "error", title: "boom" });
+  });
+
+  it("track keeps the result and falls back when the success formatter throws", async () => {
+    const controller = createController();
+
+    const result = await controller.api.track(Promise.resolve(42), {
+      progress: "Working",
+      success: () => { throw new Error("formatter"); },
+      error: "Failed"
+    });
+
+    expect(result).toBe(42);
+    expect(controller.getEntries()[0]).toMatchObject({ level: "success", title: "Operation finished" });
+  });
+
+  it("track keeps the original rejection and falls back when the error formatter throws", async () => {
+    const controller = createController();
+    const err = new Error("boom");
+
+    await expect(controller.api.track(Promise.reject(err), {
+      progress: "Working",
+      success: "Done",
+      error: () => { throw new Error("formatter"); }
+    })).rejects.toBe(err);
+
+    expect(controller.getEntries()[0]).toMatchObject({ level: "error", title: "Operation failed" });
   });
 
   it("entries published before a scope are kept when the scope is set", () => {
