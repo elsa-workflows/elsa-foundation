@@ -37,12 +37,18 @@ public static class AgentApi
             null, typeof(AgentApiResponse<AgentBootstrapResponse>), HandleBootstrapAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions", "CreateSession", AgentPermissionKeys.Use,
             typeof(AgentCreateSessionRequest), typeof(AgentApiResponse<AgentCreateSessionResponse>), HandleCreateSessionAsync);
+        Map(api, "GET", $"{RoutePrefix}/sessions", "ListSessions", AgentPermissionKeys.Use,
+            typeof(AgentSessionListQueryRequest), typeof(AgentApiResponse<AgentSessionListResponse>), HandleListSessionsAsync);
         Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}", "GetSession", AgentPermissionKeys.Use,
             typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<AgentSessionDetailsResponse>), HandleGetSessionAsync);
         Map(api, "PUT", $"{RoutePrefix}/sessions/{{sessionId}}/autonomy", "ChangeAutonomy", AgentPermissionKeys.Use,
             typeof(AgentSessionAutonomyRequest), typeof(AgentApiResponse<AgentSessionPolicyResponse>), HandleChangeAutonomyAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/messages", "PostMessage", AgentPermissionKeys.Use,
             typeof(AgentMessageRequest), typeof(AgentApiResponse<AgentMessageAcceptedResponse>), HandlePostMessageAsync);
+        Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/messages/{{messageId}}/withdraw", "WithdrawMessage", AgentPermissionKeys.Use,
+            typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<AgentMessageViewModelResponse>), HandleWithdrawMessageAsync);
+        Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}/proposals", "ListSessionProposals", AgentPermissionKeys.Use,
+            typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<IReadOnlyCollection<AgentActionProposal>>), HandleListProposalsAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/turns/{{turnId}}/cancel", "CancelTurn", AgentPermissionKeys.Use,
             typeof(AgentTurnCancelRequest), typeof(AgentApiResponse<AgentTurnCancelResponse>), HandleCancelTurnAsync);
         Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}/stream", "StreamSession", AgentPermissionKeys.Use,
@@ -57,6 +63,8 @@ public static class AgentApi
             typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentProposalExecutionResult>), HandleExecuteProposalAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/client-invocations/{{invocationId}}/acknowledgements", "AcknowledgeClientInvocation", AgentPermissionKeys.Proposals,
             typeof(AgentClientAcknowledgement), typeof(AgentApiResponse<AgentProposalExecutionResult>), HandleClientAcknowledgementAsync);
+        Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/client-invocations/{{invocationId}}/resolution", "ResolveClientInvocation", AgentPermissionKeys.Proposals,
+            typeof(AgentClientInvocationResolutionRequest), typeof(AgentApiResponse<AgentActionProposal>), HandleClientResolutionAsync);
         Map(api, "GET", $"{RoutePrefix}/audit", "Audit", AgentPermissionKeys.Audit,
             typeof(AgentAuditQueryRequest), typeof(AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>), HandleAuditAsync);
     }
@@ -79,7 +87,7 @@ public static class AgentApi
             // The published documents accept any media type on the route- and query-bound reads,
             // exactly as the hand-written mapper declared them.
             builder.WithMetadata(new AcceptsMetadata(
-                requestType == typeof(AgentSessionRouteRequest) || requestType == typeof(AgentAuditQueryRequest)
+                requestType == typeof(AgentSessionRouteRequest) || requestType == typeof(AgentAuditQueryRequest) || requestType == typeof(AgentSessionListQueryRequest)
                     ? ["*/*", "application/json"]
                     : ["application/json"], requestType, false));
         }
@@ -182,7 +190,11 @@ public static class AgentApi
         var mode = metadata.TryGetValue("mode", out var metadataMode) && !string.IsNullOrWhiteSpace(metadataMode)
             ? metadataMode
             : request.Mode;
-        var session = await sessions.CreateAsync(new(tenantId, actorId, conversationId, providers.Active.ProviderId, mode, title, policy, sessionMetadata), context.RequestAborted);
+        var session = await sessions.CreateAsync(new(tenantId, actorId, conversationId, providers.Active.ProviderId, mode, title, policy, sessionMetadata)
+        {
+            Workspace = string.IsNullOrWhiteSpace(request.Workspace) ? null : request.Workspace,
+            ContinuedFrom = string.IsNullOrWhiteSpace(request.ContinuedFrom) ? null : request.ContinuedFrom
+        }, context.RequestAborted);
         await providers.Active.CreateSessionAsync(session, context.RequestAborted);
         // Routes and presentation metadata never establish an authoritative resource target.
         IReadOnlyCollection<AgentContextAttachment> attachments = [];
@@ -192,6 +204,47 @@ public static class AgentApi
         };
         await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Success(created), AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse);
     }
+
+    /// <summary>
+    /// Preview: the caller's own sessions. The owning store filters by the authenticated actor and tenant before it orders
+    /// and limits; the workspace only narrows the result. Nothing in the request can select another owner.
+    /// </summary>
+    private static async Task HandleListSessionsAsync(HttpContext context)
+    {
+        var take = ParseTake(context.Request.Query["take"].FirstOrDefault(), out var bindingError);
+        if (bindingError is not null)
+        {
+            await WriteBindingErrorAsync(context, "take", bindingError);
+            return;
+        }
+        var actorId = AgentEndpointActor.Resolve(context.User);
+        var tenantId = AgentEndpointActor.ResolveTenant(context.User);
+        if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(tenantId))
+        {
+            await WriteSessionListFailureAsync(context, new("agent.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403));
+            return;
+        }
+        var workspace = context.Request.Query["workspace"].FirstOrDefault();
+        var query = new AgentSessionOwnerQuery(actorId, tenantId, string.IsNullOrWhiteSpace(workspace) ? null : workspace,
+            Math.Clamp(take ?? AgentSessionOwnerQuery.DefaultTake, 1, AgentSessionOwnerQuery.MaxTake), context.Request.Query["before"].FirstOrDefault());
+        AgentSessionListResult result;
+        try { result = await context.RequestServices.GetRequiredService<IAgentSessionService>().ListOwnedAsync(query, context.RequestAborted); }
+        catch (ArgumentException) when (query.Before is not null)
+        {
+            await WriteBindingErrorAsync(context, "before", "The cursor is not one this server issued.");
+            return;
+        }
+        if (!result.Succeeded || result.Page is not { } page)
+        {
+            await WriteSessionListFailureAsync(context, new("agent.session.query_unsupported", "The installed agent session service cannot answer owner-scoped session queries.", 409));
+            return;
+        }
+        await WriteAsync(context, AgentApiResponse<AgentSessionListResponse>.Success(new(page.Items.Select(x => x.ToResponse()).ToList(), page.Next)),
+            AgentJsonContext.Default.AgentApiResponseAgentSessionListResponse);
+    }
+
+    private static Task WriteSessionListFailureAsync(HttpContext context, AgentError error) =>
+        WriteAsync(context, AgentApiResponse<AgentSessionListResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentSessionListResponse, error.StatusCode);
 
     private static async Task HandleGetSessionAsync(HttpContext context)
     {
@@ -426,6 +479,35 @@ public static class AgentApi
         await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(message.ToAcceptedResponse(warnings)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
     }
 
+    /// <summary>Preview: the session's proposals with their statuses, previews and deadlines, for the session's owner only.</summary>
+    private static async Task HandleListProposalsAsync(HttpContext context)
+    {
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(),
+            context.User, RouteValue(context, "sessionId"), context.RequestAborted);
+        var result = error is null
+            ? await context.RequestServices.GetRequiredService<IAgentProposalService>().ListAsync(session!.Id, context.RequestAborted)
+            : new(null, error);
+        await WriteAsync(context, result.Succeeded
+                ? AgentApiResponse<IReadOnlyCollection<AgentActionProposal>>.Success(result.Value!.ToList())
+                : AgentApiResponse<IReadOnlyCollection<AgentActionProposal>>.Failure(result.Error!),
+            AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
+    }
+
+    /// <summary>
+    /// Preview: withdraws the owner's prompt that never started (Pending to Cancelled, reason <c>withdrawn</c>); refused
+    /// with 409 <c>agent.message.not_pending</c> once it started, or while a turn is registered for the session.
+    /// </summary>
+    private static async Task HandleWithdrawMessageAsync(HttpContext context)
+    {
+        var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, context.User, RouteValue(context, "sessionId"), context.RequestAborted);
+        var result = error is null ? await sessions.WithdrawMessageAsync(session!.Id, RouteValue(context, "messageId"), context.RequestAborted) : new(null, error);
+        await WriteAsync(context, result.Succeeded
+                ? AgentApiResponse<AgentMessageViewModelResponse>.Success(result.Value!.ToViewModel())
+                : AgentApiResponse<AgentMessageViewModelResponse>.Failure(result.Error!),
+            AgentJsonContext.Default.AgentApiResponseAgentMessageViewModelResponse, result.Succeeded ? 200 : result.Error!.StatusCode);
+    }
+
     private static async Task HandleCancelTurnAsync(HttpContext context)
     {
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentTurnCancelRequest);
@@ -630,6 +712,29 @@ public static class AgentApi
             RouteValue(context, "invocationId"), session!.ActorId, request, context.RequestAborted);
         await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!) : AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!),
             AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, result.Succeeded ? 200 : result.Error!.StatusCode);
+    }
+
+    /// <summary>
+    /// Preview: the owner's statement about an uncertain client operation. It is recorded on the proposal, never as a
+    /// receipt, and releases only that operation's claim; repeating the same statement is idempotent.
+    /// </summary>
+    private static async Task HandleClientResolutionAsync(HttpContext context)
+    {
+        var request = await ReadAsync(context, AgentJsonContext.Default.AgentClientInvocationResolutionRequest);
+        if (request is null)
+            return;
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(),
+            context.User, RouteValue(context, "sessionId"), context.RequestAborted);
+        AgentResult<AgentActionProposal> result;
+        if (error is not null)
+            result = new(null, error);
+        else if (AgentApiMapping.ParseResolutionClaim(request.Claim) is not { } claim)
+            result = AgentResult<AgentActionProposal>.Failure("agent.invocation.resolution_invalid", "Send claim applied, notApplied or unknown.", 400);
+        else
+            result = await context.RequestServices.GetRequiredService<IAgentProposalService>().ResolveClientInvocationAsync(session!.Id,
+                RouteValue(context, "invocationId"), session.ActorId, claim, context.RequestAborted);
+        await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentActionProposal>.Success(result.Value!) : AgentApiResponse<AgentActionProposal>.Failure(result.Error!),
+            AgentJsonContext.Default.AgentApiResponseAgentActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     private static async Task HandleAuditAsync(HttpContext context)

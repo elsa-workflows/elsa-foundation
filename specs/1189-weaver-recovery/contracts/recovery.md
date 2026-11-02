@@ -9,7 +9,11 @@ the complete package proof pass with durable recovery configured, as the prior l
 | --- | --- | --- |
 | `IAgentSessionRecordStore` | Replacement contract, at most one, Preview | Aggregate reads and writes for one session: hydrate, write a transition with an owner and fence check that also extends the lease, take ownership, release the lease, insert unique keys, resolve a proposal to its session, list owned sessions. The default in-memory implementation matches today's behaviour. A second registration fails `AgentRegistrationValidator` |
 | `IAgentTurnStateStore` | Existing contract, **changed** | Becomes `SaveAsync`, `FindAsync` and `RemoveAsync`. A Major change, accepted pre-GA under ADR 0080 D4. A replacement keeps autonomy support, but durable recovery is Unsupported for that composition |
-| `IAgentSessionService.ListOwnedAsync(AgentSessionOwnerQuery)` | Additive, Preview | Defaults to Unsupported. Filters by actor and tenant, then workspace, then orders and limits |
+| `IAgentSessionService.ListOwnedAsync(AgentSessionOwnerQuery)` | Additive, Preview | Defaults to Unsupported (`AgentSessionListResult`). Filters by actor and tenant, then workspace, then orders and limits |
+| `IAgentSessionService.FindOwnerAsync`, `IAgentProposalService.FindSessionIdAsync`, `IAgentSessionRecordStore.FindOwnerAsync` (`AgentSessionOwner`) | Additive, Preview, with defaults | The plain owner columns and the proposal-to-session lookup that authorization reads before anything hydrates, takes ownership or settles |
+| `IAgentSessionService.WithdrawMessageAsync`, `IAgentProposalService.ListAsync`, `IAgentProposalService.ResolveClientInvocationAsync` | Additive, Preview | Default to a refusal (`agent.message.withdraw_unsupported`, `agent.proposal.query_unsupported`, `agent.invocation.resolution_unsupported`) |
+| `AgentActionProposal.OwnerResolution` (`AgentOwnerResolution`, `AgentOwnerResolutionClaim`) | Additive, Preview | The owner's statement; omitted from JSON when absent |
+| `AgentProposalRecord.Version`, `AgentSessionRecordOutcome.VersionConflict` | Additive, Preview | Every proposal record write names the version it read; the store refuses a mismatch |
 | `AgentSessionOwnerQuery`, `AgentSessionSummary` | Additive models | Actor, tenant, workspace, take (at most 100) and a `before` cursor. The summary holds id, title, status, updatedAt, expiresAt, pendingReviewCount and recoveryState |
 | `AgentMessage.StatusReason` | Additive | `interrupted`, `withdrawn` or `user-stop` for Cancelled |
 | Audit sink, reader and ownership | Existing contracts, replaced together by the EF feature | A duplicate of the trio fails the registration validator. `settledBy` is a metadata key |
@@ -20,10 +24,11 @@ the complete package proof pass with durable recovery configured, as the prior l
 
 | Route | Success | Refusals |
 | --- | --- | --- |
-| `GET /_elsa/agent/sessions?workspace=&take=&before=` | 200 `{ items: AgentSessionSummary[], next }` | 403 `agent.actor.unresolved`; 409 `agent.session.query_unsupported` |
+| `GET /_elsa/agent/sessions?workspace=&take=&before=` | 200 `{ items: AgentSessionSummary[], next }`; `take` defaults to 20 and is clamped to 1..100 | 400 for a `take` or `before` this server did not issue; 403 `agent.actor.unresolved`; 409 `agent.session.query_unsupported` |
 | `GET /_elsa/agent/sessions/{id}/proposals` | 200 proposals with status, preview and deadline | Shared session-authorization 404 and 403 |
-| `POST /_elsa/agent/sessions/{id}/messages/{messageId}/withdraw` | 200 message, Cancelled with reason `withdrawn` | 404 and 403; 409 `agent.message.not_pending` |
-| `POST /_elsa/agent/sessions/{id}/client-invocations/{invocationId}/resolution` `{ claim: applied \| notApplied \| unknown }` | 200 proposal with `ownerResolution`; the claim is released | 404 and 403; 409 `agent.invocation.not_uncertain` |
+| `POST /_elsa/agent/sessions/{id}/messages/{messageId}/withdraw` | 200 message, Cancelled with reason `withdrawn` | 404 and 403; 404 `agent.message.not_found`; 409 `agent.message.not_pending` |
+| `POST /_elsa/agent/sessions/{id}/client-invocations/{invocationId}/resolution` `{ claim: applied \| notApplied \| unknown }` | 200 proposal with `ownerResolution`; the claim is released | 404 and 403; 400 `agent.invocation.resolution_invalid`; 404 `agent.invocation.not_found`; 409 `agent.invocation.not_uncertain`; 409 `agent.invocation.resolution_conflict` for a different statement than the recorded one |
+| `POST /_elsa/agent/sessions/{id}/turns/{turnId}/cancel` (existing) | As today; the stopped prompt records `StatusReason=user-stop` (a dropped stream records none) | As today |
 | `POST /_elsa/agent/proposals/{id}/execute` (existing) | As today | Adds 409 `agent.proposal.policy_stale` when the stamped revision differs; Expired once the deadline has passed |
 | Any route on a session another process holds a live lease on | n/a | 409 `agent.session.owned_elsewhere`, retryable, with a retry hint |
 | Any route on a session this process lost during the call | n/a | 409 `agent.session.ownership_lost` |

@@ -25,7 +25,8 @@ public sealed class AgentRecoveryAuthorizationTests
     private static readonly TimeSpan PastPreparedDeadline = TimeSpan.FromMinutes(6);
 
     /// <summary>Plain owner reads that authorization may perform; anything else would hydrate, take over or write.</summary>
-    private static readonly string[] AuthorizationReads = [nameof(IAgentSessionRecordStore.FindProposalSessionAsync), RecordingRecordStore.FindOwner];
+    private static readonly string[] AuthorizationReads =
+        [nameof(IAgentSessionRecordStore.FindProposalSessionAsync), RecordingRecordStore.FindOwner, nameof(IAgentSessionRecordStore.ListOwnedAsync)];
 
     public static TheoryData<string, string?, string?> ForeignWork()
     {
@@ -67,6 +68,13 @@ public sealed class AgentRecoveryAuthorizationTests
                 new Dictionary<string, string> { ["proposalId"] = proposal.Id }, new { revision = proposal.BaseRevision });
             AgentRecoveryApi.AssertFailure(status, text, 403, "agent.proposal.forbidden");
         }
+
+        // The caller's own session list never shows the session.
+        var (listed, listedBody) = await AgentRecoveryApi.SendAsync(host, "ListSessions", foreign);
+        if (actor is null)
+            AgentRecoveryApi.AssertFailure(listed, listedBody, 403, "agent.actor.unresolved");
+        else
+            Assert.Empty(System.Text.Json.JsonDocument.Parse(listedBody).RootElement.GetProperty("data").GetProperty("items").EnumerateArray());
 
         Assert.All(store.Calls, call => Assert.Contains(call, AuthorizationReads));
         var after = (await store.Inner.LoadAsync(session.Id))!;
@@ -131,6 +139,10 @@ public sealed class AgentRecoveryAuthorizationTests
             new AgentClientAcknowledgement(new("client-1", "generation-1"), proposal.PreparedInvocation.ApprovalDigest, AgentClientOutcome.Applied,
                 "Foreign report.", null, null), null);
         yield return ("Audit", new Dictionary<string, string>(), null, "?sessionId=" + session.Id);
+        yield return ("ListSessionProposals", route, null, null);
+        yield return ("WithdrawMessage", new Dictionary<string, string>(route) { ["messageId"] = "message-1" }, null, null);
+        yield return ("ResolveClientInvocation", new Dictionary<string, string>(route) { ["invocationId"] = proposal.PreparedInvocation.InvocationId },
+            new { claim = "applied" }, null);
     }
 
     /// <summary>

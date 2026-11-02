@@ -21,6 +21,9 @@ internal sealed class AgentCamelCaseEnumConverter : JsonStringEnumConverter
 [JsonSerializable(typeof(AgentApiResponse<AgentActionProposal>))]
 [JsonSerializable(typeof(AgentApiResponse<AgentProposalExecutionResult>))]
 [JsonSerializable(typeof(AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>))]
+[JsonSerializable(typeof(AgentApiResponse<AgentSessionListResponse>))]
+[JsonSerializable(typeof(AgentApiResponse<IReadOnlyCollection<AgentActionProposal>>))]
+[JsonSerializable(typeof(AgentApiResponse<AgentMessageViewModelResponse>))]
 [JsonSerializable(typeof(AgentBindingErrorResponse))]
 [JsonSerializable(typeof(AgentCreateSessionRequest))]
 [JsonSerializable(typeof(AgentMessageRequest))]
@@ -30,6 +33,8 @@ internal sealed class AgentCamelCaseEnumConverter : JsonStringEnumConverter
 [JsonSerializable(typeof(AgentProposalDecisionRequest))]
 [JsonSerializable(typeof(AgentClientAcknowledgement))]
 [JsonSerializable(typeof(AgentAuditQueryRequest))]
+[JsonSerializable(typeof(AgentSessionListQueryRequest))]
+[JsonSerializable(typeof(AgentClientInvocationResolutionRequest))]
 public partial class AgentJsonContext : JsonSerializerContext;
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(AgentCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]

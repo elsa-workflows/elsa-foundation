@@ -29,6 +29,27 @@ public interface IAgentSessionService
     /// </summary>
     async Task<AgentSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
         => await FindAsync(sessionId, cancellationToken) is { } session ? new(session.ActorId, session.TenantId) : null;
+
+    /// <summary>
+    /// Preview: the sessions of the query's actor and tenant, narrowed to its workspace, newest first, at most
+    /// <see cref="AgentSessionOwnerQuery.Take"/>, older than its cursor. The owning store filters by owner before it orders
+    /// and limits; there is no global read. The default refuses with <see cref="AgentSessionQueryOutcome.Unsupported"/>,
+    /// so a replacement that predates this query never falls back to scanning sessions. Implementations throw
+    /// <see cref="ArgumentException"/> for a blank actor or tenant, a limit outside 1..<see cref="AgentSessionOwnerQuery.MaxTake"/>
+    /// and a cursor they did not issue.
+    /// </summary>
+    Task<AgentSessionListResult> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentSessionListResult.Unsupported);
+
+    /// <summary>
+    /// Preview: withdraws an accepted prompt that never started: a compare-and-set from Pending to Cancelled with reason
+    /// <c>withdrawn</c>, refused with <c>agent.message.not_pending</c> when the prompt is not Pending or a turn is
+    /// registered for the session, so a withdraw cannot lose to a concurrent start. A missing prompt is
+    /// <c>agent.message.not_found</c>. The default refuses with <c>agent.message.withdraw_unsupported</c>.
+    /// </summary>
+    Task<AgentResult<AgentMessage>> WithdrawMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<AgentMessage>.Failure("agent.message.withdraw_unsupported",
+            "The installed agent session service cannot withdraw prompts.", 409));
 }
 
 /// <summary>
@@ -186,6 +207,26 @@ public interface IAgentProposalService
     /// </summary>
     async Task<string?> FindSessionIdAsync(string proposalId, CancellationToken cancellationToken = default)
         => (await FindAsync(proposalId, cancellationToken))?.SessionId;
+
+    /// <summary>
+    /// Preview: the session's proposals with their current statuses, oldest first. The default refuses with
+    /// <c>agent.proposal.query_unsupported</c>.
+    /// </summary>
+    Task<AgentResult<IReadOnlyList<AgentActionProposal>>> ListAsync(string sessionId, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<IReadOnlyList<AgentActionProposal>>.Failure("agent.proposal.query_unsupported",
+            "The installed agent proposal service cannot list a session's proposals.", 409));
+
+    /// <summary>
+    /// Preview: records the owner's statement about a client-scope Uncertain operation on its proposal and releases only
+    /// that operation's claim. It is not a receipt; a later truthful receipt still reconciles the operation. Repeating
+    /// the same statement returns the proposal unchanged; a different statement is <c>agent.invocation.resolution_conflict</c>.
+    /// Any other operation is refused with <c>agent.invocation.not_uncertain</c>. The default refuses with
+    /// <c>agent.invocation.resolution_unsupported</c>.
+    /// </summary>
+    Task<AgentResult<AgentActionProposal>> ResolveClientInvocationAsync(string sessionId, string invocationId, string actorId,
+        AgentOwnerResolutionClaim claim, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<AgentActionProposal>.Failure("agent.invocation.resolution_unsupported",
+            "The installed agent proposal service cannot record an owner's resolution.", 409));
 }
 
 public interface IAgentStreamingService

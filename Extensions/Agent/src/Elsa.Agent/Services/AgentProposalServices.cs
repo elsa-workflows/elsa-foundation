@@ -408,6 +408,52 @@ internal sealed class InMemoryAgentProposalService(
         finally { gate.Release(); }
     }
 
+    /// <summary>The session's proposals after hydrating it, oldest first.</summary>
+    public async Task<AgentResult<IReadOnlyList<AgentActionProposal>>> ListAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (_owner is not null && !await _owner.HydrateSessionAsync(sessionId, cancellationToken))
+            return AgentResult<IReadOnlyList<AgentActionProposal>>.Failure("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
+        IReadOnlyList<AgentActionProposal> listed = store.Proposals.Values.Where(x => x.SessionId == sessionId)
+            .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray();
+        return AgentResult<IReadOnlyList<AgentActionProposal>>.Success(listed);
+    }
+
+    /// <summary>
+    /// Under the proposal gate: records the owner's statement on a client-scope Uncertain proposal in one awaited write
+    /// and releases that operation's claim; any paused turn awaiting it keeps its own Pause claim. The same statement again
+    /// is idempotent, also after a later receipt reconciled the operation.
+    /// </summary>
+    public async Task<AgentResult<AgentActionProposal>> ResolveClientInvocationAsync(string sessionId, string invocationId, string actorId,
+        AgentOwnerResolutionClaim claim, CancellationToken cancellationToken = default)
+    {
+        if (!Enum.IsDefined(claim))
+            return AgentResult<AgentActionProposal>.Failure("agent.invocation.resolution_invalid", "Send applied, notApplied or unknown.", 400);
+        if (!store.InvocationProposals.TryGetValue(invocationId, out var proposalId)
+            && (_owner is null || !await _owner.HydrateSessionAsync(sessionId, cancellationToken) || !store.InvocationProposals.TryGetValue(invocationId, out proposalId)))
+            return AgentResult<AgentActionProposal>.Failure("agent.invocation.not_found", "The retained invocation was not found.", 404);
+        var gate = Gate(proposalId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var access = await AccessAsync(proposalId, actorId, cancellationToken);
+            if (access.Error is { } error) return new(null, error);
+            var proposal = access.Proposal!;
+            if (proposal.SessionId != sessionId)
+                return AgentResult<AgentActionProposal>.Failure("agent.invocation.not_found", "The retained invocation was not found.", 404);
+            if (proposal.OwnerResolution is { } recorded)
+                return recorded.Claim == claim ? AgentResult<AgentActionProposal>.Success(proposal)
+                    : AgentResult<AgentActionProposal>.Failure("agent.invocation.resolution_conflict", "A different statement is already recorded for this operation.", 409);
+            if (proposal.Status != AgentActionProposalStatus.Uncertain
+                || proposal.PreparedInvocation?.ExecutionLocation != AgentExecutionLocation.ClientWorkingState)
+                return AgentResult<AgentActionProposal>.Failure("agent.invocation.not_uncertain", "Only an uncertain client operation can be resolved by its owner.", 409);
+            var now = clock.GetUtcNow();
+            var resolved = proposal with { OwnerResolution = new(claim, actorId, now), UpdatedAt = now };
+            await TransitionAsync(resolved);
+            return AgentResult<AgentActionProposal>.Success(resolved);
+        }
+        finally { gate.Release(); }
+    }
+
     public async Task<AgentToolResult?> FindResultAsync(string proposalId, CancellationToken cancellationToken = default)
     {
         if (store.Results.TryGetValue(proposalId, out var available))
@@ -545,13 +591,15 @@ internal sealed class InMemoryAgentProposalService(
 
     /// <summary>
     /// Executed (validated receipt), Denied, Expired, Failed (refused), Cancelled and server-scope Uncertain settle.
-    /// AwaitingClient retains its claim; client-scope Uncertain retains it until the originating continuation consumes it.
+    /// AwaitingClient retains its claim; client-scope Uncertain retains it until the originating continuation consumes it
+    /// or its owner resolves it.
     /// </summary>
     internal static bool Settled(AgentActionProposal proposal) => proposal.Status switch
     {
         AgentActionProposalStatus.Executed or AgentActionProposalStatus.Denied or AgentActionProposalStatus.Expired
             or AgentActionProposalStatus.Failed or AgentActionProposalStatus.Cancelled => true,
-        AgentActionProposalStatus.Uncertain => proposal.PreparedInvocation?.ExecutionLocation != AgentExecutionLocation.ClientWorkingState,
+        AgentActionProposalStatus.Uncertain => proposal.PreparedInvocation?.ExecutionLocation != AgentExecutionLocation.ClientWorkingState
+            || proposal.OwnerResolution is not null,
         _ => false
     };
 

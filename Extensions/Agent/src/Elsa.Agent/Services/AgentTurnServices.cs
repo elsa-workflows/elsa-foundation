@@ -168,6 +168,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnToken);
         var token = linked.Token;
+        // Only the registry's own cancellation, which the cancel route requests, is the owner's stop; a dropped stream is not.
+        string? UserStopped() => turnToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested ? AgentMessageStatusReasons.UserStop : null;
         PreparedTurn? prepared = null;
         AgentMessage? preparationSource = null;
         var paused = false;
@@ -210,7 +212,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     var cancelledPrompt = (await boundary.CallAsync("list-cancelled-prompts", () => sessions.ListMessagesAsync(sessionId, CancellationToken.None)))
                         .LastOrDefault(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending);
                     if (cancelledPrompt is not null)
-                        await boundary.CallAsync("cancel-prompt", () => sessions.SetMessageStatusAsync(sessionId, cancelledPrompt.Id, AgentMessageStatus.Cancelled, CancellationToken.None));
+                        await boundary.CallAsync("cancel-prompt", () => SetStoppedStatusAsync(sessionId, cancelledPrompt.Id, AgentMessageStatus.Cancelled, UserStopped()));
                 }
                 yield return Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, boundary.Call("read-turn-options", () => Math.Max(1, options.Value.MaxSteps), token)));
                 yield break;
@@ -633,10 +635,10 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         catch (Exception cause) { RecordCleanupFailure("remove-turn-state", cause); }
                         try
                         {
-                            await sessions.SetMessageStatusAsync(sessionId, source.Id,
+                            await SetStoppedStatusAsync(sessionId, source.Id,
                                 completed ? AgentMessageStatus.Completed : disclosureStop is not null ? AgentMessageStatus.Failed
                                     : token.IsCancellationRequested ? AgentMessageStatus.Cancelled : AgentMessageStatus.Failed,
-                                CancellationToken.None);
+                                UserStopped());
                         }
                         catch (Exception cause) { RecordCleanupFailure("set-source-status", cause); }
                     }
@@ -1232,6 +1234,12 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
     private static IReadOnlyList<AgentTurnMessage> Append(IReadOnlyList<AgentTurnMessage> history, AgentTurnMessage message) => [.. history, message];
     private static AgentStreamEvent Lifecycle(AgentStreamEventKind kind, object? payload, string? proposalId = null) => new(NewId(), kind, null, proposalId, null, DateTimeOffset.UtcNow, null, payload);
+    /// <summary>Records a turn's terminal prompt status; a Cancelled prompt the owner stopped records reason <c>user-stop</c>.</summary>
+    private Task SetStoppedStatusAsync(string sessionId, string messageId, AgentMessageStatus status, string? reason)
+        => _owner is not null && status == AgentMessageStatus.Cancelled && reason is not null
+            ? _owner.SetMessageStatusWithReasonAsync(sessionId, messageId, status, reason, CancellationToken.None)
+            : sessions.SetMessageStatusAsync(sessionId, messageId, status, CancellationToken.None);
+
     private static AgentStreamEvent Error(string code, string message, int status) => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, status), DateTimeOffset.UtcNow, AgentResultKind.Error);
 
     private sealed record PreparedTurn(AgentMessage? Source, IReadOnlyList<AgentTurnMessage> History,

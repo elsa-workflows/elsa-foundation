@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Agent.Core.Contracts;
 
 namespace Elsa.Agent.Core.Models;
@@ -349,7 +350,27 @@ public sealed record AgentActionProposal(
     /// or null when the installed services do not own policy revisions.
     /// </summary>
     public long? PolicyRevision { get; init; }
+    /// <summary>
+    /// Preview: the owner's statement about an uncertain client operation, or null when none was made. It is not a
+    /// receipt: a later truthful receipt still reconciles the operation and supersedes it, and the statement is kept.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentOwnerResolution? OwnerResolution { get; init; }
 }
+
+/// <summary>Preview: what the owner states about an uncertain client operation.</summary>
+public enum AgentOwnerResolutionClaim
+{
+    /// <summary>The owner states that the operation was applied.</summary>
+    Applied,
+    /// <summary>The owner states that the operation was not applied.</summary>
+    NotApplied,
+    /// <summary>The owner cannot tell whether the operation was applied.</summary>
+    Unknown
+}
+
+/// <summary>Preview: an owner's recorded statement about an uncertain client operation (<see cref="AgentActionProposal.OwnerResolution"/>).</summary>
+public sealed record AgentOwnerResolution(AgentOwnerResolutionClaim Claim, string ActorId, DateTimeOffset ResolvedAt);
 
 public sealed record AgentProposalExecutionResult(
     string ProposalId,
@@ -720,6 +741,23 @@ public sealed record AgentSessionSummaryPage(IReadOnlyList<AgentSessionSummary> 
 /// hydrates the session or takes its ownership.
 /// </summary>
 public sealed record AgentSessionOwner(string ActorId, string TenantId);
+
+/// <summary>Preview.</summary>
+public enum AgentSessionQueryOutcome
+{
+    /// <summary>The page holds the owner's sessions, already filtered, ordered and limited by the owning store.</summary>
+    Succeeded,
+    /// <summary>The installed session service cannot answer owner-scoped session queries. Nothing is returned.</summary>
+    Unsupported
+}
+
+/// <summary>Preview: the outcome of an owner-scoped session list query.</summary>
+public sealed record AgentSessionListResult(AgentSessionQueryOutcome Outcome, AgentSessionSummaryPage? Page)
+{
+    public static AgentSessionListResult Unsupported { get; } = new(AgentSessionQueryOutcome.Unsupported, null);
+
+    public bool Succeeded => Outcome == AgentSessionQueryOutcome.Succeeded;
+}
 
 /// <summary>
 /// Preview: an explicit provider outcome shown to the user as a <see cref="AgentStreamEventKind.Progress"/> event, such

@@ -210,6 +210,34 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         await CommitAsync(sessionId, () => false, row => PlanMessageStatus(row, messageId, null, status, null), cancellationToken);
     }
 
+    /// <summary>Sets one message's status and, for Cancelled, why it stopped (<see cref="AgentMessageStatusReasons"/>).</summary>
+    internal Task SetMessageStatusWithReasonAsync(string sessionId, string messageId, AgentMessageStatus status, string? reason,
+        CancellationToken cancellationToken = default)
+        => CommitAsync(sessionId, () => false, row => PlanMessageStatus(row, messageId, null, status, reason), cancellationToken);
+
+    /// <summary>
+    /// Withdraws a prompt that never started. Under the session write gate, the prompt must still be Pending and no turn may
+    /// be registered for the session: a registered turn may be about to start it, and a start's own compare-and-set from
+    /// Pending cannot interleave with this one. The prompt becomes Cancelled with reason <c>withdrawn</c> and its Prompt
+    /// claim is released.
+    /// </summary>
+    public Task<AgentResult<AgentMessage>> WithdrawMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
+        => CommitAsync<AgentResult<AgentMessage>>(sessionId,
+            () => AgentResult<AgentMessage>.Failure("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404), row =>
+            {
+                var message = row.Messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.Ordinal));
+                if (message is not { Role: AgentRole.User })
+                    return new(AgentResult<AgentMessage>.Failure("agent.message.not_found", $"Agent message '{messageId}' was not found in session '{sessionId}'.", 404));
+                if (message.Status != AgentMessageStatus.Pending || turns?.IsActive(row.Session.Id) == true)
+                    return new(AgentResult<AgentMessage>.Failure("agent.message.not_pending", "The prompt is not waiting to start, so it cannot be withdrawn.", 409));
+                var planned = PlanMessageStatus(row, messageId, AgentMessageStatus.Pending, AgentMessageStatus.Cancelled, AgentMessageStatusReasons.Withdrawn);
+                return new(AgentResult<AgentMessage>.Success(planned.Write!.Messages[0]), planned.Write, planned.Apply);
+            }, cancellationToken);
+
+    /// <summary>The record store's owner-scoped list; it filters by owner before it orders and limits, and decodes no payload.</summary>
+    public async Task<AgentSessionListResult> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
+        => new(AgentSessionQueryOutcome.Succeeded, await _store.ListOwnedAsync(query, cancellationToken));
+
     /// <summary>
     /// Compare-and-set of one message's status: changes it only while it still has <paramref name="expected"/>.
     /// False when the message is missing or another transition moved it first.
