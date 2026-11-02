@@ -103,7 +103,9 @@ public enum AgentAuditEventKind
     FeedbackReceived,
     ProviderDiagnostic,
     ModuleInteraction,
-    ToolInvoked
+    ToolInvoked,
+    /// <summary>Preview: the owner stated the outcome of an uncertain client operation. The statement is not a receipt.</summary>
+    ProposalResolved
 }
 
 public enum AgentStreamEventKind

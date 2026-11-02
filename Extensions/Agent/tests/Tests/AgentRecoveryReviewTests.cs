@@ -81,6 +81,31 @@ public sealed class AgentRecoveryReviewTests
     }
 
     [Fact]
+    public async Task The_owners_resolution_is_audited_once_with_the_operations_correlation_and_the_claim()
+    {
+        var client = new ProposalClientTool();
+        using var harness = new AgentRestartHarness(configure: services => services.AddSingleton<IAgentTool>(client));
+        var (session, proposal) = await AwaitingClientAsync(harness, client);
+        harness.Clock.Advance(TimeSpan.FromMinutes(6));
+        var prepared = proposal.PreparedInvocation!;
+
+        Assert.True((await harness.Host.Proposals.ResolveClientInvocationAsync(session.Id, prepared.InvocationId, session.ActorId,
+            AgentOwnerResolutionClaim.NotApplied)).Succeeded);
+        // An idempotent retry records nothing more.
+        Assert.True((await harness.Host.Proposals.ResolveClientInvocationAsync(session.Id, prepared.InvocationId, session.ActorId,
+            AgentOwnerResolutionClaim.NotApplied)).Succeeded);
+
+        var resolved = Assert.Single(await harness.Host.AuditAsync(session), x => x.Kind == AgentAuditEventKind.ProposalResolved);
+        Assert.Equal((session.Id, session.ActorId), (resolved.SessionId, resolved.ActorId));
+        Assert.Equal(proposal.Id, resolved.Metadata["proposalId"]);
+        Assert.Equal(prepared.InvocationId, resolved.Metadata["invocationId"]);
+        Assert.Equal(prepared.TurnId, resolved.Metadata["turnId"]);
+        Assert.Equal(prepared.ToolCallId, resolved.Metadata["toolCallId"]);
+        Assert.Equal("notApplied", resolved.Metadata["claim"]);
+        Assert.Equal(nameof(AgentActionProposalStatus.Uncertain), resolved.Metadata["status"]);
+    }
+
+    [Fact]
     public async Task An_invocation_of_another_owners_session_is_not_found_rather_than_forbidden()
     {
         var client = new ProposalClientTool();

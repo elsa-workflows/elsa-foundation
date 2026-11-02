@@ -476,6 +476,9 @@ internal sealed class InMemoryAgentProposalService(
             var now = clock.GetUtcNow();
             var resolved = proposal with { OwnerResolution = new(claim, actorId, now), UpdatedAt = now };
             await TransitionAsync(resolved, version);
+            await AuditAsync(resolved, AgentAuditEventKind.ProposalResolved, actorId,
+                "The owner stated the outcome of an uncertain client operation; the statement is not a receipt.", CancellationToken.None,
+                new Dictionary<string, string> { ["claim"] = ClaimName(claim) });
             return AgentResult<AgentActionProposal>.Success(resolved);
         }
         catch (AgentProposalConflictException) { return Conflict<AgentActionProposal>(); }
@@ -694,6 +697,14 @@ internal sealed class InMemoryAgentProposalService(
     private static readonly IReadOnlyDictionary<string, string> PendingClientDeadline = new Dictionary<string, string>
         { ["dispatch"] = "client", ["effect"] = "possible", ["deadline"] = "pending-client" };
     private static readonly IReadOnlyDictionary<string, string> PendingClientWithdrawn = new Dictionary<string, string> { ["dispatch"] = "client", ["effect"] = "possible" };
+
+    /// <summary>The owner's claim as the resolution route names it.</summary>
+    private static string ClaimName(AgentOwnerResolutionClaim claim) => claim switch
+    {
+        AgentOwnerResolutionClaim.Applied => "applied",
+        AgentOwnerResolutionClaim.NotApplied => "notApplied",
+        _ => "unknown"
+    };
 
     private SemaphoreSlim Gate(string proposalId) => store.Gates.GetOrAdd(proposalId, _ => new(1, 1));
     private static bool RevisionMatches(AgentActionProposal proposal, string? expected) => string.Equals(proposal.PreparedInvocation?.Target?.Revision ?? proposal.BaseRevision, expected, StringComparison.Ordinal);
