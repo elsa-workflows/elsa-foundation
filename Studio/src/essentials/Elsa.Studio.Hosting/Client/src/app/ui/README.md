@@ -98,7 +98,16 @@ owns the modal focus lifecycle.
 
 Use the injected `api.notifications` to publish action results. `notify({ level, title, message?,
 link?, action? })` shows a toast and records an entry in the Notification Center; `link.path` is a
-Studio route and `action` (for example Restore) is not persisted across a reload. It returns a
-handle with `update` and `dismiss`. `track(work, { progress, success, error })` wraps a long-running
-promise in one entry that updates in place. Load failures, stale data, validation errors and
-`Suspense` fallbacks stay inline; see the classification table in the module UI guide.
+Studio route and `action` (for example Restore) runs at most once and is not persisted across a
+reload. It returns a handle with `update` and `dismiss`. `update(patch)` leaves keys absent from the
+patch untouched and clears an optional key passed as `undefined` (`message: undefined`); moving the
+level into `success`, `error` or `warning` marks the entry unread and raises its toast again.
+`track(work, { progress, success, error })` wraps a long-running promise in one entry that updates
+in place and returns the original result or rejection. Load failures, stale data, validation errors
+and `Suspense` fallbacks stay inline; see the classification table in the module UI guide.
+
+`api.notifications` is optional on `ElsaStudioModuleApi`: hosts built against an older SDK do not
+provide it, so capture it with a guard and fall back to a no-op (or inline feedback) when it is
+missing. Modules only publish; reading, marking read and clearing belong to the host, and the
+controller's other members (`setScope`, `replaceEntries`, `hideToast`, `clearAction`,
+`setToastsSuppressed`, …) are host-only.

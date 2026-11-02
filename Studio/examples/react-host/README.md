@@ -59,6 +59,9 @@ then your theme overrides. The editor stylesheet is exported as
 `@elsa-workflows/studio-workflows`'s `register(api)` touches only:
 
 - `api.dialogs` — passed to the module's internal dialog wiring.
+- `api.notifications` — optional; captured for action results (moved, deleted, restored, …) on the
+  workflow definitions page. A host that does not provide it gets no action feedback there: the
+  module falls back to a no-op instead of an inline status line.
 - `api.featureAreas.add(...)` — registers one "Workflows" feature area with nav + routes.
 
 Registered route components then read `api.backend` / `api.ai` / editor registries at render

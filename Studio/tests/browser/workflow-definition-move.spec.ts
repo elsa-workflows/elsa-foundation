@@ -49,8 +49,10 @@ test("move result survives reload in the notification center", async ({ page }) 
   await expect(page.locator(".studio-toast").getByText("Moved 1 workflow definition", { exact: true })).toBeVisible();
 
   await page.reload();
+  await expect(page.getByRole("button", { name: "Notifications, 1 unread" })).toBeVisible();
+  await expect(page.locator(".studio-toast")).toHaveCount(0);
   await page.getByRole("button", { name: "Notifications, 1 unread" }).click();
-  await expect(page.getByText("Moved 1 workflow definition", { exact: true })).toBeVisible();
+  await expect(page.locator(".studio-notification-center").getByText("Moved 1 workflow definition", { exact: true })).toBeVisible();
 });
 
 test("a paged direct-folder projection rebases to page 1 after moving its page-2 row out", async ({ page }) => {
