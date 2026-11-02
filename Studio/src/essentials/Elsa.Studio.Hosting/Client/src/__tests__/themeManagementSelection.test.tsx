@@ -143,4 +143,27 @@ describe("theme management with an empty selectable default", () => {
     await update(() => root.render(page("visible")));
     expect(calls).toBe(loaded);
   });
+
+  it("does not repeat a Retry that is still loading when a background tab returns", async () => {
+    const custom = { ...cloneThemeDefinition(builtInThemeDefinitions[0]), id: "managed-theme", name: "Managed Theme", source: "custom", enabled: true, published: true };
+    const wire = { themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] };
+    let release = () => {};
+    const getJson = vi.fn()
+      .mockRejectedValueOnce(new Error("Theme Store unavailable"))
+      .mockImplementationOnce(() => new Promise(resolve => { release = () => resolve(wire); }))
+      .mockResolvedValue(wire);
+    const context = { http: { getJson: async () => wire } } as unknown as StudioEndpointContext;
+    const api = { host: { http: { getJson } }, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
+    const page = (mode: "visible" | "hidden") => <ThemeProvider storeContext={context}><React.Activity mode={mode}><ThemeBuilderPage api={api} /></React.Activity></ThemeProvider>;
+    await update(() => root.render(page("visible")));
+    const retry = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Retry"))!;
+    await update(() => retry.click());
+    expect(getJson).toHaveBeenCalledTimes(2);
+
+    await update(() => root.render(page("hidden")));
+    await update(() => root.render(page("visible")));
+    expect(getJson).toHaveBeenCalledTimes(2);
+    await update(() => release());
+    expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBeTruthy();
+  });
 });

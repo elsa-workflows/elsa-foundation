@@ -82,8 +82,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const loadingRef = useRef(false);
   useEffect(() => {
     if (storeRef.current || loadingRef.current) return;
-    loadingRef.current = true;
-    void loadStore().finally(() => { loadingRef.current = false; });
+    void loadStore();
   }, []);
 
   // Seed the draft only when the store or the selection changes, not when a returning tab mounts its
@@ -119,11 +118,16 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const optionalMode = mode === "dim" || mode === "high-contrast" ? mode : null;
 
   async function loadStore() {
-    await run(async () => {
-      const nextStore = await fetchThemeStore(api.host);
-      setStore(nextStore);
-      setSelectedThemeId(current => current || nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
-    }, "Theme Store refreshed.");
+    loadingRef.current = true;
+    try {
+      await run(async () => {
+        const nextStore = await fetchThemeStore(api.host);
+        setStore(nextStore);
+        setSelectedThemeId(current => current || nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
+      }, "Theme Store refreshed.");
+    } finally {
+      loadingRef.current = false;
+    }
   }
 
   async function persistDraft(nextDraft = draft) {
