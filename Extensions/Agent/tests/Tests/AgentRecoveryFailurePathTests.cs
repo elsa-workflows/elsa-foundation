@@ -64,6 +64,29 @@ public sealed class AgentRecoveryFailurePathTests
     }
 
     [Fact]
+    public async Task An_outcome_whose_write_committed_but_failed_returns_the_recorded_outcome_and_audits_it()
+    {
+        using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
+        var store = (FaultingRecordStore)harness.Store;
+        var host = harness.Host;
+        var session = await host.CreateAsync();
+        var proposal = (await host.Invoker.DispatchAsync(AgentRecoveryRestartTests.Call(session), session.Policy)).Proposal!;
+        Assert.True((await host.Proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        store.CommitThenThrowNextWrite(write => write.Proposals.Any(x => x.Proposal.Status == AgentActionProposalStatus.Executed));
+
+        var result = await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+
+        Assert.True(result.Value?.Executed, result.Value?.Status);
+        Assert.NotNull(result.Value!.ToolResult?.Receipt);
+        Assert.Equal(AgentActionProposalStatus.Executed, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
+        Assert.Single(await host.AuditAsync(session), x => x.Kind == AgentAuditEventKind.ProposalExecuted);
+        Assert.DoesNotContain(await host.AuditAsync(session), x => x.Metadata.GetValueOrDefault(AgentProposalRecovery.SettledBy) == AgentProposalRecovery.Recovery);
+        Assert.True((await host.Proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Value?.Executed);
+        Assert.Equal(AgentSessionPolicyOutcome.Succeeded, (await host.ProbeAsync(session)).Outcome);
+        Assert.Equal(1, harness.Module.Effects);
+    }
+
+    [Fact]
     public async Task An_unrecorded_outcome_that_cannot_be_settled_yet_is_settled_on_its_next_access()
     {
         using var harness = new AgentRestartHarness(clock => new FaultingRecordStore(new InMemoryAgentSessionRecordStore(clock)));
@@ -213,6 +236,10 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
     public void FailNextWrite(Func<AgentSessionRecordWrite, bool> condition) => FailNextWrites(condition, 1);
 
     private int _failures;
+    private Func<AgentSessionRecordWrite, bool>? _commitThenThrow;
+
+    /// <summary>The next write matching <paramref name="condition"/> is recorded, and then reported as failed (a timeout after commit).</summary>
+    public void CommitThenThrowNextWrite(Func<AgentSessionRecordWrite, bool> condition) => Volatile.Write(ref _commitThenThrow, condition);
 
     /// <summary>The next <paramref name="count"/> writes matching <paramref name="condition"/> throw and record nothing.</summary>
     public void FailNextWrites(Func<AgentSessionRecordWrite, bool> condition, int count)
@@ -241,20 +268,25 @@ internal sealed class FaultingRecordStore(IAgentSessionRecordStore inner) : IAge
         return hold;
     }
 
-    public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default)
+    public async Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default)
     {
+        if (Volatile.Read(ref _commitThenThrow) is { } committing && committing(write) && Interlocked.CompareExchange(ref _commitThenThrow, null, committing) == committing)
+        {
+            await inner.WriteAsync(write, cancellationToken);
+            throw new TimeoutException("The record store timed out after committing this write.");
+        }
         lock (this)
             if (_refuseWrite is { } refuse && refuse.Condition(write))
             {
                 _refuseWrite = null;
-                return Task.FromResult(new AgentSessionRecordResult(refuse.Outcome));
+                return new AgentSessionRecordResult(refuse.Outcome);
             }
         if (Volatile.Read(ref _failWrite) is { } condition && condition(write) && Interlocked.Decrement(ref _failures) >= 0)
         {
             if (Volatile.Read(ref _failures) <= 0) Interlocked.CompareExchange(ref _failWrite, null, condition);
             throw new InvalidOperationException("The record store is unavailable for this write.");
         }
-        return inner.WriteAsync(write, cancellationToken);
+        return await inner.WriteAsync(write, cancellationToken);
     }
 
     public async Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)

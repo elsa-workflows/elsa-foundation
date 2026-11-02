@@ -197,15 +197,16 @@ internal sealed class InMemoryAgentProposalService(
     /// <summary>
     /// Under the proposal gate: brings an operation whose outcome this process could not record in line with its record. The
     /// recorded proposal, version and outcome replace what this process holds; a record still Executing is settled Uncertain
-    /// once (zero new effect, attributed to recovery). A no-op for any other proposal.
+    /// once (zero new effect, attributed to recovery). Returns the recorded outcome when the record already holds one past
+    /// Executing (the outcome write committed although it reported a failure); null otherwise, and for any other proposal.
     /// </summary>
-    private async Task ReconcileAsync(string proposalId)
+    private async Task<AgentResult<AgentProposalExecutionResult>?> ReconcileAsync(string proposalId)
     {
-        if (_owner is null || !store.Unsettled.TryGetValue(proposalId, out var sessionId)) return;
+        if (_owner is null || !store.Unsettled.TryGetValue(proposalId, out var sessionId)) return null;
         if (await _owner.LoadProposalRecordAsync(sessionId, proposalId) is not { } recorded)
         {
             store.Unsettled.TryRemove(proposalId, out _);
-            return;
+            return null;
         }
         var proposal = recorded.Proposal;
         lock (store.Mutation)
@@ -234,7 +235,14 @@ internal sealed class InMemoryAgentProposalService(
         }
         else if (Settled(proposal)) _owner.ReleaseProposal(sessionId, proposalId);
         store.Unsettled.TryRemove(proposalId, out _);
+        return proposal.Status != AgentActionProposalStatus.Executing ? recorded.Execution : null;
     }
+
+    /// <summary>The single audit record of an execution's recorded outcome.</summary>
+    private Task AuditOutcomeAsync(string proposalId, AgentResult<AgentProposalExecutionResult> result, string actorId)
+        => AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
+                : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
+            actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);
 
     /// <summary><see cref="ReconcileAsync"/> for a caller that does not hold the proposal gate.</summary>
     private async Task ReconcileGatedAsync(string proposalId, CancellationToken cancellationToken)
@@ -436,7 +444,16 @@ internal sealed class InMemoryAgentProposalService(
                 logger?.LogError("The outcome of prepared operation {InvocationId} could not be recorded ({FailureType}); it is settled from its record.",
                     proposal.PreparedInvocation.InvocationId, failure.GetType().Name);
                 store.Unsettled[proposalId] = proposal.SessionId;
-                try { await ReconcileAsync(proposalId); }
+                try
+                {
+                    // A write that committed and then reported a failure (for example a timeout after commit) left the real
+                    // outcome on the record: it is returned and audited as if the write had answered.
+                    if (await ReconcileAsync(proposalId) is { } recordedOutcome)
+                    {
+                        await AuditOutcomeAsync(proposalId, recordedOutcome, actorId);
+                        return recordedOutcome;
+                    }
+                }
                 catch (Exception retry) when (retry is not OperationCanceledException)
                 {
                     logger?.LogError("Prepared operation {InvocationId} could not be settled yet ({FailureType}); its next access retries.",
@@ -445,9 +462,7 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(executing,
                     "The operation was dispatched, but its outcome could not be recorded. Its effect is uncertain and will not be replayed; read its current state."));
             }
-            await AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted
-                    : result.Value?.Status == "awaiting-client" ? AgentAuditEventKind.ToolInvoked : AgentAuditEventKind.ProposalFailed,
-                actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.", CancellationToken.None);
+            await AuditOutcomeAsync(proposalId, result, actorId);
             return result;
         }
         catch (AgentProposalConflictException) { return Conflict<AgentProposalExecutionResult>(); }
