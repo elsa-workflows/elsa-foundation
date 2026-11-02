@@ -21,7 +21,7 @@ Write risk-based tests alongside each increment, with causal red/green controls 
 
 **Goal**: The owner writes through a record store and hydrates before acting. In memory, behaviour is unchanged. Every story depends on this phase.
 
-- [ ] T003 Add the Preview contracts to `Extensions/Agent/src/Core/Contracts/AgentContracts.cs` and `AgentTurnContracts.cs`, and their models to `Extensions/Agent/src/Core/Models/AgentModels.cs`:
+- [x] T003 Add the Preview contracts to `Extensions/Agent/src/Core/Contracts/AgentContracts.cs` and `AgentTurnContracts.cs`, and their models to `Extensions/Agent/src/Core/Models/AgentModels.cs`:
   - `IAgentSessionRecordStore`, covering hydrate, guarded write, ownership, unique keys, proposal-to-session lookup and the owned list;
   - `AgentSessionOwnerQuery` and `AgentSessionSummary`;
   - `AgentMessage.StatusReason`;
@@ -30,10 +30,14 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   The async `IAgentTurnStateStore` change belongs to T006, so this task compiles on its own.
 
   Record the public surface in `Extensions/Agent/src/Elsa.Agent/PublicAPI.Unshipped.txt` where it applies.
-- [ ] T004 Implement the default in-memory record store and register it in `Extensions/Agent/src/Elsa.Agent/Extensions/AgentServiceCollectionExtensions.cs`. Extend `Extensions/Agent/src/Elsa.Agent/Services/AgentRegistrationValidator.cs` so that registering a second `IAgentSessionRecordStore`, or a second audit trio, fails with a clear diagnostic. Add a registration test for each in `Extensions/Agent/tests/Tests/AgentCompositionTests.cs`. Durable recovery reports Unsupported when `IAgentTurnStateStore` is replaced or the store cannot fence. Add a test for that too.
+
+  Verified: commit `b67c7926e`; Core holds the surface (no PublicAPI file there), the accepted-message wire projection carries `StatusReason`, and `Elsa.Agent`'s tracked public surface is unchanged.
+- [x] T004 Implement the default in-memory record store and register it in `Extensions/Agent/src/Elsa.Agent/Extensions/AgentServiceCollectionExtensions.cs`. Extend `Extensions/Agent/src/Elsa.Agent/Services/AgentRegistrationValidator.cs` so that registering a second `IAgentSessionRecordStore`, or a second audit trio, fails with a clear diagnostic. Add a registration test for each in `Extensions/Agent/tests/Tests/AgentCompositionTests.cs`. Durable recovery reports Unsupported when `IAgentTurnStateStore` is replaced or the store cannot fence. Add a test for that too.
 
   The default store round-trips records by serializing on write and on hydrate, so a test can never pass because an old host and a new host share mutable objects.
-- [ ] T005 Route `InMemoryAgentSessionService` in `DefaultAgentServices.cs` through an async per-session write gate, then an awaited store write, then the monitor. Requirements:
+
+  Verified: commits `b67c7926e` and `5f8bf5fa2`; `AgentSessionRecordStoreTests` (round-trip copies, fence, lease, keys, owned list), `AgentCompositionTests` (shell activation and lifecycle resolution refuse a second store or audit facet; one-of-each replacement stays supported), and `AgentSessionOwnerWriteThroughTests` (Unsupported for a replaced turn-state store, an unfenced store or a replaced owner).
+- [x] T005 Route `InMemoryAgentSessionService` in `DefaultAgentServices.cs` through an async per-session write gate, then an awaited store write, then the monitor. Requirements:
   - Hydration is single-flight.
   - Claim acquisition (Prompt, Foreground, Preparation, Proposal, Pause) and `ChangeAutonomy` serialize on the gate.
   - `MarkProposalDispatched` and every other internal method hydrate first.
@@ -44,17 +48,25 @@ Write risk-based tests alongside each increment, with causal red/green controls 
   - the tests `AgentSessionPolicyTests.cs` (`:200-228`) and `AgentSessionAutonomyApiTests.cs` (`:205`).
 
   Add causal red-then-green tests for the unloaded-row `MarkProposalDispatched` defect.
-- [ ] T006 Change `IAgentTurnStateStore` in `Core/Contracts/AgentTurnContracts.cs` to `SaveAsync`, `FindAsync` and `RemoveAsync`. In the same commit, update every caller (research R2): `AgentTurnServices.cs`, `Api/AgentApi.cs`, the default registration in `AgentServiceCollectionExtensions.cs`, and the 17 test references. The default store keeps the paused turn on the owner's row, so saving the pause also records the Pause claim. Adapt only the async call sites in the existing tests, and list them in the commit message.
-- [ ] T007 Make the call-key, turn-mutation and call-input registration in `AgentToolInvoker.cs` a single store insert. Make the durable transitions in `AgentProposalServices.cs` awaited writes:
+
+  Verified: commit `cf359df62`; `AgentSessionOwnerWriteThroughTests` (the unloaded-row causal control was red on the previous code, write-through hydration, refused writes apply nothing, message compare-and-set) plus all 737 existing tests; the listed test edits are in the commit message.
+- [x] T006 Change `IAgentTurnStateStore` in `Core/Contracts/AgentTurnContracts.cs` to `SaveAsync`, `FindAsync` and `RemoveAsync`. In the same commit, update every caller (research R2): `AgentTurnServices.cs`, `Api/AgentApi.cs`, the default registration in `AgentServiceCollectionExtensions.cs`, and the 17 test references. The default store keeps the paused turn on the owner's row, so saving the pause also records the Pause claim. Adapt only the async call sites in the existing tests, and list them in the commit message.
+
+  Verified: commit `5f8bf5fa2`; the pause records itself and its Pause claim in one transition and hydrates on a new host; the adapted test sites are listed in the commit message.
+- [x] T007 Make the call-key, turn-mutation and call-input registration in `AgentToolInvoker.cs` a single store insert. Make the durable transitions in `AgentProposalServices.cs` awaited writes:
   - Executing is written before the executor runs.
   - AwaitingClient is written before the envelope is returned.
   - `StoreOutcome` is written as one aggregate.
 
   Add a causal red-then-green test for the non-atomic three-step key insert.
-- [ ] T008 Run the complete Agent suite and require all 737 existing tests plus the new ones to pass. Add barrier tests that prove:
+
+  Verified: commit `c232d6981`; `AgentProposalRecordTests` (the three-step key causal control was red on the previous code: an identical retry re-prepared and a conflicting retry threw; Executing before dispatch, AwaitingClient before the envelope, the outcome and acknowledgement as one aggregate).
+- [x] T008 Run the complete Agent suite and require all 737 existing tests plus the new ones to pass. Add barrier tests that prove:
   - a claim acquired during an in-flight policy write reads the new revision;
   - concurrent first hydrations settle once;
   - the lock order holds (proposal gate before session gate, never the reverse).
+
+  Verified: `AgentSessionGateOrderingTests` (4 barrier cases); the complete Agent suite passes 772/772 (737 existing plus 35 new), three repeated runs, at load average about 5.5. Concurrent first hydrations are proved single-flight here; recording Expired once at hydrate belongs to T010–T011.
 
 ## Phase 3: US2 — Survive a restart without repeating or losing work (P1, plan step 2)
 
