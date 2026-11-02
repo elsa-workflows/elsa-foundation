@@ -11,6 +11,11 @@ of published definitions and versions and stores the exact canonical `EtlPublish
 full content hash. It preserves an existing selection outside the currently loaded page. General Workflows
 Studio contains no ETL-specific branch or alternate activity catalog.
 
+It also contributes `etl-native-run` (cross-domain) to the optional `workflow.run.related-links` slot
+(`api.workflowRunRelatedLinks`) for `RunEtl` occurrences whose authorized `etl.run-reference/1` state view names
+a run. The link opens the exact ETL run on the same backend, with a return route limited to the originating
+native run; hosts without the slot or the runtime capability show no link.
+
 The structured editor supports the v1 file topology in [spec 255](../../../../specs/255-finite-file-etl/spec.md)
 and the v2 connector topology in [spec 996](../../../../specs/996-http-etl/spec.md). Connector drafts select
 HTTP or CSV sources, optional CSV lookup, and HTTP or JSONL routes through scoped alias/role/kind choices.
@@ -29,3 +34,11 @@ See [the ETL module guide](../../README.md) for host composition and recovery li
 [connector component evidence](../../../../specs/996-http-etl/evidence/connector-studio-checkpoint.md), and
 [real Workbench/Studio acceptance](../../../../specs/996-http-etl/evidence/http-live-acceptance-checkpoint.md)
 for their respective verified source checkpoints.
+
+## Cross-domain contributions
+
+`Elsa.Studio.Etl` contributes to Studio-owned surfaces only through the public SDK: the `etl-published-selection`
+property editor for `RunEtl.Pipeline`, and `etl-native-run` in the
+[workflow run related-links slot](../../../../Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#workflow-run-related-links-sdk--elsastudiohosting).
+Neither adds an ETL branch to Workflows Studio. Both are offered only when the selected backend advertises the
+required ETL capabilities.

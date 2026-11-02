@@ -424,22 +424,31 @@ export async function preflightDraftPromotion(
 export async function promoteDraft(
   context: StudioEndpointContext,
   draftId: string,
-  requestedVersion?: string
+  requestedVersion?: string,
+  operationKey?: string,
+  signal?: AbortSignal
 ) {
+  const init = operationKey || signal ? { ...(operationKey ? { retryOnUnauthorized: false } : {}), ...(signal ? { signal } : {}) } : undefined;
   if (requestedVersion !== undefined) {
     const path = await resolveCapabilityLink(
       context,
       capabilityIds.workflowDesign,
       promotionVersionRelations.exact,
       { draftId });
-    return context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
+    if (signal?.aborted) throw new DOMException("The draft promotion was aborted.", "AbortError");
+    return init
+      ? context.http.postJson<PromoteDraftResponse>(path, { requestedVersion, ...(operationKey ? { operationKey } : {}) }, init)
+      : context.http.postJson<PromoteDraftResponse>(path, { requestedVersion });
   }
   const draftPath = await resolveCapabilityLink(
     context,
     capabilityIds.workflowDesign,
     "workflow-drafts",
     { draftId });
-  return context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, {});
+  if (signal?.aborted) throw new DOMException("The draft promotion was aborted.", "AbortError");
+  return init
+    ? context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, operationKey ? { operationKey } : {}, init)
+    : context.http.postJson<PromoteDraftResponse>(`${draftPath}/promote`, {});
 }
 
 export async function analyzeScopedVariables(

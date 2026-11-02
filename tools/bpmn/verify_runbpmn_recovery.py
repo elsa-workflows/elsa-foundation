@@ -23,6 +23,14 @@ PRODUCTS={"Elsa.Workbench.dll","Elsa.Workflows.Runtime.Core.dll","Elsa.Workflows
     "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll","Elsa.Activities.Bpmn.Core.dll","Elsa.Activities.Bpmn.dll",
     "Elsa.Activities.Bpmn.Api.dll","Elsa.Workflows.Publishing.Core.dll","Elsa.Workflows.Publishing.dll","Bpmn.Model.dll","Bpmn.Semantics.dll"}
 
+# The authored-publication host records its coupled Design assemblies as well.
+# Preserve the archived 11-product inventory and admit only the complete current 15-product set.
+AUTHORING_PRODUCTS={"Elsa.Workflows.Design.Core.dll","Elsa.Workflows.Design.Api.dll",
+    "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll","Elsa.Persistence.EntityFramework.dll"}
+def known_products(products):
+    names={item["file"] for item in products}
+    return len(products)==len(names) and (names==PRODUCTS or names==PRODUCTS|AUTHORING_PRODUCTS)
+
 def key(value):return base64.b64encode(value.encode("utf-16le","surrogatepass")).decode()
 def text(value):return base64.b64decode(value,validate=True).decode("utf-16le","surrogatepass")
 def invocation(value):
@@ -122,7 +130,7 @@ def verify(path):
         if (case["sourceRevision"]!=source or case["parent"]!=parent or case["cancel"] is not cancel or case["predecessorExit"]!=137 or
                 len({case["firstProcess"],case["secondProcess"],case["thirdProcess"]})!=3):raise ValueError("The actual embedding lacks its three-process loss/recovery provenance.")
         products=case["binaries"]
-        if len(products)!=11 or {item["file"] for item in products}!=PRODUCTS or any(not item["productVersion"].endswith("+"+source) for item in products if item["file"].startswith("Elsa.")) or any(not item["productVersion"].startswith("0.5.0+") for item in products if item["file"].startswith("Bpmn.")):
+        if not known_products(products) or any(not item["productVersion"].endswith("+"+source) for item in products if item["file"].startswith("Elsa.")) or any(not item["productVersion"].startswith("0.5.0+") for item in products if item["file"].startswith("Bpmn.")):
             raise ValueError("The actual host/runtime/BPMN/publishing products differ from their source.")
         if after!=read("retained-checked.json"):raise ValueError("The actual native/model terminal proof changed after another process.")
         model=before["model"];final=after["model"];native=before["nativeParent"]

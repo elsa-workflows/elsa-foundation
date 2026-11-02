@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Bpmn.Core;
@@ -8,14 +9,31 @@ namespace Elsa.Activities.Bpmn.Core;
 /// with material/execution context and the original JSON exception as its inner cause. Transport parsing is separate.</remarks>
 public interface IBpmnModelRuntime
 {
+    /// <summary>Current new-execution admission; accepted-work inspection and commands remain independent.</summary>
+    bool AdmitNewExecutions => false;
     ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
+    /// <summary>Publishes with trusted immutable authored provenance; raw publication keeps its existing identity and payload.</summary>
+    ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationProvenance source,
+        string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnPublishedModel>(new NotSupportedException("This BPMN host does not support authored-source publication."));
     ValueTask<BpmnModelCommandOutcome> StartAsync(string sourceReferenceId, string requestId,
         IReadOnlyDictionary<string, JsonElement>? inputs, BpmnModelCaller caller, CancellationToken cancellationToken = default);
     ValueTask<RuntimeModelExecutionState?> FindExecutionAsync(string executionId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
+    /// <summary>Reads persisted graph/provenance/current work and retained native outcomes; transports reauthorize the exact returned State before disclosure.</summary>
+    ValueTask<BpmnModelInspection> InspectAsync(string executionId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnModelInspection>(new NotSupportedException("This BPMN host does not support persisted inspection."));
     ValueTask<RuntimeStorePage<BpmnHumanWork>> ListWorkAsync(string executionId, RuntimeStorePageRequest request,
         BpmnModelCaller caller, CancellationToken cancellationToken = default);
     ValueTask<BpmnModelCommandOutcome> CompleteHumanAsync(string executionId, string requestId, string invocationId,
         string attemptId, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken = default);
+    /// <summary>Claims exact claim-required human work for the server-captured caller; the first accepted claim is the only owner.</summary>
+    ValueTask<BpmnModelCommandOutcome> ClaimHumanAsync(string executionId, string requestId, string invocationId,
+        string attemptId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnModelCommandOutcome>(new NotSupportedException("This BPMN host does not support human work claims."));
+    /// <summary>Completes claim-required work only for its exact current claim, attempt and claimant.</summary>
+    ValueTask<BpmnModelCommandOutcome> CompleteClaimedHumanAsync(string executionId, string requestId, string invocationId,
+        string attemptId, string claimId, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnModelCommandOutcome>(new NotSupportedException("This BPMN host does not support human work claims."));
     /// <summary>Closes semantic progression and retains any native cancellation responsibility until its actual settlement.</summary>
     ValueTask<BpmnModelCommandOutcome> CancelAsync(string executionId, string requestId, string? reason,
         BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
@@ -41,7 +59,17 @@ public sealed record BpmnPublishedModel(WorkflowExecutableIdentity Executable, s
 public sealed record BpmnModelCommandOutcome(string ExecutionId, string InputId, bool Replay, bool Pending, JsonElement? Result);
 
 public sealed record BpmnHumanWork(string ElementId, string BindingId, string TokenId, string? IterationId,
-    string InvocationId, string AttemptId);
+    string InvocationId, string AttemptId)
+{
+    /// <summary>Whether completion requires an exact current claim; unclaimed profiles omit it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ClaimRequired { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BpmnHumanClaim? Claim { get; init; }
+}
+
+/// <summary>The one current owner of claim-required work, captured by the server from the authenticated caller.</summary>
+public sealed record BpmnHumanClaim(string ClaimId, string ClaimantId, DateTimeOffset ClaimedAt);
 
 /// <summary>Authorized service-failure inspection; failed worker evidence remains retained after resolution.</summary>
 public sealed record BpmnServiceIncident(string IncidentId, string ElementId, string BindingId, string InvocationId,

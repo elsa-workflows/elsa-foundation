@@ -1,7 +1,7 @@
 # Extension points — API Capabilities
 
 This module has one add-don't-replace contribution seam and one replaceable catalog service. Shared meanings
-remain in the [feature specification](../../../../specs/220-domain-owned-apis/spec.md).
+remain in the [feature specification](../../../../../specs/220-domain-owned-apis/spec.md).
 
 ## Contributor seam
 
@@ -16,7 +16,7 @@ remain in the [feature specification](../../../../specs/220-domain-owned-apis/sp
   derive public contracts from its own type name, a feature name, or endpoint reflection.
 - **Failure:** cancellation propagates. Provider failures and incompatible duplicate declarations fail document
   assembly; the catalog never silently advertises a partial or arbitrarily selected contract.
-- **Dormancy:** a Source whose feature is dormant ([spec 182](../../../../specs/182-dormant-features-until-finalization/spec.md),
+- **Dormancy:** a Source whose feature is dormant ([spec 182](../../../../../specs/182-dormant-features-until-finalization/spec.md),
   FR-007) keeps contributing its declaration, with `DormantReason` set from `ISchemaDormancyCheck`'s caller-neutral
   `SchemaAvailability.Reason`; it never omits it. The view is then marked `status: "dormant"` with that `reason`, and
   one dormant contribution marks the whole capability dormant.
@@ -29,7 +29,7 @@ the event contribution pattern. Handlers append the same declaration type and ob
 - **Cross-domain:** `StructuredLogsApiCapabilitySource` in Diagnostics Structured Logs contributes the
   `elsa.api.structured-logs` contract with the host-configured recent, sources and stream paths. Registered by
   `StructuredLogsFeature` through `AddApiCapabilitySource`; it keeps configuration-owned routes out of static links.
-  See the [Structured Logs contribution note](../../Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/README.md#cross-domain-contributions).
+  See the [Structured Logs contribution note](../../../Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/README.md#cross-domain-contributions).
 
 ## Replaceable service
 
@@ -55,8 +55,10 @@ Active domain API features call `AddApiCapability` during shell composition. Equ
 idempotent; incompatible declarations throw `ApiCapabilityConflictException` immediately. Static declarations
 are a feature-owned public-contract statement, not an independent provider extension point.
 
+Features that only declare a surface can reference `Elsa.Api.Capabilities.Core` and call `ApiCapabilityRegistration.Add` with the same declaration. The existing API extension delegates to that thin registration. Type forwarding preserves the original API assembly's public model/exception identities for compiled consumers.
+
 ## References
 
 - [Module README](README.md)
-- [Management API OpenAPI contract](../../../../specs/220-domain-owned-apis/contracts/management-api.openapi.yaml)
-- [Repository extension-point index](../../../../EXTENSION_POINTS.md)
+- [Management API OpenAPI contract](../../../../../specs/220-domain-owned-apis/contracts/management-api.openapi.yaml)
+- [Repository extension-point index](../../../../../EXTENSION_POINTS.md)

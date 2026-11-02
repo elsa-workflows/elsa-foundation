@@ -39,13 +39,24 @@ type EditorContract = [
   Assert<Equal<ActivityContext["activityId"], string | null | undefined>>
 ];`;
 
+const runRelatedContract = `
+const olderHost: Pick<ElsaStudioModuleApi, "workflowRunRelatedLinks"> = {};
+const related: StudioWorkflowRunRelatedLinkContribution = {
+  id: "example", activityTypes: ["Example.Activity"], viewKind: "example.run-reference", viewVersion: 1,
+  getLinks: context => [{ id: "run", label: "Open related run", path: context.returnTo }]
+};
+type ProjectedData = Assert<Equal<StudioWorkflowRunRelatedLinkContext["stateView"]["data"], unknown>>;
+`;
+
 function compileConsumer({ path, hasPropertyEditors }: typeof typingSources[number]) {
   const declarationPath = fileURLToPath(new URL(path, import.meta.url));
   const consumerPath = fileURLToPath(new URL("./__sdk-contract-consumer__.ts", import.meta.url));
   const moduleName = path === "../sdk/index.ts" ? "../sdk/index" : "@elsa-workflows/studio-sdk";
+  const canonical = path === "../sdk/index.ts";
   const imports = ["StudioActivityInputDescriptor", ...(hasPropertyEditors
-    ? ["StudioActivityPropertyEditorProps", "StudioActivityPropertyEditorContribution", "StudioActivityPropertyEditorContext"] : [])];
-  const consumer = `import type { ${imports.join(", ")} } from "${moduleName}";\n${inputContract}\n${hasPropertyEditors ? editorContract : ""}`;
+    ? ["StudioActivityPropertyEditorProps", "StudioActivityPropertyEditorContribution", "StudioActivityPropertyEditorContext"] : []),
+    ...(canonical ? ["ElsaStudioModuleApi", "StudioWorkflowRunRelatedLinkContribution", "StudioWorkflowRunRelatedLinkContext"] : [])];
+  const consumer = `import type { ${imports.join(", ")} } from "${moduleName}";\n${inputContract}\n${hasPropertyEditors ? editorContract : ""}\n${canonical ? runRelatedContract : ""}`;
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,

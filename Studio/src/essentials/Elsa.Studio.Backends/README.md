@@ -86,4 +86,4 @@ and caches discovery per immutable endpoint context. Unsupported contributions a
 they are unavailable. Permission policies still run independently. Optional actions inside a supported page must check
 their own required relations, as the workflow Publish and Test Run controls do. After Server feature Apply, emit
 studioBackendCapabilitiesChangedEvent with the exact backendSession.key to refresh discovery for that lifetime.
-See [API capability composition](../../../../Essentials/src/Api/Capabilities/README.md) for server declarations.
+See [API capability composition](../../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/README.md) for server declarations.

@@ -51,6 +51,22 @@ class ActualRunBpmnRecoveryControls(unittest.TestCase):
         for field in ("etlEmbeddingProved","pendingParentResultCrashProved","cancellationBeforeAdmissionProved","upgradedHostOrStudioProved"):
             self.assertFalse(result[field])
 
+    def test_partial_authoring_product_inventory_is_refused(self):
+        def partial(value):
+            prototype=value["binaries"][0]
+            for name in sorted(runbpmn.AUTHORING_PRODUCTS)[:-1]:
+                value["binaries"].append({**prototype,"file":name})
+        self.change("root-complete/case.json",partial)
+        with self.assertRaisesRegex(ValueError,"products differ"):self.verify()
+
+    def test_added_authoring_product_requires_the_same_exact_source(self):
+        def foreign(value):
+            prototype=value["binaries"][0]
+            for name in sorted(runbpmn.AUTHORING_PRODUCTS):
+                value["binaries"].append({**prototype,"file":name,"productVersion":"1.0.0+foreign-source"})
+        self.change("root-complete/case.json",foreign)
+        with self.assertRaisesRegex(ValueError,"products differ"):self.verify()
+
     def test_native_completion_cannot_borrow_another_model_result(self):
         def foreign(value):
             activity=next(item for item in value["activities"] if item["execution"]["activityType"]==runbpmn.ACTIVITY)

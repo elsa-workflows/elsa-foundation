@@ -25,7 +25,11 @@ public static class BpmnInterchangeApi
             jsonContentType: "application/json; charset=utf-8",
             tag: applicationName);
 
-        api.MapEndpointsFrom(typeof(BpmnInterchangeApi).Assembly);
+        // The optional authored publisher shares this package, but its endpoint is mapped only
+        // by its own feature. Ordinary interchange must not expose an uncomposed write action.
+        api.MapEndpoint<Documents.Analyze.Endpoint>();
+        api.MapEndpoint<Documents.Import.Endpoint>();
+        api.MapEndpoint<Documents.Export.Endpoint>();
     }
 }
 

@@ -1,0 +1,50 @@
+{
+  "productSource": "41f1828cb5797c167701e14f5c366cf152dda75b",
+  "containsMain": "8dcbf2345d96507d7b81b2483cc37445333cb1d7",
+  "controllerAndMainDriverSource": "fd45e249b",
+  "replacementInspectionSource": "f7d635de1",
+  "actualRecovery": {
+    "readOnly": true,
+    "passed": true,
+    "productSource": "41f1828cb5797c167701e14f5c366cf152dda75b",
+    "controllerSource": "fd45e249bd0fc0904113e0f93f0ccbf430d3e61d",
+    "driverSource": "fd45e249bd0fc0904113e0f93f0ccbf430d3e61d",
+    "wholeStoresVerified": 24,
+    "directModels": 1,
+    "nativeAttempts": 2,
+    "etlRuns": 2,
+    "pipelineVersionRetained": 1,
+    "newerPipelineVersionPublished": 2,
+    "replacementRecords": 4,
+    "originalOutputFilesRetained": 2,
+    "retryAcceptedInputs": 1,
+    "etlDeliveryDispositions": [
+      2,
+      2
+    ],
+    "modelTerminalRevision": 4,
+    "responseLossReloadAndRestartReplay": true,
+    "claimsInterruptionFinalAndWiderAcceptance": false
+  },
+  "actualAuthoredServicePublicationReplay": {
+    "passed": true,
+    "case": "controls/lookup-receipt-repair/actual-service-publication-replay.json",
+    "source": "41f1828cb5797c167701e14f5c366cf152dda75b"
+  },
+  "replacementInspection": {
+    "passed": false,
+    "reason": "Completed RunEtl clears PrivateState; state-view service returns StateCleared before ETL projector can use its consumed receipt. Failed RunEtl retains state and its link works.",
+    "case": "recovery/replacement-inspection-failure.png",
+    "runtimeWriterChanged": false,
+    "T026Complete": false
+  },
+  "verifierControls": {
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "e03cd0985c91028a4d7dba1a3513ace67742a07d68774d4d7f7788727435b6ae"
+  },
+  "fullReviewRounds": 0,
+  "finalGatesComplete": false,
+  "widerEtlOrProgramAcceptance": false
+}

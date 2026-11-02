@@ -37,6 +37,14 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: return `shell` from `StudioModuleInstance`, or call `api.shell.add(contribution)` during registration. `registerStudioModuleInstances` aggregates instance contributions into each fresh registry.
 - Known implementations: Backends switcher, connection notice and recovery page (intra-domain, optional). Backend admission applies to normal contributions; recovery uses only original-host services and is available before a selected connection exists.
 
+### Workflow run related links (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `workflow.run.related-links` slot (`api.workflowRunRelatedLinks`).
+- Signature: `StudioWorkflowRunRelatedLinkContribution { id, order?, activityTypes, viewKind, viewVersion, requiresBackend?, getLinks(context) }` returning `StudioWorkflowRunRelatedLink { id, label, path }`.
+- Register: call `api.workflowRunRelatedLinks?.add(contribution)` during registration; hosts without the slot show no links.
+- Consumer: `WorkflowRunRelatedLinks` in native run details and attached Test Run inspection. It reads the authorized activity state view matching `viewKind`/`viewVersion`, and keeps only same-origin Studio paths on the selected backend. The target route reauthorizes its own reads.
+- Known implementations: `etl-native-run` (`Elsa.Studio.Etl`, cross-domain; see its [catalog](../../../../Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md#cross-domain-contributions)).
+
 ## Events
 
 | Event | Delivery | Meaning | Payload | Contributor | Publication site |

@@ -66,6 +66,7 @@ describe("studio registry", () => {
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
+    expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
     expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
     expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
     expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);

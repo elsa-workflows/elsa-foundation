@@ -82,7 +82,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md) |
+| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md) |
 | API endpoint layer (failure pipeline, endpoint composition contracts, unload-safety enforcement) | [`Essentials/src/Api/EXTENSION_POINTS.md`](Essentials/src/Api/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
@@ -231,4 +231,4 @@ not automatic constitution violations.
 ## Studio
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
-- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

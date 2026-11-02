@@ -2,6 +2,7 @@ import React from "react";
 import type { GraphPaletteElement } from "../graph-authoring/graphPaletteElements";
 import { createBpmnShapeNode } from "./bpmnAdapter";
 import { bpmnShapePalette, bpmnElementTypes, isEventElementType, isGatewayElementType, type BpmnShapeDescriptor } from "./bpmnTypes";
+import { directBindingProperty, directHumanBinding } from "./bpmnDirectBinding";
 
 /** BPMN owns its notation and payload; the shared Elements palette only consumes contributions. */
 export const bpmnPaletteElements: readonly GraphPaletteElement[] = bpmnShapePalette.map(shape => ({
@@ -13,6 +14,15 @@ export const bpmnPaletteElements: readonly GraphPaletteElement[] = bpmnShapePale
   icon: <BpmnPaletteIcon shape={shape} />,
   createNode: position => createBpmnShapeNode(shape, position)
 }));
+
+/** Offered only by an editable root workflow with an available direct publisher. */
+export const directHumanBpmnElement: GraphPaletteElement = {
+  id: "bpmn:humanWait", label: "Human wait", category: "BPMN",
+  description: "Pause a direct BPMN process for a person to complete.", keywords: ["human", "person", "user task", "wait"],
+  icon: <BpmnPaletteIcon shape={{ key: "humanWait", label: "Human wait", elementType: "userTask" }} />,
+  createNode: position => createBpmnShapeNode({ key: "humanWait", label: "Human wait", name: "Human wait", elementType: "userTask",
+    properties: { [directBindingProperty]: directHumanBinding } }, position)
+};
 
 function BpmnPaletteIcon({ shape }: { shape: BpmnShapeDescriptor }) {
   const isEnd = shape.elementType === bpmnElementTypes.endEvent;

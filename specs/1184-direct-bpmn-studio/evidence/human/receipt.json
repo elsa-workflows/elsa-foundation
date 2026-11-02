@@ -1,0 +1,20 @@
+{
+  "source": "11437c0bd2c0ee9d1dbf0a6bcc926f2f4672cd1a",
+  "containsMain": "c0b47ceb19c0123a2a75f1475c3b2595ec3506e3",
+  "name": "elsa-bpmn-studio-human-11437c0bd.zip",
+  "sha256": "a76aba44d0a2f3d0a6b716eb70166398dab946c0dd2ed96938b597d4e111a7bb",
+  "bytes": 7124971,
+  "files": 142,
+  "assetId": 698827902,
+  "checksumAssetId": 698828053,
+  "url": "https://github.com/elsa-workflows/elsa-foundation/releases/download/contributor-preview-2026-10-07.1/elsa-bpmn-studio-human-11437c0bd.zip",
+  "uploader": "elsa-workflows-codex[bot]",
+  "downloadVerified": true,
+  "allMembersVerified": true,
+  "testsRerunFromArchive": false,
+  "actualStudioBrowserAcceptance": true,
+  "wholeStoresVerified": 12,
+  "newReleaseOrTag": false,
+  "releasePublishedAtUnchanged": "2026-10-07T15:44:19Z",
+  "downloadedReadOnlyVerificationRepeated": true
+}

@@ -277,6 +277,8 @@ Elsa.Workflows.Runtime.Core.Contracts.IActivityScopeCleanupStore
 Elsa.Workflows.Runtime.Core.Contracts.IActivityScopeCleanupStore.ApplyAsync(Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IActivityScopeCleanupStore.CaptureAsync(string! workflowExecutionId, string! executionScopeId, System.Collections.Generic.IReadOnlySet<string!>! activityExecutionIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.ActivityScopeCleanupRequest!>
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector
+Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.ActivityTypeWithoutState.get -> string?
+Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.ProjectWithoutStateAsync(Elsa.Workflows.Runtime.Core.Contracts.ActivityStateViewContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement?>
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.ProjectAsync(Elsa.Workflows.Runtime.Core.Contracts.ActivityStateViewContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement>
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.StateTypeAlias.get -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IActivityStateViewProjector.ViewKind.get -> string!

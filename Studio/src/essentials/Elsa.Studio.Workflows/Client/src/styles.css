@@ -7472,6 +7472,14 @@ html[data-theme-material] .availability-search .wf-search {
   gap: 4px;
 }
 
+.wf-bpmn-claim-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-block: 4px;
+  font-size: 13px;
+}
+
 /* --- Binding conversion controls (issue #449) ------------------------------------------------- */
 
 .wf-conversion-control {
