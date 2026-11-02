@@ -166,6 +166,14 @@ public sealed record AgentMessageViewModelResponse(
     /// <summary>Preview: the policy revision the owner accepted this message under, when it owns revisions.</summary>
     public long? AcceptedPolicyRevision { get; init; }
 
+    /// <summary>
+    /// Preview (#3441): the public session policy (mode, ceiling, allowed modes and revision) the owner accepted this
+    /// message under; omitted when the owner did not attribute it. Revisions are per session, so a reopened session names
+    /// each message's mode from this record rather than from a revision number seen elsewhere.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentSessionPolicyResponse? AcceptedPolicy { get; init; }
+
     /// <summary>Preview: why a cancelled message stopped (<c>interrupted</c>, <c>withdrawn</c> or <c>user-stop</c>); absent otherwise.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? StatusReason { get; init; }
@@ -416,6 +424,7 @@ public static class AgentApiMapping
         => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString())
         {
             AcceptedPolicyRevision = message.AcceptedPolicy?.Revision,
+            AcceptedPolicy = message.AcceptedPolicy?.ToResponse(),
             StatusReason = message.StatusReason
         };
 

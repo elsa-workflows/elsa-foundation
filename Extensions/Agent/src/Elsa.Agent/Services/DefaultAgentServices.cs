@@ -536,6 +536,15 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         }
     }
 
+    /// <summary>
+    /// The decode failures a record store reports for recorded state it cannot read, and hydration's own verification
+    /// refusals. A store that maps its decode failures itself (as the EF store does) already throws
+    /// <see cref="AgentSessionUnavailableException"/>; an infrastructure failure is never in this set.
+    /// </summary>
+    private static bool IsUnreadable(Exception failure)
+        => failure is AgentSessionUnavailableException or JsonException or NotSupportedException or ArgumentException
+            or InvalidDataException or FormatException or InvalidCastException or OverflowException;
+
     /// <summary>Under the session write gate: single-flight hydration. It never takes a proposal gate.</summary>
     private async Task<SessionRow?> HydrateAsync(string sessionId, CancellationToken cancellationToken)
     {
@@ -560,16 +569,18 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             // Every snapshot, history and fingerprint is verified before anything is settled or acts on the row (FR-018).
             history = HydratedHistory.Rebuild(record);
         }
-        // A store's decode failure is unreadable state, the same set a snapshot rebuild verifies against; an ownership
-        // refusal, a disposed store or a cancellation keeps its own outcome.
-        catch (Exception failure) when (failure is AgentSessionUnavailableException or JsonException or NotSupportedException or ArgumentException
-                                            or AgentContributionException
-                                            or InvalidOperationException and not AgentSessionOwnershipException and not ObjectDisposedException)
+        // An ownership refusal, a disposed store or a cancellation keeps its own outcome and its lease handling.
+        catch (Exception failure) when (failure is not (OperationCanceledException or ObjectDisposedException or AgentSessionOwnershipException))
         {
-            // Nothing was settled; the lease this hydration took is given back so the refusal leaves no trace.
+            // Nothing was settled; the lease this hydration took is given back so the failure leaves no trace.
             try { await _store.ReleaseOwnershipAsync(sessionId, ownership.Fence, CancellationToken.None); }
             catch (Exception) { }
-            throw failure as AgentSessionUnavailableException ?? new AgentSessionUnavailableException(sessionId, "unreadable");
+            // Only verification or a decode failure shows the recorded state itself to be unreadable (FR-018). A store
+            // that cannot answer right now (a pool timeout, exhausted retries, a read that kept changing, which the EF
+            // store reports as AgentContributionException) keeps its own, retryable outcome.
+            if (IsUnreadable(failure))
+                throw failure as AgentSessionUnavailableException ?? new AgentSessionUnavailableException(sessionId, "unreadable", failure);
+            throw;
         }
 
         // Recovery settles what the recorded facts already decide, in one write, before anything acts on the row.

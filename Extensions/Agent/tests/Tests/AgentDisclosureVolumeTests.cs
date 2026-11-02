@@ -135,7 +135,6 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
     [InlineData("pause-history-missing", "history_missing")]
     [InlineData("decode-not-supported", "unreadable")]
     [InlineData("decode-argument", "unreadable")]
-    [InlineData("decode-invalid-operation", "unreadable")]
     public async Task Recorded_disclosure_state_that_fails_verification_makes_the_session_unavailable_with_no_effect(string tampering, string reason)
     {
         TamperingRecordStore? store = null;
@@ -181,8 +180,42 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
         Assert.Equal(AgentActionProposalStatus.Expired, (await harness.Store.LoadAsync(session.Id))!.Proposals.Single().Proposal.Status);
     }
 
+    /// <summary>
+    /// A store that cannot answer right now (a pool timeout, an exhausted retry, a read that kept changing) has not shown
+    /// the recorded state to be unreadable. Hydration gives the lease back and keeps the failure's own outcome, so the
+    /// owner sees a retryable failure instead of <c>agent.session.unavailable_state</c>, and a later read hydrates.
+    /// </summary>
+    [Theory]
+    [InlineData("transient-invalid-operation")]
+    [InlineData("transient-store")]
+    public async Task A_transient_store_failure_during_hydration_is_not_unavailable_state_and_leaves_no_trace(string failure)
+    {
+        TamperingRecordStore? store = null;
+        using var harness = new AgentRestartHarness(clock => store = new(new InMemoryAgentSessionRecordStore(clock)));
+        var session = await harness.Host.CreateAsync();
+        await harness.Host.PostAsync(session, "hello");
+        var host = harness.Restart();
+        store!.Tamper = record => Tamper(record, failure);
+
+        var thrown = await Assert.ThrowsAnyAsync<Exception>(() => host.Sessions.FindAsync(session.Id));
+
+        Assert.Null(AgentSessionUnavailableException.Find(thrown));
+        Assert.IsType(failure == "transient-store" ? typeof(AgentContributionException) : typeof(InvalidOperationException), thrown);
+        // The lease this hydration took was given back, and nothing was settled or audited.
+        Assert.Null((await store.LoadUntamperedAsync(session.Id))!.LeaseExpiresAt);
+        Assert.Empty(await host.AuditAsync(session));
+
+        store.Tamper = null;
+        Assert.NotNull(await host.Sessions.FindAsync(session.Id));
+    }
+
     private static AgentSessionRecord Tamper(AgentSessionRecord record, string tampering)
     {
+        // Infrastructure failures say nothing about the recorded state itself.
+        if (tampering == "transient-invalid-operation")
+            throw new InvalidOperationException("Timeout expired before a pooled connection was available.");
+        if (tampering == "transient-store")
+            throw new AgentContributionException($"Agent session '{record.Session.Id}' kept changing while it was read; nothing was hydrated.");
         var assistant = record.Messages.First(x => x.Message.Role == AgentRole.Assistant && x.DisclosureDigests is { Count: > 1 });
         AgentSessionRecord Replace(AgentMessageRecord changed)
             => record with { Messages = record.Messages.Select(x => x.Message.Id == changed.Message.Id ? changed : x).ToArray() };
@@ -202,7 +235,6 @@ public sealed class AgentDisclosureVolumeTests(ITestOutputHelper output)
             // A store whose decoding fails throws the exceptions hydration verifies against, not only JSON failures.
             "decode-not-supported" => throw new NotSupportedException("The recorded payload uses an unsupported encoding."),
             "decode-argument" => throw new ArgumentException("The recorded payload is malformed."),
-            "decode-invalid-operation" => throw new InvalidOperationException("The recorded payload is incompatible."),
             _ => throw new ArgumentOutOfRangeException(nameof(tampering))
         };
     }

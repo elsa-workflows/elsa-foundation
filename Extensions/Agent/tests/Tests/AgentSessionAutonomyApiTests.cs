@@ -286,6 +286,30 @@ public sealed class AgentSessionAutonomyApiTests
         Assert.Equal(["first", "second"], messages.Select(x => x.GetProperty("content").GetString()!).ToArray());
     }
 
+    /// <summary>
+    /// #3441: a reopened session names the mode that admitted each message from the owner's record, not from whatever
+    /// mode the client last saw under the same revision number (revisions are per session).
+    /// </summary>
+    [Fact]
+    public async Task Session_detail_names_the_public_policy_each_message_was_accepted_under()
+    {
+        using var fixture = new Fixture();
+        var session = await fixture.CreateAsync(PrivatePolicy);
+        await fixture.Sessions.AddMessageAsync(session.Id, new(AgentRole.User, "first", AgentMessageStatus.Completed, null, [], []));
+        Assert.Equal(200, (await fixture.ChangeAsync(session.Id, new { autonomyMode = "auto-read-only", expectedRevision = 1 })).Status);
+        await fixture.Sessions.AddMessageAsync(session.Id, new(AgentRole.User, "second", AgentMessageStatus.Completed, null, [], []));
+        var (status, body) = await fixture.SendRawResponseAsync("GetSession", null, session.Id);
+
+        Assert.Equal(200, status);
+        using var document = JsonDocument.Parse(body);
+        var accepted = document.RootElement.GetProperty("data").GetProperty("messages").EnumerateArray().Select(x => x.GetProperty("acceptedPolicy")).ToArray();
+        Assert.Equal(["manual", "auto-read-only"], accepted.Select(x => x.GetProperty("autonomyMode").GetString()!).ToArray());
+        Assert.Equal([1L, 2L], accepted.Select(x => x.GetProperty("revision").GetInt64()).ToArray());
+        Assert.All(accepted, x => Assert.Equal(["allowedAutonomyModes", "autonomyMode", "maxAutonomyMode", "revision"],
+            x.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ToArray()));
+        AssertNoPrivatePolicy(body);
+    }
+
     [Fact]
     public async Task Accepted_prompt_detail_and_stream_disclose_only_the_public_session_policy()
     {
@@ -371,6 +395,7 @@ public sealed class AgentSessionAutonomyApiTests
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("acceptedPolicyRevision").ValueKind);
+        Assert.False(document.RootElement.TryGetProperty("acceptedPolicy", out _));
     }
 
     // ---- Helpers ----
