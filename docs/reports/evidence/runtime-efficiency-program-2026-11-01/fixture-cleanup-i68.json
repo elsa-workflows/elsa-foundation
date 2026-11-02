@@ -1,0 +1,20 @@
+{
+  "fixture": "runtime-efficiency-i68",
+  "completedAtUtc": "2026-11-02 (after evidence custody)",
+  "precondition": "two-host-i68-evidence.tar.gz downloaded and verified file-by-file before any removal",
+  "runner": {
+    "vm": "elsa-p2382-98e7664aa3 (existing)",
+    "container": "elsa-efficiency-i68-pg removed (name and task label matched); zero task-labelled containers remain",
+    "removed": [
+      "/root/elsa-eff-i68 (SSH key, database password, transfer token, controllers, outputs)",
+      "leftover /root qualification helper scripts"
+    ],
+    "listeners15432": 0,
+    "finalPowerState": "PowerState/deallocated"
+  },
+  "workers": "fixture Workbench and Worker processes stopped before deletion",
+  "nsg": "Rule RuntimeEfficiencyI68PrivateFixture deleted (via ARM REST after an az CLI import deadlock); remaining rules semantically equal to the recorded original",
+  "taskResourceGroup": "rg-elsa-efficiency-i68 (tag codex.task=runtime-efficiency-i68: two D2s_v6 workers, NICs, OS disks, transfer storage account) deleted; az group exists = false",
+  "subscriptionCheck": "No task-tagged resources and no running VMs remain",
+  "local": "Transfer SAS file deleted; no private key or SAS token remains in the local evidence roots"
+}

@@ -9,7 +9,10 @@ python3 specs/1183-runtime-efficiency-program/evidence/prepare-projects.py nativ
 ```
 
 The seven accepted names are `native-qualification`, `retained-boundaries`, `timer-qualification`, `etl-qualification`,
-`bpmn-qualification` `diagnostics-attribution` and the unfinished `cluster-control` prototype. The helper copies the exact project/lock bytes into ignored local
+`bpmn-qualification`, `diagnostics-attribution` and `cluster-control`. `two-host-qualification/` holds Python controllers
+and one diagnostics-only startup-hook source (`conflict-hook-StartupHook.cs`); that hook is explicitly exempt from frozen
+templates because it has no package references, is not a qualification subject and is built as a plain `net10.0` class
+library as its README states. The helper copies the exact project/lock bytes into ignored local
 files and refuses to replace differing local files. It never restores, builds, starts a server or runs a workload.
 Keep the current checkout's relative source paths intact; source-archive qualification uses the same explicit
 materialization before building. Projects built for earlier receipts had the same project/lock bytes at their

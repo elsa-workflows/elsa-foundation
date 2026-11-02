@@ -25,7 +25,7 @@ Balanced/Ephemeral were 90, 104, 180 respectively; only fork/join changed, to 17
 
 ## Cooperative cancellation of a progressing native drain
 
-The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport is separately qualified.
+The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
 
 Six real SQLite integration cases cover External and ReplaySafe loop bodies under Durable, Balanced and Ephemeral. Each starts an otherwise unbounded progressing While with no total-cycle cap, requests Cancel through the public actor API while the first body is executing, and proves one completed body, durable Cancelled state, a yielded turn and unchanged activity state after a resumption sweep. A bounded runaway guard makes removal of the behavior fail without hanging.
 
@@ -91,7 +91,7 @@ race controls mutate the SQL row within the test transaction immediately before 
 conditional write and rollback behavior, and are not independent-host race evidence.
 
 Whole local EF persistence: 1,851 passed; HTTP integration: 107 passed, zero failed/skipped. Discovery reconciles all
-executions. Independent review, cluster root-deletion races and final program gates remain due. Initial fixture
+executions. Independent review, cluster root-deletion races and final program gates remain due (point-in-time; see [Independent-host failure qualification](#independent-host-failure-qualification) for the later results). Initial fixture
 attempts omitted required codecs/run-health state and expected the wrong stale-fence exception; they are retained
 separately, not counted as causal controls. The saved mutation source differs from the final source only in its XML
 summary; the final whole suites ran against the current source.
@@ -180,7 +180,7 @@ under default options. Neither original coverage assertion nor workflow correctn
 
 The user guide and resumption mechanics describe the retained session and state that queues without targeted
 deletion fall back to immediate checkpoints. That fallback has behavioral controls; its throughput is unmeasured.
-Independent-host takeover, final provider integration, full review and containing-main gates remain open.
+Independent-host takeover, final provider integration, full review and containing-main gates remain open (point-in-time; see [Independent-host failure qualification](#independent-host-failure-qualification) for the later results).
 
 ### Statement and wire attribution
 
@@ -214,7 +214,9 @@ public checkpoint member or storage format.
 The current SQLite references pass with Durable ten WriteLines **269** commands (from 329), HTTP **171** (183), and
 long suspension/resume **2,137** (2,737). Other reference counts are unchanged. Disabling only the successful-commit
 receipt fails exactly those three lowered budget cases; restoration passes all thirteen. The ten-WriteLine result
-meets #2584's original under-300 objective without reviving its obsolete per-hop persistence layer.
+meets #2584's original under-300 objective without reviving its obsolete per-hop persistence layer. #2584's
+other acceptance item, an owner-reviewed spec of every crash window it changes, is posted on the issue (analysis in
+`specs/1183-runtime-efficiency-program/plan.md`) and stays open until the owner reviews it.
 
 Nine focused cases cover accepted versus retaining/attempt/unfenced/unrelated decisions, failed physical writes and
 nested receipt isolation. Eight independent mutations each fail their corresponding case and pass the other eight;
@@ -225,7 +227,7 @@ that cap-triggered boundary. The after-advance gate requires a physically commit
 deferred checkpoint. Across all forty crash cases, completed activity identities persist and their bodies do not run
 in the fresh recovery process. All ten old writers are fenced out after B recovers, leaving the inspected durable
 rows unchanged. A stale ReplaySafe owner can still enter code before its next physical fence; no exactly-once
-external-effect guarantee is inferred. These remain single-machine process checks.
+external-effect guarantee is inferred. These remain single-machine process checks (point-in-time; see [Independent-host failure qualification](#independent-host-failure-qualification) for the later results).
 
 Whole suites pass with complete discovery reconciliation and zero failures/skips: Runtime 3,177, activity runtime
 732, EF persistence 1,851, HTTP integration 116, DispatchWorkflow 380, Distributed 114 and BPMN 513. The first BPMN
@@ -241,7 +243,7 @@ reference cohort increased Durable ten WriteLines from 329 to 338 and the long s
 Those two budget failures were regressions; no budget was raised. An earlier prototype left a queued row, which was
 corrected before that measurement. Compile/setup failures and all prototype sources are preserved separately at
 `m4-rejected-atomic-queue/`. The narrower acknowledgement resolves the measured cost with the existing transport.
-Independent-host/provider integration and final reviewed-head/main qualification remain due.
+Independent-host/provider integration and final reviewed-head/main qualification remain due (point-in-time; see [Independent-host failure qualification](#independent-host-failure-qualification) for the later results).
 
 ## Owner dispositions
 
@@ -420,7 +422,7 @@ All preflight attempts remain visible: the first stopped before workload because
 the next found an undefined operator storage-path variable before host launch; the third completed warmup but
 stopped when its unprivileged collector could not read the root-created host log. The fourth fixes log ownership
 and passes. These are fixture failures, not passing workload samples. No failed attempt is replaced in the ledger.
-The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open.
+The longer 15-second/60-second diagnostics series and independent-host workload/failure qualification remain open (point-in-time; see [Independent-host failure qualification](#independent-host-failure-qualification) for the later results).
 
 Additional affected-model qualification at production source `63e4c1fc4`: the whole ETL suite passes **1,009 tests** and the real-host BPMN suite passes **46**, both with zero failed/skipped cases. Discovery reconciles every case. These are correctness/hosting results on the shared macOS machine, not model throughput or independent-host evidence. Custody: `m5-model-*` in the program evidence root.
 
@@ -627,9 +629,9 @@ empty sweep. Runtime DLL hashes match the `63e4c1fc4` capacity cohort.
 | PostgreSQL Durable (2 each) | 2.3–2.4 /s | — | 7.0–7.5 /s | 10.1–11.0 /s |
 | SQLite Balanced (2 each) | 1.6 /s | — | 2.4–2.5 /s | — |
 
-On PostgreSQL, degree 8 drains the backlog 3.5–3.8× (Balanced) and 4.4× (Durable) faster than the default degree 1.
-At degree 8 the process averages about 1.7 of the worker's two cores during the sweep, so the worker CPU is the next
-limit on this shape. SQLite gains about 1.5× at degree 4. Allocation per resume does not change with degree
+On PostgreSQL, degree 8 drains the backlog 3.5–3.8× (Balanced) and 4.4–4.6× (Durable) faster than the default degree 1.
+At degree 8 Balanced averages about 1.7 of the worker's two cores during the sweep, so worker CPU is the next limit for
+that shape; Durable averages about 1.4. SQLite gains about 1.5× at degree 4. Allocation per resume does not change with degree
 (about 11.8 MB Balanced, 24.3 MB Durable). This measures draining an existing due backlog on one node, not deadline
 accuracy, clustered timer ownership or behaviour under concurrent foreground load. The production default stays at
 one; changing it is an owner decision these samples inform but do not make.
@@ -660,10 +662,12 @@ On the final engine (Worker r8, including the fence-renewal fix below) all **68 
 | Database restart, host `RetryNow` policy | 6 | Same interruption with a host policy that retries transient provider failures: B completes the run with no incident and no duplicate rows |
 
 Earlier attempts are retained: the first full run had 50/62 (the reclaim cases collided with database names left by
-the shakedown; the interrupt cases asserted automatic completion, which is not the default policy), and a second
-series hit a stale per-case folder. A host `RetryAfter` policy was also measured: the run stalls silently, because
-nothing re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRetryAt`, but no sweep reads it).
-That pre-existing defect is outside this delivery and is listed below as a follow-up.
+the shakedown; the interrupt cases asserted automatic completion, which is not the default policy). In the second
+series (`failure-r2`) the reclaim and default-interrupt cases hit a stale per-case folder, and its `interrupt-retry`
+cases measured a host `RetryAfter` policy: all six runs stalled silently in Running with no incident, because nothing
+re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRetryAt`, but no sweep reads it). That
+pre-existing defect is already tracked as [#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275) and is
+outside this delivery.
 
 ### A lease heartbeat failed fenced checkpoints (found and fixed)
 
@@ -690,15 +694,23 @@ Both were forwarded through the durable transport (`Deferred`), and the executio
 and by node A's own API, with no incident, empty transport and no further activity. This passed in all three complete
 runs (`c3`, `c5` and the hook-side result of `c1`, whose controller then failed on a receipt key).
 
-Cancelling a **progressing** drain on another node did **not** qualify. Node A's `While(true)` kept progressing with no
-incidents, but node B's sender stalled right after picking up its request in some runs and failed its own pre-dispatch
-check in others, so no Cancel was ever dispatched. The same happens with main's build. Sampling showed placement stayed
-on node A throughout on both builds, so ownership flapping is ruled out; the root cause is not established. Local
-cooperative Cancel of a progressing drain remains covered by the in-process tests only.
+Cancelling a **progressing** drain on another node did **not** qualify, and no Cancel was ever dispatched:
+
+- In `c5` and `c6` the execution's **placement had moved to the sender node B** before the Cancel was sent, while node
+  A, which still held runtime ownership, kept executing the loop. The sender's precondition check (placement on the
+  owner) therefore failed, correctly. Placement and the executing node can disagree during a long inline drain.
+- In `c7` and in the one-run comparisons `p-main` and `p-branch`, placement stayed on node A throughout (150 one-second
+  samples each), yet the sender never progressed past picking up its request; the cause is not established.
+- `c4` is invalid: a leftover sender from `c3` held the port, so the new sender never started.
+- Before the fence fix, `c1`'s loop was poisoned on node A (one incident, rows stalled at 1,618); `c2` never formed
+  the cluster, because its control folders already existed.
+
+The main build showed the same stalled sender in its single run. Local cooperative Cancel of a progressing drain
+remains covered by the in-process tests only; cross-node behaviour is recorded on #2831 as open.
 
 ### Second fixture cleanup
 
 After the 2,178-file archive was verified, the database container and task directory (SSH key, database password,
 transfer token) were removed from the runner, the added NSG rule was deleted (remaining rules equal the original), the
 task resource group with both workers and its storage was deleted, and the runner was deallocated again. No
-task-tagged resource or running VM remains.
+task-tagged resource or running VM remains. See `fixture-cleanup-i68.json`.
