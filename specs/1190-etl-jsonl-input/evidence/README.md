@@ -4,13 +4,18 @@ Every receipt names the source it ran on. Limits are stated with each one.
 
 ## Actual Workbench journey (SC-006, US5)
 
-The driver is [`jsonl_workbench_journey.py`](jsonl_workbench_journey.py). It ran at source `9b7c6df4d` (clean tree), on a Workbench built from that commit (Debug, .NET SDK 10.0.402), with Python 3.14.
+The driver is [`jsonl_workbench_journey.py`](jsonl_workbench_journey.py). It ran twice, with Python 3.14 and .NET SDK 10.0.402, each time on a clean tree and a Debug Workbench built from that commit:
+
+- Run 1 at `9b7c6df4d`, on an ephemeral port.
+- Run 2 at `724bb5c00`, which only adds the driver's `--port` and `--studio-origin` options, on owned port 5391 so a Studio could attach. Its summary records that revision.
+
+Both runs passed every check.
 
 The driver:
 
 - copies the Workbench settings into a private root;
 - approves two JSON Lines source files and per-case output folders;
-- starts its own Workbench on a loopback port (ephemeral for run 1; owned port 5391 for run 2, so a Studio could attach);
+- starts its own Workbench on a loopback port;
 - publishes two pipelines through the design API;
 - runs each from a native Flowchart whose `RunEtl` connects `Done` and `BusinessError` to different `WriteLine` nodes.
 
@@ -46,7 +51,7 @@ The fixture-backed Playwright spec (`Studio/tests/browser/etl-connector-authorin
 
 ## Worker-process recovery (SC-003, US3)
 
-`EtlRuntimeJourneyTests.Two_jsonl_worker_processes_recover_an_owed_partition_without_duplicate_effects` runs real child worker processes (`Elsa.Etl.WorkerHost`) over one SQLite runtime store. For each of `AfterReservation` and `BeforeAcceptance` (after physical main and error publication), it:
+`EtlRuntimeJourneyTests.Two_jsonl_worker_processes_recover_an_owed_partition_without_duplicate_effects` runs real child worker processes (`Elsa.Etl.WorkerHost`) over one SQLite runtime store. For each of `AfterReservation` and `BeforeAcceptance` (after physical publication of every route the owed batch produced, asserted per route), it:
 
 1. kills the predecessor;
 2. waits for its lease to expire;
@@ -54,7 +59,7 @@ The fixture-backed Playwright spec (`Studio/tests/browser/etl-connector-authorin
 
 The replacement:
 
-- takes the same partition under a higher fence;
+- takes the same partition under a higher fence, after which the killed owner's lease is refused with `LeaseLost`;
 - rebuilds the identical batch descriptor and digest;
 - keeps the retained output;
 - leaves the published main file set unchanged (no second physical file);
@@ -75,7 +80,28 @@ The replacement:
 | R10 gap check disabled | 1 of 5 |
 | R10 line-start check disabled | 1 of 5 |
 
-Disabling the span check leaves its third case red: the gap check still refuses that forged index.
+Disabling the span check fails only 2 of its 3 targeted cases: the third forged index is still refused, by the gap check, so that test stays green.
+
+## Whole-suite checks
+
+Run locally before the PR was opened, at `7ecec65ad`; CI covers the exact head:
+
+- `Elsa.Etl.Tests`: 1056/1056 passed, 0 skipped; `--list-tests` gives 1056; 3 min 6 s test time on a loaded shared machine.
+- Architecture guard: 609/609.
+- `Elsa.Maps.Generator -- check` and `test-tiers-check`: pass.
+- Studio ETL client: typecheck clean; Vitest 70/70.
+- Playwright `etl-connector-authoring`: 6/6.
+
+The project's manifest entry is PR tier, `child-process`, median 1.83 min, from CI timing. The new child-process journeys add roughly 30 s of local wall time. If CI's median for the project reaches 2 minutes, the §E7 tier rule moves it to the integration tier; that is decided from CI timing, not from this machine.
+
+## Artifact reviews
+
+Independent reviews ran before implementation. Each finding was adopted, and none was discarded.
+
+- **Spec, against the code at `3adffdfe1`:** one blocker and ten other findings. The blocker was that header-only v2 CSV runs never settle (FR-011).
+- **Plan and tasks:** ten should-fix findings and three nits, among them the preparer gates, the shared reader's size check and ordinals, the settlement placement, replacement ordering, forged-hash index tests and the R4 exception.
+
+PR review round 1 used three independent lenses: correctness, standards and spec conformance. Their findings and outcomes are recorded in the PR's gate-evidence comment.
 
 ## Not covered here
 

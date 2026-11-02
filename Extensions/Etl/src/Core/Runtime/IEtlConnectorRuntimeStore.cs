@@ -18,6 +18,10 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlConnectorAdmissionResult> AdmitConnectorAsync(EtlConnectorRunAdmission admission, CancellationToken cancellationToken = default);
     ValueTask<EtlConnectorRunView?> FindConnectorRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default);
     ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
+    /// <summary>Commits verified preparation and makes the run's partitions claimable.</summary>
+    /// <remarks>A file input with zero records has no partition that could complete the run, so the same transaction
+    /// settles it as success with its terminal result and owed native delivery. An identical replay returns Replay
+    /// without settling again.</remarks>
     ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default);
     ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
     /// <summary>Reserves source capacity and records a bounded permit before issuing a GET.</summary>

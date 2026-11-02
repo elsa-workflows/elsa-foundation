@@ -231,6 +231,9 @@ public sealed partial class EtlRuntimeStoreTests
             ConnectorPreparedFile(recordCount: 1, sourceByteLength: 1, jsonl: true)));
         var partition = await connector.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "worker");
         Assert.Equal(new EtlConnectorFilePosition(1, 2, 1), Assert.IsType<EtlConnectorFilePosition>(partition!.Position));
+        // Two requested partitions over one record make exactly one partition.
+        Assert.Null(await connector.ClaimConnectorPartitionAsync(scope, admission.Invocation.RunId, "second-worker"));
+        Assert.Single(await context.ConnectorPartitions.ToListAsync());
         Assert.Equal(EtlRunStatus.Running, (await connector.FindConnectorRunAsync(scope, admission.Invocation.RunId))!.Run.Status);
     }
 

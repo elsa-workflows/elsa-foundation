@@ -62,7 +62,7 @@ internal static class EtlJsonPageReader
             {
                 EtlJsonRecordReader.ValidateDocument(document.RootElement);
             }
-            catch (EtlJsonDuplicatePropertyException)
+            catch (EtlDuplicatePropertyException)
             {
                 throw Refused("etl.http.duplicate-property");
             }

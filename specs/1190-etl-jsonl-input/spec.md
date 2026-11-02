@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-02
 
-**Status**: In progress
+**Status**: Implemented — [PR #3657](https://github.com/elsa-workflows/elsa-foundation/pull/3657); [evidence](evidence/README.md)
 
 **Input**: The JSON Lines half of the file-connector criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908) ("CSV and JSON Lines file ingestion/delivery have explicit positions, replay, parsing/validation and destination-idempotency behavior"), in [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). Scope follows the [25 October research checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6393884289) and the [claim](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6578657843).
 
@@ -63,10 +63,9 @@ An operator restarts or loses an ETL worker while a JSON Lines partition has an 
 2. **Given** the stale owner tries to accept or advance after replacement, **When** it calls the store, **Then** the transition is refused and accounting is unchanged.
 3. **Given** the retained snapshot or index bytes are altered after preparation, **When** a worker opens the partition, **Then** it refuses with `etl.snapshot-integrity-failed` or a reconstruction mismatch instead of producing different records.
 4. **Given** the source file on the host changes after admission, **When** a replacement worker continues, **Then** it reads the retained snapshot, not the changed file.
+5. **Given** a JSON Lines run with owed work, **When** it is cancelled, **Then** no new batch is reserved or accepted afterwards and the run settles as cancelled once, as for CSV.
 
 ---
-
-5. **Given** a JSON Lines run with owed work, **When** it is cancelled, **Then** no new batch is reserved or accepted afterwards and the run settles as cancelled once, as for CSV.
 
 ### User Story 4 — Inspect a JSON Lines run (Priority: P2)
 
@@ -140,8 +139,8 @@ An integration author publishes a JSON Lines pipeline through the Workbench's de
 - **SC-002** Every framing and parsing rule in FR-005 and FR-006, and every edge case listed above, has a test that fails when the rule is broken (a bite-proof is recorded for the framing and the line-error routing).
 - **SC-003** In real worker processes over one runtime store, a worker killed after reservation, and one killed after physical publication and before acceptance, are each replaced; the replacement runs under a higher fence, accepts the same batch and effect identities once, the final output equals the uninterrupted output, and accounting returns to zero. Physical publication is reported as at least once. Cancellation of a JSON Lines run with owed work settles once.
 - **SC-004** Existing CSV, HTTP and v1 artifacts keep their canonical bytes and hashes, the existing ETL test project passes in full, and a zero-record CSV and a zero-record JSON Lines run each settle as success through the worker with no manual settlement.
-- **SC-006** On an actual Workbench host, a native workflow runs a published JSON Lines pipeline to success and, with rejected lines, to business error, and the run inspection shows the source kind, record count and partition ranges.
 - **SC-005** Studio authoring of a JSON Lines source is covered by a component test and observed in a real browser against a running host.
+- **SC-006** On an actual Workbench host, a native workflow runs a published JSON Lines pipeline to success and, with rejected lines, to business error, and the run inspection shows the source kind, record count and partition ranges.
 
 ## Assumptions and boundaries
 

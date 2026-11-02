@@ -32,10 +32,10 @@
 - [x] T014 Preparer accepts JSON Lines: kind and pin checks, the shard refusal, the field-count policy, the snapshot publisher, the zero-byte case, the `.jsonl` reopen, the index identity kind, the indexer, and `etl.source-too-many-records` through an injectable ceiling (`Preparation/EtlConnectorPreparer.cs`). FR-003, FR-004.
 - [x] T015 Extract the shared JSON record reader from the page reader without behaviour change. It takes the field list and a 32-bit ordinal, has no size check, and raises a neutral duplicate-name failure that each caller maps (`Http/EtlJsonRecordReader.cs`, `Http/EtlJsonPageReader.cs`). FR-006.
 - [x] T016 Batch builder for JSON Lines: file-source gates, sentinel check, kind-specific key extension and pin, framing re-verification, oversize classification, per-line parse with file ordinals, field names (`Execution/EtlConnectorInputBatchBuilder.cs`). FR-005, FR-006, FR-007.
-- [x] T017 Tests (`EtlJsonlLineIndexerTests`, `EtlJsonlInputPreparationTests`, `EtlJsonlInputBatchBuilderTests`, `EtlJsonPageReaderTests`), covering FR-004 to FR-007 and SC-002:
+- [x] T017 Tests (`EtlJsonlInputTests`, with its `Line_indexer_*`, `Preparation_*`, `Batch_*` and `Opening_*` cases, plus `EtlJsonPageReaderTests` unchanged), covering FR-004 to FR-007 and SC-002:
   - The indexer framing matrix and the ceiling refusal.
   - Preparer: unavailable file, digest mismatch, snapshot too large, empty and BOM-only files, shards refused.
-  - Batch builder: every FR-006 code and edge case; more partitions than records; two partitions; rebuild identity; tampered snapshot.
+  - Batch builder: every FR-006 code and edge case (exact and max+1 content, int64 and decimal bounds, object and array values, nested duplicates, CR-only files); two partitions; rebuild identity; tampered snapshot. More partitions than records is asserted at the store (`Jsonl_preparation_creates_file_ranges_and_bounds_its_sentinel_index`); the record ceiling at and over its bound in `Preparation_*`.
   - Forged-hash index refusals for each R10 check.
   - The host file changed after preparation is not read.
   - The HTTP page reader tests stay green unchanged.
@@ -44,7 +44,7 @@
 
 - [x] T018 Test fixtures: JSON Lines source content in `RuntimeFiles`, a `jsonl` arm in `EtlRuntimeFixtures.ConnectorAdmission`, and a JSON Lines pipeline helper (`EtlRuntimeJourneyTests.cs`, `EtlRuntimeFixtures.cs`).
 - [x] T019 Worker journeys: JSON Lines → JSON Lines and → HTTP with lookup and rejected lines (business error, counts); empty JSON Lines and header-only CSV settle as success; cancellation with owed work (`EtlConnectorWorkerJourneyTests.cs` or a new `EtlRuntimeJourneyTests.Jsonl.cs`). SC-001, SC-003, SC-004.
-- [x] T020 Child-process recovery at `AfterReservation` and `BeforeAcceptance` on two partitions (`EtlRuntimeJourneyTests.JsonlProcessRecovery.cs`; `WorkerHost` unchanged). SC-003.
+- [x] T020 Child-process recovery at `AfterReservation` and `BeforeAcceptance` on two partitions (`EtlRuntimeJourneyTests.Jsonl.cs`; `WorkerHost` changed only to map the new snapshot format). SC-003.
   - Start the replacement after the predecessor's partition lease expires.
   - Assert a higher fence, identical batch and effect identity and file bytes, and zero outstanding accounting.
 
@@ -52,8 +52,8 @@
 
 - [x] T021 [P] Types, source-kind option, binding filter, fields editor reuse, labels (`etlTypes.ts`, `EtlConnectorSourceEditor.tsx`, `EtlHttpJsonSourceFieldsEditor.tsx`, the pipeline editor and inspection text). FR-009, FR-010.
 - [x] T022 [P] Tests, written first against T021's intended behaviour. SC-005.
-  - Vitest for the kind switch, the binding filter and label (`__tests__/connector-pipeline-editor.test.tsx`), and the inspection text (`__tests__/runInspection.test.tsx`).
-  - Extend `Studio/tests/browser/etl-connector-authoring.spec.ts` and its approvals in `Studio/tests/browser/etlConnectorsFixture.tsx` with a JSON Lines source.
+  - Vitest for the kind switch, the binding filter and label (`__tests__/connector-pipeline-editor.test.tsx`). Run inspection needed no change: its `JSON Lines` kind label already existed.
+  - Extend `Studio/tests/browser/etl-connector-authoring.spec.ts` with a JSON Lines source; its existing `csv` Source approval serves as the source file.
 
 ## Phase 6 — Real host, review and evidence
 
@@ -62,7 +62,7 @@
 - [x] T025 Bite-proofs for framing, line-error routing and zero-record settlement, recorded in `evidence/`. SC-002, SC-004.
 - [x] T026 Whole ETL test project with `--list-tests` count comparison; architecture guard; `Elsa.Maps.Generator -- check`; Studio ETL client tests. SC-004.
 - [x] T027 Docs: `Extensions/Etl/README.md`, `src/Core/README.md` and `studio/Elsa.Studio.Etl/EXTENSION_POINTS.md` source-kind lists. FR-001, §2.22.1.
-- [ ] T028 Review loop to convergence (correctness, standards, spec lenses with adversarial verification); gate-evidence PR comment; set spec `**Status**: Implemented` in the PR; mark ready; request review; source-bound status on #2908, #2892 and Project #62.
+- [x] T028 Review loop to convergence (correctness, standards, spec lenses with adversarial verification); gate-evidence PR comment; set spec `**Status**: Implemented` in the PR; mark ready; request review; source-bound status on #2908, #2892 and Project #62.
 
 ## Dependencies
 

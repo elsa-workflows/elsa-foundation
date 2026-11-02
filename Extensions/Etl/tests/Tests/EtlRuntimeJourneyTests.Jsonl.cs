@@ -97,6 +97,9 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.False(before.Settled);
         Assert.Equal(boundary == EtlConnectorWorkerGate.BeforeAcceptance, before.OutputJson is not null);
         Assert.Equal(boundary == EtlConnectorWorkerGate.BeforeAcceptance, before.MainFilePublished);
+        // Every route the owed batch produced is physically published before the acceptance boundary.
+        if (before.OutputJson is not null)
+            Assert.Equal(EtlConnectorRecordCodec.Read<EtlConnectorBatchOutput>(before.OutputJson).Errors is not null, before.ErrorFilePublished);
         var publishedBefore = PublishedMainFiles(files);
         if (boundary == EtlConnectorWorkerGate.BeforeAcceptance)
             AssertPublishedMatchesRetained(files, before);
@@ -111,6 +114,13 @@ public sealed partial class EtlRuntimeJourneyTests
         var recovered = await survivor.WaitForConnectorCheckpointAsync(deadline.Token);
 
         AssertReplacementWorker(stopped, recovered, survivor);
+        await using (var operation = host.Services.CreateAsyncScope())
+        {
+            // The killed owner's lease cannot accept the batch its replacement now owns.
+            var stale = await operation.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>()
+                .AcceptConnectorBatchAsync(stopped.Lease, stopped.BatchId!, deadline.Token);
+            Assert.Equal(EtlStoreStatus.LeaseLost, stale.Status);
+        }
         Assert.Equal(stopped.BatchId, recovered.BatchId);
         var pending = await ReadJsonlBatchAsync(host.Services, stopped.BatchId!, deadline.Token);
         Assert.Equal(before.DescriptorJson, pending.DescriptorJson);

@@ -33,7 +33,7 @@ Only the artifact gains a shape; every persisted runtime shape is reused.
 | `Index` entry 0 | header record span | sentinel `(0, 0, bomLength)` |
 | `Index` entry *i* ≥ 1 | record *i* span, contiguous | record *i* span; gaps only over blank lines |
 | `Index.ByteLength` | `(RecordCount + 1) × 24 ≤ Source × 24` | `(RecordCount + 1) × 24 ≤ (Source + 1) × 24` |
-| `RecordCount` | data rows | non-blank lines, ≤ `int.MaxValue` |
+| `RecordCount` | data rows | non-blank lines; preparation refuses more than `int.MaxValue` |
 
 ## Position, batch range and identity (unchanged)
 

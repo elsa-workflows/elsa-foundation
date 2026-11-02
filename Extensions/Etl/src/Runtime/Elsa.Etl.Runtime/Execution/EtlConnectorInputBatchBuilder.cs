@@ -542,7 +542,8 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             throw Invalid("etl.source-index-invalid", ordinal);
 
         var maxRecordBytes = _pipeline.Limits.MaxRecordBytes;
-        var content = spanLength <= maxRecordBytes + 2L ? new byte[spanLength] : null;
+        // Only spans that can hold an admissible record (content plus CRLF) are buffered, never beyond one array.
+        var content = spanLength <= Math.Min(maxRecordBytes + 2L, Array.MaxLength) ? new byte[spanLength] : null;
         var framing = new JsonlFraming();
         source.Position = entry.StartByteOffset;
         await ScanAsync(source, spanLength, content, (chunk, offset) => framing.AcceptSpan(chunk, offset, spanLength), cancellationToken);
@@ -567,7 +568,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             var (row, error) = EtlJsonRecordReader.ReadFields(document.RootElement, _jsonlSource!.Fields, _jsonlPointers, ordinal);
             return new EtlConnectorInputRecord(entry.Ordinal, spanLength, row is null ? null : EtlConnectorCsvSupport.FreezeRow(row), error);
         }
-        catch (Exception exception) when (exception is JsonException or EtlJsonDuplicatePropertyException or InvalidOperationException)
+        catch (Exception exception) when (exception is JsonException or EtlDuplicatePropertyException or InvalidOperationException)
         {
             // Decoder exceptions can carry input fragments; only the stable code is retained.
             return JsonlError("etl.jsonl.record-invalid");

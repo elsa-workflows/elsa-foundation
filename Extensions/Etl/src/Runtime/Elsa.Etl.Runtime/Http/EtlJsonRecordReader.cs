@@ -6,7 +6,7 @@ using Elsa.Etl.Runtime.Transformation;
 namespace Elsa.Etl.Runtime.Http;
 
 /// <summary>A repeated property name inside one JSON object; carries no source text.</summary>
-internal sealed class EtlJsonDuplicatePropertyException() : Exception("A JSON object repeats a property name.");
+internal sealed class EtlDuplicatePropertyException() : Exception("A JSON object repeats a property name.");
 
 /// <summary>Reads declared typed fields from one JSON object, shared by HTTP JSON pages and JSON Lines files.</summary>
 /// <remarks>Callers own size limits and map document-level failures to their own stable codes.</remarks>
@@ -39,7 +39,7 @@ internal static class EtlJsonRecordReader
     }
 
     /// <summary>Rejects duplicate property names at any depth and forces decoding of every string, selected or not.</summary>
-    /// <exception cref="EtlJsonDuplicatePropertyException">A property name repeats within one object.</exception>
+    /// <exception cref="EtlDuplicatePropertyException">A property name repeats within one object.</exception>
     /// <exception cref="InvalidOperationException">A string or property name is not valid UTF-8.</exception>
     public static void ValidateDocument(JsonElement element)
     {
@@ -50,7 +50,7 @@ internal static class EtlJsonRecordReader
                 foreach (var property in element.EnumerateObject())
                 {
                     if (!names.Add(property.Name))
-                        throw new EtlJsonDuplicatePropertyException();
+                        throw new EtlDuplicatePropertyException();
                     ValidateDocument(property.Value);
                 }
                 break;

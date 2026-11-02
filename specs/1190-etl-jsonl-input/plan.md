@@ -36,14 +36,14 @@ Both constitutions and the review checklist were loaded.
 | §E2.6 Executable-always-runs, artifact-only runtime | Pass. A JSON Lines run needs only the artifact, its pins and the retained snapshot. |
 | §E6 Type naming R1–R8 | Pass with one recorded exception. New types: `EtlJsonlSource`, `EtlJsonlLineIndexer`, `EtlJsonRecordReader`. **R4 exception:** `…Source` is reserved for "returns on request"; `EtlJsonlSource` is a member of the existing closed `EtlSource` declaration set beside `EtlCsvSource` and `EtlHttpJsonSource`, and renaming the set is out of scope. The wire discriminator `jsonl` matches the existing destination kind string. `EtlPreparedCsvInput` keeps its public name (research R3). |
 | §2.21.1 Tests describing valid behaviour still pass | One existing test, `Empty_csv_preparation_can_settle_shared_terminal_success`, encodes the zero-record gap by settling by hand. It is rewritten to assert automatic settlement, with the reason recorded (FR-011). |
-| §2.22.1 Extension-point catalog in the same unit | No extension point is added; the source kind is a closed polymorphic set. `Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md:16` describes the authoring surface as "HTTP or CSV sources" and is updated in the same unit (T027). |
+| §2.22.1 Extension-point catalog in the same unit | No extension point is added; the source kind is a closed polymorphic set. FR-011 adds an obligation to the existing optional `IEtlConnectorRuntimeStore.CommitConnectorPreparationAsync`, so `Extensions/Etl/src/Core/EXTENSION_POINTS.md` and the method documentation state it. `Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md:16` describes the authoring surface as "HTTP or CSV sources" and is updated in the same unit (T027). |
 | §2.23.1–§2.23.2 Registration and behaviour tests | Behaviour tests per FR; no new registration. |
 | §2.23.3 Public by meaning | `EtlJsonlSource` is public, like its sibling source records; the indexer and record reader are internal. |
 | §2.23.5 Infrastructure exceptions wrapped | `JsonException` and decoder failures become record errors; I/O failures keep the existing `etl.snapshot-*` diagnostics. |
 | §4.1 / §E5 Public API delta | Additive: one record and its members, recorded in `Core/PublicAPI.Unshipped.txt`. |
 | §E7 CI tiers | No new test project. |
 
-No violations, so Complexity Tracking is empty.
+No violations; one recorded naming exception (R4). Recorded debt: the shared `EtlJsonRecordReader` lives beside `EtlJsonPointer` in the `Http` namespace, and the JSON Lines snapshot is opened through `EtlConnectorCsvSupport`; both are format-neutral helpers whose names predate this slice. Complexity Tracking is empty.
 
 ## Design
 
@@ -111,7 +111,7 @@ No violations, so Complexity Tracking is empty.
   - The binding picker filters Source approvals of kind `csv`, labelled "Source file binding".
   - The kind switch carries fields across, as the existing CSV↔HTTP switch does.
 - `EtlHttpJsonSourceFieldsEditor.tsx`: accepts a JSON Lines source, rendering only the fields table (no records pointer or pagination).
-- `PipelineBindingSelect.tsx`: `connectorRoleLabels.Source` gains a source-file label so the JSON Lines picker does not read "Source CSV".
+- `PipelineBindingSelect.tsx`: an optional `subjectLabel` prop overrides the role and kind wording, so the JSON Lines picker reads "Source file" rather than "Source CSV".
 - Pipeline editor summary labels and run inspection empty-state text name JSON Lines where they name only CSV/HTTP.
 
 ## Verification plan
@@ -120,7 +120,7 @@ Focused checks run while implementing. CI runs whole suites (`Build & test`, `Fu
 
 1. **Unit**, all in `Extensions/Etl/tests/Tests`:
    - `EtlJsonlLineIndexerTests`: BOM, LF/CRLF mix, unterminated last line, blank and whitespace-only lines, empty file, entry bounds, sentinel.
-   - `EtlJsonRecordReader` coverage through the JSON Lines batch builder: every FR-006 code, exact and over-max content, depth, duplicate names, invalid UTF-8, non-object, wrong types, int64 and decimal bounds.
+   - JSON Lines batch-builder coverage of every FR-006 code: exact and over-max content, depth, top-level and nested duplicate names, invalid UTF-8, non-object, wrong types, object and array values, int64 and decimal bounds, CR-only files.
    - `EtlArtifactV2JsonTests`: round trip, plus unchanged hashes for existing fixtures.
    - Compiler V2, executable reader, `HostConnectorBindings` and codec tests for the new kind and the input-digest rule.
 2. **Preparer and batch builder**:
@@ -132,7 +132,7 @@ Focused checks run while implementing. CI runs whole suites (`Build & test`, `Fu
    - JSON Lines → JSON Lines and JSON Lines → HTTP, with lookup and rejected lines, settling as a business error.
    - An empty JSON Lines file and a header-only CSV settle as success with no manual call.
    - Cancellation with owed work.
-5. **Worker process recovery** (`EtlRuntimeJourneyTests.JsonlProcessRecovery.cs`), using the child `WorkerHost`:
+5. **Worker process recovery** (`EtlRuntimeJourneyTests.Jsonl.cs`), using the child `WorkerHost`:
    - Gates at `AfterReservation` and `BeforeAcceptance` on a two-partition file. The child host needs no change: it receives file bindings through `EtlWorkerConfiguration` and shares the snapshot root.
    - Crash, then start the replacement only after the predecessor's partition lease has expired, so owed-batch-first claiming gives it the owed partition. A gate checkpoints once per process, and partition 1 is otherwise free immediately.
    - Assert the higher fence, the same batch descriptor, effect identity and file bytes, no lost records and zero outstanding accounting.

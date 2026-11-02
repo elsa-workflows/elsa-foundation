@@ -160,6 +160,69 @@ public sealed class EtlJsonlInputTests
     }
 
     [Fact]
+    public async Task Batch_classifies_boundary_values_nested_duplicates_and_cr_only_files()
+    {
+        using var files = new TestRoot();
+        var atLimit = "{\"id\":1,\"name\":\"" + new string('a', 64 - 18) + "\"}";
+        var overLimit = "{\"id\":2,\"name\":\"" + new string('b', 64 - 17) + "\"}";
+        Assert.Equal((64, 65), (atLimit.Length, overLimit.Length));
+        var lines = new[]
+        {
+            atLimit,
+            overLimit,
+            "{\"id\":9223372036854775808,\"name\":\"big\"}",
+            "{\"id\":3,\"name\":{\"first\":\"Ada\"}}",
+            "{\"id\":4,\"name\":[\"Ada\"]}",
+            "{\"id\":5,\"name\":\"N\",\"meta\":{\"k\":1,\"k\":2}}",
+            "{\"id\":6,\"name\":\"Dec\",\"amount\":1.00000000000000000000000000001}"
+        };
+        var source = files.WriteBytes("source.jsonl", Utf8(string.Join("\n", lines) + "\n"));
+        var baseline = JsonlPipeline(maxBatchRecords: 100);
+        var pipeline = baseline with
+        {
+            Source = new EtlJsonlSource("source", [new EtlJsonField("id", "/id", EtlColumnType.Int64, true),
+                new EtlJsonField("name", "/name", EtlColumnType.String, true),
+                new EtlJsonField("amount", "/amount", EtlColumnType.Decimal, false)]),
+            Limits = baseline.Limits with { MaxRecordBytes = 64 }
+        };
+        var admission = Admission(files.Scope, pipeline, source);
+        var prepared = await PrepareAsync(files, pipeline, source, admission);
+        await using var builder = await EtlConnectorInputBatchBuilder.OpenAsync(files.SnapshotRoot, admission, prepared, 0);
+
+        var batch = (await builder.BuildNextAsync(new EtlConnectorFilePosition(1, 8, 1))).Batch!;
+
+        Assert.Equal(new string?[]
+            {
+                null, "etl.record-too-large", "etl.invalid-value", "etl.invalid-value", "etl.invalid-value",
+                "etl.jsonl.record-invalid", "etl.invalid-value"
+            },
+            batch.Records.Select(record => record.Error?.Code));
+        Assert.Equal(new string?[] { null, null, "id", "name", "name", null, "amount" }, batch.Records.Select(record => record.Error?.Field));
+
+        // CR-only line ends are not record terminators: the whole file is one line and one invalid record.
+        using var crFiles = new TestRoot();
+        var crSource = crFiles.WriteBytes("source.jsonl", Utf8("{\"id\":1,\"name\":\"A\"}\r{\"id\":2,\"name\":\"B\"}\r"));
+        var crAdmission = Admission(crFiles.Scope, JsonlPipeline(), crSource);
+        var crPrepared = await PrepareAsync(crFiles, JsonlPipeline(), crSource, crAdmission);
+        Assert.Equal(1, crPrepared.File!.RecordCount);
+        await using var crBuilder = await EtlConnectorInputBatchBuilder.OpenAsync(crFiles.SnapshotRoot, crAdmission, crPrepared, 0);
+        var crBatch = (await crBuilder.BuildNextAsync(new EtlConnectorFilePosition(1, 2, 1))).Batch!;
+        Assert.Equal("etl.jsonl.record-invalid", Assert.Single(crBatch.Records).Error!.Code);
+    }
+
+    [Fact]
+    public async Task Preparation_accepts_a_record_count_exactly_at_its_ceiling()
+    {
+        using var files = new TestRoot();
+        var source = files.WriteBytes("source.jsonl", Utf8("{\"id\":1,\"name\":\"Ada\"}\n{\"id\":2,\"name\":\"Bram\"}\n"));
+        var result = await new EtlConnectorPreparer(Bindings(files.Scope, source), files.SnapshotRoot,
+            new FileChunkPublisherFactory(), maxSourceRecords: 2).PrepareAsync(Admission(files.Scope, JsonlPipeline(), source));
+
+        Assert.True(result.Succeeded, result.Diagnostic?.Code);
+        Assert.Equal(2, result.Prepared!.File!.RecordCount);
+    }
+
+    [Fact]
     public async Task Two_partitions_rebuild_the_same_identity_and_ignore_a_changed_host_file()
     {
         using var files = new TestRoot();
