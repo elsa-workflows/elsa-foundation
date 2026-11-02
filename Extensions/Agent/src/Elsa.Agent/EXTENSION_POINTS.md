@@ -135,8 +135,11 @@ participants of one owner instance. Any replacement, forwarding decorator or add
 last-registered service of those four returns `Unsupported`, with no shadow default state; admission
 and turns keep their existing behavior. `IAgentTurnRegistry` and `IAgentTurnStateStore` replacements
 stay supported because the orchestrator holds the claims around their calls. Only the default
-registry's busy refusal is known to precede a write, so a replacement registry's refusal leaves the
-session conservatively busy for policy changes. `IAgentActionProposalExecutor` is not a participant.
+registry's busy refusal is known to precede a write, so a replacement registry's refusal or
+registration failure leaves the foreground claim held: every autonomy change on that session returns
+`agent.session.busy` until the session expires. Likewise, an accepted prompt that never reaches a
+terminal status (for example after a process crash before its stream starts) keeps its prompt claim;
+that prompt already blocked new prompts before #3440, and a persistent store must resolve it. `IAgentActionProposalExecutor` is not a participant.
 Only the default executor's engine-private pre-dispatch cancellation is recorded as Cancelled; any
 failure a replacement returns, including the `agent.proposal.cancelled` code, is recorded as a Failed
 zero-effect refusal.

@@ -58,7 +58,9 @@ returns 400 for any session.
 Readback and attribution:
 
 - Create-session and session-detail responses gain an additive `policy` object of the same shape.
-  It is omitted only when the composition cannot read it back (Unsupported).
+  It is omitted only when the composition cannot read it back (Unsupported). Clients treat an
+  absent `policy` as "no server-owned autonomy setting": the selector is unavailable, and an update
+  would return `agent.session.autonomy_unsupported`.
 - Each session-detail message view gains `acceptedPolicyRevision`. It is always serialized, as
   `null` when the installed store does not own revisions.
 - The accepted-prompt response projects the domain `AgentMessage` through `AgentAcceptedMessageResponse`:
