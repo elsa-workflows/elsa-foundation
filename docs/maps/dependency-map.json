@@ -685,6 +685,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review.Api",
+          "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Review",
+          "path": "Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Workflows",
           "path": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj"
         },
@@ -23491,6 +23501,16 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn",
+          "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Bpmn.Interchange",
+          "path": "Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Activities.Design.Api",
