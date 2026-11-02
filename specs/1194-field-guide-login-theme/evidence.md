@@ -32,7 +32,10 @@ Round 1 against the parent PR head found two real specificity regressions in dar
 They were fixed in `9df15f0f4` with zero-specificity `:where()` exclusions, preserving the prior cascade.
 Round 2 independently reviewed correctness, repository standards and acceptance: all clean.
 Round 3 checked the evidence-only delta. Round 4 covers the final native-contrast button fix and
-completion metadata; its exact-head results are on the PR.
+completion metadata; its exact-head results are on the PR. Round 5 independently reviewed the combined
+diff against main at `329ec72b0`, including the prerequisite artwork changes, and all three lenses were clean.
 
-Hosted checks, prerequisite merge, retargeting to main, and resulting-main verification remain pending;
-they are not represented as passed by these local checks.
+The PR now targets main so hosted checks can qualify while the prerequisite finishes.
+Hosted checks, prerequisite merge, and resulting-main verification remain pending;
+they are not represented as passed by these local checks. The documentation-only delivery update
+does not change the tested implementation; its final-head review is recorded on the PR.
