@@ -32,6 +32,7 @@ Known host-owned Slot IDs:
 - `workflow.activity.property-editors`
 - `workflow.expression-editors`
 - `workflow.run-input.editors`
+- `workflow.run.related-links`
 - `workflow.designer.node-renderers`
 - `workflow.designer.toolbox-items`
 - `workflow.designer.panels`
@@ -46,6 +47,10 @@ Known host-owned Slot IDs:
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
+
+## Related run links
+
+Hosts may expose the optional `api.workflowRunRelatedLinks` registry. A `StudioWorkflowRunRelatedLinkContribution` names its native activity types and exact public state-view kind/version, then synchronously returns related Studio routes from that authorized projection. The native inspector owns the read and scope retirement; the host rejects foreign destinations/backends and the target route authorizes its own reads. Contributions never receive private activity frames. Hosts without this Slot retain ordinary native inspection.
 
 ## Activity icons
 
@@ -271,6 +276,13 @@ existing tool-contract contribution. The generic runner calls it only after expl
 backend pending acceptance. Resolve with an observed resource outcome, never merely after enqueueing
 an editor action. Matching duplicate delivery coalesces within this in-memory lifetime; post-dispatch
 loss yields uncertainty rather than replay. Backend acknowledgement validates the module result.
+
+Preview (#3441): a module may also provide `clientTargetAvailability` on the same contribution. The runner
+asks it before dispatch whether the invocation's exact unsaved target (its editor, working generation or other
+module-private state) still exists in this page. Anything other than `available`, or a failure to answer, refuses
+the operation with zero effect and the module's reason. The runner never reconstructs vanished unsaved state, and
+a missing adapter is reported as such. An operation already dispatched without a receipt stays uncertain; after a
+reload or a lost page its owner can resolve it explicitly, and that statement is never a receipt.
 
 Modules own live bindings, revision interpretation, validation, presentation and native undo.
 Resource targets now require `moduleId` and nullable `resourceId`/`revision`; mutations enforce the

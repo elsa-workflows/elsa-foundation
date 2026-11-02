@@ -286,3 +286,42 @@ function streamFrom(chunks: string[]) {
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
+
+// Preview (#3441): explicit provider notices and coded stream refusals.
+describe("agent stream recovery outcomes", () => {
+  it("keeps a provider notice and a refusal's code instead of treating them as transient progress or bare text", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      // The server's AgentProviderNotice(Code, Label); the label is the notice's text even without event content.
+      `data: ${JSON.stringify({ kind: "progress", payload: { code: "agent.provider.github_copilot.conversation_reset", label: "GitHub Copilot could not resume this session's earlier conversation." } })}\n\n`,
+      `data: ${JSON.stringify({ Kind: "progress", Content: "Reading context" })}\n\n`,
+      `data: ${JSON.stringify({ Kind: "error", Error: { Code: "agent.context.disclosure_budget_exceeded", Message: "Session limit reached." } })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([
+      { type: "provider-notice", code: "agent.provider.github_copilot.conversation_reset", message: "GitHub Copilot could not resume this session's earlier conversation." },
+      { type: "progress", label: "Reading context" },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+    ]);
+  });
+
+  it.each(["snapshots", "bytes"])("keeps the %s session limit detail and drops an unknown one", async limit => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", statusCode: 409, limit } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "rows" } })}\n\n`,
+      // One disclosure that does not fit, or is larger than any session: not a session limit, so no limit is kept.
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-does-not-fit" } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "error", error: { code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit: "snapshot-too-large" } })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+    expect(events).toEqual([
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached.", limit },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." },
+      { type: "error", code: "agent.context.disclosure_budget_exceeded", message: "Session limit reached." }
+    ]);
+  });
+});

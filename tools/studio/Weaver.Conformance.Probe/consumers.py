@@ -218,6 +218,39 @@ def select_protocol_profile(run, name):
     profile["protocolProfile"] = name
 
 
+DURABLE_STORE_FEATURE = "FoundationAgentEntityFrameworkCore"
+DURABLE_STORE_DEPENDENCY = "Secrets"
+
+
+def enable_durable_agent_store(run, database, encryption_key, *, lease_seconds=15):
+    """Configure the packaged EF session store on SQLite in the backend's runtime JSON, without rebuilding it.
+
+    The caller must stop its own backend first and start a new generation afterwards; this helper never starts or stops
+    a host. The database is a new file under the run's owned output root. The Secrets key protecting the store's
+    payloads stays private in the runtime JSON and is never returned, so receipts cannot carry it.
+    """
+    database = Path(database)
+    check(database.is_absolute() and database.resolve().is_relative_to(run.root.resolve()) and not database.exists()
+          and database.parent.is_dir() and database.parent.stat().st_mode & 0o077 == 0,
+          "The durable store needs a new database file in a private directory under the owned run root")
+    check(isinstance(encryption_key, str) and len(encryption_key) >= 32, "The durable store needs a private Secrets key")
+    check(type(lease_seconds) is int and 15 <= lease_seconds <= 86400, "The store's lease is 15 to 86400 seconds")
+    profile = run.profiles["backend"]
+    path = profile["published"] / "shells.json"
+    document = json.loads(path.read_text())
+    features = document["CShells"]["Shells"]["Authoring"]["Features"]
+    check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features,
+          "The durable store is configured once per run, over a baseline that did not select it")
+    features[DURABLE_STORE_DEPENDENCY] = {"EncryptionKey": encryption_key}
+    features[DURABLE_STORE_FEATURE] = {"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(database), "LeaseSeconds": lease_seconds}
+    write_json(path, document)
+    path.chmod(0o600)
+    selected = {"feature": DURABLE_STORE_FEATURE, "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
+                "database": str(database), "leaseSeconds": lease_seconds}
+    profile["durableAgentStore"] = dict(selected)
+    return selected
+
+
 def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_password, provider="copilot", enroll=False):
     """Write private owned origins/seed settings before launch; never emit credentials to receipts."""
     from urllib.parse import urlparse

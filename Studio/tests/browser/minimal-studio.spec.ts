@@ -160,7 +160,7 @@ for (const item of presets) test(`${item.name} keeps long folder trees beside th
         const bounds = await navigation.boundingBox();
         const tableBounds = await table.boundingBox();
         expect(tableBounds!.x).toBeGreaterThanOrEqual(bounds!.x + bounds!.width);
-        const controls = await page.getByRole("region", { name: "Workflow library organization", exact: true }).boundingBox();
+        const controls = await page.locator(".wf-library-toolbar").boundingBox();
         expect(Math.abs(controls!.x - tableBounds!.x)).toBeLessThanOrEqual(1);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
         if (filtersOpen) await page.getByRole("button", { name: "Filters", exact: true }).click();
@@ -249,9 +249,14 @@ test("Classic dark keeps library fields and buttons aligned beside folders", asy
   for (const width of [1440, 1329]) {
     await page.setViewportSize({ width, height: 960 });
     const sort = await controls.getByLabel("Sort workflows", { exact: true }).boundingBox();
-    for (const button of ["Favorites", "Filters", "Save view", "Manage tags"].map(name => controls.getByRole("button", { name, exact: true }))) {
+    for (const button of ["Favorites", "Filters"].map(name => controls.getByRole("button", { name, exact: true }))) {
       const bounds = await button.boundingBox();
       expect(Math.abs(bounds!.y + bounds!.height - sort!.y - sort!.height)).toBeLessThanOrEqual(1);
+    }
+    const view = await controls.getByLabel("Saved workflow view", { exact: true }).boundingBox();
+    for (const name of ["Save view", "Manage tags"]) {
+      const bounds = await controls.getByRole("button", { name, exact: true }).boundingBox();
+      expect(Math.abs(bounds!.y + bounds!.height - view!.y - view!.height)).toBeLessThanOrEqual(1);
     }
     const navigation = await page.getByRole("complementary", { name: "Workflow folders", exact: true }).boundingBox();
     expect((await table.boundingBox())!.x).toBeGreaterThanOrEqual(navigation!.x + navigation!.width);
