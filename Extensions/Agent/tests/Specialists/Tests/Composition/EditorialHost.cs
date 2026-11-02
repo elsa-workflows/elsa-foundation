@@ -39,6 +39,8 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
+using Elsa.Activities.Bpmn.Models;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Agent.Specialists.Tests.Composition;
@@ -102,6 +104,7 @@ internal sealed class EditorialHost : IAsyncDisposable
             .WithFeature(services => new ActivitiesRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Bpmn.ActivitiesBpmnFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new BackgroundActivitiesFeature { RunWorkers = false, LeaseDurationSeconds = 60 }.ConfigureServices(services))
@@ -315,7 +318,12 @@ internal static class EditorialExecutable
             new("comments-key", "Comments", new("String"), false, true, "elsa.json")
         ]);
 
-    public static async Task<(WorkflowExecutable Executable, string CopywriterVersion, string ProofreaderVersion)> BuildAsync(DateTimeOffset deadline, int maxRounds = 3)
+    /// <param name="reauthor">
+    /// Optional: receives the native BPMN process graph with the exact specialist versions and returns the executable
+    /// structure to run instead, so a test can route the process through authoring, export, import and compilation.
+    /// </param>
+    public static async Task<(WorkflowExecutable Executable, string CopywriterVersion, string ProofreaderVersion)> BuildAsync(DateTimeOffset deadline, int maxRounds = 3, bool bpmn = false,
+        Func<BpmnStructure, string, string, Task<ExecutableActivityStructure>>? reauthor = null)
     {
         var copywriter = await SpecialistPublicationTests.PublishAndPlaceSpecialistAsync(Copywriter, CopywriterNodeOrigin,
             new Dictionary<string, RuntimeInputBinding>
@@ -347,7 +355,7 @@ internal static class EditorialExecutable
         var writer = copywriter.Placement.Root;
         var reader = proofreader.Placement.Root;
         var flowchartContract = ClrActivityContractTestBuilder.BuildContract(typeof(FlowchartActivity));
-        var flowchart = new ExecutableNode("editorial-flowchart", "authored-editorial-flowchart", typeof(FlowchartActivity).FullName!, "1.0.0",
+        var flowchart = bpmn ? await Bpmn(gate, writer, check, reader, review, reauthor is null ? null : x => reauthor(x, copywriter.DefinitionVersionId, proofreader.DefinitionVersionId)) : new ExecutableNode("editorial-flowchart", "authored-editorial-flowchart", typeof(FlowchartActivity).FullName!, "1.0.0",
             WellKnownRuntimeActivityConsumers.ClrActivity, flowchartContract.DescriptorPayload, new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, [gate, writer, check, reader, review])],
             structure: new ExecutableActivityStructure(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion,
@@ -385,6 +393,48 @@ internal static class EditorialExecutable
                 Variable("verdict", "Verdict", Text), Variable("review-comments", "ReviewComments", Text)
             ]);
         return (executable, copywriter.DefinitionVersionId, proofreader.DefinitionVersionId);
+    }
+
+    /// <summary>
+    /// The same placed specialists, gates and review as bound children of a native BPMN process. Outcome-named flows
+    /// route each child's completion; the reviewer's flow back to the gate is a loop that mints a fresh iteration.
+    /// </summary>
+    private static async Task<ExecutableNode> Bpmn(ExecutableNode gate, ExecutableNode writer, ExecutableNode check, ExecutableNode reader, ExecutableNode review,
+        Func<BpmnStructure, Task<ExecutableActivityStructure>>? reauthor)
+    {
+        var contract = ClrActivityContractTestBuilder.BuildContract(typeof(BpmnProcessActivity));
+        var structure = new BpmnStructure(
+            [
+                new BpmnElement("start", BpmnElementTypes.StartEvent),
+                new BpmnElement("gate", BpmnElementTypes.Task, childNodeId: gate.ExecutableNodeId),
+                new BpmnElement("write", BpmnElementTypes.ServiceTask, childNodeId: writer.ExecutableNodeId),
+                new BpmnElement("check", BpmnElementTypes.Task, childNodeId: check.ExecutableNodeId),
+                new BpmnElement("proofread", BpmnElementTypes.ServiceTask, childNodeId: reader.ExecutableNodeId),
+                new BpmnElement("human-review", BpmnElementTypes.UserTask, childNodeId: review.ExecutableNodeId),
+                new BpmnElement("approved", BpmnElementTypes.EndEvent),
+                new BpmnElement("rejected", BpmnElementTypes.EndEvent),
+                new BpmnElement("exhausted", BpmnElementTypes.EndEvent)
+            ],
+            [
+                new BpmnSequenceFlow("f-start", "start", "gate"),
+                new BpmnSequenceFlow("f-write", "gate", "write", conditionOutcome: "Write"),
+                new BpmnSequenceFlow("f-review-ready", "gate", "human-review", conditionOutcome: "Approved"),
+                new BpmnSequenceFlow("f-exhausted", "gate", "exhausted", conditionOutcome: "Exhausted"),
+                new BpmnSequenceFlow("f-check", "write", "check"),
+                new BpmnSequenceFlow("f-proofread", "check", "proofread", conditionOutcome: "Review"),
+                new BpmnSequenceFlow("f-loop", "proofread", "gate"),
+                new BpmnSequenceFlow("f-approved", "human-review", "approved", conditionOutcome: "Approved"),
+                new BpmnSequenceFlow("f-rejected", "human-review", "rejected", conditionOutcome: "Rejected")
+            ]);
+        var canStart = contract.Inputs[nameof(BpmnProcessActivity.CanStartWorkflow)];
+        return new ExecutableNode("editorial-flowchart", "authored-editorial-bpmn", typeof(BpmnProcessActivity).FullName!, "1.0.0",
+            WellKnownRuntimeActivityConsumers.ClrActivity, contract.DescriptorPayload,
+            new Dictionary<string, RuntimeInputBinding> { [canStart.Key] = Literal(canStart.Key, canStart.Type, false) }, new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(BpmnProcessActivity.ActivitiesSlotName, [gate, writer, check, reader, review])],
+            structure: reauthor is null
+                ? new ExecutableActivityStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure))
+                : await reauthor(structure),
+            activityContract: contract);
     }
 
     private const string CopywriterNodeOrigin = "editorial-copywriter";

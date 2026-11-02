@@ -75,11 +75,28 @@ Extract shared semantic graph models/identities into Elsa.Activities.Bpmn.Core. 
 
 ### D8 — Native tools, approval and teams
 
-Separate model turns, human approval waits and protected effects into native operations. M4 delivers the finite [editorial revision/review example](contracts/editorial.md), including a real exact-wait human decision path, before M6 reusable teams/tools. SDK approval objects are not durable permission. Coordinate #2912's decision/approval/effect/budget work; use native complete-cohort barriers, bounded feedback and cancellation. Do not adopt MAF Workflows checkpoints as a second owner for the initial patterns. [Execution contract](contracts/execution.md) and [team contract](contracts/teams.md).
+Separate model turns, human approval waits and protected effects into native operations. M4 delivers the generic [human review](contracts/human-review.md) wait and decision path, shown by the [editorial sample](contracts/editorial.md), before M6 reusable teams/tools. SDK approval objects are not durable permission. Coordinate #2912's decision/approval/effect/budget work; use native complete-cohort barriers, bounded feedback and cancellation. Do not adopt MAF Workflows checkpoints as a second owner for the initial patterns. [Execution contract](contracts/execution.md) and [team contract](contracts/teams.md).
 
 ### D9 — Module-owned Studio experience
 
 Build /agents over provider-filtered generic APIs, with existing api.activityEditors contributions. Keep generic contract/save/conflict/publish ownership. Add module-owned playground/evaluation/inspection routes and a narrow occurrence-link contribution where needed; no universal resource-lens/tab framework. [Studio contract](contracts/studio.md).
+
+### D10 — Configuration-defined specialists
+
+Owner decision (2 Nov 2026): specialists are user-defined agents, authored in Studio or defined in host
+configuration, in the spirit of Azure AI Foundry agents. A configuration source under the Agents domain reads
+operator-versioned specialist manifests and validates each one. It contributes the valid ones through the existing
+activity reconciliation lifecycle (`ActivityVersionsReconciling`) as source-owned content. Today's source-owned
+publication (`SourceOwnedActivityVersionPublisher` → `ExecutableNodeCompiler.CompileSourceOwnedRoot`) builds a single
+root node and never calls a provider compiler. It must be extended so that provider-backed source content is
+compiled through the registered `IActivityTemplateProviderCompiler`, with the same preflight as Studio publication:
+schema, model capability, runtime and storage. That extension is generic Essentials publishing work, not a specialist
+fork. It generalizes `ActivityTemplateCompiler` and the Studio preflight beyond drafts: the review-policy subject,
+schema validation, and the candidate evaluation extracted from `ActivityDefinitionPublisher`. It reports a compile or preflight failure for that one
+version without aborting the pass. Today one invalid reconciliation entry aborts the whole pass, so per-definition
+isolation is split: the configuration source validates the manifest and version before contribution, and the
+publication bridge isolates compile and preflight failures. Versions are operator-declared; reconciliation keeps rejecting same-version content changes.
+[Publication contract](contracts/publication.md), FR-027, T061–T062.
 
 Detailed meanings live in the [glossary](../../docs/glossary/elsa.md); state/support decisions live in the linked documents. Proposed public signatures stabilize only after the first independent package consumer and owning implementation review.
 

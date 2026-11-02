@@ -193,15 +193,19 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
     private sealed class CountingActivities(IActivityExecutionStateStore inner) : IActivityExecutionStateStore
     {
         public int Reads { get; private set; }
+        public int HistoryReads { get; private set; }
+        public int AncestorReads { get; private set; }
         public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken ct = default) => inner.SaveAsync(state, ct);
         public ValueTask<ActivityExecutionState?> FindAsync(string workflow, string activity, CancellationToken ct = default)
         {
             Reads++;
+            AncestorReads++;
             return inner.FindAsync(workflow, activity, ct);
         }
         public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken ct = default)
         {
             Reads++;
+            HistoryReads++;
             return inner.ListPageAsync(query, ct);
         }
         public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(ActivityExecutionStateParentPageQuery query, CancellationToken ct = default)

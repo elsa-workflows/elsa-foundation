@@ -86,7 +86,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def fixture(self, provider="copilot", *, serialized=False, read=False):
+    def fixture(self, provider="copilot", *, serialized=False, read=False, inline=False):
         self.sequence += 1; root = self.root / str(self.sequence); root.mkdir()
         output = root / "browser"; output.mkdir()
         command = {"commandId": "driver-command", "toolName": "sample_change", "arguments": {"opaque": [False, 3]}}
@@ -101,14 +101,14 @@ class ProtocolCorrelationTests(unittest.TestCase):
         rows = [row("request", sessionId="session-a", tools=[{"name": command["toolName"], "jsonSchema": {"type": "object"}}]),
                 row("call", toolName=command["toolName"], arguments=copy.deepcopy(command["arguments"]))]
         if provider == "copilot":
-            rows += ([row("return", result=adapter_result)] if read else [
+            rows += ([row("return", result=adapter_result)] if read or inline else [
                 row("return", result={"status": "awaiting-approval", "executed": False, "proposalId": "proposal"}),
                 row("continuation", sessionId="session-a", results=[adapter_result])])
         else:
             item = {"kind": "functionResult", "callId": command["commandId"],
                     "result": json.dumps(adapter_result) if serialized else adapter_result}
             rows[0]["data"]["messages"] = [{"role": "user", "contents": [{"kind": "text", "text": "Synthetic request"}]}]
-            rows += [row("request", tools=copy.deepcopy(rows[0]["data"]["tools"]) if read else [], messages=[
+            rows += [row("request", tools=copy.deepcopy(rows[0]["data"]["tools"]) if read or inline else [], messages=[
                 *copy.deepcopy(rows[0]["data"]["messages"]), {"role": "tool", "contents": [copy.deepcopy(item)]}]),
                 row("continuation", results=[item])]
         trace = root / "trace.jsonl"
@@ -121,7 +121,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                   "contentType": "text/event-stream", "termination": "loadingFailed", "canceled": True,
                   "errorText": "net::ERR_ABORTED", "captureError": None, "rawBody": "data: " + json.dumps(event) + "\n\n"}
         fixture = SimpleNamespace(output=output, command=command, rows=rows, trace=trace, transport=transport,
-                                  response=response, streams=[stream] if read else [])
+                                  response=response, streams=[stream] if read or inline else [], inline=inline)
         self.sync(fixture)
         return fixture
 
@@ -131,7 +131,8 @@ class ProtocolCorrelationTests(unittest.TestCase):
         # Real browser runs retain successful owner HTTP sidecars alongside execute
         # responses. Their status200 must not be mistaken for an Agent envelope.
         (fixture.output / "owner-http.json").write_text(json.dumps({"status": 200, "rawBody": '{"owner":"synthetic"}'}))
-        (fixture.output / "execute.json").write_text(json.dumps(fixture.response))
+        if not fixture.inline:
+            (fixture.output / "execute.json").write_text(json.dumps(fixture.response))
         (fixture.output / "agent-streams.json").write_text(json.dumps(fixture.streams))
         fixture.trace.write_text("".join(json.dumps(row) + "\n" for row in fixture.rows))
 
@@ -193,7 +194,79 @@ class ProtocolCorrelationTests(unittest.TestCase):
         if provider == "anthropic":
             fixture.rows[-1]["data"]["results"][0]["result"] = json.dumps(adapter)
             fixture.rows[-2]["data"]["messages"][-1]["contents"][0]["result"] = json.dumps(adapter)
+        elif fixture.inline: fixture.rows[-1]["data"]["result"] = adapter
         else: fixture.rows[-1]["data"]["results"][0] = adapter
+
+    def inline_fixture(self, provider, native_scope="serverPersisted", adapter_scope="ServerPersisted"):
+        fixture = self.fixture(provider, serialized=True, inline=True)
+        native = fixture.response["response"]["data"]["toolResult"]
+        native["receipt"]["scope"] = native_scope
+        adapter = copy.deepcopy(native); adapter["receipt"]["scope"] = adapter_scope
+        self.store_adapter_result(fixture, provider, adapter)
+        event = json.loads(fixture.streams[0]["rawBody"][6:])
+        event["payload"] = copy.deepcopy(native)
+        fixture.streams[0]["rawBody"] = "data: " + json.dumps(event) + "\n\n"
+        self.sync(fixture)
+        return fixture
+
+    def test_inline_automatic_server_effect_uses_original_native_receipt_without_execute(self):
+        for provider in ("copilot", "anthropic"):
+            for native_scope, adapter_scope in (("serverPersisted", "ServerPersisted"), (1, "serverPersisted"), ("ServerPersisted", 1)):
+                with self.subTest(provider=provider, native=native_scope, adapter=adapter_scope):
+                    fixture = self.inline_fixture(provider, native_scope, adapter_scope)
+                    self.assertFalse((fixture.output / "execute.json").exists())
+                    proof = json.loads(Path(self.correlate(fixture, provider)["receipt"]["path"]).read_text())
+                    correlation = proof["correlations"][0]
+                    self.assertIn("nativeAutomaticReceipt", correlation)
+                    self.assertNotIn("nativeRead", correlation)
+                    self.assertEqual(correlation["nativeAutomaticReceipt"]["sessionId"], "session-a")
+
+    def test_inline_automatic_receipt_needs_one_complete_matching_original_native_frame(self):
+        for provider in ("copilot", "anthropic"):
+            for kind in ("absent", "truncated", "session", "tool-name", "call-id", "payload", "receipt", "orphan", "duplicate"):
+                with self.subTest(provider=provider, kind=kind):
+                    fixture = self.inline_fixture(provider)
+                    stream = fixture.streams[0]
+                    event = json.loads(stream["rawBody"][6:])
+                    if kind == "absent": fixture.streams.clear()
+                    elif kind == "truncated": stream["rawBody"] = stream["rawBody"].rstrip("\n")
+                    elif kind == "session": stream["url"] = stream["url"].replace("session-a", "foreign-session")
+                    else:
+                        if kind in ("tool-name", "call-id"):
+                            event["payload"]["toolName" if kind == "tool-name" else "toolCallId"] = "foreign-native-identity"
+                        elif kind == "payload": event["payload"]["payload"]["data"]["opaque"] = 1
+                        elif kind == "receipt": event["payload"]["receipt"]["after"]["revision"] = "different-owner-revision"
+                        elif kind == "orphan": event["payload"]["receipt"] = None
+                        stream["rawBody"] = "data: " + json.dumps(event) + "\n\n"
+                        if kind == "duplicate": stream["rawBody"] *= 2
+                    self.sync(fixture)
+                    with self.assertRaises(RuntimeError): self.correlate(fixture, provider)
+
+    def test_inline_receipt_rejects_client_scope_invalid_scope_and_changed_opaque_evidence(self):
+        for provider in ("copilot", "anthropic"):
+            for scope in (0, "clientWorkingState", True, 1.0, "unknown"):
+                with self.subTest(provider=provider, scope=scope):
+                    fixture = self.inline_fixture(provider, scope, scope)
+                    with self.assertRaises(RuntimeError): self.correlate(fixture, provider)
+            fixture = self.inline_fixture(provider)
+            adapter = copy.deepcopy(fixture.response["response"]["data"]["toolResult"])
+            adapter["receipt"]["evidence"] = {"opaque": 0}
+            self.store_adapter_result(fixture, provider, adapter)
+            event = json.loads(fixture.streams[0]["rawBody"][6:])
+            event["payload"]["receipt"]["evidence"] = {"opaque": False}
+            fixture.streams[0]["rawBody"] = "data: " + json.dumps(event) + "\n\n"
+            self.sync(fixture)
+            with self.assertRaises(RuntimeError): self.correlate(fixture, provider)
+
+    def test_matching_native_frame_cannot_hide_a_conflicting_accepted_execute_result(self):
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                fixture = self.inline_fixture(provider)
+                response = copy.deepcopy(fixture.response)
+                response["response"]["data"]["toolResult"]["receipt"]["after"]["revision"] = "different-accepted-owner"
+                (fixture.output / "execute.json").write_text(json.dumps(response))
+                with self.assertRaisesRegex(RuntimeError, "actual execute/ACK result"):
+                    self.correlate(fixture, provider)
 
     def test_receipt_scope_matches_actual_numeric_and_named_wire_forms_for_both_scopes(self):
         # AgentEffectScope: ClientWorkingState=0, ServerPersisted=1. The native

@@ -13,6 +13,7 @@ using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Connections;
 using Elsa.Studio.Etl;
 using Elsa.Studio.Secrets;
+using Elsa.Studio.Agent.Specialists;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
 using Elsa.Studio.Workflows.Dashboard;
@@ -40,6 +41,7 @@ internal static class StudioFeatureAssemblies
                 typeof(WeaverWorkflowsStudioFeature).Assembly,
                 typeof(WorkflowsStudioFeature).Assembly,
                 typeof(SecretsStudioFeature).Assembly,
+                typeof(AgentSpecialistsStudioFeature).Assembly,
                 typeof(ConnectionsStudioFeature).Assembly,
                 typeof(EtlStudioFeature).Assembly,
                 typeof(JavaScriptExpressionEditorStudioFeature).Assembly,

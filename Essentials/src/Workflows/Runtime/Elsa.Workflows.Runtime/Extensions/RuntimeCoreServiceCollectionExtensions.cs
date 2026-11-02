@@ -314,7 +314,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IPersistenceAccessContextAccessor>(),
-                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>()));
+                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+                serviceProvider.GetService<IRuntimeAdmissionLoadSignal>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -340,6 +341,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
+        services.TryAddSingleton<DrainControlContext>();
 
         // Live dispatch admission control (RB1, #1235). All three are singletons: the load reading, the limit, and the
         // counters are host-wide facts, and a per-scope controller would see one command at a time and never bound
@@ -434,7 +436,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<RuntimeSchedulerDispatchDiagnostics>(),
                 serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>())
-            { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>() });
+            { ModelProtocols = serviceProvider.GetService<RuntimeExecutionProtocolSelector>(),
+                DrainControls = serviceProvider.GetRequiredService<DrainControlContext>() });
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();
@@ -506,11 +509,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
         // Explicit factory (not greedy ctor selection) so the eviction options are wired in and the provider owns its
         // self-instrumentation meter; the container disposes the singleton (and its meter) on shutdown.
-        services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider =>
-            new InProcessWorkflowExecutionActorProvider(
-                serviceProvider.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
-                serviceProvider.GetRequiredService<RuntimeActorEvictionOptions>()));
-        services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
+        // Keep the configured concrete mailbox provider available to distributed placement too.
+        services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
+        services.TryAddSingleton<IWorkflowExecutionActorProvider>(serviceProvider => serviceProvider.GetRequiredService<InProcessWorkflowExecutionActorProvider>());
+        services.TryAddSingleton<IRuntimeExecutionIdGenerator, RuntimeExecutionIdGenerator>();
         services.TryAddScoped<IWorkflowStartDispatcher>(serviceProvider =>
         {
             var policies = serviceProvider.GetServices<IWorkflowExecutableStartPolicy>().ToArray();

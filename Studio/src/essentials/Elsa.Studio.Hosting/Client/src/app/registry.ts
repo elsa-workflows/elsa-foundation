@@ -25,6 +25,7 @@ import {
   type StudioRouteContribution
 } from "../sdk";
 import { dialogController } from "./dialogs";
+import { notificationController } from "./notifications";
 
 type RegistryItem<T> = T extends StudioContributionRegistry<infer Item> ? Item : never;
 
@@ -89,6 +90,7 @@ export function createStudioRegistry(
     },
     ai,
     dialogs: dialogController.api,
+    notifications: notificationController.api,
     diagnostics: createContributionRegistry<StudioModuleDiagnostic>({ slot: studioSlots.diagnostics })
   };
 }

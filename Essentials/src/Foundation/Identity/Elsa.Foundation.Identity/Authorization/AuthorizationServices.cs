@@ -545,7 +545,7 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
     }
 
     private static bool IsInternalIdentityClaim(string claimType) =>
-        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
+        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission or IdentityClaimTypes.UserId;
 }
 
 /// <summary>

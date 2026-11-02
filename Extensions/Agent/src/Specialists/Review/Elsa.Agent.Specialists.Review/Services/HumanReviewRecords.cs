@@ -21,7 +21,7 @@ internal static class HumanReviewRecords
             activity.PrivateState?.Value.InlineValue is not { ValueKind: JsonValueKind.Object } value)
             throw HumanReviewException.Invalid("The activity is not a pending human review.");
         HumanReviewState? state;
-        try { state = value.Deserialize<HumanReviewState>(); }
+        try { state = value.Deserialize<HumanReviewState>(HumanReviewJson.Runtime); }
         catch (JsonException) { throw HumanReviewException.Invalid("The human review state is unreadable."); }
         if (state is null || state.FormatVersion != HumanReviewIds.FormatVersion ||
             state.WorkflowExecutionId != activity.Execution.WorkflowExecutionId || state.ActivityExecutionId != activity.InvocationId ||
@@ -32,7 +32,6 @@ internal static class HumanReviewRecords
         return state;
     }
 
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// The pinned review of a live or resolved activity. Native completion drops private state and compacts the
@@ -75,7 +74,7 @@ internal static class HumanReviewRecords
         if (activity.Status != ActivityExecutionStatus.Completed || activity.Completion?.Result.InlineValue is not { ValueKind: JsonValueKind.Object } value)
             return null;
         HumanReviewResult? result;
-        try { result = value.Deserialize<HumanReviewResult>(Web); }
+        try { result = value.Deserialize<HumanReviewResult>(HumanReviewJson.Web); }
         catch (JsonException) { throw HumanReviewException.Invalid("The human review result is unreadable."); }
         if (result is null || result.Content.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null ||
             ReviewDecisionCodec.HashContent(result.Content) != result.ContentHash)
@@ -88,7 +87,7 @@ internal static class HumanReviewRecords
         if (input is not { ValueKind: JsonValueKind.Object } value)
             throw HumanReviewException.Invalid("The decision payload is missing.");
         ReviewDecisionDelivery? delivery;
-        try { delivery = value.Deserialize<ReviewDecisionDelivery>(); }
+        try { delivery = value.Deserialize<ReviewDecisionDelivery>(HumanReviewJson.Runtime); }
         catch (JsonException) { throw HumanReviewException.Invalid("The decision payload is unreadable."); }
         if (delivery is null || delivery.FormatVersion != HumanReviewIds.FormatVersion)
             throw HumanReviewException.Invalid("The decision payload format is unsupported.");

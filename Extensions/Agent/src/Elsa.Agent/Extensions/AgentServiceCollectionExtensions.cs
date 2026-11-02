@@ -43,6 +43,8 @@ public static class AgentServiceCollectionExtensions
         services.TryAddSingleton<InMemoryAgentAuditStore>();
         services.TryAddSingleton<IAgentAuditSink>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
         services.TryAddSingleton<IAgentAuditReader>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
+        // Preview: the session owner associates ownership with the same store; the store has no dependencies.
+        services.TryAddSingleton<IAgentAuditOwnership>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
         services.TryAddSingleton<IAgentFeedbackService, InMemoryAgentFeedbackService>();
         // Scoped so tools may depend on per-request services without being captured by a singleton.
         services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();
@@ -54,6 +56,8 @@ public static class AgentServiceCollectionExtensions
             "The context source timeout must be positive and within the supported finite timer range.");
         services.TryAddScoped<IAgentToolInvoker>(AgentRegistrationValidator.Create<DefaultAgentToolInvoker>);
         services.TryAddScoped<IAgentStreamingService>(AgentRegistrationValidator.Create<DefaultAgentTurnOrchestrator>);
+        // Preview: scoped because participation is checked against the scoped lifecycle services.
+        services.TryAddScoped<IAgentSessionPolicyService>(AgentRegistrationValidator.Create<DefaultAgentSessionPolicyService>);
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();
 
         return services;

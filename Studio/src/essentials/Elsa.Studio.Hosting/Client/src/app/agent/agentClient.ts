@@ -3,8 +3,10 @@ import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
 import type {
   AgentClientAcknowledgement,
+  AgentAcceptedPolicy,
   AgentActionProposal,
   AgentAutonomyMode,
+  AgentAutonomyUpdateRequest,
   AgentBootstrapResponse,
   AgentProviderStatus,
   AgentProviderDiagnostics,
@@ -14,12 +16,21 @@ import type {
   AgentMessageRequest,
   AgentMessageResponse,
   AgentProposalDecisionRequest,
-  AgentProposalDecisionResponse
+  AgentProposalDecisionResponse,
+  AgentSessionDetailResponse,
+  AgentSessionPolicy
 } from "./agentTypes";
 
 export interface AgentClient {
   bootstrap(): Promise<AgentBootstrapResponse>;
   createSession(request: AgentCreateSessionRequest): Promise<AgentCreateSessionResponse>;
+  /** Reads the authoritative session detail, including its acknowledged policy when the backend owns one. */
+  getSession(sessionId: string): Promise<AgentSessionDetailResponse>;
+  /**
+   * Preview (#3440): one conditional autonomy-only change. Resolves with the acknowledged policy;
+   * refusals reject with an {@link AgentApiError} carrying the server's code, and carry no policy data.
+   */
+  updateAutonomy(sessionId: string, request: AgentAutonomyUpdateRequest): Promise<AgentSessionPolicy>;
   sendMessage(sessionId: string, request: AgentMessageRequest): Promise<AgentMessageResponse>;
   approveProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   denyProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
@@ -35,6 +46,67 @@ export class AgentExecutionError extends StudioHttpError {
     super(status, message, null, payload);
     this.name = "AgentExecutionError";
   }
+}
+
+/** An HTTP refusal that carries the Agent API's error code (for example `agent.session.policy_stale`). */
+export class AgentApiError extends StudioHttpError {
+  constructor(status: number, message: string, public readonly code: string, payload: unknown) {
+    super(status, message, null, payload);
+    this.name = "AgentApiError";
+  }
+}
+
+/** How an autonomy update request ended when it did not return an acknowledged policy. */
+export type AgentAutonomyFailure = "lost" | "stale" | "busy" | "closed" | "unsupported" | "invalid" | "not-found" | "refused";
+
+const AUTONOMY_FAILURES: Record<string, AgentAutonomyFailure> = {
+  "agent.session.policy_stale": "stale",
+  "agent.session.busy": "busy",
+  "agent.session.closed": "closed",
+  "agent.session.autonomy_unsupported": "unsupported",
+  "agent.session.autonomy_invalid": "invalid"
+};
+
+/**
+ * Classifies a failed autonomy update. Only a transport failure, or a response that carries no
+ * authoritative refusal (5xx, timeout, unreadable body), is "lost": the change may have committed.
+ */
+export function classifyAutonomyFailure(error: unknown): AgentAutonomyFailure {
+  if (!(error instanceof StudioHttpError)) return "lost";
+  const code = error instanceof AgentApiError ? error.code : readString(readRecord(error.payload, "error"), "code");
+  if (code && AUTONOMY_FAILURES[code]) return AUTONOMY_FAILURES[code];
+  if (error.status === 404) return "not-found";
+  if (error.status === 400) return "invalid";
+  if (error.status === 0 || error.status === 408 || error.status >= 500 || (error.status >= 200 && error.status < 300)) return "lost";
+  return "refused";
+}
+
+/** Prompt admission lost to a committed policy change; the prompt was not accepted and is never resent automatically. */
+export const POLICY_CHANGED = "agent.message.policy_changed";
+
+/** The error code a refused Agent request carried, when it carried one. */
+export function getAgentErrorCode(error: unknown): string | undefined {
+  if (error instanceof AgentApiError || error instanceof AgentExecutionError) return error.code;
+  if (error instanceof StudioHttpError) return readString(readRecord(error.payload, "error"), "code");
+  return undefined;
+}
+
+function toAgentApiError(error: unknown): unknown {
+  if (!(error instanceof StudioHttpError) || error instanceof AgentApiError) return error;
+  const failure = readRecord(error.payload, "error");
+  const code = readString(failure, "code");
+  return code ? new AgentApiError(error.status, readString(failure, "message") ?? error.message, code, error.payload) : error;
+}
+
+/** Unwraps an envelope, turning a wrapped (status 200) refusal into the same coded error as an HTTP refusal. */
+function unwrapCoded<T>(envelope: AgentApiResponse<T>): T {
+  const failure = readRecord(envelope, "error");
+  const code = readString(failure, "code");
+  if (failure && code) {
+    const status = readField(failure, "statusCode");
+    throw new AgentApiError(typeof status === "number" ? status : 409, readString(failure, "message") ?? code, code, envelope);
+  }
+  return unwrap(envelope);
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
@@ -76,29 +148,76 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         }
       })));
     },
+    async getSession(sessionId) {
+      let envelope: AgentApiResponse<BackendAgentSession>;
+      try {
+        envelope = await context.http.getJson<AgentApiResponse<BackendAgentSession>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}`);
+      } catch (error) { throw toAgentApiError(error); }
+      const detail = unwrapCoded(envelope);
+      return {
+        sessionId: readString(detail, "sessionId") ?? readString(detail, "id") ?? sessionId,
+        status: mapSessionStatus(readField(detail, "status")),
+        policy: mapSessionPolicy(readRecord(detail, "policy")),
+        messages: readRecordArray(detail, "messages").map(message => {
+          const revision = readField(message, "acceptedPolicyRevision");
+          return {
+            id: readString(message, "id") ?? "",
+            role: normalizeEnum(readField(message, "role")),
+            status: normalizeEnum(readField(message, "status")),
+            acceptedPolicyRevision: typeof revision === "number" ? revision : undefined
+          };
+        })
+      };
+    },
+    async updateAutonomy(sessionId, request) {
+      let envelope: AgentApiResponse<unknown>;
+      try {
+        // Only the requested mode and the last acknowledged revision are sent; every other policy field is the owner's.
+        envelope = await context.http.putJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/autonomy`, {
+          autonomyMode: request.autonomyMode,
+          expectedRevision: request.expectedRevision
+        });
+      } catch (error) { throw toAgentApiError(error); }
+      const data = unwrapCoded(envelope);
+      const policy = mapSessionPolicy(isRecord(data) ? data : undefined);
+      if (!policy) throw new StudioHttpError(200, "The server acknowledged the autonomy change without a readable policy.");
+      return policy;
+    },
     async sendMessage(sessionId, request) {
       let requestId = request.requestId ?? deliveryIds.get(request);
       if (!requestId) { requestId = globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`; deliveryIds.set(request, requestId); }
-      const accepted = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
-        role: "user",
-        content: request.message,
-        message: request.message,
-        mode: request.mode,
-        capabilityId: request.capabilityId,
-        requestId,
-        source: request.source,
-        promptMode: request.promptMode,
-        activeSurface: request.activeSurface,
-        requestedCapabilities: request.capabilityId ? [request.capabilityId] : [],
-        contextAttachments: request.contextAttachments.map(mapContextAttachment)
-      }));
+      let envelope: AgentApiResponse<BackendAgentMessageAcceptedResponse>;
+      try {
+        envelope = await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
+          role: "user",
+          content: request.message,
+          message: request.message,
+          mode: request.mode,
+          capabilityId: request.capabilityId,
+          requestId,
+          source: request.source,
+          promptMode: request.promptMode,
+          activeSurface: request.activeSurface,
+          requestedCapabilities: request.capabilityId ? [request.capabilityId] : [],
+          contextAttachments: request.contextAttachments.map(mapContextAttachment)
+        });
+      } catch (error) {
+        // Only a policy conflict changes the thrown shape: callers read the session back and the user resends.
+        const coded = toAgentApiError(error);
+        throw coded instanceof AgentApiError && coded.code === POLICY_CHANGED ? coded : error;
+      }
+      const failure = readRecord(envelope, "error");
+      // Keep the historical wrapped-error message, but carry a policy conflict's code so callers can read back.
+      if (readString(failure, "code") === POLICY_CHANGED) unwrapCoded(envelope);
+      const accepted = unwrap(envelope);
 
       return {
         messageId: getAcceptedMessageId(accepted),
         status: mapMessageStatus(readField(readRecord(accepted, "message"), "status")),
         contextAttachments: readRecordArray(readRecord(accepted, "message"), "context").map(mapAdmittedContextAttachment),
         warnings: readRecordArray(accepted, "warnings").map(item => ({ code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", target: readString(item, "target") })),
-        streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`
+        streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`,
+        acceptedPolicy: mapAcceptedPolicy(readRecord(readRecord(accepted, "message"), "acceptedPolicy"))
       };
     },
     async approveProposal(proposalId, request) {
@@ -317,11 +436,36 @@ function mapProviderStatus(status: unknown, provider: AgentProviderDiagnostics |
 }
 
 function mapSession(session: BackendAgentSession): AgentCreateSessionResponse {
+  const policy = mapSessionPolicy(readRecord(session, "policy"));
   return {
     sessionId: readString(session, "sessionId") ?? readString(session, "id") ?? "",
     status: mapSessionStatus(readField(session, "status")),
-    contextAttachments: []
+    contextAttachments: [],
+    ...(policy ? { policy } : {})
   };
+}
+
+/** Maps the additive session policy; an absent or unreadable one stays absent rather than defaulting. */
+function mapSessionPolicy(policy: Record<string, unknown> | undefined): AgentSessionPolicy | undefined {
+  const autonomyMode = mapAutonomyMode(readField(policy, "autonomyMode"));
+  const revision = readField(policy, "revision");
+  if (!autonomyMode || typeof revision !== "number" || !Number.isFinite(revision)) return undefined;
+  const maxAutonomyMode = mapAutonomyMode(readField(policy, "maxAutonomyMode")) ?? autonomyMode;
+  const allowed = readStringArray(policy, "allowedAutonomyModes")
+    ?.map(mapAutonomyMode)
+    .filter((mode): mode is AgentAutonomyMode => mode !== undefined);
+  return { autonomyMode, maxAutonomyMode, allowedAutonomyModes: allowed?.length ? allowed : allowedModesUpTo(maxAutonomyMode), revision };
+}
+
+/**
+ * The accepted message's public `acceptedPolicy` (the session-policy shape: mode, ceiling, allowed modes and
+ * revision) as the mode and revision that admitted it. Private policy data never reaches the client.
+ */
+function mapAcceptedPolicy(accepted: Record<string, unknown> | undefined): AgentAcceptedPolicy | undefined {
+  const revision = readField(accepted, "revision");
+  if (typeof revision !== "number") return undefined;
+  const autonomyMode = mapAutonomyMode(readField(accepted, "autonomyMode"));
+  return autonomyMode ? { autonomyMode, revision } : { revision };
 }
 
 function mapContextAttachment(attachment: AgentMessageRequest["contextAttachments"][number]) {

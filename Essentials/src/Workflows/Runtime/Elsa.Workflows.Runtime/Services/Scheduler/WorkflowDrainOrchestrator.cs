@@ -292,6 +292,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                     claimDurably = true;
                 }
 
+                if (drainResult.StopReason == RuntimeSchedulerDrainStopReason.Yielded)
+                {
+                    stopReason = RuntimeSchedulerDrainStopReason.Yielded;
+                    break;
+                }
+
                 if (drainResult.StoppedOnDeferral)
                 {
                     stopReason = RuntimeSchedulerDrainStopReason.Deferred;

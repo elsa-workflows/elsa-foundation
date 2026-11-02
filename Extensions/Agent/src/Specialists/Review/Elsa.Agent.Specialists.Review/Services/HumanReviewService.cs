@@ -90,7 +90,7 @@ internal sealed partial class HumanReviewService(IWorkflowExecutionStateStore wo
             return new(ReviewDecisionReceiptStatus.Forbidden, "You do not currently hold the human review permission.");
 
         var claims = Claims(command, decider, review, bookmark.BookmarkId, time.GetUtcNow());
-        var input = JsonSerializer.SerializeToElement(new ReviewDecisionDelivery(HumanReviewIds.FormatVersion, codec.Protect(claims)));
+        var input = JsonSerializer.SerializeToElement(new ReviewDecisionDelivery(HumanReviewIds.FormatVersion, codec.Protect(claims)), HumanReviewJson.Runtime);
         var dispatched = await dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(review.WorkflowExecutionId, HumanReviewIds.StimulusType,
             review.WaitId, input, command.RequestId, RequestedBy, null, HumanReviewRecords.PayloadType, HumanReviewIds.ProviderId,
             bookmark.BookmarkId, null), cancellationToken: cancellationToken);

@@ -33,6 +33,7 @@ internal sealed class WidgetTestEnvironment
     internal WidgetResource Resource { get; }
     internal ReadWidgetTool Read { get; }
     internal SetWidgetVisibilityTool Write { get; }
+    internal SetWidgetSizeTool Size { get; }
     internal WidgetContextSource Context { get; }
 
     private WidgetTestEnvironment()
@@ -43,6 +44,7 @@ internal sealed class WidgetTestEnvironment
         Resource = new(Http, Auth, Permissions, Preferences, new(HostId));
         Read = new(Resource);
         Write = new(Resource);
+        Size = new(Resource);
         Context = new(Resource, Sessions);
     }
 
@@ -62,6 +64,9 @@ internal sealed class WidgetTestEnvironment
 
     internal async Task<AgentResult<AgentToolPreparation>> PrepareAsync(bool visible = false) => await Write.PrepareAsync(Invocation(WidgetContract.WriteTool,
         new Dictionary<string, object?> { ["visible"] = visible }, [await SnapshotAsync()]));
+
+    internal async Task<AgentResult<AgentToolPreparation>> PrepareSizeAsync(string size = "small") => await Size.PrepareAsync(Invocation(WidgetContract.SizeTool,
+        new Dictionary<string, object?> { ["size"] = size }, [await SnapshotAsync()]));
 
     internal static AgentPreparedToolInvocation Freeze(AgentToolPreparation preparation, string name = WidgetContract.WriteTool) => new(
         "invocation-a", "session-a", "turn-a", "call-a", name, "1", WidgetContract.Module, "actor-a", "tenant-a", preparation.Target,
@@ -88,6 +93,7 @@ internal sealed class TrackingPreferences(IStudioPreferenceService inner) : IStu
     internal bool ThrowAfterCommit;
     internal bool CancelAfterCommit;
     internal Func<Task>? BeforeWrite;
+    internal Func<Task>? AfterCommit;
     internal StudioPreferenceWriteCondition? LastCondition;
     internal StudioPreferenceKey? LastKey;
 
@@ -105,6 +111,7 @@ internal sealed class TrackingPreferences(IStudioPreferenceService inner) : IStu
         if (BeforeWrite is not null) await BeforeWrite();
         var result = await inner.WriteAsync(key, write, condition, cancellationToken);
         Interlocked.Increment(ref Committed);
+        if (AfterCommit is not null) await AfterCommit();
         if (ThrowAfterCommit) throw new IOException("owned postcommit test fault");
         if (CancelAfterCommit) throw new OperationCanceledException("owned postcommit cancellation");
         return result;

@@ -144,6 +144,10 @@ export function testApi(): ElsaStudioModuleApi {
       confirm: vi.fn(async () => true),
       prompt: vi.fn(async () => null),
       alert: vi.fn(async () => {})
+    },
+    notifications: {
+      notify: vi.fn(() => ({ id: "notification-1", update: vi.fn(), dismiss: vi.fn() })),
+      track: vi.fn(async (work: Promise<unknown>) => work)
     }
   } as unknown as ElsaStudioModuleApi;
 }

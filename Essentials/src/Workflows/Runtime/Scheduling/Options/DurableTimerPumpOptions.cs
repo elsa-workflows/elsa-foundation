@@ -23,6 +23,12 @@ public sealed class DurableTimerPumpOptions
     public int MaxTimersPerTick { get; set; } = 100;
 
     /// <summary>
+    /// Maximum concurrent dispatches in a sweep. Defaults to one. Parallel dispatch requires bound operation
+    /// scopes; custom hosts without a scope factory retain sequential dispatch. Tune against provider capacity.
+    /// </summary>
+    public int MaxConcurrentDispatches { get; set; } = 1;
+
+    /// <summary>
     /// Visibility lease held while a claim-capable store dispatches one timer. The pump renews the lease
     /// while dispatch is in progress.
     /// </summary>

@@ -40,6 +40,25 @@ def same(left, right):
     return json.dumps(left, sort_keys=True, separators=(",", ":"), allow_nan=False) == json.dumps(right, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
+# The client receives only the public session-policy shape (effective mode, ceiling, allowed modes and an
+# opaque revision; specs/1186-weaver-effects/data-model.md). These domain AgentPolicy members never reach it.
+PRIVATE_POLICY_KEYS = frozenset({"deniedCapabilityIds", "allowedContextKinds", "maxContextSensitivity", "retentionLabel",
+                                 "contextVisibility", "requiresApprovalForMutations"})
+
+
+def private_policy_keys(value):
+    """Every private policy member name used as a key anywhere in a retained native JSON value."""
+    found, pending = set(), [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, dict):
+            found.update(key for key in item if key in PRIVATE_POLICY_KEYS)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return found
+
+
 def browser_inputs(config):
     """Export only allowlisted public journey inputs; the original auth config stays private."""
     summary = {key: config[key] for key in ("journey", "provider", "studioOrigin", "backendOrigin")}

@@ -148,6 +148,19 @@ visual recipe while retaining their column geometry and interaction code.
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.
 
+Decide per feedback surface whether it becomes a notification:
+
+| Existing feedback | Becomes |
+|---|---|
+| Result of a user action (moved, deleted, restored, saved, favorited) | `notify({ level: "success" })` |
+| Failed action the user cannot correct on the page | `notify({ level: "error" })` |
+| Long-running operation (export, publish, import, test run) | `track()` |
+| Reversible action with existing reversal logic | toast with an `action` |
+| Load failure, stale data, validation and field errors | stays inline |
+| Loading placeholders (`Suspense` fallbacks) | stays inline |
+
+Publish action results through the injected `api.notifications`; never render a local status bar for them.
+
 ## Verify a new module
 
 Render the module independently as well as inside the host. Check light and dark

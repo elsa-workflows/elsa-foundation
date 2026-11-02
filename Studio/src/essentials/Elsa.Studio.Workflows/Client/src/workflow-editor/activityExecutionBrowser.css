@@ -22,6 +22,8 @@
 .wf-execution-child-group h5 span { color: var(--studio-text-muted); font-weight: normal; }
 .wf-execution-incident { margin: 0 0.5rem 0.5rem; color: var(--studio-text); }
 .wf-execution-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; padding: 0.6rem 1rem; border-bottom: 1px solid var(--studio-border); color: var(--studio-text); }
+.wf-attached-run-inspection > .wf-execution-scope { padding-bottom: 1rem; border-bottom: 0; }
+.wf-attached-run-inspection > .wf-execution-scope-occurrence { margin-bottom: 0.5rem; }
 .wf-execution-scope > button { display: inline-flex; align-items: center; gap: 0.4rem; }
 .wf-execution-paging button, .wf-execution-children > button, .wf-execution-scope button, .wf-execution-feedback button { font: inherit; background: transparent; color: var(--studio-text); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); padding: 0.4rem 0.6rem; cursor: pointer; }
 .wf-execution-scope > button { border: 0; color: var(--studio-text-muted); }

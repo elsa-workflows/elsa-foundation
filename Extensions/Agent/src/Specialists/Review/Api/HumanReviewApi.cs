@@ -44,7 +44,10 @@ internal sealed class ReviewRequestCaller(IHttpContextAccessor http, NormalizedP
         if (http.HttpContext is not { } context || !principals.TryGetNormalizedPrincipal(context.User, out var principal))
             throw new UnauthorizedAccessException("The caller is not a trusted Elsa principal.");
         var tenants = principal.FindAll(IdentityClaimTypes.TenantId).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
-        var actor = principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("sub")?.Value;
+        // The canonical Elsa user ID wins: after external sign-in the first NameIdentifier is the provider's subject.
+        var userIds = principal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
+        if (userIds.Length > 1) throw new UnauthorizedAccessException("The caller has more than one Elsa user ID.");
+        var actor = userIds.SingleOrDefault() ?? principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("sub")?.Value;
         if (tenants.Length != 1 || string.IsNullOrWhiteSpace(tenants[0]) || string.IsNullOrWhiteSpace(actor))
             throw new UnauthorizedAccessException("The caller has no single tenant and subject.");
         return new(tenants[0], actor);

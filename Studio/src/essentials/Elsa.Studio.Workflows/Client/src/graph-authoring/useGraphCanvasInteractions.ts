@@ -660,6 +660,7 @@ export function useGraphCanvasInteractions({
   };
 
   const isValidConnection = (connection: Connection | Edge) => {
+    if (!canCreateActivityFromPort) return false;
     if (!connection.source || !connection.target) return false;
     if (connection.source === connection.target) return false;
     if (!isGraphMode) return false;

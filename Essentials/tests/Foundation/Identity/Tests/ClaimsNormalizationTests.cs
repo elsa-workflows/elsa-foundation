@@ -68,6 +68,7 @@ public sealed class ClaimsNormalizationTests
             new(IdentityClaimTypes.Permission, DefaultIdentityPermissionKeys.IdentityProvidersManage),
             new(IdentityClaimTypes.Normalized, "v1"),
             new(IdentityClaimTypes.Normalized, "forged"),
+            new(IdentityClaimTypes.UserId, "user-forged"),
             new(ClaimTypes.Role, "external-role"),
             new("groups", "admins")
         ]));
@@ -91,6 +92,7 @@ public sealed class ClaimsNormalizationTests
         Assert.Equal("v1", marker.Value);
         Assert.DoesNotContain(result.Principal.Claims, x => x.Type == IdentityClaimTypes.TenantId && x.Value == "stale-tenant");
         Assert.DoesNotContain(result.Principal.Claims, x => x.Type == IdentityClaimTypes.Provider && x.Value == "stale-provider");
+        Assert.DoesNotContain(result.Principal.Claims, x => x.Type == IdentityClaimTypes.UserId);
     }
 
     [Fact]

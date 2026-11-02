@@ -217,22 +217,26 @@ public sealed class RuntimeCheckpointCommitter
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 
-    // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
+    // An active overlay records successful, explicitly non-delayed continuation provenance for clock-safe delivery.
+    // Otherwise, publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
     // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
     // execution (so the dispatcher will look here rather than deserialize); and the drain's session for the execution
     // has stopped folding (while it folds, its overlay is authoritative on continuation delivery). When any guard
     // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
     private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
     {
+        if (_coalescingSessionAccessor?.Current is { } active && active.AppliesTo(commit.WorkflowExecutionId))
+        {
+            active.RecordImmediateSchedulerIntents(commit);
+            return;
+        }
+
         if (!_inProcessHopFastPathOptions.Enabled)
             return;
         if (commit.PostCommitIntents.Count == 0)
             return;
         if (_liveDrainDeliveryAccessor?.Current is not { } scope || !scope.AppliesTo(commit.WorkflowExecutionId))
             return;
-        if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
-            return;
-
         foreach (var intent in commit.PostCommitIntents)
         {
             // A delayed intent (R-7) is delivered by the outbox sweep once it is due, never by this drain.
