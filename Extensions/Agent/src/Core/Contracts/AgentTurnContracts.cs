@@ -51,6 +51,8 @@ public sealed record AgentPausedTurn(
 /// The default keeps the paused turn on the default session owner's record, so saving the pause also records the
 /// session's Pause claim and the pause survives with the session. A replacement keeps autonomy support, because the
 /// orchestrator still claims the pause explicitly, but durable recovery is Unsupported for that composition.
+/// Only the default orchestrator's continuation releases the Pause claim that saving through the default store takes,
+/// so with a replaced orchestrator autonomy is Unsupported in that composition (the session policy participation rule).
 /// </remarks>
 public interface IAgentTurnStateStore
 {

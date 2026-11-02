@@ -70,6 +70,38 @@ public sealed class AgentSessionGateOrderingTests
     }
 
     [Fact]
+    public async Task A_cancelled_first_hydration_keeps_one_gate_so_later_callers_still_serialize()
+    {
+        var store = new HeldRecordStore(new InMemoryAgentSessionRecordStore());
+        var first = new InMemoryAgentSessionService(new InMemoryAgentAuditStore(), recordStore: store);
+        var session = await AgentSessionOwnerWriteThroughTests.CreateAsync(first);
+        await store.ReleaseOwnershipAsync(session.Id, (await store.LoadAsync(session.Id))!.Owner!);
+        var restarted = new InMemoryAgentSessionService(new InMemoryAgentAuditStore(), recordStore: store);
+        using var cancellation = new CancellationTokenSource();
+        var heldFirst = store.HoldNextLoad();
+
+        var cancelled = restarted.FindAsync(session.Id, cancellation.Token);
+        await heldFirst.Entered.Task.WaitAsync(HandoffTimeout);
+        var queued = restarted.FindAsync(session.Id);
+        Assert.False(queued.IsCompleted);
+        var heldSecond = store.HoldNextLoad();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled.WaitAsync(HandoffTimeout));
+        await heldSecond.Entered.Task.WaitAsync(HandoffTimeout);
+        var loads = store.Loads;
+
+        // The queued caller now hydrates under the gate; a third caller waits behind it instead of hydrating beside it.
+        var third = restarted.FindAsync(session.Id);
+        Assert.False(third.IsCompleted);
+        Assert.Equal(loads, store.Loads);
+        heldSecond.Release.SetResult();
+
+        var hydrated = await queued.WaitAsync(HandoffTimeout);
+        Assert.Same(hydrated, await third.WaitAsync(HandoffTimeout));
+        Assert.Equal(loads, store.Loads);
+    }
+
+    [Fact]
     public async Task A_held_proposal_gate_never_blocks_session_gated_owner_operations()
     {
         var sink = new HookedAuditSink();

@@ -450,14 +450,19 @@ internal sealed class InMemoryAgentProposalService(
 
     /// <summary>
     /// Runs one proposal transition through the owner: session write gate, awaited record write, then apply. Without
-    /// the default owner the change is applied in memory only. A planned transition always completes.
+    /// the default owner the plan and its change run as one step under the proposal store's (re-entrant) monitor, in
+    /// memory only. A planned transition always completes.
     /// </summary>
     private Task<T> CommitAsync<T>(string sessionId, Func<AgentSessionFence?, AgentSessionTransition<T>> plan)
     {
         if (_owner is not null) return _owner.CommitAsync(sessionId, plan, CancellationToken.None);
-        var planned = plan(null);
-        planned.Apply?.Invoke();
-        return Task.FromResult(planned.Result);
+        // Without the owner's session gate, the plan and its change are one step under the proposal store's monitor.
+        lock (store.Mutation)
+        {
+            var planned = plan(null);
+            planned.Apply?.Invoke();
+            return Task.FromResult(planned.Result);
+        }
     }
 
     private static AgentSessionRecordWrite? Write(AgentSessionFence? fence, string sessionId, AgentProposalRecord record, IReadOnlyList<AgentSessionUniqueKey>? keys = null)

@@ -116,6 +116,46 @@ public sealed class AgentProposalRecordTests
         Assert.Equal(AgentActionProposalStatus.Expired, (await RecordedAsync(fixture, expiring)).Proposal.Status);
     }
 
+    // ---- Review fix: without the default owner, insertion stays one atomic step ----
+
+    [Fact]
+    public async Task Racing_calls_in_one_turn_insert_one_proposal_when_the_session_service_is_replaced()
+    {
+        var tool = new RacingPreparationTool();
+        using var fixture = await ProposalFixture.CreateAsync(tool, null, services =>
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => new AgentSessionPolicyTests.ForwardingSessions(
+                new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>(), sp.GetRequiredService<TimeProvider>())))));
+        var store = fixture.Services.GetRequiredService<InMemoryAgentProposalStore>();
+        for (var turn = 0; turn < 200; turn++)
+        {
+            tool.Arm();
+            var first = Task.Run(() => fixture.Invoker.DispatchAsync(fixture.Invocation("call-a") with { TurnId = $"turn-{turn}" }, fixture.Session.Policy));
+            var second = Task.Run(() => fixture.Invoker.DispatchAsync(fixture.Invocation("call-b") with { TurnId = $"turn-{turn}" }, fixture.Session.Policy));
+            var outcomes = await Task.WhenAll(first, second).WaitAsync(HandoffTimeout);
+
+            Assert.Single(outcomes, x => x.Outcome == AgentToolDispatchOutcome.ProposalCreated);
+            Assert.Single(outcomes, x => x.Error?.Code == "agent.tool.turn_mutation_limit");
+            Assert.Single(store.Proposals.Values, x => x.PreparedInvocation!.TurnId == $"turn-{turn}");
+        }
+    }
+
+    /// <summary>A mutation whose two preparations in one round are released together, so both insert at once.</summary>
+    private sealed class RacingPreparationTool : IAgentTool
+    {
+        private readonly ProposalMutationTool _inner = new();
+        private Barrier? _round;
+        public AgentToolDescriptor Descriptor => _inner.Descriptor;
+        public void Arm() => _round = new Barrier(2);
+        public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            var round = _round!;
+            await Task.Run(() => round.SignalAndWait(HandoffTimeout), cancellationToken);
+            return await _inner.PrepareAsync(invocation, cancellationToken);
+        }
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+            => _inner.ExecuteAsync(invocation, cancellationToken);
+    }
+
     private static IAgentSessionRecordStore RecordStore(ProposalFixture fixture) => fixture.Services.GetRequiredService<IAgentSessionRecordStore>();
 
     private static async Task<AgentProposalRecord> RecordedAsync(ProposalFixture fixture, AgentActionProposal proposal)

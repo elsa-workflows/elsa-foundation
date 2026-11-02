@@ -628,7 +628,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
             finally
             {
                 // A verified pause is claimed before foreground is released, so there is no idle gap.
-                if (paused && foreground is not null) await _owner!.EnsurePauseAsync(sessionId, CancellationToken.None);
+                if (paused && foreground is not null)
+                {
+                    // Ensuring the claim can hydrate and fail (for example after a takeover). That failure must neither
+                    // skip unregistering the turn and releasing its foreground claim nor replace the primary cause.
+                    try { await _owner!.EnsurePauseAsync(sessionId, CancellationToken.None); }
+                    catch (Exception cause) { RecordCleanupFailure("ensure-pause", cause); }
+                }
                 var unregistered = false;
                 try { turnRegistry.Unregister(sessionId, turnId); unregistered = true; }
                 catch (Exception cause) { RecordCleanupFailure("release-turn", cause); }

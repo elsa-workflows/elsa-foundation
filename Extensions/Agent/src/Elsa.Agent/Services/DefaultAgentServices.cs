@@ -395,9 +395,11 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         var gate = Gate(sessionId);
         await gate.WaitAsync(cancellationToken);
         SessionRow? row = null;
+        var notRecorded = false;
         try
         {
             row = await HydrateAsync(sessionId, cancellationToken);
+            notRecorded = row is null;
             AgentSessionFence? fence = null;
             if (row is not null)
                 lock (row) fence = row.Fence;
@@ -409,7 +411,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         finally
         {
             gate.Release();
-            if (row is null) ForgetGate(sessionId, gate);
+            if (notRecorded) ForgetGate(sessionId, gate);
         }
     }
 
@@ -450,15 +452,17 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
             return row;
         var gate = Gate(sessionId);
         await gate.WaitAsync(cancellationToken);
+        var notRecorded = false;
         try
         {
             row = await HydrateAsync(sessionId, cancellationToken);
+            notRecorded = row is null;
             return row;
         }
         finally
         {
             gate.Release();
-            if (row is null) ForgetGate(sessionId, gate);
+            if (notRecorded) ForgetGate(sessionId, gate);
         }
     }
 
@@ -596,9 +600,11 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         var gate = Gate(sessionId);
         await gate.WaitAsync(cancellationToken);
         SessionRow? row = null;
+        var notRecorded = false;
         try
         {
             row = await HydrateAsync(sessionId, cancellationToken);
+            notRecorded = row is null;
             if (row is null)
                 return missing();
             AgentSessionTransition<T> planned;
@@ -611,13 +617,14 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink, Tim
         finally
         {
             gate.Release();
-            if (row is null) ForgetGate(sessionId, gate);
+            if (notRecorded) ForgetGate(sessionId, gate);
         }
     }
 
     private SemaphoreSlim Gate(string sessionId) => _gates.GetOrAdd(sessionId, _ => new(1, 1));
 
-    // Probes for sessions that are not recorded must not accumulate gates; hydration itself is idempotent.
+    // Probes for sessions that are not recorded must not accumulate gates. Only a hydration that completed and found no
+    // record forgets the gate; after a failure or cancellation other callers may still be queued on it.
     private void ForgetGate(string sessionId, SemaphoreSlim gate)
     {
         if (!_rows.ContainsKey(sessionId))

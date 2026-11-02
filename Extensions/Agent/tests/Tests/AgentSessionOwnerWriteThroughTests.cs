@@ -150,6 +150,34 @@ public sealed class AgentSessionOwnerWriteThroughTests
         Assert.Null((await owner.RecordStore.LoadAsync(session.Id))!.PausedTurn);
     }
 
+    // ---- Review fix: a pause claim that cannot be ensured never strands the turn ----
+
+    [Fact]
+    public async Task A_failed_pause_claim_still_unregisters_the_turn_and_releases_its_foreground_claim()
+    {
+        var store = new TakeoverOnPauseStore(new InMemoryAgentSessionRecordStore());
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionRecordStore>(store));
+            services.AddSingleton<IAgentProvider, DeterministicAgentProvider>();
+            services.AddSingleton<IAgentTool>(new ApplyChangeTool());
+        });
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var session = await CreateAsync((InMemoryAgentSessionService)sessions);
+        await sessions.AddMessageAsync(session.Id, Prompt("mutate the resource"));
+
+        // Another process takes the session over exactly when the pause is recorded.
+        await Assert.ThrowsAnyAsync<Exception>(async () => { await foreach (var _ in streaming.StreamAsync(session.Id)) { } });
+
+        Assert.False(scope.ServiceProvider.GetRequiredService<IAgentTurnRegistry>().IsActive(session.Id));
+        store.TakenOver = false;
+        var next = new List<AgentStreamEvent>();
+        await foreach (var item in streaming.StreamAsync(session.Id)) next.Add(item);
+        Assert.DoesNotContain(next, x => x.Error?.Code == "agent.turn.busy");
+    }
+
     // ---- T004/T006: durable recovery support ----
 
     [Fact]
@@ -192,6 +220,32 @@ public sealed class AgentSessionOwnerWriteThroughTests
         "provider", "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
 
     internal static AgentMessageCreateRequest Prompt(string content) => new(AgentRole.User, content, AgentMessageStatus.Pending, null, [], []);
+
+    /// <summary>Refuses the write that records a paused turn and then reports a live lease held by another owner.</summary>
+    private sealed class TakeoverOnPauseStore(IAgentSessionRecordStore inner) : IAgentSessionRecordStore
+    {
+        private readonly RefusingRecordStore _forward = new(inner);
+        public bool TakenOver { get; set; }
+        public bool SupportsFencing => true;
+        public Task<AgentSessionRecordResult> CreateAsync(AgentSessionRecord record, string ownerToken, CancellationToken cancellationToken = default)
+            => _forward.CreateAsync(record, ownerToken, cancellationToken);
+        public Task<AgentSessionRecord?> LoadAsync(string sessionId, CancellationToken cancellationToken = default) => _forward.LoadAsync(sessionId, cancellationToken);
+        public Task<AgentSessionRecordResult> AcquireOwnershipAsync(string sessionId, string ownerToken, CancellationToken cancellationToken = default)
+            => TakenOver ? Task.FromResult(new AgentSessionRecordResult(AgentSessionRecordOutcome.OwnedElsewhere))
+                : _forward.AcquireOwnershipAsync(sessionId, ownerToken, cancellationToken);
+        public Task ReleaseOwnershipAsync(string sessionId, AgentSessionFence fence, CancellationToken cancellationToken = default)
+            => _forward.ReleaseOwnershipAsync(sessionId, fence, cancellationToken);
+        public Task<AgentSessionRecordResult> WriteAsync(AgentSessionRecordWrite write, CancellationToken cancellationToken = default)
+        {
+            if (write.PausedTurn is null && !TakenOver) return _forward.WriteAsync(write, cancellationToken);
+            TakenOver = true;
+            return Task.FromResult(new AgentSessionRecordResult(AgentSessionRecordOutcome.OwnershipLost));
+        }
+        public Task<string?> FindProposalSessionAsync(string proposalId, CancellationToken cancellationToken = default)
+            => _forward.FindProposalSessionAsync(proposalId, cancellationToken);
+        public Task<AgentSessionSummaryPage> ListOwnedAsync(AgentSessionOwnerQuery query, CancellationToken cancellationToken = default)
+            => _forward.ListOwnedAsync(query, cancellationToken);
+    }
 
     /// <summary>A store that keeps every record but cannot guard its writes on owner and fence.</summary>
     private sealed class UnfencedRecordStore(IAgentSessionRecordStore inner) : IAgentSessionRecordStore
