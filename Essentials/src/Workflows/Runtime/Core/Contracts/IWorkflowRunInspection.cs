@@ -21,7 +21,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <para>
 /// An incident message is disclosed only when its activity, and the one causal child it propagated from (the fault
 /// recorder's causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the
-/// child whose parent notification or control batches the parent was handling), are established non-sensitive. This assumes that a propagated
+/// child whose parent notification the parent was handling), are established non-sensitive. An incident a child-control
+/// consumer raised, or one recorded for poisoned scheduler work, is always withheld: its message may echo another Run's
+/// batches or an arbitrary handler's exception text. This assumes that a propagated
 /// fault message names its child but never carries the child's own exception text: only one causal level is checked. A
 /// runtime that copies a child's text into its parent's incident breaks that assumption and must not be inspected through
 /// this contract.

@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Workflows.Runtime.Services.Incidents;
 
 namespace Elsa.Workflows.Runtime.Api.Services;
 
@@ -116,27 +117,38 @@ internal sealed class WorkflowRunInspection(
     /// </summary>
     internal const int SensitivityLookupLimit = 32;
 
+    // The sub-status the runtime's child-control delivery records on a thrown consumer fault.
+    private const string ChildControlFaulted = "ChildControlFaulted";
+
     /// <summary>
     /// Whether an incident's message may echo a sensitive input. Non-sensitivity must be established from both sources, the
     /// Executable's input bindings and the activity execution's own value evidence, for the activity the incident names and,
     /// when it propagated from a child's fault, for that causal activity execution too (the fault recorder's causal execution,
-    /// a structural parent's completed child, the child whose parent notification the parent was handling, or the child whose
-    /// control batches a consumer was evaluating). Only one causal level is checked: this assumes, as the runtime's fault
-    /// recorders do, that a propagated fault message names its child but never carries the child's own exception text. An
-    /// incident without an activity execution, or whose causal execution is blank or named only partly, counts as sensitive.
+    /// a structural parent's completed child, or the child whose parent notification the parent was handling). Only one causal
+    /// level is checked: this assumes, as the runtime's fault recorders do, that a propagated fault message names its child
+    /// but never carries the child's own exception text. An incident without an activity execution, whose causal execution
+    /// is blank or named only partly, raised by a child-control consumer, or recorded for poisoned scheduler work, counts as
+    /// sensitive.
     /// </summary>
     private async Task<bool> IncidentSensitiveAsync(string workflowExecutionId, string? activityExecutionId, string? executableNodeId,
         IReadOnlyDictionary<string, string> metadata, HashSet<string>? sensitive, Dictionary<string, bool> lookups, CancellationToken cancellationToken)
     {
         if (activityExecutionId is null) return true;
+        // Withheld outright: a child-control consumer received batches the called workflow's own Run produced, which this
+        // one-Run read cannot inspect (every fault arm names the calling child; a thrown arm recorded before that only carries
+        // its sub-status), and a poisoned scheduler work item's message embeds an arbitrary handler's exception text.
+        if (metadata.ContainsKey(RuntimeMetadataKeys.ChildControlActivityExecutionId)
+            || metadata.TryGetValue(RuntimeMetadataKeys.FaultSubStatus, out var subStatus) && subStatus == ChildControlFaulted
+            || metadata.TryGetValue(RuntimeMetadataKeys.CheckpointReason, out var reason) && reason == PoisonedSchedulerWorkIncidentObserver.IncidentFailureType)
+            return true;
         if (await ActivitySensitiveAsync(workflowExecutionId, activityExecutionId, executableNodeId, sensitive, lookups, cancellationToken)) return true;
         // A causal child: the fault recorder's (IActivityFaultCausation), a structural parent's completed child, or the child
-        // whose notification or control batches the parent's handler received. A key that is present but blank, or a causal
+        // whose notification the parent's handler received. A key that is present but blank, or a causal
         // node or incident without its activity execution, cannot be established non-sensitive.
         foreach (var key in new[]
                  {
                      RuntimeMetadataKeys.CausalActivityExecutionId, RuntimeMetadataKeys.CompletedChildActivityExecutionId,
-                     RuntimeMetadataKeys.NotifyingChildActivityExecutionId, RuntimeMetadataKeys.ChildControlActivityExecutionId
+                     RuntimeMetadataKeys.NotifyingChildActivityExecutionId
                  })
         {
             if (!metadata.TryGetValue(key, out var child)) continue;

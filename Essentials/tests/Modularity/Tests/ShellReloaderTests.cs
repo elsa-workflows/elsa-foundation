@@ -56,7 +56,7 @@ public sealed class ShellReloaderTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new ShellReloader(registry, new NuplaneHostTestComposition.StubShell("Authoring"), logger).ReloadAsync(cancellation.Token));
-        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("cancelled while retrying", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("was cancelled", StringComparison.Ordinal));
     }
 
     private static Task<int> Reload(QueuedReloadRegistry registry) =>

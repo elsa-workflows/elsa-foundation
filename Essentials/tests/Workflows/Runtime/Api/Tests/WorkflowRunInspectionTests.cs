@@ -289,7 +289,9 @@ public sealed class WorkflowRunInspectionTests
     [InlineData("notifying-plain", false)]
     [InlineData("notifying-blank", true)]
     [InlineData("control-sensitive", true)]
-    [InlineData("control-plain", false)]
+    [InlineData("control-plain", true)]
+    [InlineData("control-thrown-before-key", true)]
+    [InlineData("poisoned-work", true)]
     [InlineData("control-blank", true)]
     public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
     {
@@ -310,9 +312,12 @@ public sealed class WorkflowRunInspectionTests
             // A parent faulting while handling a child's notification records that child, whose payload reached the handler.
             "notifying-sensitive" or "notifying-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = ChildId },
             "notifying-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = "" },
-            // A child-control consumer's fault, on every arm, records the child whose control batches it received.
+            // A child-control consumer's fault, on every arm, records the calling child; the batches came from another Run.
             "control-sensitive" or "control-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlActivityExecutionId] = ChildId },
             "control-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.ChildControlActivityExecutionId] = "" },
+            // A thrown consumer fault recorded before the key existed carries only its sub-status.
+            "control-thrown-before-key" => new Dictionary<string, string> { [RuntimeMetadataKeys.FaultSubStatus] = "ChildControlFaulted" },
+            "poisoned-work" => new Dictionary<string, string> { [RuntimeMetadataKeys.CheckpointReason] = "SchedulerWorkPoisoned" },
             _ => new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalActivityExecutionId] = ChildId,
