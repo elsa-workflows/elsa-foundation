@@ -61,12 +61,14 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await page.getByRole("button", { name: "Definitions", exact: true }).click();
   await expect(workflowRow(page)).toBeVisible();
 
-  await page.getByRole("button", { name: "Manage tags", exact: true }).click();
-  const catalog = page.getByRole("dialog", { name: "Manage workflow tags", exact: true });
+  await page.getByRole("link", { name: "Manage tags", exact: true }).click();
+  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  const catalog = page.locator(".wf-tag-page");
   await catalog.getByLabel("Tag name", { exact: true }).fill(tagName);
   await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
-  await expect(catalog.getByRole("status")).toContainText(`Saved tag ${tagName}`);
-  await catalog.getByLabel("Tag to manage", { exact: true }).selectOption("");
+  await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
+  await page.getByRole("button", { name: "Create tag", exact: true }).click();
   await catalog.getByLabel("Tag name", { exact: true }).fill(teamName);
   await catalog.getByLabel("Tag kind", { exact: true }).selectOption("controlled");
   await catalog.getByRole("button", { name: "Add controlled value", exact: true }).click();
@@ -77,10 +79,11 @@ test("organizes and queries a real workflow through folders, tags, publication, 
     new URL(response.url()).pathname.endsWith("/tags"));
   await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
   const controlledTagReceipt = await (await controlledResponse).json() as { values: { id: string; name: string }[] };
-  await expect(catalog.getByRole("status")).toContainText(`Saved tag ${teamName}`);
+  await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   expect(controlledTagReceipt.values).toHaveLength(2);
   expect(controlledTagReceipt.values.every(value => value.id.startsWith("value-"))).toBe(true);
-  await catalog.getByRole("button", { name: "Close", exact: true }).click();
+  await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
+  await page.getByRole("button", { name: "Back to workflows", exact: true }).click();
 
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Organization", exact: true }).click();

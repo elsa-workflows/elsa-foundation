@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { WorkflowTagsRoute } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTagsPage";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
@@ -212,6 +214,19 @@ const ai = { promptActions: { list: () => [] }, dispatchPrompt: () => undefined 
 
 function Library() {
   const session = useWorkflowDefinitionBrowseSession(context);
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const sync = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+  if (path.includes("/workflows/tags")) {
+    const view = path.endsWith("/new") ? "create" : path.endsWith("/tags") ? "list" : "edit";
+    return <main style={{ height: "100vh", overflow: "auto", padding: 24 }}><WorkflowTagsRoute key={view} context={context} view={view} navigate={next => {
+      window.history.pushState({}, "", `${next}${window.location.search}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }} /></main>;
+  }
   if (parameters.get("organization-surface") === "properties") return <main className="wf-canvas-shell wf-tokens" style={{ height: "100vh" }}><WorkflowOrganizationButton context={context} definitionId="welcome" name="Welcome new customer" onSaved={() => undefined} /><div className="wf-properties-view"><section className="wf-properties-section"><h3>Information</h3><p>Welcome new customer</p></section></div></main>;
   return <main className="wf-page wf-page--definitions"><WorkflowDefinitions context={context} ai={ai} session={session} onOpen={() => undefined} /></main>;
 }

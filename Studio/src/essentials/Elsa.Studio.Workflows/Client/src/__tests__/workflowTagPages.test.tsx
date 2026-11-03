@@ -1,0 +1,98 @@
+import { describe, expect, it, vi } from "vitest";
+import { button, click, fill, pagedDefinitionCapabilities, renderWorkflowRoute, response, waitForText } from "./workflowDefinitionTestHelpers";
+import type { WorkflowTag } from "../api/workflowOrganization";
+
+const tag: WorkflowTag = { id: "region", name: "Region", description: "Geographical area", mode: "controlled", cardinality: "single", revision: "1", deprecated: false, values: [{ id: "eu", name: "Europe" }] };
+const retired: WorkflowTag = { ...tag, id: "old", name: "Legacy", deprecated: true };
+function capabilities() {
+  const caps = pagedDefinitionCapabilities();
+  caps.capabilities[0].links.push({ rel: "workflow-tags", href: "tags" }, { rel: "workflow-tag", href: "tags/{tagId}", templated: true });
+  return caps;
+}
+function fixture(options: { denied?: boolean; fail?: boolean; deferred?: Promise<Response> } = {}) {
+  const reads: string[] = [];
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input)); reads.push(url.pathname + url.search);
+    if (options.fail) throw new Error("Catalog offline");
+    if (url.pathname === "/tags/region") return options.deferred ?? response(tag);
+    if (url.pathname === "/tags") return response({ items: url.searchParams.has("search") ? [] : url.searchParams.has("continuationToken") ? [retired] : [tag], permissions: { canManageTags: !options.denied }, nextContinuationToken: url.searchParams.has("search") || url.searchParams.has("continuationToken") ? null : "next-page" });
+    throw new Error(`Unexpected request ${url}`);
+  });
+  return { fetcher, reads };
+}
+
+describe("workflow tag pages", () => {
+  it("opens a tag from the collection at its edit URL and returns to the collection", async () => {
+    const { fetcher, reads } = fixture();
+    const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, capabilities(), { followNavigation: true });
+    await waitForText(container, "Region");
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    await click(container.querySelector('a[href="/workflows/tags/region"]'));
+    await waitForText(container, "Edit workflow tag");
+    expect(window.location.pathname).toBe("/workflows/tags/region");
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("Region");
+    expect(container.querySelector('[aria-label="Tag to manage"]')).toBeNull();
+    expect(reads).toContain("/tags/region");
+    await click(button(container, "Back to tags"));
+    await waitForText(container, "Region");
+    expect(window.location.pathname).toBe("/workflows/tags");
+    await click(button(container, "Create tag"));
+    await waitForText(container, "Create workflow tag");
+    expect(window.location.pathname).toBe("/workflows/tags/new");
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");
+  });
+
+  it("loads continuation pages including retired tags and searches on the server", async () => {
+    const { fetcher, reads } = fixture();
+    const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, capabilities());
+    await waitForText(container, "1 tags loaded");
+    await click(button(container, "Load more tags"));
+    await waitForText(container, "2 tags loaded");
+    expect(container.textContent).toContain("Retired");
+    expect(reads).toContain("/tags?pageSize=100&continuationToken=next-page");
+    await fill(container.querySelector('[aria-label="Search workflow tags"]'), "missing");
+    await click(button(container, "Search"));
+    await waitForText(container, "No matching tags");
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
+    expect(reads).toContain("/tags?pageSize=100&search=missing");
+  });
+
+  for (const path of ["/workflows/tags/new", "/workflows/tags/region"]) it(`denies direct mutation navigation to ${path}`, async () => {
+    const { fetcher, reads } = fixture({ denied: true });
+    const { container } = await renderWorkflowRoute(path, fetcher, capabilities());
+    await waitForText(container, "Tag management is not allowed");
+    expect(container.querySelector("form")).toBeNull();
+    expect(reads).not.toContain("/tags/region");
+  });
+
+  it("offers retry after an initial load failure", async () => {
+    const options = { fail: true };
+    const { fetcher } = fixture(options);
+    const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, capabilities());
+    await waitForText(container, "Could not load workflow tags");
+    options.fail = false;
+    await click(button(container, "Retry"));
+    await waitForText(container, "Region");
+  });
+
+  it("distinguishes an unsupported backend without reading its tag catalog", async () => {
+    const { fetcher, reads } = fixture();
+    const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, pagedDefinitionCapabilities());
+    await waitForText(container, "Workflow tags unavailable");
+    expect(reads).toEqual([]);
+  });
+
+  it("discards an old tag detail after navigating to another edit URL", async () => {
+    let resolve!: (value: Response) => void;
+    const { fetcher, reads } = fixture({ deferred: new Promise<Response>(done => { resolve = done; }) });
+    const { container } = await renderWorkflowRoute("/workflows/tags/region", fetcher, capabilities(), { followNavigation: true });
+    await vi.waitFor(() => expect(reads).toContain("/tags/region"));
+    window.history.pushState({}, "", "/workflows/tags/new");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitForText(container, "Create workflow tag");
+    resolve(response(tag));
+    await new Promise(done => setTimeout(done, 20));
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");
+    expect(container.textContent).not.toContain("Edit workflow tag");
+  });
+});
