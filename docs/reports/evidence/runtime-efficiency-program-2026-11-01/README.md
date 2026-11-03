@@ -130,4 +130,4 @@ machines on one private subnet, with PostgreSQL 16.15 on its own host and owner 
 It keeps the controller ledgers for series `x1`–`x3`, every sender receipt directory and the surviving node logs.
 Environment files are excluded, and every file was checked for the database password before download.
 `cancel-i69-custody.json` records the topology and binary identities, and `fixture-cleanup-i69.json` records the
-removal. `analyze-cancel-i69.py` (run on the extracted archive) writes `cancel-i69-summary.json`.
+removal. `analyze-cancel-i69.py` (run on the extracted archive) prints the JSON committed as `cancel-i69-summary.json`.

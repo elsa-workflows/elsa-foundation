@@ -16,7 +16,8 @@
     },
     "image": "Canonical:ubuntu-24_04-lts:server:latest",
     "network": "one private subnet 10.238.2.0/24; inbound SSH only to the database host, from the operator's /32",
-    "database": "postgres:16-alpine sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab; PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit"
+    "database": "postgres:16-alpine sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab; PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; data on the database VM's OS volume (Premium SSD, Docker default storage)",
+    "deviationFromTwoHostReadme": "The two-host README describes no public addresses; here the database host had one, with inbound SSH only from the operator's /32. The nodes had none."
   },
   "binaries": {
     "source": "c6ba9b42db5f4780e7b74659da1e29ba9bfd9bb8; runtime source identical to main a1419b9c3 (only Markdown differs); contains #3669 (854667110)",
@@ -26,5 +27,6 @@
     "deployedHashesVerified": "Elsa.Workbench.dll and the hook DLL on both nodes matched the build"
   },
   "controller": "specs/1183-runtime-efficiency-program/evidence/two-host-qualification/cluster-controller.py and api.py, unchanged; series x1 (delay,loop), x2 (loop), x3 (loop)",
-  "note": "The controller names node logs node-<host>-<n>.log per series, so each series overwrote the previous one: the archive keeps node A's and the sender's x3 logs and the x1 second sender's log (node-b-1.log). Every case ledger and every sender receipt directory is kept."
+  "note": "The controller names node logs node-<host>-<n>.log per series, so each series overwrote the previous one: the archive keeps node A's and the sender's x3 logs and the x1 second sender's log (node-b-1.log). Every case ledger and every sender receipt directory is kept.",
+  "timing": "secondsToSettledReceipt is measured by the controller from writing cancel.json over SSH to reading finished.json with one-second SSH polling; it is an upper bound, not a latency. The hook marks its output timingEligible: false."
 }

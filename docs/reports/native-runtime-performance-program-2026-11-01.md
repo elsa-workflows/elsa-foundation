@@ -25,7 +25,7 @@ Balanced/Ephemeral were 90, 104, 180 respectively; only fork/join changed, to 17
 
 ## Cooperative cancellation of a progressing native drain
 
-The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify until #3669 stopped the placement pump waiting for a dispatched drain, after which its two-node runs cancelled the loop three times out of three (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
+The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify until #3669 stopped the placement pump waiting for a dispatched drain, after which its two-node runs on one machine cancelled the loop three times out of three, and fixture `i69` later passed the same case on independent machines (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
 
 Six real SQLite integration cases cover External and ReplaySafe loop bodies under Durable, Balanced and Ephemeral. Each starts an otherwise unbounded progressing While with no total-cycle cap, requests Cancel through the public actor API while the first body is executing, and proves one completed body, durable Cancelled state, a yielded turn and unchanged activity state after a resumption sweep. A bounded runaway guard makes removal of the behavior fail without hanging.
 
@@ -722,24 +722,32 @@ for a dispatched drain, so it keeps renewing placement and delivers a forwarded 
 two-node runs, placement stayed on node A and the progressing loop was cancelled in 3 to 13 s, three times out of three.
 Those runs used two Workbench processes and PostgreSQL 16 on one machine.
 
-On independent machines (fixture `i69`, 2026-11-03), the build containing #3669 passed all four cases. Node A,
-node B and PostgreSQL 16.15 each ran on their own D2s_v6 machine on one private subnet, with the same controller and
-hook as above. Times run from the Cancel request to the sender's receipt that the execution is Cancelled with
-an empty queue, no incidents and no undelivered outbox.
+On independent machines (fixture `i69`, 2026-11-03), the build containing #3669 passed all four cases. Node A and
+node B each ran on their own D2s_v6 machine, and PostgreSQL 16.15 ran in Docker on a third, on that machine's OS
+volume (Premium SSD), all on one private subnet. The controller and hook are the ones above, unchanged. Unlike the
+i68 topology, the database host had a public IP, open only to SSH from the operator's address.
 
 | Case | Series | Result |
 |---|---|---|
-| Parked Cancel | `x1` | Settled as Cancelled 2.0 s after the request; placement stayed on node A |
-| Progressing Cancel | `x1`, `x2`, `x3` | Settled as Cancelled 4.1 s after the request in each; placement stayed on node A |
+| Parked Cancel | `x1` | Cancelled; placement on node A before and after |
+| Progressing Cancel | `x1`, `x2`, `x3` | Cancelled in each; placement on node A before and after |
 
 - Both duplicate Cancel envelopes were forwarded as `Deferred` in every case, so each Cancel crossed the durable
   transport to the owner.
-- In each progressing case, activity rows grew before the Cancel (by 146–196 in five seconds) and not after it.
+- The sender's receipt reported the execution Cancelled with an empty queue, no incidents and no undelivered outbox
+  within 2.0 s of the request for the parked case and 4.1 s for each progressing case. These are controller-side
+  upper bounds that include one-second SSH polling, not latencies; the hook marks its output `timingEligible: false`.
+- In each progressing case, activity rows grew by 146–196 in the five seconds before the Cancel, kept growing until
+  it took effect, and did not change in the ten seconds after the settled receipt.
 - Every case ended with the owner's API reporting `Cancelled`, an empty transport and no incidents.
-- Each node log has one PostgreSQL `40001` serialization conflict on the command transport, which EF logs at `fail`
-  level. The transport's bounded compare-and-swap retries it as a transient write conflict, and nothing failed.
+- Errors logged: each node log has one PostgreSQL `40001` serialization conflict on the command transport, which EF
+  logs at `fail` level and the transport's bounded compare-and-swap retries as a transient write conflict. Node A's
+  other eight `fail` lines are EF probing migration-history tables on the fresh database. Nothing failed.
 - Node logs survive only for the last series of each process name (see `cancel-i69-custody.json`). Every case ledger
   and sender receipt is kept.
+- Limits: two nodes only, so four-node results remain open; one parked and three progressing runs; no owner failure
+  or database interruption during a Cancel; and placement never moved to the sender, so the `c5`/`c6` mode above was
+  not exercised. No throughput or allocation is claimed.
 
 ### Second fixture cleanup
 
