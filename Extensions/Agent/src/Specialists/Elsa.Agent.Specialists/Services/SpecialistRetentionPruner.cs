@@ -72,10 +72,7 @@ internal sealed class SpecialistRetentionPruner(ISpecialistTurnStore turns, IWor
             if (!SpecialistTurnDeliveryRules.SameLogical(identity, delivery.Identity)) return "delivery-mismatch";
             var parent = await activities.FindAsync(identity.WorkflowExecutionId, delivery.Identity.ActivityExecutionId, cancellationToken);
             if (parent is null || !executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var node)) return "delivery-unavailable";
-            // A draft Test Run root journaled before playground continuity has no conversation workspace in its stored
-            // identity; that member changes conversation ownership only, so the same native delivery still settles retention.
-            var native = SpecialistNativeBinding.CancellationIdentity(workflow, parent, node);
-            if (native != delivery.Identity && native with { ConversationWorkspace = null } != delivery.Identity) return "delivery-mismatch";
+            if (SpecialistNativeBinding.CancellationIdentity(workflow, parent, node) != delivery.Identity) return "delivery-mismatch";
             if (parent.Status == ActivityExecutionStatus.Completed)
             {
                 var application = candidate.Applications?.SingleOrDefault(item => item.Identity == delivery.Identity);

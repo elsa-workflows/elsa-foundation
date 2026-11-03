@@ -113,14 +113,15 @@ version (`activity-test-version-…`, one per saved draft revision) and the temp
   `$specialist.options` `{conversationId, revision}`, which a fresh run passes as `{}`;
 - an edited revision, a stale revision, a published run and a nested specialist cannot continue it;
 - history follows the ordinary content retention of each accepted turn's own Test Run workflow; once the latest accepted
-  turn's content is purged, a continuation fails with `specialist.session.unavailable` and a fresh conversation is needed.
+  turn's content is purged, a continuation faults with `specialist.journal.content-unavailable` and a fresh conversation is needed.
 
 The workspace is shared like the generic Test Run itself: any caller who can manage draft Test Runs in the tenant and
 holds the conversation reference can continue it. That reference is the `Conversation` output of a run,
 which any such caller can read through the generic Test Run.
 
-A draft Test Run turn journaled before this change keeps its workflow-owned identity. If it is still in flight across
-the upgrade, it faults on resume. Retention still settles it.
+Pre-release data: a draft Test Run root turn journaled before this change keeps an identity without the workspace,
+so it no longer matches its native binding. An in-flight one faults on resume, retention pins it as a delivery
+mismatch, and the evidence read shows no turn for it. Reset development journals that hold such runs.
 
 `SpecialistsInMemoryJournal` is an explicit development/test profile, retaining at most 10,000 turns
 for one host lifetime through scoped adapters over shared in-memory state. Both backends enforce the
