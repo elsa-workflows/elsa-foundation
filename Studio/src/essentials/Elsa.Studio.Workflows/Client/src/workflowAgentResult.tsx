@@ -62,3 +62,18 @@ export function WorkflowBatchUndoControl({ controller, toolResult }: StudioAgent
     {status ? <p role="status">{status}</p> : null}
   </div>;
 }
+
+/** Reverts a reviewed list or create-dialog change on its originating page (spec 1193 FR-020, FR-023); nothing was saved. */
+export function WorkflowPageRevertControl({ controller, toolResult }: StudioAgentResultRendererProps & { controller: WorkflowAgentController }) {
+  const data = toolResult?.payload?.data;
+  const token = data && typeof data === "object" && typeof (data as Record<string, unknown>).undoToken === "string" ? (data as Record<string, unknown>).undoToken as string : null;
+  const [status, setStatus] = useState("");
+  const [done, setDone] = useState(false);
+  if (!token) return null;
+  const revert = controller.library?.revert;
+  return <div className="wf-agent-page-revert">
+    <p data-outcome="applied-locally">Applied on this page only; nothing was saved.</p>
+    <button type="button" disabled={!revert || done} onClick={() => { const message = revert?.(token) ?? "The originating page is unavailable."; setStatus(message); setDone(message.startsWith("Reverted")); }}>Revert</button>
+    {status ? <p role="status">{status}</p> : null}
+  </div>;
+}

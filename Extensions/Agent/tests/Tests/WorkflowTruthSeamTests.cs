@@ -269,8 +269,9 @@ public sealed class WorkflowTruthSeamTests
 
         var policies = host.Services.GetRequiredService<IAgentPolicyEvaluator>();
         // The API's rule for a requested capability: installed, and its own id allowed by the session's policy.
+        // The definition's own capabilities: the library capabilities (slice E) belong to the library context, not to one workflow.
         var installed = (await host.Services.GetRequiredService<IAgentCapabilityCatalog>().ListAsync())
-            .Where(item => item.ModuleId == WorkflowAgentSnapshot.ModuleId).Select(item => item.Id).ToArray();
+            .Where(item => item.ModuleId == WorkflowAgentSnapshot.ModuleId && item.ContextKinds.Contains("workflow.definition")).Select(item => item.Id).ToArray();
         var admitted = new List<string>();
         foreach (var id in installed)
             if ((await policies.EvaluateCapabilityAsync(policy, id)).Allowed) admitted.Add(id);

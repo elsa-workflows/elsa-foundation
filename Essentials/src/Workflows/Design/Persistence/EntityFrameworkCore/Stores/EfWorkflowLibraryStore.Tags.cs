@@ -76,21 +76,74 @@ internal sealed partial class EfWorkflowLibraryStore
         return input with { Name = name, Values = normalized };
     }
 
-    public Task<WorkflowTag> CreateTagAsync(WorkflowTagInput input, string actorId, CancellationToken cancellationToken = default)
+    public Task<WorkflowTag> CreateTagAsync(WorkflowTagInput input, string actorId, CancellationToken cancellationToken = default) =>
+        CreateTagCoreAsync(input, actorId, null, cancellationToken);
+
+    public Task<WorkflowTag> CreateTagAsync(WorkflowTagInput input, string actorId, string operationKey, CancellationToken cancellationToken = default)
     {
-        input = ValidateTag(input, null); ValidateActor(actorId); var key = NewId("create-tag-");
-        var normalized = Normalized(input.Name); var hash = EfDesignSupport.LookupHash(normalized);
-        return WriteAsync(key, "workflow.tag.create.v1", new { input, actorId }, async token =>
+        ValidateClientKey(operationKey);
+        return CreateTagCoreAsync(input, actorId, operationKey, cancellationToken);
+    }
+
+    public Task<WorkflowTag?> FindTagByOperationKeyAsync(string operationKey, CancellationToken cancellationToken = default)
+    {
+        ValidateClientKey(operationKey); var keyHash = ClientKeyHash(operationKey);
+        return EfDesignSupport.ReadAsync("reading workflow tag by operation key", async () =>
         {
-            if (await TagRows.AnyAsync(row => row.NameHash == hash, token)) Conflict("A tag with this name already exists.");
-            if (await TagRows.CountAsync(token) >= MaximumTags) throw new ArgumentException($"The tag catalog limit is {MaximumTags}.");
-            var now = DateTimeOffset.UtcNow;
-            var row = new WorkflowTagEntity { Id = NewId("tag-"), TenantId = Tenant, Name = input.Name,
-                NormalizedName = normalized, NameHash = hash, Description = input.Description,
-                Mode = input.Mode, Cardinality = input.Cardinality, Deprecated = input.Deprecated,
-                Revision = Revision(), ValuesJson = JsonSerializer.Serialize(input.Values, Json), CreatedAt = now, LastModifiedAt = now };
-            db.Tags.Add(row); var result = Tag(row); Audit(row.Id, actorId, "tag.create", key, null, result); return result;
-        }, cancellationToken);
+            var row = await TagRows.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.OperationKey == keyHash, cancellationToken);
+            return row is null ? null : Tag(row);
+        });
+    }
+
+    private async Task<WorkflowTag> CreateTagCoreAsync(WorkflowTagInput input, string actorId, string? clientKey, CancellationToken cancellationToken)
+    {
+        input = ValidateTag(input, null); ValidateActor(actorId);
+        var normalized = Normalized(input.Name); var hash = EfDesignSupport.LookupHash(normalized);
+        var keyHash = clientKey is null ? null : ClientKeyHash(clientKey);
+        // The create's meaning under its key: identities of new values are generated, so they are not part of it.
+        var fingerprint = keyHash is null ? null : Fingerprint(new { input.Name, input.Description, input.Mode, input.Cardinality,
+            input.Deprecated, values = input.Values!.Select(value => new { value.Name, value.Deprecated }) });
+        // A repeated keyed create rereads by its key first and writes nothing (ADR 0051: a client-known identity, never a
+        // replayed response). The writer's own operation key stays server-generated.
+        if (keyHash is not null && await KeyedTagAsync(keyHash, fingerprint!, cancellationToken) is { } existing) return existing;
+        var key = NewId("create-tag-");
+        try
+        {
+            return await WriteAsync(key, "workflow.tag.create.v1", new { input, actorId, operationKey = keyHash }, async token =>
+            {
+                if (keyHash is not null && await TagRows.SingleOrDefaultAsync(row => row.OperationKey == keyHash, token) is { } raced)
+                    return KeyedTag(raced, fingerprint!);
+                if (await TagRows.AnyAsync(row => row.NameHash == hash, token)) Conflict("A tag with this name already exists.");
+                if (await TagRows.CountAsync(token) >= MaximumTags) throw new ArgumentException($"The tag catalog limit is {MaximumTags}.");
+                var now = DateTimeOffset.UtcNow;
+                var row = new WorkflowTagEntity { Id = NewId("tag-"), TenantId = Tenant, Name = input.Name,
+                    NormalizedName = normalized, NameHash = hash, Description = input.Description,
+                    Mode = input.Mode, Cardinality = input.Cardinality, Deprecated = input.Deprecated,
+                    Revision = Revision(), ValuesJson = JsonSerializer.Serialize(input.Values, Json), CreatedAt = now, LastModifiedAt = now,
+                    OperationKey = keyHash, OperationFingerprint = fingerprint };
+                db.Tags.Add(row); var result = Tag(row); Audit(row.Id, actorId, "tag.create", key, null, result); return result;
+            }, cancellationToken);
+        }
+        catch (Exception) when (keyHash is not null && !cancellationToken.IsCancellationRequested)
+        {
+            // A concurrent create under the same key wins the unique index; its committed tag is this create's outcome.
+            if (await KeyedTagAsync(keyHash, fingerprint!, cancellationToken) is { } winner) return winner;
+            throw;
+        }
+    }
+
+    private async Task<WorkflowTag?> KeyedTagAsync(string keyHash, string fingerprint, CancellationToken token)
+    {
+        var row = await EfDesignSupport.ReadAsync("reading workflow tag by operation key",
+            () => TagRows.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.OperationKey == keyHash, token));
+        return row is null ? null : KeyedTag(row, fingerprint);
+    }
+
+    private static WorkflowTag KeyedTag(WorkflowTagEntity row, string fingerprint)
+    {
+        if (!StringComparer.Ordinal.Equals(row.OperationFingerprint, fingerprint))
+            Conflict("This operation key already created a different tag.");
+        return Tag(row);
     }
 
     public Task<WorkflowTag> UpdateTagAsync(string id, WorkflowTagInput input, string actorId, CancellationToken cancellationToken = default)

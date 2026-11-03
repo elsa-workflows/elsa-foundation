@@ -224,6 +224,53 @@ additive). The removed `workflows.proposal` renderer and the explain-executable 
 **Major** for any host that dispatched them (pre-GA cleanup, constitution §4.2). The removed `ai-context-providers` and
 `ai-tools` manifest tags are a Patch correction (no such contribution ever existed).
 
+## Library, create dialog and templates (spec 1193 slice E)
+
+**Context source `workflows.library-context`** (`WorkflowLibraryContextProvider`, `internal sealed`, Minor): admits three client
+kinds, schema `1`, each strictly (every field declared; an unknown field, an over-long value or a list beyond its bound
+refuses it) and within 16 KiB, well under the host's 32 KiB per-attachment budget:
+
+| Kind | Target (`ModuleId` `Elsa.Studio.Workflows`) | Content |
+| --- | --- | --- |
+| `workflows.library` | `workflow-library` / `library` / list revision | the visible query (search, folder, tag and value filters, favorites-only, sort, publication filter), the applied view's identity, owner kind (`private` or `shared`) and revision, the columns, the selection (visible rows only), up to 50 visible rows and the native permission flags the page response carries |
+| `workflows.create-dialog` | `workflow-create-dialog` / `create-dialog` / dialog revision | the open dialog's name, description, root activity or template, and the templates it offers |
+| `workflows.template-list` | `workflow-template-list` / `templates` / list revision | the visible filter, the selected template and each listed template's identity and persisted revision; never a workflow definition |
+
+Each is bound to its page's client binding. With any of them it adds `workflows.library-organization` (`AuthoritativeRead`):
+the library's own current answer from `IWorkflowLibraryCommands.GetPermissionsAsync`, read again every turn, with
+`status` `available`, `denied` or `unavailable` and, when unavailable (organization disabled, or no or several
+installed commands), the backend's reason; ordinary list context remains. Its installed guidance
+(`workflows.library-guidance`) names the tools below and refuses deletion with a pointer to the library's Delete actions.
+
+**Library server writes** (`Mutating`, `ReviewRequired`, `ExecutionLocation.Server`, result `workflows.library-result`,
+renderer `weaver.workflows.library-result`, disclosed by `workflows.library-context`): `workflow_library_assign_tags`
+(`workflows/design/tag-assignments:manage`), `workflow_library_set_favorite` (`workflows/design:read`),
+`workflow_library_move_to_folder` (`workflows/design:manage`) and `workflow_library_save_view` (`workflows/design:read`).
+Each goes through `IWorkflowLibraryCommands` (Workflows Design Core, D4) for the session's own actor and tenant, returns
+`RequiresApproval` from preparation so review holds in every mode including `full-auto`, and names only rows of the admitted
+list. Tag edits bind each target by its current organization revision; favorites and folder moves are idempotent sets (a
+move applies to all targets or none). A tag that does not exist is created first, only as a marker tag, only with the
+library's tag-management flag, and the review shows the creation. Tag creation and view creation carry a client operation
+key frozen at preparation; when the create's response is lost, the outcome is an authoritative reread by that key, so a
+retry resolves to exactly one tag or view (SC-008). A shared view needs the view-sharing flag; an update is the applied view
+bound by its revision. Results carry one outcome per target: `applied` only when every target applied, `partial` otherwise,
+and a change that altered nothing is a refusal with no receipt. Delete and permanent delete are not offered.
+
+**Page working-state tools** (`Mutating`, `ReviewRequired`, `ExecutionLocation.ClientWorkingState`, reviewed in every mode):
+`workflow_library_set_list_state` (result `workflows.list-state`) changes only the visible list's search, folder, tag filters,
+favorites-only, sort, publication filter or columns (folder, tag and favorite narrowing are unavailable with organization
+disabled); `workflow_create_dialog_prefill` (result `workflows.create-dialog-prefill`) fills the open dialog's name,
+description and either a root activity that is an available entry of the actor's current `IActivityAuthoringCatalog` read or
+a template the dialog lists. Each completes only on a receipt that repeats exactly the approved change; the page keeps it
+revertible, and creating the workflow remains the user's Create action.
+
+**Templates.** `workflows.context` also admits `workflows.template-editor` schema `1`: the template editor's working state in
+the active-draft shape, targeted `workflow-template` / template id / content revision, with `templateId` and the persisted
+`templateRevision` (the expected revision of the user's explicit save) instead of a definition and draft. Its authority is
+the host's design read and manage decision; `IWorkflowDefinitionAuthorizer` is never asked about a template.
+`workflow_apply_operation_batch` accepts it: the preview names the template and its persisted revision and no definition,
+and the template editor's adapter applies it with the designer's history and autosave rules.
+
 ## Removed legacy seams
 
 The seven public legacy contracts, their default implementations, their registrations and the models only they used are

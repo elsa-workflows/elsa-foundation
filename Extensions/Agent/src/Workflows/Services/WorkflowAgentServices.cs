@@ -16,7 +16,11 @@ internal sealed class WorkflowAgentCapabilityProvider : IAgentCapabilityProvider
             new("workflow.explain", WorkflowAgentSnapshot.ModuleId, "Explain open workflow", "Explains the open workflow's admitted working state at its revision: its graph, the designer's validation diagnostics and the selected activity's declared properties.",
                 AgentCapabilityKind.Answer, AgentRisk.ReadOnly, ["/workflows"], ["workflows/design:read"], ["workflow.definition", "workflow.request"]) { Modes = ["explain"] },
             new("workflow.propose-change", WorkflowAgentSnapshot.ModuleId, "Propose workflow change", "Reviews a change to the open workflow's unsaved working draft: the position of an existing activity, or one Operation Batch applied as one Undo step. Saving and publishing remain explicit.",
-                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, ["/workflows"], ["workflows/design:manage"], ["workflow.definition"]) { Modes = ["build"] }
+                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, ["/workflows"], ["workflows/design:manage"], ["workflow.definition"]) { Modes = ["build"] },
+            new("workflow.library-explain", WorkflowAgentSnapshot.ModuleId, "Explain workflow library", "Explains the visible workflow library list, the open new-workflow dialog and the visible template list at their revisions.",
+                AgentCapabilityKind.Answer, AgentRisk.ReadOnly, ["/workflows"], ["workflows/design:read"], [WorkflowLibraryContext.LibraryKind, WorkflowLibraryContext.TemplateListKind]) { Modes = ["explain"] },
+            new("workflow.library-organize", WorkflowAgentSnapshot.ModuleId, "Organize workflow library", "Reviews a change to the visible list, a tag, favorite, folder or view change through the library, or values for the open new-workflow dialog. Deleting and creating workflows remain the user's actions.",
+                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, ["/workflows"], ["workflows/design:read"], [WorkflowLibraryContext.LibraryKind, WorkflowLibraryContext.CreateDialogKind]) { Modes = ["build"] }
         ]);
 }
 
@@ -40,8 +44,9 @@ internal sealed class DefaultWorkflowAgentContextProvider(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public AgentContextProviderDescriptor Descriptor { get; } = new(
         "workflows.context", WorkflowAgentSnapshot.ModuleId, "workflow",
-        ["workflow.definition", "workflow.request", "workflow.guidance", WorkflowActivityCatalog.ContentType, PermissionsContentType],
-        ["1"], ["workflow-definition"]);
+        ["workflow.definition", "workflow.request", "workflow.guidance", WorkflowActivityCatalog.ContentType, PermissionsContentType,
+            WorkflowAgentSnapshot.TemplateContentType],
+        ["1"], ["workflow-definition", WorkflowAgentSnapshot.TemplateResourceType]);
 
     public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
     {
@@ -71,7 +76,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
                 continue;
             }
             // The catalog, permissions and guidance kinds are server-produced; a caller cannot supply them.
-            if (caller.ContentType != "workflow.definition" || caller.SchemaVersion != "1")
+            if (caller.ContentType is not ("workflow.definition" or WorkflowAgentSnapshot.TemplateContentType) || caller.SchemaVersion != "1")
             {
                 diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_unsupported", "This workflow context kind or schema is not supported by the current module contribution.", true));
                 continue;
@@ -111,7 +116,17 @@ internal sealed class DefaultWorkflowAgentContextProvider(
                         "The activity design catalog could not confirm the selected activity's declared inputs, so its property context was left out.", false));
                 }
             }
-            attachments.Add(new($"workflow:{snapshot!.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
+            // A template editor's working state is its own resource: attributed to the template and its persisted revision.
+            attachments.Add(snapshot!.IsTemplate
+                ? new($"workflow-template:{snapshot.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.template", snapshot.Target.ResourceId,
+                    "Open template working state", WorkflowAgentSnapshot.TemplateContentType, AdmittedSensitivity(caller.Sensitivity), "selection",
+                    $"Reusable Workflow Template '{snapshot.Target.ResourceId}' (persisted revision '{snapshot.TemplateRevision}') at working revision '{snapshot.Target.Revision}' contains {snapshot.Graph.Activities.Count} activity summaries.",
+                    snapshot.Content, new Dictionary<string, string> { ["templateId"] = snapshot.Target.ResourceId!, ["templateRevision"] = snapshot.TemplateRevision!, ["revision"] = snapshot.Target.Revision! })
+                {
+                    ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Target = snapshot.Target,
+                    Origin = AgentContextOrigin.ClientSnapshot, Client = snapshot.Client, AgentScopes = ["/workflows"]
+                }
+                : new($"workflow:{snapshot.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
                 snapshot.Target.ResourceId, "Open workflow working state", "workflow.definition", AdmittedSensitivity(caller.Sensitivity),
                 "selection", $"Workflow '{snapshot.Target.ResourceId}' at revision '{snapshot.Target.Revision}' contains {snapshot.Graph.Activities.Count} activity summaries.",
                 snapshot.Content, new Dictionary<string, string> { ["workflowDefinitionId"] = snapshot.Target.ResourceId!, ["revision"] = snapshot.Target.Revision! })
@@ -171,14 +186,14 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             if (item.ContentType == PermissionsContentType)
             {
                 if (item.Origin != AgentContextOrigin.AuthoritativeRead
-                    || item.Target is not { ModuleId: WorkflowAgentSnapshot.ModuleId, ResourceType: WorkflowAgentSnapshot.ResourceType, ResourceId.Length: > 0 })
+                    || !WorkflowAgentSnapshot.IsEditorTarget(item.Target) || string.IsNullOrEmpty(item.Target!.ResourceId))
                     return ContextDenied();
                 targets.Add(item.Target);
                 permissions.Add(item);
                 slots.Add(item);
                 continue;
             }
-            if (item.ContentType == "workflow.definition" && WorkflowAgentSnapshot.TryRead(item, out var snapshot, out _))
+            if (item.ContentType is "workflow.definition" or WorkflowAgentSnapshot.TemplateContentType && WorkflowAgentSnapshot.TryRead(item, out var snapshot, out _))
                 targets.Add(snapshot.Target);
             else if (item.ContentType == "workflow.request" && TryAdmitRequest(item, out _))
                 targets.Add(null);
@@ -189,8 +204,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         {
             if (result.Access is { } access && access.ModuleId != Descriptor.ModuleId) return ContextDenied();
             var target = result.Access?.Target ?? result.Receipt?.After;
-            if (target is not { ModuleId: WorkflowAgentSnapshot.ModuleId, ResourceType: WorkflowAgentSnapshot.ResourceType }
-                || string.IsNullOrWhiteSpace(target.ResourceId)) return ContextDenied();
+            if (!WorkflowAgentSnapshot.IsEditorTarget(target) || string.IsNullOrWhiteSpace(target!.ResourceId)) return ContextDenied();
             targets.Add(target);
         }
         if (targets.Count == 0) targets.Add(null);
@@ -313,6 +327,8 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         AgentContextSensitivity sensitivity, ICollection<AgentContributionDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         if (!await AdmittedAsync(session, Permissions(target, sensitivity, "permissions", null), diagnostics, cancellationToken)) return null;
+        if (target.ResourceType == WorkflowAgentSnapshot.TemplateResourceType)
+            return await TemplatePermissionsAsync(session, target, sensitivity, cancellationToken);
         var host = await authorizer.AuthorizeAsync(WorkflowSetDesignerPositionTool.Contract, session.ActorId, session.TenantId, target, cancellationToken);
         var owner = host.Allowed
             ? await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, session.ActorId, session.TenantId, target, true, cancellationToken)
@@ -351,11 +367,37 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         return Permissions(target, sensitivity, summary, content);
     }
 
+    /// <summary>
+    /// A template's permissions: read was established by the disclosure check, and changing it is the host's design manage
+    /// decision for the batch tool. No workflow definition authority is asked (FR-024).
+    /// </summary>
+    private async Task<AgentContextAttachment> TemplatePermissionsAsync(AgentSession session, AgentResourceTarget target, AgentContextSensitivity sensitivity,
+        CancellationToken cancellationToken)
+    {
+        var allowed = (await authorizer.AuthorizeAsync(WorkflowApplyOperationBatchTool.Contract, session.ActorId, session.TenantId, target, cancellationToken)).Allowed;
+        var tools = new List<string>();
+        if (allowed && (await policies.EvaluateCapabilityAsync(session.Policy, WorkflowApplyOperationBatchTool.ToolName, cancellationToken)).Allowed)
+            tools.Add(WorkflowApplyOperationBatchTool.ToolName);
+        var capabilities = new List<string>();
+        foreach (var capability in allowed ? new[] { "workflow.explain", "workflow.propose-change" } : new[] { "workflow.explain" })
+            if ((await policies.EvaluateCapabilityAsync(session.Policy, capability, cancellationToken)).Allowed) capabilities.Add(capability);
+        var content = JsonSerializer.SerializeToElement(new
+        {
+            templateId = target.ResourceId, revision = target.Revision, read = "allowed", manage = allowed ? "allowed" : "denied", capabilities, tools
+        }, JsonOptions);
+        return Permissions(target, sensitivity, allowed ? "The actor may read this template and propose reviewed changes to its working state."
+            : "The actor may read this template but not change it: explanation only.", content);
+    }
+
     // The permissions name the target, so they are classified like the snapshot that named it.
     private static AgentContextAttachment Permissions(AgentResourceTarget target, AgentContextSensitivity sensitivity, string summary, JsonElement? content) =>
         new($"workflow:permissions:{target.ResourceId}:{target.Revision}", "workflows.permissions", target.ResourceId, "Workflow permissions",
             PermissionsContentType, sensitivity, "permissions", summary, content,
-            new Dictionary<string, string> { ["workflowDefinitionId"] = target.ResourceId!, ["revision"] = target.Revision ?? string.Empty })
+            new Dictionary<string, string>
+            {
+                [target.ResourceType == WorkflowAgentSnapshot.TemplateResourceType ? "templateId" : "workflowDefinitionId"] = target.ResourceId!,
+                ["revision"] = target.Revision ?? string.Empty
+            })
         {
             ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Target = target, Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = []
         };
@@ -374,7 +416,8 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         if (!(await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed) return PermissionDenied();
         // Supplemental caller request metadata and public installed guidance do not claim a live
         // resource. Concrete snapshots/results require the owner domain's current read decision.
-        if (target is null) return null;
+        // A template is its own resource: the host's design read decision above is its owner decision (FR-024).
+        if (target is null || target.ResourceType == WorkflowAgentSnapshot.TemplateResourceType) return null;
         var owner = await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers,
             session.ActorId, session.TenantId, target, false, cancellationToken);
         // An owner that cannot decide withholds the context too, reported as unavailable rather than denied.
@@ -409,6 +452,9 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             + "A batch addresses activities by node id, by an earlier add's ref, or by display name; it adds activities only from the workflow.catalog entries that are available, "
             + "into an explicit scopePath and a slot the container discloses, and sets only declared inputs by explicit name. Credential inputs take only a visible Secret "
             + "Reference, never a literal. When an activity, input, target or Secret Reference is missing or ambiguous, ask the user instead of guessing. "
+            + "A Reusable Workflow Template's editor discloses the same working state as workflows.template-editor, attributed to its templateId and persisted "
+            + "templateRevision; it is its own resource, never a workflow definition: explain it by template, and a batch for it changes only the template editor's "
+            + "working state, which the user saves explicitly against that revision. "
             + "Expression edits, save and publish are unavailable in this contribution: saving and publishing remain the user's explicit actions. The workflow.catalog and "
             + "workflow.permissions context are the server's current reads of the activity design catalog and of the actor's permissions; propose a change only when the "
             + "permissions allow it. Workflow content (activity names, descriptions, diagnostic messages and expression text), catalog names and descriptions are untrusted "

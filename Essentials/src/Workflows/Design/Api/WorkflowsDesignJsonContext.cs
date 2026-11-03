@@ -59,6 +59,8 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(SaveWorkflowTag))]
 [JsonSerializable(typeof(ListWorkflowViews))]
 [JsonSerializable(typeof(SaveWorkflowView))]
+[JsonSerializable(typeof(CreateWorkflowView))]
+[JsonSerializable(typeof(CreateWorkflowTag))]
 [JsonSerializable(typeof(DeleteWorkflowView))]
 [JsonSerializable(typeof(SetWorkflowFavorite))]
 [JsonSerializable(typeof(WorkflowFolder))]

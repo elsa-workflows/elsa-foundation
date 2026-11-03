@@ -32,8 +32,20 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     /// <summary>The graph activities the draft references by definition identity and version (FR-014).</summary>
     internal IReadOnlyList<WorkflowAgentGraphActivity> GraphActivities { get; init; } = [];
 
+    /// <summary>The template editor's persisted template revision (FR-005), the expected revision of its explicit save; null for a definition.</summary>
+    internal string? TemplateRevision { get; init; }
+    /// <summary>Whether this is a Reusable Workflow Template's editor working state rather than a workflow definition draft.</summary>
+    internal bool IsTemplate => Target.ResourceType == TemplateResourceType;
+
     internal const string ModuleId = "Elsa.Studio.Workflows";
     internal const string ResourceType = "workflow-definition";
+    /// <summary>The Reusable Workflow Template editor's working state (spec 1193 FR-024): its own resource, never a definition.</summary>
+    internal const string TemplateContentType = "workflows.template-editor";
+    internal const string TemplateResourceType = "workflow-template";
+
+    /// <summary>Whether the target is one of this module's editor working states: a definition draft or a template.</summary>
+    internal static bool IsEditorTarget(AgentResourceTarget? target) =>
+        target is { ModuleId: ModuleId } && target.ResourceType is ResourceType or TemplateResourceType;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>The same snapshot without the selected activity's property context, for when the owning catalog cannot confirm it.</summary>
@@ -65,8 +77,12 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     {
         snapshot = null;
         error = "The workflow snapshot requires an exact definition, draft, revision and client generation.";
-        if (attachment.ModuleId != ModuleId || attachment.ContentType != "workflow.definition" || attachment.SchemaVersion != "1" ||
-            attachment.Target is not { ModuleId: ModuleId, ResourceType: ResourceType } target ||
+        // A template editor discloses the same working-state shape under its own kind, resource type and identity field.
+        var template = attachment.ContentType == TemplateContentType;
+        var resourceType = template ? TemplateResourceType : ResourceType;
+        var idField = template ? "templateId" : "workflowDefinitionId";
+        if (attachment.ModuleId != ModuleId || attachment.ContentType != (template ? TemplateContentType : "workflow.definition") || attachment.SchemaVersion != "1" ||
+            attachment.Target is not { ModuleId: ModuleId } target || target.ResourceType != resourceType ||
             !ValidString(target.ResourceId) || target.ResourceId == "active-draft" || !ValidString(target.Revision) ||
             attachment.Client is not { } client || !ValidString(client.ClientId) || !ValidString(client.GenerationId))
             return false;
@@ -74,8 +90,8 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         try { body = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
         if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 ||
-            Text(body, "workflowDefinitionId") != target.ResourceId || Text(body, "revision") != target.Revision ||
-            !ValidString(Text(body, "draftId")))
+            Text(body, idField) != target.ResourceId || Text(body, "revision") != target.Revision ||
+            (template ? !ValidString(Text(body, "templateRevision")) || body.TryGetProperty("draftId", out _) : !ValidString(Text(body, "draftId"))))
             return false;
         if (!body.TryGetProperty("activities", out var nodes) || nodes.ValueKind != JsonValueKind.Array || nodes.GetArrayLength() > 256 ||
             !body.TryGetProperty("connections", out var edges) || edges.ValueKind != JsonValueKind.Array || edges.GetArrayLength() > 512 ||
@@ -119,11 +135,11 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         // Only declared graph metadata is copied. Caller summaries, permission claims, guidance, property values outside the
         // selected activity's bounded property context, and arbitrary extra fields are discarded.
         // The optional additions are copied only when the editor disclosed them, so an older snapshot admits unchanged.
-        var admittedBody = new Dictionary<string, object?>
-        {
-            ["workflowDefinitionId"] = target.ResourceId, ["draftId"] = Text(body, "draftId"), ["revision"] = target.Revision,
-            ["selectedNodeId"] = selectedNodeId
-        };
+        var admittedBody = new Dictionary<string, object?> { [idField] = target.ResourceId };
+        if (template) admittedBody["templateRevision"] = Text(body, "templateRevision");
+        else admittedBody["draftId"] = Text(body, "draftId");
+        admittedBody["revision"] = target.Revision;
+        admittedBody["selectedNodeId"] = selectedNodeId;
         if (workingState is not null) admittedBody["workingState"] = workingState;
         admittedBody["activities"] = activities;
         if (admittedStructure is not null) admittedBody["structure"] = admittedStructure;
@@ -136,9 +152,10 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         if (selectedActivity is not null) admittedBody["selectedActivity"] = WorkflowAgentExplainContext.Project(selectedActivity);
         if (body.TryGetProperty("graphActivities", out _)) admittedBody["graphActivities"] = WorkflowAgentExplainContext.Project(graphActivities);
         var admitted = JsonSerializer.SerializeToElement(admittedBody, JsonOptions);
-        snapshot = new(new(ModuleId, ResourceType, target.ResourceId, target.Revision), client, Text(body, "draftId")!,
+        snapshot = new(new(ModuleId, resourceType, target.ResourceId, target.Revision), client, template ? target.ResourceId! : Text(body, "draftId")!,
             new(target.Revision, activities, connections), admitted)
         {
+            TemplateRevision = template ? Text(body, "templateRevision") : null,
             // An empty draft has no structure to withhold, so it is structured (and empty) by definition.
             Structure = structure ?? (activities.Count == 0 ? new Dictionary<string, WorkflowAgentNode>() : null), ReservedIds = reservedIds, WorkingState = workingState, SecretReferences = secretReferences,
             SelectedNodeId = selectedNodeId, Diagnostics = diagnostics, SelectedActivity = selectedActivity, GraphActivities = graphActivities

@@ -1,4 +1,7 @@
 import { qualifyStudioBackendPath, useStudioWorkspaceTab, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
+import type { WorkflowAgentController } from "../workflowAgent";
+import { applyCreateDialogPrefill, applyListStateChange, createDialogAttachment, createDialogKind, libraryAttachment, libraryKind } from "./workflowLibraryAgent";
+import { useWorkflowPageAgent } from "./useWorkflowLibraryAgent";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
@@ -15,7 +18,7 @@ import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
 import { clearUnavailableWorkflowBrowseConstraints, unavailableWorkflowBrowseConstraints, updateWorkflowDefinitionBrowseUrl, workflowFolderSelectionKey, workflowLibraryFilterKey, type WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
-import type { WorkflowOrganizationPermissions, WorkflowTag } from "../api/workflowOrganization";
+import type { WorkflowLibraryView, WorkflowOrganizationPermissions, WorkflowTag } from "../api/workflowOrganization";
 import { workflowOrganizationSupport } from "../api/workflowOrganizationCapabilities";
 import "./workflowFolders.css";
 import "./workflowDefinitionTable.css";
@@ -78,9 +81,11 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
     && (previous.search === next.search ? previous.page === next.page : true);
 }
 
-export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
+export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
+  /** The Workflows module's agent state: this page discloses its visible list and create dialog, and applies their reviewed changes. */
+  weaver?: WorkflowAgentController;
   onOpen(id: string): void;
   session: WorkflowDefinitionBrowseSession;
   homeCreateRequestId?: string | null;
@@ -150,6 +155,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [librarySupportError, setLibrarySupportError] = useState<string | null>(null);
   const [libraryPermissions, setLibraryPermissions] = useState<WorkflowOrganizationPermissions>({});
   const [tagCatalog, setTagCatalog] = useState<WorkflowTag[]>([]);
+  const [libraryViews, setLibraryViews] = useState<WorkflowLibraryView[]>([]);
   const [organizationTarget, setOrganizationTarget] = useState<{ id: string; name: string } | null>(null);
   const [bulkTagTargets, setBulkTagTargets] = useState<string[] | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -644,6 +650,31 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     ? `Couldn't load workflow definitions for “${search.trim()}”`
     : "Couldn't load workflow definitions";
   const selectedIds = selectionMatchesScope && isCurrentData ? selectedDefinitionIds : new Set<string>();
+  // Spec 1193 FR-020: the visible list as Weaver context, bounded to what the user sees, at the revision of its visible state.
+  // Only current data is disclosed; while a request is pending the page has no list to describe.
+  const appliedView = browseLocation.viewId ? libraryViews.find(view => view.id === browseLocation.viewId) ?? null : null;
+  useWorkflowPageAgent<WorkflowDefinitionBrowseLocation>({
+    controller: weaver, clientId: ai.clientId, kind: libraryKind, toolId: "workflow_library_set_list_state", resultType: "workflows.list-state",
+    describe: "Changed the visible workflow list on this page; nothing was saved.",
+    build: (location, client) => isCurrentData ? libraryAttachment({
+      location, view: appliedView && location.viewId === appliedView.id ? { id: appliedView.id, name: appliedView.name, shared: appliedView.shared, revision: appliedView.revision, canEdit: appliedView.canEdit !== false } : null,
+      rows: definitions.map(definition => ({ id: definition.id, name: definition.name, folderId: definition.folderId ?? null, tags: definition.tags ?? [],
+        favorite: definition.favorite === true, publicationState: definition.publicationState ?? null })),
+      selection: [...selectedIds], totalCount, permissions: libraryPermissions, organizationEnabled: librarySupport?.organization === true
+    }, client) : null,
+    apply: change => applyListStateChange(browseLocation, change),
+    current: () => browseLocation,
+    restore: changeLibraryLocation
+  });
+  // Spec 1193 FR-023: the open create dialog's unsaved values; a prefill only fills it, and Create stays the user's action.
+  useWorkflowPageAgent<CreateWorkflowDraft | null>({
+    controller: weaver, clientId: ai.clientId, kind: createDialogKind, toolId: "workflow_create_dialog_prefill", resultType: "workflows.create-dialog-prefill",
+    describe: "Filled in the open New workflow dialog; create the workflow with its Create action.",
+    build: (draft, client) => draft ? createDialogAttachment(draft, [], client) : null,
+    apply: change => createDraft ? applyCreateDialogPrefill(createDraft, change, []) : null,
+    current: () => createDraft,
+    restore: draft => setCreateDraft(draft)
+  });
   const selectedCount = selectedIds.size;
   const selectedVisibleCurrentCount = visibleDefinitionIds.filter(id => selectedIds.has(id)).length;
   const allCurrentVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCurrentCount === visibleDefinitionIds.length;
@@ -720,7 +751,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
         {hasLibrarySupport ? <Suspense fallback={<p role="status">Loading library organization…</p>}><WorkflowLibraryControls
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
-          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions}
+          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions} onViews={setLibraryViews}
         /></Suspense> : null}
         </div>
         {browseScopeBlocked && browseSupport ? <div className="wf-alert" role="alert">

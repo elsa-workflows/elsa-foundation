@@ -67,6 +67,14 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
         Text(actor, "Actor", 256);
         if (actor.Length > 256) throw new ArgumentException("Actor identifiers cannot exceed 256 characters.");
     }
+    /// <summary>A client operation key: 1–256 characters without control characters. Only its lookup hash is stored.</summary>
+    private static void ValidateClientKey(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        if (key.Length > 256 || key.Any(char.IsControl)) throw new ArgumentException("Operation keys must have 1–256 characters without control characters.");
+    }
+    private static string ClientKeyHash(string key) => EfDesignSupport.LookupHash("workflow-library-client-key\0" + key);
+    private static string Fingerprint(object material) => EfDesignSupport.LookupHash(JsonSerializer.Serialize(material, Json));
     private static void ValidateStoredId(string id, string prefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);

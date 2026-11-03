@@ -28,7 +28,47 @@ internal sealed partial class EfWorkflowLibraryStore
     }
 
     public Task<WorkflowLibraryView> SaveViewAsync(string? id, WorkflowLibraryViewInput input, string subjectId,
-        bool canShare, CancellationToken cancellationToken = default)
+        bool canShare, CancellationToken cancellationToken = default) => SaveViewCoreAsync(id, input, subjectId, canShare, null, cancellationToken);
+
+    public Task<WorkflowLibraryView> SaveViewAsync(string? id, WorkflowLibraryViewInput input, string subjectId, bool canShare,
+        string operationKey, CancellationToken cancellationToken = default)
+    {
+        ValidateClientKey(operationKey);
+        if (id is not null) throw new ArgumentException("An operation key applies to creating a workflow view; an update is bound by its revision.");
+        return SaveViewCoreAsync(null, input, subjectId, canShare, operationKey, cancellationToken);
+    }
+
+    public Task<WorkflowLibraryView?> FindViewByOperationKeyAsync(string operationKey, string subjectId, CancellationToken cancellationToken = default)
+    {
+        ValidateClientKey(operationKey); ValidateActor(subjectId);
+        var keyHash = ClientKeyHash(operationKey); var ownerHash = EfDesignSupport.LookupHash(subjectId);
+        return EfDesignSupport.ReadAsync("reading workflow view by operation key", async () =>
+        {
+            var row = await KeyedViewRowAsync(keyHash, ownerHash, subjectId, cancellationToken);
+            return row is null ? null : View(row);
+        });
+    }
+
+    private Task<WorkflowLibraryViewEntity?> KeyedViewRowAsync(string keyHash, string ownerHash, string subjectId, CancellationToken token) =>
+        Scoped(db.LibraryViews).AsNoTracking().SingleOrDefaultAsync(candidate => candidate.OwnerHash == ownerHash &&
+            candidate.OperationKey == keyHash && candidate.OwnerId == subjectId, token);
+
+    private async Task<WorkflowLibraryView?> KeyedViewAsync(string keyHash, string fingerprint, string subjectId, CancellationToken token)
+    {
+        var ownerHash = EfDesignSupport.LookupHash(subjectId);
+        var row = await EfDesignSupport.ReadAsync("reading workflow view by operation key", () => KeyedViewRowAsync(keyHash, ownerHash, subjectId, token));
+        return row is null ? null : KeyedView(row, fingerprint);
+    }
+
+    private static WorkflowLibraryView KeyedView(WorkflowLibraryViewEntity row, string fingerprint)
+    {
+        if (!StringComparer.Ordinal.Equals(row.OperationFingerprint, fingerprint))
+            Conflict("This operation key already created a different workflow view.");
+        return View(row);
+    }
+
+    private async Task<WorkflowLibraryView> SaveViewCoreAsync(string? id, WorkflowLibraryViewInput input, string subjectId,
+        bool canShare, string? clientKey, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input); ValidateActor(subjectId);
         ArgumentNullException.ThrowIfNull(input.Query);
@@ -41,32 +81,47 @@ internal sealed partial class EfWorkflowLibraryStore
             throw new ArgumentException("Workflow views contain at most 16 supported columns.");
         var content = JsonSerializer.Serialize(new ViewContent(query, columns.Distinct(StringComparer.Ordinal).ToArray()), Json);
         if (content.Length > 32768) throw new ArgumentException("The saved view exceeds 32 KiB.");
+        var keyHash = clientKey is null ? null : ClientKeyHash(clientKey);
+        var fingerprint = keyHash is null ? null : Fingerprint(new { name, content, input.Shared });
+        // A repeated keyed create rereads by its key first and writes nothing; the writer's own key stays server-generated.
+        if (keyHash is not null && await KeyedViewAsync(keyHash, fingerprint!, subjectId, cancellationToken) is { } existing) return existing;
         var key = NewId("save-view-");
-        return WriteAsync(key, "workflow.view.save.v1", new { id, name, content, input.Shared, input.Revision, subjectId }, async token =>
+        try
         {
-            await ValidateQueryReferencesAsync(query, token);
-            var row = id is null ? null : await Scoped(db.LibraryViews).SingleOrDefaultAsync(candidate => candidate.Id == id, token)
-                ?? Missing<WorkflowLibraryViewEntity>(id!);
-            if (row is not null && !StringComparer.Ordinal.Equals(row.OwnerId, subjectId) && !(row.Shared && canShare)) Missing<WorkflowLibraryView>(id!);
-            if (row is not null && row.Shared && !canShare) throw new UnauthorizedAccessException("Changing a shared view requires the share permission.");
-            if (row is not null) CheckRevision(input.Revision, row.Revision);
-            var before = row is null ? null : View(row);
-            if (row is null)
+            return await WriteAsync(key, "workflow.view.save.v1", new { id, name, content, input.Shared, input.Revision, subjectId, operationKey = keyHash }, async token =>
             {
-                var subjectHash = EfDesignSupport.LookupHash(subjectId);
-                if (await Scoped(db.LibraryViews).CountAsync(candidate => candidate.OwnerHash == subjectHash && candidate.OwnerId == subjectId, token) >= 100)
-                    throw new ArgumentException("Each user can create at most 100 workflow views.");
-                if (input.Shared && await Scoped(db.LibraryViews).CountAsync(candidate => candidate.Shared, token) >= 500)
+                if (keyHash is not null && await KeyedViewRowAsync(keyHash, EfDesignSupport.LookupHash(subjectId), subjectId, token) is { } raced)
+                    return KeyedView(raced, fingerprint!);
+                await ValidateQueryReferencesAsync(query, token);
+                var row = id is null ? null : await Scoped(db.LibraryViews).SingleOrDefaultAsync(candidate => candidate.Id == id, token)
+                    ?? Missing<WorkflowLibraryViewEntity>(id!);
+                if (row is not null && !StringComparer.Ordinal.Equals(row.OwnerId, subjectId) && !(row.Shared && canShare)) Missing<WorkflowLibraryView>(id!);
+                if (row is not null && row.Shared && !canShare) throw new UnauthorizedAccessException("Changing a shared view requires the share permission.");
+                if (row is not null) CheckRevision(input.Revision, row.Revision);
+                var before = row is null ? null : View(row);
+                if (row is null)
+                {
+                    var subjectHash = EfDesignSupport.LookupHash(subjectId);
+                    if (await Scoped(db.LibraryViews).CountAsync(candidate => candidate.OwnerHash == subjectHash && candidate.OwnerId == subjectId, token) >= 100)
+                        throw new ArgumentException("Each user can create at most 100 workflow views.");
+                    if (input.Shared && await Scoped(db.LibraryViews).CountAsync(candidate => candidate.Shared, token) >= 500)
+                        throw new ArgumentException("The tenant supports at most 500 shared workflow views.");
+                    row = new WorkflowLibraryViewEntity { Id = NewId("view-"), TenantId = Tenant, OwnerId = subjectId,
+                        OwnerHash = subjectHash, CreatedAt = DateTimeOffset.UtcNow, OperationKey = keyHash, OperationFingerprint = fingerprint };
+                    db.LibraryViews.Add(row);
+                }
+                else if (!row.Shared && input.Shared && await Scoped(db.LibraryViews).CountAsync(candidate => candidate.Shared, token) >= 500)
                     throw new ArgumentException("The tenant supports at most 500 shared workflow views.");
-                row = new WorkflowLibraryViewEntity { Id = NewId("view-"), TenantId = Tenant, OwnerId = subjectId,
-                    OwnerHash = subjectHash, CreatedAt = DateTimeOffset.UtcNow };
-                db.LibraryViews.Add(row);
-            }
-            else if (!row.Shared && input.Shared && await Scoped(db.LibraryViews).CountAsync(candidate => candidate.Shared, token) >= 500)
-                throw new ArgumentException("The tenant supports at most 500 shared workflow views.");
-            row.Name = name; row.Shared = input.Shared; row.ContentJson = content; row.Revision = Revision(); row.LastModifiedAt = DateTimeOffset.UtcNow;
-            var result = View(row); Audit(row.Id, subjectId, "view.save", key, before, result); return result;
-        }, cancellationToken);
+                row.Name = name; row.Shared = input.Shared; row.ContentJson = content; row.Revision = Revision(); row.LastModifiedAt = DateTimeOffset.UtcNow;
+                var result = View(row); Audit(row.Id, subjectId, "view.save", key, before, result); return result;
+            }, cancellationToken);
+        }
+        catch (Exception) when (keyHash is not null && !cancellationToken.IsCancellationRequested)
+        {
+            // A concurrent create under the same key wins the unique index; its committed view is this create's outcome.
+            if (await KeyedViewAsync(keyHash, fingerprint!, subjectId, cancellationToken) is { } winner) return winner;
+            throw;
+        }
     }
 
     public async Task DeleteViewAsync(string id, string revision, string subjectId, bool canShare, CancellationToken cancellationToken = default)

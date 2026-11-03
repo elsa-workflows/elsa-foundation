@@ -18,13 +18,15 @@ import "./workflowOrganization.css";
 const WorkflowTagCatalogDialog = lazy(() => import("./WorkflowTagCatalogDialog").then(module => ({ default: module.WorkflowTagCatalogDialog })));
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, onViews }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
   onChange(next: WorkflowDefinitionBrowseLocation): void;
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
+  /** The visible library views, so the page can disclose the applied view's identity, owner kind and revision. */
+  onViews?(views: WorkflowLibraryView[]): void;
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
@@ -65,6 +67,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
+  useEffect(() => { onViews?.(views); }, [onViews, views]);
   const missingFilterTags = !catalogLoading ? JSON.stringify([...new Set((location.tagFilters ?? []).map(filter => filter.tagId))].filter(id => !tags.some(tag => tag.id === id))) : "[]";
   useEffect(() => {
     const ids = JSON.parse(missingFilterTags) as string[];

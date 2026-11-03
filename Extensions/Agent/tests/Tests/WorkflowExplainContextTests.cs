@@ -512,16 +512,21 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Equal(fixture["contextSourceId"]!.GetValue<string>(), source.Descriptor.Id);
         Assert.Equal(Strings(fixture["contextKinds"]!), source.Descriptor.ContextKinds);
         Assert.Equal(Strings(fixture["capabilities"]!), capabilities.Select(item => item.Id));
+        // The library context source (slice E) is the module's second source, with its own context kinds.
+        var library = scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<WorkflowLibraryContextProvider>().Single();
+        Assert.Equal(moduleId, library.Descriptor.ModuleId);
+        Assert.Equal(fixture["librarySource"]!["id"]!.GetValue<string>(), library.Descriptor.Id);
+        Assert.Equal(Strings(fixture["librarySource"]!["contextKinds"]!), library.Descriptor.ContextKinds);
         Assert.All(capabilities, capability =>
         {
             Assert.Equal(moduleId, capability.ModuleId);
-            Assert.All(capability.ContextKinds, kind => Assert.Contains(kind, source.Descriptor.ContextKinds));
+            Assert.All(capability.ContextKinds, kind => Assert.True(source.Descriptor.ContextKinds.Contains(kind) || library.Descriptor.ContextKinds.Contains(kind), kind));
         });
         var expected = fixture["tools"]!.AsArray().Select(item => (item!["name"]!.GetValue<string>(), item["resultType"]!.GetValue<string>(),
             item["rendererId"]?.GetValue<string>(), item["executionLocation"]!.GetValue<string>())).ToArray();
         Assert.Equal(expected, tools.Select(tool => (tool.Name, tool.ResultType!, tool.ResultRendererId,
             JsonNamingPolicy.CamelCase.ConvertName(tool.ExecutionLocation.ToString()))));
-        Assert.All(tools, tool => Assert.Equal(source.Descriptor.Id, tool.DisclosureSourceId));
+        Assert.Equal(fixture["tools"]!.AsArray().Select(item => item!["disclosureSourceId"]!.GetValue<string>()), tools.Select(tool => tool.DisclosureSourceId!));
 
         // The guidance and the tool and capability texts name only registered tools and context kinds: any tool-like
         // snake_case token, whatever its prefix, must be a tool the composed registry holds.

@@ -21,7 +21,7 @@ using Host = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiContractTests.Aut
 
 namespace Elsa.Workflows.Design.Api.Tests;
 
-public sealed class WorkflowLibraryApiContractTests
+public sealed partial class WorkflowLibraryApiContractTests
 {
     [Theory]
     [InlineData(null, true)]
@@ -744,7 +744,7 @@ public sealed class WorkflowLibraryApiContractTests
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
     }
 
-    private sealed class LibraryProbe : IWorkflowLibraryStore
+    private class LibraryProbe : IWorkflowLibraryStore
     {
         public string? Subject, Actor, DefinitionId, FolderId, Revision, OperationKey, TagId, ViewId;
         public WorkflowTagInput? TagInput;

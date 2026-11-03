@@ -140,7 +140,7 @@ export function register(api: ElsaStudioModuleApi) {
       ] : []),
       { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], path: "/workflows/templates", label: "Workflow templates",
         workspace: workspaceResource("workflow-template", "template"),
-        component: ({ navigate }) => deferred("workflow templates", <WorkflowTemplatesPage api={api} navigate={navigate} />) },
+        component: ({ navigate }) => deferred("workflow templates", <WorkflowTemplatesPage api={api} navigate={navigate} weaver={weaver} />) },
       {
         id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/import-elsa3",

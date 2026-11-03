@@ -50,7 +50,22 @@ public sealed record SaveWorkflowTag(string TagId, string Name, string? Descript
 {
     public WorkflowTagInput ToInput() => new(Name, Description, Mode, Cardinality, Deprecated, Values, Revision);
 }
+/// <summary>The tag create body: the tag input plus an optional client operation key (spec 1193 FR-021), additive to the former body.</summary>
+/// <remarks>The same key with the same input returns the tag that key created; with different input it is a 409. A store
+/// without key support answers a keyed create with 501.</remarks>
+public sealed record CreateWorkflowTag(string Name, string? Description = null, string Mode = "marker",
+    string Cardinality = "single", bool Deprecated = false, IReadOnlyList<WorkflowTagValue>? Values = null,
+    string? Revision = null, string? OperationKey = null)
+{
+    public WorkflowTagInput ToInput() => new(Name, Description, Mode, Cardinality, Deprecated, Values, Revision);
+}
 public sealed record ListWorkflowViews;
+/// <summary>The view create body: the view input plus an optional client operation key (spec 1193 FR-021), additive to the former body.</summary>
+public sealed record CreateWorkflowView(string Name, WorkflowLibraryQuery Query, bool Shared = false,
+    IReadOnlyList<string>? Columns = null, string? Revision = null, string? OperationKey = null)
+{
+    public WorkflowLibraryViewInput ToInput() => new(Name, Query, Shared, Columns, Revision);
+}
 public sealed record SaveWorkflowView(string ViewId, string Name, WorkflowLibraryQuery Query, bool Shared = false,
     IReadOnlyList<string>? Columns = null, string? Revision = null)
 {

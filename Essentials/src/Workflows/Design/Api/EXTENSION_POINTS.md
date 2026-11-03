@@ -26,6 +26,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 | `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
+| `IWorkflowLibraryCommands` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowLibraryCommands` (internal, this package); duplicates fail configuration and shell startup | A host replaces the library organization commands other domains (such as Weaver) call through Workflows Design Core. The library endpoints keep the built-in decisions. |
 | `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied optional replacement; at most one implementation, duplicates fail shell startup | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
 
 ### `IWorkflowDefinitionAuthorizer` *(Contract — `Elsa.Workflows.Design.Core`)*
@@ -75,6 +76,25 @@ the evidence. A failed read discards earlier evidence, so a built-in GET makes t
 decisions on the definition, one per breadcrumb folder, one definition store read and one
 organization lookup, where it made six, two per folder, two and two.
 
+### `IWorkflowLibraryCommands` *(Contract — `Elsa.Workflows.Design.Core`, spec 1193 D4)*
+
+The library's organization commands for an explicit `WorkflowLibraryActor(actorId, tenantId)`: `GetPermissionsAsync`,
+`GetOrganizationAsync(definitionId)`, `ListTagsAsync(search)`, `CreateTagAsync(input, operationKey)`,
+`FindTagByOperationKeyAsync`, `EditTagsAsync(edit)`, `SetFavoritesAsync(ids, favorite)`,
+`MoveDefinitionsAsync(ids, folderId, operationKey)`, `ListViewsAsync`, `SaveViewAsync(viewId, input, operationKey)` and
+`FindViewByOperationKeyAsync`. Each returns a `WorkflowLibraryCommandResult<T>` whose status is one of
+`WorkflowLibraryCommandStatus` (`applied`, `denied`, `unavailable`, `conflict`, `not-found`, `invalid`, `unsupported`)
+with a cause-free message; multi-target commands report one `WorkflowLibraryTargetOutcome` per target, and a folder move,
+which the store applies atomically, reports the same outcome for every target. Delete and permanent delete are not offered.
+
+The default, `WorkflowLibraryCommands`, is the library endpoints' own logic, extracted: the endpoints call its
+request-bound methods, so both paths share one decision in the same order. For an explicit actor it serves only the
+current request's own authenticated subject and tenant (any other is `denied`), applies the permission the matching
+endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for tag edits, `Manage` for folder moves,
+`Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's
+reason before any actor or permission decision. Infrastructure failures and cancellation propagate. One registration per
+shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
+
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 
 The scoped optional port owns catalog organization independently of authored workflow state.
@@ -92,10 +112,20 @@ direct requests to optional routes.
 `ListDefinitionsAsync(query, subjectId, readScope)`, `GetVersionLabelsAsync(versionIds)`, `GetOrganizationAsync(definitionId)`,
 `ReplaceTagsAsync(definitionId, revision, tags, actorId, operationKey)`,
 `EditTagsAsync(edit, actorId)`, `ListTagsAsync(search, pageSize, cursor)`, `GetTagAsync(id)`,
-`CreateTagAsync(input, actorId)`, `UpdateTagAsync(id, input, actorId)`,
-`ListViewsAsync(subjectId)`, `SaveViewAsync(id, input, subjectId, canShare)`,
+`CreateTagAsync(input, actorId)`, `CreateTagAsync(input, actorId, operationKey)`, `FindTagByOperationKeyAsync(operationKey)`,
+`UpdateTagAsync(id, input, actorId)`, `ListViewsAsync(subjectId)`, `SaveViewAsync(id, input, subjectId, canShare)`,
+`SaveViewAsync(id, input, subjectId, canShare, operationKey)`, `FindViewByOperationKeyAsync(operationKey, subjectId)`,
 `DeleteViewAsync(id, revision, subjectId, canShare)` and `SetFavoriteAsync(definitionId, favorite, subjectId)`;
 all operations are asynchronous and accept cancellation.
+
+**Operation keys (spec 1193 FR-021, Minor, additive):** the keyed `CreateTagAsync` and `SaveViewAsync` overloads and the two
+`Find…ByOperationKeyAsync` rereads are default interface members whose default throws
+`WorkflowLibraryOperationKeyUnsupportedException` (a `NotSupportedException` with a fixed message), so an existing
+replacement keeps compiling and a keyed create against it is unavailable (501 on the API), never silently non-idempotent.
+A store that implements them keeps the key unique per tenant scope for tags and per tenant scope and owning subject for
+views: the same key with the same input returns the resource that key created and writes nothing; the same key with
+different input is a `WorkflowLibraryConflictException`; the reread returns the key's resource or null. The client key is
+never the store writer's own operation key. A keyed view save creates only (`id` null); an update stays bound by its revision.
 
 **Override obligations:** replace one scoped implementation deliberately. Enforce the immutable
 ordinary tenant persistence scope for every identity and query; bind cursors to scope, actor and
@@ -106,6 +136,10 @@ server-derived subject. Folder placement during creation participates in
 `IAddWorkflowDefinitionCommand.Execute(..., folderId, actorId, cancellationToken)` in the same
 committing operation as definition/draft creation. No organization operation changes authored
 state or runtime behavior.
+
+`POST tags` and `POST views` accept an optional body `operationKey` (1–256 characters) and then call the keyed overloads:
+a repeat with the same key and body returns the existing tag or view (200), the same key with a different body is 409,
+and a store without key support answers 501. A request without a key is unchanged.
 
 The API derives actors through `IAuthSessionService` and evaluates permissions through
 `IPermissionAuthorizationService`, including per-target host resource handlers. Host handlers receive
