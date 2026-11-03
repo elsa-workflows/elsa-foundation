@@ -76,7 +76,7 @@ The spec leaves three decisions to the plan (D1–D3). The planning review added
 
 ### D1. The authorization-unavailable outcome
 
-A `WorkflowDefinitionAuthorizationException` maps to HTTP 503 with the stable code `workflow.authorization.unavailable`. The message is the exception's own fixed text, "Workflow definition authorization could not be completed.", which carries no cause.
+A `WorkflowDefinitionAuthorizationException` maps to HTTP 503 with the stable code `workflow.authorization.unavailable`. The body keeps the design error shape. The top-level `message` stays "One or more errors occurred!", as in every design body. The exception's fixed text, "Workflow definition authorization could not be completed.", is the `generalErrors` entry, and it carries no cause. Consumers read `errorCode`, never the message.
 
 The design error body gains an optional `errorCode` property, written only when a code is set, so every existing body is unchanged. The name matches the Publishing API's `errorCode`. The design API's compatibility baseline is updated for the additive property. The 503 is written by a new keyed Design `IEndpointFaultRenderer`, as Publishing and Runtime do, because `EndpointProblem` carries no code. The writer's shape stays in one place.
 
@@ -120,13 +120,12 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 ## Slice A: Read-path hardening
 
 **Server, Workflows Design Api**:
-- `WorkflowDesignExceptionTranslator` gains an arm for `WorkflowDefinitionAuthorizationException` that returns 503 with D1's code. The arm comes before the generic arms.
-- `EndpointProblem` carries no code today, so the design problem writer reads the code from a design-owned coded problem, in the same way that Publishing's `WorkflowPublishingFaultRenderer` writes `errorCode`. `WorkflowDesignError` gains the optional `errorCode`.
+- A new keyed `WorkflowDesignFaultRenderer` maps `WorkflowDefinitionAuthorizationException` to 503 with D1's code, ahead of the translator, in the same way that Publishing's `WorkflowPublishingFaultRenderer` writes `errorCode`. `EndpointProblem` carries no code. The shared design writer assembles the body in one place, and `WorkflowDesignError` gains the optional `errorCode`.
 - The definition GET and the built-in authorizer stop repeating work. The built-in `WorkflowDefinitionDetailsReader` records request-scoped read evidence at the end of a successful `ReadAsync`: the definition identity, the tenant, and the fact that its permission, store and organization checks ran. The built-in `HttpWorkflowDefinitionAuthorizer` accepts that evidence only when the same internal reader recorded it in the same request scope, for the same definition and tenant. It then skips its own repeated Read permission check, store lookup and `AuthorizeReadAsync`. A manage decision still runs the Manage permission check.
 - The evidence records the reader instance that produced it. The authorizer accepts it only when `ReferenceEquals(currentReaders[0], recordingReader)`. A replacement reader that delegates `ReadAsync` to the built-in reader therefore still has its own `AuthorizeReadAsync` called, and cannot stand in for the authorizer. A replacement authorizer is unaffected.
-- When no library store is registered, the built-in reader runs no permission or organization check, so it records no evidence and the authorizer does its full work.
+- When no library store is registered, the built-in reader runs no permission or organization check. Its evidence then records existence only, so the authorizer still runs its own Read check and skips only its repeated store lookup. The tenant is compared with the stored definition.
 - The endpoint's own `RequireAsync` stays, because it orders the permission refusal before the not-found result when no library store is registered.
-- The result on a built-in GET: four permission checks, two store reads and two organization checks become two, one and one.
+- The result on a built-in GET with a library store: six Read decisions, four folder decisions, two store reads and two organization lookups become three, two, one and one. Without a library store, two store reads become one.
 
 **Server, Agent Workflows**: `WorkflowResourceAuthority` catches `WorkflowDefinitionAuthorizationException` and returns D1's unavailable outcome. `WorkflowReadGraphTool`, `WorkflowSetDesignerPositionTool` and the context provider surface it unchanged.
 
@@ -138,7 +137,8 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 - tool tests for the unavailable outcome.
 
 - **Catalog**: the authorizer and details-reader failure semantics in `Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, and the unavailable propagation in `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`.
-- **Normal host**: a Playwright journey that opens a definition with a throwing authorizer, through the e2e host's test seam, and sees the unavailable state, distinct from denied.
+- **Browser**: a Playwright fixture journey that runs the editor's real load path and error banner against the design API's exact 503 and 403 bodies. Neither Workbench nor the composition probe has a seam to make the authorizer throw. The native evidence is therefore the probe case, whose test-only seam lives in the probe's backend consumer, never in product code.
+- **Provider surface**: on Copilot the function return carries the stable code. On Anthropic the refused tool result carries the fixed "unavailable" text, distinct from "forbidden", because the engine's refused-tool result carries only its message.
 
 **Probe**: `workflow-authorization-unavailable` on both adapters, with a throwing authorizer registered through the probe host's test seam, against both the definition API and the Weaver tools.
 
@@ -222,14 +222,14 @@ Concrete file seams are recorded in [research.md](research.md).
 
 | Item | Slice | Class |
 | --- | --- | --- |
-| The `errorCode` property on design error bodies, and the unavailable outcome | A | Minor |
+| The `errorCode` property on design error bodies, the 503 outcome, and the public constant `WorkflowDefinitionAuthorizationException.UnavailableCode`, which is compiled into callers and so never changes value | A | Minor |
 | The removed legacy contracts, implementations and models in `Elsa.Agent.Workflows` | B | Major (pre-GA cleanup) |
 | `workflow_apply_operation_batch` v1 and the new context kinds | C, D, E, F, G | Minor |
 | The removed `workflows.proposal` renderer | D | Major |
 | The operation-key overloads on `IWorkflowLibraryStore` | E | Minor, additive |
 | The new `Elsa.Agent.Workflows.Runtime` package | F | Minor |
 | The new `.Core` contracts of D4 | B, E, F, G | Minor, additive |
-| The owner-unavailable code in Agent's tool invoker and context admission | A | Minor |
+| The Preview property `AgentViolation.OwnerUnavailable`, and its 503 mapping in the tool invoker, proposal execution and context admission | A | Minor |
 
 ## Project Structure
 

@@ -186,7 +186,21 @@ public sealed record AgentResult<T>(T? Value, AgentError? Error)
     public static AgentResult<T> Failure(string code, string message, int statusCode = 400) => new(default, new(code, message, statusCode));
 }
 
-public sealed record AgentViolation(string Code, string Message, string? Target = null);
+public sealed record AgentViolation(string Code, string Message, string? Target = null)
+{
+    /// <summary>
+    /// Preview: the owning module could not reach a decision, as opposed to refusing. Still a refusal (fail closed), but the
+    /// tool invoker reports it as unavailable (503) with this violation's <see cref="Code"/> and a fixed, cause-free message
+    /// of its own, instead of the generic forbidden outcome. The violation's <see cref="Message"/> is never forwarded.
+    /// </summary>
+    /// <remarks>
+    /// Honoured only on a violation from the installed tool's own <c>IAgentToolAuthorization</c> decision; a host
+    /// <c>IAgentToolAuthorizer</c> violation that sets it stays an ordinary denial. The code must be the owner's own dotted
+    /// identifier (ASCII letters, digits, <c>.</c>, <c>_</c> or <c>-</c>, at most 128 characters), outside the engine's
+    /// reserved <c>agent.</c> namespace; any other code stays an ordinary denial.
+    /// </remarks>
+    public bool OwnerUnavailable { get; init; }
+}
 
 public sealed record AgentPolicy(
     string Id,

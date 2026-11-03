@@ -51,6 +51,30 @@ compatibility default may call its complete `ReadAsync`. The definition GET hono
 authorizer before returning details and preserves the existing reader's not-found response. This
 contract does not replace the bounded query visibility policy used before counts and paging.
 
+**Failure semantics (spec 1193).** Any authorizer, built-in or replacement, that throws
+`WorkflowDefinitionAuthorizationException` makes every Design endpoint answer fail-closed as
+unavailable: HTTP 503 in the design error body with `errorCode`
+`workflow.authorization.unavailable` (`WorkflowDefinitionAuthorizationException.UnavailableCode`)
+and the exception's fixed message in `errors.generalErrors`. The inner cause is logged, never
+written. A `false` decision stays the existing 403, whose body, like every other design body, has
+no `errorCode` property. The Design owner's keyed `IEndpointFaultRenderer` writes this ahead of
+the codeless `WorkflowDesignExceptionTranslator`. Weaver's workflow tools and context report the
+same code, distinct from denied.
+
+**Read evidence (built-in only).** At the end of a successful `ReadAsync`, the built-in
+`WorkflowDefinitionDetailsReader` records internal, single-use evidence in the request's
+`HttpContext.Items`: its own instance, its definition store, the principal, the definition id and
+the stored tenant, and, when a library store is registered, the scoped permission service its Read
+permission and organization checks used. The built-in authorizer's next decision in that request
+takes the evidence and, only when the registered reader is that same instance, the store and
+principal are the same, and the id and the principal's tenant match, skips its repeated Read
+permission check (only when the reader made one), `FindByIdAsync` and `AuthorizeReadAsync`. A
+Manage decision still checks Manage. Any mismatch, including any replacement reader, even one that
+delegates to the built-in reader, gets the complete decision. A replacement authorizer never sees
+the evidence. A failed read discards earlier evidence, so a built-in GET makes three Read
+decisions on the definition, one per breadcrumb folder, one definition store read and one
+organization lookup, where it made six, two per folder, two and two.
+
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 
 The scoped optional port owns catalog organization independently of authored workflow state.

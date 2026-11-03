@@ -129,7 +129,7 @@ A host replaces the workflow definition authorizer. When that authorizer cannot 
 1. **Given** a replacement authorizer that throws `WorkflowDefinitionAuthorizationException`, **When** a definition is read, **Then** the API returns an explicit unavailable outcome (503 with a stable code), not a generic 500, and the body discloses no cause.
 2. **Given** a replacement authorizer that denies, **When** a definition is read, **Then** the existing denied outcome is returned, and it is distinguishable from unavailable.
 3. **Given** a Weaver tool whose authority check meets the same exception, **When** it runs, **Then** it fails closed with the unavailable outcome and discloses nothing.
-4. **Given** a definition read, **When** duplicate checks are reduced, **Then** native visibility, organization and current actor and tenant guarantees are unchanged. The existing order of not-found and owner decisions is kept, so existence is disclosed no more than today, and a successful reader never stands in for the owning authorizer.
+4. **Given** a definition read, **When** duplicate checks are reduced, **Then** native visibility, organization and current actor and tenant guarantees are unchanged. The existing order of not-found and owner decisions is kept, so existence is disclosed no more than today, and a successful replacement reader never stands in for the owning authorizer.
 
 ---
 
@@ -247,7 +247,7 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
 #### Read-path hardening
 
 - **FR-001**: The workflow design API MUST map a `WorkflowDefinitionAuthorizationException` from any authorizer to an explicit fail-closed unavailable outcome. The outcome is HTTP 503 with a stable code, it is distinct from the denied outcome, and it discloses no cause. Weaver workflow tools MUST surface the same distinction.
-- **FR-002**: A definition read MUST NOT repeat authorization, store or organization work that it does not need. Any reduction MUST keep native visibility, organization and current actor and tenant guarantees. It MUST also keep the existing order of not-found and owner decisions, so that existence is disclosed no more than today. This is demonstrated by the existing authorization boundary tests plus a regression on read counts. A successful reader MUST NOT stand in for the owning authorizer's decision.
+- **FR-002**: A definition read MUST NOT repeat authorization, store or organization work that it does not need. Any reduction MUST keep native visibility, organization and current actor and tenant guarantees. It MUST also keep the existing order of not-found and owner decisions, so that existence is disclosed no more than today. This is demonstrated by the existing authorization boundary tests plus a regression on read counts. A successful replacement reader MUST NOT stand in for the owning authorizer's decision. The built-in reader MAY hand request-scoped facts it established (existence in the tenant, and the Read and organization checks it ran) to the built-in authorizer for the same definition, principal and request; any other combination does the authorizer's full work.
 
 #### Truth seams
 

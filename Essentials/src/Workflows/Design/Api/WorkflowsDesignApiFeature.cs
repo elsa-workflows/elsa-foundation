@@ -55,6 +55,8 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         // module's generic exceptions.
         services.TryAddKeyedSingleton<IEndpointProblemWriter, WorkflowDesignProblemWriter>(WorkflowsDesignApi.OwnerId);
         services.TryAddKeyedSingleton<IEndpointExceptionTranslator, WorkflowDesignExceptionTranslator>(WorkflowsDesignApi.OwnerId);
+        // Coded failures (the authorization-unavailable 503) render ahead of translation with an additive errorCode.
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, WorkflowDesignFaultRenderer>(WorkflowsDesignApi.OwnerId);
 
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
