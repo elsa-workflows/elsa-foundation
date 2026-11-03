@@ -96,6 +96,19 @@ def _attachments(frame, kind):
     return [item for item in items if isinstance(item, dict) and item.get("contentType") == kind]
 
 
+TARGET_IDENTITY = ("moduleId", "resourceType", "resourceId", "revision")
+
+
+def same_target(observed, expected):
+    """A resource target's canonical identity: module, type, id and revision. The wire target also carries the optional
+    presentation fields displayName and route (null for these snapshots), which never retarget a resource, as the engine's
+    own target comparison ignores them; an unknown extra member is refused."""
+    return (isinstance(observed, dict) and isinstance(expected, dict)
+            and set(observed) <= {*TARGET_IDENTITY, "displayName", "route"}
+            and all(observed.get(key) == expected.get(key) for key in TARGET_IDENTITY)
+            and all(isinstance(expected.get(key), str) and expected[key] for key in TARGET_IDENTITY))
+
+
 def require_truth_turn(frames, rows, *, provider, command_id, target):
     """One completed read-graph turn whose every admission carried the same catalog and the target's permissions."""
     check(provider in PROVIDERS, "Unknown adapter")
@@ -107,13 +120,13 @@ def require_truth_turn(frames, rows, *, provider, command_id, target):
     for frame in admitted:
         payload = frame.get("payload")
         check(isinstance(payload, dict) and payload.get("diagnostics") == [], "Context admission reported a diagnostic")
-        check(any(item.get("target") == target for item in _attachments(frame, "workflow.definition")),
+        check(any(same_target(item.get("target"), target) for item in _attachments(frame, "workflow.definition")),
               "The admission lost the exact working-state target")
         current_catalog, current_permissions = _attachments(frame, CATALOG_KIND), _attachments(frame, PERMISSIONS_KIND)
         check(len(current_catalog) == 1 and current_catalog[0].get("origin") == "authoritativeRead" and current_catalog[0].get("target") is None,
               "Each admission must carry exactly one server-read catalog with no target")
         check(len(current_permissions) == 1 and current_permissions[0].get("origin") == "authoritativeRead"
-              and current_permissions[0].get("target") == target, "Each admission must carry the exact target's server-read permissions")
+              and same_target(current_permissions[0].get("target"), target), "Each admission must carry the exact target's server-read permissions")
         # Each turn reads both again; an unchanged answer is the identical projection, never a drifting one.
         catalog = catalog or current_catalog[0]
         permissions = permissions or current_permissions[0]

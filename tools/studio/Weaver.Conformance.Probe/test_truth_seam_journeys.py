@@ -9,7 +9,7 @@ from artifacts import sha
 from journey_runtime import BASE_GRANTS
 from truth_seam_journeys import (ACTORS, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
                                  SECTION, TENANT_READER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
-                                 require_permissions, require_truth_turn, require_workflow_truth_seams, synthetic_actors,
+                                 require_permissions, require_truth_turn, same_target, require_workflow_truth_seams, synthetic_actors,
                                  synthetic_registrations, truth_principals, truth_seam_manifest_gaps)
 
 TARGET = {"moduleId": "Elsa.Studio.Workflows", "resourceType": "workflow-definition", "resourceId": "wf-1", "revision": "unsaved-1"}
@@ -67,6 +67,19 @@ def rows(provider="copilot", tools=(READ_TOOL, LAYOUT_TOOL)):
             {"kind": provider + ".return", "data": {"commandId": COMMAND}}]
 
 
+# The exact envelope target both adapters' native streams carried in the 499853897 witness: the engine serializes the
+# optional presentation members of AgentResourceTarget as null.
+WIRE_TARGET = {**TARGET, "displayName": None, "route": None}
+
+
+def wire_frames(manage=True):
+    value = frames(manage)
+    for frame in value:
+        for item in (frame.get("payload") or {}).get("attachments", []) if frame["kind"] == "contextAdmitted" else []:
+            if item.get("target") is not None: item["target"] = dict(WIRE_TARGET)
+    return value
+
+
 class TurnTests(unittest.TestCase):
     def check(self, value=None, trace=None, provider="copilot"):
         return require_truth_turn(frames() if value is None else value, rows(provider) if trace is None else trace,
@@ -79,6 +92,21 @@ class TurnTests(unittest.TestCase):
                 self.assertEqual(sorted([READ_TOOL, LAYOUT_TOOL]), observed["advertised"])
                 self.assertEqual("allowed", observed["permissions"]["manage"])
                 self.assertEqual(len(owner_entries()), observed["catalog"]["totalCount"])
+
+    def test_the_native_wire_target_with_null_presentation_members_is_the_same_target(self):
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                observed = require_truth_turn(wire_frames(), rows(provider), provider=provider, command_id=COMMAND, target=TARGET)
+                self.assertEqual("allowed", observed["permissions"]["manage"])
+        self.assertTrue(same_target({**TARGET, "displayName": "Workflow", "route": "/workflows"}, TARGET))
+        for name, target in (("other-revision", {**WIRE_TARGET, "revision": "persisted"}), ("other-id", {**WIRE_TARGET, "resourceId": "wf-2"}),
+                             ("other-module", {**WIRE_TARGET, "moduleId": "Acme"}), ("unknown-member", {**WIRE_TARGET, "tenantId": "t"}),
+                             ("missing-revision", {key: value for key, value in WIRE_TARGET.items() if key != "revision"}), ("none", None)):
+            with self.subTest(target=name):
+                self.assertFalse(same_target(target, TARGET))
+                value = wire_frames()
+                value[1]["payload"]["attachments"][0]["target"] = target
+                with self.assertRaises(RuntimeError): require_truth_turn(value, rows(), provider="copilot", command_id=COMMAND, target=TARGET)
 
     def test_a_missing_drifting_forged_or_incomplete_turn_never_qualifies(self):
         def attachment(value, kind, index=1):
