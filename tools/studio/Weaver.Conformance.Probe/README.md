@@ -128,6 +128,43 @@ existing read-permission text. The
 tool's own 503 outcome is component evidence, because no native turn reaches it. A random private cause canary must appear on no HTTP body, SSE frame or adapter
 trace. Deselecting the seam must restore the unchanged native definition read. `evidence.witness_manifest()` lists
 the two cases, and `require_workflow_authorization` refuses a missing, failed, duplicated or changed record.
+Each admitted context there must also carry the host's available `workflow.catalog`: the consumer composes the
+Activities Design API, so the catalog is the real one.
+
+### Workflow truth seams (spec 1193 T012)
+
+Next, `truth_seam_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-truth-seams`). Four
+dedicated principals are appended after the original five. A manager, a read-only reader and a reader without
+`activities/design:read` in the admin's tenant run one `workflow_read_graph` turn each against the admin's seeded
+workflow. A reader in a second tenant compares catalogs only: the packaged consumer's workflow persistence has one scope,
+so every definition is stored under `default` whatever tenant creates it, and the owner rightly refuses another
+tenant's principal. Its Weaver catalog is the collection admitted with a message over a target-free `workflow.request`,
+and no stream, turn or provider call follows. The backend's test-only `QualificationTenantActivity` feature, selected through the native
+feature apply for this inventory only, adds one activity to the designer's catalog read for the first tenant. For each
+actor, every admitted context must carry one server-read `workflow.catalog` and the exact target's
+`workflow.permissions`, identical across the turn's admissions. The catalog must equal the designer's own
+`GET /design/activities/catalog?availability=all` for the same actor: the same entries, order, availability and
+versions, or its marked prefix. The tenant-restricted activity must appear in exactly the first tenant's two answers.
+The permissions must equal the owning design API's answers: the definition GET for read, and the manage-gated promotion
+preflight (200 or 403) for manage. The tools the actual adapter is offered must follow them: the layout tool only for a
+manager. Each dedicated actor holds exactly the grants its journey reaches (`truth_seam_journeys.py` lists them):
+`api-capabilities:read` for owner-link discovery through `GET /capabilities`, the design read or manage it exercises (the evaluator lets manage satisfy read),
+`activities/design:read` except for the catalog-denied actor, and `expressions:read` for the reader's Studio editor. The
+browser journey fails with the exact paths when Studio is refused a read it depends on (owner-link discovery, the
+definition and its draft, the activity catalog and expression descriptors). Other refused reads, such as runtime
+executables or publishing profiles the reader is not granted, are retained as evidence only; layout absence is proven
+from the adapter trace, not from what the browser shows. The actor without `activities/design:read` must get a 403 from the designer catalog and a denied
+catalog with no entries from Weaver. The host's generation observation must report no placeholder type in the loaded
+Agent Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
+journey `workflow-read-only` in `browser.mjs`, with a fresh normal-login state of its own: the accepted message's
+context must carry `manage: denied` and only `workflow_read_graph`, explanation must complete, and a layout request
+must end without a proposal, node move, review or effect request, or owning write, with the stored draft unchanged.
+The driver checks the adapter trace for each command the browser retained: the layout tool was never offered and never
+called. `require_workflow_truth_seams` refuses a missing, failed, duplicated or changed record.
+
+The tenant-restricted activity is synthesized by the seam's reader wrapper. It proves that the designer and Weaver share
+one tenant-aware catalog read path for the request principal, not that the activity stores scope rows by tenant; store
+tenant scoping is the Activities Design persistence tests' evidence.
 
 ### Restart inventory over the packaged durable store (#3441 T031)
 
