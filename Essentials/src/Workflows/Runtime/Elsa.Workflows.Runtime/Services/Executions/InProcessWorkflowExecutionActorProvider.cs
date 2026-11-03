@@ -528,6 +528,11 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             if (!string.Equals(request.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                 return;
 
+            // A running drain yields to the passivation at its next step, as it does to a waiting Cancel, so a drain that
+            // keeps making progress still ends its turn and a hand-off releases placement while it holds the lease (#3678).
+            // The yielded segment flushes its continuations durably and undelivered. This actor is no longer Active, so it
+            // does not re-drive them: the next owner, or the resumption sweep, does.
+            var pendingHandoff = _drainControls is null ? null : _drainControl.Wait();
             SetStatus(WorkflowExecutionActorStatus.Passivating);
 
             try
@@ -536,7 +541,11 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             }
             catch
             {
+                // A passivation that gives up keeps the actor, so a drain that yielded to it is re-driven like one that
+                // yielded to a withdrawn Cancel.
+                pendingHandoff?.Dispose();
                 SetStatus(WorkflowExecutionActorStatus.Active);
+                RedriveIfYieldStranded();
                 throw;
             }
 
@@ -546,6 +555,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
             }
             finally
             {
+                pendingHandoff?.Dispose();
                 _mailbox.Release();
             }
         }

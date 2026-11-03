@@ -172,8 +172,8 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
 
     /// <summary>
     /// Hands off every execution this member still holds, in every persistence scope: passivating each
-    /// local actor, which waits for an in-flight drain to finish its turn, releasing its placement lease, and making its
-    /// unacknowledged transport items visible. A drain that outlasts the lease duration is left as a crash would be; its
+    /// local actor, which makes an in-flight drain yield at its next step, releasing its placement lease, and making its
+    /// unacknowledged transport items visible. A step that outlasts the lease duration is left as a crash would be; its
     /// leases are reclaimed once the host id is departed.
     /// </summary>
     public async ValueTask<int> HandOffAllAsync(string reason, CancellationToken cancellationToken = default)
@@ -297,7 +297,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
                 if (decision is { IsRunnable: false })
                 {
                     gate!.Report(lease.WorkflowExecutionId, expectedPartition, decision);
-                    // Passivation waits for a running drain's turn to end, which a progressing drain may never reach.
+                    // Passivation makes a running drain yield, but only at its next step, after the current one ends.
                     await ReleaseBoundedAsync(
                         HandOffAsync(lease.WorkflowExecutionId, placementService.NodeId, later, expectedPartition, decision.Reason!, cancellationToken).AsTask(),
                         waits, expectedPartition, lease.WorkflowExecutionId, "Handing off", cancellationToken);

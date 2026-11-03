@@ -219,6 +219,101 @@ public sealed partial class RuntimeInProcessAgentProviderTests
             (await agent.EnqueueAsync(NewEnvelope(2), timeout.Token).AsTask().WaitAsync(timeout.Token)).Status);
     }
 
+    [Fact]
+    public async Task Passivating_an_actor_whose_drain_keeps_running_makes_the_drain_yield_and_finishes()
+    {
+        using var drain = await StartYieldingDrainAsync();
+        var (processor, agent, timeout) = (drain.Processor, drain.Agent, drain.Timeout);
+
+        // The drain never ends its turn on its own; only a yield request does (#3678).
+        var passivation = drain.Provider.PassivateAsync(NewPassivationRequest("wfexec-1"), timeout.Token).AsTask();
+        await processor.YieldObserved.Task.WaitAsync(timeout.Token);
+        processor.Release.TrySetResult();
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await drain.Running.WaitAsync(timeout.Token)).Status);
+        await passivation.WaitAsync(timeout.Token);
+        Assert.Equal(WorkflowExecutionActorStatus.Passivated, agent.Descriptor.Status);
+        Assert.Equal(0, AgentCount(drain.Provider));
+        Assert.False(drain.Controls.ShouldYield("wfexec-1"));
+
+        // The yielded work is the next owner's or the resumption sweep's: a passivated mailbox does not re-drive it.
+        await Task.Delay(TimeSpan.FromMilliseconds(500), timeout.Token);
+        Assert.False(processor.Redriven.Task.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Only_a_passivation_of_its_own_execution_and_partition_asks_its_drain_to_yield(bool otherExecution, bool otherPartition)
+    {
+        var controls = new DrainControlContext();
+        var processor = new ObservingControlProcessor(controls);
+        using var provider = new InProcessWorkflowExecutionActorProvider(processor) { DrainControls = controls };
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var running = agent.EnqueueAsync(NewEnvelope(1), timeout.Token).AsTask();
+        await processor.Entered.Task.WaitAsync(timeout.Token);
+        var own = !otherExecution && !otherPartition;
+
+        var passivation = provider.PassivateAsync(
+            NewPassivationRequest(otherExecution ? "wfexec-2" : "wfexec-1", partition: otherPartition ? new WorkflowExecutionPartition("other") : null),
+            timeout.Token).AsTask();
+        if (own)
+            await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
+        else
+            await passivation.WaitAsync(timeout.Token);
+        processor.Inspect.TrySetResult();
+        await running.WaitAsync(timeout.Token);
+        await passivation.WaitAsync(timeout.Token);
+
+        Assert.Equal(own, processor.OwnYield);
+        Assert.False(processor.OtherYield);
+        Assert.Equal(own ? WorkflowExecutionActorStatus.Passivated : WorkflowExecutionActorStatus.Active, agent.Descriptor.Status);
+        Assert.False(controls.ShouldYield("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task A_cancel_that_arrives_while_the_actor_passivates_is_deferred_and_the_drain_still_yields()
+    {
+        using var drain = await StartYieldingDrainAsync();
+        var (processor, agent, timeout) = (drain.Processor, drain.Agent, drain.Timeout);
+        var passivation = drain.Provider.PassivateAsync(NewPassivationRequest("wfexec-1"), timeout.Token).AsTask();
+        await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
+
+        // A Cancel on a passivating actor asks for no yield of its own and runs nothing here. Deferred, it stays with its
+        // sender: the placement pump leaves it in the transport for the next owner, as for any deferred command.
+        var cancel = agent.EnqueueAsync(NewCancel("cancel"), timeout.Token).AsTask();
+        await processor.YieldObserved.Task.WaitAsync(timeout.Token);
+        processor.Release.TrySetResult();
+
+        await passivation.WaitAsync(timeout.Token);
+        var deferred = await cancel.WaitAsync(timeout.Token);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, deferred.Status);
+        Assert.Equal(0, processor.CancelsProcessed);
+        await Task.Delay(TimeSpan.FromMilliseconds(500), timeout.Token);
+        Assert.False(processor.Redriven.Task.IsCompleted);
+    }
+
+    [Fact]
+    public async Task A_drain_that_yielded_to_a_passivation_that_gave_up_is_redriven_and_the_actor_stays_active()
+    {
+        using var drain = await StartYieldingDrainAsync();
+        var (processor, agent, timeout) = (drain.Processor, drain.Agent, drain.Timeout);
+        using var passivationToken = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        var passivation = drain.Provider.PassivateAsync(NewPassivationRequest("wfexec-1"), passivationToken.Token).AsTask();
+        await processor.YieldObserved.Task.WaitAsync(timeout.Token);
+
+        await passivationToken.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => passivation);
+        processor.Release.TrySetResult();
+
+        var redrive = await processor.Redriven.Task.WaitAsync(timeout.Token);
+        Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, redrive.Command.Kind);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, agent.Descriptor.Status);
+        Assert.Equal(0, processor.CancelsProcessed);
+    }
+
     private async Task<YieldingDrain> StartYieldingDrainAsync(string? precedingCancelKey = null, ILogger? logger = null)
     {
         var controls = new DrainControlContext();
