@@ -1,6 +1,8 @@
+import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getExecutableDetail, register } from "../module";
+import type { ElsaStudioModuleApi, StudioAgentResultRendererProps, StudioContributionRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { presentsResourceModule } from "@elsa-workflows/studio-sdk";
+import { getExecutableDetail, register, WorkflowBatchResult } from "../module";
 
 describe("weaver workflows module", () => {
   it("registers prompts and presentation on the canonical agent path", () => {
@@ -34,6 +36,49 @@ describe("weaver workflows module", () => {
     expect(prompt?.attachments).toEqual([
       expect.objectContaining({ contentType: "workflow.request", sourceId: "artifact-1", content: { requestKind: "workflow-executable", referenceId: "artifact-1" } })
     ]);
+  });
+
+  describe("workflows.batch-result renderer", () => {
+    const preview = { typeId: "workflows.batch-result", schemaVersion: "1", data: {
+      risk: "destructive", highComplexity: true,
+      operations: [
+        { index: 0, kind: "add", risk: "reviewRequired", summary: "Add Write Line as 'greet' into 'Main' [flow] / activities." },
+        { index: 1, kind: "remove", risk: "destructive", summary: "Remove 'Old step' [old] from the root scope." }
+      ]
+    } };
+
+    it("registers under its own package for the Workflows module's results", () => {
+      const api = testApi(); register(api);
+      const renderer = api.agent.resultRenderers.list().find(item => item.id === "weaver.workflows.batch-result")!;
+      expect(renderer).toMatchObject({ moduleId: "Elsa.Studio.Weaver.Workflows", resourceModuleIds: ["Elsa.Studio.Workflows"],
+        resultTypes: ["workflows.batch-result"], schemaVersions: ["1"] });
+      // The host's own match: the Workflows module's results, never another module's.
+      expect(presentsResourceModule(renderer, "Elsa.Studio.Workflows")).toBe(true);
+      expect(presentsResourceModule(renderer, "Elsa.Studio.Weaver.Workflows")).toBe(false);
+      expect(presentsResourceModule(renderer, null)).toBe(false);
+    });
+
+    it("labels each operation's risk, the batch's highest risk and its complexity while proposed", () => {
+      const text = render({ proposal: { status: "awaiting-approval" }, result: undefined, preparedInvocation: { preview, risk: "destructive" } as never });
+      expect(text).toContain("Proposed — awaiting your review");
+      expect(text).toContain("Destructive");
+      expect(text).toContain("Review required");
+      expect(text).toContain("High complexity");
+      expect(text).toContain("Undo does not restore them");
+      expect(text).toContain("Saving and publishing remain your explicit actions");
+    });
+
+    it("reports an applied batch by its receipt and leaves Undo and the saved state to the owning module", () => {
+      const applied = render({ proposal: null, result: undefined, preparedInvocation: { preview } as never,
+        toolResult: { toolCallId: "call", toolName: "workflow_apply_operation_batch", succeeded: true, content: "Applied all 2 operations.", payload: preview,
+          receipt: { invocationId: "i", before: {} as never, after: {} as never, scope: "clientWorkingState", evidence: preview } } });
+      expect(applied).toContain("Applied locally to the working draft as one Undo step");
+      expect(applied).not.toContain("Undo whole change");
+    });
+
+    it("reports a refused batch as nothing changed", () => {
+      expect(render({ proposal: { status: "denied" }, result: undefined, preparedInvocation: { preview } as never })).toContain("Refused — nothing changed");
+    });
   });
 
   describe("get-executable-detail tool", () => {
@@ -107,4 +152,22 @@ function registry<T>(): StudioContributionRegistry<T> {
     add: item => items.push(item),
     list: () => [...items]
   };
+}
+
+function render(props: StudioAgentResultRendererProps) {
+  return text(<WorkflowBatchResult {...props} />);
+}
+
+// The renderer is hook-free, so their element tree is read directly: this package's tests do
+// not depend on a DOM renderer.
+function text(node: React.ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(text).join("");
+  if (React.isValidElement(node)) {
+    const element = node as React.ReactElement<{ children?: React.ReactNode }>;
+    if (typeof element.type === "function") return text((element.type as (props: unknown) => React.ReactNode)(element.props));
+    return text(element.props.children);
+  }
+  return "";
 }

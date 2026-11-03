@@ -8,14 +8,14 @@ Domain: `Elsa.Agent.Workflows`
 The module contributes to [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) through contracts in `Elsa.Agent.Core`.
 
 - `IAgentContextProvider`: `DefaultWorkflowAgentContextProvider` (`internal sealed`) admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Property values, caller permission claims and arbitrary diagnostics are excluded. A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics. With admitted workflow context it also contributes two server-produced kinds, described under [Truth seams](#truth-seams-spec-1193); a caller cannot supply either.
-- `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` (`internal sealed`) declares explanation of the admitted graph and a reviewed position-change journey. It does not advertise runtime investigation, activity creation, save or publish.
+- `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` (`internal sealed`) declares explanation of the admitted graph and a reviewed change journey (a position change or one Operation Batch, below). It does not advertise runtime investigation, save or publish.
 - `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result. `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
 - `IAgentClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.agent.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
 - `IAgentToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed. When the owner throws `WorkflowDefinitionAuthorizationException`, the tools and the context provider fail closed as unavailable with the Design API's code `workflow.authorization.unavailable`, distinct from `agent.workflow.permission_denied`, and disclose no cause. The tools report an owner-unavailable violation, so dispatch reports 503. The context provider reports an owner-unavailable required diagnostic, so collection and turn admission, including the re-admission before each tool call, fail with that code and 503 instead of `agent.context.incomplete`. A denial keeps `agent.context.incomplete` with 400. `agent.workflow.authority_unavailable` keeps its meaning: zero or several authorizers are composed.
 
 The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
-This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. [Final-head qualification/CI, independent review, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches, activity creation, expression authoring and troubleshooting remain [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442); a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
+This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. [Final-head qualification/CI, independent review, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches and activity creation are delivered by [draft authoring](#draft-authoring-spec-1193-slice-c); expression authoring and troubleshooting remain [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442); a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
 
 ## Truth seams (spec 1193)
 
@@ -65,6 +65,86 @@ disclosed: a lost read is the required `agent.workflow.permission_denied`, an ow
 
 Revision identity follows FR-005: `workflow.definition` already carries the exact target, the working-state content
 revision and the client binding. No persisted revision is read in its place.
+
+## Draft authoring (spec 1193 slice C)
+
+- `IAgentTool` / `IAgentClientTool` / `IAgentToolAuthorization`: `WorkflowApplyOperationBatchTool` (`internal sealed`),
+  `workflow_apply_operation_batch` contract `1`, execution location `ClientWorkingState`, result `workflows.batch-result`
+  schema `1`, renderer `weaver.workflows.batch-result`, required permission `workflows/design:manage`, owner check
+  `IWorkflowDefinitionAuthorizer.CanManageAsync` (unavailable stays `workflow.authorization.unavailable`, 503).
+  - **Strict schema.** Eight operation kinds, each an object that refuses unknown fields: `add` (a new `ref`, the
+    catalog `activityTypeKey` and exact `version`, an explicit `scopePath` of node ids from the root to the container and
+    a `slot` the container discloses), `set-root` (installs a root candidate added in the batch), `position`,
+    `set-property` (an explicit declared input; a `literal` or a visible `secretReference`; no default property),
+    `update` (only `displayName`, `description` and `canStartWorkflow`; type, version and children are never rewritten),
+    `remove`, `connect` and `disconnect`. Activities are addressed by `id`, by an earlier `ref`, or by display `name`.
+    At most 64 operations; above the declared limit of 16 the review labels the batch high-complexity. A batch is never
+    split or partly applied. The plan's `name` field is not offered: the designer's `ActivityNode` has no name, and its
+    visible name is the `displayName` presentation record.
+  - **Preparation.** Requires one admitted `workflow.definition` snapshot with structure (each activity's exact version,
+    parent, slot and slots) and `workingState: "draft"`. Manage authority is decided before validation, so a reader
+    gets the shared `agent.workflow.permission_denied` (explanation stays available) and learns nothing else. The
+    catalog is read fresh from `IActivityAuthoringCatalog` when an operation needs it. Outcomes, each naming the failing
+    operation, with nothing changed: `agent.workflow.batch.schema_invalid` (400), `agent.workflow.batch.reference_invalid`
+    (dangling, reused or removed references, a new id the document still holds in a layout or presentation record, a
+    root-scope add without `set-root`, a second `set-root`, an add into or a connection within an activity the same
+    batch adds, an add into or a removal from a BPMN scope, cross-scope connections; 422),
+    `agent.workflow.batch.clarification_required` (an absent, hidden or non-addable activity, an undeclared input, an
+    ambiguous name with candidates by scope path, a Secret Reference that is not visible, an unreadable catalog; 422),
+    `agent.workflow.batch.credential_literal` (with an offer to bind a visible Secret Reference; 422),
+    `agent.workflow.batch.expression_unsupported` (expression edits belong to the Expression Module; 422),
+    `agent.workflow.batch.target_not_editable` (a published or historical working state; 409),
+    `agent.workflow.batch.structure_required` (409) and `activities.catalog.unavailable` (503). Existing non-addable
+    activities stay editable.
+  - **Risk and review.** Each operation is `ReviewRequired`, or `Destructive` for `remove`, `disconnect` and a
+    `set-root` that replaces an existing root. The batch takes the highest. Preparation always returns
+    `RequiresApproval`, so the batch is reviewed in every autonomy mode, including `full-auto`. The frozen arguments carry
+    every resolved node id, the catalog `activityVersionId` of each add and each operation's risk, so Studio can recheck
+    the classification against live working state and fail closed.
+  - **Completion.** `CompleteAsync` admits only an exact observation: applied, a new working-state revision, the
+    originating binding and approval digest, `appliedCount` equal to the frozen operations, the frozen added node ids
+    in order, `baseRevision` equal to the prepared revision and `historyEntry: true`. The admitted result carries the
+    server's own risk labels from the preview, never the client's. The receipt is `ClientWorkingState`: the batch is
+    applied locally and not saved or published.
+- **Snapshot additions.** `workflow.definition` schema `1` admits, when present, a compact `structure`: `versions` groups
+  activity indexes (into `activities`) by exact `activityVersionId`, and `containers` lists the root and every activity
+  that declares slots, each with its `parentId`, its `slot` in the parent and its `slots` (`id`, `mode`, `cardinality`,
+  member `nodes` by index). Every activity has exactly one version and, except the root, exactly one slot; the result
+  must be one tree. Optional `reservedIds` lists ids the document holds only in its layout or presentation records, so
+  preparation never reuses one. It also admits the snapshot's `workingState` (`draft` or `historical`) and up to 64 visible
+  `secretReferences` (name, type and scope only). The additions are copied only when sent, so an older snapshot admits
+  unchanged, and activities keep their pre-existing `id`, `type` and `displayName` shape.
+  - **Size.** The compact form keeps the 64 KiB content bound: measured on a chained flowchart with GUID catalog
+    version ids, structure adds 946 bytes at 100 activities (24,716 to 25,662), 1,346 at 150 and 1,746 at 200
+    (49,116 to 50,862). A per-activity encoding added about 150 bytes each and pushed 200 activities to 78,743. Studio
+    leaves the structure out when the content would come within 2 KiB of the bound, so a draft that fits without
+    structure always still fits; explanation keeps working and a batch is then refused with
+    `agent.workflow.batch.structure_required` (`workflowContextSize.test.tsx`).
+  - **Visible Secret References** are, in this slice, the Secret References the draft already binds, which the user
+    sees in the designer. No Secrets contract is consulted; a broader picker-backed list is later work.
+- `workflow.permissions` adds `workflow_apply_operation_batch` to `tools` when manage is allowed, the host authorizes the
+  batch tool's own descriptor and the session's capability policy allows its name.
+
+- **Studio side** (not catalogued elsewhere; recorded here with the contract it serves). `Elsa.Studio.Workflows`
+  registers the `workflow_apply_operation_batch` client tool contract with `clientTargetAvailability`, applies the frozen
+  batch through the strict applier in `workflowGraphOperationBatch.ts` (the same field allowlists; unknown fields, a
+  missing property name, structural property names and credential literals refused), rechecks each operation's risk
+  against the live draft and fails closed on any disagreement, and compares definition, SHA-256 content revision
+  (`sha256:` plus 64 hex digits, from a module-owned synchronous SHA-256), editor generation, selection and scope frame
+  before replacing the draft. Designer history records the batch as exactly one entry after flushing pending capture
+  from the latest committed draft; each entry carries its line's batch ids, and autosave is held while the current
+  line holds a batch the user has not explicitly saved. The `workflow.definition` snapshot's revision is now the
+  SHA-256 content revision; the 32-bit hash remains for change detection only. `Elsa.Studio.Weaver.Workflows` renders
+  `workflows.batch-result` (`weaver.workflows.batch-result`) with each operation's risk label, registered under its own
+  module identity with `resourceModuleIds: ["Elsa.Studio.Workflows"]`. The designer-history Undo and the live saved
+  state ("Persisted by your explicit save") are Studio Workflows' result control `workflows.agent.batch-undo`
+  (`api.agent.resultControls`), which the host renders after the renderer. Preparation and the applier share one case
+  file, `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
+  `WorkflowBatchConformanceTests` and `workflowBatchConformance.test.ts`.
+
+**SemVer: Minor.** A new tool contract, result kind and optional snapshot fields; nothing existing changes meaning.
+The working-state revision string changes format (a 32-bit hex hash becomes `sha256:<64 hex>`); it is an opaque
+identity that consumers compare for equality only, so this is Minor.
 
 ## Removed legacy seams
 

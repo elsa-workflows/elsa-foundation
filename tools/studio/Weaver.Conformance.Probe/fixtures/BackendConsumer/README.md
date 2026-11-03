@@ -52,3 +52,11 @@ single `IActivityAuthoringCatalogReader` registration with a wrapper over the ho
 that adds one activity, first, for requests whose principal is in that tenant. The designer's catalog GET and Weaver's
 `IActivityAuthoringCatalog` both read through it, so the driver compares each tenant's two answers. The seam supplies no
 other service and changes no product code.
+
+`QualificationBatchCatalog.cs` is a test-only host feature for the spec 1193 workflow-batch inventory. No baseline shell
+selects it. `batch_journeys.py` selects it through the ordinary native feature apply and deselects it afterwards. The
+host's CLR-reconciled catalog has no credential input and no activity its availability policy excludes, so the seam
+replaces the single `IActivityAuthoringCatalogReader` registration with a wrapper over the host's actual
+`ActivityAuthoringCatalogReader` that adds two activities first: one with a credential input (`apiKey`), and, only when
+every entry is requested, one that is listed but not addable. The designer's catalog GET and Weaver's
+`IActivityAuthoringCatalog` both read through it. The seam supplies no other service and changes no product code.

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import { collectWorkflowContextActivities, collectWorkflowContextConnections, getDraftRevision } from "./editorHelpers";
+import { collectWorkflowContextActivities, collectWorkflowContextConnections, collectWorkflowContextStructure, getDraftContentRevision, type WorkflowContextStructure } from "./editorHelpers";
+import { readSecretReference, type SecretReferenceView } from "../maskedInput";
+import { getChildSlots } from "../workflowAdapter";
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { indexActivityPresentation } from "../activityPresentation";
@@ -18,6 +20,8 @@ interface WorkflowContextBridgeParams {
   inspectedDescriptor: StudioActivityDescriptor | null;
   inspectedIsScopeOwner: boolean;
   catalogByVersion: Map<string, ActivityCatalogItem>;
+  /** True while the designer shows a historical (read-only) snapshot instead of the editable working draft. */
+  historical?: boolean;
 }
 
 function resolveActivityType(node: ActivityNode | null, descriptor: StudioActivityDescriptor | null, catalogByVersion: Map<string, ActivityCatalogItem>) {
@@ -35,20 +39,12 @@ export function useWorkflowContextBridge({
   inspectedNode,
   inspectedDescriptor,
   inspectedIsScopeOwner,
-  catalogByVersion
+  catalogByVersion,
+  historical = false
 }: WorkflowContextBridgeParams) {
   // The full-tree walks depend only on the draft + catalog; memoized so selection/inspection changes
   // (which re-fire the effect) only rewrite the scalar snapshot fields.
-  const activities = useMemo(
-    () => draft
-      ? collectWorkflowContextActivities(
-          draft.state.rootActivity,
-          catalogByVersion,
-          [],
-          indexActivityPresentation(draft.activityPresentation))
-      : [],
-    [catalogByVersion, draft]);
-  const connections = useMemo(() => draft ? collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
+  const drafted = useMemo(() => draft ? buildWorkflowSnapshotContent(draft, catalogByVersion) : null, [catalogByVersion, draft]);
   const diagnostics = useMemo(
     () => (draft?.validationErrors ?? []).map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." })),
     [draft]
@@ -82,7 +78,7 @@ export function useWorkflowContextBridge({
     void selectionKey;
     const generation = activeGeneration.current;
     if (!controller || !details?.definition || !draft || !authorized.current || !generation) return;
-    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-definition", resourceId: details.definition.id, revision: getDraftRevision(draft), displayName: details.definition.name };
+    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-definition", resourceId: details.definition.id, revision: getDraftContentRevision(draft), displayName: details.definition.name };
     const attachment = {
       id: `workflow:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
       source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: "workflow.definition", sensitivity: "internal" as const,
@@ -91,9 +87,76 @@ export function useWorkflowContextBridge({
       content: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision, selectedNodeId,
         selectedActivityType: resolveActivityType(selectedNode, selectedDescriptor, catalogByVersion),
         inspectedNodeId: inspectedNode?.nodeId ?? null, inspectedActivityType: resolveActivityType(inspectedNode, inspectedDescriptor, catalogByVersion), inspectedIsScopeOwner,
-        activities, connections, diagnostics, positions: draft.layout.map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })) }
+        workingState: historical ? "historical" : "draft",
+        diagnostics, ...drafted } as Record<string, unknown>
     };
+    // The server admits at most 64 KiB of snapshot content. Structure is left out rather than letting a draft that fits
+    // without it be refused: explanation keeps working, and an Operation Batch then says the structure is required.
+    if (JSON.stringify(attachment.content).length > workflowSnapshotContentLimit - workflowSnapshotStructureMargin) delete attachment.content.structure;
     controller.snapshot = attachment;
     return () => { if (controller.snapshot === attachment) controller.snapshot = null; };
-  }, [activities, catalogByVersion, clientId, connections, controller, details, diagnostics, draft, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, selectedDescriptor, selectedNode, selectedNodeId, selectionKey]);
+  }, [catalogByVersion, clientId, controller, details, diagnostics, draft, drafted, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, selectedDescriptor, selectedNode, selectedNodeId, selectionKey]);
+}
+
+/**
+ * The draft-derived part of the `workflow.definition` snapshot: activities, connections, positions, visible Secret
+ * References and (spec 1193 FR-014) the compact structure, so an Operation Batch can name an explicit scope path and
+ * slot. Pure, so the shared server contract test builds exactly what the editor sends.
+ */
+export function buildWorkflowSnapshotContent(draft: WorkflowDraft, catalogByVersion: Map<string, ActivityCatalogItem>) {
+  const activities = collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion, [], indexActivityPresentation(draft.activityPresentation));
+  const structure = compactWorkflowStructure(activities, collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion),
+    [...(draft.layout ?? []), ...(draft.activityPresentation ?? [])].map(record => record.nodeId));
+  return {
+    activities,
+    connections: collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion),
+    positions: (draft.layout ?? []).map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })),
+    // Visible Secret References are those the draft already binds: names, types and scopes only, never a value.
+    secretReferences: collectVisibleSecretReferences(draft.state.rootActivity, catalogByVersion),
+    structure
+  };
+}
+
+/** The server's bound on `workflow.definition` content (`WorkflowAgentSnapshot`), in UTF-16 code units of its JSON text. */
+export const workflowSnapshotContentLimit = 65536;
+/** Headroom for differences between this serialization and the one the server measures. */
+const workflowSnapshotStructureMargin = 2048;
+
+/**
+ * The compact containment structure: activity indexes grouped by exact version, and the root plus every activity with
+ * slots, each with its parent, its slot in the parent and its slots' member indexes.
+ */
+export function compactWorkflowStructure(activities: Array<{ id: string }>, structure: Map<string, WorkflowContextStructure>, sideTableIds: string[] = []) {
+  const indexOf = new Map(activities.map((activity, index) => [activity.id, index]));
+  const versions = new Map<string, number[]>();
+  activities.forEach((activity, index) => {
+    const versionId = structure.get(activity.id)?.activityVersionId;
+    if (versionId) versions.set(versionId, [...(versions.get(versionId) ?? []), index]);
+  });
+  const containers = activities.flatMap(activity => {
+    const node = structure.get(activity.id);
+    if (!node || node.parentId !== null && node.slots.length === 0) return [];
+    return [{ id: activity.id, parentId: node.parentId, slot: node.slot, slots: node.slots.map(slot => ({ ...slot,
+      nodes: activities.flatMap(child => { const member = structure.get(child.id); return member?.parentId === activity.id && member.slot === slot.id ? [indexOf.get(child.id)!] : []; }) })) }];
+  });
+  // Ids only the side tables still hold: a new node never reuses one, so the server must know them too (bounded).
+  const reservedIds = [...new Set(sideTableIds.filter(id => !indexOf.has(id)))].slice(0, 256);
+  return { versions: [...versions].map(([id, nodes]) => ({ id, nodes })), containers, ...(reservedIds.length ? { reservedIds } : {}) };
+}
+
+/** The distinct Secret References the draft binds, bounded to 64. A Secret Reference names a secret; it holds no value. */
+function collectVisibleSecretReferences(root: ActivityNode | null | undefined, catalogByVersion: Map<string, ActivityCatalogItem>) {
+  const found = new Map<string, SecretReferenceView>();
+  const visit = (activity: ActivityNode) => {
+    for (const value of Object.values(activity)) {
+      if (found.size >= 64) return;
+      if (!value || typeof value !== "object" || !("expression" in value)) continue;
+      const expression = (value as { expression?: { type?: unknown; value?: unknown } }).expression;
+      const reference = readSecretReference(typeof expression?.type === "string" ? expression.type : null, expression?.value);
+      if (reference) found.set(JSON.stringify([reference.name, reference.typeName, reference.scope]), reference);
+    }
+    for (const slot of getChildSlots(activity, catalogByVersion)) for (const child of slot.activities) visit(child);
+  };
+  if (root) visit(root);
+  return [...found.values()];
 }

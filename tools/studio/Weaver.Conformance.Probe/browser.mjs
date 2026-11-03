@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -104,7 +104,7 @@ page.on("request", request => {
     owningWrites.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
   }
   // Publish is an explicit boundary: a lifecycle journey records any attempt to cross it.
-  if (lifecycle && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
+  if ((lifecycle || config.journey === "workflow-batch") && url.origin === backend && /publish/i.test(url.pathname) && request.method() !== "GET")
     publishAttempts.push({ url: diagnosticUrl(request.url()), method: request.method() });
   if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || !["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
@@ -1500,6 +1500,222 @@ async function workflowReadOnly() {
     explainCompleted: true, layoutOffered: false, proposalCount: 0, nodeMoved: false, draftUnchanged: true, owningWrites: 0 };
 }
 
+// Spec 1193 T022: one reviewed Operation Batch in the actual packaged editor. Four refused controls first, each with zero
+// working-state change (an edit after the proposal, a selection change, a remount); then the batch itself, seven
+// operations of six kinds with three in a nested flowchart and a hand edit in its base revision, observed through the designer's own
+// export, validation, autosave, Undo and Redo; and last an approval from a second tab. Weaver never saves or publishes.
+const BATCH_TOOL = "workflow_apply_operation_batch";
+async function workflowBatch() {
+  const wf = config.workflow ?? {};
+  const { definitionId, definitionPath, nodes, batch, followUp } = wf;
+  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.nested && nodes?.inner && batch?.operations && followUp?.operations,
+    "The batch journey needs exact owning IDs, node IDs and both prepared batches.");
+  owningDraftPath = wf.draftPath;
+  const editorUrl = studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId);
+  const node = (id, target = page) => target.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  const commands = {};
+  await page.goto(editorUrl);
+  for (const id of [nodes.a, nodes.b, nodes.nested]) await expect(node(id)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  await nativeValidation("validation-before");
+  const initial = await workingDraft("working-initial");
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+
+  const select = async (id, name) => {
+    // The node header, clear of any slot-entry control in a container's body.
+    await node(id).click({ position: { x: 12, y: 12 } });
+    await expect(node(id)).toHaveClass(/\bselected\b/);
+    result.evidence.push(retain(name + "-interaction", { method: "pointer-click", nodeId: id }));
+  };
+  const drag = async (id, dx, dy, name) => {
+    const box = await node(id).boundingBox();
+    need(box, "The node to move by hand is not on the canvas: " + id);
+    const x = box.x + 12, y = box.y + 12;
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 12 }); await page.mouse.up();
+    result.evidence.push(retain(name + "-interaction", { method: "pointer-drag", nodeId: id, dx, dy }));
+  };
+  const settled = () => expect(dock()).toHaveAttribute("aria-busy", "false");
+  // The tool's arguments are exactly the operations: the config's expectations (added id, version, literal, ...) stay
+  // here, since the strict batch schema refuses any other field.
+  const request = async (prepared, name) => {
+    await settled();
+    const args = { operations: prepared.operations };
+    const selected = command(BATCH_TOOL, args);
+    commands[name] = selected.commandId;
+    const cards = dock().locator(".agent-proposal"), before = await cards.count();
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: BATCH_TOOL, arguments: args }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    const sent = await accepted(message, name + "-message");
+    // Wait on the turn itself, not a fixed delay: it ends with a new card awaiting review or settles without one, and
+    // then the dock's own text says why (a refusal at preparation, a provider error).
+    await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
+    if (await cards.count() <= before) {
+      const text = (await dock().innerText()).slice(-800);
+      result.evidence.push(retain(name + "-no-proposal", { text }));
+      need(false, name + ": the batch turn ended without a proposal: " + text);
+    }
+    const proposal = cards.last();
+    await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+    await expect(proposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
+    return { proposal, sent, commandId: selected.commandId };
+  };
+  const apply = async (proposal, name, target = page) => {
+    const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
+    await proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    const delivery = await accepted(execute, name + "-execute");
+    need(delivery.response.status() === 202, name + ": the change was not delivered to a browser for application.");
+    const ack = await accepted(acknowledged, name + "-ack");
+    return { ack, sent: ack.response.request().postDataJSON() };
+  };
+  const refused = async (review, name, reason) => {
+    await approve(review.proposal, name);
+    const { ack, sent } = await apply(review.proposal, name);
+    expect(sent).toMatchObject({ outcome: "refused" });
+    need(typeof sent.summary === "string" && reason.test(sent.summary), name + ": refused for another reason: " + sent.summary);
+    need(sent.result == null && sent.after == null, name + ": a refused change reported an applied observation.");
+    expect(ack.value.data).toMatchObject({ executed: false, status: "refused" });
+    await expect(review.proposal).toHaveAttribute("data-status", "failed");
+    const working = await workingDraft(name + "-working");
+    need(!JSON.stringify(working.state).includes(batch.addedNodeId), name + ": refused batch content reached the working draft.");
+    result.evidence.push(retain(name + "-outcome", { summary: sent.summary, status: await review.proposal.getAttribute("data-status") }));
+    await settled();
+    return { summary: sent.summary, working };
+  };
+  // A hand edit's ordinary autosave: the owning write happened and the editor reports no save pending.
+  const settledAutosave = async (writesBefore, what) => {
+    await expect.poll(() => owningWrites.length, { timeout: 15000, message: "The " + what + " was never autosaved." }).toBeGreaterThan(writesBefore);
+    await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  };
+  const sameDraft = async (name, expected) => expect((await owner(name, definitionPath)).value.draft).toEqual(expected);
+
+  // Control 1: a hand edit after the proposal changes the working-state revision; the selection stays as reviewed.
+  await select(nodes.nested, "stale-select");
+  const stale = await request(batch, "staleEdit");
+  const writesBeforeStaleEdit = owningWrites.length;
+  await drag(nodes.nested, 60, 40, "stale-hand-edit");
+  await expect(node(nodes.nested)).toHaveClass(/\bselected\b/);
+  const staleOutcome = await refused(stale, "staleEdit", /revision changed after review, so this change is stale/);
+  need(JSON.stringify(staleOutcome.working.layout) !== JSON.stringify(initial.layout), "The hand edit after the proposal was not in the working state.");
+  // The hand edit is ordinary unsaved work until its debounced autosave lands; Studio rightly refuses to navigate away
+  // from unsaved work, so the remount below needs it settled. Wait on the editor's own write and save state.
+  await settledAutosave(writesBeforeStaleEdit, "stale hand edit");
+  expect((await owner("owner-after-stale-autosave", definitionPath)).value.draft.layout).toEqual(staleOutcome.working.layout);
+  // Control 2: a selection change rotates the editor binding before dispatch.
+  const selection = await request(batch, "selectionChange");
+  await select(nodes.a, "selection-change");
+  // The binding rotates, as on a remount: the editor reports its originating target gone before anything is dispatched.
+  await refused(selection, "selectionChange", /selection changed\. Nothing was applied/);
+  // Control 3: the editor remounts inside the same document; the dock and its proposal survive, the binding does not.
+  const remount = await request(batch, "remount");
+  // Nothing unsaved may be pending, or the native navigation guard keeps the editor (correctly) and nothing remounts.
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const writesBeforeRemount = owningWrites.length;
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
+  await expect(node(nodes.a), "Studio kept the editor open: its navigation guard refused to leave (unsaved or pending work), "
+    + "save status '" + (await page.locator(".wf-editor-save-status").innerText().catch(() => "")) + "'").toHaveCount(0);
+  need(owningWrites.length === writesBeforeRemount, "Leaving the editor for the remount wrote the owning draft.");
+  await page.goBack();
+  await expect(node(nodes.a)).toBeVisible();
+  need(await page.evaluate(() => performance.timeOrigin) === timeOrigin, "The remount control reloaded the document instead of remounting the editor.");
+  await refused(remount, "remount", /remounted.*Nothing was applied/);
+
+  // The batch. A hand edit just before the request is part of its base revision; its ordinary autosave settles first.
+  const writesBeforeHandEdit = owningWrites.length;
+  await drag(nodes.nested, 40, 30, "base-hand-edit");
+  await settledAutosave(writesBeforeHandEdit, "base hand edit");
+  const base = await workingDraft("working-before-batch");
+  const ownerBase = (await owner("owner-before-batch", definitionPath)).value.draft;
+  const nestedRow = rows => rows.find(row => row.nodeId === nodes.nested);
+  expect([nestedRow(ownerBase.layout)?.x, nestedRow(ownerBase.layout)?.y]).toEqual([nestedRow(base.layout)?.x, nestedRow(base.layout)?.y]);
+  const writesBeforeBatch = owningWrites.length;
+  const positive = await request(batch, "applied");
+  const reviewText = await positive.proposal.innerText();
+  need(/Destructive/.test(reviewText) && /Review required/.test(reviewText), "The review does not label each operation's risk.");
+  // The admitted context, as the accepted message records it; targets compare by identity, never by display name or route.
+  const admittedDraft = (positive.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflow.definition");
+  need(admittedDraft && admittedDraft.target?.moduleId === "Elsa.Studio.Workflows" && admittedDraft.target?.resourceType === "workflow-definition"
+    && admittedDraft.target?.resourceId === definitionId && /^sha256:[0-9a-f]{64}$/.test(admittedDraft.target?.revision ?? "")
+    && Array.isArray(admittedDraft.content?.structure?.containers), "The admitted working-state context lost its identity, SHA-256 revision or structure.");
+  await approve(positive.proposal, "applied");
+  const { ack, sent } = await apply(positive.proposal, "applied");
+  expect(sent).toMatchObject({ outcome: "applied", after: { resourceId: definitionId }, result: { typeId: "workflows.batch-result", schemaVersion: "1",
+    data: { observed: true, historyEntry: true, appliedCount: batch.operations.length, addedNodeIds: [batch.addedNodeId], baseRevision: admittedDraft.target.revision } } });
+  expect(ack.value.data?.toolResult?.receipt?.scope).toBe("clientWorkingState");
+  await expect(positive.proposal).toHaveAttribute("data-status", "executed");
+  await settled();
+  const applied = await workingDraft("working-applied");
+  const root = applied.state.rootActivity, children = root.structure.payload.activities;
+  const nested = children.find(child => child.nodeId === nodes.nested);
+  const greet = nested?.structure?.payload?.activities?.find(child => child.nodeId === batch.addedNodeId);
+  need(greet && greet.activityVersionId === batch.writeLineVersionId, "The added activity is not in the nested flowchart.");
+  const innerPairs = (nested.structure.payload.connections ?? []).map(edge => edge.source.nodeId + ">" + edge.target.nodeId);
+  expect(innerPairs).toEqual([nodes.inner + ">" + batch.addedNodeId]);
+  need(JSON.stringify(greet).includes(batch.literal), "The added activity's declared input was not set.");
+  need((applied.activityPresentation ?? []).some(row => row.nodeId === nodes.a && row.displayName === batch.displayName), "The display name update is missing.");
+  const pairs = (root.structure.payload.connections ?? []).map(edge => edge.source.nodeId + ">" + edge.target.nodeId).sort();
+  expect(pairs).toEqual([nodes.a + ">" + nodes.b, nodes.b + ">" + nodes.nested].sort());
+  const bRow = applied.layout.find(row => row.nodeId === nodes.b);
+  expect([bRow?.x, bRow?.y]).toEqual([batch.position.x, batch.position.y]);
+  await nativeValidation("validation-after-batch");
+  // Dirty: the working draft differs from the owner's, which still holds the base.
+  need(JSON.stringify(applied.state) !== JSON.stringify(ownerBase.state), "The applied batch did not leave the working draft dirty.");
+  await page.waitForTimeout(1600);
+  await sameDraft("owner-after-autosave-window", ownerBase);
+  expect(owningWrites.length).toBe(writesBeforeBatch);
+  // One Undo restores exactly the base, hand edit included; the review card's Undo is designer-history Undo.
+  await positive.proposal.getByRole("button", { name: "Undo whole change", exact: true }).click();
+  expect(await workingDraft("working-after-undo")).toEqual(base);
+  await nativeValidation("validation-after-undo");
+  // Redo restores the whole batch and holds autosave again.
+  await nativeEnter("designer-redo", page.getByRole("button", { name: "Redo", exact: true }), "Redo");
+  expect(await workingDraft("working-after-redo")).toEqual(applied);
+  await page.waitForTimeout(1600);
+  await sameDraft("owner-after-redo-window", ownerBase);
+  expect(owningWrites.length).toBe(writesBeforeBatch);
+
+  // Control 4: approving from a second tab of the same Studio. Its dock reopens the session, but the invocation belongs
+  // to the first tab's binding, so it is refused before anything is applied; the first tab's working draft is unchanged.
+  await request(followUp, "secondTab");
+  const second = await context.newPage();
+  try {
+    await second.goto(editorUrl);
+    await expect(node(nodes.a, second)).toBeVisible();
+    await second.getByRole("button", { name: /^Weaver/ }).click();
+    const otherDock = second.getByRole("region", { name: "Weaver assistant", exact: true });
+    const card = otherDock.locator(".agent-proposal").last();
+    await expect(card).toHaveAttribute("data-status", "awaiting-approval");
+    const approved = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/approve"));
+    await card.getByRole("button", { name: "Approve", exact: true }).click();
+    need((await approved).ok(), "The second tab could not approve the proposal.");
+    const execute = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/execute"));
+    const acknowledged = second.waitForResponse(response => new URL(response.url()).origin === backend && response.url().endsWith("/acknowledgements"));
+    await card.getByRole("button", { name: "Apply", exact: true }).click();
+    need((await execute).status() === 202, "The second tab's approval was not delivered to a browser.");
+    const otherAck = (await acknowledged).request().postDataJSON();
+    result.evidence.push(retain("secondTab-ack", otherAck));
+    expect(otherAck).toMatchObject({ outcome: "refused", summary: "The originating Studio context is unavailable." });
+    need(otherAck.result == null && otherAck.after == null, "The second tab reported an applied observation.");
+    await expect(card).toHaveAttribute("data-status", "failed");
+  } finally { await second.close(); }
+  expect(await workingDraft("working-after-second-tab")).toEqual(applied);
+  await sameDraft("owner-after", ownerBase);
+  result.ownerAfter = (await owner("owner-after-final", definitionPath)).receipt;
+  expect(owningWrites.length).toBe(writesBeforeBatch);
+  need(publishAttempts.length === 0, "The batch journey attempted to publish.");
+  await screenshot("workflow-batch-applied");
+  result.commands = commands;
+  result.observations = { staleEdit: "refused", selectionChange: "refused", remount: "refused", secondTab: "refused", applied: true,
+    operationCount: batch.operations.length, nestedScope: true, handEditInBase: true, validated: true, dirty: true, autosaveSuspended: true,
+    undoRestored: true, redoRestored: true, noSaveOrPublish: true };
+}
+
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1509,6 +1725,7 @@ try {
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
   else if (config.journey === "workflow-read-only") await workflowReadOnly();
+  else if (config.journey === "workflow-batch") await workflowBatch();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -1545,7 +1762,7 @@ try {
   result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
   result.evidence.push(retain("agent-requests", requests));
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
-  if (lifecycle) result.evidence.push(retain("publish-attempts", publishAttempts));
+  if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);

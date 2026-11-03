@@ -166,6 +166,37 @@ The tenant-restricted activity is synthesized by the seam's reader wrapper. It p
 one tenant-aware catalog read path for the request principal, not that the activity stores scope rows by tenant; store
 tenant scoping is the Activities Design persistence tests' evidence.
 
+### Workflow Operation Batch (spec 1193 T022)
+
+Next, `batch_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-batch`) against a nested
+workflow it seeds (a root flowchart holding two Write Lines and a nested flowchart that holds a third; the packaged
+consumer's catalog has no other container, and each container's payload is its catalog `initialPayload`). The backend's test-only
+`QualificationBatchCatalog` feature adds a credential-input activity and a listed-but-excluded activity to the designer's
+catalog read for this inventory only. Native turns, each in its own full-auto session, send the open editor's compact
+structured snapshot:
+
+- one `workflow_apply_operation_batch` call of seven operations of six kinds (an add into the nested flowchart wired
+  after its own activity, so validation stays clean) must pause at exactly one review, in each adapter's own pinned
+  frame order: `requiresApproval`, client working state, destructive (it disconnects), per-operation risk labels,
+  the exact target by identity; it is then denied;
+- six negative controls must each end at preparation, with no review, with the module's own text: an activity the
+  catalog does not offer, the excluded activity, an undeclared input, a display name that matches three activities, a
+  literal on the credential input (a random canary appears in no admitted context, result or refusal), and a historical
+  working state;
+- the truth-seam reader, without manage permission, is never offered the batch tool and never calls it.
+
+The owner's draft is unchanged across all of them. Then the admin runs the actual packaged Studio journey
+`workflow-batch` in `browser.mjs` with a fresh normal-login state. An edit after the proposal, a selection change and a
+remount (SPA navigation away and back, same document) are each refused with zero change. Then a hand edit, whose
+ordinary autosave settles first, is part of the base revision of the seven-operation batch, which is approved and applied:
+the designer's own export, validation and owner reads show the nested add, the declared input, the display name, the
+move and the rewiring, a dirty working draft, no owning write past the autosave interval, an exact restore of the base
+through the review card's Undo (designer history), the whole batch again through the designer's Redo, and still no
+save or publish. Last, a proposal approved and applied from a second tab of the same Studio is refused by that tab's
+host before anything is applied. The driver checks the adapter trace for every command the browser retained.
+`require_workflow_batch` refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two
+cases (95 in all).
+
 ### Restart inventory over the packaged durable store (#3441 T031)
 
 After the autonomy matrix, the same complete witness appends the

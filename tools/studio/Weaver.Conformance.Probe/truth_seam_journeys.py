@@ -48,7 +48,10 @@ SEAM_FEATURE = "QualificationTenantActivity"
 TENANT_ONLY_VERSION = "qualification-tenant-only-activity-v1"
 READ_TOOL = "workflow_read_graph"
 LAYOUT_TOOL = "workflow_set_designer_position"
+BATCH_TOOL = "workflow_apply_operation_batch"
+# The read-only journey asks for exactly these two; every advertisement check covers all three module tools.
 WORKFLOW_TOOLS = frozenset({READ_TOOL, LAYOUT_TOOL})
+ADVERTISED_TOOLS = frozenset({READ_TOOL, LAYOUT_TOOL, BATCH_TOOL})
 CATALOG_KIND = "workflow.catalog"
 PERMISSIONS_KIND = "workflow.permissions"
 
@@ -140,7 +143,7 @@ def require_truth_turn(frames, rows, *, provider, command_id, target):
     check(len(calls) == 1 and calls[0]["data"].get("toolName") == READ_TOOL, "The actual adapter did not make exactly one read-graph call")
     offered = [row["data"] for row in owned if row.get("kind") == provider + ".request" and row["data"].get("tools")]
     check(bool(offered), "The actual adapter recorded no tool advertisement")
-    advertised = sorted({tool.get("name") for tool in offered[0]["tools"] if isinstance(tool, dict)} & WORKFLOW_TOOLS)
+    advertised = sorted({tool.get("name") for tool in offered[0]["tools"] if isinstance(tool, dict)} & ADVERTISED_TOOLS)
     return {"catalog": catalog["content"], "permissions": permissions["content"], "advertised": advertised}
 
 
@@ -195,7 +198,7 @@ def require_permissions(content, *, manage, read_status, manage_status, advertis
     check(read_status == 200, "The actor cannot read the definition through the owning design API")
     check(manage_status == (200 if manage else 403), "The owning design API's manage decision differs from the actor's grants")
     expected = "allowed" if manage else "denied"
-    tools = [READ_TOOL, LAYOUT_TOOL] if manage else [READ_TOOL]
+    tools = [READ_TOOL, LAYOUT_TOOL, BATCH_TOOL] if manage else [READ_TOOL]
     capabilities = ["workflow.explain", "workflow.propose-change"] if manage else ["workflow.explain"]
     check(isinstance(content, dict) and content.get("read") == "allowed" and content.get("manage") == expected
           and content.get("workflowDefinitionId") == target["resourceId"] and content.get("revision") == target["revision"]
@@ -233,7 +236,7 @@ def require_read_only_browser(observed, commands, rows, *, provider):
         owned = [row for row in rows if isinstance(row, dict) and (row.get("data") or {}).get("commandId") == command_id]
         offered = [row["data"] for row in owned if row.get("kind") == provider + ".request" and row["data"].get("tools")]
         check(bool(offered), "The actual adapter recorded no tool advertisement for the " + tool + " request")
-        names = [sorted({entry.get("name") for entry in item["tools"] if isinstance(entry, dict)} & WORKFLOW_TOOLS) for item in offered]
+        names = [sorted({entry.get("name") for entry in item["tools"] if isinstance(entry, dict)} & ADVERTISED_TOOLS) for item in offered]
         check(all(value == [READ_TOOL] for value in names), "The actual adapter was offered the layout tool for a read-only actor")
         calls = [row["data"] for row in owned if row.get("kind") == provider + ".call"]
         expected = 1 if tool == READ_TOOL else 0

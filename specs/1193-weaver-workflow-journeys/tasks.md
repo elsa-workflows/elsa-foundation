@@ -24,16 +24,16 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 ## Slice C: Draft authoring (stories 2, 3)
 
-- [ ] T013 Server tool `workflow_apply_operation_batch` v1: strict schemas, catalog, declared-input, credential and ambiguity checks, per-operation risk, and `RequiresApproval` in every mode. Refuse stale, published and historical targets (FR-007, FR-012, FR-013, FR-015, FR-017).
-- [ ] T014 Studio applier: strict schemas and no default property name (FR-007).
-- [ ] T015 SHA-256 content revision, and compare-and-replace on definition, revision, binding and selection (FR-008, R2).
-- [ ] T016 History flush, one history entry per batch, and a review-card Undo that uses designer history (FR-009, R3).
-- [ ] T017 Autosave hold keyed to the history position, held again on Redo (FR-010).
-- [ ] T018 Scope frame, selection, test-run result and published-artifact handling, and a receipt before the binding rotates. Outcomes distinguish proposed, approved, applied locally, persisted, refused and uncertain, and Weaver never saves (FR-008, FR-011).
-- [ ] T019 Studio risk recheck that fails closed (FR-012).
-- [ ] T020 `workflows.batch-result` renderer (Weaver Workflows).
-- [ ] T021 [P] Server and Vitest tests: the armed capture timer, a hand edit inside the capture delay, autosave across Undo and Redo, the 50-entry history cap, and the NIST vectors for the hash (SC-002, SC-004).
-- [ ] T022 Probe case `workflow-batch` and its negative controls, and a Playwright journey.
+- [x] T013 Server tool `workflow_apply_operation_batch` v1: strict schemas, catalog, declared-input, credential and ambiguity checks, per-operation risk, and `RequiresApproval` in every mode. Refuse stale, published and historical targets (FR-007, FR-012, FR-013, FR-015, FR-017).
+- [x] T014 Studio applier: strict schemas and no default property name (FR-007).
+- [x] T015 SHA-256 content revision, and compare-and-replace on definition, revision, binding and selection (FR-008, R2).
+- [x] T016 History flush, one history entry per batch, and a review-card Undo that uses designer history (FR-009, R3).
+- [x] T017 Autosave hold keyed to the history position, held again on Redo (FR-010).
+- [x] T018 Scope frame, selection, test-run result and published-artifact handling, and a receipt before the binding rotates. Outcomes distinguish proposed, approved, applied locally, persisted, refused and uncertain, and Weaver never saves (FR-008, FR-011).
+- [x] T019 Studio risk recheck that fails closed (FR-012).
+- [x] T020 `workflows.batch-result` renderer (Weaver Workflows).
+- [x] T021 [P] Server and Vitest tests: the armed capture timer, a hand edit inside the capture delay, autosave across Undo and Redo, the 50-entry history cap, and the NIST vectors for the hash (SC-002, SC-004).
+- [x] T022 Probe case `workflow-batch` and its negative controls, and a Playwright journey.
 
 ## Slice D: Explain and troubleshoot (story 1)
 
