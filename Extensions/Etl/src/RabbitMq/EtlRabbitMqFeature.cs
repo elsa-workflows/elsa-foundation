@@ -16,7 +16,8 @@ public class EtlRabbitMqFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        // The publisher holds no state: each publication opens and disposes its own connection, so one instance serves all.
+        // One instance for the process: it holds at most one blocked connection per target while a broker's resource alarm
+        // lasts, and further publications to that target must see it.
         services.AddSingleton<IEtlRabbitMqPublisher, RabbitMqEtlPublisher>();
     }
 }

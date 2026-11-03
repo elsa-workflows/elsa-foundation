@@ -15,9 +15,10 @@ namespace Elsa.Etl.RabbitMq;
 /// </summary>
 /// <remarks>
 /// Each publication opens its own connection without automatic recovery: the runtime retries a whole batch, so a connection
-/// that recovered mid-batch could not tell which messages it confirmed. Each confirm and each protocol round trip is bounded,
-/// because a broker under a resource alarm blocks publishers without closing their connections; a bounded wait yields the
-/// attempt and its capacity instead of holding them until the alarm clears.
+/// that recovered mid-batch could not tell which messages it confirmed. Each confirm and each protocol round trip is bounded.
+/// A broker under a resource alarm blocks publishers without closing their connections and stops reading them: its
+/// <c>connection.blocked</c> notice ends the publication at once, and the blocked connection is held, one per target, until
+/// the broker unblocks or drops it. While one is held, a publication to that target yields without opening a connection.
 /// </remarks>
 internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
 {
@@ -69,7 +70,13 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
             _ = Task.Run(blocked.Cancel);
             return Task.CompletedTask;
         };
-        connection.ConnectionUnblockedAsync += (_, _) => Free(connectionString, connection);
+        // The broker sends one unblocked notice per blocked one, possibly before the hold below is taken; remember it.
+        var unblocked = 0;
+        connection.ConnectionUnblockedAsync += (_, _) =>
+        {
+            Volatile.Write(ref unblocked, 1);
+            return Free(connectionString, connection);
+        };
         connection.ConnectionShutdownAsync += (_, _) => Free(connectionString, connection);
         var answered = false;
         try
@@ -87,7 +94,8 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
                 await connection.DisposeAsync();
             else if (blocked.IsCancellationRequested && connection.IsOpen && _blocked.TryAdd(connectionString, connection))
             {
-                if (!connection.IsOpen)
+                // An unblock or shutdown that arrived before the hold was taken found nothing to free.
+                if (!connection.IsOpen || Volatile.Read(ref unblocked) == 1)
                     await Free(connectionString, connection);
             }
             else
