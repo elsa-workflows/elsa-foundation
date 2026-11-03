@@ -223,7 +223,7 @@ internal sealed class EfEtlDefinitionStore(
         CancellationToken cancellationToken)
     {
         dbContext.ChangeTracker.Clear();
-        var existing = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
+        var existing = await QueryPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
         if (existing is not null)
             return ExistingPublicationResult(existing, scope, definitionId, validated);
 
@@ -231,14 +231,14 @@ internal sealed class EfEtlDefinitionStore(
         try
         {
             // Recheck after taking the transaction: retries of the same version converge, including after a later draft edit.
-            existing = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
+            existing = await QueryPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
             if (existing is not null)
             {
                 await transaction.RollbackAsync(cancellationToken);
                 return ExistingPublicationResult(existing, scope, definitionId, validated);
             }
 
-            var draft = await FindDraftRowAsync(identity, cancellationToken);
+            var draft = await QueryDraftRowAsync(identity, cancellationToken);
             if (draft is null)
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -289,10 +289,10 @@ internal sealed class EfEtlDefinitionStore(
             // Clear first: an exception from the rollback below leaves this catch without reaching the one that clears.
             dbContext.ChangeTracker.Clear();
             await transaction.RollbackAsync(cancellationToken);
-            var published = await FindPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
+            var published = await QueryPublishedRowAsync(identity, artifact.DefinitionVersion, cancellationToken);
             if (published is not null)
                 return ExistingPublicationResult(published, scope, definitionId, validated);
-            var current = await FindDraftRowAsync(identity, cancellationToken);
+            var current = await QueryDraftRowAsync(identity, cancellationToken);
             if (current is null)
                 return new(EtlPublicationStatus.NotFound, null);
             _ = EtlDefinitionRecordCodec.ReadDraftContent(current, scope, definitionId);
@@ -314,17 +314,26 @@ internal sealed class EfEtlDefinitionStore(
         dbContext.Drafts.AsNoTracking().Where(row => row.ScopeKey == identity.Scope.Key && row.DefinitionKey == identity.Definition.Key);
 
     private async Task<EtlDefinitionDraftRecord?> FindDraftRowAsync(IdentitySet identity, CancellationToken cancellationToken) =>
-        await EtlDesignReadRetry.RunAsync(dbContext, () => DraftQuery(identity).SingleOrDefaultAsync(cancellationToken), cancellationToken);
+        await EtlDesignReadRetry.RunAsync(dbContext, () => QueryDraftRowAsync(identity, cancellationToken), cancellationToken);
 
     private async Task<EtlPublishedArtifactRecord?> FindPublishedRowAsync(
         IdentitySet identity,
         int definitionVersion,
         CancellationToken cancellationToken) =>
-        await EtlDesignReadRetry.RunAsync(dbContext, () => dbContext.PublishedArtifacts.AsNoTracking().SingleOrDefaultAsync(
+        await EtlDesignReadRetry.RunAsync(dbContext, () => QueryPublishedRowAsync(identity, definitionVersion, cancellationToken), cancellationToken);
+
+    // Unretried reads, for a publication attempt: its own retry runs the whole unit again, so a read retry there would
+    // multiply the budget.
+    private Task<EtlDefinitionDraftRecord?> QueryDraftRowAsync(IdentitySet identity, CancellationToken cancellationToken) =>
+        DraftQuery(identity).SingleOrDefaultAsync(cancellationToken);
+
+    private Task<EtlPublishedArtifactRecord?> QueryPublishedRowAsync(IdentitySet identity, int definitionVersion,
+        CancellationToken cancellationToken) =>
+        dbContext.PublishedArtifacts.AsNoTracking().SingleOrDefaultAsync(
             row => row.ScopeKey == identity.Scope.Key &&
                    row.DefinitionKey == identity.Definition.Key &&
                    row.DefinitionVersion == definitionVersion,
-            cancellationToken), cancellationToken);
+            cancellationToken);
 
     private async Task<EtlPublicationResult> ResolvePublishRaceAsync(
         IdentitySet identity,
@@ -333,11 +342,11 @@ internal sealed class EfEtlDefinitionStore(
         EtlDefinitionRecordCodec.ValidatedArtifact validated,
         CancellationToken cancellationToken)
     {
-        var published = await FindPublishedRowAsync(identity, validated.Artifact.DefinitionVersion, cancellationToken);
+        var published = await QueryPublishedRowAsync(identity, validated.Artifact.DefinitionVersion, cancellationToken);
         if (published is not null)
             return ExistingPublicationResult(published, scope, definitionId, validated);
 
-        var draft = await FindDraftRowAsync(identity, cancellationToken);
+        var draft = await QueryDraftRowAsync(identity, cancellationToken);
         if (draft is not null)
             _ = EtlDefinitionRecordCodec.ReadDraftContent(draft, scope, definitionId);
         return draft is null

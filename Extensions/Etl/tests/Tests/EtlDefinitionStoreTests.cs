@@ -131,6 +131,45 @@ public sealed class EtlDefinitionStoreTests : EtlDefinitionStoreContract
         Assert.Equal(EtlDefinitionWriteStatus.Created, (await store.CreateDraftAsync(scope, "orders", pipeline)).Status);
     }
 
+    [Fact]
+    public async Task A_store_or_catalog_read_that_meets_a_busy_database_is_read_again()
+    {
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var busy = new BusyOnNextDraftRead();
+        await using var context = database.CreateContext(busy);
+        Assert.Equal(EtlDefinitionWriteStatus.Created, (await Store(context).CreateDraftAsync(scope, "orders", EtlTestPipelines.Create())).Status);
+
+        busy.Arm();
+        Assert.NotNull(await Store(context).FindDraftAsync(scope, "orders"));
+        busy.Arm();
+        Assert.Single(await new EfEtlDefinitionCatalog(context).ListDefinitionsAsync(scope, null, 10));
+
+        Assert.Equal(2, busy.Refusals);
+    }
+
+    /// <summary>Once armed, answers the next draft read as SQLite does a locked database, a lost race the store retries.</summary>
+    private sealed class BusyOnNextDraftRead : DbCommandInterceptor
+    {
+        private bool _armed;
+        public int Refusals { get; private set; }
+
+        public void Arm() => _armed = true;
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (_armed && command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("\"elsa_etl_definition_drafts\"", StringComparison.Ordinal))
+            {
+                _armed = false;
+                Refusals++;
+                throw new SqliteException("database is locked", 5);
+            }
+            return ValueTask.FromResult(result);
+        }
+    }
+
     /// <summary>Cancels a token as the first draft insert executes, as a caller giving up mid-write.</summary>
     private sealed class CancelOnDraftInsert(CancellationTokenSource cancellation) : DbCommandInterceptor
     {
