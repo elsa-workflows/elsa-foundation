@@ -191,9 +191,10 @@ public sealed partial class WorkflowExplainContextTests
         var fixture = StudioSnapshot();
         using var host = new Host();
         host.Catalog.Entries = fixture["catalog"]!.AsArray().Select(item => new ActivityAuthoringCatalogEntry(item!["activityVersionId"]!.GetValue<string>(),
-            "Acme." + item["activityVersionId"]!.GetValue<string>(), "1.0.0", "Display", null, null, true, null,
+            item["activityTypeKey"]!.GetValue<string>(), "1.0.0", "Display", null, null, true, null,
             item["inputs"]!.AsArray().Select(input => new ActivityAuthoringCatalogInput(input!["referenceKey"]!.GetValue<string>(), input["name"]!.GetValue<string>(),
-                input["typeName"]!.GetValue<string>(), null, false, input["isSensitive"]!.GetValue<bool>(), input["isCredential"]!.GetValue<bool>())).ToArray())).ToArray();
+                input["typeName"]!.GetValue<string>(), null, false, input["isSensitive"]!.GetValue<bool>(), input["isCredential"]!.GetValue<bool>())
+            { UiHint = input["uiHint"]?.GetValue<string>() }).ToArray())).ToArray();
         var content = fixture["content"]!.AsObject();
         var revision = content["revision"]!.GetValue<string>();
         var caller = WorkflowAgentTests.Snapshot() with
@@ -224,6 +225,79 @@ public sealed partial class WorkflowExplainContextTests
         var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", ".."));
         var path = Path.Combine(root, "Studio", "src", "essentials", "Elsa.Studio.Workflows", "Client", "src", "__tests__", "workflowExplainSnapshot.json");
         return JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+    }
+
+    [Fact]
+    public async Task A_password_hinted_input_must_be_masked_although_the_catalog_does_not_declare_it_sensitive()
+    {
+        // The designer masks a password-hinted input; an editor that discloses its content is refused.
+        using var host = new Host();
+        var content = Draft(selected: "a");
+        content["selectedActivity"] = Selected("a", "version-write-line",
+            Property("Password", "Password", "String", false, false, Expression("Literal", Canary, false, Canary.Length)));
+        Assert.DoesNotContain(Canary, JsonSerializer.Serialize(await host.RefusedAsync(content)));
+
+        content["selectedActivity"] = Selected("a", "version-write-line",
+            Property("Password", "Password", "String", false, true, new JsonObject { ["kind"] = "withheld", ["expressionType"] = "Literal" }));
+        Assert.Equal("withheld", (await host.AdmittedAsync(content)).GetProperty("selectedActivity").GetProperty("properties")[0].GetProperty("value")
+            .GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task Property_context_is_bound_to_the_structures_exact_version_and_the_activitys_own_type()
+    {
+        // Without the structure the selected node's version is unbound, so a client could name an older version whose input
+        // was no credential: the property context is refused.
+        using var host = new Host();
+        var content = Draft(selected: "a");
+        content["selectedActivity"] = Selected("a", "version-write-line", Property("Text", "Text", "String", false, false, Expression("Literal", "x", false, 1)));
+        content.Remove("structure");
+        await host.RefusedAsync(content);
+
+        // A version id whose catalog entry is another activity type carries another activity's declared inputs: refused.
+        content = Draft(selected: "a");
+        content["selectedActivity"] = Selected("a", "version-write-line", Property("Text", "Text", "String", false, false, Expression("Literal", "x", false, 1)));
+        content["activities"]!.AsArray()[1]!["type"] = "Acme.Other";
+        await host.RefusedAsync(content);
+    }
+
+    [Fact]
+    public async Task A_malformed_UTF16_string_refuses_the_snapshot_instead_of_failing_the_collection()
+    {
+        // A lone surrogate escape: JsonElement.GetString throws on it, so every read refuses it as malformed instead.
+        using var host = new Host();
+        var content = Draft();
+        content["diagnostics"] = new JsonArray(Diagnostic("error", null, "b", null, "MARKER"));
+        var text = content.ToJsonString().Replace("MARKER", "\\ud800", StringComparison.Ordinal);
+        var caller = WorkflowAgentTests.Snapshot() with { Content = JsonDocument.Parse(text).RootElement.Clone() };
+
+        var contribution = await host.Source.CollectAsync(WorkflowAgentTests.Request(caller) with { SessionId = host.SessionId });
+
+        Assert.DoesNotContain(contribution.Attachments, item => item.ContentType == "workflow.definition");
+        Assert.Contains(contribution.Diagnostics, item => item.Code == "agent.workflow.context_invalid" && item.Required);
+    }
+
+    [Fact]
+    public void Scope_paths_run_through_parallel_branches_as_through_any_container()
+    {
+        // A Parallel-like container: each branch is a member of its many slot, and a container inside a branch nests on.
+        var structure = new Dictionary<string, WorkflowAgentNode>
+        {
+            ["root"] = new("root", "Acme.Flowchart", "root", "flow", null, null, [new("flowchart:activities", "flowchart", "many")]),
+            ["parallel"] = new("parallel", "Acme.Parallel", "parallel", "parallel", "root", "flowchart:activities", [new("parallel:branches", "generic", "many")]),
+            ["left"] = new("left", "Acme.WriteLine", "left", "write", "parallel", "parallel:branches", []),
+            ["right"] = new("right", "Acme.Sequence", "right", "sequence", "parallel", "parallel:branches", [new("sequence:activities", "sequence", "many")]),
+            ["deep"] = new("deep", "Acme.WriteLine", "deep", "write", "right", "sequence:activities", [])
+        };
+
+        var (addresses, truncated) = WorkflowAgentExplainContext.Addresses(["root", "parallel", "left", "right", "deep"], structure);
+
+        Assert.False(truncated);
+        var paths = JsonSerializer.SerializeToNode(addresses)!.AsArray().ToDictionary(item => item!["id"]!.GetValue<string>(),
+            item => string.Join("/", item!["scopePath"]!.AsArray().Select(segment => segment!.GetValue<string>())) + "|" + item["slot"]?.GetValue<string>());
+        Assert.Equal("root/parallel|parallel:branches", paths["left"]);
+        Assert.Equal("root/parallel|parallel:branches", paths["right"]);
+        Assert.Equal("root/parallel/right|sequence:activities", paths["deep"]);
     }
 
     [Fact]
@@ -407,8 +481,9 @@ public sealed partial class WorkflowExplainContextTests
             JsonNamingPolicy.CamelCase.ConvertName(tool.ExecutionLocation.ToString()))));
         Assert.All(tools, tool => Assert.Equal(source.Descriptor.Id, tool.DisclosureSourceId));
 
-        // The guidance and the tool and capability texts name only registered tools and context kinds.
-        var names = tools.Select(tool => tool.Name).ToHashSet();
+        // The guidance and the tool and capability texts name only registered tools and context kinds: any tool-like
+        // snake_case token, whatever its prefix, must be a tool the composed registry holds.
+        var names = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToHashSet();
         foreach (var text in new[] { GuidanceText() }.Concat(tools.Select(tool => tool.Description)).Concat(capabilities.Select(item => item.Description)))
         {
             foreach (Match match in ToolToken().Matches(text)) Assert.Contains(match.Value, names);
@@ -417,7 +492,7 @@ public sealed partial class WorkflowExplainContextTests
         }
     }
 
-    [GeneratedRegex(@"\bworkflow_[a-z_]+\b")]
+    [GeneratedRegex(@"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")]
     private static partial Regex ToolToken();
 
     [GeneratedRegex(@"\bworkflow\.[a-z-]+\b")]
@@ -521,7 +596,8 @@ public sealed partial class WorkflowExplainContextTests
             Entries =
             [
                 FixtureActivityCatalog.Entry("version-write-line", true, new ActivityAuthoringCatalogInput("Text", "Text", "String", "Text", true, false, false),
-                    new ActivityAuthoringCatalogInput("ApiKey", "ApiKey", "String", "API key", false, true, true)),
+                    new ActivityAuthoringCatalogInput("ApiKey", "ApiKey", "String", "API key", false, true, true),
+                    new ActivityAuthoringCatalogInput("Password", "Password", "String", "Password", false, false, false) { UiHint = "password" }),
                 FixtureActivityCatalog.Entry("version-flow", true)
             ]
         };

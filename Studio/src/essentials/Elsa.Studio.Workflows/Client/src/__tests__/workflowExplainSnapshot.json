@@ -1,10 +1,11 @@
 {
   "description": "Spec 1193 slice D: the active-draft snapshot Studio's bridge discloses for one seeded draft (workflowExplainContext.test.tsx produces exactly this content), and the owning catalog's declared inputs for it. Elsa.Agent.Tests admits this content strictly against that catalog. The canary is the credential literal the draft holds in the browser; it appears nowhere here.",
   "canary": "CANARY-CREDENTIAL-2f7a9c",
-  "admittedLength": 3145,
+  "admittedLength": 3349,
   "catalog": [
     {
       "activityVersionId": "activity-api-call-v1",
+      "activityTypeKey": "Acme.ApiCall",
       "inputs": [
         {
           "referenceKey": "url",
@@ -39,7 +40,8 @@
           "name": "Password",
           "typeName": "String",
           "isSensitive": false,
-          "isCredential": false
+          "isCredential": false,
+          "uiHint": "password"
         },
         {
           "referenceKey": "body",
@@ -59,10 +61,12 @@
     },
     {
       "activityVersionId": "activity-flowchart-v1",
+      "activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart",
       "inputs": []
     },
     {
       "activityVersionId": "activity-approval-v3",
+      "activityTypeKey": "Acme.Approval",
       "inputs": []
     }
   ],
@@ -76,6 +80,27 @@
     "inspectedActivityType": null,
     "inspectedIsScopeOwner": false,
     "workingState": "draft",
+    "diagnostics": [
+      {
+        "severity": "error",
+        "message": "Variable 'orderId' is not visible from this activity's scope.",
+        "type": "Expressions/UnresolvedVariable",
+        "nodeId": "api",
+        "property": "url"
+      },
+      {
+        "severity": "warning",
+        "message": "Approval is not connected.",
+        "type": "Structure/DisconnectedNode",
+        "nodeId": "inner"
+      },
+      {
+        "severity": "warning",
+        "message": "Größe <a&b> + `c` \"quoted\" 🚀 tab\t line\n bell\u0007 del é",
+        "type": "Workflow/Note",
+        "nodeId": "api"
+      }
+    ],
     "activities": [
       {
         "id": "flow",
@@ -99,21 +124,6 @@
       }
     ],
     "connections": [],
-    "diagnostics": [
-      {
-        "severity": "error",
-        "message": "Variable 'orderId' is not visible from this activity's scope.",
-        "type": "Expressions/UnresolvedVariable",
-        "nodeId": "api",
-        "property": "url"
-      },
-      {
-        "severity": "warning",
-        "message": "Approval is not connected.",
-        "type": "Structure/DisconnectedNode",
-        "nodeId": "inner"
-      }
-    ],
     "positions": [],
     "secretReferences": [
       {
@@ -122,6 +132,62 @@
         "scope": "tenant"
       }
     ],
+    "structure": {
+      "versions": [
+        {
+          "id": "activity-flowchart-v1",
+          "nodes": [
+            0,
+            2
+          ]
+        },
+        {
+          "id": "activity-api-call-v1",
+          "nodes": [
+            1
+          ]
+        },
+        {
+          "id": "activity-approval-v3",
+          "nodes": [
+            3
+          ]
+        }
+      ],
+      "containers": [
+        {
+          "id": "flow",
+          "parentId": null,
+          "slot": null,
+          "slots": [
+            {
+              "id": "elsa.flowchart.structure:activities",
+              "mode": "flowchart",
+              "cardinality": "many",
+              "nodes": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested",
+          "parentId": "flow",
+          "slot": "elsa.flowchart.structure:activities",
+          "slots": [
+            {
+              "id": "elsa.flowchart.structure:activities",
+              "mode": "flowchart",
+              "cardinality": "many",
+              "nodes": [
+                3
+              ]
+            }
+          ]
+        }
+      ]
+    },
     "graphActivities": [
       {
         "activityDefinitionId": "definition-approval",
@@ -225,62 +291,6 @@
           "value": {
             "kind": "unset"
           }
-        }
-      ]
-    },
-    "structure": {
-      "versions": [
-        {
-          "id": "activity-flowchart-v1",
-          "nodes": [
-            0,
-            2
-          ]
-        },
-        {
-          "id": "activity-api-call-v1",
-          "nodes": [
-            1
-          ]
-        },
-        {
-          "id": "activity-approval-v3",
-          "nodes": [
-            3
-          ]
-        }
-      ],
-      "containers": [
-        {
-          "id": "flow",
-          "parentId": null,
-          "slot": null,
-          "slots": [
-            {
-              "id": "elsa.flowchart.structure:activities",
-              "mode": "flowchart",
-              "cardinality": "many",
-              "nodes": [
-                1,
-                2
-              ]
-            }
-          ]
-        },
-        {
-          "id": "nested",
-          "parentId": "flow",
-          "slot": "elsa.flowchart.structure:activities",
-          "slots": [
-            {
-              "id": "elsa.flowchart.structure:activities",
-              "mode": "flowchart",
-              "cardinality": "many",
-              "nodes": [
-                3
-              ]
-            }
-          ]
         }
       ]
     }

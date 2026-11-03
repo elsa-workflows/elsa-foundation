@@ -48,4 +48,14 @@ public sealed record ActivityAuthoringCatalogInput(
     string? DisplayName,
     bool IsRequired,
     bool IsSensitive,
-    bool IsCredential);
+    bool IsCredential)
+{
+    /// <summary>The input's editor hint (for example <c>password</c>), when it declares one.</summary>
+    public string? UiHint { get; init; }
+
+    /// <summary>
+    /// Whether the designer masks the input's value: it is sensitive, a credential, or hinted as a password. A masked
+    /// value is never shown, logged or disclosed.
+    /// </summary>
+    public bool IsMasked => IsSensitive || IsCredential || string.Equals(UiHint, "password", StringComparison.OrdinalIgnoreCase);
+}

@@ -39,7 +39,7 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 - [x] T023 Property, expression and credential context in the active-draft snapshot, bounded, with resource content marked as untrusted (FR-016, FR-017, FR-031).
 - [x] T024 Graph read by scope path, and graph activities by definition and version (FR-014).
-- [x] T025 Expression Module routing, or an unavailable outcome. Explanation guidance names the revision it describes and uses only the designer's diagnostics (FR-016, FR-018).
+- [x] T025 Expression interpretation, semantic diagnostics and edits unconditionally unavailable (routing to an Expression Module deferred to #3711). Explanation guidance names the revision it describes and uses only the designer's diagnostics (FR-016, FR-018).
 - [x] T026 Remove the `workflows.proposal` renderer, the explain-executable prompt and `getExecutableDetail`. Add the registered-reference behaviour test (FR-019, SC-007).
 - [x] T027 Glossary entries in `Studio/CONTEXT.md` (FR-035).
 - [ ] T028 Probe case `workflow-explain` with a canary search, and a Playwright journey (SC-005).

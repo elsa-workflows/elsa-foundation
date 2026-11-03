@@ -94,7 +94,7 @@ export function collectSelectedActivityContext(node: ActivityNode, descriptor: S
     if (value.kind === "expression") budget -= value.content.length;
     properties.push({
       name: bounded(input.name, 256) ?? referenceKey, referenceKey,
-      typeName: (readTypeName(input) ?? "").slice(0, 256), isCredential, isSensitive, value
+      typeName: clip(readTypeName(input) ?? "", 256), isCredential, isSensitive, value
     });
   }
   const truncated = properties.length < new Set(inputs.map(input => getInputPropertyName(input))).size
@@ -113,7 +113,7 @@ function describeValue(node: ActivityNode, input: StudioActivityInputDescriptor,
   } else {
     const expression = isPlainRecord(stored) && isPlainRecord(stored.expression) ? stored.expression : null;
     if (!expression) return { kind: "unset" };
-    expressionType = typeof expression.type === "string" && expression.type.trim() ? expression.type.slice(0, 128) : "Literal";
+    expressionType = typeof expression.type === "string" && expression.type.trim() ? clip(expression.type, 128) : "Literal";
     value = expression.value;
   }
   if (expressionType === secretSyntax) {
@@ -135,9 +135,14 @@ export interface WorkflowGraphActivityReference {
   nodes: number[];
 }
 
+/** The provenance a design-authored (graph) activity version carries: it is published from an Activity Definition draft. */
+export const designAuthoredSourceKind = "ActivityDefinitionDraft";
+
 /**
  * The graph activities the draft uses (FR-014), by their activity definition identity and exact version, with the indexes
- * of the activities that use each. A graph activity's body is its definition's, so it is never inlined here.
+ * of the activities that use each. A graph activity's body is its definition's, so it is never inlined here. Only
+ * design-authored versions count: a source-owned (CLR or Json) activity also has a definition identity, and recommended
+ * definitions decorate its catalog row with it, but its behavior is code, not a graph.
  */
 export function collectGraphActivityReferences(activities: Array<{ id: string }>, versionOf: (nodeId: string) => string | undefined,
   catalogByVersion: Map<string, ActivityCatalogItem>): WorkflowGraphActivityReference[] {
@@ -146,7 +151,7 @@ export function collectGraphActivityReferences(activities: Array<{ id: string }>
     const versionId = versionOf(activity.id);
     const item = versionId ? catalogByVersion.get(versionId) : undefined;
     const definitionId = bounded(item?.activityDefinitionId, 256);
-    if (!versionId || !item || !definitionId) return;
+    if (!versionId || !item || !definitionId || item.provenance?.sourceKind !== designAuthoredSourceKind) return;
     const existing = references.get(versionId);
     if (existing) existing.nodes.push(index);
     else if (references.size < maxGraphActivities)
@@ -180,6 +185,7 @@ export function hostSerializedLength(value: unknown) {
  * size guard measures this.
  */
 export function admittedSnapshotLength(content: Record<string, unknown>) {
+  // As the server bounds them (`value[..256]`), which may cut a pair; its writer escapes a lone surrogate, never throws.
   const text = (value: unknown) => typeof value === "string" ? value.slice(0, 256) : "";
   const admitted: Record<string, unknown> = {
     workflowDefinitionId: content.workflowDefinitionId, draftId: content.draftId, revision: content.revision, selectedNodeId: content.selectedNodeId ?? null
@@ -206,7 +212,7 @@ function readTypeName(input: StudioActivityInputDescriptor) {
 }
 
 function boundedReference(reference: SecretReferenceView): SecretReferenceView {
-  return { name: reference.name.slice(0, 256), typeName: bounded(reference.typeName, 256), scope: bounded(reference.scope, 256) };
+  return { name: clip(reference.name, 256), typeName: bounded(reference.typeName, 256), scope: bounded(reference.scope, 256) };
 }
 
 function bounded(value: string | null | undefined, limit: number) {
@@ -214,8 +220,11 @@ function bounded(value: string | null | undefined, limit: number) {
   return clip(value, limit);
 }
 
-/** Cuts text to at most `limit` UTF-16 units without splitting a surrogate pair. */
-function clip(text: string, limit: number) {
+/**
+ * Cuts text to at most `limit` UTF-16 units without splitting a surrogate pair: a lone surrogate would reach the server as
+ * malformed UTF-16, which it refuses.
+ */
+export function clip(text: string, limit: number) {
   if (text.length <= limit) return text;
   const cut = text.slice(0, limit);
   const last = cut.charCodeAt(cut.length - 1);

@@ -10,17 +10,20 @@ On each actual adapter, explaining and troubleshooting the active draft must rea
   Expression Module registers Weaver tools; a credential literal is only present and withheld;
 - a snapshot that discloses a credential input's value (as a non-credential literal) is refused at admission with the
   module's own reason, before any provider call;
-- the credential canary that the working state holds appears in no disclosed payload, stream frame, adapter trace or
-  retained evidence;
 - the actual packaged Studio (browser.mjs, workflow-explain) discloses the selected input's expression, the designer's own
-  diagnostic for it and an unsaved hand edit, attributed to the working-state revision it read, and never saves.
+  diagnostic for it and an unsaved hand edit, attributed to the working-state revision it read; then the reader types a
+  credential canary into a password-hinted input through the editor's own masked field, as an unsaved edit, and the
+  next read discloses that input only as withheld; nothing is saved;
+- that canary, which exists only in Studio's working state, appears in no disclosed payload, stream frame, adapter trace,
+  captured browser request or retained evidence of the case, so a regression in Studio's withholding fails the case.
 
 The seeded draft is a root flowchart with a nested flowchart (the consumer's only container activity, so its nested and
 parallel structure is flowchart-in-flowchart); b's text is a Variable expression naming a variable the workflow does not
-declare, so the owner's own draft validation reports it by activity and input. The unsaved working state adds a JavaScript
-expression on the nested activity and two activities of the test-only QualificationBatchCatalog credential activity (the
-consumer's catalog has none of its own): one holding a credential literal (the canary), one bound to a visible Secret
-Reference. The packaged consumer ships no JavaScript Expression Module and no graph activity definition, so JavaScript is
+declare, so the owner's own draft validation reports it by activity and input; it also holds one activity of the test-only
+QualificationBatchCatalog seam's password-hinted activity, with no value (the consumer's catalog has no masked input of
+its own, and Studio offers a credential input only the secret picker, so a literal can be typed only into such an input).
+The native unsaved working state adds a JavaScript expression on the nested activity and two activities of the seam's
+credential activity: one holding a credential literal, one bound to a visible Secret Reference. The packaged consumer ships no JavaScript Expression Module and no graph activity definition, so JavaScript is
 disclosed by type and content only, and no graph activity reference is disclosed (graph activities are covered by the
 server and Studio unit tests). The native turns send the open editor's snapshot as Studio's bridge builds it from that
 working state (workflowExplainContext.ts). Nothing is retried.
@@ -42,7 +45,7 @@ from artifacts import TOOL, check, sha
 from authorization_journeys import select_command
 from batch_journeys import CREDENTIAL, SEAM_FEATURE
 from journey_runtime import browser_inputs, same
-from owner_resources import EXPLAIN_MISSING_VARIABLE, UNRESOLVED_VARIABLE, capability_links, owner_path, seed_batch_workflow
+from owner_resources import EXPLAIN_MISSING_VARIABLE, PASSWORD_ACTIVITY, UNRESOLVED_VARIABLE, capability_links, owner_path, seed_batch_workflow
 from runtime import RUNTIME_ENVIRONMENT, private_json
 from truth_seam_journeys import same_target
 
@@ -94,6 +97,8 @@ def working_state(seed, canary):
         n["inner"]: {"version": write["activityVersionId"], "inputs": {"text": wrapped("JavaScript", JAVASCRIPT)}},
         LITERAL_NODE: {"version": CREDENTIAL["activityVersionId"], "inputs": {CREDENTIAL["input"]: wrapped("Literal", canary)}},
         SECRET_NODE: {"version": CREDENTIAL["activityVersionId"], "inputs": {CREDENTIAL["input"]: wrapped("Secret", dict(SECRET_REFERENCE))}},
+        # Seeded with no value; only the browser journey types a value into it.
+        PASSWORD_ACTIVITY["nodeId"]: {"version": PASSWORD_ACTIVITY["activityVersionId"], "inputs": {}},
     }
 
 
@@ -163,7 +168,8 @@ def admitted_selection(selected):
 
 def _order(seed):
     n = seed["nodes"]
-    return [n["root"], n["a"], n["b"], n["nested"], n["inner"], LITERAL_NODE, SECRET_NODE]
+    # The designer's own order: the seeded tree depth first, then the unsaved activities added to the root.
+    return [n["root"], n["a"], n["b"], n["nested"], n["inner"], PASSWORD_ACTIVITY["nodeId"], LITERAL_NODE, SECRET_NODE]
 
 
 def expected_addresses(seed):
@@ -179,20 +185,22 @@ def explain_snapshot(seed, revision, state, catalog, diagnostics, omitted, selec
     order = _order(seed)
     types = {seed["writeLine"]["activityVersionId"]: (seed["writeLine"]["activityTypeKey"], seed["writeLine"]["displayName"]),
              flow["activityVersionId"]: (flow["activityTypeKey"], flow["displayName"]),
-             CREDENTIAL["activityVersionId"]: (CREDENTIAL["activityTypeKey"], "Qualification credential activity")}
+             CREDENTIAL["activityVersionId"]: (CREDENTIAL["activityTypeKey"], "Qualification credential activity"),
+             PASSWORD_ACTIVITY["activityVersionId"]: (PASSWORD_ACTIVITY["activityTypeKey"], "Qualification password activity")}
     activities = [{"id": node, "type": types[state[node]["version"]][0], "displayName": types[state[node]["version"]][1]} for node in order]
     versions = {}
     for index, node in enumerate(order):
         versions.setdefault(state[node]["version"], []).append(index)
     members = lambda nodes: [{"id": flow["slot"], "mode": "flowchart", "cardinality": "many", "nodes": [order.index(node) for node in nodes]}]
     structure = {"versions": [{"id": key, "nodes": value} for key, value in versions.items()], "containers": [
-        {"id": n["root"], "parentId": None, "slot": None, "slots": members([n["a"], n["b"], n["nested"], LITERAL_NODE, SECRET_NODE])},
+        {"id": n["root"], "parentId": None, "slot": None, "slots": members([n["a"], n["b"], n["nested"], PASSWORD_ACTIVITY["nodeId"], LITERAL_NODE, SECRET_NODE])},
         {"id": n["nested"], "parentId": n["root"], "slot": flow["slot"], "slots": members([n["inner"]])}]}
     content = {"workflowDefinitionId": seed["definitionId"], "draftId": seed["draftId"], "revision": revision, "selectedNodeId": selected,
                "workingState": "draft", "activities": activities, "structure": structure,
                "connections": [{"source": n["a"], "target": n["b"], "sourcePort": "Done"}, {"source": n["a"], "target": n["nested"], "sourcePort": "Done"}],
                "positions": [{"nodeId": n["a"], "x": 120, "y": 160}, {"nodeId": n["b"], "x": 420, "y": 160}, {"nodeId": n["nested"], "x": 120, "y": 420},
-                             {"nodeId": n["inner"], "x": 80, "y": 80}, {"nodeId": LITERAL_NODE, "x": 720, "y": 160}, {"nodeId": SECRET_NODE, "x": 720, "y": 420}],
+                             {"nodeId": n["inner"], "x": 80, "y": 80}, {"nodeId": PASSWORD_ACTIVITY["nodeId"], "x": 720, "y": 160},
+                             {"nodeId": LITERAL_NODE, "x": 960, "y": 160}, {"nodeId": SECRET_NODE, "x": 960, "y": 420}],
                "secretReferences": [dict(SECRET_REFERENCE)], "diagnostics": diagnostics}
     if omitted: content["diagnosticsOmitted"] = omitted
     if selected is not None:
@@ -302,10 +310,10 @@ def require_disclosure_refused(response, marker):
 
 
 BROWSER_JOURNEY = "workflow-explain"
-BROWSER_STEPS = ("before", "after")
+BROWSER_STEPS = ("before", "after", "masked")
 BROWSER_OBSERVATIONS = {"explainCompleted": True, "selectedExpressionType": "Variable", "interpretation": INTERPRETATION,
                         "diagnosticOnSelectedInput": True, "autosaveOff": True, "revisionChanged": True, "positionFollowed": True,
-                        "draftUnchanged": True, "owningWrites": 0}
+                        "maskedTyped": True, "maskedWithheld": True, "canaryAbsentInPage": True, "draftUnchanged": True, "owningWrites": 0}
 
 
 def require_explain_browser(observed, commands, rows, *, provider):
@@ -369,12 +377,16 @@ def _catalog(runtime, name, seed):
     check(record["status"] == 200, "The designer's catalog read failed")
     entries = json.loads(data).get("activities")
     inputs = {}
-    for version in (seed["writeLine"]["activityVersionId"], seed["flowchart"]["activityVersionId"], CREDENTIAL["activityVersionId"]):
+    for version in (seed["writeLine"]["activityVersionId"], seed["flowchart"]["activityVersionId"], CREDENTIAL["activityVersionId"],
+                    PASSWORD_ACTIVITY["activityVersionId"]):
         matches = [entry for entry in entries if isinstance(entry, dict) and entry.get("activityVersionId") == version]
         check(len(matches) == 1 and isinstance(matches[0].get("inputs"), list), "The designer's catalog does not list exactly one " + version)
         inputs[version] = matches[0]["inputs"]
     check(any(item.get("referenceKey") == CREDENTIAL["input"] and item.get("isCredential") is True for item in inputs[CREDENTIAL["activityVersionId"]]),
           "The qualification credential activity has no credential input")
+    check(any(item.get("referenceKey") == PASSWORD_ACTIVITY["input"] and str(item.get("uiHint") or "").lower() == "password"
+              and item.get("isSensitive") is not True and item.get("isCredential") is not True for item in inputs[PASSWORD_ACTIVITY["activityVersionId"]]),
+          "The qualification password activity has no input that only its password hint masks")
     return inputs, [capability, record["receipt"]]
 
 
@@ -441,7 +453,7 @@ def _native(runtime, name, seed, canary):
     return records, evidence
 
 
-def _browser(runtime, name, seed):
+def _browser(runtime, name, seed, canary):
     """Runs the actual browser journey as the workflow's manager (the admin) with a fresh normal-login state of its own."""
     _, identity = runtime.sign_in()
     root = runtime.output(name)
@@ -449,8 +461,11 @@ def _browser(runtime, name, seed):
     n = seed["nodes"]
     workflow = {key: seed[key] for key in ("definitionId", "draftId", "definitionPath", "draftPath", "validationPath")}
     workflow["activityId"] = n["b"]
+    # The canary travels in the private configuration only (never browser-inputs evidence): the driver types it into the
+    # masked field, so it exists only in Studio's working state.
     workflow.update(nodes=n, explain={"property": "text", "expressionType": "Variable", "diagnosticType": UNRESOLVED_VARIABLE,
-                                      "interpretation": INTERPRETATION, "moveNode": n["a"]})
+                                      "interpretation": INTERPRETATION, "moveNode": n["a"], "maskedNode": PASSWORD_ACTIVITY["nodeId"],
+                                      "maskedProperty": PASSWORD_ACTIVITY["input"], "maskedLabel": PASSWORD_ACTIVITY["label"], "canary": canary})
     config = {"journey": BROWSER_JOURNEY, "provider": runtime.provider, "studioOrigin": runtime.studio_origin,
               "backendOrigin": runtime.backend_origin, "storageState": identity["storageState"],
               "commandFile": str(runtime.command_file), "output": str(output), "workflow": workflow}
@@ -470,6 +485,9 @@ def _browser(runtime, name, seed):
     value = require_explain_browser(observed, commands, trace["records"], provider=runtime.provider)
     evidence = [*observed["evidence"], observed["ownerBefore"], observed["ownerAfter"], {"path": str(observation), "sha256": sha(observation)},
                 runtime.save(root, "browser-inputs", browser_inputs(config)), trace["receipt"]]
+    # The typed canary in no captured browser request, agent stream, owner read, adapter trace or other browser evidence.
+    value["canarySearch"] = {"files": require_no_canary_in_evidence(evidence, canary, runtime.run.root), "found": 0}
+    _no_canary(canary, trace["records"])
     return value, evidence
 
 
@@ -492,13 +510,13 @@ def _case(runtime, provider):
     evidence = list(runtime.select_provider(provider))
     canary = "CANARY-CREDENTIAL-" + uuid.uuid4().hex
     runtime.sign_in()
-    seed = seed_batch_workflow(runtime.backend, runtime.output(name + "-workflow") / "workflow-seed", unresolved_variable=True)
+    seed = seed_batch_workflow(runtime.backend, runtime.output(name + "-workflow") / "workflow-seed", explain=True)
     evidence.extend(seed["evidence"])
     evidence.extend(runtime.apply_features(name + "-select-seam", {SEAM_FEATURE: (True, {})}))
     try:
         native, native_evidence = _native(runtime, name, seed, canary)
         evidence.extend(native_evidence)
-        browser, browser_evidence = _browser(runtime, name + "-browser", seed)
+        browser, browser_evidence = _browser(runtime, name + "-browser", seed, canary)
         evidence.extend(browser_evidence)
     finally:
         evidence.extend(runtime.apply_features(name + "-deselect-seam", {SEAM_FEATURE: (False, {})}))

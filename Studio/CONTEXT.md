@@ -217,7 +217,7 @@ A structured set of changes to a working state, a workflow draft or a Reusable W
 _Avoid_: Execution, save, publish
 
 **Context Kind**:
-A module-owned, versioned description of one kind of Studio context that Weaver may read, such as `workflow.definition` for the active draft. Each Context Kind declares its own bounds and the revision identity it is attributed to; its content is resource data, never guidance.
+A module-owned, versioned description of one kind of Studio context that Weaver may read, such as `workflow.definition` for the active draft. Each Context Kind declares its own bounds and the revision identity it is attributed to. Resource content, such as a workflow's names, descriptions and expression text, is untrusted data, kept distinct from installed-module guidance, which a module contributes as its own kind (for example `workflow.guidance`).
 _Avoid_: Attachment type, prompt context
 
 **Weaver Tool**:

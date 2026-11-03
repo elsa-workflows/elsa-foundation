@@ -166,16 +166,22 @@ says so.
   disclosed, as is a Secret syntax that names no Secret); or `secretReference` (name, type and scope). A sensitive input
   never carries content, a credential input is always sensitive, and the properties carry at most 16 KiB of content
   together. On admission the server stamps `interpretation: "unavailable"` on every non-literal expression: interpretation,
-  semantic diagnostics and edits belong to the owning Expression Module's Weaver Tools (Studio ADR 0002), and no Expression
-  Module registers any; an editor cannot claim another status. During collection the property context is checked against
+  semantic diagnostics and edits belong to the owning Expression Module's Weaver Tools (Studio ADR 0002), and they are
+  unconditionally unavailable here: no contract maps an expression type to an Expression Module's tools, so routing is
+  deferred to [#3711](https://github.com/elsa-workflows/elsa-foundation/issues/3711); an editor cannot claim another status. During collection the property context is checked against
   the owning catalog's declared inputs for that exact version (read once per collection and shared with the
-  `workflow.catalog` attachment): an undeclared input, a different credential flag, or a catalog-sensitive input reported
-  as not sensitive refuses the snapshot; an editor may mask more (a password hint), never less. When the catalog cannot
+  `workflow.catalog` attachment): an undeclared input, a different credential flag, an entry of another activity type than the activity's own, or a catalog-masked input (`IActivityAuthoringCatalog` input `IsMasked`: sensitive, a credential or hinted `password`) reported
+  as not sensitive refuses the snapshot; an editor may mask more, never less. A property context requires the structure,
+  which binds the selected node to its exact version; without it the snapshot is refused (Studio drops the property
+  context before the structure). Studio discloses it only from the descriptor of the node's exact catalog version. When the catalog cannot
   answer for the version (denied, unavailable or not listed) the property context is left out and the optional
   `agent.workflow.property_context_unverified` diagnostic says so; the draft is still explained.
 - **Graph activities** (FR-014). `graphActivities`: at most 64 references, each the `activityDefinitionId`, exact
   `activityVersionId` and `version`, and the activity indexes that use it (each index at most once, and in the
-  structure's version). A graph activity's body belongs to its definition and is never inlined.
+  structure's version). A graph activity's body belongs to its definition and is never inlined. Studio lists only
+  design-authored versions (catalog provenance `ActivityDefinitionDraft`): the native witness on 999942f18 showed that
+  recommended definitions also give CLR rows (Flowchart, WriteLine) a definition identity, which must not make them graph
+  activities. The server cannot confirm provenance (the Core catalog entry carries none), so this rule is Studio's.
 - **Scope paths** (FR-014). `workflow_read_graph` returns the admitted snapshot plus `addresses`: for each activity, its
   `scopePath` (the container ids from the root to the container that holds it, as an Operation Batch names a scope) and
   its `slot`; the root's path is empty. The addresses are bounded to 24 KiB, and `addressesTruncated` says when some were
@@ -189,7 +195,8 @@ says so.
   fixture (`workflowExplainSnapshot.json` records it; `WorkflowExplainContextTests` holds the server to it). On a chained
   flowchart with GUID catalog versions the structure is kept up to 120 activities (32,496 characters admitted), left out
   from 121 (31,695 without it), and from 126 activities (32,995 even without structure) the snapshot does not fit the
-  host budget at all and is refused (`agent.context.budget_exceeded`); `workflowContextSize.test.tsx` pins these.
+  host budget at all and is refused (`agent.context.budget_exceeded`); `workflowContextSize.test.tsx` pins these. Lifting
+  that limit is [#3710](https://github.com/elsa-workflows/elsa-foundation/issues/3710).
 - **Expression edits** stay refused at preparation (`agent.workflow.batch.expression_unsupported`), consistent with the
   unavailable interpretation.
 - **Guidance** names the revision rule (an explanation names the revision it read and never attributes an answer to
@@ -206,11 +213,13 @@ says so.
 - **Studio side.** `Elsa.Studio.Weaver.Workflows` no longer registers the `workflows.proposal` renderer (no tool
   produced that kind, and it was registered under the Workflows module's identity), the explain-executable prompt (it
   named a `get-executable-detail` tool that was never registered; slice F restores it against `workflow_read_executable`)
-  or the test-only `getExecutableDetail` helper. Its propose-update prompt now asks for one reviewed Operation Batch.
+  or the test-only `getExecutableDetail` helper, nor the explain-instance prompt (it named instance state, incidents and
+  bookmarks with no instance context or tool; slice G restores it). Its propose-update prompt now asks for one reviewed Operation Batch.
 
 **SemVer.** The snapshot additions, the read result's `addresses` and the new diagnostic code are **Minor** (optional,
-additive). The removed `workflows.proposal` renderer and explain-executable prompt are **Major** for any host that
-dispatched them (pre-GA cleanup, constitution §4.2).
+additive). The removed `workflows.proposal` renderer and the explain-executable and explain-instance prompts are
+**Major** for any host that dispatched them (pre-GA cleanup, constitution §4.2). The removed `ai-context-providers` and
+`ai-tools` manifest tags are a Patch correction (no such contribution ever existed).
 
 ## Removed legacy seams
 

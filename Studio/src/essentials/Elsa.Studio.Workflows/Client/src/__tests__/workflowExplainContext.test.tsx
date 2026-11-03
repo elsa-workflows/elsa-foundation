@@ -6,7 +6,7 @@ import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge, workflowContextCandidateBudget } from "../workflow-editor/useWorkflowContextBridge";
-import { admittedSnapshotLength, collectWorkflowContextDiagnostics, hostSerializedLength, workflowPropertyContentBudget, workflowPropertyContentLimit } from "../workflow-editor/workflowExplainContext";
+import { admittedSnapshotLength, clip, collectWorkflowContextDiagnostics, hostSerializedLength, workflowPropertyContentBudget, workflowPropertyContentLimit } from "../workflow-editor/workflowExplainContext";
 import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { flowchartActivity, writeLine } from "./fixtures";
 import shared from "./workflowExplainSnapshot.json";
@@ -29,7 +29,8 @@ const apiActivity: ActivityCatalogItem = {
 };
 const approval: ActivityCatalogItem = {
   ...writeLine, activityVersionId: "activity-approval-v3", activityTypeKey: "Acme.Approval", displayName: "Approval", version: "3",
-  activityDefinitionId: "definition-approval", activityDefinitionVersionId: "activity-approval-v3", activityDefinitionVersion: "3"
+  activityDefinitionId: "definition-approval", activityDefinitionVersionId: "activity-approval-v3", activityDefinitionVersion: "3",
+  provenance: { sourceKind: "ActivityDefinitionDraft", sourceId: "draft-approval" }
 };
 const catalogByVersion = new Map([writeLine, flowchartActivity, apiActivity, approval].map(item => [item.activityVersionId, item]));
 
@@ -86,6 +87,14 @@ function snapshot(draft: WorkflowDraft, options: { selected?: ActivityNode | nul
   flushSync(() => root.unmount());
   return attachment.content as Record<string, unknown>;
 }
+
+// Non-ASCII, the characters the server's writer escapes (`<&+'\``), a surrogate pair, control characters and DEL, and a
+// quote inside a string, so a drift between the size guard's estimate and the host's measure fails the shared fixture.
+const sharedErrors: ValidationError[] = [
+  { path: "api/inputs/url", type: "Expressions/UnresolvedVariable", message: "Variable 'orderId' is not visible from this activity's scope.", severity: "Error" },
+  { path: "inner", type: "Structure/DisconnectedNode", message: "Approval is not connected.", severity: "Warning" },
+  { path: "api", type: "Workflow/Note", message: "Größe <a&b> + `c` \"quoted\" 🚀 tab\t line\n bell\u0007 del\u007f é", severity: "Warning" }
+];
 
 type Property = { referenceKey: string; isCredential: boolean; isSensitive: boolean; value: Record<string, unknown> };
 
@@ -149,6 +158,27 @@ describe("workflow explain context", () => {
     expect(omitted).toBe(6);
   });
 
+  it("never lists a source-owned activity as a graph activity, although recommendations give it a definition identity", () => {
+    // As observed natively: recommended definitions decorate CLR rows (WriteLine, Flowchart) with their definition ids.
+    const clrWriteLine: ActivityCatalogItem = { ...writeLine, activityDefinitionId: "definition-write-line", activityDefinitionVersionId: writeLine.activityVersionId,
+      provenance: { sourceKind: "CLR", sourceId: "/published/" } };
+    const decorated = new Map([...catalogByVersion, [clrWriteLine.activityVersionId, clrWriteLine]]);
+    const plain: ActivityNode = { nodeId: "plain", activityVersionId: clrWriteLine.activityVersionId, inputs: [], outputs: [] };
+    const agent = createAgentRegistry();
+    const controller = registerWorkflowAgent(agent);
+    function Probe() {
+      useWorkflowContextBridge({ controller, clientId: agent.clientId, details: { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails,
+        draft: draftWith([plain]), selectedNode: null, selectedNodeId: null, selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null,
+        inspectedIsScopeOwner: false, catalogByVersion: decorated });
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    flushSync(() => root.render(<Probe />));
+    const content = controller.snapshot!.content as { graphActivities: Array<{ activityDefinitionId: string }> };
+    flushSync(() => root.unmount());
+    expect(content.graphActivities.map(item => item.activityDefinitionId)).toEqual(["definition-approval"]);
+  });
+
   it("references graph activities by definition identity and version, never their bodies", () => {
     const content = snapshot(draftWith([apiNode()]));
     const activities = content.activities as Array<{ id: string }>;
@@ -175,23 +205,57 @@ describe("workflow explain context", () => {
   it("produces exactly the shared snapshot the server admits against the owning catalog", () => {
     // Elsa.Agent.Tests (WorkflowExplainContextTests) admits this same content strictly; a drift on either side fails one suite.
     const node = apiNode();
-    const errors: ValidationError[] = [
-      { path: "api/inputs/url", type: "Expressions/UnresolvedVariable", message: "Variable 'orderId' is not visible from this activity's scope.", severity: "Error" },
-      { path: "inner", type: "Structure/DisconnectedNode", message: "Approval is not connected.", severity: "Warning" }
-    ];
-    const content = snapshot(draftWith([node]), { selected: node, validationErrors: errors });
+    const content = snapshot(draftWith([node]), { selected: node, validationErrors: sharedErrors });
     expect(content).toEqual(shared.content);
     // The size guard's estimate of the host's measure; the server test holds the real measure to the same number.
     expect(admittedSnapshotLength(content)).toBe(shared.admittedLength);
+    expect(JSON.stringify(content)).toContain("🚀");
     expect(JSON.stringify(content)).not.toContain(canary);
     // The catalog the server checks against declares the same inputs the designer's descriptor does.
     expect(shared.catalog[0].inputs.map(input => [input.referenceKey, input.isCredential]))
       .toEqual(apiActivity.inputs.map(input => { const item = input as { referenceKey: string; isCredential?: boolean }; return [item.referenceKey, item.isCredential === true]; }));
   });
 
+  it("never cuts a surrogate pair, so the server never receives malformed UTF-16", () => {
+    expect(clip("ab🚀", 3)).toBe("ab");
+    expect(clip("ab🚀", 4)).toBe("ab🚀");
+    // A Literal whose cut would fall inside a pair stops before it.
+    const long = "x".repeat(workflowPropertyContentLimit - 1) + "🚀🚀";
+    const node = apiNode({ url: wrapped("Literal", long) });
+    const value = (snapshot(draftWith([node]), { selected: node }).selectedActivity as { properties: Property[] }).properties[0].value as { content: string; truncated: boolean };
+    expect(value.content).toHaveLength(workflowPropertyContentLimit - 1);
+    expect(value.truncated).toBe(true);
+  });
+
+  it("leaves the property context out when the selected node's exact version is not in the catalog", () => {
+    // The designer then inspects it with another version's descriptor, whose inputs the server would refuse as undeclared.
+    const node = { ...apiNode(), activityVersionId: "activity-api-call-v0" };
+    const agent = createAgentRegistry();
+    const controller = registerWorkflowAgent(agent);
+    const details = { definition: { id: "definition", name: "Orders" } } as WorkflowDefinitionDetails;
+    function Probe() {
+      useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: draftWith([node]), selectedNode: node, selectedNodeId: node.nodeId,
+        selectedDescriptor: descriptorOf(apiActivity), inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion });
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    flushSync(() => root.render(<Probe />));
+    const content = controller.snapshot!.content as Record<string, unknown>;
+    flushSync(() => root.unmount());
+    expect(content.selectedNodeId).toBe("api");
+    expect(content).not.toHaveProperty("selectedActivity");
+  });
+
   it("measures the host's escaped serialization, not the browser's", () => {
     expect(hostSerializedLength({ text: "a<b" })).toBe(JSON.stringify({ text: "a<b" }).length + 5);
     expect(hostSerializedLength({ text: "é" })).toBe(JSON.stringify({ text: "é" }).length + 5);
+    // A surrogate pair is two escaped units; control characters are escaped alike by both writers; DEL and a quote
+    // inside a string are escaped only by the server's (`\u007F`, `\u0022`).
+    expect(hostSerializedLength("🚀")).toBe(JSON.stringify("🚀").length + 10);
+    expect(hostSerializedLength("\u0001\n\t")).toBe(JSON.stringify("\u0001\n\t").length);
+    expect(hostSerializedLength("\u007f")).toBe(JSON.stringify("\u007f").length + 5);
+    expect(hostSerializedLength('say "hi"')).toBe(JSON.stringify('say "hi"').length + 8);
+    expect(hostSerializedLength("back\\slash")).toBe(JSON.stringify("back\\slash").length);
   });
 });
 

@@ -7,7 +7,7 @@ import type {
 
 // Every prompt and renderer below is registered under this package's own module identity, and names only tools and
 // result kinds the Workflows packages register (spec 1193 FR-019, SC-007). The explain-executable prompt returns with the
-// Executable read tool it needs (slice F).
+// Executable read tool it needs (slice F), and the explain-instance prompt with the Run context and tool (slice G).
 const moduleId = "Elsa.Studio.Weaver.Workflows";
 
 export function register(api: ElsaStudioModuleApi) {
@@ -84,21 +84,6 @@ export function register(api: ElsaStudioModuleApi) {
       mode: "enqueue",
       attachments: [createAttachment("workflow-definition", readReferenceId(context), context)],
       source: { moduleId, actionId: "weaver.workflows.propose-update", label: "Propose workflow update" }
-    })
-  });
-
-  api.agent.promptActions.add({
-    id: "weaver.workflows.explain-instance",
-    label: "Explain instance",
-    description: "Ask Weaver to explain workflow instance state and history when instance data is available.",
-    moduleId,
-    placement: "empty-state",
-    contextKind: "workflow-instance",
-    createPrompt: context => ({
-      message: "Explain how to reason about workflow instances in this Studio view. If an instance is attached, summarize its state, incidents, bookmarks, and next actions.",
-      mode: "enqueue",
-      attachments: [createAttachment("workflow-instance", readReferenceId(context), context)],
-      source: { moduleId, actionId: "weaver.workflows.explain-instance", label: "Explain workflow instance" }
     })
   });
 

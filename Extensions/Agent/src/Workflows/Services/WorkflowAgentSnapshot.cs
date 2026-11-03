@@ -135,8 +135,18 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     }
 
     internal static string? Text(JsonElement body, string property) =>
-        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() : null;
+        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(property, out var value) ? String(value) : null;
+
+    /// <summary>
+    /// The element's string, or null when it is not a string or holds malformed UTF-16 (a lone surrogate escape), which
+    /// <see cref="JsonElement.GetString"/> would throw on: such a value is refused like any other malformed field.
+    /// </summary>
+    internal static string? String(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.String) return null;
+        try { return value.GetString(); }
+        catch (InvalidOperationException) { return null; }
+    }
     internal static bool Number(JsonElement body, string property, out double number)
     {
         number = 0;
@@ -252,7 +262,7 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
             if (reservedItems.ValueKind != JsonValueKind.Array || reservedItems.GetArrayLength() > 256) return false;
             foreach (var item in reservedItems.EnumerateArray())
             {
-                var id = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+                var id = String(item);
                 if (!ValidString(id) || indexOf.ContainsKey(id!) || reserved.Contains(id!)) return false;
                 reserved.Add(id!);
             }
@@ -303,7 +313,7 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     {
         value = null;
         if (!body.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null) return true;
-        value = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+        value = String(element);
         return value is not null && value.Length <= 256;
     }
     private static string Bounded(string? value) => value is null ? string.Empty : value[..Math.Min(value.Length, 256)];

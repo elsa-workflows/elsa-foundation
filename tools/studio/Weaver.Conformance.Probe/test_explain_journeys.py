@@ -12,11 +12,11 @@ from explain_journeys import (BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CONTROL, CO
                               expected_addresses, explain_manifest_gaps, explain_snapshot, property_context, require_disclosure_refused,
                               require_explain_browser, require_explain_turn, require_no_canary_in_evidence, require_workflow_explain,
                               synthetic_browser, synthetic_native, synthetic_search, working_state)
-from owner_resources import EXPLAIN_MISSING_VARIABLE, UNRESOLVED_VARIABLE
+from owner_resources import EXPLAIN_MISSING_VARIABLE, PASSWORD_ACTIVITY, UNRESOLVED_VARIABLE
 
-# The shape owner_resources.seed_batch_workflow(unresolved_variable=True) returns.
+# The shape owner_resources.seed_batch_workflow(explain=True) returns.
 SEED = {"definitionId": "wf-1", "draftId": "draft-1",
-        "nodes": {"root": "batch-flow", "a": "batch-a", "b": "batch-b", "nested": "batch-nested", "inner": "batch-inner"},
+        "nodes": {"root": "batch-flow", "a": "batch-a", "b": "batch-b", "nested": "batch-nested", "inner": "batch-inner", "masked": "batch-masked"},
         "writeLine": {"activityTypeKey": "Elsa.Activities.Primitives.Activities.WriteLine", "version": "1.0.0", "activityVersionId": "write-v1", "displayName": "Write Line"},
         "flowchart": {"activityTypeKey": "Elsa.Activities.Flowchart.Activities.Flowchart", "version": "1.0.0", "activityVersionId": "flow-v1",
                       "displayName": "Flowchart", "slot": "elsa.flowchart.structure:activities", "mode": "flowchart"},
@@ -27,7 +27,9 @@ SEED = {"definitionId": "wf-1", "draftId": "draft-1",
 # The owner catalog's declared inputs, as the designer's catalog read lists them.
 CATALOG = {"write-v1": [{"referenceKey": "text", "name": "Text", "type": "String", "isSensitive": False, "isCredential": False}],
            "flow-v1": [],
-           CREDENTIAL["activityVersionId"]: [{"referenceKey": CREDENTIAL["input"], "name": "ApiKey", "type": "String", "isSensitive": True, "isCredential": True}]}
+           CREDENTIAL["activityVersionId"]: [{"referenceKey": CREDENTIAL["input"], "name": "ApiKey", "type": "String", "isSensitive": True, "isCredential": True}],
+           PASSWORD_ACTIVITY["activityVersionId"]: [{"referenceKey": "password", "name": "Password", "type": "String", "uiHint": "password",
+                                                     "isSensitive": False, "isCredential": False}]}
 CANARY = "CANARY-CREDENTIAL-" + "5" * 32
 COMMAND = "command-1"
 
@@ -123,6 +125,13 @@ class ExplainSnapshotTests(unittest.TestCase):
         self.assertEqual(([], None), addresses["batch-flow"])
         self.assertEqual((["batch-flow"], SEED["flowchart"]["slot"]), addresses[LITERAL_NODE])
         self.assertEqual((["batch-flow", "batch-nested"], SEED["flowchart"]["slot"]), addresses["batch-inner"])
+        self.assertEqual((["batch-flow"], SEED["flowchart"]["slot"]), addresses[PASSWORD_ACTIVITY["nodeId"]])
+
+    def test_a_password_hinted_input_is_masked_and_the_seeded_one_holds_no_value(self):
+        state = {"version": PASSWORD_ACTIVITY["activityVersionId"], "inputs": {"password": {"expression": {"type": "Literal", "value": CANARY}}}}
+        value = property_context("p", state, CATALOG[PASSWORD_ACTIVITY["activityVersionId"]])["properties"][0]
+        self.assertEqual((True, {"kind": "withheld", "expressionType": "Literal"}), (value["isSensitive"], value["value"]))
+        self.assertEqual({}, working_state(SEED, CANARY)[PASSWORD_ACTIVITY["nodeId"]]["inputs"])
 
 
 class ExplainTurnTests(unittest.TestCase):
@@ -200,20 +209,21 @@ class ExplainBrowserTests(unittest.TestCase):
     def observed(self, **changes):
         return {"journey": BROWSER_JOURNEY, "status": "passed", "provider": "copilot", "observations": copy.deepcopy(BROWSER_OBSERVATIONS),
                 "ownerBefore": {"path": "/x", "sha256": "0"}, "ownerAfter": {"path": "/y", "sha256": "0"}, "evidence": [{"path": "/z"}],
-                "commands": {"before": "c-1", "after": "c-2"}, **changes}
+                "commands": {"before": "c-1", "after": "c-2", "masked": "c-3"}, **changes}
 
     def commands(self):
-        return [{"commandId": "c-1", "toolName": READ_TOOL, "arguments": {}}, {"commandId": "c-2", "toolName": READ_TOOL, "arguments": {}}]
+        return [{"commandId": command, "toolName": READ_TOOL, "arguments": {}} for command in ("c-1", "c-2", "c-3")]
 
     def rows(self):
-        return rows(command="c-1") + rows(command="c-2")
+        return rows(command="c-1") + rows(command="c-2") + rows(command="c-3")
 
     def test_the_editors_journey_is_checked_against_the_adapter_trace(self):
         self.assertEqual(BROWSER_OBSERVATIONS, require_explain_browser(self.observed(), self.commands(), self.rows(), provider="copilot")["observations"])
         for observed, commands, trace in (
                 (self.observed(observations={**BROWSER_OBSERVATIONS, "draftUnchanged": False}), self.commands(), self.rows()),
-                (self.observed(commands={"before": "c-1", "after": "c-1"}), self.commands(), self.rows()),
-                (self.observed(), [{**self.commands()[0], "arguments": {"x": 1}}, self.commands()[1]], self.rows()),
+                (self.observed(commands={"before": "c-1", "after": "c-1", "masked": "c-3"}), self.commands(), self.rows()),
+                (self.observed(observations={**BROWSER_OBSERVATIONS, "maskedWithheld": False}), self.commands(), self.rows()),
+                (self.observed(), [{**self.commands()[0], "arguments": {"x": 1}}, *self.commands()[1:]], self.rows()),
                 (self.observed(), self.commands(), rows(command="c-1")),
                 (self.observed(status="failed"), self.commands(), self.rows())):
             with self.assertRaises(RuntimeError): require_explain_browser(observed, commands, trace, provider="copilot")

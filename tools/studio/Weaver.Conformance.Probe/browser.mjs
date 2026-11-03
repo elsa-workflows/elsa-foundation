@@ -1784,6 +1784,9 @@ async function workflowExplain() {
     "The selected input's expression was not disclosed by type, content and the unavailable interpretation: " + JSON.stringify(property ?? null));
   const diagnostic = (content.diagnostics ?? []).find(item => item.nodeId === nodes.b && item.property === explain.property && item.type === explain.diagnosticType);
   need(diagnostic, "The designer's diagnostic for the selected input was not disclosed.");
+  // The packaged consumer has no design-authored (graph) activity: its CLR activities, though recommendations give them
+  // definition identities, are never disclosed as graph activities.
+  need(!("graphActivities" in content), "A source-owned activity was disclosed as a graph activity.");
 
   // A hand edit with autosave off: the working state changes and stays unsaved.
   const writes = owningWrites.length;
@@ -1801,6 +1804,36 @@ async function workflowExplain() {
   const exported = (working.layout ?? []).find(item => item.nodeId === explain.moveNode);
   need(exported && exported.x === moved.x && exported.y === moved.y, "The admitted position is not the editor's working state.");
   need(owningWrites.length === writes, "The hand edit was saved although autosave was off.");
+
+  // A credential canary typed into the editor's own masked field of a password-hinted input, as an unsaved edit after the
+  // export above, so it exists only in Studio's working state. The read discloses the input only as withheld.
+  const canary = explain.canary;
+  need(typeof canary === "string" && canary.length >= 24 && explain.maskedNode && explain.maskedLabel && explain.maskedProperty,
+    "The explanation journey needs the masked input and its canary.");
+  // The dock shares the editor's width, so the inspector may be collapsed beside it: close the dock, select the activity
+  // and expand the inspector through its own control, type, then reopen the dock (the conversation is kept).
+  await dock().getByRole("button", { name: "Close assistant", exact: true }).click();
+  await expect(dock()).toBeHidden();
+  await node(explain.maskedNode).click({ position: { x: 12, y: 12 } });
+  await expect(node(explain.maskedNode)).toHaveClass(/\bselected\b/);
+  const expand = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+  if (await expand.count()) await nativeEnter("inspector-expand", expand, "Expand inspector panel");
+  const field = page.locator('input[type="password"][aria-label=' + JSON.stringify(explain.maskedLabel) + ']');
+  await expect(field).toHaveCount(1);
+  await field.fill(canary);
+  result.evidence.push(retain("masked-interaction", { method: "keyboard-fill", nodeId: explain.maskedNode, input: explain.maskedProperty, length: canary.length }));
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await expect(dock()).toBeVisible();
+  const masked = await ask("masked");
+  const maskedContent = masked.content ?? {};
+  need(maskedContent.selectedNodeId === explain.maskedNode && maskedContent.selectedActivity?.nodeId === explain.maskedNode,
+    "The admitted context does not describe the masked activity.");
+  const withheld = (maskedContent.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.maskedProperty);
+  need(withheld?.isSensitive === true && withheld.value?.kind === "withheld" && Object.keys(withheld.value).sort().join() === "expressionType,kind",
+    "The typed masked value was not disclosed only as withheld: " + JSON.stringify(withheld?.value?.kind ?? null));
+  // In-page search: nothing the page sent to or received from the agent API carries the canary.
+  need(!JSON.stringify(requests).includes(canary) && !JSON.stringify(masked).includes(canary), "The typed canary left the browser's working state.");
+  need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
   const after = await owner("owner-after", definitionPath);
   result.ownerAfter = after.receipt;
   expect(after.value.draft).toEqual(before.value.draft);
@@ -1808,7 +1841,8 @@ async function workflowExplain() {
   await screenshot("explained");
   result.commands = commands;
   result.observations = { explainCompleted: true, selectedExpressionType: property.value.expressionType, interpretation: property.value.interpretation,
-    diagnosticOnSelectedInput: true, autosaveOff: true, revisionChanged: true, positionFollowed: true, draftUnchanged: true, owningWrites: owningWrites.length };
+    diagnosticOnSelectedInput: true, autosaveOff: true, revisionChanged: true, positionFollowed: true, maskedTyped: true, maskedWithheld: true,
+    canaryAbsentInPage: true, draftUnchanged: true, owningWrites: owningWrites.length };
 }
 
 function xpathString(value) {

@@ -122,13 +122,19 @@ def _container(entry):
 # that does not exist, so the owner's own draft validation reports it by activity and input.
 EXPLAIN_MISSING_VARIABLE = "qualification-missing-variable"
 UNRESOLVED_VARIABLE = "Expressions/UnresolvedVariable"
+# It also holds one activity of the QualificationBatchCatalog seam's password-hinted activity, with no value: the browser
+# journey types a credential canary into that masked input as an unsaved edit, so the canary only ever exists in Studio's
+# working state. The seam's entries are not persisted versions, so the owner's validation also reports it as unknown.
+PASSWORD_ACTIVITY = {"activityVersionId": "qualification-password-activity-v1", "activityTypeKey": "Qualification.PasswordActivity",
+                     "input": "password", "label": "Qualification password", "nodeId": "batch-masked"}
 
 
-def seed_batch_workflow(http, output, *, unresolved_variable=False):
+def seed_batch_workflow(http, output, *, explain=False):
     """Create the real nested draft the Operation Batch journeys address: a root flowchart holding two Write Lines and a
     nested flowchart that holds a third, connected a -> b and a -> nested. Retains the catalog entries and slot identities.
-    With unresolved_variable (the explanation journeys) b's text is a Variable expression naming a variable the workflow does
-    not declare, and the owner's validation must report exactly that input; the batch journeys require a clean draft."""
+    With explain (the explanation journeys) b's text is a Variable expression naming a variable the workflow does not
+    declare, and the owner's validation must report exactly that input, and the root also holds the seam's password-hinted
+    activity with no value; the batch journeys require a clean draft."""
     output = _new_output(output)
     activities, activity_capability = capability_links(http, "elsa.api.activity-design", output / "activities")
     workflows, workflow_capability = capability_links(http, "elsa.api.workflow-design", output / "workflows")
@@ -155,19 +161,21 @@ def seed_batch_workflow(http, output, *, unresolved_variable=False):
     n = BATCH_NODES
     nested = flow(n["nested"], [leaf(n["inner"], "Inside the nested flowchart")], [], n["inner"])
     second = leaf(n["b"], "Second")
-    if unresolved_variable:
+    if explain:
         second["inputs"] = [{"referenceKey": "text", "value": {"value": {"referenceKey": EXPLAIN_MISSING_VARIABLE, "declaringScopeId": "workflow"},
                                                                "expressionType": "Variable"}}]
-    root = flow(n["root"], [leaf(n["a"], "First"), second, nested],
+    masked = [{"nodeId": PASSWORD_ACTIVITY["nodeId"], "activityVersionId": PASSWORD_ACTIVITY["activityVersionId"], "inputs": [], "outputs": [],
+               "structure": None}] if explain else []
+    root = flow(n["root"], [leaf(n["a"], "First"), second, nested, *masked],
                 [{"id": "batch-a-b", "source": {"nodeId": n["a"], "port": "Done"}, "target": {"nodeId": n["b"]}},
                  {"id": "batch-a-nested", "source": {"nodeId": n["a"], "port": "Done"}, "target": {"nodeId": n["nested"]}}], n["a"])
     request = {
-        "operationKey": str(uuid.uuid4()), "name": ("Weaver explain witness " if unresolved_variable else "Weaver batch witness ") + uuid.uuid4().hex[:8],
-        "description": ("Owned spec 1193 explanation qualification" if unresolved_variable else "Owned spec 1193 Operation Batch qualification")
+        "operationKey": str(uuid.uuid4()), "name": ("Weaver explain witness " if explain else "Weaver batch witness ") + uuid.uuid4().hex[:8],
+        "description": ("Owned spec 1193 explanation qualification" if explain else "Owned spec 1193 Operation Batch qualification")
                        + "; no runtime dispatch or publication.",
         "initialState": {"variables": [], "inputs": [], "outputs": [], "rootActivity": root},
         "layout": [{"nodeId": n["a"], "x": 120, "y": 160}, {"nodeId": n["b"], "x": 420, "y": 160}, {"nodeId": n["nested"], "x": 120, "y": 420},
-                   {"nodeId": n["inner"], "x": 80, "y": 80}],
+                   {"nodeId": n["inner"], "x": 80, "y": 80}, *([{"nodeId": PASSWORD_ACTIVITY["nodeId"], "x": 720, "y": 160}] if explain else [])],
         "activityPresentation": []}
     request_receipt = _retain(output, "create-request", request)
     definitions_path = owner_path(http, workflows["workflow-definitions"])
@@ -182,7 +190,7 @@ def seed_batch_workflow(http, output, *, unresolved_variable=False):
     observed_receipt = _retain(output, "owner-readback", observed)
     validations, _ = http.json(owner_path(http, workflows["workflow-draft-validations"], draftId=draft_id))
     validation_receipt = _retain(output, "validation-readback", validations)
-    if unresolved_variable:
+    if explain:
         check(validations["draftId"] == draft_id and any(item.get("nodeId") == n["b"] and item.get("member") == "inputs/text"
                                                          and item.get("code") == UNRESOLVED_VARIABLE for item in validations["errors"]),
               "The owner's validation does not report the explanation seed's unresolved variable on b's text")
@@ -191,7 +199,7 @@ def seed_batch_workflow(http, output, *, unresolved_variable=False):
     return {"definitionId": definition_id, "draftId": draft_id, "definitionPath": definition_path, "validations": validations["errors"],
             "draftPath": owner_path(http, workflows["workflow-drafts"], draftId=draft_id),
             "validationPath": owner_path(http, workflows["workflow-draft-validations"], draftId=draft_id),
-            "nodes": dict(n), "writeLine": {"activityTypeKey": write["activityTypeKey"], "version": write["version"],
+            "nodes": {**n, **({"masked": PASSWORD_ACTIVITY["nodeId"]} if explain else {})}, "writeLine": {"activityTypeKey": write["activityTypeKey"], "version": write["version"],
                                             "activityVersionId": write["activityVersionId"], "displayName": write["displayName"]},
             "flowchart": {"activityTypeKey": flowchart["activityTypeKey"], "version": flowchart["version"], "activityVersionId": flowchart["activityVersionId"],
                           "displayName": flowchart["displayName"], "slot": container["slot"], "mode": container["mode"]},

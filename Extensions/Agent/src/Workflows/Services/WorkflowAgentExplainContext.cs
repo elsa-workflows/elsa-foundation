@@ -67,9 +67,10 @@ internal static class WorkflowAgentExplainContext
         if (!Only(value, ["nodeId", "activityVersionId", "truncated", "properties"], ["nodeId", "activityVersionId", "truncated", "properties"])) return false;
         var nodeId = WorkflowAgentSnapshot.Text(value, "nodeId");
         var versionId = WorkflowAgentSnapshot.Text(value, "activityVersionId");
-        // Property context describes the selected activity only, in the version the structure gives it.
+        // Property context describes the selected activity only, in the exact version the structure binds it to. Without the
+        // structure that version is unbound, so the property context is refused (Studio drops it before the structure).
         if (nodeId is null || nodeId != selectedNodeId || !Bounded(versionId, 256)
-            || structure is not null && (!structure.TryGetValue(nodeId, out var node) || node.ActivityVersionId != versionId)
+            || structure is null || !structure.TryGetValue(nodeId, out var node) || node.ActivityVersionId != versionId
             || !Boolean(value, "truncated", out var truncated))
             return false;
         var items = value.GetProperty("properties");
@@ -145,7 +146,7 @@ internal static class WorkflowAgentExplainContext
                     return false;
                 // The editor cannot claim an Expression Module's interpretation; the server stamps it again on admission.
                 if (value.TryGetProperty("interpretation", out var interpretation)
-                    && (interpretation.ValueKind != JsonValueKind.String || interpretation.GetString() != InterpretationUnavailable))
+                    && WorkflowAgentSnapshot.String(interpretation) != InterpretationUnavailable)
                     return false;
                 property = property with { Kind = kind, ExpressionType = type, Content = content, Truncated = truncated, Length = length };
                 return true;
@@ -285,7 +286,7 @@ internal static class WorkflowAgentExplainContext
     {
         text = null;
         if (!value.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null) return true;
-        text = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+        text = WorkflowAgentSnapshot.String(element);
         return Bounded(text, limit);
     }
 }

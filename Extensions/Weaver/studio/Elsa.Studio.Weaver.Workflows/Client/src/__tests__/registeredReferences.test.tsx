@@ -78,6 +78,10 @@ describe("registered references of the Workflows packages (spec 1193 SC-007)", (
       expect(slots.has(contract.slotId)).toBe(true);
       for (const id of contract.resultRendererIds ?? []) expect([contract.id, id, rendererIds.has(id)]).toEqual([contract.id, id, true]);
     }
+    // And every server tool that runs in the browser's working state has the client contract that executes it.
+    const contracts = new Set(workflows.toolContracts.list().map(item => item.id));
+    for (const tool of server.tools.filter(item => item.executionLocation === "clientWorkingState"))
+      expect([tool.name, contracts.has(tool.name)]).toEqual([tool.name, true]);
   });
 
   it("names only registered tools, capabilities and context kinds in every prompt and starter", () => {

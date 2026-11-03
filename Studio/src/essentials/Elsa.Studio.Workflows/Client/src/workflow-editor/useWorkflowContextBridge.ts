@@ -157,7 +157,12 @@ export function buildWorkflowSnapshotContent(draft: WorkflowDraft, catalogByVers
   const parts = options.parts ?? collectWorkflowSnapshotParts(draft, catalogByVersion);
   const diagnostics = collectWorkflowContextDiagnostics(options.validationErrors ?? draft.validationErrors ?? []);
   const graphActivities = collectGraphActivityReferences(parts.activities, nodeId => parts.versionOf.get(nodeId), catalogByVersion);
+  // Property context only from the descriptor of the node's exact catalog version. When that version is not in the
+  // catalog the designer falls back to another version's descriptor (resolveActivityDescriptor), whose inputs the server
+  // would rightly refuse as undeclared, so the property context is left out instead.
+  const exact = options.selectedNode ? catalogByVersion.get(options.selectedNode.activityVersionId) : undefined;
   const selected = options.selectedNode && options.selectedDescriptor && options.selectedNode.nodeId === options.selectedNodeId
+    && exact && options.selectedDescriptor.typeName === exact.activityTypeKey
     ? collectSelectedActivityContext(options.selectedNode, options.selectedDescriptor) : null;
   const { versionOf: _versions, ...drafted } = parts;
   const content: Record<string, unknown> = {

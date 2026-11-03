@@ -97,7 +97,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             if (snapshot.SelectedActivity is { } selected)
             {
                 catalogRead ??= await WorkflowActivityCatalog.ReadAsync(catalogs, cancellationToken, logger);
-                var verified = VerifyProperties(selected, catalogRead);
+                var verified = VerifyProperties(selected, snapshot.Structure![selected.NodeId].Type, catalogRead);
                 if (verified is false)
                 {
                     diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_invalid",
@@ -272,20 +272,23 @@ internal sealed class DefaultWorkflowAgentContextProvider(
     }
 
     /// <summary>
-    /// Whether the selected activity's property context agrees with the owning catalog's declared inputs: true when every
-    /// disclosed property is a declared input of that exact version with the same credential flag, and reported sensitive
-    /// whenever the catalog declares it sensitive (the editor may mask more, never less); false on any disagreement; null
-    /// when the catalog cannot answer for that version (denied, unavailable or not listed).
+    /// Whether the selected activity's property context agrees with the owning catalog's declared inputs: true when the
+    /// exact version's entry is of the activity's own type, and every disclosed property is a declared input of it with the
+    /// same credential flag, reported masked whenever the designer masks it (sensitive, a credential or hinted as a
+    /// password; the editor may mask more, never less); false on any disagreement; null when the catalog cannot answer for
+    /// that version (denied, unavailable or not listed).
     /// </summary>
-    internal static bool? VerifyProperties(WorkflowAgentSelectedActivity selected, WorkflowActivityCatalog.Read catalog)
+    internal static bool? VerifyProperties(WorkflowAgentSelectedActivity selected, string activityType, WorkflowActivityCatalog.Read catalog)
     {
         if (catalog.Status != WorkflowActivityCatalog.Status.Available) return null;
         var entries = catalog.Entries.Where(entry => entry.ActivityVersionId == selected.ActivityVersionId).ToArray();
         if (entries.Length != 1) return null;
+        // A version id of another activity type would carry another activity's declared inputs.
+        if (entries[0].ActivityTypeKey != activityType) return false;
         foreach (var property in selected.Properties)
         {
             var input = entries[0].Inputs.FirstOrDefault(item => item.ReferenceKey == property.ReferenceKey);
-            if (input is null || input.IsCredential != property.IsCredential || (input.IsSensitive || input.IsCredential) && !property.IsSensitive)
+            if (input is null || input.IsCredential != property.IsCredential || input.IsMasked && !property.IsSensitive)
                 return false;
         }
         return true;

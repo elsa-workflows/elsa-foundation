@@ -15,6 +15,8 @@ describe("weaver workflows module", () => {
     const api = testApi(); register(api);
     expect(api.agent.resultRenderers.list().flatMap(item => item.resultTypes)).not.toContain("workflows.proposal");
     expect(api.agent.promptActions.list().map(item => item.id)).not.toContain("weaver.workflows.explain-executable");
+    // Instance state, incidents and bookmarks have no context or tool until the Run journey (slice G).
+    expect(api.agent.promptActions.list().map(item => item.id)).not.toContain("weaver.workflows.explain-instance");
   });
 
   it("asks for one reviewed Operation Batch, never a direct update, and grounds risk findings in the designer's diagnostics", () => {
