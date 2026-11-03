@@ -462,7 +462,7 @@ Evidence categories:
 - **P**: deterministic provider-protocol native evidence. It uses the actual Copilot (delegated) and Anthropic (host-driven) adapters, with packaged consumers on the packaged EF store over SQLite, and drives each journey through the normal host in a real browser (`tools/studio/Weaver.Conformance.Probe`). Its cases are named `{copilot,anthropic}-workflow-<journey>`.
 - **Live**: live-provider evidence. None is claimed.
 
-The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The native proofs ran on `f0b244f51`, slice G's integrated head with slices E and F and `main`. Commits after it change only documentation and this record.
+The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The native proofs ran on `8e5657d39`, slice G's final integrated head with slices E and F and `main`. Commits after it change only this record.
 
 | #3442 item | Evidence |
 | --- | --- |
@@ -485,6 +485,6 @@ The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #373
 | Fail-closed replacement authorizer: unavailable versus denied | C: `WorkflowAuthorizationUnavailableTests`, `AgentOwnerUnavailableTests`, `AgentContextOwnerUnavailableTests`, `AgentRetainedOutcomeAdmissionTests`, `workflow-authorization-unavailable.spec.ts`. P: `workflow-authorization-unavailable` on both adapters. C: `test_authorization_journeys.py` |
 
 Final-head proofs:
-- **Complete package witness:** 107 of 107 cases, no gaps, `independentPackageWitness: true`, report SHA-256 `2474e1450f573f64488d94099179a299c32bcb630db25520bff45ff3fe6c0e2a`. The attempt on `2cfeced8f` failed because a feature apply's shell reload raced the configuration file watcher; `ShellReloader` now retries that CShells refusal, at most three attempts in all.
+- **Complete package witness:** 107 of 107 cases, no gaps, `independentPackageWitness: true`, report SHA-256 `631345d80a9e41406b86d5048e313ef450b468fc7516bd2d408a56d15e313d98`. An earlier head, `f0b244f51`, also passed 107 of 107. The attempt on `2cfeced8f` failed because a feature apply's shell reload raced the configuration file watcher; `ShellReloader` now retries that CShells refusal, at most three attempts in all.
 - **Composed Studio suite:** 948 tests: 942 passed, 6 skipped, 0 failed, 0 flaky. The 6 skips are opt-in screenshot captures that run only when asked: `activity-icons`, `elsa3-reusable-import`, `home`, `nav-placement` and two in `settings-shell`.
 - **Required CI:** the closing PR merges only once `Build & test`, `Generated maps fresh` and `Full tier` are green on its exact head, including CI's own independent package witness. That run is recorded on the PR.
