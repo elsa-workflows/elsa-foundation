@@ -176,6 +176,7 @@
           "BackgroundActivities": {},
           "SpecialistsRuntime": {},
           "SpecialistsEntityFrameworkCore": {},
+          "SpecialistsInspectionApi": {},
           "Connections": {},
           "ConnectionsApi": {},
           "ConnectionsDesign": {},

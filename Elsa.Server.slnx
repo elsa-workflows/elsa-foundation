@@ -21,6 +21,9 @@
     <Project Path="Extensions/Agent/src/Specialists/JsonSchema/Elsa.Agent.Specialists.JsonSchema.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Agent/src/Specialists/Inspection/">
+    <Project Path="Extensions/Agent/src/Specialists/Inspection/Api/Elsa.Agent.Specialists.Inspection.Api.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Agent/src/Specialists/Review/">
     <Project Path="Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/Elsa.Agent.Specialists.Review.csproj" />
