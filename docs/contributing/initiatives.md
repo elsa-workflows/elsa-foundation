@@ -2,7 +2,7 @@
 
 An **initiative** is how people plan an objective that needs architecture decisions before anyone builds it. Technical
 architects analyse, propose decisions as ADR pull requests and agree on them. Then the specs are defined, and only then
-is the work built. One GitHub issue, labelled `initiative`, is the check-in point: anyone who opens it can see where
+is the work built. One GitHub issue of the **Initiative** [issue type](https://docs.github.com/en/issues/tracking-your-work-with-issues/configuring-issues/managing-issue-types-in-an-organization) is the check-in point: anyone who opens it can see where
 the initiative stands, where they are needed and how to contribute.
 
 The [Initiative Coordination](../skills/catalog.md#initiative-coordination) skill (`elsa-initiative`) carries out every
@@ -24,7 +24,7 @@ This repository has two planning systems. They are kept separate on purpose.
 |---|---|---|
 | Led by | A coordinator and the initiative's approvers | A steward, with human or agent execution |
 | Answers | Which architecture decisions and specs an objective needs | Which mid-term buckets of work are active |
-| Lives in | One issue labelled `initiative`, its ADR PRs and its specs | `docs/program-goals/` and `type:program` issues |
+| Lives in | One issue of type Initiative, its ADR PRs and its specs | `docs/program-goals/` and `type:program` issues |
 | A decision is | An ADR PR agreed under its approval plan | As each program records it |
 
 The two systems keep distinct responsibilities over **shared** specs, issues and PRs: an initiative decides what an
@@ -35,7 +35,7 @@ Both systems hand work to the same way of working: a spec goes through the
 [Speckit flow](../skills/catalog.md#speckit-flow-guide), and issues are claimed and delivered through Issue Bus Lite
 and [triage](../agents/triage-labels.md).
 
-**Boundary rule.** Work belongs to an initiative when its issue is a sub-issue of an `initiative`-labelled issue (at
+**Boundary rule.** Work belongs to an initiative when its issue is a sub-issue of an issue of type Initiative (at
 any depth), or when the issue or PR says `Part of #N` and #N is that issue or one of its sub-issues. A PR belongs to it
 through the issues it closes or its `Part of #N`. Such work follows this page. All other work follows the existing
 rules and is never pulled into an initiative. The initiative skill does not change program-goal files.

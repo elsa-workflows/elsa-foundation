@@ -86,7 +86,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 |---|---|
 | Feature development | [Speckit flow](docs/skills/catalog.md#speckit-flow-guide) and [task path](docs/contributing/task-paths.md#feature-development) |
 | Architecture development | [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or [Work Unit Planner](docs/skills/catalog.md#work-unit-planner) |
-| Work on or linked to an `initiative`-labelled issue | [Initiative Coordination](docs/skills/catalog.md#initiative-coordination) and [initiatives](docs/contributing/initiatives.md) |
+| Work on or linked to an issue of type Initiative | [Initiative Coordination](docs/skills/catalog.md#initiative-coordination) and [initiatives](docs/contributing/initiatives.md) |
 | Codebase verification | [Verify Codebase Against Constitution](docs/skills/catalog.md#verify-codebase-against-constitution) |
 | Backend e2e tests | [Backend e2e tests](docs/contributing/task-paths.md#backend-e2e-tests) and [e2e-tests/README.md](e2e-tests/README.md) |
 | Constitution review of a change | [Review checklist](docs/contributing/review-checklist.md) |
