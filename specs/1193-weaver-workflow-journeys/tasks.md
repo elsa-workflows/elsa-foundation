@@ -54,7 +54,7 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 - [x] T033 `workflows.create-dialog` context and the prefill tool (FR-023).
 - [x] T034 `workflows.template-list` and `workflows.template-editor` contexts, and template batches through the template adapter (FR-024).
 - [x] T035 [P] Tests and EF provider-contract tests. Update the catalogs (FR-034).
-- [ ] T036 Probe cases `workflow-library` and `workflow-templates`, and Playwright journeys (SC-008).
+- [x] T036 Probe cases `workflow-library` and `workflow-templates`, and Playwright journeys (SC-008).
 
 ## Slice F: Versions and Executables (story 8)
 
