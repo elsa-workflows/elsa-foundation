@@ -52,14 +52,14 @@ public sealed class WorkflowDeploymentShapeTests
     }
 
     [Fact]
-    public async Task A_combined_host_serves_version_and_Executable_journeys_side_by_side()
+    public async Task A_combined_host_serves_version_Executable_and_Run_journeys_side_by_side()
     {
         using var root = Compose(runtime: true);
         using var scope = root.CreateScope();
         var session = await SessionAsync(scope);
 
         var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
-            Request(session, WorkflowVersionAgentTests.Reference("definition-1", "v2"), Executable()));
+            Request(session, WorkflowVersionAgentTests.Reference("definition-1", "v2"), Executable(), Run()));
 
         Assert.True(collected.Succeeded, collected.Error?.Message);
         Assert.Empty(collected.Value!.Diagnostics);
@@ -67,9 +67,13 @@ public sealed class WorkflowDeploymentShapeTests
         var executable = Assert.Single(collected.Value.Attachments, item => item.ContentType == "workflows.executable");
         Assert.Equal(("workflows.version-context", "workflows.executable-context"), (version.ContributorId, executable.ContributorId));
         Assert.Equal(new AgentResourceTarget(Module, "workflow-executable", "artifact-1", "sha256:artifact"), executable.Target);
+        var run = Assert.Single(collected.Value.Attachments, item => item.ContentType == "workflows.run");
+        Assert.Equal(("workflows.run-context", new AgentResourceTarget(Module, "workflow-run", "run-1", "run-1")), (run.ContributorId, run.Target));
         var tools = await Tools(scope);
         Assert.Contains("workflow_read_version", tools);
         Assert.Contains("workflow_read_executable", tools);
+        Assert.Contains("workflow_read_run", tools);
+        Assert.Contains("workflow.run-explain", await Capabilities(scope));
         Assert.Contains("workflow.version-explain", await Capabilities(scope));
         Assert.Contains("workflow.executable-explain", await Capabilities(scope));
     }
@@ -83,6 +87,7 @@ public sealed class WorkflowDeploymentShapeTests
         if (!runtime) return;
         new FoundationWorkflowsRuntimeAgentFeature().ConfigureServices(services);
         services.AddSingleton<IWorkflowExecutableInspection>(new Inspection());
+        services.AddSingleton<IWorkflowRunInspection>(new RunInspection());
     });
 
     private static async Task<AgentSession> SessionAsync(IServiceScope scope) =>
@@ -113,6 +118,15 @@ public sealed class WorkflowDeploymentShapeTests
         new("workflows.run:run-1", "workflow-run", "run-1", "Run", "workflows.run", AgentContextSensitivity.Internal, "screen", "Workflow Run",
             JsonSerializer.SerializeToElement(new { workflowExecutionId = "run-1", activityExecutionId = (string?)null }), new Dictionary<string, string>())
         { ModuleId = Module, SchemaVersion = "1", Target = new(Module, "workflow-run", "run-1", "run-1"), Origin = AgentContextOrigin.ClientSnapshot };
+
+    private sealed class RunInspection : IWorkflowRunInspection
+    {
+        public ValueTask<WorkflowRunInspectionDetails?> GetAsync(WorkflowRunInspectionRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowRunInspectionDetails?>(request.WorkflowExecutionId != "run-1" ? null : new(
+                new("run-1", "artifact-1", "sha256:artifact", "definition-1", "v2", "2.0.0", "Faulted", null, "Production", true, DateTimeOffset.UnixEpoch,
+                    DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, null, 0, 0, 0, 0, null, null),
+                [], new([], 0, null), null, true, true, "Durable", "activity-level", DateTimeOffset.UnixEpoch));
+    }
 
     private sealed class Inspection : IWorkflowExecutableInspection
     {

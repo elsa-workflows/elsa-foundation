@@ -1,15 +1,22 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Agent.Workflows.Services;
 
 /// <summary>
-/// The version tool's own structural reading of an exact version's authored state, and its own comparison of two exact
-/// versions (spec 1193 R6). Children are projected only by the owning activity modules' structure handlers, through the
-/// activity structure service; connections are read from a container's structure as the conventional <c>connections</c>
-/// list of source and target node ids and ports (the shape the Runtime inspector also reads). Input values never leave this
-/// class: only their names, and whether they differ.
+/// Weaver's own structural reading of an exact version's authored state, and its own comparison of two exact versions,
+/// computed over two reads from the owning design services (spec 1193 R6). Children are projected only by the owning
+/// activity modules' structure handlers, through the activity structure service; a container whose structure no installed
+/// handler projects is reported as an incomplete reading, never as having no children. Connections are read from a
+/// container's structure as the conventional <c>connections</c> list of source and target node ids and ports (the shape the
+/// Runtime inspector also reads), each with the container's metadata for it (<c>connectionMetadata</c> by connection id), and
+/// a child's metadata in its container (<c>nodeMetadata</c> by node id) belongs to that child. The rest of a container's
+/// structure (its start node, cases and variables) is compared as one normalized signature, with the projected children,
+/// the connections and that per-element metadata taken out. The order of a slot's children is compared only for an ordered
+/// container: a container that wires its children with connections (a flowchart) runs them by its connections, so the order
+/// of its list carries no meaning. Input and output values never leave this class: only their names, and whether they differ.
 /// </summary>
 internal static class WorkflowVersionStructure
 {
@@ -17,32 +24,75 @@ internal static class WorkflowVersionStructure
     internal const int WalkLimit = 2000;
     internal const int ListLimit = 100;
     private const int DepthLimit = 64;
+    private const int ReasonLimit = 10;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     internal sealed record Activity(string NodeId, string ActivityVersionId, IReadOnlyList<string> ScopePath, string? Slot,
-        IReadOnlyDictionary<string, string> Inputs, IReadOnlyDictionary<string, string> Outputs);
+        IReadOnlyDictionary<string, string> Inputs, IReadOnlyDictionary<string, string> Outputs, string? Intrinsic, string Placement,
+        string? Structure, IReadOnlyDictionary<string, IReadOnlyList<string>> SlotOrder, string? ContainerMetadata);
 
-    internal sealed record Connection(string Container, string Source, string? SourcePort, string Target, string? TargetPort);
+    /// <summary>One connection by its endpoints; its container's metadata for it is compared, never part of its identity.</summary>
+    internal sealed record Connection(string Container, string Source, string? SourcePort, string Target, string? TargetPort)
+    {
+        public string? Metadata { get; init; }
+        public bool Equals(Connection? other) => other is not null && Container == other.Container && Source == other.Source
+            && SourcePort == other.SourcePort && Target == other.Target && TargetPort == other.TargetPort;
+        public override int GetHashCode() => HashCode.Combine(Container, Source, SourcePort, Target, TargetPort);
+    }
 
-    internal sealed record Flattened(IReadOnlyList<Activity> Activities, IReadOnlyList<Connection> Connections, bool Truncated);
+    /// <summary>
+    /// One version's reading. <c>Truncated</c>: the walk stopped at its bound. <c>Incomplete</c>: some container's children
+    /// could not be projected, so the reading (and any comparison over it) does not cover them; the reasons say which.
+    /// </summary>
+    internal sealed record Flattened(IReadOnlyList<Activity> Activities, IReadOnlyList<Connection> Connections, bool Truncated,
+        IReadOnlyList<string> IncompleteReasons)
+    {
+        public bool Incomplete => IncompleteReasons.Count > 0;
+    }
 
     internal static Flattened Flatten(ActivityNode? root, IActivityStructureService structure)
     {
         var activities = new List<Activity>();
         var connections = new List<Connection>();
+        var reasons = new List<string>();
         var truncated = false;
-        void Visit(ActivityNode node, IReadOnlyList<string> scope, string? slot)
+        void Visit(ActivityNode node, IReadOnlyList<string> scope, string? slot, string? containerMetadata)
         {
             if (activities.Count >= WalkLimit || scope.Count > DepthLimit) { truncated = true; return; }
-            activities.Add(new(node.NodeId, node.ActivityVersionId, scope, slot, Arguments(node.Inputs), Arguments(node.Outputs)));
-            connections.AddRange(Connections(node));
+            IReadOnlyCollection<ActivityChildProjection> projections = [];
+            if (node.Structure is { } authored)
+            {
+                if (!structure.HasHandler(authored))
+                    reasons.Add($"No installed structure handler reads '{node.NodeId}' ({authored.Kind} {authored.SchemaVersion}); its children were not read.");
+                else
+                {
+                    try { projections = structure.ProjectChildren(node); }
+                    catch (Exception exception) when (exception is InvalidOperationException or JsonException or ArgumentException or NotSupportedException)
+                    {
+                        reasons.Add($"The structure of '{node.NodeId}' could not be projected; its children were not read.");
+                    }
+                }
+            }
+            var children = projections.SelectMany(item => item.Activities).Select(child => child.NodeId).ToHashSet(StringComparer.Ordinal);
+            var wired = Connections(node).ToArray();
+            var graph = node.Structure?.Payload is { ValueKind: JsonValueKind.Object } payload
+                && payload.TryGetProperty("connections", out var list) && list.ValueKind == JsonValueKind.Array;
+            activities.Add(new(node.NodeId, node.ActivityVersionId, scope, slot, Arguments(node.Inputs), Arguments(node.Outputs),
+                node.Intrinsic is null ? null : JsonSerializer.Serialize(node.Intrinsic, JsonOptions), node.ExecutionPlacement.ToString(),
+                StructureSignature(node.Structure, children),
+                // Only an ordered container's child order is compared (see the summary).
+                graph ? new Dictionary<string, IReadOnlyList<string>>()
+                    : projections.GroupBy(item => item.Name, StringComparer.Ordinal).ToDictionary(group => group.Key,
+                        group => (IReadOnlyList<string>)group.SelectMany(item => item.Activities).Select(child => child.NodeId).ToArray(), StringComparer.Ordinal),
+                containerMetadata));
+            connections.AddRange(wired);
             var inner = scope.Append(node.NodeId).ToArray();
-            foreach (var projection in structure.ProjectChildren(node))
+            foreach (var projection in projections)
                 foreach (var child in projection.Activities)
-                    Visit(child, inner, projection.Name);
+                    Visit(child, inner, projection.Name, Metadata(node.Structure, "nodeMetadata", child.NodeId));
         }
-        if (root is not null) Visit(root, [], null);
-        return new(activities, connections, truncated);
+        if (root is not null) Visit(root, [], null, null);
+        return new(activities, connections, truncated, reasons);
     }
 
     /// <summary>The version section of the tool's result: bounded activities by scope path (input names only) and connections.</summary>
@@ -52,13 +102,20 @@ internal static class WorkflowVersionStructure
         activities = flattened.Activities.Take(limit).Select(Row).ToArray(),
         activitiesTruncated = flattened.Truncated || flattened.Activities.Count > limit,
         connections = flattened.Connections.Take(limit).Select(ConnectionRow).ToArray(),
-        connectionsTruncated = flattened.Truncated || flattened.Connections.Count > limit
+        connectionsTruncated = flattened.Truncated || flattened.Connections.Count > limit,
+        incomplete = flattened.Incomplete,
+        incompleteReasons = flattened.IncompleteReasons.Take(ReasonLimit).ToArray()
     };
 
     /// <summary>
     /// The changes of <paramref name="version"/> relative to <paramref name="comparedTo"/>: activities only in the version
-    /// (added) or only in the compared version (removed), activities in both whose catalog version, scope or authored inputs
-    /// or outputs differ (changed, naming the differing input names), and connections added and removed. Each list is bounded.
+    /// (added) or only in the compared version (removed), and activities in both that changed, each with its aspects:
+    /// <c>activityVersion</c>, <c>inputs</c> (naming the differing inputs), <c>outputs</c>, <c>scope</c> (another container or
+    /// slot), <c>intrinsic</c>, <c>placement</c>, <c>containerMetadata</c> (its metadata in its container, such as a
+    /// flowchart join policy), <c>structure</c> (the container's structure other than its children, connections and their
+    /// metadata, such as its start node or cases) and <c>childOrder</c> (children common to both in another order in a slot
+    /// of an ordered container, named in <c>reorderedSlots</c>); and connections added, removed and changed (the same
+    /// endpoints with other metadata). Each list is bounded.
     /// </summary>
     internal static object Compare(Flattened version, Flattened comparedTo, int limit = ListLimit)
     {
@@ -76,24 +133,44 @@ internal static class WorkflowVersionStructure
             if (inputs.Length > 0) aspects.Add("inputs");
             if (Differing(item.Outputs, other.Outputs).Length > 0) aspects.Add("outputs");
             if (!item.ScopePath.SequenceEqual(other.ScopePath, StringComparer.Ordinal) || item.Slot != other.Slot) aspects.Add("scope");
-            if (aspects.Count > 0) changed.Add(new { nodeId = item.NodeId, scopePath = item.ScopePath, aspects = aspects.Order(StringComparer.Ordinal).ToArray(), inputs });
+            if (item.Intrinsic != other.Intrinsic) aspects.Add("intrinsic");
+            if (item.Placement != other.Placement) aspects.Add("placement");
+            if (item.Structure != other.Structure) aspects.Add("structure");
+            if (item.ContainerMetadata != other.ContainerMetadata) aspects.Add("containerMetadata");
+            var reordered = item.SlotOrder
+                .Where(slot => other.SlotOrder.TryGetValue(slot.Key, out var before)
+                    && !slot.Value.Where(before.Contains).SequenceEqual(before.Where(slot.Value.Contains), StringComparer.Ordinal))
+                .Select(slot => slot.Key).Order(StringComparer.Ordinal).ToArray();
+            if (reordered.Length > 0) aspects.Add("childOrder");
+            if (aspects.Count > 0)
+                changed.Add(new { nodeId = item.NodeId, scopePath = item.ScopePath, aspects = aspects.Order(StringComparer.Ordinal).ToArray(), inputs, reorderedSlots = reordered });
         }
         var mineConnections = version.Connections.ToHashSet();
         var theirConnections = comparedTo.Connections.ToHashSet();
         var connectionsAdded = version.Connections.Where(item => !theirConnections.Contains(item)).Distinct().ToArray();
         var connectionsRemoved = comparedTo.Connections.Where(item => !mineConnections.Contains(item)).Distinct().ToArray();
+        // The same connection in both whose metadata (its label, policy or configuration) changed.
+        var theirByEndpoints = comparedTo.Connections.GroupBy(item => item).ToDictionary(group => group.Key, group => group.First());
+        var connectionsChanged = version.Connections.Distinct()
+            .Where(item => theirByEndpoints.TryGetValue(item, out var before) && before.Metadata != item.Metadata).ToArray();
+        var reasons = version.IncompleteReasons.Concat(comparedTo.IncompleteReasons).Distinct().ToArray();
         return new
         {
             computedBy = "workflow_read_version",
-            note = "This is workflow_read_version's own structural comparison of the two exact versions the workflow design service returned, by node id and "
-                + "scope path. It is not a semantic diff of activity behaviour, and input values are compared without being disclosed.",
+            note = "This is Weaver's own structural comparison (workflow_read_version), computed over the two exact versions the workflow design service "
+                + "returned, by node id and scope path. It is not a semantic diff of activity behaviour, and input and output values are compared without "
+                + "being disclosed." + (reasons.Length > 0 ? " It is incomplete: some containers' children could not be read, so changes inside them are not covered." : ""),
             activitiesAdded = added.Take(limit).Select(Summary).ToArray(),
             activitiesRemoved = removed.Take(limit).Select(Summary).ToArray(),
             activitiesChanged = changed.Take(limit).ToArray(),
             connectionsAdded = connectionsAdded.Take(limit).Select(ConnectionRow).ToArray(),
             connectionsRemoved = connectionsRemoved.Take(limit).Select(ConnectionRow).ToArray(),
-            truncated = version.Truncated || comparedTo.Truncated || new[] { added.Length, removed.Length, changed.Count, connectionsAdded.Length, connectionsRemoved.Length }
-                .Any(count => count > limit)
+            connectionsChanged = connectionsChanged.Take(limit).Select(ConnectionRow).ToArray(),
+            truncated = version.Truncated || comparedTo.Truncated
+                || new[] { added.Length, removed.Length, changed.Count, connectionsAdded.Length, connectionsRemoved.Length, connectionsChanged.Length }
+                .Any(count => count > limit),
+            incomplete = reasons.Length > 0,
+            incompleteReasons = reasons.Take(ReasonLimit).ToArray()
         };
     }
 
@@ -124,6 +201,36 @@ internal static class WorkflowVersionStructure
         return result;
     }
 
+    /// <summary>
+    /// A container's structure without its projected children (a child node object anywhere in the payload) and without its
+    /// connections, which are compared on their own; the kind and schema version are part of it. Object properties are
+    /// ordered, so equal structures read equal.
+    /// </summary>
+    private static string? StructureSignature(ActivityNodeStructure? structure, IReadOnlySet<string> children)
+    {
+        if (structure is null) return null;
+        var payload = JsonNode.Parse(structure.Payload.GetRawText());
+        // The connections and the per-element metadata are compared with the connections and the children they describe.
+        if (payload is JsonObject body)
+            foreach (var key in new[] { "connections", "connectionMetadata", "nodeMetadata" }) body.Remove(key);
+        return JsonSerializer.Serialize(new { kind = structure.Kind, schemaVersion = structure.SchemaVersion, payload = Normalize(payload, children) }, JsonOptions);
+    }
+
+    private static JsonNode? Normalize(JsonNode? node, IReadOnlySet<string> children) => node switch
+    {
+        JsonObject value when IsChild(value, children) => JsonValue.Create("child"),
+        JsonObject value => new JsonObject(value.OrderBy(property => property.Key, StringComparer.Ordinal)
+            .Select(property => KeyValuePair.Create(property.Key, Normalize(property.Value, children)))),
+        JsonArray items => new JsonArray(items.Where(item => item is not JsonObject child || !IsChild(child, children)).Select(item => Normalize(item, children)).ToArray()),
+        null => null,
+        _ => node.DeepClone()
+    };
+
+    // A projected child as the payload embeds it: an activity node object (node id and catalog version) the handler projected.
+    private static bool IsChild(JsonObject value, IReadOnlySet<string> children) =>
+        value.TryGetPropertyValue("nodeId", out var id) && id is JsonValue nodeId && nodeId.TryGetValue<string>(out var text) && children.Contains(text)
+        && value.ContainsKey("activityVersionId");
+
     private static IEnumerable<Connection> Connections(ActivityNode node)
     {
         if (node.Structure?.Payload is not { ValueKind: JsonValueKind.Object } payload
@@ -132,8 +239,17 @@ internal static class WorkflowVersionStructure
         {
             if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("source", out var source) || !item.TryGetProperty("target", out var target)) continue;
             if (Endpoint(source) is not { } from || Endpoint(target) is not { } to) continue;
-            yield return new(node.NodeId, from.NodeId, from.Port, to.NodeId, to.Port);
+            var id = item.TryGetProperty("id", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+            yield return new(node.NodeId, from.NodeId, from.Port, to.NodeId, to.Port) { Metadata = id is null ? null : Metadata(node.Structure, "connectionMetadata", id) };
         }
+    }
+
+    // A container's metadata entry for one element (a child or a connection) by its id, as normalized JSON text, or null.
+    private static string? Metadata(ActivityNodeStructure? structure, string property, string key)
+    {
+        if (structure?.Payload is not { ValueKind: JsonValueKind.Object } payload || !payload.TryGetProperty(property, out var map)
+            || map.ValueKind != JsonValueKind.Object || !map.TryGetProperty(key, out var entry)) return null;
+        return Normalize(JsonNode.Parse(entry.GetRawText()), new HashSet<string>())?.ToJsonString();
     }
 
     private static (string NodeId, string? Port)? Endpoint(JsonElement value)

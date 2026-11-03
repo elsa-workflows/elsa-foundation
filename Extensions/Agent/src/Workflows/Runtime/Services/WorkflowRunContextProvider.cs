@@ -92,6 +92,10 @@ internal sealed class WorkflowRunContextProvider(
             var read = await WorkflowRunContext.ReadAsync(authorizer, inspection, session.ActorId, session.TenantId,
                 new(target.ResourceId!, WorkflowRunContext.SelectedActivity(target), null), cancellationToken);
             if (Refusal(read.Outcome) is { } refusal) return new([], [refusal]);
+            // Nor once it discloses more than the actor's current run access covers: incident details read under value
+            // inspection, or values released under payload resolution, that the actor no longer holds.
+            if (WorkflowReadRunTool.Exceeds(result.Payload, read.Run!))
+                return new([], [new(Descriptor.Id, WorkflowRunContext.AccessChangedCode, WorkflowRunContext.AccessChangedMessage, true)]);
         }
         return new(projection, []);
     }

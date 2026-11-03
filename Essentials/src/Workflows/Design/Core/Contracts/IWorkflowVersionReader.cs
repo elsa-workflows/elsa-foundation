@@ -20,6 +20,12 @@ public interface IWorkflowVersionReader
     /// <summary>The exact version, or <see langword="null"/> when no persisted version has this identity.</summary>
     ValueTask<WorkflowVersionDetails?> ReadAsync(string versionId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The identity of the definition an exact version belongs to, or <see langword="null"/> when no persisted version has
+    /// this identity. It discloses nothing else, so a consumer can ask the definition's owner before it reads the version.
+    /// </summary>
+    ValueTask<string?> FindDefinitionIdAsync(string versionId, CancellationToken cancellationToken = default);
+
     /// <summary>The definition's persisted versions in the store's order; empty when it has none.</summary>
     ValueTask<IReadOnlyList<WorkflowDefinitionVersionSummary>> ListAsync(string definitionId, CancellationToken cancellationToken = default);
 }

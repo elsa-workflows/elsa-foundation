@@ -19,6 +19,16 @@ describe("workflow batch contract shared with the server", () => {
       .toEqual({ activities: shared.activities, connections: shared.connections, positions: shared.positions, secretReferences: shared.secretReferences, structure: shared.structure });
   });
 
+  it("discloses positions only for placed activities and keeps a stale layout record's id reserved", () => {
+    // A version promoted after a node was removed keeps that node's layout record (the witness's v3 draft did).
+    const stale = draft();
+    stale.layout = [...(stale.layout ?? []), { nodeId: "removed-node", x: 1, y: 2 } as (typeof stale.layout)[number]];
+    const catalogByVersion = new Map(catalog.map(item => [item.activityVersionId, item]));
+    const content = buildWorkflowSnapshotContent(stale, catalogByVersion) as { positions: Array<{ nodeId: string }>; structure: { reservedIds?: string[] } };
+    expect(content.positions.map(item => item.nodeId)).toEqual(fixture.snapshot.positions.map(item => item.nodeId));
+    expect(content.structure.reservedIds).toContain("removed-node");
+  });
+
   it.each(fixture.cases.filter(item => item.accepted).map(item => [item.name, item] as const))("applies the server's frozen %s batch", (_name, item) => {
     const result = applyWorkflowOperationBatch(draft(), parseFrozenWorkflowBatch(item.frozen), catalog);
     expect(result.appliedCount).toBe(item.frozen!.operations.length);

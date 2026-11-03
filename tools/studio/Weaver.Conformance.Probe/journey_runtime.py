@@ -64,8 +64,10 @@ def browser_inputs(config):
     summary = {key: config[key] for key in ("journey", "provider", "studioOrigin", "backendOrigin")}
     summary["driverSha256"] = sha(TOOL / "browser.mjs")
     if "workflow" in config:
-        fields = ("definitionId", "activityId", "draftId", "definitionPath", "draftPath", "validationPath")
+        # activityId is optional: a journey that inspects a resource (a version, an Executable, a run) selects no activity.
+        fields = ("definitionId", "draftId", "definitionPath", "draftPath", "validationPath")
         summary["workflow"] = {key: config["workflow"][key] for key in fields}
+        if "activityId" in config["workflow"]: summary["workflow"]["activityId"] = config["workflow"]["activityId"]
         check(all(isinstance(value, str) and value for value in summary["workflow"].values()), "Browser summary requires actual native workflow identities and paths")
         check(all(summary["workflow"][key].startswith("/") and not summary["workflow"][key].startswith("//")
                   and "?" not in summary["workflow"][key] and "#" not in summary["workflow"][key]

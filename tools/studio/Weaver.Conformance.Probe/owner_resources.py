@@ -242,13 +242,14 @@ VERSION_NODES = {"root": "versions-flow", "a": "versions-a", "b": "versions-b", 
 SIDE_BY_SIDE_SLOT = "qualification-side"
 
 
-def version_states(write, flowchart):
-    """The three authored states, in the wire shape the design API accepts (and Studio saves)."""
+def version_states(write, flowchart, canary=""):
+    """The three authored states, in the wire shape the design API accepts (and Studio saves). Every authored text carries the
+    canary, so a disclosed input value is detectable wherever it would appear."""
     container = _container(flowchart)
     n = VERSION_NODES
     def leaf(node_id, text):
         return {"nodeId": node_id, "activityVersionId": write["activityVersionId"], "outputs": [], "structure": None,
-                "inputs": [{"referenceKey": "text", "value": {"value": text, "expressionType": "Literal"}}]}
+                "inputs": [{"referenceKey": "text", "value": {"value": (text + " " + canary).strip(), "expressionType": "Literal"}}]}
     def connection(source, target):
         return {"id": source + "-" + target, "source": {"nodeId": source, "port": "Done"}, "target": {"nodeId": target}}
     def state(children, connections):
@@ -278,7 +279,8 @@ def seed_versioned_workflow(http, output, *, publish=True):
         check(len(matches) == 1 and bool(matches[0]["activityVersionId"]), "The actual catalog must uniquely supply " + type_key)
         return matches[0]
     write, flowchart = entry(BATCH_WRITE_LINE), entry(BATCH_FLOWCHART)
-    states = version_states(write, flowchart)
+    canary = "vcanary-" + uuid.uuid4().hex[:16]
+    states = version_states(write, flowchart, canary)
     request = {"operationKey": str(uuid.uuid4()), "name": "Weaver versions witness " + uuid.uuid4().hex[:8],
                "description": "Owned spec 1193 version and Executable qualification.", "initialState": states[0],
                "layout": [{"nodeId": node, "x": 120 + 300 * index, "y": 160} for index, node in enumerate(("versions-a", "versions-b", "versions-c"))],
@@ -313,7 +315,7 @@ def seed_versioned_workflow(http, output, *, publish=True):
             "versionPath": workflows["workflow-versions"], "versions": versions, "list": listed, "nodes": dict(VERSION_NODES),
             "writeLine": {"activityVersionId": write["activityVersionId"], "activityTypeKey": write["activityTypeKey"]},
             "flowchart": {"activityVersionId": flowchart["activityVersionId"], "activityTypeKey": flowchart["activityTypeKey"]},
-            "evidence": evidence}
+            "valueCanary": canary, "evidence": evidence}
     if publish:
         publishing, publishing_capability = capability_links(http, "elsa.api.publishing", output / "publishing")
         runtime, runtime_capability = capability_links(http, "elsa.api.runtime", output / "runtime")
@@ -342,8 +344,8 @@ def seed_versioned_workflow(http, output, *, publish=True):
 
 
 # Spec 1193 slice G (T045): one Run of a seeded workflow that faults. Its first activity is a Write Line whose text, a
-# private canary, is authored sensitive, so execution evidence never captures it (the runtime's default capture policy
-# excludes sensitive payloads, and inspection reports it sensitive and uncaptured); its second is a Fault, which faults
+# private canary, is authored sensitive (the run case selects the QualificationRunCapture seam first, so the runtime captures
+# it into value evidence, which the run API never returns inline); its second is a Fault, which faults
 # the Run with one blocking incident. A second, waiting Run (an Event that does not start the workflow, so it suspends)
 # is still in progress while it is explained.
 RUN_NODES = {"root": "run-flow", "sensitive": "run-sensitive", "fault": "run-fault", "wait": "run-wait"}

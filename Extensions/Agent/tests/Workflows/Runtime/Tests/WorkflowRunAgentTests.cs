@@ -59,7 +59,7 @@ public sealed class WorkflowRunAgentTests
             selected.GetProperty("activityType").GetString(), selected.GetProperty("valueCount").GetInt32()));
         // The context never resolves a value or carries an incident message: values are read only by workflow_read_run.
         var request = Assert.Single(host.Runs.Requests);
-        Assert.Equal(("run-1", "act-write", false), (request.WorkflowExecutionId, request.ActivityExecutionId, request.ResolveSelectedValues));
+        Assert.Equal(("run-1", "act-write", (IReadOnlySet<string>?)null), (request.WorkflowExecutionId, request.ActivityExecutionId, request.ResolveEvidenceIds));
         Assert.DoesNotContain("Qualification fault", content.GetRawText());
         Assert.DoesNotContain(Canary, JsonSerializer.Serialize(contribution.Attachments));
         Assert.Single(contribution.Attachments, item => item.ContentType == "workflows.run-guidance" && item.Origin == AgentContextOrigin.InstalledGuidance);
@@ -136,8 +136,10 @@ public sealed class WorkflowRunAgentTests
         Assert.False(prepared.Value!.RequiresApproval);
         Assert.Equal(AgentRisk.ReadOnly, prepared.Value.Risk);
         Assert.Equal(new AgentResourceTarget(ModuleId, "workflow-run", "run-1", "act-write"), prepared.Value.Target);
-        // The tool alone asks the owner to resolve values, through its audited payload read.
-        Assert.True(host.Runs.Requests[^1].ResolveSelectedValues);
+        // The tool alone asks the owner to resolve values, through its audited payload read, and only the ones it discloses: a
+        // first read resolves nothing and decides the bounds, the second resolves exactly the disclosed resolvable values.
+        Assert.Null(host.Runs.Requests[^2].ResolveEvidenceIds);
+        Assert.Equal(["evidence-result"], host.Runs.Requests[^1].ResolveEvidenceIds!);
         var data = prepared.Value.Preview.Data;
         Assert.Equal("workflows.run", prepared.Value.Preview.TypeId);
         Assert.True(data.GetProperty("readOnly").GetBoolean());
@@ -287,7 +289,7 @@ public sealed class WorkflowRunAgentTests
         var data = (await host.PrepareRunAsync(session, admitted, new Dictionary<string, object?> { ["activityPageSize"] = 2, ["activityContinuationToken"] = "page-2" }))
             .Value!.Preview.Data;
         var request = host.Runs.Requests[^1];
-        Assert.Equal((2, "page-2", false), (request.ActivityPageSize, request.ActivityContinuationToken, request.ResolveSelectedValues));
+        Assert.Equal((2, "page-2", (IReadOnlySet<string>?)null), (request.ActivityPageSize, request.ActivityContinuationToken, request.ResolveEvidenceIds));
         var page = data.GetProperty("activities");
         Assert.Equal((2, 5L, "next"), (page.GetProperty("items").GetArrayLength(), page.GetProperty("totalCount").GetInt64(), page.GetProperty("nextContinuationToken").GetString()));
         Assert.Equal(JsonValueKind.Null, data.GetProperty("selectedActivity").ValueKind);
@@ -366,6 +368,114 @@ public sealed class WorkflowRunAgentTests
         foreach (var phrase in new[] { "retry, cancel, delete or dispatch", "run page's own controls", "never guess or reconstruct", "not captured, pruned",
                      "in progress", "never the latest run" })
             Assert.Contains(phrase, guidance);
+    }
+
+    [Theory]
+    [InlineData("inspect-values")]
+    [InlineData("resolve-value-payloads")]
+    public async Task A_retained_read_is_withheld_once_the_actor_loses_the_value_access_it_was_read_under(string revoked)
+    {
+        using var host = new WorkflowRuntimeAgentTestHost();
+        var session = await host.SessionAsync();
+        var admitted = (await host.CollectRunAsync(session, RunReference())).Attachments
+            .Select(item => item with { ContributorId = "workflows.run-context" }).ToArray();
+        var prepared = (await host.PrepareRunAsync(session, admitted)).Value!;
+        Assert.Contains(prepared.Preview.Data.GetProperty("selectedActivity").GetProperty("values").EnumerateArray(),
+            value => value.GetProperty("disclosure").GetString() == "resolved");
+        var result = (await host.RunTool.ExecuteAsync(Prepared(session, prepared))).Value! with
+        {
+            Access = new(ModuleId, "1", WorkflowRunContext.Target("run-1", "act-write"))
+        };
+        Assert.Empty((await host.RunSource.AdmitDisclosureAsync(new(session.Id, admitted, [result], false))).Diagnostics);
+
+        // An administrator revokes value inspection (incident details) or payload resolution (released values).
+        host.Runs.Read = request => Run(request, canInspectValues: revoked != "inspect-values", canResolveValues: false);
+        var withheld = await host.RunSource.AdmitDisclosureAsync(new(session.Id, admitted, [result], false));
+        Assert.Empty(withheld.Attachments);
+        var refusal = Assert.Single(withheld.Diagnostics);
+        Assert.Equal((WorkflowRunContext.AccessChangedCode, true), (refusal.Code, refusal.Required));
+        // The retained context itself carries no value or incident message, so it is still admitted, read again.
+        Assert.Empty((await host.RunSource.AdmitDisclosureAsync(new(session.Id, admitted, [], false))).Diagnostics);
+    }
+
+    [Fact]
+    public async Task A_retained_read_that_released_nothing_survives_a_revoked_payload_grant()
+    {
+        using var host = new WorkflowRuntimeAgentTestHost();
+        host.Runs.Read = request => Run(request, canResolveValues: false);
+        var session = await host.SessionAsync();
+        var admitted = (await host.CollectRunAsync(session, RunReference(activityExecutionId: null))).Attachments
+            .Select(item => item with { ContributorId = "workflows.run-context" }).ToArray();
+        var prepared = (await host.PrepareRunAsync(session, admitted)).Value!;
+        var result = (await host.RunTool.ExecuteAsync(Prepared(session, prepared))).Value! with
+        {
+            Access = new(ModuleId, "1", WorkflowRunContext.Target("run-1", null))
+        };
+        Assert.Empty((await host.RunSource.AdmitDisclosureAsync(new(session.Id, admitted, [result], false))).Diagnostics);
+        Assert.True(WorkflowReadRunTool.Exceeds(new("workflows.run", "1", JsonSerializer.SerializeToElement(new { other = true })),
+            Run(new("run-1"))), "A result whose disclosure cannot be read is treated as exceeding.");
+    }
+
+    [Fact]
+    public async Task Hundreds_of_bookmarks_and_a_40_KB_exception_message_stay_under_the_budget_with_truncation_marked()
+    {
+        using var host = new WorkflowRuntimeAgentTestHost();
+        var message = "System.InvalidOperationException: " + new string('m', 40 * 1024);
+        host.Runs.Read = request => Run(request, bookmarks: 600, incidents: 40, message: message, resultValue: new string('v', 40 * 1024), activities: 50);
+        var session = await host.SessionAsync();
+        var admitted = (await host.CollectRunAsync(session, RunReference())).Attachments;
+
+        var prepared = await host.PrepareRunAsync(session, admitted, new Dictionary<string, object?> { ["activityPageSize"] = 50 });
+
+        Assert.True(prepared.Succeeded, prepared.Error?.Message);
+        var data = prepared.Value!.Preview.Data;
+        Assert.True(data.GetRawText().Length <= WorkflowReadRunTool.ResultBudget);
+        Assert.True(WorkflowReadRunTool.ResultBudget <= 24 * 1024, "The bound stays well under the host's 32 KiB check.");
+        var selected = data.GetProperty("selectedActivity");
+        Assert.True(selected.GetProperty("bookmarksTruncated").GetBoolean());
+        Assert.Equal(600, selected.GetProperty("bookmarkCount").GetInt32());
+        Assert.True(data.GetProperty("incidentsTruncated").GetBoolean());
+        foreach (var incident in data.GetProperty("incidents").EnumerateArray())
+        {
+            Assert.True(incident.GetProperty("messageTruncated").GetBoolean());
+            if (incident.GetProperty("message").GetString() is { } text) Assert.EndsWith(WorkflowReadRunTool.TruncationMarker, text);
+        }
+        // Every value the second read resolved is disclosed, so the payload read audited only what the result shows.
+        var resolved = host.Runs.Requests[^1].ResolveEvidenceIds ?? new HashSet<string>();
+        var values = selected.GetProperty("values").EnumerateArray().ToDictionary(item => item.GetProperty("evidenceId").GetString()!);
+        Assert.All(resolved, id => Assert.Equal("resolved", values[id].GetProperty("disclosure").GetString()));
+        Assert.All(resolved, id => Assert.False(values[id].GetProperty("valueOmitted").GetBoolean()));
+        if (resolved.Count > 0) Assert.True(values["evidence-result"].GetProperty("valueTruncated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_run_that_cannot_fit_even_its_smallest_bound_is_refused_never_sent_over_budget()
+    {
+        using var host = new WorkflowRuntimeAgentTestHost();
+        host.Runs.Read = request => Run(request) with { Instance = Run(request).Instance with { DefinitionId = new string('d', 30 * 1024) } };
+        var session = await host.SessionAsync();
+        var admitted = (await host.CollectRunAsync(session, RunReference(activityExecutionId: null))).Attachments;
+        var prepared = await host.PrepareRunAsync(session, admitted);
+        Assert.False(prepared.Succeeded);
+        Assert.Equal((WorkflowRunContext.TooLargeCode, 413), (prepared.Error!.Code, prepared.Error.StatusCode));
+    }
+
+    [Fact]
+    public async Task Incident_messages_withheld_for_sensitive_inputs_are_listed_as_withheld()
+    {
+        using var host = new WorkflowRuntimeAgentTestHost();
+        host.Runs.Read = request => Run(request) with
+        {
+            Incidents = [new("incident-1", "act-fault", "fault", "Error", "Active", "workflow.fault", "Incident details are withheld because the activity has a sensitive input.",
+                true, true, true, DateTimeOffset.UnixEpoch, null)]
+        };
+        var session = await host.SessionAsync();
+        var data = (await host.PrepareRunAsync(session, (await host.CollectRunAsync(session, RunReference(activityExecutionId: null))).Attachments)).Value!.Preview.Data;
+        var incident = Assert.Single(data.GetProperty("incidents").EnumerateArray());
+        Assert.True(incident.GetProperty("sensitiveInputs").GetBoolean());
+        Assert.True(incident.GetProperty("messageRedacted").GetBoolean());
+        Assert.Contains(data.GetProperty("unavailable").EnumerateArray(), item => item.GetProperty("reason").GetString() == "withheld"
+            && item.GetProperty("data").GetString() == "incident messages of activities with sensitive inputs");
     }
 
     private static AgentPreparedToolInvocation Prepared(AgentSession session, AgentToolPreparation preparation) =>

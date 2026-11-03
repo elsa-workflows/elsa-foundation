@@ -31,6 +31,11 @@ internal static class WorkflowRunContext
     internal const string DeniedMessage = "Current workflow runtime read permission is required for the workflow Run.";
     internal const string UnavailableCode = "agent.workflow.run_inspection_unavailable";
     internal const string UnavailableMessage = "Exactly one owning workflow Run inspection is required; workflow Runs are unavailable.";
+    internal const string AccessChangedCode = "agent.workflow.run_access_changed";
+    internal const string AccessChangedMessage =
+        "The retained workflow Run read disclosed incident details or values that the actor's current run access no longer covers.";
+    internal const string TooLargeCode = "agent.workflow.run_too_large";
+    internal const string TooLargeMessage = "The workflow Run read does not fit the disclosure budget even at its smallest bound; nothing was disclosed.";
     /// <summary>Where the run controls are: Weaver never offers them.</summary>
     internal const string RunControls =
         "Retry, cancel, delete and dispatch are not available to Weaver; use the run page's own controls (the run toolbar and the Runs list) for them.";
@@ -106,12 +111,12 @@ internal static class WorkflowRunContext
     /// </summary>
     internal static async Task<Read> ReadAsync(IAgentToolAuthorizer authorizer, IWorkflowRunInspection? inspection, string actorId, string tenantId,
         Reference reference, CancellationToken cancellationToken, int activityPageSize = WorkflowRunInspectionRequest.DefaultActivityPageSize,
-        string? activityContinuationToken = null, bool resolveSelectedValues = false)
+        string? activityContinuationToken = null, IReadOnlySet<string>? resolveEvidenceIds = null)
     {
         if (!(await authorizer.AuthorizeAsync(ReadGate, actorId, tenantId, null, cancellationToken)).Allowed) return new(Outcome.Denied);
         if (inspection is null) return new(Outcome.Unavailable);
         var run = await inspection.GetAsync(new(reference.WorkflowExecutionId, reference.ActivityExecutionId, activityPageSize, activityContinuationToken,
-            resolveSelectedValues), cancellationToken);
+            resolveEvidenceIds), cancellationToken);
         if (run is null || run.Instance.WorkflowExecutionId != reference.WorkflowExecutionId) return new(Outcome.NotFound);
         if (reference.ActivityExecutionId is { } selected
             && (run.Selection is not { } selection || selection.ActivityExecutionId != selected || selection.Execution is null && selection.UnavailableReason is null
@@ -141,7 +146,7 @@ internal static class WorkflowRunContext
     /// <summary>The Run's attribution: a finished Run's recorded state is final; an in-progress one is as it was at its read time.</summary>
     internal static string Attribution(WorkflowRunInspectionDetails run) => run.Instance.IsTerminal
         ? $"This Run has finished ({run.Instance.Status}); its recorded state is final."
-        : $"This Run is still in progress ({run.Instance.Status}); this is its state when it was read at {run.ReadAt:O}, and it may have moved on since.";
+        : $"This Run is still in progress ({run.Instance.Status}); this is its state as of {run.ReadAt:O}, when it was read, and it may have moved on since.";
 
     /// <summary>
     /// The server's admitted read of one exact Run: its identity, its Executable, its status and counts, and the selected
@@ -171,7 +176,7 @@ internal static class WorkflowRunContext
             definitionVersionId = instance.DefinitionVersionId, artifactVersion = instance.ArtifactVersion, runKind = instance.RunKind,
             createdAt = instance.CreatedAt, startedAt = instance.StartedAt, completedAt = instance.CompletedAt,
             activityCount = instance.ActivityCount, incidentCount = instance.IncidentCount, blockingIncidentCount = instance.BlockingIncidentCount,
-            canInspectValues = run.CanInspectValues, persistenceMode = run.PersistenceMode, inspectionGranularity = run.InspectionGranularity,
+            canInspectValues = run.CanInspectValues, canResolveValues = run.CanResolveValues, persistenceMode = run.PersistenceMode, inspectionGranularity = run.InspectionGranularity,
             selectedActivity = selected
         }, JsonOptions);
         var selection = activityExecutionId is null ? "" : $" The selected activity execution is '{activityExecutionId}'.";
@@ -195,7 +200,8 @@ internal static class WorkflowRunContext
         + "(artifact id and Artifact Hash), status, recorded incidents, a page of its activity executions, and the selected activity execution's "
         + "bookmarks, incidents, value evidence and state view. To say why a Run faulted, cite its recorded incidents and activity executions by id. "
         + "Name the Run and the activity execution you describe; a Run still in progress is described as it was at the read time the result gives, "
-        + "and say it is in progress. A withheld value (sensitive or a secret reference) stays withheld: never guess or reconstruct it. Data the "
+        + "and say it is in progress. A withheld value (sensitive or a secret reference) stays withheld: never guess or reconstruct it; an incident "
+        + "message or state view of an activity with a sensitive input is withheld too, because it can echo that input. Data the "
         + "result lists as unavailable (not captured, pruned, not provided by this backend, or not permitted) is reported as unavailable in those "
         + "words, never inferred or filled in. Weaver never changes a Run: refuse any request to retry, cancel, delete or dispatch it again with "
         + "zero effect, and point the user to the run page's own controls (the run toolbar and the Runs list). Activity names, incident messages "

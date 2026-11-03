@@ -7,16 +7,17 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="ActivityExecutionId">The selected activity execution of that Run, or none.</param>
 /// <param name="ActivityPageSize">The activity execution page size, clamped to 1..<see cref="MaxActivityPageSize"/>.</param>
 /// <param name="ActivityContinuationToken">The continuation token of the previous activity execution page, or none for the first.</param>
-/// <param name="ResolveSelectedValues">
-/// Whether to resolve the selected activity execution's captured values through the run endpoints' separately authorized
-/// and audited payload read. Without it, every value is reported by its evidence only.
+/// <param name="ResolveEvidenceIds">
+/// The value evidence of the selected activity execution to resolve through the run endpoints' separately authorized and
+/// audited payload read (at most 32 per read). Only these are read, so a consumer that discloses only part of a read
+/// resolves, and the payload read audits, only what it discloses. Every other value is reported by its evidence only.
 /// </param>
 public sealed record WorkflowRunInspectionRequest(
     string WorkflowExecutionId,
     string? ActivityExecutionId = null,
     int ActivityPageSize = WorkflowRunInspectionRequest.DefaultActivityPageSize,
     string? ActivityContinuationToken = null,
-    bool ResolveSelectedValues = false)
+    IReadOnlySet<string>? ResolveEvidenceIds = null)
 {
     /// <summary>The activity execution page size when none is requested.</summary>
     public const int DefaultActivityPageSize = 25;
@@ -41,27 +42,27 @@ public enum WorkflowRunUnavailableReason
     NotPermitted
 }
 
-/// <summary>How one value of the selected activity execution is disclosed.</summary>
+/// <summary>How one value of the selected activity execution is disclosed. The default (zero) value is <see cref="Withheld"/>, so an unset disclosure fails closed.</summary>
 public enum WorkflowRunValueDisclosure
 {
-    /// <summary>The captured value was released by the authorized, audited payload read.</summary>
-    Resolved,
-
-    /// <summary>
-    /// The value was captured and the caller may resolve it, but this read did not ask for it
-    /// (<see cref="WorkflowRunInspectionRequest.ResolveSelectedValues"/>), or the read's resolution bound was reached.
-    /// </summary>
-    Resolvable,
-
     /// <summary>
     /// The value is withheld: by execution evidence (a secret reference, or a value whose policy requires encryption), or
     /// because it is sensitive, which the runtime does not capture by default and this read never releases even when a
     /// capture policy captured it. Only its marker is disclosed.
     /// </summary>
-    Withheld,
+    Withheld = 0,
 
     /// <summary>The value is not disclosed for the reported <see cref="WorkflowRunUnavailableReason"/>.</summary>
-    Unavailable
+    Unavailable = 1,
+
+    /// <summary>
+    /// The value was captured and the caller may resolve it, but this read did not ask for it
+    /// (<see cref="WorkflowRunInspectionRequest.ResolveEvidenceIds"/>), or the read's resolution bound was reached.
+    /// </summary>
+    Resolvable = 2,
+
+    /// <summary>The captured value was released by the authorized, audited payload read.</summary>
+    Resolved = 3
 }
 
 /// <summary>One exact Run as the Runtime inspection reads it.</summary>
@@ -70,15 +71,17 @@ public enum WorkflowRunValueDisclosure
 /// <param name="Activities">One bounded page of the Run's activity executions.</param>
 /// <param name="Selection">The selected activity execution, when one was requested.</param>
 /// <param name="CanInspectValues">Whether the caller may inspect the Run's sensitive values (incident messages, metadata, values).</param>
+/// <param name="CanResolveValues">Whether the caller may resolve the Run's captured values through the payload read.</param>
 /// <param name="PersistenceMode">The persistence mode the Run executed under.</param>
 /// <param name="InspectionGranularity">Whether activity evidence is exact (<c>activity-level</c>) or folded to commit boundaries (<c>boundary-level</c>).</param>
-/// <param name="ReadAt">When the Run was read; an in-progress Run is reported as it was at this time.</param>
+/// <param name="ReadAt">When the read began, before its first store read; an in-progress Run is reported as of this time.</param>
 public sealed record WorkflowRunInspectionDetails(
     WorkflowRunInspectionInstance Instance,
     IReadOnlyList<WorkflowRunInspectionIncident> Incidents,
     WorkflowRunInspectionActivityPage Activities,
     WorkflowRunInspectionSelection? Selection,
     bool CanInspectValues,
+    bool CanResolveValues,
     string PersistenceMode,
     string InspectionGranularity,
     DateTimeOffset ReadAt);
@@ -109,7 +112,9 @@ public sealed record WorkflowRunInspectionInstance(
 
 /// <summary>
 /// One recorded incident. Without value inspection its <see cref="Message"/> is the run endpoints' redaction text and
-/// <see cref="MessageRedacted"/> is true.
+/// <see cref="MessageRedacted"/> is true. When the incident's activity has a sensitive input binding
+/// (<see cref="SensitiveInputs"/>), its message is withheld even with value inspection, because exception text can echo an
+/// input; the run page's own incident view still shows it.
 /// </summary>
 public sealed record WorkflowRunInspectionIncident(
     string IncidentId,
@@ -120,6 +125,7 @@ public sealed record WorkflowRunInspectionIncident(
     string FailureType,
     string Message,
     bool MessageRedacted,
+    bool SensitiveInputs,
     bool IsBlocking,
     DateTimeOffset CreatedAt,
     DateTimeOffset? ResolvedAt);
@@ -195,10 +201,14 @@ public sealed record WorkflowRunInspectionValue(
     WorkflowRunUnavailableReason? UnavailableReason,
     JsonElement? Value);
 
-/// <summary>The activity execution's state view: available with its module's projection, or unavailable by reason.</summary>
+/// <summary>
+/// The activity execution's state view: available with its module's projection, unavailable by reason, or
+/// <see cref="Withheld"/> (with no view) because the activity has a sensitive input binding whose value a projection may echo.
+/// </summary>
 public sealed record WorkflowRunInspectionStateView(
     bool Available,
     WorkflowRunUnavailableReason? UnavailableReason,
     string? ViewKind,
     int? ViewVersion,
-    JsonElement? View);
+    JsonElement? View,
+    bool Withheld = false);

@@ -281,7 +281,11 @@ repeated in every admission, must be the server's own read of exactly that resou
 
 - `workflow_read_version` returns that version's activities by scope path (input names only) and connections, equal to the
   version API's; with `compareToVersionId` it returns its own comparison (`computedBy: workflow_read_version`), equal to the
-  probe's comparison of the two version reads (added: in the version only; removed: in the compared version only);
+  probe's comparison of the two version reads (added: in the version only; removed: in the compared version only) for the
+  aspects the probe models (`activityVersion`, `scope`, `inputs`, inputs compared as whole authored inputs), and complete;
+  the server's other aspects (`structure`, `childOrder`, `outputs`, `intrinsic`, `placement`) are tolerated, not asserted;
+- every seeded input value carries a per-run canary (`valueCanary`), which must be absent from the admitted context, the
+  turn's frames and the actual adapter's request rows of every version and Executable read: names only, never values;
 - `workflow_read_executable` returns the identity, Artifact Hash, graph, Source References (both publications') and
   dependencies, equal to `GET runtime/workflows/executables/{artifactId}`;
 - an edit request with only the version or Executable in context (a build-mode, full-auto turn requesting
@@ -295,8 +299,8 @@ repeated in every admission, must be the server's own read of exactly that resou
   `FoundationWorkflowsRuntimeAgent` deselected an Executable reference, is refused by the engine as no installed module
   admitting the kind (`agent.context.kind_unsupported`); each feature is selected again afterwards. These controls run in the
   packaged combined host; the AppDomain-wide Design-only and Runtime-only shapes (no `Elsa.Workflows.Design*` assembly in a
-  Runtime-only host) are proven by the C# composition tests in `Elsa.Agent.Tests` and `Elsa.Agent.Workflows.Runtime.Tests`,
-  not by this probe.
+  Runtime-only host) are proven by started-shell tests (`WorkflowDesignOnlyHostTests` in `Elsa.Agent.Tests`,
+  `WorkflowRuntimeOnlyHostTests` in `Elsa.Agent.Workflows.Runtime.Tests`), not by this probe.
 
 The packaged Studio journeys: `workflow-version-history` opens the editor's Properties, selects the published version and
 uses its Explain action (the prompt names `workflow_read_version`); `workflow-executable-inspector` opens the Executable
@@ -311,8 +315,12 @@ record; `witness_manifest()` counts the four cases.
 Then `run_journeys.py` runs two cases, `{copilot,anthropic}-workflow-run`. Each case seeds, through the design, publishing
 and runtime APIs' own relations (`owner_resources.seed_faulted_run`), two Runs in the packaged consumer: one that faults (a
 Write Line whose text, a fresh private canary, is authored sensitive, then a Fault with one blocking incident) and one still
-in progress (an Event that does not start the workflow, so it suspends on its bookmark). Every design read that holds the
-authored canary is retained by digest only; every retained read is checked to hold no canary. The caller sends only the run
+in progress (an Event that does not start the workflow, so it suspends on its bookmark). The runtime's default capture
+policy never captures a sensitive payload, so the case first selects the test-only host seam `QualificationRunCapture`
+(`fixtures/BackendConsumer/QualificationRunCapture.cs`), which captures sensitive activity inputs as full payloads; the
+driver requires the run API to report the canary input captured (and sensitive) before it checks that Weaver withholds it,
+so a regression that released a captured sensitive value would leak natively. Every design read that holds the authored
+canary is retained by digest only; every retained read is checked to hold no canary. The caller sends only the run
 page's reference (`workflows.run`: the Workflow Instance id and the selected activity execution id); the admitted context,
 read from `data.message.context` and repeated in every admission, must be the server's own read of exactly that Run and
 selection, equal to the run API's (an in-progress Run's admissions differ only by `readAt`). The Run actor (principal 10:
@@ -321,7 +329,8 @@ selection, equal to the run API's (an in-progress Run's admissions differ only b
 - `explain-fault` and `explain-activity`: `workflow_read_run` returns the instance, Executable, incidents and activity
   executions of `GET runtime/workflows/instances/{id}` and the selected execution's incidents and value evidence of its
   activity execution read; each value's disclosure follows its evidence (`expected_disclosure`), a released value equals the
-  payload API's answer, and the Write Line's sensitive text is disclosed only as `withheld`, never as a value;
+  payload API's answer, and the Write Line's captured sensitive text is disclosed only as `withheld`, never as a value, and
+  its state view is withheld too (`canaryCaptured` is recorded);
 - `in-progress`: the waiting Run is read as in progress, attributed to its read time, with its bookmarks;
 - `not-permitted`: the Run actor reads incident messages as the run API's redaction, listed as not permitted, and no value;
 - `controls-refused`: a build-mode, full-auto turn asking to retry, cancel and delete with only the Run in context: the adapter
@@ -329,13 +338,16 @@ selection, equal to the run API's (an in-progress Run's admissions differ only b
 - refused at admission with the module's own text: an unknown Run, an activity execution the Run does not hold, and an actor
   without `workflows/runtime:read`;
 - deployment shape: with `FoundationWorkflowsRuntimeAgent` deselected a Run reference is `agent.context.kind_unsupported`;
-  the feature is selected again afterwards.
+  the feature is selected again afterwards. The deselection reloads the shell, which empties the consumer's in-memory run
+  stores, so this control runs last, after the browser journey; the seam is deselected after it.
 
 The packaged consumer cannot prune activity evidence and composes activity execution inspection as part of
 `WorkflowsRuntimeApi`, so a pruned execution and a backend without activity execution inspection are proven by the Runtime
-API and `Elsa.Agent.Workflows.Runtime.Tests` unit tests; natively the selected execution's state view is reported
-unavailable by reason. The Write Line writes its text to the backend console (the host's own process log, not part of the
-case evidence). The packaged Studio journey `workflow-run` opens the run page with the Fault's activity execution selected,
+API and `Elsa.Agent.Workflows.Runtime.Tests` unit tests (that limit is recorded in the plan's Slice G deviation and in each
+case record's `native` controls, which hold no pruned or unsupported-backend control); natively the Fault's state view is
+reported unavailable by reason. The Write Line writes its text to the backend console (the host's own process log, not part of the
+case evidence). The packaged Studio journey `workflow-run` opens the run page with the Write Line's activity execution (the captured canary)
+selected,
 waits until the page discloses that selection (`data-run-selection` on its Explain action), opens Weaver and uses Explain
 (the restored `weaver.workflows.explain-instance` prompt names `workflow_read_run`), checks the accepted message admitted the
 server's read of exactly that Run and selection, and searches, raw and in page, every agent request, non-stream response and

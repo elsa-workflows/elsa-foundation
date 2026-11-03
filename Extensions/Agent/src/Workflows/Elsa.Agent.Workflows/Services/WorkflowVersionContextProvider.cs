@@ -82,15 +82,15 @@ internal sealed class WorkflowVersionContextProvider(
         {
             if (result.Access is not { ModuleId: WorkflowVersionContext.ModuleId } access || result.ToolName != WorkflowReadVersionTool.ToolName
                 || !WorkflowVersionContext.IsTarget(access.Target)) return ContextDenied();
-            // The read is disclosed again only while the actor may still read the version it describes.
+            // The read is disclosed again only while the actor may still read the version it describes: the host's design read,
+            // then the definition's owner (its definition looked up without reading the version), then the version, read once.
             var versionId = access.Target!.ResourceId!;
-            if (!(await authorizer.AuthorizeAsync(WorkflowVersionContext.ReadGate, session.ActorId, session.TenantId, null, cancellationToken)).Allowed)
-                return new([], [Refusal(WorkflowVersionContext.Outcome.Denied)!]);
             var reader = WorkflowVersionContext.Reader(readers, out _);
-            var version = reader is null ? null : await reader.ReadAsync(versionId, cancellationToken);
-            var read = version is null
-                ? new WorkflowVersionContext.Read(reader is null ? WorkflowVersionContext.Outcome.ReaderUnavailable : WorkflowVersionContext.Outcome.NotFound)
-                : await WorkflowVersionContext.ReadAsync(authorizer, owners, reader, session.ActorId, session.TenantId, version.DefinitionId, versionId, false, cancellationToken);
+            var (owner, definitionId) = await WorkflowVersionContext.AuthorizeVersionAsync(authorizer, owners, reader, session.ActorId, session.TenantId,
+                versionId, cancellationToken);
+            var read = owner == WorkflowVersionContext.Outcome.Read
+                ? await WorkflowVersionContext.ReadOwnedAsync(reader!, definitionId!, versionId, false, cancellationToken)
+                : new WorkflowVersionContext.Read(owner);
             if (Refusal(read.Outcome) is { } withheld) return new([], [withheld]);
         }
         return new(projection, []);
@@ -108,7 +108,7 @@ internal sealed class WorkflowVersionContextProvider(
             return (null, new(Descriptor.Id, WorkflowVersionContext.StructureUnavailableCode,
                 "The activity structure service is unavailable, so the workflow version cannot be read.", true) { OwnerUnavailable = true });
         var flattened = WorkflowVersionStructure.Flatten(read.Version!.State.RootActivity, structure);
-        return (WorkflowVersionContext.Attachment(read.Version, read.Versions!, flattened.Activities.Count, sensitivity, reference.Client), null);
+        return (WorkflowVersionContext.Attachment(read.Version, read.Versions!, flattened.Activities.Count, flattened.Incomplete, sensitivity, reference.Client), null);
     }
 
     private AgentContributionDiagnostic? Refusal(WorkflowVersionContext.Outcome outcome) => outcome switch
@@ -119,6 +119,8 @@ internal sealed class WorkflowVersionContextProvider(
         // The owner could not decide: the Design API's own code, marked so the engine reports unavailable (503), never denied.
         WorkflowVersionContext.Outcome.OwnerUnavailable => new(Descriptor.Id, WorkflowDefinitionAuthorizationException.UnavailableCode,
             WorkflowResourceAuthority.UnavailableMessage, true) { OwnerUnavailable = true },
+        WorkflowVersionContext.Outcome.AuthorityUnavailable => new(Descriptor.Id, WorkflowVersionContext.AuthorityUnavailableCode,
+            WorkflowVersionContext.AuthorityUnavailableMessage, true) { OwnerUnavailable = true },
         _ => new(Descriptor.Id, WorkflowVersionContext.ReaderUnavailableCode,
             "Exactly one owning workflow version reader is required; workflow versions are unavailable.", true) { OwnerUnavailable = true }
     };

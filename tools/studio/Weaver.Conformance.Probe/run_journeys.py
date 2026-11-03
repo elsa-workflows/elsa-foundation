@@ -3,9 +3,11 @@
 On each actual adapter, Weaver's read-only explanation of one exact Run must hold against the packaged consumer's own run and
 evidence APIs. The seed (owner_resources.seed_faulted_run) publishes and executes two workflows in the packaged consumer:
 
-- a Run that faults: a Write Line whose text is a private canary authored sensitive, so execution evidence never captures it
-  (the runtime's default capture policy excludes sensitive payloads), then a Fault that faults the Run with one blocking
-  incident;
+- a Run that faults: a Write Line whose text is a private canary authored sensitive, then a Fault that faults the Run with one
+  blocking incident. The runtime's default capture policy never captures a sensitive payload, which would make every
+  "canary absent" check vacuous, so the case selects the test-only host seam QualificationRunCapture first: it captures
+  sensitive activity inputs as full payloads, and the driver requires the run API to report the canary input captured before
+  it checks that Weaver withholds it;
 - a Run that is still in progress: an Event that does not start the workflow, so the Run suspends on its bookmark.
 
 Native controls, each a fresh session and turn:
@@ -14,8 +16,8 @@ Native controls, each a fresh session and turn:
   repeats it; workflow_read_run returns the instance, Executable, incidents and activity executions the run API reads, and
   the selected execution's incidents and value evidence, each value's disclosure following its evidence (a captured value
   released only by the audited payload read and equal to the payload API's answer);
-- explain-activity: the Write Line's activity execution selected: its sensitive input is disclosed only as withheld, never
-  as a value, and listed as withheld; its state view is reported unavailable by reason;
+- explain-activity: the Write Line's activity execution selected: its captured sensitive input is disclosed only as withheld,
+  never as a value, and listed as withheld; its state view is withheld too (the activity has a sensitive input);
 - in-progress: the waiting Run is attributed to its read time (readAt, inProgress, the attribution sentence) and its
   selected execution's bookmarks are the run API's;
 - not-permitted: an actor with runtime read and structure inspection but no value inspection reads incident messages as the
@@ -31,13 +33,15 @@ Native controls, each a fresh session and turn:
 The packaged consumer cannot prune activity evidence (its in-memory runtime stores keep a Run's evidence for the process
 lifetime) and composes activity execution inspection as part of WorkflowsRuntimeApi, so a pruned execution and a backend
 without activity execution inspection are proven by WorkflowRunInspectionTests (Runtime API) and WorkflowRunAgentTests
-(Elsa.Agent.Workflows.Runtime.Tests); natively the state view is reported unavailable by reason and the Runtime-side
-deployment shape is deselected. The canary is searched, raw, in every disclosed payload, stream frame, adapter trace and
+(Elsa.Agent.Workflows.Runtime.Tests); natively the Fault's state view is reported unavailable by reason and the Runtime-side
+deployment shape is deselected. The deselection reloads the shell, which empties the consumer's in-memory run stores, so it
+runs after the browser journey, last. The canary is searched, raw, in every disclosed payload, stream frame, adapter trace and
 retained evidence file of the case, and in the browser journey's own agent traffic. The Write Line writes its text to the
 backend's console, which is the host's own process log and not a Weaver disclosure; it is not part of the case evidence.
 
-In the actual packaged Studio (browser.mjs, workflow-run) the run page discloses the exact Run and selected activity execution
-and its Explain action reads it. Frame orders are each adapter's own, pinned from earlier witnesses (explain_journeys.READ_FRAMES).
+In the actual packaged Studio (browser.mjs, workflow-run) the run page, with the Write Line's activity execution (the captured
+canary) selected, discloses the exact Run and selection and its Explain action reads it; the page's own agent traffic and
+streams are searched raw for the canary. Frame orders are each adapter's own, pinned from earlier witnesses (explain_journeys.READ_FRAMES).
 Nothing is retried.
 """
 from __future__ import annotations
@@ -59,7 +63,7 @@ from explain_journeys import READ_FRAMES
 from authorization_journeys import select_command
 from inspection_journeys import (ADMISSION_REFUSAL, MUTATING_TOOLS, RUNTIME_AGENT_FEATURE, RUNTIME_DENIED, _completed, _frames, _kinds, _owned,
                                  _called_once, _offered, _refused_at_admission, _session, _without_feature, require_admissions, require_unchanged)
-from journey_runtime import BASE_GRANTS, browser_inputs, same
+from journey_runtime import BASE_GRANTS, same
 from owner_resources import owner_path, seed_faulted_run
 from runtime import RUNTIME_ENVIRONMENT, private_json
 from truth_seam_journeys import CAPABILITIES_READ, same_target
@@ -73,6 +77,8 @@ EXPECTED_CASES = frozenset(provider + "-workflow-run" for provider in PROVIDERS)
 WORKFLOW_MODULE = "Elsa.Studio.Workflows"
 RUN_TOOL, RUN_KIND, RUN_GUIDANCE, RUN_RESOURCE = "workflow_read_run", "workflows.run", "workflows.run-guidance", "workflow-run"
 RUN_CAPABILITY, CHANGE_CAPABILITY = "workflow.run-explain", "workflow.propose-change"
+# The test-only host seam (fixtures/BackendConsumer/QualificationRunCapture.cs) that captures sensitive activity inputs.
+SEAM_FEATURE = "QualificationRunCapture"
 # No package registers a run control; a tool whose name says one would be a regression.
 RUN_CONTROL_WORDS = ("retry", "cancel", "delete", "dispatch", "rerun", "restart")
 TEXTS = {
@@ -180,8 +186,8 @@ def require_run_result(data, run, *, selected=None, payloads=None, permitted=Tru
     check(data.get("inProgress") is (not terminal) and isinstance(data.get("readAt"), str) and isinstance(data.get("attribution"), str)
           and ("has finished" if terminal else "still in progress") in data["attribution"],
           "The read is not attributed as the run API's status says")
-    check(data.get("canInspectValues") is permitted and TEXTS["run-controls"] in str(data.get("runControls")),
-          "The read does not report the actor's value inspection or the run controls")
+    check(data.get("canInspectValues") is permitted and data.get("canResolveValues") is permitted and TEXTS["run-controls"] in str(data.get("runControls")),
+          "The read does not report the actor's value inspection and resolution or the run controls")
     incident = lambda row: (row.get("incidentId"), row.get("activityExecutionId"), row.get("failureType"), row.get("isBlocking"), row.get("message"))
     check(data.get("incidentsTruncated") is False
           and sorted(incident(row) for row in data.get("incidents") or []) == sorted(incident(row) for row in run["instance"].get("incidents") or [])
@@ -224,9 +230,15 @@ def require_run_result(data, run, *, selected=None, payloads=None, permitted=Tru
             check(any(reason == "withheld" for _, reason in unavailable), "A withheld value is not listed as withheld")
         disclosures[str(row.get("inputKey") or row.get("name"))] = disclosure
     state = chosen.get("stateView") or {}
-    check(state.get("available") is False and state.get("unavailableReason") in ("notCaptured", "unsupported") and state.get("view") is None
-          or state.get("available") is True, "The state view is neither shown nor unavailable by reason")
-    return {**record, "selected": detail["activityExecutionId"], "values": disclosures, "stateView": state.get("unavailableReason") or "available"}
+    sensitive = any(row.get("isSensitive") is True and row.get("subject") == "ActivityInput" for row in evidence.values())
+    if sensitive:
+        check(state.get("withheld") is True and state.get("available") is False and state.get("view") is None,
+              "The state view of an activity with a sensitive input was not withheld")
+    else:
+        check(state.get("withheld") is False and (state.get("available") is False and state.get("unavailableReason") in ("notCaptured", "unsupported")
+              and state.get("view") is None or state.get("available") is True), "The state view is neither shown nor unavailable by reason")
+    label = "withheld" if state.get("withheld") else state.get("unavailableReason") or "available"
+    return {**record, "selected": detail["activityExecutionId"], "values": disclosures, "stateView": label}
 
 
 def require_run_read(frames, rows, accepted, *, provider, command_id, attachment, run, selected=None, payloads=None, permitted=True, canary):
@@ -331,9 +343,16 @@ def _native(runtime, name, seed, canary):
     faulted, waiting, n = seed["faulted"], seed["waiting"], seed["nodes"]
     record, refs, _ = _read(runtime, name + "-explain-fault", runtime.backend, seed, faulted, faulted["activities"][n["fault"]], canary=canary)
     records["explain-fault"], evidence = {"control": "explain-fault", **record}, evidence + refs
-    record, refs, _ = _read(runtime, name + "-explain-activity", runtime.backend, seed, faulted, faulted["activities"][n["sensitive"]], canary=canary)
-    check(record["values"].get("text") == "withheld", "The sensitive input was not disclosed only as withheld")
-    records["explain-activity"], evidence = {"control": "explain-activity", **record}, evidence + refs
+    sensitive = faulted["activities"][n["sensitive"]]
+    # The seam made the runtime capture the canary, so this control could fail: a regression that released a captured
+    # sensitive value would put the canary in the disclosed payload.
+    captured = [row for row in sensitive["detail"].get("valueSnapshots") or [] if (row.get("inputKey") or row.get("name")) == "text"]
+    check(len(captured) == 1 and captured[0].get("isSensitive") is True and captured[0].get("captureState") in ("payloadCaptured", "diagnosticSnapshotCaptured"),
+          "The run API does not hold the captured sensitive input, so its withholding would prove nothing: " + json.dumps(captured)[:300])
+    record, refs, _ = _read(runtime, name + "-explain-activity", runtime.backend, seed, faulted, sensitive, canary=canary)
+    check(record["values"].get("text") == "withheld" and record["stateView"] == "withheld",
+          "The captured sensitive input (or its activity's state view) was not disclosed only as withheld")
+    records["explain-activity"], evidence = {"control": "explain-activity", **record, "canaryCaptured": True}, evidence + refs
     record, refs, _ = _read(runtime, name + "-in-progress", runtime.backend, seed, waiting, waiting["activities"][n["wait"]], canary=canary)
     check(record["inProgress"] is True, "The waiting Run was not read as in progress")
     records["in-progress"], evidence = {"control": "in-progress", **record}, evidence + refs
@@ -368,13 +387,16 @@ def _native(runtime, name, seed, canary):
                                           TEXTS["run-denied"])
     records["runtime-denied"], evidence = {"control": "runtime-denied", **refusal}, evidence + refs
     runtime.sign_in()
-    def absent():
-        value, refs = _refused_at_admission(runtime, name + "-runtime-agent-absent", runtime.backend, run_attachment(faulted["workflowExecutionId"]), None,
-                                            TEXTS["kind-unsupported"])
-        return {"control": "runtime-agent-absent", **value}, refs
-    record, refs = _without_feature(runtime, name + "-runtime-agent", RUNTIME_AGENT_FEATURE, absent)
-    records["runtime-agent-absent"], evidence = record, evidence + refs
     return records, evidence
+
+
+def _absent(runtime, name, seed):
+    """The deployment-shape control. It reloads the shell, which empties the consumer's in-memory run stores, so it runs last."""
+    def absent():
+        value, refs = _refused_at_admission(runtime, name + "-runtime-agent-absent", runtime.backend, run_attachment(seed["faulted"]["workflowExecutionId"]),
+                                            None, TEXTS["kind-unsupported"])
+        return {"control": "runtime-agent-absent", **value}, refs
+    return _without_feature(runtime, name + "-runtime-agent", RUNTIME_AGENT_FEATURE, absent)
 
 
 def _browser(runtime, name, seed, canary):
@@ -385,7 +407,7 @@ def _browser(runtime, name, seed, canary):
     # The canary travels in the private configuration only (never browser-inputs evidence): the page searches its own agent
     # traffic for it, raw.
     workflow = {"run": {"workflowExecutionId": faulted["workflowExecutionId"], "path": faulted["instancePath"],
-                        "activityExecutionId": faulted["activities"][n["fault"]]["detail"]["activityExecutionId"], "canary": canary}}
+                        "activityExecutionId": faulted["activities"][n["sensitive"]]["detail"]["activityExecutionId"], "canary": canary}}
     config = {"journey": BROWSER_JOURNEY, "provider": runtime.provider, "studioOrigin": runtime.studio_origin, "backendOrigin": runtime.backend_origin,
               "storageState": identity["storageState"], "commandFile": str(runtime.command_file), "output": str(output), "workflow": workflow}
     private_json(root / "config-private.json", config)
@@ -401,11 +423,19 @@ def _browser(runtime, name, seed, canary):
     check(trace["incompleteTailBytes"] == 0, "An incomplete adapter trace cannot establish the Run journey")
     commands = [json.loads(path.read_text()) for path in sorted(output.glob("command-*.json"))]
     value = require_run_browser(observed, commands, trace["records"], provider=runtime.provider)
-    public = {**config, "workflow": {"run": {key: item for key, item in workflow["run"].items() if key != "canary"}}}
     evidence = [*observed["evidence"], observed["ownerBefore"], observed["ownerAfter"], {"path": str(observation), "sha256": sha(observation)},
-                runtime.save(root, "browser-inputs", browser_inputs(public)), trace["receipt"]]
+                runtime.save(root, "browser-inputs", run_browser_inputs(config)), trace["receipt"]]
     no_canary(canary, trace["records"])
     return value, evidence
+
+
+def run_browser_inputs(config):
+    """The journey's allowlisted public inputs: the Run's identity and path, never the canary or the authentication state."""
+    run = (config.get("workflow") or {}).get("run") or {}
+    check(all(isinstance(run.get(key), str) and run[key] for key in ("workflowExecutionId", "activityExecutionId", "path"))
+          and run["path"].startswith("/") and not run["path"].startswith("//") and "?" not in run["path"], "The Run journey needs native identities and a local path")
+    return {**{key: config[key] for key in ("journey", "provider", "studioOrigin", "backendOrigin")}, "driverSha256": sha(TOOL / "browser.mjs"),
+            "run": {key: run[key] for key in ("workflowExecutionId", "activityExecutionId", "path")}}
 
 
 def require_run_browser(observed, commands, rows, *, provider):
@@ -448,12 +478,19 @@ def _case(runtime, provider):
     evidence = list(runtime.select_provider(provider))
     canary = "CANARY-RUN-SENSITIVE-" + uuid.uuid4().hex
     runtime.sign_in()
-    seed = seed_faulted_run(runtime.backend, runtime.output(name + "-workflow") / "run-seed", canary)
-    evidence += seed["evidence"]
-    native, native_evidence = _native(runtime, name, seed, canary)
-    evidence += native_evidence
-    browser, browser_evidence = _browser(runtime, name + "-browser", seed, canary)
-    evidence += browser_evidence
+    # The test-only capture seam first (a shell reload), so the seeded Runs' sensitive input is really captured.
+    evidence += runtime.apply_features(name + "-select-seam", {SEAM_FEATURE: (True, {})})
+    try:
+        seed = seed_faulted_run(runtime.backend, runtime.output(name + "-workflow") / "run-seed", canary)
+        evidence += seed["evidence"]
+        native, native_evidence = _native(runtime, name, seed, canary)
+        evidence += native_evidence
+        browser, browser_evidence = _browser(runtime, name + "-browser", seed, canary)
+        evidence += browser_evidence
+        native["runtime-agent-absent"], absent_evidence = _absent(runtime, name, seed)
+        evidence += absent_evidence
+    finally:
+        evidence += runtime.apply_features(name + "-deselect-seam", {SEAM_FEATURE: (False, {})})
     searched = require_no_canary_in_evidence(evidence, canary, runtime.run.root)
     return {"id": name, "status": "passed", "adapter": provider, "evidenceCategory": EVIDENCE_CATEGORY, "native": native, "browser": browser,
             "canarySearch": {"files": searched, "found": 0}, "evidence": evidence}
@@ -528,6 +565,7 @@ def require_workflow_run(section, owned_root=None, *, source=None):
             check(observed.get("id") == row["id"] and observed.get("status") == "passed" and observed.get("adapter") == row["id"].split("-", 1)[0]
                   and sorted(native) == sorted(RUN_NATIVE) and all((native.get(control) or {}).get("control") == control for control in RUN_NATIVE)
                   and ((native.get("explain-activity") or {}).get("values") or {}).get("text") == "withheld"
+                  and (native.get("explain-activity") or {}).get("canaryCaptured") is True
                   and (native.get("in-progress") or {}).get("inProgress") is True
                   and controls.get("unchanged") is True and isinstance(controls.get("offered"), list) and not MUTATING_TOOLS & set(controls["offered"])
                   and (native.get("runtime-agent-absent") or {}).get("code") == ADMISSION_REFUSAL["code"]
@@ -540,7 +578,7 @@ def require_workflow_run(section, owned_root=None, *, source=None):
 def synthetic_native():
     """The minimal native record shape the final gate checks; for synthetic self-tests only, never native evidence."""
     value = {control: {"control": control} for control in RUN_NATIVE}
-    value["explain-activity"]["values"] = {"text": "withheld"}
+    value["explain-activity"].update(values={"text": "withheld"}, canaryCaptured=True)
     value["in-progress"]["inProgress"] = True
     value["controls-refused"].update(unchanged=True, offered=[RUN_TOOL])
     value["runtime-agent-absent"]["code"] = ADMISSION_REFUSAL["code"]

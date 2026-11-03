@@ -24,8 +24,16 @@ internal sealed class WorkflowReadExecutableTool(
     internal const string ResultType = WorkflowExecutableContext.ExecutableKind;
     /// <summary>At most this many graph nodes are returned, depth first; a larger graph is reported as truncated.</summary>
     internal const int NodeLimit = 300;
-    /// <summary>The result's bound on its JSON text, under the host's 32 KiB per-attachment budget (#3710).</summary>
-    internal const int ResultBudget = 28 * 1024;
+    /// <summary>The result's bound on its JSON text, well under the host's 32 KiB per-attachment budget (#3710).</summary>
+    internal const int ResultBudget = 24 * 1024;
+    private const int TextLimit = 256;
+
+    /// <summary>
+    /// The bounds tried in order, each smaller than the last: graph nodes (depth first), each node's inputs and connections,
+    /// and the Source References and dependencies. The first whose result fits the budget is used.
+    /// </summary>
+    private static readonly (int Nodes, int Inputs, int Connections, int References)[] Bounds =
+        [(NodeLimit, 32, 64, 32), (150, 16, 32, 32), (80, 8, 16, 16), (40, 8, 16, 8), (20, 4, 8, 8), (10, 4, 8, 4), (1, 0, 0, 1)];
     private static readonly JsonSerializerOptions JsonOptions = WorkflowExecutableContext.JsonOptions;
 
     internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow Executable",
@@ -87,64 +95,104 @@ internal sealed class WorkflowReadExecutableTool(
             case WorkflowExecutableContext.Outcome.Unavailable: return Failure(WorkflowExecutableContext.UnavailableCode, WorkflowExecutableContext.UnavailableMessage, 503);
         }
         var executable = read.Executable!;
-        // The largest depth-first prefix of the graph whose result fits the budget; a smaller one says it is truncated.
-        JsonElement data = default;
-        foreach (var limit in new[] { NodeLimit, 150, 80, 40, 20, 10, 1 })
+        // The largest bounded reading whose result fits the budget; a smaller one says what it left out. If even the smallest
+        // does not fit, nothing unbounded is returned.
+        JsonElement? data = null;
+        foreach (var limits in Bounds)
         {
-            data = Result(executable, limit);
-            if (data.GetRawText().Length <= ResultBudget) break;
+            var candidate = Result(executable, limits);
+            if (candidate.GetRawText().Length <= ResultBudget) { data = candidate; break; }
         }
-        return AgentResult<AgentToolPreparation>.Success(new(WorkflowExecutableContext.Target(executable.ArtifactId, executable.ArtifactHash), data, AgentRisk.ReadOnly,
-            new(ResultType, "1", data), RequiresApproval: false));
+        if (data is not { } bounded)
+            return Failure("agent.workflow.executable_too_large", "The workflow Executable's read does not fit the context budget even at its smallest bound; nothing was read.", 413);
+        return AgentResult<AgentToolPreparation>.Success(new(WorkflowExecutableContext.Target(executable.ArtifactId, executable.ArtifactHash), bounded, AgentRisk.ReadOnly,
+            new(ResultType, "1", bounded), RequiresApproval: false));
     }
 
     public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default) =>
         Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
             "Read the exact workflow Executable through the workflow runtime at its bound Artifact Hash; nothing was changed.", new(ResultType, "1", invocation.Arguments))));
 
-    private static JsonElement Result(WorkflowExecutableInspectionDetails executable, int limit)
+    private static JsonElement Result(WorkflowExecutableInspectionDetails executable, (int Nodes, int Inputs, int Connections, int References) bound)
     {
-        var included = 0;
-        var graph = Node(executable.RootActivity, limit, ref included);
+        var walk = new Walk(bound.Nodes, bound.Inputs, bound.Connections);
+        walk.Include(executable.RootActivity);
+        var graph = walk.Node(executable.RootActivity);
         return JsonSerializer.SerializeToElement(new
         {
             readOnly = true, artifactId = executable.ArtifactId, artifactHash = executable.ArtifactHash, createdAt = executable.CreatedAt,
-            rootActivityType = executable.RootActivityType, rootActivityVersion = executable.RootActivityVersion, nodeCount = executable.NodeCount,
-            graph, nodesIncluded = included, graphTruncated = Count(executable.RootActivity) > included,
-            sourceReferences = WorkflowExecutableContext.References(executable),
-            sourceReferencesTruncated = executable.SourceReferences.Count > WorkflowExecutableContext.ReferenceLimit,
-            dependencies = executable.Dependencies.Take(WorkflowExecutableContext.ReferenceLimit)
-                .Select(dependency => new { artifactId = dependency.ArtifactId, artifactHash = dependency.ArtifactHash }).ToArray()
+            rootActivityType = walk.Text(executable.RootActivityType), rootActivityVersion = walk.Text(executable.RootActivityVersion), nodeCount = executable.NodeCount,
+            graph, nodesIncluded = walk.Included.Count,
+            graphTruncated = Count(executable.RootActivity) > walk.Included.Count || walk.ListsCut || walk.ConnectionsOmitted > 0,
+            connectionsOmitted = walk.ConnectionsOmitted,
+            // Text values (types, versions, names, ports) longer than 256 characters are cut; identities never are.
+            truncatedFields = walk.TruncatedFields,
+            sourceReferences = WorkflowExecutableContext.References(executable).Take(bound.References).ToArray(),
+            sourceReferencesTruncated = executable.SourceReferences.Count > Math.Min(bound.References, WorkflowExecutableContext.ReferenceLimit),
+            dependencies = executable.Dependencies.Take(bound.References)
+                .Select(dependency => new { artifactId = dependency.ArtifactId, artifactHash = dependency.ArtifactHash }).ToArray(),
+            dependenciesTruncated = executable.Dependencies.Count > bound.References
         }, JsonOptions);
     }
 
-    // Depth first, bounded: a node beyond the bound is left out with its subtree, and the result says the graph was truncated.
-    private static object Node(WorkflowExecutableInspectionNode node, int limit, ref int included)
+    /// <summary>
+    /// One bounded, depth-first reading of the graph. The included nodes are chosen first, so a connection is kept only when
+    /// both its ends are included; a node beyond the bound is left out with its subtree, and each node's inputs and
+    /// connections are bounded too. Every cut is reported, never silent.
+    /// </summary>
+    private sealed class Walk(int nodes, int inputs, int connections)
     {
-        included++;
-        var slots = new List<object>();
-        foreach (var slot in node.Slots)
+        public HashSet<string> Included { get; } = new(StringComparer.Ordinal);
+        public bool ListsCut { get; private set; }
+        public int TruncatedFields { get; private set; }
+
+        /// <summary>A text value bounded at 256 characters; each cut is counted and reported.</summary>
+        public string Text(string value)
         {
-            var nodes = new List<object>();
-            foreach (var child in slot.Nodes)
-            {
-                if (included >= limit) break;
-                nodes.Add(Node(child, limit, ref included));
-            }
-            slots.Add(new { name = slot.Name, nodes });
+            if (value.Length <= TextLimit) return value;
+            TruncatedFields++;
+            return value[..TextLimit];
         }
-        return new
+        public int ConnectionsOmitted { get; private set; }
+
+        public void Include(WorkflowExecutableInspectionNode node)
         {
-            executableNodeId = node.ExecutableNodeId, authoredActivityId = node.AuthoredActivityId, activityType = node.ActivityType,
-            activityTypeVersion = node.ActivityTypeVersion, structureKind = node.StructureKind,
-            inputs = node.Inputs.Select(input => new { name = input.Name, source = input.Source, sensitive = input.IsSensitive }).ToArray(),
-            slots,
-            connections = node.Connections.Select(connection => new
+            Included.Add(node.ExecutableNodeId);
+            foreach (var slot in node.Slots)
+                foreach (var child in slot.Nodes)
+                {
+                    if (Included.Count >= nodes) return;
+                    Include(child);
+                }
+        }
+
+        public object Node(WorkflowExecutableInspectionNode node)
+        {
+            var slots = node.Slots.Select(slot => new
             {
-                source = connection.Source, sourcePort = connection.SourcePort, target = connection.Target, targetPort = connection.TargetPort
-            }).ToArray()
-        };
+                name = Text(slot.Name),
+                nodes = slot.Nodes.Where(child => Included.Contains(child.ExecutableNodeId)).Select(Node).ToArray()
+            }).ToArray();
+            var kept = node.Connections.Where(item => Included.Contains(item.Source) && Included.Contains(item.Target)).ToArray();
+            ConnectionsOmitted += node.Connections.Count - Math.Min(kept.Length, connections);
+            if (node.Inputs.Count > inputs || kept.Length > connections) ListsCut = true;
+            return new
+            {
+                executableNodeId = node.ExecutableNodeId, authoredActivityId = node.AuthoredActivityId, activityType = Text(node.ActivityType),
+                activityTypeVersion = Text(node.ActivityTypeVersion), structureKind = node.StructureKind is null ? null : Text(node.StructureKind),
+                inputs = node.Inputs.Take(inputs).Select(input => new { name = Text(input.Name), source = input.Source, sensitive = input.IsSensitive }).ToArray(),
+                inputsTruncated = node.Inputs.Count > inputs,
+                slots,
+                connections = kept.Take(connections).Select(connection => new
+                {
+                    source = connection.Source, sourcePort = connection.SourcePort is null ? null : Text(connection.SourcePort), target = connection.Target,
+                    targetPort = connection.TargetPort is null ? null : Text(connection.TargetPort)
+                }).ToArray(),
+                connectionsTruncated = node.Connections.Count > kept.Take(connections).Count()
+            };
+        }
     }
+
 
     private static int Count(WorkflowExecutableInspectionNode node) => 1 + node.Slots.Sum(slot => slot.Nodes.Sum(Count));
 

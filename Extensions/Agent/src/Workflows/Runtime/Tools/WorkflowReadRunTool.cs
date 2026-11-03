@@ -16,6 +16,11 @@ namespace Elsa.Agent.Workflows.Runtime.Tools;
 /// payload read releases them; a withheld value stays withheld) and state view. What is unavailable is listed by reason.
 /// Nothing is ever changed, and no run control is offered.
 /// </summary>
+/// <remarks>
+/// The read is made twice. The first resolves no value and decides the bounds the result fits in, counting every value it
+/// may release at its full bound; the second resolves exactly the values those bounds disclose, so the payload read audits
+/// only what the result discloses. A result that does not fit even at its smallest bound is refused, never sent over budget.
+/// </remarks>
 internal sealed class WorkflowReadRunTool(
     IAgentToolAuthorizer authorizer,
     IServiceProvider services) : IAgentTool, IAgentToolAuthorization
@@ -25,14 +30,24 @@ internal sealed class WorkflowReadRunTool(
 
     public const string ToolName = "workflow_read_run";
     internal const string ResultType = WorkflowRunContext.RunKind;
-    /// <summary>The result's bound on its JSON text, under the host's 32 KiB per-attachment budget (#3710).</summary>
-    internal const int ResultBudget = 28 * 1024;
+    /// <summary>The result's hard bound on its JSON text, well under the host's 32 KiB per-attachment budget (#3710).</summary>
+    internal const int ResultBudget = 24 * 1024;
     internal const int TokenLimit = 1024;
+    internal const int OutcomeLimit = 16;
+    internal const string TruncationMarker = " … [truncated]";
     private static readonly JsonSerializerOptions JsonOptions = WorkflowRunContext.JsonOptions;
 
-    /// <summary>The bounds tried in order until the result fits the budget: incidents, activity executions, values, characters per value or view.</summary>
-    private static readonly (int Incidents, int Activities, int Values, int ValueChars)[] Tiers =
-        [(50, 50, 64, 4096), (25, 25, 32, 2048), (10, 10, 16, 1024), (5, 5, 8, 256), (2, 2, 4, 0), (0, 0, 0, 0)];
+    /// <summary>
+    /// The bounds tried in order until the result fits the budget: incidents, activity executions, values, bookmarks,
+    /// characters per value or view, characters per incident message. The last discloses identities and counts only.
+    /// </summary>
+    internal static readonly Tier[] Tiers =
+    [
+        new(50, 50, 32, 50, 4096, 2048), new(25, 25, 16, 25, 2048, 1024), new(10, 10, 8, 10, 1024, 512), new(5, 5, 4, 5, 512, 256),
+        new(2, 2, 2, 2, 256, 128), new(1, 1, 1, 1, 0, 64), new(0, 0, 0, 0, 0, 0)
+    ];
+
+    internal sealed record Tier(int Incidents, int Activities, int Values, int Bookmarks, int ValueChars, int MessageChars);
 
     internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow Run",
         "Returns one exact workflow Run named by an admitted workflows.run context (its workflowExecutionId, or the only one), read-only: the Workflow " +
@@ -94,24 +109,23 @@ internal sealed class WorkflowReadRunTool(
         if (bound is null)
             return Failure("agent.workflow.run_context_required",
                 "One admitted workflow Run context is required, and workflowExecutionId must name one of them; nothing was read.", 409);
-        var read = await WorkflowRunContext.ReadAsync(authorizer, WorkflowRunContext.Inspection(inspections), invocation.ActorId, invocation.TenantId, bound,
-            cancellationToken, pageSize, token, resolveSelectedValues: bound.ActivityExecutionId is not null);
-        switch (read.Outcome)
+        var inspection = WorkflowRunContext.Inspection(inspections);
+        // First read: no value resolved. It decides the bounds, counting each value it may release at its full bound.
+        var read = await WorkflowRunContext.ReadAsync(authorizer, inspection, invocation.ActorId, invocation.TenantId, bound, cancellationToken, pageSize, token);
+        if (Refusal(read.Outcome) is { } refused) return refused;
+        var tier = Tiers.FirstOrDefault(item => Result(read.Run!, bound.ActivityExecutionId, pageSize, item, estimate: true).GetRawText().Length <= ResultBudget);
+        if (tier is null) return Failure(WorkflowRunContext.TooLargeCode, WorkflowRunContext.TooLargeMessage, 413);
+        // Second read: exactly the values those bounds disclose are resolved, so the payload read audits only what is disclosed.
+        var resolve = Disclosable(read.Run!, tier);
+        if (resolve.Count > 0)
         {
-            case WorkflowRunContext.Outcome.Denied: return Failure("agent.workflow.permission_denied", WorkflowRunContext.DeniedMessage, 403);
-            case WorkflowRunContext.Outcome.NotFound: return Failure(WorkflowRunContext.NotFoundCode, WorkflowRunContext.NotFoundMessage, 404);
-            case WorkflowRunContext.Outcome.ActivityNotFound: return Failure(WorkflowRunContext.ActivityNotFoundCode, WorkflowRunContext.ActivityNotFoundMessage, 404);
-            case WorkflowRunContext.Outcome.Unavailable: return Failure(WorkflowRunContext.UnavailableCode, WorkflowRunContext.UnavailableMessage, 503);
+            read = await WorkflowRunContext.ReadAsync(authorizer, inspection, invocation.ActorId, invocation.TenantId, bound, cancellationToken, pageSize, token, resolve);
+            if (Refusal(read.Outcome) is { } changed) return changed;
         }
-        var run = read.Run!;
-        // The largest result whose text fits the budget; a smaller one says what it left out.
-        JsonElement data = default;
-        foreach (var tier in Tiers)
-        {
-            data = Result(run, bound.ActivityExecutionId, pageSize, tier);
-            if (data.GetRawText().Length <= ResultBudget) break;
-        }
-        return AgentResult<AgentToolPreparation>.Success(new(WorkflowRunContext.Target(run.Instance.WorkflowExecutionId, bound.ActivityExecutionId), data,
+        var data = Result(read.Run!, bound.ActivityExecutionId, pageSize, tier, estimate: false);
+        // The hard guard: never sent over budget (a Run that grew between the two reads is refused rather than cut).
+        if (data.GetRawText().Length > ResultBudget) return Failure(WorkflowRunContext.TooLargeCode, WorkflowRunContext.TooLargeMessage, 413);
+        return AgentResult<AgentToolPreparation>.Success(new(WorkflowRunContext.Target(read.Run!.Instance.WorkflowExecutionId, bound.ActivityExecutionId), data,
             AgentRisk.ReadOnly, new(ResultType, "1", data), RequiresApproval: false));
     }
 
@@ -119,13 +133,49 @@ internal sealed class WorkflowReadRunTool(
         Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
             "Read the exact workflow Run through the workflow runtime; nothing was changed.", new(ResultType, "1", invocation.Arguments))));
 
-    private static JsonElement Result(WorkflowRunInspectionDetails run, string? activityExecutionId, int pageSize,
-        (int Incidents, int Activities, int Values, int ValueChars) tier)
+    /// <summary>
+    /// Whether a retained result discloses more than the actor's current run access covers: incident details read under value
+    /// inspection, or values released under payload resolution. A result whose disclosure cannot be read is treated as exceeding.
+    /// </summary>
+    internal static bool Exceeds(AgentPayload? payload, WorkflowRunInspectionDetails current)
+    {
+        if (payload is null) return false;
+        var data = payload.Data;
+        if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("canInspectValues", out var inspected)
+            || inspected.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return true;
+        if (inspected.GetBoolean() && !current.CanInspectValues) return true;
+        if (!data.TryGetProperty("selectedActivity", out var selected) || selected.ValueKind != JsonValueKind.Object
+            || !selected.TryGetProperty("values", out var values)) return false;
+        if (values.ValueKind != JsonValueKind.Array) return true;
+        var released = values.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.Object
+            || !value.TryGetProperty("disclosure", out var disclosure) || disclosure.GetString() == "resolved");
+        return released && !(current.CanInspectValues && current.CanResolveValues);
+    }
+
+    private static AgentResult<AgentToolPreparation>? Refusal(WorkflowRunContext.Outcome outcome) => outcome switch
+    {
+        WorkflowRunContext.Outcome.Denied => Failure("agent.workflow.permission_denied", WorkflowRunContext.DeniedMessage, 403),
+        WorkflowRunContext.Outcome.NotFound => Failure(WorkflowRunContext.NotFoundCode, WorkflowRunContext.NotFoundMessage, 404),
+        WorkflowRunContext.Outcome.ActivityNotFound => Failure(WorkflowRunContext.ActivityNotFoundCode, WorkflowRunContext.ActivityNotFoundMessage, 404),
+        WorkflowRunContext.Outcome.Unavailable => Failure(WorkflowRunContext.UnavailableCode, WorkflowRunContext.UnavailableMessage, 503),
+        _ => null
+    };
+
+    // The resolvable values the tier discloses with a value: within its value count, and only when values are shown at all.
+    private static IReadOnlySet<string> Disclosable(WorkflowRunInspectionDetails run, Tier tier) =>
+        tier.ValueChars == 0 || run.Selection?.Execution is not { } execution ? new HashSet<string>()
+            : execution.Values.Take(tier.Values).Where(value => value.Disclosure == WorkflowRunValueDisclosure.Resolvable).Select(value => value.EvidenceId)
+                .ToHashSet(StringComparer.Ordinal);
+
+    private static JsonElement Result(WorkflowRunInspectionDetails run, string? activityExecutionId, int pageSize, Tier tier, bool estimate)
     {
         var instance = run.Instance;
         var unavailable = new List<object>();
         if (!run.CanInspectValues && run.Incidents.Count > 0)
             unavailable.Add(new { data = "incident messages", reason = "notPermitted", explanation = WorkflowRunContext.Explain(WorkflowRunUnavailableReason.NotPermitted) });
+        if (run.CanInspectValues && run.Incidents.Any(incident => incident.SensitiveInputs))
+            unavailable.Add(new { data = "incident messages of activities with sensitive inputs", reason = "withheld",
+                explanation = "withheld because the activity has a sensitive input that its text could echo" });
         if (run.InspectionGranularity != "activity-level")
             unavailable.Add(new { data = "exact per-activity evidence", reason = "notCaptured",
                 explanation = $"This Run executed under the {run.PersistenceMode} persistence mode, so its activity evidence is folded to commit boundaries ({run.InspectionGranularity})." });
@@ -134,25 +184,30 @@ internal sealed class WorkflowReadRunTool(
         {
             if (run.Selection is { Execution: { } execution })
             {
-                var values = execution.Values.Take(tier.Values).Select(value => Value(value, tier.ValueChars, unavailable)).ToArray();
+                var values = execution.Values.Take(tier.Values).Select(value => Value(value, tier.ValueChars, estimate, unavailable)).ToArray();
                 var state = execution.StateView;
-                if (!state.Available && state.UnavailableReason is { } stateReason)
+                if (state.Withheld)
+                    unavailable.Add(new { data = "selected activity execution state view", reason = "withheld",
+                        explanation = "withheld because the activity has a sensitive input that its state could echo" });
+                else if (!state.Available && state.UnavailableReason is { } stateReason)
                     unavailable.Add(new { data = "selected activity execution state view", reason = WorkflowRunContext.Reason(stateReason), explanation = WorkflowRunContext.Explain(stateReason) });
                 var view = state.View is { } projection && projection.GetRawText().Length <= tier.ValueChars ? (JsonElement?)projection : null;
                 selected = new
                 {
                     activityExecutionId, summary = Summary(execution.Summary), parentActivityExecutionId = execution.ParentActivityExecutionId,
                     schedulingActivityExecutionId = execution.SchedulingActivityExecutionId, attemptNumber = execution.AttemptNumber,
-                    bookmarks = execution.Bookmarks.Select(bookmark => new
+                    bookmarks = execution.Bookmarks.Take(tier.Bookmarks).Select(bookmark => new
                     {
                         bookmarkId = bookmark.BookmarkId, stimulusType = bookmark.StimulusType, createdAt = bookmark.CreatedAt, expiresAt = bookmark.ExpiresAt
                     }).ToArray(),
-                    incidents = execution.Incidents.Take(Math.Max(tier.Incidents, 1)).Select(Incident).ToArray(),
-                    incidentsTruncated = execution.Incidents.Count > Math.Max(tier.Incidents, 1),
-                    values, valuesTruncated = execution.Values.Count > values.Length,
+                    bookmarkCount = execution.Bookmarks.Count, bookmarksTruncated = execution.Bookmarks.Count > tier.Bookmarks,
+                    incidents = execution.Incidents.Take(tier.Incidents).Select(incident => Incident(incident, tier.MessageChars)).ToArray(),
+                    incidentsTruncated = execution.Incidents.Count > tier.Incidents,
+                    values, valueCount = execution.Values.Count, valuesTruncated = execution.Values.Count > values.Length,
                     stateView = new
                     {
-                        available = state.Available, unavailableReason = state.UnavailableReason is { } reason ? WorkflowRunContext.Reason(reason) : null,
+                        available = state.Available, withheld = state.Withheld,
+                        unavailableReason = state.UnavailableReason is { } reason ? WorkflowRunContext.Reason(reason) : null,
                         viewKind = state.ViewKind, viewVersion = state.ViewVersion, view, viewOmitted = state.View is not null && view is null
                     }
                 };
@@ -163,6 +218,7 @@ internal sealed class WorkflowReadRunTool(
                 selected = new { activityExecutionId, unavailable = WorkflowRunContext.Reason(reason), explanation = WorkflowRunContext.Explain(reason) };
             }
         }
+        var activities = Math.Min(tier.Activities, pageSize);
         return JsonSerializer.SerializeToElement(new
         {
             readOnly = true, workflowExecutionId = instance.WorkflowExecutionId, activityExecutionId,
@@ -176,12 +232,14 @@ internal sealed class WorkflowReadRunTool(
                 activityCount = instance.ActivityCount, incidentCount = instance.IncidentCount, activeIncidentCount = instance.ActiveIncidentCount,
                 blockingIncidentCount = instance.BlockingIncidentCount, sourceReferenceId = instance.SourceReferenceId, publicationId = instance.PublicationId
             },
-            canInspectValues = run.CanInspectValues, persistenceMode = run.PersistenceMode, inspectionGranularity = run.InspectionGranularity,
-            incidents = run.Incidents.Take(tier.Incidents).Select(Incident).ToArray(), incidentsTruncated = run.Incidents.Count > tier.Incidents,
+            canInspectValues = run.CanInspectValues, canResolveValues = run.CanResolveValues,
+            persistenceMode = run.PersistenceMode, inspectionGranularity = run.InspectionGranularity,
+            incidents = run.Incidents.Take(tier.Incidents).Select(incident => Incident(incident, tier.MessageChars)).ToArray(),
+            incidentsTruncated = run.Incidents.Count > tier.Incidents,
             activities = new
             {
-                items = run.Activities.Items.Take(Math.Min(tier.Activities, pageSize)).Select(Summary).ToArray(), pageSize,
-                itemsTruncated = run.Activities.Items.Count > Math.Min(tier.Activities, pageSize),
+                items = run.Activities.Items.Take(activities).Select(Summary).ToArray(), pageSize,
+                itemsTruncated = run.Activities.Items.Count > activities,
                 totalCount = run.Activities.TotalCount, nextContinuationToken = run.Activities.NextContinuationToken
             },
             selectedActivity = selected,
@@ -190,33 +248,66 @@ internal sealed class WorkflowReadRunTool(
         }, JsonOptions);
     }
 
-    private static object Incident(WorkflowRunInspectionIncident incident) => new
+    private static object Incident(WorkflowRunInspectionIncident incident, int limit)
     {
-        incidentId = incident.IncidentId, activityExecutionId = incident.ActivityExecutionId, executableNodeId = incident.ExecutableNodeId,
-        severity = incident.Severity, status = incident.Status, failureType = incident.FailureType, message = incident.Message,
-        messageRedacted = incident.MessageRedacted, isBlocking = incident.IsBlocking, createdAt = incident.CreatedAt, resolvedAt = incident.ResolvedAt
-    };
+        var (message, truncated) = Bounded(incident.Message, limit);
+        return new
+        {
+            incidentId = incident.IncidentId, activityExecutionId = incident.ActivityExecutionId, executableNodeId = incident.ExecutableNodeId,
+            severity = incident.Severity, status = incident.Status, failureType = Bounded(incident.FailureType, 256).Text, message, messageTruncated = truncated,
+            messageRedacted = incident.MessageRedacted, sensitiveInputs = incident.SensitiveInputs, isBlocking = incident.IsBlocking,
+            createdAt = incident.CreatedAt, resolvedAt = incident.ResolvedAt
+        };
+    }
+
+    // A prefix whose JSON-escaped text fits the bound, marked as truncated; nothing at all when the bound is zero.
+    private static (string? Text, bool Truncated) Bounded(string text, int limit)
+    {
+        if (JsonSerializer.Serialize(text, JsonOptions).Length - 2 <= limit) return (text, false);
+        if (limit <= TruncationMarker.Length) return (null, true);
+        var length = Math.Min(text.Length, limit - TruncationMarker.Length);
+        string prefix;
+        do
+        {
+            // Never split a surrogate pair.
+            if (length > 0 && char.IsHighSurrogate(text[length - 1])) length--;
+            prefix = text[..length] + TruncationMarker;
+            length -= Math.Max(1, length / 8);
+        }
+        while (length > 0 && JsonSerializer.Serialize(prefix, JsonOptions).Length - 2 > limit);
+        return JsonSerializer.Serialize(prefix, JsonOptions).Length - 2 <= limit ? (prefix, true) : (null, true);
+    }
 
     private static object Summary(WorkflowRunInspectionActivitySummary activity) => new
     {
         activityExecutionId = activity.ActivityExecutionId, executableNodeId = activity.ExecutableNodeId, authoredActivityId = activity.AuthoredActivityId,
         activityType = activity.ActivityType, activityTypeVersion = activity.ActivityTypeVersion, status = activity.Status, subStatus = activity.SubStatus,
         executionSequence = activity.ExecutionSequence, scheduledAt = activity.ScheduledAt, startedAt = activity.StartedAt, completedAt = activity.CompletedAt,
-        outcomes = activity.OutcomeNames, bookmarkCount = activity.BookmarkCount, incidentCount = activity.IncidentCount, valueCount = activity.ValueSnapshotCount
+        outcomes = activity.OutcomeNames.Take(OutcomeLimit).ToArray(), outcomesTruncated = activity.OutcomeNames.Count > OutcomeLimit,
+        bookmarkCount = activity.BookmarkCount, incidentCount = activity.IncidentCount, valueCount = activity.ValueSnapshotCount
     };
 
-    // A value as its evidence says: resolved values only as the payload read released them (within the bound), a withheld
-    // one by its marker alone, an unavailable one by its reason.
-    private static object Value(WorkflowRunInspectionValue value, int limit, List<object> unavailable)
+    // A value as its evidence says: a released value (within the bound, otherwise a marked prefix of its JSON text), a
+    // withheld one by its marker alone, an unavailable one by its reason. Estimating, a resolvable value counts at its full bound.
+    private static object Value(WorkflowRunInspectionValue value, int limit, bool estimate, List<object> unavailable)
     {
         var disclosure = value.Disclosure switch
         {
             WorkflowRunValueDisclosure.Resolved => "resolved",
             WorkflowRunValueDisclosure.Resolvable => "resolvable",
-            WorkflowRunValueDisclosure.Withheld => "withheld",
-            _ => "unavailable"
+            WorkflowRunValueDisclosure.Unavailable => "unavailable",
+            _ => "withheld"
         };
-        var released = value.Disclosure == WorkflowRunValueDisclosure.Resolved && value.Value is { } payload && payload.GetRawText().Length <= limit ? value.Value : null;
+        object? released = null;
+        var truncated = false;
+        if (value.Disclosure == WorkflowRunValueDisclosure.Resolved && value.Value is { } payload && limit > 0)
+        {
+            var text = payload.GetRawText();
+            if (text.Length <= limit) released = payload;
+            else (released, truncated) = Bounded(text, limit);
+        }
+        else if (estimate && value.Disclosure == WorkflowRunValueDisclosure.Resolvable && limit > 0)
+            released = new string('x', limit);
         var label = value.Subject + " '" + (value.InputKey ?? value.Name) + "'";
         if (value.Disclosure == WorkflowRunValueDisclosure.Withheld)
             unavailable.Add(new { data = label, reason = "withheld", explanation = "withheld by execution evidence (" + (value.WithheldKind ?? "Sensitive") + "); it is never shown" });
@@ -226,10 +317,11 @@ internal sealed class WorkflowReadRunTool(
         {
             evidenceId = value.EvidenceId, name = value.Name, subject = value.Subject, inputKey = value.InputKey, captureMode = value.CaptureMode,
             captureState = value.CaptureState, accessState = value.AccessState, sensitive = value.IsSensitive, capturedAt = value.CapturedAt,
-            captureReason = value.CaptureReason, typeKind = value.TypeKind, typeId = value.TypeId, disclosure, withheldKind = value.WithheldKind,
+            captureReason = Bounded(value.CaptureReason, 256).Text, typeKind = value.TypeKind, typeId = value.TypeId, disclosure, withheldKind = value.WithheldKind,
             secretReferenceName = value.SecretReferenceName,
             unavailableReason = value.UnavailableReason is { } why ? WorkflowRunContext.Reason(why) : null,
-            value = released, valueOmitted = value.Disclosure == WorkflowRunValueDisclosure.Resolved && released is null
+            value = released, valueTruncated = truncated,
+            valueOmitted = value.Disclosure == WorkflowRunValueDisclosure.Resolved && released is null
         };
     }
 

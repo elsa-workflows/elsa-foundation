@@ -105,7 +105,9 @@ One registration per shell: a second one fails configuration and shell startup (
 
 Exact, read-only reads of persisted workflow definition versions: `ReadAsync(versionId)` returns
 `WorkflowVersionDetails(VersionId, DefinitionId, Version, DefinitionName, State)` or `null` for an unknown version (a
-synthetic `draft:` identifier is never looked up), and `ListAsync(definitionId)` returns the definition's
+synthetic `draft:` identifier is never looked up), `FindDefinitionIdAsync(versionId)` returns only the definition a version
+belongs to (through the version store, without reading the version), so a consumer can ask the definition's owner first, and
+`ListAsync(definitionId)` returns the definition's
 `WorkflowDefinitionVersionSummary` rows in the store's order. The default, `WorkflowVersionReader`, reads through the same
 `IWorkflowVersionDetailsReader` composition as `GET versions/{versionId}` (without the layout and presentation records) and
 the same store list as `GET definitions/{definitionId}/versions`. It decides no authority: a consumer requires the host's

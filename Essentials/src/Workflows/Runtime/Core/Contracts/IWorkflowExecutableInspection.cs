@@ -12,8 +12,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// installed, and a second registration fails startup. Consumers must fail closed when no implementation or several
 /// implementations are installed. The reader makes no authority decision: a consumer decides run access (the Runtime
 /// read permission the executable endpoints require) before it discloses anything it read. The default, in the Workflows
-/// Runtime API, reads exactly what <c>GET runtime/workflows/executables/{artifactId}</c> returns: binding values and source
-/// details (a secret read's reference included) stay out, and a sensitive binding is reported as sensitive.
+/// Runtime API, reads through the same inspector as <c>GET runtime/workflows/executables/{artifactId}</c> and returns a
+/// subset of that response: the identity, Artifact Hash, root, node and live-reference counts, the node tree (each node's
+/// identities, type, structure kind, input bindings by name, source and sensitivity, child slots and connections), the
+/// Source References and the direct dependencies. It leaves out what the endpoint also returns (the chosen reference and
+/// its layout, compatibility metadata, the input contract, output captures, the BPMN projection and the retained execution
+/// count); binding values and source details (a secret read's reference included) are never part of either.
 /// The lookup is by artifact id; a caller that bound an Artifact Hash compares it with the returned one. An
 /// infrastructure failure propagates.
 /// </remarks>

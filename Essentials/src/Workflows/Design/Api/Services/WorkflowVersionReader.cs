@@ -36,6 +36,13 @@ internal sealed class WorkflowVersionReader(IServiceProvider services) : IWorkfl
         }
     }
 
+    public async ValueTask<string?> FindDefinitionIdAsync(string versionId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(versionId) || versionId.StartsWith("draft:", StringComparison.OrdinalIgnoreCase)) return null;
+        return (await versions.FindByIdAsync(versionId, cancellationToken))?.DefinitionId;
+    }
+
     public async ValueTask<IReadOnlyList<WorkflowDefinitionVersionSummary>> ListAsync(string definitionId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

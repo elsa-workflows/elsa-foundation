@@ -75,7 +75,7 @@ public sealed class WorkflowRunInspectionTests
         Assert.Empty(_audit.Records);
         Assert.Equal(WorkflowRunValueDisclosure.Resolvable, Value(described, "text").Disclosure);
 
-        var read = (await inspection.GetAsync(new(RunId, ActivityId, ResolveSelectedValues: true)))!.Selection!.Execution!;
+        var read = (await inspection.GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!.Selection!.Execution!;
         var token = Value(read, "token");
         Assert.Equal((WorkflowRunValueDisclosure.Withheld, "SecretReference", "payments.api-key", true, (JsonElement?)null),
             (token.Disclosure, token.WithheldKind, token.SecretReferenceName, token.IsSensitive, token.Value));
@@ -97,7 +97,7 @@ public sealed class WorkflowRunInspectionTests
     public async Task A_value_the_caller_may_not_inspect_or_resolve_is_not_permitted(bool canInspect, bool canResolve, string accessState)
     {
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted, canInspect: canInspect, canResolve: canResolve, snapshots: [Captured("text", "hello")]);
-        var text = Value((await Create(details).GetAsync(new(RunId, ActivityId, ResolveSelectedValues: true)))!.Selection!.Execution!, "text");
+        var text = Value((await Create(details).GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!.Selection!.Execution!, "text");
         Assert.Equal((WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotPermitted, accessState, (JsonElement?)null),
             (text.Disclosure, text.UnavailableReason, text.AccessState, text.Value));
     }
@@ -116,7 +116,7 @@ public sealed class WorkflowRunInspectionTests
     public async Task A_value_the_runtime_did_not_capture_or_a_backend_without_payload_reads_is_reported_by_reason()
     {
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted, snapshots: [NotCaptured("skipped"), Captured("text", "hello")]);
-        var read = (await Create(details, payloads: false).GetAsync(new(RunId, ActivityId, ResolveSelectedValues: true)))!.Selection!.Execution!;
+        var read = (await Create(details, payloads: false).GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!.Selection!.Execution!;
         Assert.Equal((WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotCaptured), (Value(read, "skipped").Disclosure, Value(read, "skipped").UnavailableReason));
         Assert.Equal((WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.Unsupported), (Value(read, "text").Disclosure, Value(read, "text").UnavailableReason));
     }
@@ -136,7 +136,7 @@ public sealed class WorkflowRunInspectionTests
 
     [Theory]
     [InlineData("none", false, WorkflowRunUnavailableReason.Unsupported)]
-    [InlineData("missing", false, WorkflowRunUnavailableReason.NotCaptured)]
+    [InlineData("missing", false, WorkflowRunUnavailableReason.Unsupported)]
     [InlineData(ActivityStateView.StateCleared, false, WorkflowRunUnavailableReason.NotCaptured)]
     [InlineData(ActivityStateView.NoProjector, false, WorkflowRunUnavailableReason.Unsupported)]
     [InlineData("available", true, null)]
@@ -152,6 +152,109 @@ public sealed class WorkflowRunInspectionTests
         var stateView = (await Create(details, stateViews: new StateViews(view), stateViewsSupported: state != "none").GetAsync(new(RunId, ActivityId)))!.Selection!.Execution!.StateView;
         Assert.Equal((available, reason), (stateView.Available, stateView.UnavailableReason));
         if (available) Assert.Equal(("test.view", 2), (stateView.ViewKind, stateView.View!.Value.GetProperty("step").GetInt32()));
+    }
+
+    [Fact]
+    public async Task Only_the_named_evidence_is_resolved_and_audited_up_to_the_read_bound()
+    {
+        var snapshots = Enumerable.Range(0, 40).Select(index => Captured("value-" + index, "v" + index)).ToArray();
+        var details = await SeedValuesAsync(WorkflowExecutionStatus.Faulted, snapshots);
+        var inspection = Create(details);
+        var described = (await inspection.GetAsync(new(RunId, ActivityId)))!.Selection!.Execution!;
+        var named = described.Values.Take(3).Select(value => value.EvidenceId).ToHashSet();
+
+        var read = (await inspection.GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: named)))!.Selection!.Execution!;
+        Assert.Equal(named, read.Values.Where(value => value.Disclosure == WorkflowRunValueDisclosure.Resolved).Select(value => value.EvidenceId).ToHashSet());
+        Assert.Equal(named, _audit.Records.Select(record => record.EvidenceId).ToHashSet());
+
+        _audit.Records.Clear();
+        var all = (await inspection.GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!.Selection!.Execution!;
+        Assert.Equal(32, all.Values.Count(value => value.Disclosure == WorkflowRunValueDisclosure.Resolved));
+        Assert.Equal(8, all.Values.Count(value => value.Disclosure == WorkflowRunValueDisclosure.Resolvable));
+        Assert.Equal(32, _audit.Records.Count);
+    }
+
+    [Fact]
+    public async Task A_denied_payload_read_is_not_permitted_and_a_vanished_one_is_pruned()
+    {
+        var details = await SeedValuesAsync(WorkflowExecutionStatus.Faulted, Captured("text", "hello"));
+        // The payload read denies a caller it cannot attribute, whatever the activity read said.
+        var denied = Value((await Create(details, payloadAccess: new(true, true, auditSubject: "")).GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!
+            .Selection!.Execution!, "text");
+        Assert.Equal((WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotPermitted), (denied.Disclosure, denied.UnavailableReason));
+        var vanished = Value((await Create(details, payloadPruned: true).GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!.Selection!.Execution!, "text");
+        Assert.Equal((WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.Pruned), (vanished.Disclosure, vanished.UnavailableReason));
+    }
+
+    [Theory]
+    [InlineData("metadataOnly")]
+    [InlineData("captureFailed")]
+    [InlineData("unavailable")]
+    public async Task A_value_without_a_captured_payload_is_not_captured(string state)
+    {
+        var snapshot = state switch
+        {
+            "metadataOnly" => ActivityExecutionInspectionValueSnapshot.FromDecision("text", ActivityExecutionInspectionValueSubject.ActivityInput,
+                new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.MetadataOnly, "Runtime diagnostics policy captured metadata only."),
+                new RuntimeValueTypeDescriptor("alias", "String", null), Now, null, false, inputKey: "text"),
+            "captureFailed" => ActivityExecutionInspectionValueSnapshot.FromDecision("text", ActivityExecutionInspectionValueSubject.ActivityInput,
+                new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.DiagnosticSnapshot, "Diagnostic snapshot captured by runtime diagnostics policy."),
+                new RuntimeValueTypeDescriptor("alias", "String", null), Now, JsonSerializer.SerializeToElement("x"), false, inputKey: "text",
+                failure: new RuntimeInputEvaluationFailure("expression.failed", "The expression failed.")),
+            _ => ActivityExecutionInspectionValueSnapshot.FromDecision("text", ActivityExecutionInspectionValueSubject.ActivityInput,
+                new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.DiagnosticSnapshot, "Diagnostic snapshot captured by runtime diagnostics policy."),
+                new RuntimeValueTypeDescriptor("alias", "String", null), Now, null, false, inputKey: "text")
+        };
+        var details = await SeedValuesAsync(WorkflowExecutionStatus.Faulted, snapshot);
+        var text = Value((await Create(details).GetAsync(new(RunId, ActivityId, ResolveEvidenceIds: All)))!.Selection!.Execution!, "text");
+        Assert.Equal((state, WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotCaptured), (text.CaptureState, text.Disclosure, text.UnavailableReason));
+        Assert.Empty(_audit.Records);
+    }
+
+    [Fact]
+    public async Task The_payload_grant_is_reported_and_an_unset_disclosure_fails_closed()
+    {
+        Assert.True((await Create(await SeedAsync(WorkflowExecutionStatus.Faulted)).GetAsync(new(RunId)))!.CanResolveValues);
+        Assert.False((await Create(await SeedAsync(WorkflowExecutionStatus.Faulted, canResolve: false)).GetAsync(new(RunId)))!.CanResolveValues);
+        Assert.False((await Create(await SeedAsync(WorkflowExecutionStatus.Faulted, canInspect: false)).GetAsync(new(RunId)))!.CanResolveValues);
+        Assert.Equal(WorkflowRunValueDisclosure.Withheld, default(WorkflowRunValueDisclosure));
+    }
+
+    [Fact]
+    public async Task An_activity_with_a_sensitive_input_has_its_incident_messages_and_state_view_withheld_even_with_value_inspection()
+    {
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        var run = (await Create(details, sensitiveNode: true, stateViews: new StateViews(new ActivityStateView(RunId, ActivityId, "node-1", "Faulted", true, null,
+            "test.view", 1, true, JsonSerializer.SerializeToElement(new { echoed = Sentinel })))).GetAsync(new(RunId, ActivityId)))!;
+        var incident = Assert.Single(run.Incidents);
+        Assert.Equal((true, true), (incident.SensitiveInputs, incident.MessageRedacted));
+        Assert.NotEqual("The workflow faulted.", incident.Message);
+        var state = run.Selection!.Execution!.StateView;
+        Assert.Equal((false, true, (JsonElement?)null), (state.Available, state.Withheld, state.View));
+        Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(run), StringComparison.Ordinal);
+        // Without the Executable the read cannot tell which activities are sensitive, so it withholds every activity's message.
+        Assert.True(Assert.Single((await Create(details, executable: false).GetAsync(new(RunId)))!.Incidents).MessageRedacted);
+        // An activity without a sensitive input keeps its message for a caller with value inspection.
+        Assert.Equal("The workflow faulted.", Assert.Single((await Create(details).GetAsync(new(RunId)))!.Incidents).Message);
+    }
+
+    [Fact]
+    public async Task Pruned_does_not_depend_on_the_callers_activity_page()
+    {
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        var narrowed = new Details(details.View! with { Activities = [] });
+        Assert.Equal(WorkflowRunUnavailableReason.Pruned, (await Create(narrowed, pruned: true).GetAsync(new(RunId, ActivityId, ActivityPageSize: 1)))!.Selection!.UnavailableReason);
+        var unrecorded = new Details(details.View! with { Incidents = [] });
+        Assert.Null((await Create(unrecorded, pruned: true).GetAsync(new(RunId, ActivityId)))!.Selection!.UnavailableReason);
+    }
+
+    [Fact]
+    public async Task The_read_is_attributed_to_its_start_before_any_store_read()
+    {
+        var clock = new FakeTimeProvider(ReadAt);
+        var details = await SeedAsync(WorkflowExecutionStatus.Running);
+        var run = await Create(new Details(details.View, () => clock.Advance(TimeSpan.FromMinutes(1))), clock: clock).GetAsync(new(RunId));
+        Assert.Equal(ReadAt, run!.ReadAt);
     }
 
     [Fact]
@@ -192,16 +295,21 @@ public sealed class WorkflowRunInspectionTests
 
     private Access _access = new(true, true);
 
+    private static readonly IReadOnlySet<string> All = new AllEvidence();
+
     private IWorkflowRunInspection Create(Details details, bool activities = true, StateViews? stateViews = null, bool payloads = true, bool pruned = false,
-        bool stateViewsSupported = true) =>
+        bool stateViewsSupported = true, Access? payloadAccess = null, bool payloadPruned = false, bool sensitiveNode = false, bool executable = true,
+        TimeProvider? clock = null) =>
         (IWorkflowRunInspection)Activator.CreateInstance(RuntimeApiEndpointTestFactory.FindType("Elsa.Workflows.Runtime.Api.Services.WorkflowRunInspection")!,
             details,
             activities ? new ActivityExecutionInspectionService(_workflows, pruned ? new InMemoryActivityExecutionInspectionStore() : _inspections, _access) : null,
             stateViewsSupported
                 ? stateViews ?? new StateViews(new ActivityStateView(RunId, ActivityId, "node-1", "Faulted", false, ActivityStateView.StateCleared, null, null, true, null))
                 : null,
-            payloads ? new ActivityExecutionValuePayloadReader(_workflows, _inspections, _access, _audit, new FakeTimeProvider(Now)) : null,
-            new FakeTimeProvider(ReadAt))!;
+            payloads ? new ActivityExecutionValuePayloadReader(_workflows, payloadPruned ? new InMemoryActivityExecutionInspectionStore() : _inspections,
+                payloadAccess ?? _access, _audit, new FakeTimeProvider(Now)) : null,
+            clock ?? new FakeTimeProvider(ReadAt),
+            _workflows, _access, null, executable ? new Executables(sensitiveNode) : null)!;
 
     private async Task<Details> SeedValuesAsync(WorkflowExecutionStatus status, params ActivityExecutionInspectionValueSnapshot[] values) =>
         await SeedAsync(status, true, true, values);
@@ -247,12 +355,29 @@ public sealed class WorkflowRunInspectionTests
             new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.DiagnosticSnapshot, "Diagnostic snapshot captured by runtime diagnostics policy."),
             new RuntimeValueTypeDescriptor("alias", "String", null), Now, JsonSerializer.SerializeToElement(value), sensitive, inputKey: name);
 
-    private sealed class Details(WorkflowInstanceDetailsView? view) : IWorkflowInstanceDetailsService
+    /// <summary>Every evidence id: the caller asks to resolve whatever the selected execution holds.</summary>
+    private sealed class AllEvidence : HashSet<string>, IReadOnlySet<string>
+    {
+        bool IReadOnlySet<string>.Contains(string item) => true;
+    }
+
+    /// <summary>The Run's Executable: node-1, with or without a sensitive input binding.</summary>
+    private sealed class Executables(bool sensitive) : IWorkflowExecutableInspection
+    {
+        public ValueTask<WorkflowExecutableInspectionDetails?> GetAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutableInspectionDetails?>(new(artifactId, "sha256:test", Now, "Test.Root", "1.0.0", 2, 1,
+                new("root", "root", "Test.Root", "1.0.0", null, [], [new("activities", [new("node-1", "authored-1", "Test.Activity", "1.0.0", null,
+                    [new("token", "Literal", sensitive)], [], [])])], []), [], []));
+    }
+
+    private sealed class Details(WorkflowInstanceDetailsView? view, Action? onRead = null) : IWorkflowInstanceDetailsService
     {
         public List<GetWorkflowInstance> Requests { get; } = [];
+        public WorkflowInstanceDetailsView? View => view;
 
         public Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
         {
+            onRead?.Invoke();
             Requests.Add(request);
             return Task.FromResult(view?.Instance.WorkflowExecutionId == request.WorkflowExecutionId ? view : null);
         }
@@ -263,10 +388,10 @@ public sealed class WorkflowRunInspectionTests
         public Task<ActivityStateView?> GetAsync(GetActivityExecutionStateView request, CancellationToken cancellationToken) => Task.FromResult(view);
     }
 
-    private sealed class Access(bool canInspectSensitiveValues, bool canResolve) : IActivityInspectionContextAsync
+    private sealed class Access(bool canInspectSensitiveValues, bool canResolve, string auditSubject = "subject-1") : IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant-a";
-        public string AuditSubject => "subject-1";
+        public string AuditSubject => auditSubject;
         public string RequestCorrelationId => "request-1";
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("structure");
         public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);

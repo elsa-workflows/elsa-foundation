@@ -9,7 +9,7 @@ from artifacts import sha
 from batch_journeys import OUTCOME_ROWS
 from explain_journeys import READ_FRAMES
 from inspection_journeys import ADMISSION_REFUSAL, MUTATING_TOOLS
-from run_journeys import (BROWSER_JOURNEY, BROWSER_OBSERVATIONS, EXPECTED_CASES, RUN_KIND, RUN_LIMITED, RUN_LIMITED_GRANTS, RUN_NATIVE, RUN_TOOL, TEXTS,
+from run_journeys import (BROWSER_JOURNEY, run_browser_inputs, BROWSER_OBSERVATIONS, EXPECTED_CASES, RUN_KIND, RUN_LIMITED, RUN_LIMITED_GRANTS, RUN_NATIVE, RUN_TOOL, TEXTS,
                           expected_disclosure, no_canary, require_controls_unoffered, require_no_canary_in_evidence, require_run_browser,
                           require_run_context, require_run_read, require_run_result, require_workflow_run, run_attachment, run_manifest_gaps,
                           run_principal, synthetic_browser, synthetic_native, synthetic_search)
@@ -58,11 +58,12 @@ def result(value, selected=None, *, permitted=True, payloads=None, overrides=Non
     terminal = instance["status"] != "Suspended"
     data = {"readOnly": True, "workflowExecutionId": instance["workflowExecutionId"], "readAt": "2026-11-03T12:00:00Z", "inProgress": not terminal,
             "attribution": "This Run has finished (Faulted); its recorded state is final." if terminal else "This Run is still in progress (Suspended); read at ...",
-            "instance": dict(instance), "canInspectValues": permitted, "runControls": "Retry ... use the run page's own controls (the run toolbar).",
+            "instance": dict(instance), "canInspectValues": permitted, "canResolveValues": permitted, "runControls": "Retry ... use the run page's own controls (the run toolbar).",
             "incidents": [{**row, "messageRedacted": not permitted} for row in value["instance"]["incidents"]], "incidentsTruncated": False,
             "activities": {"items": value["instance"]["activities"], "itemsTruncated": False}, "selectedActivity": None,
             "unavailable": [] if permitted else [{"data": "incident messages", "reason": "notPermitted"}]}
     if selected is not None:
+        sensitive = any(row["isSensitive"] for row in selected["detail"]["valueSnapshots"])
         values = []
         for row in selected["detail"]["valueSnapshots"]:
             disclosure, reason = expected_disclosure(row)
@@ -72,7 +73,8 @@ def result(value, selected=None, *, permitted=True, payloads=None, overrides=Non
             if disclosure == "withheld": data["unavailable"].append({"data": "ActivityInput '" + row["inputKey"] + "'", "reason": "withheld"})
         data["selectedActivity"] = {"activityExecutionId": selected["detail"]["activityExecutionId"], "summary": {"status": selected["detail"]["status"]},
                                     "incidents": selected["detail"]["incidents"], "bookmarks": [], "values": values, "valuesTruncated": False,
-                                    "stateView": {"available": False, "unavailableReason": "notCaptured", "view": None}}
+                                    "stateView": {"available": False, "withheld": sensitive, "unavailableReason": None if sensitive else "notCaptured",
+                                                  "view": None}}
     for key, item in (overrides or {}).items(): data[key] = item
     return data
 
@@ -146,6 +148,14 @@ class RunDisclosureTests(unittest.TestCase):
         with self.assertRaises(RuntimeError): require_run_result(leaked, run(), selected=WRITE)
         unlisted = result(run(), WRITE, overrides={"unavailable": []})
         with self.assertRaises(RuntimeError): require_run_result(unlisted, run(), selected=WRITE)
+        self.assertEqual("withheld", record["stateView"])
+        # The state view of an activity with a sensitive input must be withheld, never shown or merely unavailable.
+        shown = result(run(), WRITE)
+        shown["selectedActivity"]["stateView"] = {"available": True, "withheld": False, "view": {"echo": CANARY}}
+        with self.assertRaises(RuntimeError): require_run_result(shown, run(), selected=WRITE)
+        # A captured sensitive value is withheld too.
+        captured = {"detail": {**WRITE["detail"], "valueSnapshots": [evidence("text", sensitive=True)]}, "path": WRITE["path"]}
+        self.assertEqual({"text": "withheld"}, require_run_result(result(run(), captured), run(), selected=captured)["values"])
 
     def test_released_values_equal_the_payload_api_and_differences_fail(self):
         payloads = {CODE["evidenceId"]: "qualification.run.fault", MESSAGE["evidenceId"]: "Qualification Run fault."}
@@ -153,7 +163,7 @@ class RunDisclosureTests(unittest.TestCase):
         self.assertEqual({"code": "resolved", "message": "resolved"}, record["values"])
         with self.assertRaises(RuntimeError):
             require_run_result(result(run(), FAULT, payloads={**payloads, CODE["evidenceId"]: "other"}), run(), selected=FAULT, payloads=payloads)
-        for change in ({"incidents": []}, {"inProgress": True}, {"runControls": "nothing"}, {"canInspectValues": False}):
+        for change in ({"incidents": []}, {"inProgress": True}, {"runControls": "nothing"}, {"canInspectValues": False}, {"canResolveValues": False}):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 require_run_result(result(run(), FAULT, payloads=payloads, overrides=change), run(), selected=FAULT, payloads=payloads)
 
@@ -235,6 +245,16 @@ class RunBrowserAndGateTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             require_run_browser(self.observed(), [{"commandId": COMMAND, "toolName": "workflow_read_executable", "arguments": {}}], rows("copilot"), provider="copilot")
 
+    def test_the_public_browser_inputs_never_carry_the_canary(self):
+        config = {"journey": BROWSER_JOURNEY, "provider": "copilot", "studioOrigin": "http://127.0.0.1:1", "backendOrigin": "http://127.0.0.1:2",
+                  "storageState": "private", "workflow": {"run": {"workflowExecutionId": "run-1", "activityExecutionId": "act-1", "path": "/runtime/run-1",
+                                                                  "canary": CANARY}}}
+        value = run_browser_inputs(config)
+        self.assertEqual({"workflowExecutionId": "run-1", "activityExecutionId": "act-1", "path": "/runtime/run-1"}, value["run"])
+        self.assertNotIn(CANARY, json.dumps(value))
+        self.assertNotIn("storageState", value)
+        with self.assertRaises(RuntimeError): run_browser_inputs({**config, "workflow": {"run": {"workflowExecutionId": "run-1"}}})
+
     def test_the_canary_search_reads_every_retained_file(self):
         clean = [self.write("a.json", {"ok": True}), self.write("b.json", {"ok": False})]
         self.assertEqual(2, require_no_canary_in_evidence(clean, CANARY, self.root))
@@ -259,7 +279,8 @@ class RunBrowserAndGateTests(unittest.TestCase):
         self.assertTrue(run_manifest_gaps(self.section(), source="b" * 40))
         for name, native, search in (
                 ("control-missing", {key: value for key, value in synthetic_native().items() if key != "runtime-denied"}, None),
-                ("value-released", {**synthetic_native(), "explain-activity": {"control": "explain-activity", "values": {"text": "resolved"}}}, None),
+                ("value-released", {**synthetic_native(), "explain-activity": {"control": "explain-activity", "values": {"text": "resolved"}, "canaryCaptured": True}}, None),
+                ("canary-not-captured", {**synthetic_native(), "explain-activity": {"control": "explain-activity", "values": {"text": "withheld"}}}, None),
                 ("not-in-progress", {**synthetic_native(), "in-progress": {"control": "in-progress", "inProgress": False}}, None),
                 ("control-offered", {**synthetic_native(), "controls-refused": {"control": "controls-refused", "unchanged": True,
                                                                                   "offered": [RUN_TOOL, sorted(MUTATING_TOOLS)[0]]}}, None),

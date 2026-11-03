@@ -8,7 +8,7 @@ import unittest
 from artifacts import sha
 from batch_journeys import OUTCOME_ROWS, REFUSED_FRAMES
 from explain_journeys import READ_FRAMES
-from inspection_journeys import (ADMISSION_REFUSAL, COMPUTED_BY, EXECUTABLE_BROWSER, EXECUTABLE_KIND, EXECUTABLE_NATIVE, EXECUTABLE_OBSERVATIONS,
+from inspection_journeys import (require_values_withheld, ADMISSION_REFUSAL, COMPUTED_BY, EXECUTABLE_BROWSER, EXECUTABLE_KIND, EXECUTABLE_NATIVE, EXECUTABLE_OBSERVATIONS,
                                  EXECUTABLE_TOOL, EXPECTED_CASES, MUTATING_TOOLS, TEXTS, VERSION_BROWSER, VERSION_KIND, VERSION_NATIVE, VERSION_OBSERVATIONS,
                                  VERSION_TOOL, BATCH_TOOL, executable_attachment, expected_comparison, flatten_executable, flatten_version,
                                  inspection_manifest_gaps, other_hash, require_admission_refused, require_browser, require_executable_context,
@@ -47,7 +47,8 @@ def comparison(version, compared):
             "activitiesAdded": [row(node) for node in expected["added"]], "activitiesRemoved": [row(node) for node in expected["removed"]],
             "activitiesChanged": [{"nodeId": node, "scopePath": [N["root"]], **value} for node, value in expected["changed"].items()],
             "connectionsAdded": [connection(item) for item in expected["connectionsAdded"]],
-            "connectionsRemoved": [connection(item) for item in expected["connectionsRemoved"]], "truncated": False}
+            "connectionsRemoved": [connection(item) for item in expected["connectionsRemoved"]], "truncated": False,
+            "incomplete": False, "incompleteReasons": []}
 
 
 def version_item(attachment, version):
@@ -179,6 +180,24 @@ class VersionTurnTests(unittest.TestCase):
                 record = self.read(provider, self.data(compared=True))
                 self.assertEqual({"added": [N["c"]], "removed": [], "changed": [N["b"]], "connectionsAdded": 1, "connectionsRemoved": 0}, record["comparison"])
 
+    def test_aspects_the_seeds_do_not_model_are_tolerated_but_asserted_ones_must_match(self):
+        value = self.data(compared=True)
+        # The server also reports a container's structure and child order; the probe asserts only what it models.
+        value["comparison"]["activitiesChanged"].append({"nodeId": N["root"], "scopePath": [], "aspects": ["childOrder", "structure"], "inputs": []})
+        self.assertEqual([N["b"]], self.read("copilot", value)["comparison"]["changed"])
+        value["comparison"]["activitiesChanged"][0]["aspects"].append("activityVersion")
+        with self.assertRaises(RuntimeError): self.read("copilot", value)
+
+    def test_seeded_values_never_reach_the_context_the_frames_or_the_adapter(self):
+        canary = "vcanary-0123456789abcdef"
+        frames, accepted = turn("copilot", READ_FRAMES, self.item, succeeded(VERSION_TOOL, VERSION_KIND, self.data()))
+        read = lambda frames, accepted, adapter: require_version_read(frames, adapter, accepted, provider="copilot", command_id=COMMAND,
+                                                                      attachment=self.attachment, version=VERSIONS[1], versions=LISTED, canary=canary)
+        self.assertEqual({"canary": "absent"}, read(frames, accepted, rows("copilot", VERSION_TOOL))["values"])
+        leaked = rows("copilot", VERSION_TOOL); leaked[0]["data"]["prompt"] = "First " + canary
+        with self.assertRaises(RuntimeError): read(frames, accepted, leaked)
+        with self.assertRaises(RuntimeError): require_values_withheld("short", accepted, frames, [], "a read")
+
     def test_refuses_any_other_read(self):
         def broken(change, *, item=None, kinds=READ_FRAMES, offered=True, compared=True):
             value = self.data(compared=compared); change(value)
@@ -186,6 +205,7 @@ class VersionTurnTests(unittest.TestCase):
         broken(lambda value: None, kinds=REFUSED_FRAMES | {"copilot": REFUSED_FRAMES["copilot"][:-1]})
         broken(lambda value: None, offered=False)
         broken(lambda value: value["comparison"].update(computedBy="model"))
+        broken(lambda value: value["comparison"].update(incomplete=True))
         broken(lambda value: value["comparison"].update(activitiesRemoved=[{"nodeId": N["a"]}]))
         broken(lambda value: value["comparison"].update(activitiesChanged=[]))
         broken(lambda value: value["comparison"].update(activitiesAdded=[], activitiesRemoved=[{"nodeId": N["c"]}]))
@@ -347,3 +367,19 @@ class BrowserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VersionSeedCanaryTests(unittest.TestCase):
+    """Witness dbe305ff2: the canary must be in every seeded version input, never in the batch seed."""
+
+    def test_every_seeded_version_text_carries_the_canary(self):
+        from owner_resources import version_states
+        write = {"activityVersionId": "write-v1"}
+        flowchart = {"activityVersionId": "flow-v1", "activityTypeKey": "Elsa.Flowchart",
+                     "authoringTemplate": {"structure": {"kind": "elsa.flowchart.structure"}},
+                     "containerStructure": {"mode": "flowchart", "slots": [{"property": "activities", "cardinality": "many"}],
+                                            "initialPayload": {"activities": [], "connections": []}}}
+        states = version_states(write, flowchart, "vcanary-0123456789abcdef")
+        texts = [leaf["inputs"][0]["value"]["value"] for state in states for leaf in state["rootActivity"]["structure"]["payload"]["activities"]]
+        self.assertTrue(texts)
+        self.assertTrue(all("vcanary-0123456789abcdef" in text for text in texts))

@@ -79,3 +79,11 @@ Spec 1193 slice F adds `Elsa.Agent.Workflows.Runtime` to the packaged references
 `FoundationWorkflowsRuntimeAgent` in the baseline shell, beside `FoundationWorkflowsAgent`; its assembly is listed with the
 other agent assemblies. `inspection_journeys.py` adds no seam: it deselects each agent feature once, through the ordinary
 native feature apply, for its deployment-shape control and selects it again.
+
+`QualificationRunCapture.cs` is a test-only host feature for the spec 1193 workflow-run inventory (T045). No baseline shell
+selects it. `run_journeys.py` selects it through the ordinary native feature apply before seeding its Runs, and deselects it
+afterwards. The runtime's default `IRuntimePayloadCapturePolicy` never captures a sensitive payload, so a canary authored
+into a sensitive input would never reach execution evidence. The seam replaces the single capture policy registration with
+a wrapper over the host's actual policy that captures sensitive activity inputs as full payloads and delegates every other
+decision unchanged; the canary is then in the run's value evidence, and Weaver's withholding of it is a real control. The
+seam changes no product code.

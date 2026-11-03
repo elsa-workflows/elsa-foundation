@@ -177,6 +177,18 @@ class JourneyBoundariesTests(unittest.TestCase):
         config["workflow"]["draftPath"] += "?accessToken=PRIVATE_CREDENTIAL"
         with self.assertRaises(RuntimeError): browser_inputs(config)
 
+    def test_browser_export_summary_takes_an_activity_only_when_the_journey_has_one(self):
+        workflow = {"definitionId": "definition", "draftId": "draft", "definitionPath": "/design/workflows/definitions/definition",
+                    "draftPath": "/design/workflows/drafts/draft", "validationPath": "/design/workflows/drafts/draft/validations"}
+        config = {"journey": "workflow-version-history", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001",
+                  "backendOrigin": "http://127.0.0.1:51002", "workflow": dict(workflow)}
+        self.assertEqual(set(workflow), set(browser_inputs(config)["workflow"]))
+        # Present, it is still an actual identity; every other field stays required.
+        for value in ("", None, 7):
+            with self.assertRaises(RuntimeError): browser_inputs({**config, "workflow": {**workflow, "activityId": value}})
+        for key in workflow:
+            with self.assertRaises((KeyError, RuntimeError)): browser_inputs({**config, "workflow": {k: v for k, v in workflow.items() if k != key}})
+
     def test_semantic_refusal_requires_native_failure_and_correlated_completion(self):
         result = {"toolCallId": "native-call", "toolName": "declared_tool", "succeeded": False,
                   "content": "The actual declared operation was refused.", "payload": None, "receipt": None}

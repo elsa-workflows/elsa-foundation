@@ -98,8 +98,9 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
     /// <c>act-pruned</c> is recorded by the Run (an incident names it) but no longer inspectable.
     /// </summary>
     public static WorkflowRunInspectionDetails Run(WorkflowRunInspectionRequest request, bool inProgress = false, bool canInspectValues = true, int activities = 2,
-        int incidents = 1, bool resolved = true)
+        int incidents = 1, bool resolved = true, bool canResolveValues = true, int bookmarks = 0, string? message = null, string? resultValue = null)
     {
+        var release = canInspectValues && canResolveValues && resolved && request.ResolveEvidenceIds?.Contains("evidence-result") == true;
         var at = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
         var status = inProgress ? "Running" : "Faulted";
         var write = new WorkflowRunInspectionActivitySummary("act-write", "write", "write", "Elsa.Activities.Primitives.Activities.WriteLine", "1.0.0", "Completed",
@@ -114,15 +115,17 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
         }).ToArray();
         var recorded = Enumerable.Range(0, incidents).Select(index => new WorkflowRunInspectionIncident(index == 0 ? "incident-1" : $"incident-{index + 1}",
             index == 0 ? "act-fault" : "act-pruned", "fault", "Error", "Active", "workflow.fault",
-            canInspectValues ? "Qualification fault." + new string('x', index == 0 ? 0 : 400) : "Incident details are redacted.", !canInspectValues, true, at, null)).ToArray();
+            canInspectValues ? message ?? "Qualification fault." + new string('x', index == 0 ? 0 : 400) : "Incident details are redacted.", !canInspectValues, false,
+            true, at, null)).ToArray();
         WorkflowRunInspectionSelection? selection = request.ActivityExecutionId switch
         {
             null => null,
-            "act-write" => new("act-write", new(write, "root", "root", 1, [],
+            "act-write" => new("act-write", new(write, "root", "root", 1,
+                Enumerable.Range(0, bookmarks).Select(index => new WorkflowRunInspectionBookmark($"bookmark-{index:D4}-{new string('b', 40)}", "Elsa.Event", at, null)).ToArray(),
                 [], [
                     Value("text", "ActivityInput", WorkflowRunValueDisclosure.Withheld, null, JsonSerializer.SerializeToElement(Canary), sensitive: true),
-                    Value("result", "ActivityOutput", request.ResolveSelectedValues && resolved ? WorkflowRunValueDisclosure.Resolved : WorkflowRunValueDisclosure.Resolvable,
-                        null, request.ResolveSelectedValues && resolved ? JsonSerializer.SerializeToElement(new { ok = true }) : null),
+                    Value("result", "ActivityOutput", release ? WorkflowRunValueDisclosure.Resolved : WorkflowRunValueDisclosure.Resolvable,
+                        null, release ? resultValue is null ? JsonSerializer.SerializeToElement(new { ok = true }) : JsonSerializer.SerializeToElement(resultValue) : null),
                     Value("limited", "ActivityInput", WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotPermitted),
                     Value("skipped", "ActivityInput", WorkflowRunValueDisclosure.Unavailable, WorkflowRunUnavailableReason.NotCaptured)
                 ], new(false, WorkflowRunUnavailableReason.Unsupported, null, null, null)), null),
@@ -132,7 +135,7 @@ internal sealed class WorkflowRuntimeAgentTestHost : IDisposable
         return new(new(request.WorkflowExecutionId, "artifact-1", Hash, "definition-1", "version-1", "1.0.0", status, null, "Production", !inProgress,
                 at, at, at, inProgress ? null : at, null, activities, incidents, incidents, incidents, "published-1", "publication-1"),
             recorded, new(summaries.Take(request.ActivityPageSize).ToArray(), activities, activities > request.ActivityPageSize ? "next" : null), selection,
-            canInspectValues, "Durable", "activity-level", ReadAt);
+            canInspectValues, canInspectValues && canResolveValues, "Durable", "activity-level", ReadAt);
     }
 
     private static WorkflowRunInspectionValue Value(string key, string subject, WorkflowRunValueDisclosure disclosure, WorkflowRunUnavailableReason? reason,

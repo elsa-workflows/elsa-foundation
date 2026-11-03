@@ -29,7 +29,7 @@ internal static class WorkflowExecutableContext
     internal const string StaleCode = "agent.workflow.executable_stale";
     internal const string StaleMessage = "The workflow Executable's Artifact Hash differs from the bound hash, so the context is stale.";
     internal const string DeniedMessage = "Current workflow runtime read permission is required for the workflow Executable.";
-    internal const string UnavailableCode = "agent.workflow.executable_inspection_unavailable";
+    internal const string UnavailableCode = "workflow.executable.inspection_unavailable";
     internal const string UnavailableMessage = "Exactly one owning workflow Executable inspection is required; workflow Executables are unavailable.";
 
     internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

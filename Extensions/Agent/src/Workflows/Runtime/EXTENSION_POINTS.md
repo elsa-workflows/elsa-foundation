@@ -27,7 +27,7 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   ("Current workflow runtime read permission is required for the workflow Executable."),
   `agent.workflow.executable_not_found` ("The workflow Executable is unavailable."), `agent.workflow.executable_stale`
   ("The workflow Executable's Artifact Hash differs from the bound hash, so the context is stale."), and
-  `agent.workflow.executable_inspection_unavailable` (no or several inspections; owner-unavailable, 503). Without an
+  `workflow.executable.inspection_unavailable` (no or several inspections; owner-unavailable, 503). Without an
   Executable reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own retained read, reads it again at
   the bound hash for the current turn, and withholds a retained context or `workflow_read_executable` result once the
   Executable is gone, changed or no longer readable.
@@ -37,13 +37,17 @@ identity `Elsa.Studio.Workflows`, whose Executable Inspector discloses the conte
   Executable context or the one `artifactId` names. It reads the Executable again at the bound hash and returns its
   identity, Artifact Hash, compiled graph (each node's executable and authored ids, activity type and version, structure
   kind, input bindings by name, source and sensitivity, never a value or source detail, child slots and connections) depth
-  first and bounded (at most 300 nodes, fewer when the result would exceed 28 KiB, under the host's 32 KiB budget, #3710;
-  `nodesIncluded` and `graphTruncated` say so), the Source References (FR-028: those the Runtime read discloses under
+  first and bounded: at most 300 nodes, each with at most 32 inputs and 64 connections, fewer of each when the result would
+  exceed 24 KiB (well under the host's 32 KiB budget, #3710); a connection is kept only when both its ends are included
+  (`connectionsOmitted` counts the rest), text values (types, versions, names and ports) are cut at 256 characters and
+  counted in `truncatedFields` (identities never are), per-node `inputsTruncated` and `connectionsTruncated` and the overall
+  `nodesIncluded` and `graphTruncated` say what was cut, and a read that does not fit even its smallest bound is refused as
+  `agent.workflow.executable_too_large` (413), never returned unbounded, the Source References (FR-028: those the Runtime read discloses under
   `workflows/runtime:read`) and the direct dependencies. Its authorization decides a concrete target by the Executable's
   current existence at the bound hash. Refusals: `agent.workflow.executable_context_required` (409),
   `agent.workflow.executable_stale` (409), `agent.workflow.executable_not_found` (404),
   `agent.workflow.executable_arguments_invalid` (400), `agent.workflow.permission_denied` (403) and
-  `agent.workflow.executable_inspection_unavailable` (503).
+  `workflow.executable.inspection_unavailable` (503).
 - `IAgentCapabilityProvider`: `WorkflowRuntimeAgentCapabilityProvider` declares `workflow.executable-explain` (Answer,
   ReadOnly, `workflows/runtime:read`, kind `workflows.executable`, mode `explain`).
 
@@ -67,19 +71,27 @@ to offer the source workflow's current draft instead (FR-015); this package offe
   unavailable.", an unknown or hidden Run alike), `agent.workflow.run_activity_not_found` ("The selected activity execution is
   not part of this workflow Run.") and `agent.workflow.run_inspection_unavailable` (no or several inspections;
   owner-unavailable, 503). `AdmitDisclosureAsync` accepts only its own retained read and `workflow_read_run` results, reads
-  the Run again for the current turn and withholds them once the Run (or its selection) is no longer readable.
+  the Run again for the current turn and withholds them once the Run (or its selection) is no longer readable, and withholds
+  a retained result (`agent.workflow.run_access_changed`) once it discloses more than the actor's current run access covers:
+  incident details read under value inspection, or released values read under payload resolution, that the actor no longer
+  holds; a result whose disclosure cannot be read is treated as exceeding.
 - `IAgentTool` with `IAgentToolAuthorization`: `WorkflowReadRunTool`, `workflow_read_run` contract `1`, `ReadOnly`,
   `ExecutionLocation.Server`, `workflows/runtime:read`, result `workflows.run` schema `1`, no renderer, disclosed by
   `workflows.run-context`. Arguments `{ workflowExecutionId?, activityPageSize? (1–50), activityContinuationToken? }`, strict;
-  no argument retargets the selection. It reads the bound Run again, with the selected execution's values resolved through
-  the run endpoints' audited payload read, and returns `readAt`, `inProgress` and an `attribution` sentence, the instance,
-  `incidents` (messages redacted without value inspection, `messageRedacted`), one activity page (`totalCount`,
+  no argument retargets the selection. It reads the bound Run twice: the first read resolves nothing and decides the bounds
+  the result fits in (counting every value it may release at its full bound), the second resolves through the run endpoints'
+  audited payload read exactly the values those bounds disclose, so the payload read audits only what the result shows. It
+  returns `readAt`, `inProgress` and an `attribution` sentence, the instance,
+  `canInspectValues` and `canResolveValues`, `incidents` (messages redacted without value inspection and withheld for an
+  activity with a sensitive input, `messageRedacted`, `sensitiveInputs`; bounded with a truncation marker, `messageTruncated`), one activity page (`totalCount`,
   `nextContinuationToken`), the selected execution's summary, bookmarks, incidents, `values` (each with `disclosure`
   `resolved`, `resolvable`, `withheld` or `unavailable` and `unavailableReason` `notCaptured`, `pruned`, `unsupported` or
   `notPermitted`; a value only when `resolved`) and `stateView`, an `unavailable` list naming each withheld or unavailable item
-  with its reason in product terms, and `runControls`, which points to the run page's own controls. It is bounded under 28
-  KiB (the host's 32 KiB budget, #3710) by stepping down incidents, activities, values and characters per value
-  (`incidentsTruncated`, `itemsTruncated`, `valuesTruncated`, `valueOmitted`, `viewOmitted`). Refusals:
+  with its reason in product terms, and `runControls`, which points to the run page's own controls. It is hard-bounded at 24
+  KiB, well under the host's 32 KiB check (#3710), by stepping down incidents, activities, values, bookmarks, characters per
+  value or view and characters per incident message, to identities and counts only (`incidentsTruncated`, `itemsTruncated`,
+  `valuesTruncated`, `bookmarksTruncated`, `valueTruncated`, `valueOmitted`, `viewOmitted`, `outcomesTruncated`); a read that
+  does not fit even then is refused as `agent.workflow.run_too_large` (413), never sent over budget. Refusals:
   `agent.workflow.run_context_required` (409), `agent.workflow.run_arguments_invalid` (400), `agent.workflow.run_not_found`
   (404), `agent.workflow.run_activity_not_found` (404), `agent.workflow.permission_denied` (403) and
   `agent.workflow.run_inspection_unavailable` (503). Its authorization decides a concrete target by the Run's (and the
@@ -95,9 +107,9 @@ registers no mutating run tool.
 ## Owning contracts
 
 [`IWorkflowExecutableInspection` and `IWorkflowRunInspection`](../../../../../Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md)
-(Workflows Runtime Core, D4) are the only Runtime reads. Their defaults in the Workflows Runtime API read exactly what
-`GET runtime/workflows/executables/{artifactId}` and the run endpoints (instance, activity execution, state view and value
-payload) return.
+(Workflows Runtime Core, D4) are the only Runtime reads. The Executable default reads through the same inspector as
+`GET runtime/workflows/executables/{artifactId}` and returns a subset of that response; the Run default reads through the
+run endpoints' own services (instance, activity execution, state view and value payload). See their catalog entries.
 
 ## Deployment shapes (SC-009)
 
@@ -107,7 +119,8 @@ payload) return.
   `Elsa.Agent.Workflows`) is loaded.
 - **Design-only:** without this package an Executable or Run reference is `agent.context.kind_unsupported` and
   neither `workflow_read_executable` nor `workflow_read_run` is offered (`Elsa.Agent.Tests`, `WorkflowDeploymentShapeTests`).
-- **Combined:** both packages compose side by side (`Elsa.Workbench` selects both features).
+- **Combined:** both packages compose side by side (`Elsa.Workbench` and the Docker compose shells select both features). A host that composes the Workflows Runtime API with Weaver must select `FoundationWorkflowsRuntimeAgent`: Studio's Executable Inspector and run page always send their context, and without this package every turn on those pages is refused as `agent.context.kind_unsupported` (see the README's upgrade requirement).
+- **Started hosts:** `WorkflowRuntimeOnlyHostTests` activates a real Runtime-only shell (Workflows Runtime API and this feature only) and reads a seeded Executable through the real `WorkflowExecutableInspection`; `WorkflowDesignOnlyHostTests` activates a real Design-only shell.
 
 ## SemVer
 
