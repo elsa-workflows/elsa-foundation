@@ -4,7 +4,7 @@
 
 ## Summary
 
-The spec 1198 snapshot read gains a watermark filter. A checkpoint table keyed by scope, definition, source alias, pinned source handle, table and watermark column holds the high watermark of the last completed run. Execution reads the checkpoint before preparation, the reader filters by it and reports the snapshot's highest watermark, the prepared run records it, and the store raises the checkpoint when the run settles as succeeded or business error, in the same transaction.
+The spec 1198 snapshot read gains a watermark filter. A checkpoint table keyed by scope, definition, source alias, pinned source handle, table and watermark column holds the high watermark of the last completed run. Execution reads the checkpoint before preparation, the reader filters by it and reports the snapshot's highest watermark, the prepared run records it, and the store raises the checkpoint, in the same transaction, when the run completes every record: it settles as succeeded, or as business error with `etl.rows-rejected`.
 
 ## Constitution check
 

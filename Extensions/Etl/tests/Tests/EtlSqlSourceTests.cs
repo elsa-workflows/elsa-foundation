@@ -104,8 +104,9 @@ public sealed class EtlSqlSourceTests : IDisposable
     [Fact]
     public async Task A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark()
     {
-        Execute("CREATE TABLE versioned (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL)");
-        Execute("INSERT INTO versioned VALUES (1, 'Ada', 5), (2, 'Bram', 9), (3, 'Cleo', 7)");
+        Execute("CREATE TABLE versioned (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, version INTEGER NULL)");
+        // A NULL watermark is read whatever the floor, so the run rejects it as a record error rather than skipping it.
+        Execute("INSERT INTO versioned VALUES (1, 'Ada', 5), (2, 'Bram', 9), (3, 'Cleo', 7), (4, 'Dov', NULL)");
         var source = new EtlSqlSource("people-db", "main.versioned",
             [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("version", EtlColumnType.Int64, true)], ["id"])
             { Watermark = "version" };
@@ -115,11 +116,11 @@ public sealed class EtlSqlSourceTests : IDisposable
         var above = await preparer.PrepareAsync(Admission(Pipeline(source), "main.versioned"), default, watermarkFloor: 6);
         var none = await preparer.PrepareAsync(Admission(Pipeline(source), "main.versioned"), default, watermarkFloor: 9);
 
-        Assert.Equal((3L, 9L), (all.Prepared!.File!.RecordCount, all.Prepared.SourceWatermark!.Value));
-        Assert.Equal((2L, 9L), (above.Prepared!.File!.RecordCount, above.Prepared.SourceWatermark!.Value));
-        Assert.Equal(0L, none.Prepared!.File!.RecordCount);
+        Assert.Equal((4L, 9L), (all.Prepared!.File!.RecordCount, all.Prepared.SourceWatermark!.Value));
+        Assert.Equal((3L, 9L), (above.Prepared!.File!.RecordCount, above.Prepared.SourceWatermark!.Value));
+        Assert.Equal(1L, none.Prepared!.File!.RecordCount);
         Assert.Null(none.Prepared.SourceWatermark);
-        Assert.Equal("{\"id\":2,\"name\":\"Bram\",\"version\":9}\n{\"id\":3,\"name\":\"Cleo\",\"version\":7}\n",
+        Assert.Equal("{\"id\":2,\"name\":\"Bram\",\"version\":9}\n{\"id\":3,\"name\":\"Cleo\",\"version\":7}\n{\"id\":4,\"name\":\"Dov\",\"version\":null}\n",
             await File.ReadAllTextAsync(Path.Combine(SnapshotRoot, above.Prepared.File.Source.Key)));
     }
 

@@ -37,7 +37,7 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
 
     public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, string? watermarkColumn) =>
         $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} " +
-        (watermarkColumn is null ? "" : $"WHERE {Quote(watermarkColumn)} > @watermark ") +
+        (watermarkColumn is null ? "" : $"WHERE ({Quote(watermarkColumn)} > @watermark OR {Quote(watermarkColumn)} IS NULL) ") +
         $"ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);

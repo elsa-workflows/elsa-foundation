@@ -41,7 +41,7 @@ An author names an `Int64` watermark column whose values become visible in incre
 
 ### Edge Cases
 
-- **Watermark column.** It is one of the declared columns, declared `Int64` and required, refused otherwise with `source.sql-watermark-invalid`. A NULL watermark in a row is a record error, as for any required column, and does not count towards the high watermark.
+- **Watermark column.** It is one of the declared columns, declared `Int64` and required, refused otherwise with `source.sql-watermark-invalid`. A NULL watermark in a row is a record error, as for any required column, and does not count towards the high watermark. The filter keeps such rows, so they are rejected again on every run until fixed, rather than skipped once a checkpoint exists.
 - **Ordering.** The snapshot is still ordered by the key. The watermark only filters.
 - **Commit order.** Rows are read once their watermark is above the checkpoint; a row committed with a watermark at or below a checkpoint already passed is never read. Values drawn at insert, such as a sequence or identity, can commit out of order under concurrent writers, and a per-row version counter is not monotonic across rows, so neither is a safe watermark. The README requires a column whose values become visible in increasing order. A commit-ordered watermark derived by the engine is deferred (#3719).
 - **Identity.** The checkpoint is keyed by the scope, the definition identifier, the source binding alias and its pinned secret-free handle (which hashes the database target and the binding revision), the table and the watermark column. Publishing a new definition version keeps it; changing the alias, the database it points to, the binding revision, the table or the column starts again from all rows.
@@ -54,9 +54,9 @@ An author names an `Int64` watermark column whose values become visible in incre
 
 - **FR-001** `EtlSqlSource` gains an optional `Watermark` column name, omitted from JSON when absent, so existing artifacts keep their bytes. The compiler and the worker refuse an invalid watermark with `source.sql-watermark-invalid` and `etl.executable.invalid-pipeline`.
 - **FR-002** `IEtlConnectorRuntimeStore` gains `FindConnectorSourceWatermarkAsync`, returning the checkpoint for a key or null; its default implementation returns null.
-- **FR-003** The connector execution reads the checkpoint before preparation and passes it to the preparer. The snapshot reader filters `watermark > @floor` when a floor exists, and the preparer records the snapshot's highest non-null watermark on the prepared run.
+- **FR-003** The connector execution reads the checkpoint before preparation and passes it to the preparer. The snapshot reader filters `watermark > @floor`, keeping NULL watermarks, when a floor exists, and the preparer records the snapshot's highest non-null watermark on the prepared run.
 - **FR-004** When a run with a recorded high watermark completes every record (it settles as succeeded, or as business error with `etl.rows-rejected`), the store raises the checkpoint to that high watermark in the same transaction, unless the checkpoint is already higher. A zero-record run records no high watermark and changes nothing.
-- **FR-005** `IEtlSqlEngine.SelectSnapshot` gains the optional watermark column; engines render `WHERE {watermark} > @watermark` when it is given.
+- **FR-005** `IEtlSqlEngine.SelectSnapshot` gains the optional watermark column; engines render `WHERE ({watermark} > @watermark OR {watermark} IS NULL)` when it is given, so a row with a NULL watermark is read, and rejected as a record error, on every run.
 - **FR-006** Studio offers the watermark column on a `sql` source. The ETL README and engine catalog describe the watermark, its checkpoint and the monotonic-writer requirement.
 
 ## Success Criteria *(mandatory)*

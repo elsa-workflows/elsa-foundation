@@ -88,7 +88,9 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     /// <summary>
     /// The high watermark of the last completed run for a SQL source checkpoint, or null when none completed (spec 1199). A
-    /// store raises it in the transaction that settles a run as succeeded or business error.
+    /// store raises it only in the transaction that completes a run that routed every record: one settled as succeeded, or as
+    /// business error with <c>etl.rows-rejected</c>. A run settled by any other failure, including a rejected delivery,
+    /// leaves it unchanged.
     /// </summary>
     ValueTask<long?> FindConnectorSourceWatermarkAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
         CancellationToken cancellationToken = default) => ValueTask.FromResult<long?>(null);

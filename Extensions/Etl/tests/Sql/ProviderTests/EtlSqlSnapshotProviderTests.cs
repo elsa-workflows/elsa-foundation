@@ -124,13 +124,15 @@ public abstract partial class EtlSqlProviderTests
     public async Task A_watermark_floor_reads_only_rows_above_it_in_key_order()
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
-        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL PRIMARY KEY, version bigint NOT NULL)");
-        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, version) VALUES (1, 5), (2, 9), (3, 7), (4, 6)");
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL PRIMARY KEY, version bigint NULL)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, version) VALUES (1, 5), (2, 9), (3, 7), (4, 6), (5, NULL)");
         var source = new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true), new("version", EtlColumnType.Int64, true)], ["id"])
             { Watermark = "version" };
 
-        Assert.Equal("{\"id\":2,\"version\":9}\n{\"id\":3,\"version\":7}\n", await ReadRawSnapshotAsync(source, watermarkFloor: 6));
-        Assert.Equal(4, (await ReadRawSnapshotAsync(source)).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        // A NULL watermark is kept, so the run rejects it as a record error rather than skipping it.
+        Assert.Equal("{\"id\":2,\"version\":9}\n{\"id\":3,\"version\":7}\n{\"id\":5,\"version\":null}\n",
+            await ReadRawSnapshotAsync(source, watermarkFloor: 6));
+        Assert.Equal(5, (await ReadRawSnapshotAsync(source)).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
     [SkippableFact]
