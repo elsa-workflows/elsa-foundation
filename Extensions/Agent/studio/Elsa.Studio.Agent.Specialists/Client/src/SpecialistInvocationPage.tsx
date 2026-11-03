@@ -11,7 +11,8 @@ type Load = { kind: "loading" } | { kind: "missing" } | { kind: "error"; message
 
 const refreshIntervalMs = 2000;
 const maximumRefreshFailures = 5;
-const settledStatuses = ["Completed", "Faulted", "Cancelled", "Superseded"];
+// The native statuses after which the runtime does no more work for this occurrence.
+const settledStatuses = ["Completed", "Faulted", "Cancelled", "Superseded", "Recovered"];
 
 /** The occurrence a link names: /agents/invocations/{workflowExecutionId}/{activityExecutionId}. */
 export function readInvocationReference(pathname: string): InvocationReference | null {
@@ -96,7 +97,7 @@ function InvocationScreen({ context, reference, navigate, refreshInterval }:
           {navigate && reference ? <StudioButton onClick={() => navigate(runPath(reference))}>Open the run</StudioButton> : null}
           <StudioButton aria-label="Refresh invocation" onClick={() => void refresh()}><RefreshCw aria-hidden="true" size={14} /> Refresh</StudioButton>
         </>} />
-      {failures > 0 ? <p className="agent-playground__hint" data-testid="invocation-stale">
+      {failures > 0 ? <p className="agent-playground__hint" role="status" data-testid="invocation-stale">
         The latest evidence could not be read; showing the last loaded state.{failures >= maximumRefreshFailures ? " It is no longer refreshed automatically." : ""}</p> : null}
       <section className="agent-playground__run" aria-label="Invocation evidence">
         <InvocationEvidenceDetails invocation={invocation} valuesPermitted={valuesPermitted} terminal={settled} versionLabel="Version"
@@ -107,15 +108,27 @@ function InvocationScreen({ context, reference, navigate, refreshInterval }:
 }
 
 function summary(activityStatus: string, application: string | null) {
-  const native = settledStatuses.includes(activityStatus) ? `The agent ${activityStatus.toLowerCase()}.` : "The agent is still running.";
-  return application ? `${native} ${application}.` : `${native} No model turn was admitted.`;
+  const native = nativeText(activityStatus);
+  // A missing turn is missing evidence: the turn may never have been staged, or may not be readable here.
+  return application ? `${native} ${application}.` : `${native} No model turn evidence is available.`;
+}
+
+function nativeText(activityStatus: string) {
+  switch (activityStatus) {
+    case "Completed": return "The agent completed.";
+    case "Faulted": return "The agent faulted.";
+    case "Cancelled": return "The agent was cancelled.";
+    case "Superseded": return "This invocation was superseded by another one.";
+    case "Recovered": return "The agent's fault was recovered.";
+    default: return "The agent is still running.";
+  }
 }
 
 function tone(status: string) {
   switch (status) {
     case "Completed": return "success" as const;
     case "Faulted": return "danger" as const;
-    case "Cancelled": case "Superseded": return "warning" as const;
+    case "Cancelled": case "Superseded": case "Recovered": return "warning" as const;
     default: return "accent" as const;
   }
 }

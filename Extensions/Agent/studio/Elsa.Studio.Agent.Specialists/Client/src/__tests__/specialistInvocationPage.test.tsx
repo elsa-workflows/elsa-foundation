@@ -69,12 +69,24 @@ describe("agent invocation page", () => {
     expect(getJson).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes an unsettled invocation until it settles", async () => {
+  it("refreshes an unsettled invocation and stops once it settles", async () => {
     const { context, getJson } = fakeContext([{ invocation: invocation("Running"), valuesPermitted: true }, { invocation: invocation("Completed"), valuesPermitted: true }]);
     const container = await render(context);
+    const reads = getJson.mock.calls.length;
+    await settle();
 
-    expect(getJson.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(reads).toBe(2);
+    expect(getJson.mock.calls.length).toBe(reads);
     expect(container.querySelector("[data-testid='invocation-summary']")!.textContent).toBe("The agent completed. Accepted and applied.");
+  });
+
+  it("treats a recovered occurrence as settled", async () => {
+    const { context, getJson } = fakeContext([{ invocation: invocation("Recovered", { turn: null, output: null }), valuesPermitted: true }]);
+    const container = await render(context);
+    await settle();
+
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[data-testid='invocation-summary']")!.textContent).toBe("The agent's fault was recovered. No model turn evidence is available.");
   });
 
   it("states an unknown outcome without claiming a result", async () => {
@@ -94,12 +106,16 @@ describe("agent invocation page", () => {
     expect(container.querySelector("[data-testid='evidence-output-withheld']")!.textContent).toContain("permission to inspect captured values");
   });
 
-  it("keeps the last evidence on screen when a refresh fails", async () => {
-    const { context } = fakeContext([{ invocation: invocation("Running"), valuesPermitted: true }, Object.assign(new Error("Unavailable"), { status: 503 })]);
+  it("keeps the last evidence on screen when refreshes fail, and stops refreshing after five failures", async () => {
+    const { context, getJson } = fakeContext([{ invocation: invocation("Running"), valuesPermitted: true }, Object.assign(new Error("Unavailable"), { status: 503 })]);
     const container = await render(context);
+    for (let index = 0; index < 200 && !container.textContent?.includes("no longer refreshed"); index++) await new Promise(resolve => setTimeout(resolve, 0));
     await settle();
 
-    expect(container.querySelector("[data-testid='invocation-stale']")).not.toBeNull();
+    const stale = container.querySelector("[data-testid='invocation-stale']")!;
+    expect(stale.getAttribute("role")).toBe("status");
+    expect(stale.textContent).toContain("It is no longer refreshed automatically.");
+    expect(getJson).toHaveBeenCalledTimes(6);
     expect(container.querySelector("[data-testid='invocation-summary']")!.textContent).toContain("still running");
   });
 
