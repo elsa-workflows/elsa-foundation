@@ -30,8 +30,8 @@ const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
 );
 const WorkflowLibraryControls = lazy(() => import("./WorkflowLibraryControls").then(module => ({ default: module.WorkflowLibraryControls })));
-const WorkflowOrganizationDialog = lazy(() => import("./WorkflowOrganizationDialog").then(module => ({ default: module.WorkflowOrganizationDialog })));
-const WorkflowBulkTagsDialog = lazy(() => import("./WorkflowOrganizationDialog").then(module => ({ default: module.WorkflowBulkTagsDialog })));
+const WorkflowTagsDialog = lazy(() => import("./WorkflowTagsDialog").then(module => ({ default: module.WorkflowTagsDialog })));
+const WorkflowBulkTagsDialog = lazy(() => import("./WorkflowTagsDialog").then(module => ({ default: module.WorkflowBulkTagsDialog })));
 
 interface BrowseIdentity {
   baseUrl: string;
@@ -145,11 +145,13 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [rowMoveTarget, setRowMoveTarget] = useState<string | null>(null);
   const [focusRefreshAfterMove, setFocusRefreshAfterMove] = useState(false);
   const [librarySupport, setLibrarySupport] = useState<Awaited<ReturnType<typeof workflowOrganizationSupport>> | null>(null);
   const [librarySupportError, setLibrarySupportError] = useState<string | null>(null);
   const [libraryPermissions, setLibraryPermissions] = useState<WorkflowOrganizationPermissions>({});
   const [tagCatalog, setTagCatalog] = useState<WorkflowTag[]>([]);
+  const [libraryRefresh, setLibraryRefresh] = useState(0);
   const [organizationTarget, setOrganizationTarget] = useState<{ id: string; name: string } | null>(null);
   const [bulkTagTargets, setBulkTagTargets] = useState<string[] | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -436,6 +438,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   const openMoveDialog = () => {
     setRequestError(null);
+    setRowMoveTarget(null);
     setMoveDialogOpen(true);
   };
 
@@ -450,7 +453,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const movedDefinitions = async (folderId: string | null) => {
     if (!isCurrentGeneration()) return;
     rebase(true);
-    const count = selectedDefinitionIds.size;
+    const count = rowMoveTarget ? 1 : selectedDefinitionIds.size;
     getNotifications().notify({
       level: "success",
       title: `Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`,
@@ -500,10 +503,11 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     if (renderGeneration !== workGenerationRef.current) return;
     navigateBrowseLocation(next, "push", true);
   }, [navigateBrowseLocation, renderGeneration]);
-  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); getNotifications().notify({ level: "success", title: "Workflow organization updated" }); } };
+  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); getNotifications().notify({ level: "success", title: "Workflow tags updated" }); } };
   const closeOrganization = () => {
     if (!isCurrentGeneration()) return;
     setOrganizationTarget(null); setBulkTagTargets(null);
+    setLibraryRefresh(value => value + 1);
     requestAnimationFrame(() => { if (isCurrentGeneration()) refreshButtonRef.current?.focus(); });
   };
   const changeFavorite = async (definition: WorkflowDefinitionSummary) => {
@@ -656,7 +660,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     if (!scope || scope.authorityRevision !== authorityRevision || scope.context !== context) {
       workScopeRef.current = { authorityRevision, context };
       workGenerationRef.current += 1;
-      setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setFocusRefreshAfterMove(false);
+      setFolderCapability("unknown"); setMoveCapabilityAvailable(false); setMoveDialogOpen(false); setRowMoveTarget(null); setFocusRefreshAfterMove(false);
       createInFlightRef.current = false; setCreating(false);
       setCreateDraft(null); setCatalog([]); setCatalogState("idle"); setCatalogError("");
       setLastSuccess(null); setRequestError(null);
@@ -720,7 +724,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
         {hasLibrarySupport ? <Suspense fallback={<p role="status">Loading library organization…</p>}><WorkflowLibraryControls
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
-          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions}
+          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions} refreshKey={libraryRefresh}
         /></Suspense> : null}
         </div>
         {browseScopeBlocked && browseSupport ? <div className="wf-alert" role="alert">
@@ -810,7 +814,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                   ]
                   : [
                     { id: "artifacts", label: "Artifacts", onSelect: () => openDefinitionArtifacts(definition.id) },
-                    ...(librarySupport?.organization ? [{ id: "organization", label: "Organization", onSelect: () => setOrganizationTarget({ id: definition.id, name: definition.name }) }] : []),
+                    ...(moveCapabilityAvailable && librarySupport !== null && (!librarySupport.organization || libraryPermissions.canManageFolders === true) ? [{ id: "move", label: "Move to folder…", onSelect: () => { setRowMoveTarget(definition.id); setMoveDialogOpen(true); } }] : []),
+                    ...(librarySupport?.organization ? [{ id: "tags", label: "Edit tags…", onSelect: () => setOrganizationTarget({ id: definition.id, name: definition.name }) }] : []),
                     ...(librarySupport?.favorites ? [{ id: "favorite", label: definition.favorite ? "Remove from favorites" : "Add to favorites", onSelect: () => void changeFavorite(definition) }] : []),
                     ...(explainDefinitionAction ? [{ id: "explain", label: "Explain", onSelect: () => dispatchAiAction(ai, explainDefinitionAction, definition) }] : []),
                     { id: "delete", label: "Delete", destructive: true, onSelect: () => void softDelete(definition) }
@@ -895,7 +900,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
         /> : null}
         </WorkflowFolderNavigation>
       </div>
-      {librarySupport?.organization && organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowOrganizationDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
+      {librarySupport?.organization && organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowTagsDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {librarySupport?.bulk && bulkTagTargets ? <Suspense fallback={<p role="status">Loading bulk tag editor…</p>}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {createDraft ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
@@ -920,7 +925,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading move dialog…</div>}>
           <MoveWorkflowDefinitionsDialog
             context={context}
-            definitionIds={[...selectedDefinitionIds]}
+            definitionIds={rowMoveTarget ? [rowMoveTarget] : [...selectedDefinitionIds]}
             onClose={closeMoveDialog}
             onMoved={movedDefinitions}
           />
