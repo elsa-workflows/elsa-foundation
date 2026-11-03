@@ -1,12 +1,14 @@
-# Implementation Plan: Specialist agents
+# Implementation Plan: User-defined Agents
 
 **Branch**: `agent/codex/3538-specialist-design` | **Date**: 2026-10-31 | **Spec**: [spec.md](spec.md)
 
 **Input**: Owner-authorized [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519), [SDK research](../../docs/reports/elsa-agents-research.md), [publication/lifecycle research](../../docs/reports/elsa-agents-publication-research.md) and [source reconciliation](research.md).
 
+**Amendment status**: Draft, design-only under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [ownership contract](contracts/agent-ownership.md). Final human agreement and a separate delivery authorization are required before implementing the changed decisions. Original branch/date and delivered task receipts remain historical context.
+
 ## Summary
 
-Implement specialists inside the existing `Elsa.Agent` domain, separately from Weaver. Reuse activity authoring/publication and native/BPMN execution. MAF executes admitted model turns; existing Elsa background work owns delivery; a specialist journal owns scoped conversation acceptance. Module-owned Studio routes provide discovery, playground, evaluation and inspection. This packet delivers design, not the proposed production behavior.
+Implement specialists inside the existing `Elsa.Agent` domain, separately from Weaver. Own Agent definitions/drafts/contracts/version source and derive read-only activity publications through the existing provider and shared publication boundaries. Reuse native/BPMN execution. MAF executes admitted model turns; existing Elsa background work owns delivery; a specialist journal owns scoped conversation acceptance. Module-owned Studio routes provide discovery, playground, evaluation and inspection. This packet delivers design, not the proposed production behavior.
 
 ## Technical Context
 
@@ -14,7 +16,7 @@ Implement specialists inside the existing `Elsa.Agent` domain, separately from W
 
 **Primary Dependencies**: Current activity Design/Publishing/Runtime Core contracts; Connections and Secrets; MAF 1.27.0 with a reviewed normal-graph MEAI abstractions upgrade to 10.10.1; existing JsonSchema.Net 9.2.0; Studio SDK contributions. MAF is the first concrete turn implementation, not a new workflow engine.
 
-**Storage**: Existing activity stores remain sole definition/publication authority. A specialist journal owns conversations/turns/evaluations. Deliver a durable Connections repository through its existing contract. SQLite, PostgreSQL, SQL Server and MySQL are named first-party EF targets; in-memory is disposable support.
+**Storage**: Agent owns logical source definition/draft/candidate/version records; shared activity/template stores and publication receipts retain runnable publication authority. Agent indexes are repairable projections of confirmed receipts. Existing journal/conversation records and identifiers are preserved. Physical co-location is optional; no cross-store transaction is assumed. Deliver a durable Connections repository through its existing contract. SQLite, PostgreSQL, SQL Server and MySQL are named first-party EF targets; in-memory is disposable support.
 
 **Testing**: Risk-based behavior tests under ADR 0080 D1, using xUnit/Vitest/Playwright appropriately. No new global TDD cadence. Preserve valid tests; demonstrate red/green controls at consequential guards. Process restart, normal hosts, package consumers and authorized live models supply evidence fixtures cannot.
 
@@ -41,17 +43,17 @@ Implement specialists inside the existing `Elsa.Agent` domain, separately from W
 | Framework §2.22; Elsa §E5/§E7 | Same-unit catalogs, stable feature identities, package ranges/locks, solution filters and test tiers |
 | Draft/provisional material | §E2.8 versioning/Model X, §E2.9 and framework §2.24 retain their recorded status; this design ratifies none |
 
-No constitution exception is requested. Recheck after design and each implementation slice. Missing internal runtime capability remains a bug; domain authorization/retention gates do not excuse losing artifact interpretation.
+The proposed Agent source/bridge split keeps Core dependencies and runtime-only closures intact. Agent Core must not depend on Activities Design DTOs; adapters consume owning Core contributions. Logical record names do not pre-admit a project hierarchy. No constitution exception is requested. Recheck after design and each implementation slice. Missing internal runtime capability remains a bug; domain authorization/retention gates do not excuse losing artifact interpretation.
 
 ## Architecture decisions
 
 ### D1 — Generic publication and discovery
 
-A specialist is an activity provider manifest/public contract. Reuse drafts/revisions/review tokens/versions/templates/recommendations/lifecycle; add no specialist definition database. Fix provider membership using existing temporal draft projections: matching published head/recommendation OR active read-visible matching draft, both at the same resolved snapshot and exact owner scope, before count/paging. Do not filter client-side. Mixed-provider rows select an exact matching recommendation/head/draft or present an explicit draft choice. [Publication contract](contracts/publication.md).
+Proposed ADR 0094: Agent owns authored definitions, drafts, immutable version source and authority. An Agent activity provider projects an exact candidate into the existing catalog/publication/template system. Generated activity content is source-owned and read-only; Agent authoring cannot be bypassed by generic activity CRUD. The Agent collection queries its own authorized source/draft read model, with server-side counts/paging and stable snapshots. The native/BPMN picker still uses the one activity catalog. Legacy generic rows and exact publications remain readable through explicit scoped mappings; old provider-membership query receipts remain regression evidence, not the new source authority. [Ownership/publication protocol](contracts/agent-ownership.md).
 
 ### D2 — One I/O contract
 
-Generic public-interface members own stable typed input/result keys. The provider derives JSON schemas from that interface, with validated per-field JSON constraints where needed; no second independently edited competing contract. Preview exact schemas/fingerprints and validate inputs/output before acceptance. Reserved optional invocation controls are distinct from business JSON. [Execution contract](contracts/execution.md).
+Agent source owns stable typed input/result keys, names, null/default/required behavior and compatible field constraints. The provider derives both public activity ports and model JSON schemas. Generated contracts are not independently editable; there are no two source schemas to synchronize. Schema preview and runtime fingerprints derive from the exact candidate. Reserved invocation controls remain separate from business JSON; existing published contracts and wire keys are preserved.
 
 ### D3 — Durable model connections
 
@@ -79,26 +81,17 @@ Separate model turns, human approval waits and protected effects into native ope
 
 ### D9 — Module-owned Studio experience
 
-Build /agents over provider-filtered generic APIs, with existing api.activityEditors contributions. Keep generic contract/save/conflict/publish ownership. Add module-owned playground/evaluation/inspection routes and a narrow occurrence-link contribution where needed; no universal resource-lens/tab framework. [Studio contract](contracts/studio.md).
+The Agent module owns `/agents` discovery, authoring/public-contract editing, source revision/conflict/history and publication-intent APIs/permissions. Reuse existing UI controls and shared publication preflight/receipt mechanics through adapters without exposing a generic activity definition as the editable source. Generic activity pages recognize read-only Agent projections and navigate to the source. Playground/evaluation/inspection use exact candidate/version identity and the existing runtime path; internal model-turn handles remain diagnostic references. Compatibility routes must use the same Agent authority after transfer, not an independent writer. [Studio contract](contracts/studio.md).
 
 ### D10 — Configuration-defined specialists
 
-Owner decision (2 Nov 2026): specialists are user-defined agents, authored in Studio or defined in host
-configuration, in the spirit of Azure AI Foundry agents. A configuration source under the Agents domain reads
-operator-versioned specialist manifests and validates each one. It contributes the valid ones through the existing
-activity reconciliation lifecycle (`ActivityVersionsReconciling`) as source-owned content. Today's source-owned
-publication (`SourceOwnedActivityVersionPublisher` → `ExecutableNodeCompiler.CompileSourceOwnedRoot`) builds a single
-root node and never calls a provider compiler. It must be extended so that provider-backed source content is
-compiled through the registered `IActivityTemplateProviderCompiler`, with the same preflight as Studio publication:
-schema, model capability, runtime and storage. That extension is generic Essentials publishing work, not a specialist
-fork. It generalizes `ActivityTemplateCompiler` and the Studio preflight beyond drafts: the review-policy subject,
-schema validation, and the candidate evaluation extracted from `ActivityDefinitionPublisher`. It reports a compile or preflight failure for that one
-version without aborting the pass. Today one invalid reconciliation entry aborts the whole pass, so per-definition
-isolation is split: the configuration source validates the manifest and version before contribution, and the
-publication bridge isolates compile and preflight failures. Versions are operator-declared; reconciliation keeps rejecting same-version content changes.
-[Publication contract](contracts/publication.md), FR-027, T061–T062.
+Configuration and Studio authoring produce the same immutable Agent candidate/public contract, with explicit source ownership. Configuration versions are operator-declared and read-only in Studio; authorized copy/fork creates a new Agent source. One invalid source entry yields a scoped actionable diagnostic while other entries reconcile. Same-version/different-content remains a conflict.
 
-Detailed meanings live in the [glossary](../../docs/glossary/elsa.md); state/support decisions live in the linked documents. Proposed public signatures stabilize only after the first independent package consumer and owning implementation review.
+The shared source-owned publication bridge must be extended beyond its current single-root compilation so provider-backed candidates use `IActivityTemplateProviderCompiler` and the same schema, capability, runtime/storage, compatibility and review checks as interactive publication. This is generic Essentials publishing work, not a second Agent publisher. Extract candidate evaluation only as required by these real consumers. Persist/reserve exact source candidates before shared commit, and reconcile receipt/index loss without claiming cross-store atomicity. Proposed T064–T071 sequence this alongside the existing T061–T062 obligations. [Ownership contract](contracts/agent-ownership.md).
+
+### D11 — Terminology and legacy adoption
+
+Agent is the canonical product/domain noun. Keep the pinned `Elsa.Agent` root and all legacy `Specialist*`, `elsa.specialist`, schema/codec, package/feature/API and persistence identifiers until an explicitly reviewed compatibility change is justified. The existing directory remains `1179-specialist-agents`. Adoption maps retained versions and templates without reserialization, republish or hash/ID rewriting, transfers drafts with revision/ownership fencing, and preserves conversation/journal identities and active operations. W1–W8 and the declared rollback envelope are acceptance gates.
 
 ## Project Structure
 

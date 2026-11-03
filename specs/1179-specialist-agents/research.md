@@ -3,9 +3,13 @@
 **Status**: M1 design evidence; production recommendations remain subject to packet review.
 Sources were inspected on 31 October 2026. M0 receipts remain bounded research rather than product acceptance.
 
+## Ownership amendment under review (4 November 2026)
+
+[ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) proposes Agent-owned source, one derived activity contract/catalog and the existing shared runnable publication authority. R1 below records the prior choice and its evidence. Its rejection of a competing publication catalog does not rule out independently owned Agent source with read-only derived activities. D1/D2/D9/D10 and [agent-ownership.md](contracts/agent-ownership.md) state the proposed replacement; existing runtime/journal evidence remains intact. No new architecture behavior has been implemented or qualified.
+
 ## R1 — Publication ownership and unpublished discovery
 
-**Decision**: Reuse activity definitions/drafts/publications. Add a narrow temporal provider-membership
+**Original decision (prior approved baseline)**: Reuse activity definitions/drafts/publications. Add a narrow temporal provider-membership
 query correction rather than another catalog or a client-filtered collection.
 
 **Evidence**: `IActivityProvider` and `IActivityTemplateProviderCompiler` are exercised by the

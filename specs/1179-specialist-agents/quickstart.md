@@ -4,6 +4,8 @@
 production commands/routes below are acceptance targets to deliver, not a claim they already work.
 The [support contract](contracts/support.md) owns the finite matrix and actual status of each cell.
 
+**Design-only ownership amendment**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [W1–W8](contracts/agent-ownership.md#acceptance-witnesses) propose first-class Agent source. The existing commands, paths and receipts below describe the baseline. They are not implementation or migration instructions for the amendment. After agreement, T070 must qualify the Agent-owned create/test/publish/use/inspect/configuration journeys, crash/receipt recovery and old-artifact/active-conversation adoption from private copies. Never run migration against the existing demo merely to validate this draft.
+
 ## Existing research evidence
 
 Use .NET 10 and Python 3.12+, a new absolute directory outside the checkout and a unique local version:

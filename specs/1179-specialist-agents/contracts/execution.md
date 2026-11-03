@@ -3,6 +3,8 @@
 **Status**: Proposed. Owning requirements FR-003–FR-019/FR-022–FR-025; see [state model](../data-model.md).
 No C# signature or unqualified provider behavior is frozen by this document.
 
+**Ownership amendment**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [agent-ownership.md](agent-ownership.md) propose Agent-owned authoring. This runtime contract retains its existing native/journal guarantees and legacy `Specialist*`/`elsa.specialist` identities. Added Agent provenance must not reinterpret old definition/version fields or change old hashes. No new execution engine or direct model-call path is proposed.
+
 ## Immutable invocation and authority
 
 The native facade receives the published runtime contract/descriptor and committed input snapshot.

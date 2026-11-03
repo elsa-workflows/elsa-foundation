@@ -4,10 +4,13 @@
 product** until its implementation run is retained. Existing module support and M0 fixtures are not
 specialist acceptance. FR-023–FR-026 and Program A13–A15 own completion.
 
+**Proposed ownership qualification**: [ADR 0094](../../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) adds W1–W8 in [agent-ownership.md](agent-ownership.md) to each affected source/store/host profile before it can qualify the new model. Existing matrix dimensions and baseline receipts are retained; none is recertified by a design edit. Source migration uses retained old artifacts/packages and owned store copies. Include unavailable Agent authoring storage during old-artifact execution, independently unavailable stores during publication repair, and ownership-epoch/reader rollback refusals.
+
 ## First-party scope
 
 | Axis | Named target | Required evidence |
 |---|---|---|
+| Agent source/candidate/adoption persistence | SQLite, PostgreSQL, SQL Server, MySQL | Source authority/CAS, publication reservation and receipt repair, explicit migration mapping/one-writer/rollback W1–W7 |
 | Activity/publication/runtime persistence | SQLite, PostgreSQL, SQL Server, MySQL | Existing real provider contexts/migrations plus exact specialist publication, runtime checkpoint and restart behavior |
 | Specialist journal/evaluation persistence | EF implementations for those same four providers | Tenant/CAS/fence/acceptance/receipt/protection/retention/recovery tests and actual native handoff |
 | Connection metadata | New durable existing-repository implementation for those four providers | Restart, create/version-CAS/revoke/delete/rollback/secret-reference behavior; durable Secrets composed separately |

@@ -7,6 +7,8 @@
 - **Project:** [Elsa Agents #66 — Kanban](https://github.com/orgs/elsa-workflows/projects/66/views/1), [complete hierarchy](https://github.com/orgs/elsa-workflows/projects/66/views/3).
 - **Activation and sequencing:** [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus), 31 October Elsa Agents amendment.
 
+**Design amendment under review**: [#3781](https://github.com/elsa-workflows/elsa-foundation/issues/3781) / [proposed ADR 0094](../adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and the [spec 1179 ownership contract](../../specs/1179-specialist-agents/contracts/agent-ownership.md) draft Agent-owned definitions with derived activity publication and additive legacy adoption. Sipke authorized drafting on 4 November 2026. Final human review and separate delivery authorization are required before the changed source model is implemented; existing M0–M5 receipts remain baseline evidence. This advances the existing Agent program and creates no new active program or implementation leaf.
+
 ## Purpose
 
 Users define reusable specialists such as Copywriter and Proofreader, test them, publish immutable

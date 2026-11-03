@@ -32,3 +32,14 @@ Read-only cross-artifact analysis covered all26 requirements and60 ordered tasks
 targets or unresolved placeholders. Seven prototype views were checked at320px; these checks establish
 design readiness only. Product implementation, real hosts/providers, durability and live qualification
 remain the unchecked obligations in tasks.md and Program A1–A15.
+
+## Ownership amendment review (design-only, 4 November 2026)
+
+- [x] Proposed ADR and spec separate Agent content authority from derived activity publication and shared receipt authority.
+- [x] One Agent contract derives both activity ports and model schemas; no independently editable generated contract.
+- [x] Candidate/reservation/commit/index crash boundaries, unknown outcomes and source/lifecycle races have explicit planned witnesses.
+- [x] Legacy IDs, hashes, templates/readers, workflows and active/accepted conversation state are preserved by additive fenced adoption.
+- [x] Agent is the proposed canonical term; existing Specialist compatibility identifiers are retained.
+- [x] Historical delivery evidence is labelled separately from W1–W8; future tasks remain unchecked.
+- [ ] Required humans agree the final ADR/spec text.
+- [ ] A separately authorized implementation leaf qualifies W1–W8; no check above claims implementation.

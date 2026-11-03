@@ -1,33 +1,37 @@
-# Specialist state, identity and transactions
+# Agent state, identity and transactions
 
-**Status**: Proposed M1 model. These are logical shapes, not frozen C# signatures or an implemented schema.
+**Status**: Draft ownership amendment under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); existing journal behavior remains the regression baseline. These are logical shapes, not frozen C# signatures or an implemented schema.
 Meanings belong to the [glossary](../../docs/glossary/elsa.md); architecture choices are in [plan.md](plan.md).
 
 ## Existing authorities retained
 
-| Existing record/authority | Specialist use |
-|---|---|
-| ActivityDefinition/AuthoringState | Stable definition/type key, presentation, content authority, head/recommendation |
-| ActivityDefinitionDraft + revision | Public interface and provider manifest, exact saved candidate, conflict checks |
-| ActivityDefinitionVersionPublication/ExecutableActivityTemplate | Immutable specialist behavior, schemas, model/resource policy and runtime requirements |
-| WorkflowExecutable/activity invocation | Exact placed contract/artifact, input snapshot, logical invocation/OperationKey and process completion |
-| ConnectionDocument/ConnectionState.Version | Operational tenant connection settings/auth state/secret references under existing CAS |
-| Native background work/receipt/checkpoint/outbox | Worker delivery/fence, process acceptance/cancellation and durable settlement responsibility |
+The [Agent ownership contract](contracts/agent-ownership.md) owns the proposed source/candidate/projection shapes and crash/cutover invariants; this table connects them to retained runtime state.
 
-There is no separate specialist definition/version table. Derived collection/evaluation views retain
-foreign identities and never become publication authority.
+| Record/authority | Proposed Agent use |
+|---|---|
+| AgentDefinition / AgentDraft | Canonical scoped source, typed public contract and revision-CAS authoring |
+| AgentPublicationCandidate / AgentVersion | Frozen exact source and operation reservation; version published only through confirmed shared receipt or explicit adopted legacy association |
+| Derived activity definition/version | Source-owned read-only workflow representation; explicit Agent identity mapping |
+| ActivityDefinitionVersionPublication / ExecutableActivityTemplate / receipt | Retained immutable executable publication, hashes, runtime requirements and successful-publication authority |
+| WorkflowExecutable / activity invocation | Exact placed contract/artifact, committed input, OperationKey and process completion |
+| ConnectionDocument / ConnectionState.Version | Existing operational settings/auth/secret-reference authority under CAS |
+| Native background work/receipt/checkpoint/outbox | Existing worker fence, process acceptance/cancellation and settlement responsibility |
+
+Agent source records and activity projections are distinct logical responsibilities; they need not use different physical databases. Repairable Agent list/publication indexes are not another commit authority. Legacy Agent/activity IDs, version names, source references, templates/hashes and journal identity fields retain their existing interpretation during adoption.
 
 ## Published behavior
 
-The provider manifest contains instructions, model connection reference/type, model ID, supported
+The immutable Agent candidate/version source contains instructions, model connection reference/type, model ID, supported
 settings and capability snapshot identity, optional field-level JSON constraints, continuity/resource/
-tool/budget policy and schema version. The compiler derives exact input/result JSON schemas and result
-projections from the public contract, validates constraints and includes all behavior in the artifact hash.
+tool/budget policy and schema version. The provider derives its activity contract, exact input/result JSON schemas and result
+projections from the one Agent-owned public contract, validates constraints and includes all behavior in the artifact hash.
 Credentials, live SDK agents/sessions, mutable connection documents and UI layout are not behavior payloads.
 
 The runtime descriptor retains exact definition/version/hash, compiled schemas, model/adapter/codec
 identity and policy. Connection authority is resolved at point of use; an artifact never requires a draft
 lookup. An operational authorization denial is a domain outcome, not permission to lose an artifact reader.
+
+The generated provider manifest is derived publication input, not another editor. Existing descriptor fields retain their legacy identity meaning. If later descriptor schemas add Agent provenance, old readers/formats remain supported and old hashes are not recomputed. Migration links retained publication identity explicitly; a fresh Agent identity cannot replace the version identity that scopes an existing conversation.
 
 ## New logical records
 
@@ -118,6 +122,10 @@ with RequiresEncryption=false. Native encryption-required values/captures and se
 inputs are explicitly unsupported/refused before dispatch, not decrypted or downgraded by the facade.
 A handle alone grants no access. Qualify supported redacted flow and unsupported-policy negatives;
 do not infer native encryption support from the journal or the M0 plain fixture.
+
+## Source publication and adoption boundaries
+
+The proposed candidate/reservation/shared-receipt/index-repair protocol, W1–W8 and ownership epoch are specified in [agent-ownership.md](contracts/agent-ownership.md). Publication identity remains distinct from journal acceptance and process application; migrating source does not enlist these stores into one transaction or create a turn. Historical version records associate to retained templates without reserialization. Partial transfer, different-content/same-version and rollback-reader conflicts leave explicit resumable/blocked states with a single writable source.
 
 ## Separate transaction boundaries
 

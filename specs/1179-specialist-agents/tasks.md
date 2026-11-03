@@ -1,4 +1,4 @@
-# Tasks: Specialist agents
+# Tasks: User-defined Agents
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [contracts](contracts/) and [qualification guide](quickstart.md).
@@ -9,6 +9,8 @@ qualification; they do not assert product acceptance. M2 is complete through
 resulting-main qualification on `0d6db68a3`. M3 is complete; M4 remains open under
 [#3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524), and M5 implementation is active under
 [#3525](https://github.com/elsa-workflows/elsa-foundation/issues/3525). The product spec remains nonterminal.
+
+**Design amendment hold (4 November 2026)**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and [Agent ownership](contracts/agent-ownership.md) are draft proposals. T001–T063 and their checked receipts retain their historical meaning under the previous design; they do not establish the proposed source authority. Pending source/editor/configuration work in T005–T013, T030–T040 and T061–T062 must be re-planned against T064–T071 after agreement, rather than extending two writable models. T064–T071 remain unstarted. This PR implements none of them.
 
 **Cadence**: ADR 0080 D1 risk-based behavior tests; no invented TDD rule or coverage quota. Tests
 accompany their owning implementation slice and complete before its review/merge. Use meaningful
@@ -174,6 +176,19 @@ four authorized live journeys, retaining exact artifacts/readiness/original fail
 - [ ] T056 [US8] Reconcile real host startup asset budgets, missing/incompatible/restored module controls, native resource isolation and owned-process cleanup in `tools/agents/conformance/`; do not substitute static closure or source-tree hosts.
 - [ ] T057 [US8] Close every A1–A15 row only with reviewed product receipts in `specs/1179-specialist-agents/evidence/acceptance.md`, preserving all failed/skipped/cancelled/quarantined/unknown statuses and exact source/fixture/host/provider identities.
 
+## Proposed ownership amendment — review-gated future work
+
+The following dependency-ordered tasks apply FR-028–FR-035 and W1–W8. They are a planning amendment, not permission to start production implementation. Existing runtime and legacy-artifact tests remain regression gates.
+
+- [ ] T064 Record final human agreement on ADR 0094 and the amended `specs/1179-specialist-agents/` packet; confirm a separately authorized delivery leaf under #3519 before T065. Reconcile affected pending tasks and the support envelope.
+- [ ] T065 After T064, implement Agent-owned source definition/draft/candidate/version and source-permission/store contracts within `Extensions/Agent/src/` (proposed Definitions subdomain; exact package/API admission reviewed in that leaf), with one typed public contract, scoped revision-CAS and unpublished source discovery. Prove W1 without depending on Activities Design DTOs in Agent Core.
+- [ ] T066 After T065, adapt `Extensions/Agent/src/Specialists/Design/Services/SpecialistActivityProvider.cs` and shared `Essentials/src/Workflows/Publishing/Api/Services/ActivityDefinitionPublisher.cs`, `SourceOwnedActivityVersionPublisher.cs` plus their owning Core contracts to compile exact Agent source candidates through the common preflight/receipt path. Implement the durable source reservation, one contract projection and receipt-authoritative index repair. Prove W2/W3 including stale authority, crash/unknown-outcome and same-operation/different-material failures. Do not copy the publisher.
+- [ ] T067 After T065/T066, deliver additive scoped adoption in the Agent source/persistence boundary and generic source-write admission: verified legacy version/publication mapping, one-writer ownership epoch, revision-fenced draft transfer, resumable migration and declared rollback-reader checks. Preserve old IDs, hashes, schemas, accepted turns and conversation revisions. Prove W4–W7 with retained artifact/package inputs; no live user stores or hosts are migration fixtures.
+- [ ] T068 After T065/T066 and the T067 cutover contract, adapt `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/AgentsPage.tsx`, editor/playground/history and their backend APIs to Agent source authority, using shared controls and execution mechanics. Generic generated activity views become read-only and link to the Agent. Keep exact candidate/version, source permissions, conflicts and configuration ownership visible. Do not rename legacy wire/package/feature contracts as part of terminology.
+- [ ] T069 With T065–T068, add meaningful ownership/publication/adoption/recovery tests under `Extensions/Agent/tests/Specialists/Tests/` and the actual owning publishing/persistence suites; prove W1–W7 across scoped four-provider persistence and independently unavailable stores. Retain native/BPMN old-artifact and active-operation witnesses, reject stale writers/cross-scope mappings, reconcile test counts and demonstrate causal red/green failures.
+- [ ] T070 After T068/T069, complete W8 in real Studio and normal source/package authoring-only/runtime-only/combined hosts, configuration-defined Agents and native/BPMN journeys. Update `contracts/support.md`, `quickstart.md`, actual wireframes and owning contributor/glossary docs with receipt links; distinguish old baseline evidence from new model proof.
+- [ ] T071 After the delivery leaves and required review/CI/resulting-main checks, reconcile this amendment's W1–W8 evidence and legacy compatibility envelope before switching the default source owner. Retire obsolete editable routes only through a reviewed compatibility policy with retained readers, then update spec lifecycle in the completing unit.
+
 ## Final cross-cutting gate
 
 - [ ] T058 Complete affected full suites/discovery reconciliation, API/lock/catalog/tier/architecture/maps gates and causal controls for every implementation leaf; update owning catalogs and `docs/program-goals/elsa-agents.md` in the same units.
@@ -181,6 +196,9 @@ four authorized live journeys, retaining exact artifacts/readiness/original fail
 - [ ] T060 Set this product specification to Implemented only in the final completing PR and remove terminal checklist residue per `docs/reference/spec-lifecycle.md`; ship the final acceptance/support/docs links with Program closure.
 
 ## Dependencies and execution strategy
+
+**Ownership amendment**: T064 → T065 → T066 → T067, with T068 following the source/publication and cutover contracts; T069 accompanies each behavior change, T070 qualifies it and T071 closes delivery. No proposed ownership task runs while this design PR awaits human review. Configuration source T061 and shared publishing T062 consume T066 rather than introducing another source/publisher. Historical completed tasks are not reopened or erased by this amendment.
+
 
 T001–T004 enable the first US1 slice; T005–T008 can land as complete authoring/query work while real
 runtime capability admission still refuses publication without its interpreter. T009–T013 finish the
@@ -239,3 +257,13 @@ caller is refused (`Forbidden`) rather than misattributed. No production externa
 #3527 must make the issued token, the session service and every subject-scoped store agree on one subject for
 external sign-ins (with migration for anything saved under the provider subject) before external deciders are
 supported.
+
+### Ownership amendment traceability
+
+| Requirement | Planned tasks | Witness / Program acceptance |
+|---|---|---|
+| FR-028–FR-029 | T064–T066,T068–T070 | W1,W2,W8; A1,A3,A12 |
+| FR-030 | T066,T069–T071 | W3; A3,A13 |
+| FR-031–FR-032 | T067,T069–T071 | W4,W5,W7; A3,A4,A5,A13 |
+| FR-033–FR-035 | T066–T071 | W4,W6,W8; A6,A8,A9,A12,A13 |
+| SC-008–SC-010 | T064–T071 | W1–W8; amendment acceptance remains unproven |
