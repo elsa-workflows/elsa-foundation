@@ -86,8 +86,13 @@ is verified Done under [spec1189](../../specs/1189-weaver-recovery/spec.md). It 
 (PR #3640) on Sipke's instruction, while Code Review was unavailable, after a self-review that converged
 in four rounds. Main's own CI requalified it, including a fresh complete package witness with 20 restart
 cases on both actual adapters against the packaged EF store. M2 #3431 is verified complete.
-[Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is the sole
-current implementation leaf, under [spec1193](../../specs/1193-weaver-workflow-journeys/spec.md).
+[Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is complete under
+[spec1193](../../specs/1193-weaver-workflow-journeys/spec.md), which is now Implemented. It was delivered
+as seven slices, #3671, #3704, #3715, #3722, #3727, #3732 and #3736; the last merged as `af947767a` and
+closed #3442. Each slice merged under Sipke's standing self-review authorization while Code Review was
+unavailable. Each carried independent package witness evidence on both actual adapters, recorded on its PR.
+[Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
+implementation leaf, under [spec1203](../../specs/1203-weaver-module-support/spec.md).
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
 The current inventory also includes workflow library folders, tags and saved views added on main
 during M2.
@@ -129,6 +134,13 @@ selection and unsaved-state fidelity; navigation cannot silently retarget a pend
 Distinguish trusted installed-module guidance from untrusted resource content. Module support grants
 no blanket administration authority and exposes no secret values or unrelated data. Useful read-only
 support is valid where a domain does not support mutation, with that limit explicit in the matrix.
+
+[Owner amendment, 3 November 2026](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6612627295):
+the integrator decides which privileges Weaver has, through configuration. A host policy of the Agent
+module defines three privilege classes: administrative, irrecoverable and activation. Each is off by
+default, and the Workbench enables all three. Where a host enables the activation class, Weaver may
+apply feature selections; package promotion and package activation stay outside scope. M4 also adds a
+generic outcome for an approved action that persists nothing. Spec 1203 records how these apply.
 
 Approval, denial, effective server autonomy, cancellation, disconnect/reconnect, retry, duplicate
 delivery, restart and module removal need declared supported outcomes. Persist accepted decisions,
