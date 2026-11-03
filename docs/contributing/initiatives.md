@@ -72,8 +72,10 @@ The board states which phase the initiative is in.
 1. **Analysis and decisions.** Architects analyse, propose ADRs and agree on them. Every decision rests on at least
    one thorough analysis. Several analyses are welcome, including analyses that build on another architect's.
    Analyses lead to discussion and, in the end, to decisions.
-2. **Specs.** A spec may be drafted at any time, as long as the draft says it is **provisional**. Its formal approval
-   needs the ADRs it depends on to be agreed. Each spec row on the board names the ADRs and decisions it needs.
+2. **Specs.** A spec may be drafted at any time, as long as the draft says it is **provisional**. A provisional spec is
+   written as if the ADRs it applies were agreed, so its plan and tasks test whether those ADRs work in the code (see
+   *Provisional specs* below). Its formal approval needs the ADRs it depends on to be agreed. Each spec row on the board
+   names the ADRs and decisions it needs.
 3. **Implementation.** Production implementation needs the approved spec and the decisions it applies. ADR and spec
    PRs both follow the final-commit agreement rule below.
 
@@ -126,6 +128,15 @@ table that answers every point.
 | 2 | Unmatched-key severity | #1234 | needs clarification | Warning or refusal? | @drafter |
 | 3 | Outcome API | #1240 | differs | Setters only until a case shows they cannot express it | @drafter |
 ```
+
+**Provisional specs.**
+- **Findings flow back.** When a spec finds that an ADR it applies is incomplete, wrong or not viable, the spec's author
+  raises it on that ADR's PR, as a review comment or a row in its reconciliation, and the spec records it as an open
+  question. A spec never silently diverges from its ADR.
+- **Changes flow forward.** When an ADR changes before it is agreed, the author of every provisional spec that applies
+  it rechecks that spec against the new text. Until then, the spec's row on the board shows that it needs a recheck.
+- **General defects.** A defect a spec finds that does not depend on the initiative's decisions gets its own issue
+  outside the initiative. The spec does not depend on it.
 
 **Agreement (ADRs and specs).** Both kinds of PR stay drafts until the following steps are complete:
 1. Once review has settled the text, the **author** commits the final record: `Status: accepted (<date>)` for an ADR,
