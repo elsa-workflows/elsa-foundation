@@ -120,7 +120,7 @@ internal sealed class WorkflowRunInspection(
     /// Whether an incident's message may echo a sensitive input. Non-sensitivity must be established from both sources, the
     /// Executable's input bindings and the activity execution's own value evidence, for the activity the incident names and,
     /// when it propagated from a child's fault, for that causal activity execution too (the fault recorder's causal execution,
-    /// or a structural parent's completed child). Only one causal level is checked: this assumes, as the runtime's fault
+    /// a structural parent's completed child, or the child whose parent notification the parent was handling). Only one causal level is checked: this assumes, as the runtime's fault
     /// recorders do, that a propagated fault message names its child but never carries the child's own exception text.
     /// An incident without an activity execution, or whose causal execution is blank or named only partly, counts as sensitive.
     /// </summary>
@@ -129,9 +129,10 @@ internal sealed class WorkflowRunInspection(
     {
         if (activityExecutionId is null) return true;
         if (await ActivitySensitiveAsync(workflowExecutionId, activityExecutionId, executableNodeId, sensitive, lookups, cancellationToken)) return true;
-        // A causal child: the fault recorder's (IActivityFaultCausation) or a structural parent's completed child. A key that is
+        // A causal child: the fault recorder's (IActivityFaultCausation), a structural parent's completed child, or the child whose
+        // notification the parent was handling, whose payload reaches the parent's handler. A key that is
         // present but blank, or a causal node or incident without its activity execution, cannot be established non-sensitive.
-        foreach (var key in new[] { RuntimeMetadataKeys.CausalActivityExecutionId, RuntimeMetadataKeys.CompletedChildActivityExecutionId })
+        foreach (var key in new[] { RuntimeMetadataKeys.CausalActivityExecutionId, RuntimeMetadataKeys.CompletedChildActivityExecutionId, RuntimeMetadataKeys.NotifyingChildActivityExecutionId })
         {
             if (!metadata.TryGetValue(key, out var child)) continue;
             if (string.IsNullOrWhiteSpace(child)) return true;

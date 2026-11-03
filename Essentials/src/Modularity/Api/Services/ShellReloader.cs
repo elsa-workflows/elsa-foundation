@@ -13,13 +13,15 @@ namespace Elsa.Modularity.Api.Services;
 /// <para>
 /// A save reloads the host configuration synchronously, but the file watcher's own debounced reload still fires afterwards.
 /// When it lands while CShells composes the new generation, CShells refuses that generation as composed from changing
-/// configuration and asks for a retry. Only that refusal is retried, at most three attempts in all; every other failure is
+/// configuration and asks for a retry. Only that refusal is retried, at most three attempts in all, each after a pause longer
+/// than the file provider's default reload delay (250 ms) so a later watcher event can land first; every other failure is
 /// reported on its first attempt.
 /// </para>
 /// </remarks>
 public sealed class ShellReloader(IShellRegistry shellRegistry, IShell shell, ILogger<ShellReloader>? logger = null) : IShellReloader
 {
     private const int MaxAttempts = 3;
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(300);
 
     public async Task<int> ReloadAsync(CancellationToken cancellationToken = default)
     {
@@ -31,6 +33,7 @@ public sealed class ShellReloader(IShellRegistry shellRegistry, IShell shell, IL
             if (attempt < MaxAttempts && IsConfigurationChangedDuringComposition(result.Error))
             {
                 logger?.LogInformation("Configuration changed while shell {ShellName} was composing; reloading again (attempt {Attempt} of {MaxAttempts}).", name, attempt + 1, MaxAttempts);
+                await Task.Delay(RetryDelay, cancellationToken);
                 continue;
             }
 

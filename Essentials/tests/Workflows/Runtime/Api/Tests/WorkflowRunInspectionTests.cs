@@ -285,11 +285,14 @@ public sealed class WorkflowRunInspectionTests
     [InlineData("completed-sensitive", true)]
     [InlineData("completed-plain", false)]
     [InlineData("completed-blank", true)]
+    [InlineData("notifying-sensitive", true)]
+    [InlineData("notifying-plain", false)]
+    [InlineData("notifying-blank", true)]
     public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
     {
         const string ChildId = "actexec-child";
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
-        if (child is "sensitive" or "plain" or "completed-sensitive" or "completed-plain")
+        if (child is "sensitive" or "plain" or "completed-sensitive" or "completed-plain" or "notifying-sensitive" or "notifying-plain")
             await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ChildId, RunId, "node-child", "authored-child", "Test.Child", "1.0.0",
                 ActivityExecutionStatus.Faulted, null, 2, Now, Now, null, "checkpoint-2", "checkpoint-2", Now, ActivitySchedulingProvenance.Empty, [], [], [],
                 child.EndsWith("sensitive", StringComparison.Ordinal) ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
@@ -301,6 +304,9 @@ public sealed class WorkflowRunInspectionTests
             // A structural parent (a Flowchart) records the child it completed from, as the packaged runtime does.
             "completed-sensitive" or "completed-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = ChildId },
             "completed-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = "" },
+            // A parent faulting while handling a child's notification records that child, whose payload reached the handler.
+            "notifying-sensitive" or "notifying-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = ChildId },
+            "notifying-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = "" },
             _ => new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalActivityExecutionId] = ChildId,
