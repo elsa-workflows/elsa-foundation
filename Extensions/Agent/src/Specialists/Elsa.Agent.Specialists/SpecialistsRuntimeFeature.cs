@@ -50,6 +50,7 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddSingleton(new SpecialistStreamingPolicy(StreamResponses));
         services.TryAddScoped<SpecialistSchemaValidator>();
         services.TryAddScoped<SpecialistNativeBinding>();
+        services.TryAddScoped<ISpecialistInvocationInspector, SpecialistInvocationInspector>();
         services.TryAddScoped<SpecialistTurnJournal>();
         services.TryAddScoped<SpecialistModelRunner>();
         services.TryAddScoped<SpecialistTurnBudgetAllocator>();

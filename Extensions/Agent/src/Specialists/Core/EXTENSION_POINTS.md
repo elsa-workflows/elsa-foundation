@@ -47,6 +47,18 @@ The [connection-backed contributors](../Connections/README.md) add separate Anth
 profiles. Their configured support metadata and physical-request controls remain distinct from durable
 specialist acceptance and the Program's later live-provider qualification.
 
+## Invocation evidence
+
+[`ISpecialistInvocationInspector`](Contracts/ISpecialistInvocationInspector.cs) is a runtime-owned read port.
+`SpecialistsRuntime` registers its scoped default with `TryAdd`, so a host package may replace it before the runtime
+feature runs. Callers authorize the read first. The [inspection API](../Inspection/Api/EXTENSION_POINTS.md) does this
+through the generic draft Test Run. The default resolves the exact invocation through the same native binding the turn
+was staged under, in the caller's ordinary persistence scope, and returns `null` for anything else.
+`SpecialistInvocationEvidence` carries the candidate or published version, the model reference, limits, native status,
+a safe fault code, the inline unencrypted accepted output, and the journal turn's status, requests, usage and
+conversation. Protected request, result and session material, instructions, fences, leases, connection incarnations and
+capability fingerprints never enter it. An implementation must not decrypt, infer or mutate.
+
 ## Turn journal replacement
 
 [`ISpecialistTurnStore`](Contracts/ISpecialistTurnStore.cs) is a replacement contract: select one backend
