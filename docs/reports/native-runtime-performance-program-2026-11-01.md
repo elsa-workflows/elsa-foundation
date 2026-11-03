@@ -759,8 +759,8 @@ task-tagged resource or running VM remains. See `fixture-cleanup-i68.json`.
 ### Third fixture cleanup
 
 After the i69 collection was downloaded and extracted, the task resource group with all three machines, their disks,
-the network and the public IP was deleted; the database password existed only on the deleted database machine, and the
-task SSH key was deleted from the operator machine. No task resource or running VM remains, and no existing resource
+the network and the public IP was deleted; the database password existed only on the three deleted machines (the database host and
+each node's `node.env`), and the task SSH key was deleted from the operator machine. No task resource or running VM remains, and no existing resource
 was touched. See `fixture-cleanup-i69.json`.
 
 ### Rebuilt backend REST end-to-end suite
