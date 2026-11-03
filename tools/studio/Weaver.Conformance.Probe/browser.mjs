@@ -1501,8 +1501,8 @@ async function workflowReadOnly() {
 }
 
 // Spec 1193 T022: one reviewed Operation Batch in the actual packaged editor. Four refused controls first, each with zero
-// working-state change (an edit after the proposal, a selection change, a remount); then the batch itself, six operation
-// kinds with two in a nested flowchart and a hand edit in its base revision, observed through the designer's own
+// working-state change (an edit after the proposal, a selection change, a remount); then the batch itself, seven
+// operations of six kinds with three in a nested flowchart and a hand edit in its base revision, observed through the designer's own
 // export, validation, autosave, Undo and Redo; and last an approval from a second tab. Weaver never saves or publishes.
 const BATCH_TOOL = "workflow_apply_operation_batch";
 async function workflowBatch() {
@@ -1539,14 +1539,32 @@ async function workflowBatch() {
     result.evidence.push(retain(name + "-interaction", { method: "pointer-drag", nodeId: id, dx, dy }));
   };
   const settled = () => expect(dock()).toHaveAttribute("aria-busy", "false");
-  const request = async (args, name) => {
+  // The tool's arguments are exactly the operations: the config's expectations (added id, version, literal, ...) stay
+  // here, since the strict batch schema refuses any other field.
+  const request = async (prepared, name) => {
     await settled();
+    const args = { operations: prepared.operations };
     const selected = command(BATCH_TOOL, args);
     commands[name] = selected.commandId;
+    const cards = dock().locator(".agent-proposal"), before = await cards.count();
     await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
     await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: BATCH_TOOL, arguments: args }));
-    const review = await proposalFor(() => dock().getByRole("button", { name: "Send message", exact: true }).click(), name);
-    return { ...review, commandId: selected.commandId };
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    const sent = await accepted(message, name + "-message");
+    // Wait on the turn itself, not a fixed delay: it ends with a new card awaiting review or settles without one, and
+    // then the dock's own text says why (a refusal at preparation, a provider error).
+    await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
+    if (await cards.count() <= before) {
+      const text = (await dock().innerText()).slice(-800);
+      result.evidence.push(retain(name + "-no-proposal", { text }));
+      need(false, name + ": the batch turn ended without a proposal: " + text);
+    }
+    const proposal = cards.last();
+    await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+    await expect(proposal.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
+    return { proposal, sent, commandId: selected.commandId };
   };
   const apply = async (proposal, name, target = page) => {
     const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");

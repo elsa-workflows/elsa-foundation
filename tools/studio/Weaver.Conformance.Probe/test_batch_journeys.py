@@ -224,7 +224,7 @@ class BrowserTests(unittest.TestCase):
                 "commands": {step: "command-" + step for step in BROWSER_COMMANDS}}
 
     def commands(self):
-        return [{"commandId": "command-" + step, "toolName": BATCH_TOOL, "arguments": {"operations": []}} for step in BROWSER_COMMANDS]
+        return [{"commandId": "command-" + step, "toolName": BATCH_TOOL, "arguments": {"operations": positive_operations(SEED)}} for step in BROWSER_COMMANDS]
 
     def trace(self, skip=None):
         return [row for step in BROWSER_COMMANDS if step != skip for row in rows(command="command-" + step)]
@@ -242,6 +242,9 @@ class BrowserTests(unittest.TestCase):
             "stale-applied": (changed(staleEdit="applied"), self.commands(), self.trace()),
             "missing-call": (self.observed(), self.commands(), self.trace(skip="remount")),
             "missing-command": (self.observed(), self.commands()[1:], self.trace()),
+            # As witness 565ee7612 sent it: the config's expectations beside the operations, refused by the strict schema.
+            "extra-arguments": (self.observed(), [{**item, "arguments": {**item["arguments"], "addedNodeId": "batch-greet"}} for item in self.commands()], self.trace()),
+            "no-operations": (self.observed(), [{**item, "arguments": {"operations": []}} for item in self.commands()], self.trace()),
             "failed": ({**self.observed(), "status": "failed"}, self.commands(), self.trace()),
         }
         for name, (observed, commands, trace) in cases.items():

@@ -297,6 +297,10 @@ def require_batch_browser(observed, commands, rows, *, provider):
     for item in commands:
         check(isinstance(item, dict) and isinstance(item.get("commandId"), str) and item.get("toolName") == BATCH_TOOL
               and item["commandId"] not in by_id, "Each retained browser command must be one distinct batch request")
+        # The strict schema admits only the operations; anything else is refused at preparation, never reviewed.
+        arguments = item.get("arguments")
+        check(isinstance(arguments, dict) and sorted(arguments) == ["operations"] and isinstance(arguments["operations"], list)
+              and arguments["operations"], "A retained browser command carried arguments other than its operations")
         by_id[item["commandId"]] = item
     check(set(by_id) == set(selected.values()), "The retained commands differ from the journey's steps")
     for step, command_id in selected.items():
