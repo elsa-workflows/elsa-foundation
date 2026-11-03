@@ -720,8 +720,26 @@ The main build showed the same stalled sender in its single run. Local cooperati
 covered by the in-process tests only. #3669 addresses the cross-node case (#2831): the placement pump no longer waits
 for a dispatched drain, so it keeps renewing placement and delivers a forwarded Cancel to the drain's mailbox. In its
 two-node runs, placement stayed on node A and the progressing loop was cancelled in 3 to 13 s, three times out of three.
-Those runs used two Workbench processes and PostgreSQL 16 on one machine; progressing cross-node Cancel has no
-independent-machine result.
+Those runs used two Workbench processes and PostgreSQL 16 on one machine.
+
+On independent machines (fixture `i69`, 2026-11-03), the build containing #3669 passed all four cases. Node A,
+node B and PostgreSQL 16.15 each ran on their own D2s_v6 machine on one private subnet, with the same controller and
+hook as above. Times run from the Cancel request to the sender's receipt that the execution is Cancelled with
+an empty queue, no incidents and no undelivered outbox.
+
+| Case | Series | Result |
+|---|---|---|
+| Parked Cancel | `x1` | Settled as Cancelled 2.0 s after the request; placement stayed on node A |
+| Progressing Cancel | `x1`, `x2`, `x3` | Settled as Cancelled 4.1 s after the request in each; placement stayed on node A |
+
+- Both duplicate Cancel envelopes were forwarded as `Deferred` in every case, so each Cancel crossed the durable
+  transport to the owner.
+- In each progressing case, activity rows grew before the Cancel (by 146–196 in five seconds) and not after it.
+- Every case ended with the owner's API reporting `Cancelled`, an empty transport and no incidents.
+- Each node log has one PostgreSQL `40001` serialization conflict on the command transport, which EF logs at `fail`
+  level. The transport's bounded compare-and-swap retries it as a transient write conflict, and nothing failed.
+- Node logs survive only for the last series of each process name (see `cancel-i69-custody.json`). Every case ledger
+  and sender receipt is kept.
 
 ### Second fixture cleanup
 
