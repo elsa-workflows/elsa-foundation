@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "spec": "1202-etl-design-store-providers",
-  "sourceRevision": "ae9f0310536b83a5a7623884fcd06e274daaa957",
+  "sourceRevision": "45c60943229fbfee51d1068d13d54e445de1cef9",
   "workingTreeDirty": false,
-  "workbenchAssemblySha256": "94c5f18c9cc6bb13e354d08b6f32b6fb3818005f3c915d304cd6eabe4b633a8c",
+  "workbenchAssemblySha256": "9aca0a637d8d763c19c8afa5b4be0e59a00d47708688013b1555b93f65a1c986",
   "engines": {
     "PostgreSql": {
-      "definition": "people-6fcb0a94",
-      "twin": "People-6fcb0a94",
-      "selection": "etl1:people-6fcb0a94:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
+      "definition": "people-bcb81f1c",
+      "twin": "People-bcb81f1c",
+      "selection": "etl1:people-bcb81f1c:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -22,12 +22,12 @@
         "Cleo"
       ],
       "catalogBefore": [
-        "People-6fcb0a94",
-        "people-6fcb0a94"
+        "People-bcb81f1c",
+        "people-bcb81f1c"
       ],
       "catalogAfter": [
-        "People-6fcb0a94",
-        "people-6fcb0a94"
+        "People-bcb81f1c",
+        "people-bcb81f1c"
       ],
       "reopenedRevision": 1,
       "reopenedLastPublishedVersion": 1,
@@ -41,9 +41,9 @@
       "secretInOutput": false
     },
     "SqlServer": {
-      "definition": "people-fd6d2e11",
-      "twin": "People-fd6d2e11",
-      "selection": "etl1:people-fd6d2e11:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
+      "definition": "people-3824f0a6",
+      "twin": "People-3824f0a6",
+      "selection": "etl1:people-3824f0a6:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -57,12 +57,12 @@
         "Cleo"
       ],
       "catalogBefore": [
-        "People-fd6d2e11",
-        "people-fd6d2e11"
+        "People-3824f0a6",
+        "people-3824f0a6"
       ],
       "catalogAfter": [
-        "People-fd6d2e11",
-        "people-fd6d2e11"
+        "People-3824f0a6",
+        "people-3824f0a6"
       ],
       "reopenedRevision": 1,
       "reopenedLastPublishedVersion": 1,
@@ -76,9 +76,9 @@
       "secretInOutput": false
     },
     "MySql": {
-      "definition": "people-e94a62fd",
-      "twin": "People-e94a62fd",
-      "selection": "etl1:people-e94a62fd:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
+      "definition": "people-0091b880",
+      "twin": "People-0091b880",
+      "selection": "etl1:people-0091b880:1:98f71dbc206f942960a057b441746cf304c66d79df2e91ae6dd35665d80bf231",
       "workflowStatus": "Completed",
       "incidents": 0,
       "executedNodes": [
@@ -92,12 +92,12 @@
         "Cleo"
       ],
       "catalogBefore": [
-        "People-e94a62fd",
-        "people-e94a62fd"
+        "People-0091b880",
+        "people-0091b880"
       ],
       "catalogAfter": [
-        "People-e94a62fd",
-        "people-e94a62fd"
+        "People-0091b880",
+        "people-0091b880"
       ],
       "reopenedRevision": 1,
       "reopenedLastPublishedVersion": 1,

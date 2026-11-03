@@ -3,6 +3,20 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there.",
  "results": [
   {
+   "mutation": "design-failed-create-detaches",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_cancelled_draft_create_leaves_nothing",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_cancelled_draft_create_leaves_nothing_for_a_later_save_and_can_be_retried"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            // A create that failed otherwise, cancelled for one, must not leave its row for a later save on this context.\n            dbContext.Entry(row).State = EntityState.Detached;\n",
+   "mutated_text": "",
+   "sourceRevision": "45c60943229fbfee51d1068d13d54e445de1cef9"
+  },
+  {
    "mutation": "design-clear-before-rollback",
    "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
