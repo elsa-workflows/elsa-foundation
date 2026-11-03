@@ -21,7 +21,9 @@ import uuid
 
 from agent_transport import _json as strict_json
 from artifacts import TOOL, check, sha
+from case_records import retained
 from journey_runtime import atomic_json, same
+from runtime import private_json
 from owner_resources import seed_workflow
 
 
@@ -112,6 +114,21 @@ def require_turn_refusal(frames, rows, *, provider, command_id, expected, cause)
     return {"code": error["code"], "statusCode": error["statusCode"], "message": error["message"]}
 
 
+def select_command(transport, command_id, tool_name, arguments):
+    """Select the adapter's next command and retain a frozen copy of its exact bytes as evidence.
+
+    The protocol command file is one shared, mutable input: the next turn atomically replaces it. A reference to it
+    would no longer match its hash once a later turn ran, so the evidence is this turn's own immutable copy.
+    """
+    transport.set_command(command_id, tool_name, arguments)
+    copy_path = Path(transport.output) / "selected-command.json"
+    check(not copy_path.exists(), "Never overwrite a selected protocol command")
+    private_json(copy_path, {"commandId": command_id, "toolName": tool_name, "arguments": arguments})
+    check(strict_json(copy_path.read_text()) == strict_json(Path(transport.command_file).read_text()),
+          "The retained command differs from the command the adapter will read")
+    return retained(copy_path)
+
+
 def snapshot_attachment(seed, revision):
     """The workflow module's admitted client snapshot of the seeded draft, as an open editor sends it."""
     activity = seed["activityId"]
@@ -169,7 +186,7 @@ def _tool(runtime, name, seed, mode_file, decision, expected, cause):
     session_response = transport.create_session({"conversationId": str(uuid.uuid4()), "mode": "explain",
         "activeSurface": {"route": "/workflows/definitions"}, "autonomyMode": "auto-read-only"}).require_status(200)
     session = session_response.json()["data"]["sessionId"]
-    command = transport.set_command(command_id, READ_TOOL, {})
+    command = select_command(transport, command_id, READ_TOOL, {})
     message = transport.message(session, {"content": "Owned workflow authorization qualification request", "mode": "explain",
         "requestId": str(uuid.uuid4()), "requestedCapabilities": ["workflow.explain"],
         "contextAttachments": [snapshot_attachment(seed, "qualification-unsaved-" + uuid.uuid4().hex[:8])]}).require_status(200)

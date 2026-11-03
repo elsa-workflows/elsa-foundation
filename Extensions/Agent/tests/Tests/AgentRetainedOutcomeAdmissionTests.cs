@@ -5,8 +5,12 @@ namespace Elsa.Agent.Tests;
 
 /// <summary>
 /// One admission of several retained outcomes: a definite refusal of any outcome wins over another outcome whose owner
-/// could not decide, in either order. A turn cannot place an unavailable outcome before a refused one in one admission
-/// pass (history and tool results are admitted in recorded order), so the combination rule is pinned here directly.
+/// could not decide, in either order. Current engine flows cannot put an owner outage before a definite refusal in one
+/// admission call. Before an admission, history admission re-checks every recorded tool message in order, with the same
+/// definite rules (provenance, current authority, host policy). So a definite refusal of any recorded result is returned
+/// there first. The only unrecorded result, a paused continuation's own outcome, is always the last entry, and a turn's
+/// single mutation means no earlier lifecycle outcome precedes it there. The end-to-end consequence is pinned in
+/// AgentLifecycleOutcomeDisclosureTests; the rule itself is pinned here for any future flow that admits them together.
 /// </summary>
 public sealed class AgentRetainedOutcomeAdmissionTests
 {

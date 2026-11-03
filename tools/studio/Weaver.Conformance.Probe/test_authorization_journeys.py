@@ -7,9 +7,10 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+from agent_transport import AgentTransport
 from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_REFUSALS, UNAVAILABLE_CODE, authorization_manifest_gaps,
                                     qualify_workflow_authorization, require_denied_problem, require_turn_refusal,
-                                    require_unavailable_problem, require_workflow_authorization, snapshot_attachment)
+                                    require_unavailable_problem, require_workflow_authorization, select_command, snapshot_attachment)
 from artifacts import sha
 
 CAUSE = "QUALIFICATION_PRIVATE_OWNER_CAUSE_0123456789abcdef"
@@ -131,6 +132,39 @@ class TurnRefusalTests(unittest.TestCase):
             other = [dict(row, data={"commandId": "another-command"}) if row["kind"] == provider + ".return" else row
                      for row in rows + [{"kind": provider + ".return", "data": {}}]]
             self.check(provider, "unavailable", rows=other)
+
+
+class SelectedCommandEvidenceTests(unittest.TestCase):
+    """Witness 997887f4f: the first turn's evidence referenced the shared command file, which the next turn replaced."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        (self.root / "protocol").mkdir(mode=0o700)
+        self.command_file = self.root / "protocol" / "command.json"
+
+    def transport(self, name):
+        return AgentTransport(SimpleNamespace(base="http://127.0.0.1:1", bearer=None), self.root / name, command_file=self.command_file)
+
+    def test_the_shared_command_file_reference_goes_stale_when_the_next_turn_selects_its_command(self):
+        first = self.transport("tool-unavailable").set_command("command-unavailable", "workflow_read_graph", {})
+        self.transport("tool-denied").set_command("command-denied", "workflow_read_graph", {})
+        self.assertEqual(first["path"], str(self.command_file))
+        self.assertNotEqual(first["sha256"], sha(self.command_file))
+
+    def test_each_turn_retains_its_own_command_copy_that_still_verifies_after_later_turns(self):
+        first_transport = self.transport("tool-unavailable")
+        first = select_command(first_transport, "command-unavailable", "workflow_read_graph", {})
+        second = select_command(self.transport("tool-denied"), "command-denied", "workflow_read_graph", {})
+        for ref, command in ((first, "command-unavailable"), (second, "command-denied")):
+            path = Path(ref["path"])
+            self.assertNotEqual(self.command_file, path)
+            self.assertTrue(path.is_relative_to(self.root) and path.is_file())
+            self.assertEqual(ref["sha256"], sha(path))
+            self.assertEqual(command, json.loads(path.read_text())["commandId"])
+        self.assertEqual("command-denied", json.loads(self.command_file.read_text())["commandId"])
+        with self.assertRaises(RuntimeError): select_command(first_transport, "command-again", "workflow_read_graph", {})
 
 
 class SnapshotTests(unittest.TestCase):

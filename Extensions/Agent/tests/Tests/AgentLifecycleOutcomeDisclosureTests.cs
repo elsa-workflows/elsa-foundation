@@ -321,7 +321,114 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
         Assert.DoesNotContain(await harness.Sessions(scope).ListMessagesAsync(session.Id), x => x.Status == AgentMessageStatus.Failed);
     }
 
+    /// <summary>
+    /// End to end, an earlier lifecycle outcome whose owner cannot decide and a later read result that current authority
+    /// definitely refuses, in one turn: the definite refusal (403) is what the turn reports. It is reached through history
+    /// admission, which re-admits every recorded tool message in order before the current admission of the turn's retained
+    /// results, so the per-admission combination never sees this pair (see AgentRetainedOutcomeAdmissionTests). A turn
+    /// holds at most one mutation, so the lifecycle outcome comes from a full-auto mutation executed inline (uncertain).
+    /// </summary>
+    [Fact]
+    public async Task A_later_definitely_refused_result_wins_over_an_earlier_owner_outage_in_the_same_turn()
+    {
+        var authority = new NativeAuthority();
+        var source = new SplitSource();
+        var provider = new SequenceProvider();
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.AddSingleton<IAgentProvider>(provider);
+            services.AddScoped<IAgentContextProvider>(_ => source);
+            services.AddSingleton<IAgentTool>(new InlineMutationTool());
+            services.AddSingleton<IAgentTool>(new SwitchingReadTool(() =>
+            {
+                // Between the read's own pre-dispatch admission and the admission of its result: the owner of the earlier
+                // lifecycle outcome becomes unavailable for current decisions, and current authority withdraws the read.
+                source.CurrentUnavailable = true;
+                authority.Withdrawn.Add(SwitchingReadTool.Name);
+            }));
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
+        });
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var session = await sessions.CreateAsync(new("tenant", "actor", "conversation", provider.ProviderId, "build", null,
+            AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto }, new Dictionary<string, string>()));
+        await sessions.AddMessageAsync(session.Id, new(AgentRole.User, "change, then read", AgentMessageStatus.Pending, null, [], []));
+
+        var events = await Collect(scope, session.Id);
+
+        // The inline mutation's lifecycle outcome was really retained and admitted before the read ran.
+        var lifecycle = Assert.IsType<AgentToolResult>(Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallCompleted
+            && x.Payload is AgentToolCallOutcome { ToolName: InlineMutationTool.Name }).Payload is AgentToolCallOutcome outcome ? outcome.Result : null);
+        Assert.Equal("uncertain", lifecycle.Payload!.Data.GetProperty("status").GetString());
+        Assert.True(source.CurrentUnavailable);
+        Assert.Equal(("agent.result.disclosure_denied", 403), Code(Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error).Error));
+    }
+
     private static (string?, int?) Code(AgentError? error) => (error?.Code, error?.StatusCode);
+
+    /// <summary>A disclosure owner that answers historical admission normally but cannot decide current lifecycle outcomes once switched.</summary>
+    private sealed class SplitSource : IAgentContextProvider
+    {
+        public const string Id = "split.source";
+        public bool CurrentUnavailable { get; set; }
+        public AgentContextProviderDescriptor Descriptor { get; } = new(Id, SplitModule, Id, [], ["1"], ["split.resource"]);
+        public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(new AgentContextContribution([], []));
+        public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(CurrentUnavailable && !request.IsHistorical && request.Results.Count > 0
+                ? new AgentContextContribution([], [new(Id, "split.authority.unavailable", "Owner outage.", true) { OwnerUnavailable = true }])
+                : new AgentContextContribution(request.Context, []));
+    }
+
+    private const string SplitModule = "split.module";
+    private static readonly AgentResourceTarget SplitTarget = new(SplitModule, "split.resource", "resource-1", "revision-1");
+
+    /// <summary>A mutation that runs inline under full-auto and returns no receipt, so the engine retains an uncertain outcome.</summary>
+    private sealed class InlineMutationTool : IAgentTool
+    {
+        public const string Name = "split_change";
+        public AgentToolDescriptor Descriptor { get; } = new(Name, "Change", "Changes the split resource.", AgentToolMutability.Mutating,
+            AgentRisk.ReviewRequired, "{}", [], []) { ModuleId = SplitModule, DisclosureSourceId = SplitSource.Id, ResultType = "split.change", ResultSchemaVersion = "1" };
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Target = SplitTarget }));
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Name, true, "applied",
+                new("split.change", "1", JsonSerializer.SerializeToElement(new { size = "medium" })))));
+    }
+
+    private sealed class SwitchingReadTool(Action onExecute) : IAgentTool
+    {
+        public const string Name = "split_read";
+        public AgentToolDescriptor Descriptor { get; } = new(Name, "Read", "Reads the split resource.", AgentToolMutability.ReadOnly,
+            AgentRisk.ReadOnly, "{}", [], []) { ModuleId = SplitModule, DisclosureSourceId = SplitSource.Id, ResultType = "split.read", ResultSchemaVersion = "1" };
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Target = SplitTarget }));
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            onExecute();
+            return Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Name, true, "read",
+                new("split.read", "1", JsonSerializer.SerializeToElement(new { size = "medium" })))));
+        }
+    }
+
+    private sealed class SequenceProvider : IAgentProvider
+    {
+        private readonly DeterministicAgentProvider inner = new();
+        public string ProviderId => inner.ProviderId;
+        public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default) => inner.CreateSessionAsync(session, cancellationToken);
+        public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default) => inner.ApproveToolAsync(request, cancellationToken);
+        public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) => inner.GetDiagnosticsAsync(cancellationToken);
+        public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            if (context.StepIndex == 0) yield return Call("split-change", InlineMutationTool.Name, AgentRisk.ReviewRequired);
+            else if (context.StepIndex == 1) yield return Call("split-read", SwitchingReadTool.Name, AgentRisk.ReadOnly);
+            yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
+        }
+        private static AgentStreamEvent Call(string id, string name, AgentRisk risk)
+            => new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.ToolCallRequested, null, id, null, DateTimeOffset.UtcNow,
+                Payload: new AgentToolCallRequest(id, name, "{}", risk, false));
+    }
 
     /// <summary>Host capability policy that can withdraw a tool's capability.</summary>
     private sealed class PolicyGate : IAgentPolicyEvaluator
