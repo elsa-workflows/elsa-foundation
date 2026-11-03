@@ -91,7 +91,35 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
         Assert.False(collected.Succeeded);
         Assert.Equal("agent.context.kind_unsupported", Assert.Single(collected.Value!.Diagnostics).Code);
         var tools = (await services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name);
-        Assert.Equal(["workflow_read_executable"], tools.Where(name => name.StartsWith("workflow_", StringComparison.Ordinal)));
+        Assert.Equal(["workflow_read_executable", "workflow_read_run"], tools.Where(name => name.StartsWith("workflow_", StringComparison.Ordinal)).Order());
+    }
+
+    [Fact]
+    public async Task A_started_runtime_only_shell_composes_the_real_Run_inspection_under_the_run_endpoints_authority()
+    {
+        // Spec 1193 slice G: the shell resolves the real WorkflowRunInspection with every run service it reads through. Under a
+        // caller the run endpoints' own per-run authority does not admit (this test host has no Identity, so the inspection
+        // authority is a test double that admits nothing), a stored Run reads as absent and the Run context is refused:
+        // never a guess, never a broader read than the run page's.
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using var scope = shell.BeginScope();
+        var services = scope.ServiceProvider;
+        var inspection = Assert.Single(services.GetServices<IWorkflowRunInspection>());
+        Assert.Equal("WorkflowRunInspection", inspection.GetType().Name);
+        var now = DateTimeOffset.UtcNow;
+        await services.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(new WorkflowExecutionState("run-runtime-only",
+            new WorkflowExecutableIdentity("artifact-runtime-only", "definition-runtime-only", "version-runtime-only", "1.0.0", "sha256:runtime-only"),
+            WorkflowExecutionStatus.Faulted, null, now, now, now, now, null, null, null, new Dictionary<string, string>()));
+        Assert.Null(await inspection.GetAsync(new("run-runtime-only")));
+
+        var session = await services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test-provider", "explain",
+            null, AgentPolicy.Default, new Dictionary<string, string>()));
+        var collected = await services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+            new(session.Id, "workflow-run", new Dictionary<string, string>()) { CallerAttachments = [RunReference("run-runtime-only", null)] });
+        Assert.False(collected.Succeeded);
+        Assert.Equal("agent.workflow.run_not_found", Assert.Single(collected.Value!.Diagnostics, item => item.Required).Code);
+        Assert.DoesNotContain(AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetName().Name ?? ""),
+            name => name.StartsWith("Elsa.Workflows.Design", StringComparison.Ordinal));
     }
 
     public ValueTask DisposeAsync() => root.DisposeAsync();
@@ -120,6 +148,25 @@ public sealed class WorkflowRuntimeOnlyHostTests : IAsyncDisposable
     DependsOn = new object[] { typeof(FoundationWorkflowsRuntimeAgentFeature) })]
 public sealed class TestAgentAuthorityFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) =>
+    public void ConfigureServices(IServiceCollection services)
+    {
         services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => new WorkflowRuntimeAgentTestHost.Authorizer()));
+        // Without Identity the HTTP inspection authority cannot be built; this one admits no caller to any Run.
+        services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Api.Contracts.IActivityInspectionContextAsync, NoRunInspectionAuthority>());
+        services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Api.Contracts.IWorkflowRuntimeOperatorAccess, NoRunInspectionAuthority>());
+    }
+}
+
+/// <summary>The run endpoints' per-run authority for a caller it does not admit: no structure, values or payloads.</summary>
+internal sealed class NoRunInspectionAuthority : Elsa.Workflows.Runtime.Api.Contracts.IActivityInspectionContextAsync,
+    Elsa.Workflows.Runtime.Api.Contracts.IWorkflowRuntimeOperatorAccess
+{
+    public ValueTask<bool> CanManageAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    public string TenantScope => "global";
+    public string AuditSubject => string.Empty;
+    public string RequestCorrelationId => string.Empty;
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("untrusted");
+    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
 }

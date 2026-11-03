@@ -116,6 +116,11 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
         services.TryAddScoped<WorkflowIncidentListService>();
         services.TryAddScoped<IWorkflowIncidentListService>(sp => sp.GetRequiredService<WorkflowIncidentListService>());
+        // The exact Run read for other domains through Workflows Runtime Core (spec 1193 slice G, D4), over the services the run
+        // endpoints use. One implementation per shell, rejected at configuration and at startup.
+        WorkflowRunInspectionStartupTask.Validate(services);
+        services.TryAddScoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowRunInspection, WorkflowRunInspection>();
+        AddRunInspectionValidator(services);
         services.TryAddScoped<WorkflowDispatchInspectionService>();
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
@@ -172,6 +177,21 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
                      && (item.ImplementationInstance is WorkflowExecutableInspectionStartupTask
                          || item.ImplementationType == typeof(WorkflowExecutableInspectionStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
+    }
+
+    // One validator per configuring collection, as for the Executable inspection.
+    private static void AddRunInspectionValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowRunInspectionStartupTask))
+                ?.ImplementationInstance is not WorkflowRunInspectionStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowRunInspectionStartupTask(services);
+        services.RemoveAll<WorkflowRunInspectionStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowRunInspectionStartupTask
+                         || item.ImplementationType == typeof(WorkflowRunInspectionStartupTask))).ToArray())
             services.Remove(previous);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
     }

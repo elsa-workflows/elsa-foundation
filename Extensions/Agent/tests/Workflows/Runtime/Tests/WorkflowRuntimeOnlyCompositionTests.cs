@@ -10,11 +10,11 @@ using static Elsa.Agent.Workflows.Runtime.Tests.WorkflowRuntimeAgentTestHost;
 namespace Elsa.Agent.Workflows.Runtime.Tests;
 
 // Spec 1193 SC-009 (FR-027): a Runtime-only host composes the Runtime-side workflow package without any Workflows Design
-// assembly, serves the Executable journey, and reports every Design journey (a draft, a version) as explicitly unavailable.
+// assembly, serves the Executable and Run journeys, and reports every Design journey (a draft, a version) as explicitly unavailable.
 public sealed class WorkflowRuntimeOnlyCompositionTests
 {
     [Fact]
-    public async Task A_runtime_only_host_serves_the_Executable_journey_with_no_Design_assembly_loaded()
+    public async Task A_runtime_only_host_serves_the_Executable_and_Run_journeys_with_no_Design_assembly_loaded()
     {
         using var host = new WorkflowRuntimeAgentTestHost();
         var session = await host.SessionAsync();
@@ -25,6 +25,11 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
         Assert.Single(collected.Value!.Attachments, item => item.ContentType == "workflows.executable");
         var prepared = await host.PrepareAsync(session, collected.Value.Attachments);
         Assert.True(prepared.Succeeded);
+        // The Run journey (slice G) composes in the same Runtime-only host.
+        var runs = await host.Services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
+            new(session.Id, "workflow-run", new Dictionary<string, string>()) { CallerAttachments = [RunReference()] });
+        Assert.True(runs.Succeeded, runs.Error?.Message);
+        Assert.True((await host.PrepareRunAsync(session, runs.Value!.Attachments)).Succeeded);
 
         // AppDomain-wide, after composing and exercising the host: no Workflows Design assembly is loaded or referenced.
         var loaded = AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetName().Name ?? "").ToArray();
@@ -59,7 +64,7 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
         Assert.Empty(collected.Value.Attachments);
         // And no Design tool is installed to reach the draft or a version another way.
         var tools = (await host.Services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToArray();
-        Assert.Equal(["workflow_read_executable"], tools.Where(name => name.StartsWith("workflow_", StringComparison.Ordinal)));
+        Assert.Equal(["workflow_read_executable", "workflow_read_run"], tools.Where(name => name.StartsWith("workflow_", StringComparison.Ordinal)).Order());
     }
 
     [Fact]
@@ -73,6 +78,10 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
         Assert.Equal(fixture["contextSourceId"]!.GetValue<string>(), host.Source.Descriptor.Id);
         Assert.Equal(ModuleId, host.Source.Descriptor.ModuleId);
         Assert.Equal(Strings(fixture["contextKinds"]!), host.Source.Descriptor.ContextKinds);
+        // The Run context source (spec 1193 slice G) beside it, under the same module identity.
+        Assert.Equal(fixture["runSource"]!["id"]!.GetValue<string>(), host.RunSource.Descriptor.Id);
+        Assert.Equal(ModuleId, host.RunSource.Descriptor.ModuleId);
+        Assert.Equal(Strings(fixture["runSource"]!["contextKinds"]!), host.RunSource.Descriptor.ContextKinds);
         var capabilities = await host.Services.GetServices<IAgentCapabilityProvider>().OfType<WorkflowRuntimeAgentCapabilityProvider>().Single().GetCapabilitiesAsync();
         Assert.Equal(Strings(fixture["capabilities"]!), capabilities.Select(item => item.Id));
         var tools = (await host.Services.GetRequiredService<IAgentToolRegistry>().ListAsync()).Where(tool => tool.Descriptor.ModuleId == ModuleId)
@@ -82,7 +91,7 @@ public sealed class WorkflowRuntimeOnlyCompositionTests
             tools.Select(tool => (tool.Name, tool.ResultType!, tool.ResultRendererId, JsonNamingPolicy.CamelCase.ConvertName(tool.ExecutionLocation.ToString()),
                 tool.DisclosureSourceId!)));
         // The texts name only this package's registered tool.
-        var guidance = WorkflowExecutableContext.Guidance().Summary + " " + string.Join(" ", tools.Select(tool => tool.Description))
+        var guidance = WorkflowExecutableContext.Guidance().Summary + " " + WorkflowRunContext.Guidance().Summary + " " + string.Join(" ", tools.Select(tool => tool.Description))
             + " " + string.Join(" ", capabilities.Select(item => item.Description));
         foreach (var token in System.Text.RegularExpressions.Regex.Matches(guidance, @"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b").Select(match => match.Value))
             Assert.Contains(token, tools.Select(tool => tool.Name));

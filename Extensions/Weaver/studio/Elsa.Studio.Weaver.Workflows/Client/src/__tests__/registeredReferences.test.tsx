@@ -12,13 +12,14 @@ import server from "./workflowAgentRegistrations.json";
 // under its own package's module identity.
 const workflowsModule = "Elsa.Studio.Workflows";
 const weaverWorkflowsModule = "Elsa.Studio.Weaver.Workflows";
-// The Design-side module (Elsa.Agent.Workflows) and the Runtime-side package (Elsa.Agent.Workflows.Runtime, spec 1193 slice F)
-// register under the same Studio module identity; a combined host composes both.
+// The Design-side module (Elsa.Agent.Workflows) and the Runtime-side package (Elsa.Agent.Workflows.Runtime, spec 1193 slices F
+// and G, with its Executable and Run sources) register under the same Studio module identity; a combined host composes both.
 const allTools = [...server.tools, ...server.runtime.tools];
 const toolNames = new Set(allTools.map(tool => tool.name));
 const resultTypes = new Set(allTools.map(tool => tool.resultType));
 const capabilities = new Set([...server.capabilities, ...server.runtime.capabilities]);
-const contextKinds = new Set([...server.contextKinds, ...server.librarySource.contextKinds, ...server.versionSource.contextKinds, ...server.runtime.contextKinds]);
+const contextKinds = new Set([...server.contextKinds, ...server.librarySource.contextKinds, ...server.versionSource.contextKinds, ...server.runtime.contextKinds,
+  ...server.runtime.runSource.contextKinds]);
 
 function compose() {
   const workflows = createAgentRegistry();
@@ -45,7 +46,8 @@ function namedTools(text: string) {
 const samples: unknown[] = [{ id: "definition-1", name: "Onboard customer" }, { definition: { id: "definition-1" }, draft: { id: "draft-1" } },
   { intent: "Send a welcome email", draft: { name: "", description: "" } }, { instanceId: "instance-1" },
   { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: "ref-1" }, { artifactId: "artifact-1", artifactHash: "sha256:abc", attached: true },
-  { definitionId: "definition-1", versionId: "version-1", version: "1.0.0" }, { definitionId: "definition-1", versionId: "version-1", attached: true }];
+  { definitionId: "definition-1", versionId: "version-1", version: "1.0.0" }, { definitionId: "definition-1", versionId: "version-1", attached: true },
+  { workflowExecutionId: "run-1", activityExecutionId: "act-1" }, { workflowExecutionId: "run-1", activityExecutionId: null }, { workflowExecutionId: "run-1", attached: true }];
 
 describe("registered references of the Workflows packages (spec 1193 SC-007)", () => {
   it("registers each contribution under its own package's module identity", () => {
@@ -146,10 +148,35 @@ describe("registered references of the Workflows packages (spec 1193 SC-007)", (
     expect(version.createPrompt({ versionId: "version-1" }).attachments).toEqual([]);
   });
 
-  it("contributes the Executable Inspector's and the version history's context under the Workflows module", () => {
+  it("explains one exact Run only through the registered Run read, attaching the Run and its selection once (slice G)", () => {
+    const { weaver } = compose();
+    const run = weaver.promptActions.list().find(item => item.id === "weaver.workflows.explain-instance")!;
+    expect(run).toMatchObject({ placement: "selection", contextKind: "workflow-instance", moduleId: weaverWorkflowsModule });
+    const selected = run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: "act-1", status: "Faulted" });
+    expect(new Set(namedTools(selected.message))).toEqual(new Set(["workflow_read_run"]));
+    expect(selected.attachments).toEqual([expect.objectContaining({
+      id: "workflows.run:run-1", moduleId: workflowsModule, contentType: "workflows.run", schemaVersion: "1",
+      target: { moduleId: workflowsModule, resourceType: "workflow-run", resourceId: "run-1", revision: "act-1" },
+      content: { workflowExecutionId: "run-1", activityExecutionId: "act-1" }
+    })]);
+    expect(server.runtime.runSource.contextKinds).toContain(selected.attachments![0].contentType);
+    expect(run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: null }).attachments).toEqual([expect.objectContaining({
+      target: { moduleId: workflowsModule, resourceType: "workflow-run", resourceId: "run-1", revision: "run-1" },
+      content: { workflowExecutionId: "run-1", activityExecutionId: null }
+    })]);
+    // The run page contributes the context itself; a Run reference never names "the latest run" or a definition instead.
+    expect(run.createPrompt({ workflowExecutionId: "run-1", attached: true }).attachments).toEqual([]);
+    expect(run.createPrompt({ definitionId: "definition-1" }).attachments).toEqual([]);
+    expect(run.createPrompt({ workflowExecutionId: "run-1", activityExecutionId: "run-1" }).attachments).toEqual([]);
+    expect(toolNames.has("workflow_read_run")).toBe(true);
+    // No run control is a registered tool: retry, cancel, delete and dispatch stay with the run page.
+    expect([...toolNames].filter(name => /retry|cancel|delete|dispatch/.test(name))).toEqual([]);
+  });
+
+  it("contributes the Executable Inspector's, the version history's and the run page's context under the Workflows module", () => {
     const { workflows } = compose();
     const ids = workflows.contextProviders.list().map(item => item.id);
-    expect(ids).toEqual(expect.arrayContaining(["workflows.executable-inspector", "workflows.version-history"]));
+    expect(ids).toEqual(expect.arrayContaining(["workflows.executable-inspector", "workflows.version-history", "workflows.run-inspector"]));
   });
 
   it("fails on the dangling references this slice removed", () => {
