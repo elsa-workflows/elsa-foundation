@@ -268,9 +268,10 @@ internal sealed class DefaultWorkflowAgentContextProvider(
     {
         if (!await AdmittedAsync(session, Permissions(target, sensitivity, "permissions", null), diagnostics, cancellationToken)) return null;
         var host = await authorizer.AuthorizeAsync(WorkflowSetDesignerPositionTool.Contract, session.ActorId, session.TenantId, target, cancellationToken);
-        var owner = host.Allowed
-            ? await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, session.ActorId, session.TenantId, target, true, cancellationToken)
-            : null;
+        // The owner's manage decision is asked once and shared by every manage-gated tool; `manage` itself reports it only
+        // through the layout tool's host decision, while each tool is advertised by its own host decision.
+        var ownerDecision = await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, session.ActorId, session.TenantId, target, true, cancellationToken);
+        var owner = host.Allowed ? ownerDecision : null;
         var manage = owner is { Allowed: true } ? "allowed" : owner is not null && WorkflowResourceAuthority.IsUnavailable(owner) ? "unavailable" : "denied";
         // Tools are reported by the engine's own advertisement rule: each tool's own descriptor through the host authorizer,
         // its owner decision and the session's capability policy for its name. The read tool's owner decision is the read
@@ -283,7 +284,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         if (manage == "allowed" && (await policies.EvaluateCapabilityAsync(session.Policy, WorkflowSetDesignerPositionTool.ToolName, cancellationToken)).Allowed)
             tools.Add(WorkflowSetDesignerPositionTool.ToolName);
         // The batch tool has its own descriptor, so the host decides it separately; the owner's manage answer is shared.
-        if (manage == "allowed" && (await authorizer.AuthorizeAsync(WorkflowApplyOperationBatchTool.Contract, session.ActorId, session.TenantId, target, cancellationToken)).Allowed
+        if (ownerDecision is { Allowed: true } && (await authorizer.AuthorizeAsync(WorkflowApplyOperationBatchTool.Contract, session.ActorId, session.TenantId, target, cancellationToken)).Allowed
             && (await policies.EvaluateCapabilityAsync(session.Policy, WorkflowApplyOperationBatchTool.ToolName, cancellationToken)).Allowed)
             tools.Add(WorkflowApplyOperationBatchTool.ToolName);
         // Capabilities are reported by their own ids under the session's capability policy, as the Agent API admits a
