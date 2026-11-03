@@ -3,6 +3,34 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there.",
  "results": [
   {
+   "mutation": "design-update-reports-own-revision",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~An_update_reports_its_own_revision",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.An_update_reports_its_own_revision_when_another_writer_advances_the_draft_before_the_reread"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "                updated.Revision = expectedRevision + 1;\n",
+   "mutated_text": "",
+   "sourceRevision": "6337c6befaf9ab10747c2d88d83e3539d0698746"
+  },
+  {
+   "mutation": "design-failed-publication-clears-tracker",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_publication_that_runs_out_of_attempts",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlDefinitionStoreTests.A_publication_that_runs_out_of_attempts_leaves_nothing_for_a_later_save_to_publish"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            // A failed attempt must not leave its artifact tracked, or a later save on this context would publish it.\n            dbContext.ChangeTracker.Clear();\n",
+   "mutated_text": "",
+   "sourceRevision": "6337c6befaf9ab10747c2d88d83e3539d0698746"
+  },
+  {
    "mutation": "design-selects-postgresql",
    "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/DependencyInjection/EtlDesignEntityFrameworkCoreRegistration.cs",
    "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",

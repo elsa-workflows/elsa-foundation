@@ -14,11 +14,11 @@
 
 ## Suites
 
-At `52c05cef4`: the ETL suite passed 1309 of 1309, the `etl-ef` provider suite 102 of 102 (34 per engine), and the architecture suite's EF dependency guard 42 of 42 after admitting the tooling and provider-suite closures (the full architecture suite passed 613 of 614 before that admission, the one failure being that guard).
+At `6337c6bef` (review round 1): the ETL suite passed 1311 of 1311 and the `etl-ef` provider suite 102 of 102 (34 per engine); at `8bf64d685`, which only fixed a README link, the architecture suite passed 614 of 614 (after `tools/architecture/restore-ci-project-graph.sh`). The solution-filter and test-tier checks pass.
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has five entries, recorded at `84b61a306`, and all bite:
+[`bite-proofs.json`](bite-proofs.json) has seven entries, and all bite. Two, recorded at `6337c6bef` (review round 1), cover a draft update reporting its own revision and a failed publication clearing the change tracker. Five, recorded at `84b61a306`, cover:
 - the registration selecting the PostgreSQL context;
 - the binary collation in the SQL Server, PostgreSQL and MySQL models: without it the model disagrees with the committed migrations, so the model-agreement test fails (and on SQL Server and PostgreSQL the migrate step in each test's setup refuses the database). The recorded column collation comes from the migrations, so `Key_columns_use_the_engines_binary_collation` guards the migrations, not the model;
 - the publication retry: with a single attempt, the concurrent-publication contract fails on all three server engines, so the races are real there.
