@@ -131,9 +131,10 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
         onChange={columns => {
           const key = keyAfterColumnEdit(source, columns);
           // The watermark follows a rename like the key, and is dropped when its column is no longer a required int64.
-          const [watermark] = source.watermark ? keyAfterColumnEdit({ ...source, key: [source.watermark] }, columns) : [];
+          const [watermark] = source.watermark !== undefined ? keyAfterColumnEdit({ ...source, key: [source.watermark] }, columns) : [];
           const { watermark: _, ...rest } = source;
-          const valid = watermark && columns.some(column => column.name === watermark && column.type === "int64");
+          // Mid-rename the name may be empty; the watermark follows its row until it is typed again.
+          const valid = watermark !== undefined && columns.some(column => column.name === watermark && column.type === "int64");
           onChange(valid ? { ...rest, columns, key, watermark } : { ...rest, columns, key });
         }}
       />

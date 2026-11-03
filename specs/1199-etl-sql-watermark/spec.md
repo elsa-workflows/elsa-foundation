@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Implemented — [evidence](evidence/README.md)
+**Status**: Implemented — [PR #3717](https://github.com/elsa-workflows/elsa-foundation/pull/3717); [evidence](evidence/README.md)
 
 **Input**: The watermark half of the read side of the fourth criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): "Both PostgreSQL and SQL Server support snapshot/watermark reads and transactional keyed writes, with real provider-specific recovery evidence." Snapshot reads are [spec 1198](../1198-etl-sql-source/spec.md); keyed writes are [spec 1197](../1197-etl-sql-destination/spec.md). Part of [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
@@ -20,7 +20,7 @@ Running such a definition repeatedly, for example from a scheduled workflow, the
 
 ### User Story 1 — Load only what changed (Priority: P1)
 
-An author names an `Int64` watermark column, for example a version column the application increments on every write. The first run reads every row; each later run reads only rows whose watermark rose above what the previous completed run read.
+An author names an `Int64` watermark column whose values become visible in increasing order, for example one stamped by a single writer. The first run reads every row; each later run reads only rows whose watermark rose above what the previous completed run read.
 
 **Independent Test**: on real PostgreSQL and SQL Server, run the same definition twice with rows inserted and updated in between. The second run must deliver exactly the new and changed rows.
 
@@ -43,8 +43,8 @@ An author names an `Int64` watermark column, for example a version column the ap
 
 - **Watermark column.** It is one of the declared columns, declared `Int64` and required, refused otherwise with `source.sql-watermark-invalid`. A NULL watermark in a row is a record error, as for any required column, and does not count towards the high watermark.
 - **Ordering.** The snapshot is still ordered by the key. The watermark only filters.
-- **Monotonic writers.** Rows are read once their watermark is above the checkpoint. A writer that commits a row with a watermark at or below a checkpoint that a run has already passed is never read. The README recommends a watermark assigned at commit time, such as a sequence or version column.
-- **Identity.** The checkpoint is keyed by the scope, the definition identifier, the source binding alias, the table and the watermark column. Publishing a new definition version keeps it; changing the alias, table or column starts again from all rows.
+- **Commit order.** Rows are read once their watermark is above the checkpoint; a row committed with a watermark at or below a checkpoint already passed is never read. Values drawn at insert, such as a sequence or identity, can commit out of order under concurrent writers, and a per-row version counter is not monotonic across rows, so neither is a safe watermark. The README requires a column whose values become visible in increasing order. A commit-ordered watermark derived by the engine is deferred (#3719).
+- **Identity.** The checkpoint is keyed by the scope, the definition identifier, the source binding alias and its pinned secret-free handle (which hashes the database target and the binding revision), the table and the watermark column. Publishing a new definition version keeps it; changing the alias, the database it points to, the binding revision, the table or the column starts again from all rows.
 - **Finite only**, as for snapshot reads.
 - **Persisted state.** The prepared run gains an optional high watermark, written only when the source has a watermark column, so existing prepared runs keep their bytes. The checkpoint is a new runtime table, added by a migration.
 
@@ -61,7 +61,7 @@ An author names an `Int64` watermark column, for example a version column the ap
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001** On real PostgreSQL 16 and SQL Server 2022, the reader filters by the floor and reports the highest watermark.
+- **SC-001** On real PostgreSQL 16 and SQL Server 2022, the reader filters by the floor. The highest watermark is read back from the retained snapshot, whatever the engine, and is proven on the SQLite test engine and by the Workbench journeys' second runs.
 - **SC-002** Through the worker and store, two runs of one definition deliver all rows and then only the new and changed rows; a run settled by a delivery failure leaves the checkpoint unchanged; a third run with no change delivers nothing.
 - **SC-003** In real worker processes, a worker killed after publishing its snapshot is replaced, and the completed run's checkpoint equals the snapshot's high watermark.
 - **SC-004** An actual Workbench journey loads a PostgreSQL table into a PostgreSQL table incrementally across two runs from native Flowcharts, and the same on SQL Server.

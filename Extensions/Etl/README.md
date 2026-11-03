@@ -120,16 +120,20 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
   run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
   names the exception type, not the error number.
-  Watermark (incremental) reads, authored queries and log CDC are not supported.
+  Authored queries and log CDC are not supported.
 - **Watermark reads.** [Spec 1199](../../specs/1199-etl-sql-watermark/spec.md) adds an optional `watermark`: a declared,
   required `Int64` column. A run then reads only rows whose watermark is above the high watermark of the last completed
-  run of the same definition, source alias, table and column; the first run reads every row. The run's highest watermark
+  run of the same definition, source binding (its alias and the database it points to), table and column; the first run
+  reads every row, and so does the first run after the alias is pointed elsewhere. The run's highest watermark
   is raised into that checkpoint in the transaction that completes it, so a run settled by a failure (a fault, a
   cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Overlapping runs can
-  both read the same rows, and the checkpoint never moves backwards. Use a watermark assigned when a row is committed,
-  such as a sequence or version column: a row committed later with a watermark at or below a checkpoint already passed
-  is never read. Running the definition repeatedly, for example from a scheduled workflow, loads the table incrementally;
-  rows deleted from the source are not propagated.
+  both read the same rows, and the checkpoint never moves backwards. **A row whose watermark is at or below a checkpoint
+  already passed is never read.** Values drawn when a row is inserted, such as a sequence or identity, can commit out of
+  order under concurrent writers: a run can read value 101 while the transaction holding 100 is still open, and row 100,
+  committed later, is then skipped. A per-row version counter is not a watermark either. Use a column whose values
+  become visible in increasing order, for example one written by a single writer or by a job that stamps rows after
+  their transactions commit; otherwise load the table with snapshot reads. Running the definition repeatedly, for
+  example from a scheduled workflow, loads the table incrementally; rows deleted from the source are not propagated.
 - **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
   retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope
   before such a pipeline is admitted.

@@ -246,8 +246,10 @@ describe("connector pipeline editor", () => {
     editor.render();
     expect(editor.pipeline.source).toMatchObject({ watermark: "version" });
 
-    setInput(control<HTMLInputElement>(editor.host, "Source table columns field 3 name"), "revision");
-    editor.render();
+    for (const value of ["", "revision"]) {
+      setInput(control<HTMLInputElement>(editor.host, "Source table columns field 3 name"), value);
+      editor.render();
+    }
     expect(editor.pipeline.source).toMatchObject({ watermark: "revision" });
 
     setSelect(control<HTMLSelectElement>(editor.host, "Source table columns field 3 type"), "string");

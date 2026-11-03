@@ -123,9 +123,13 @@ public sealed record EtlConnectorPreparedRun(EtlPreparedCsvInput? File, EtlObjec
 /// <summary>Identifies a SQL source's watermark checkpoint within a scope (spec 1199).</summary>
 /// <param name="DefinitionId">The ETL definition the runs belong to; its versions share the checkpoint.</param>
 /// <param name="SourceAlias">The source binding alias.</param>
+/// <param name="SourceHandle">
+/// The pinned, secret-free handle of the source binding, so pointing the alias at another database or user starts again
+/// from every row rather than filtering the new source by the old checkpoint.
+/// </param>
 /// <param name="Table">The source table.</param>
 /// <param name="Column">The watermark column.</param>
-public sealed record EtlConnectorSourceWatermarkKey(string DefinitionId, string SourceAlias, string Table, string Column);
+public sealed record EtlConnectorSourceWatermarkKey(string DefinitionId, string SourceAlias, string SourceHandle, string Table, string Column);
 public sealed record EtlConnectorRunView(EtlRunView Run, EtlConnectorRunBindings Bindings,
     EtlConnectorPreparedRun? Prepared, long RetainedInputBytes);
 

@@ -241,7 +241,9 @@ internal sealed partial class EfEtlRuntimeStore
         var connector = await db.ConnectorRuns.SingleAsync(row => row.ScopeKey == key.ScopeKey && row.RunKey == key.RunKey, cancellationToken);
         if (connector.PreparedJson is null ||
             EtlConnectorRecordCodec.Read<EtlConnectorPreparedRun>(connector.PreparedJson).SourceWatermark is not { } high) return;
-        var checkpointKey = SourceWatermarkKey(new(invocation.Artifact.DefinitionId, sql.Binding, sql.Table, column));
+        var bindings = EtlConnectorRecordCodec.Read<EtlConnectorRunBindings>(connector.BindingsJson);
+        var checkpointKey = SourceWatermarkKey(new(invocation.Artifact.DefinitionId, sql.Binding, bindings.Source.Revision.Handle,
+            sql.Table, column));
         var checkpoint = await db.ConnectorSourceWatermarks.SingleOrDefaultAsync(
             row => row.ScopeKey == key.ScopeKey && row.CheckpointKey == checkpointKey, cancellationToken);
         if (checkpoint is null)
@@ -276,6 +278,7 @@ internal sealed partial class EfEtlRuntimeStore
             FormatVersion = 1,
             key.DefinitionId,
             key.SourceAlias,
+            key.SourceHandle,
             key.Table,
             key.Column
         })));

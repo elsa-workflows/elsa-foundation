@@ -186,15 +186,37 @@ public sealed partial class EtlRuntimeJourneyTests
             configureRuntime: runtime => runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source)));
 
         var first = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-first", WatermarkPipeline()));
-        Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (first.Status, first.AcceptedRecords, await CheckpointAsync(host, files)));
+        Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (first.Status, first.AcceptedRecords, await CheckpointAsync(host, files, "watermark-first")));
+        // The checkpoint belongs to the pinned source: an alias pointed at another database starts again from every row.
+        await using (var lookup = host.Services.CreateAsyncScope())
+            Assert.Null(await lookup.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>().FindConnectorSourceWatermarkAsync(
+                files.Scope, new("orders", "people-db", new string('0', 64), "people", "version")));
 
         ExecuteSql(source, "UPDATE people SET name = 'Bram II', version = 4 WHERE id = 2; INSERT INTO people VALUES (4, 'Dee', 5)");
         var second = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-second", WatermarkPipeline()));
-        Assert.Equal((EtlRunStatus.Succeeded, 2L, 5L), (second.Status, second.AcceptedRecords, await CheckpointAsync(host, files)));
+        Assert.Equal((EtlRunStatus.Succeeded, 2L, 5L), (second.Status, second.AcceptedRecords, await CheckpointAsync(host, files, "watermark-second")));
 
         var third = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-third", WatermarkPipeline()));
-        Assert.Equal((EtlRunStatus.Succeeded, 0L, 5L), (third.Status, third.AcceptedRecords, await CheckpointAsync(host, files)));
+        Assert.Equal((EtlRunStatus.Succeeded, 0L, 5L), (third.Status, third.AcceptedRecords, await CheckpointAsync(host, files, "watermark-third")));
         Assert.Equal(["Ada", "Bram", "Bram II", "Cleo", "Dee"], ReadJsonlNames(files.OutputRoot));
+    }
+
+    [Fact]
+    public async Task A_watermarked_run_that_completes_with_rejected_rows_still_advances_the_checkpoint()
+    {
+        await using var files = new RuntimeFiles("");
+        var source = $"Data Source={Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "source.db")};Pooling=False";
+        ExecuteSql(source, "CREATE TABLE people (id INTEGER NOT NULL PRIMARY KEY, name TEXT NULL, version INTEGER NOT NULL)");
+        ExecuteSql(source, "INSERT INTO people VALUES (1, 'Ada', 1), (2, NULL, 2), (3, 'Cleo', 3)");
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source)));
+
+        // Every record was routed, one of them to the error route, so the run completes and the checkpoint advances.
+        var run = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-rejected", WatermarkPipeline()));
+
+        Assert.Equal((EtlRunStatus.BusinessError, "etl.rows-rejected", 1L), (run.Status, run.TerminalResult?.Diagnostic?.Code, run.RejectedRecords));
+        Assert.Equal(3L, await CheckpointAsync(host, files, "watermark-rejected"));
     }
 
     [Fact]
@@ -218,11 +240,11 @@ public sealed partial class EtlRuntimeJourneyTests
         // The destination table does not exist yet, so delivery is rejected after the snapshot was read.
         var faulted = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-faulted", toCopy));
         Assert.Equal((EtlRunStatus.BusinessError, "etl.sql-write-rejected"), (faulted.Status, faulted.TerminalResult?.Diagnostic?.Code));
-        Assert.Null(await CheckpointAsync(host, files));
+        Assert.Null(await CheckpointAsync(host, files, "watermark-faulted"));
 
         ExecuteSql(source, "CREATE TABLE people_copy (id INTEGER NOT NULL, name TEXT NOT NULL, version INTEGER NOT NULL, CONSTRAINT people_copy_key UNIQUE (id))");
         var retried = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-retried", toCopy));
-        Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (retried.Status, retried.AcceptedRecords, await CheckpointAsync(host, files)));
+        Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (retried.Status, retried.AcceptedRecords, await CheckpointAsync(host, files, "watermark-retried")));
         Assert.Equal(["1|Ada", "2|Bram", "3|Cleo"], QuerySql(source, "SELECT id, name FROM people_copy ORDER BY id"));
     }
 
@@ -250,7 +272,7 @@ public sealed partial class EtlRuntimeJourneyTests
         var run = await files.WaitForTerminalAsync(host.Services, invocation.RunId);
 
         Assert.Equal((EtlRunStatus.Succeeded, 3L), (run.Status, run.AcceptedRecords));
-        Assert.Equal(3L, await CheckpointAsync(host, files));
+        Assert.Equal(3L, await CheckpointAsync(host, files, invocation.RunId));
     }
 
     private static string CreateVersionedTable(RuntimeFiles files)
@@ -272,11 +294,14 @@ public sealed partial class EtlRuntimeJourneyTests
         };
     }
 
-    private static async Task<long?> CheckpointAsync(Microsoft.Extensions.Hosting.IHost host, RuntimeFiles files)
+    /// <summary>The checkpoint as of a run, keyed by that run's pinned source handle.</summary>
+    private static async Task<long?> CheckpointAsync(Microsoft.Extensions.Hosting.IHost host, RuntimeFiles files, string runId)
     {
         await using var scope = host.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>()
-            .FindConnectorSourceWatermarkAsync(files.Scope, new("orders", "people-db", "people", "version"));
+        var store = scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>();
+        var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(files.Scope, runId));
+        return await store.FindConnectorSourceWatermarkAsync(files.Scope,
+            new("orders", "people-db", run.Bindings.Source.Revision.Handle, "people", "version"));
     }
 
     private static string CreateSqlSourceTable(RuntimeFiles files)
