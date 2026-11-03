@@ -92,6 +92,31 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Throws<ArgumentOutOfRangeException>(() => EtlRuntimeIdentity.ConnectorHttpPageId(admission, 0, 3, request, -1));
     }
 
+    [Fact]
+    public async Task A_finite_http_shard_keeps_its_whole_history_and_no_compacted_summary_across_claims()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var store = database.CreateStore(context);
+        var admission = ConnectorAdmission("finite-history", new("tenant", "finite-history"), httpShardIds: ["shard"]);
+        var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        for (var sequence = 0; sequence < 3; sequence++)
+        {
+            var attached = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, $"page-{sequence}", 10, 0, $"cursor-{sequence}"));
+            lease = (await store.AdvanceEmptyHttpPageAsync(attached.Lease!)).Lease!;
+            Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(lease));
+            lease = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
+                admission.Invocation.Scope, admission.Invocation.RunId, "worker"));
+        }
+
+        context.ChangeTracker.Clear();
+        Assert.Equal(3, await context.ConnectorHttpPages.CountAsync());
+        Assert.Equal(4, await context.ConnectorHttpRequests.CountAsync());
+        var partition = await context.ConnectorPartitions.AsNoTracking().SingleAsync();
+        Assert.Equal((0L, 0L, 3L), (partition.CompactedPageCount, partition.PollGeneration, partition.PageCount));
+        Assert.Equal(0, lease.PollGeneration);
+    }
+
     private static async Task<EtlConnectorHttpSourceFetch?> CurrentJournalAsync(HttpAcquisitionFixture fixture)
     {
         fixture.Context.ChangeTracker.Clear();
