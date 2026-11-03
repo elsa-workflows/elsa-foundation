@@ -20,7 +20,7 @@ Completed/Cancelled are read-only. Accepted responses never change. Repeated acc
 
 Form version: tenant, stable form ID, immutable version ID, display name, provider ID/version and resolved JSON. Updates create a new version; existing versions stay readable while referenced. Basic fields: exact case-sensitive key, label, kind, required/read-only, optional min/max length or number, choices and help text. Reject duplicate keys/choices, unsupported kinds and malformed constraints. Prefill/response must be objects. Required waiver affects absence only; supplied types/ranges/choices and read-only rules always apply. Plain text descriptions render escaped.
 
-Task queries apply scope, tenant and authorized assignment/queue predicates before bounded ordering/paging. Cursors bind query/actor/group eligibility and scope; changed eligibility cannot disclose stale-page records. No global counts before authorization. Current principal/user/membership/role and permission checks happen per operation; persisted history records prior authority, not ongoing access grants.
+Task queries apply scope, tenant and authorized assignment/queue predicates before bounded ordering/paging. Cursors bind query, scope, tenant and actor; each page rechecks current group eligibility, so changed membership cannot disclose stale-page records. Replicas share an explicit cursor key or a domain-separated durable recovery key. No global counts before authorization. Current principal/user/membership/role and permission checks happen per operation; persisted history records prior authority, not ongoing access grants.
 
 ## Reviewed durability refinements
 

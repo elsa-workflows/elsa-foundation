@@ -1192,3 +1192,6 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 | `ValidateUserTaskComposition` | Additive `IStartupTask` | Scoped validation of descriptor ownership and unique form provider IDs; does not activate HTTP identity dependencies in library-only hosts. |
 
 `CreateUserTask` and its typed wait live in Activities.Primitives and consume the Core runtime seam. It creates one invocation-local task and resumes with the accepted action/data. Generic authored value-outcome metadata supplies action ports. BPMN uses the existing native service-worker bridge rather than introducing another human-task lifecycle. Studio's `user-task.form-renderers` slot is an additive renderer contribution; authoritative validation remains with the matching server provider.
+
+
+User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.

@@ -70,4 +70,6 @@ public sealed class UserTaskException(string code, string message, IReadOnlyDict
 public sealed class UserTaskOptions
 {
     public bool AllowVolatileTasksForDevelopment { get; set; }
+    /// <summary>Optional Base64-encoded 32-byte key shared by API replicas. Otherwise a configured recovery signing key is domain-separated for inbox cursors; unconfigured development hosts use a process-local key.</summary>
+    public string? CursorEncryptionKey { get; set; }
 }

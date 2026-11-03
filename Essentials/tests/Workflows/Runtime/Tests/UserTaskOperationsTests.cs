@@ -4,6 +4,9 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.UserTasks;
 using Elsa.Workflows.Runtime.UserTasks;
 using Xunit;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -192,6 +195,35 @@ public sealed class UserTaskOperationsTests
         var ct = new CancellationTokenSource(); ct.Cancel();
         var cancelled = new UserTaskOperations(store, new ActorAccess(Actor("alice")), [], TimeProvider.System, new Runtime(new OperationCanceledException(ct.Token)), new(TimeProvider.System), new Accessor());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled.GetAsync("task", ct.Token).AsTask());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Inbox_cursors_cross_independent_API_replicas_with_shared_keys_and_keep_context_expiry(bool useRecoveryKey)
+    {
+        var time = new FakeTimeProvider(Now); var key = Convert.ToBase64String(Enumerable.Range(0, 32).Select(x => (byte)x).ToArray());
+        UserTaskCursorCodec Replica(string selected) {
+            var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(time);
+            services.AddSingleton<IOptions<UserTaskOptions>>(Options.Create(new UserTaskOptions { CursorEncryptionKey = useRecoveryKey ? null : selected }));
+            services.AddSingleton<IOptions<RuntimeRecoveryContinuationOptions>>(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = useRecoveryKey ? selected : null }));
+            using var provider = services.BuildServiceProvider(); return ActivatorUtilities.CreateInstance<UserTaskCursorCodec>(provider);
+        }
+        var first = Replica(key); var second = Replica(key); var cursor = first.Encode("denied-row-identity", "scope/tenant/alice/queue")!;
+        Assert.Equal("denied-row-identity", second.Decode(cursor, "scope/tenant/alice/queue"));
+        Assert.DoesNotContain("denied-row-identity", System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor)));
+        Assert.Throws<UserTaskException>(() => second.Decode(cursor, "scope/tenant/bob/queue"));
+        Assert.Throws<UserTaskException>(() => Replica(Convert.ToBase64String(new byte[32])).Decode(cursor, "scope/tenant/alice/queue"));
+        time.Advance(TimeSpan.FromMinutes(16)); Assert.Throws<UserTaskException>(() => second.Decode(cursor, "scope/tenant/alice/queue"));
+    }
+
+    [Theory]
+    [InlineData("not-a-key")]
+    [InlineData("AA==")]
+    public void Malformed_configured_cursor_keys_refuse_instead_of_using_an_ephemeral_key(string invalid)
+    {
+        var failure = Assert.Throws<InvalidOperationException>(() => new UserTaskCursorCodec(TimeProvider.System, Options.Create(new UserTaskOptions { CursorEncryptionKey = invalid })));
+        Assert.DoesNotContain(invalid, failure.Message);
     }
 
     private sealed class ExternalForms : IUserTaskFormProvider

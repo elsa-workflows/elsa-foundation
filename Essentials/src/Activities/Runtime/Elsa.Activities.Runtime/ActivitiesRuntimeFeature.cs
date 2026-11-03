@@ -27,6 +27,8 @@ public class ActivitiesRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        // Resume validators use the canonical Events pipeline in composed and direct library hosts alike.
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();

@@ -58,3 +58,6 @@ Apply the Runtime module's incremental migrations on existing supported relation
 
 
 To qualify a custom form integration, run the durable external-form journey and matching mounted renderer test, then use `e2e-tests/user-tasks/qualify_integration.py --help` to compile an external consumer against the public Runtime Core binary and actual Studio package. `Test-UserTasks.ps1` exercises the same authorized HTTP contract through publication and every action path. The live Studio journey covers activity configuration, visual connections, reusable form authoring, save/reload and participant completion on owned hosts.
+
+
+API replicas must share the inbox cursor key. Configure `UserTaskOptions.CursorEncryptionKey` with the same Base64-encoded 32-byte key on each replica, or use the configured `RuntimeRecoveryContinuationOptions.SigningKey` (the codec derives a separate key for task cursors). The existing EF recovery key setting provides that shared source. Cursors remain encrypted, bind scope/tenant/user/inbox/search, and expire after 15 minutes. Unconfigured development composition uses an ephemeral key; returning to the first page starts a fresh query after restart or key rotation. Do not generate a different configured key on each replica.

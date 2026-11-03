@@ -35,7 +35,7 @@ Round1 reviewed5d753dcd8107d31b05541b06ea06b9751dc3689e independently for correc
 
 Real authoring subsequently exposed missing dynamic-outcome facets on the catalog wire and specialized scalar editors losing to the generic editor. Both have failing regressions and fixes. Complex new activity defaults must use fixed Object syntax, so JSON text defaults become arrays/objects rather than string values. Existing activity contract surfaces are retained; the new task's intended surface is added to the baseline.
 
-Causal controls observed: disabling the accepted-response resume guard makes the forged-resume test fail; restoring it passes. Disabling collection-derived port consumption makes its three tests fail; restoring it passes. New pending-receipt, physical-boundary and UI regressions fail before their fixes and pass after them. The default-wire regression likewise fails with Literal JSON text and passes with the restored Object defaults.
+Causal controls observed: disabling the accepted-response resume guard makes the forged-resume test fail; restoring it passes. Disabling collection-derived port consumption makes its three tests fail; restoring it passes. New pending-receipt, physical-boundary and UI regressions fail before their fixes and pass after them. The default-wire regression likewise fails with Literal JSON text and passes with the restored Object defaults. Round2 repaired optional omitted/null outcome collections and exact capability readiness. Round3 adds shared replica-safe cursor keys and replaces the library-host handler loop with canonical Events composition; both have failing-before/passing-after witnesses.
 
 ## Remaining exits
 

@@ -9842,3 +9842,5 @@ static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.operator !=(Elsa.W
 static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormPage? right) -> bool
 Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary
 Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskPersistenceBoundary.CanRetainCompletionEvidence(Elsa.Workflows.Runtime.Core.UserTasks.IUserTaskStore! journal, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.CursorEncryptionKey.get -> string?
+Elsa.Workflows.Runtime.Core.UserTasks.UserTaskOptions.CursorEncryptionKey.set -> void
