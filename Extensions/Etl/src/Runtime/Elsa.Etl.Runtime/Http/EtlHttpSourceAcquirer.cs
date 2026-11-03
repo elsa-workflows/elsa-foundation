@@ -35,7 +35,7 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
             await using var binding = await bindings.ResolveExactAsync(lease.Scope, pin.Alias, "Source",
                 pin.Revision, pin.Handle, cancellationToken);
             var requests = new EtlHttpRequestBuilder(source, binding, pipeline.Http);
-            var cache = new EtlHttpPageCache(snapshotRoot, admission, lease.PartitionOrdinal, requests);
+            var cache = new EtlHttpPageCache(snapshotRoot, admission, lease.PartitionOrdinal, requests, lease.PollGeneration);
             // Policy and manifest validation precede attempt allocation. Cache corruption is never a cache miss.
             var uri = requests.RequestUri(position.Request);
             var cached = await cache.ReadAsync(position.PageSequence, position.Request, cancellationToken);
@@ -141,6 +141,24 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
         {
             return Failed(exception.Code);
         }
+    }
+
+    /// <summary>
+    /// Removes the cached manifest and per-page body of the page a continuous shard has left, once the advance committed
+    /// (spec 1196). <paramref name="left"/> is the lease that held the page, whose generation published it.
+    /// </summary>
+    public async ValueTask DeleteLeftPageAsync(EtlConnectorRunAdmission admission, EtlConnectorPartitionLease left,
+        CancellationToken cancellationToken = default)
+    {
+        if (left.Position is not EtlConnectorHttpPosition position) return;
+        var pipeline = EtlArtifactV2Json.Read(admission.Invocation.Artifact.Pipeline);
+        if (pipeline.Continuous is null || pipeline.Source is not EtlHttpJsonSource source) return;
+        var pin = admission.Bindings.Source.Revision;
+        await using var binding = await bindings.ResolveExactAsync(left.Scope, pin.Alias, "Source",
+            pin.Revision, pin.Handle, cancellationToken);
+        var cache = new EtlHttpPageCache(snapshotRoot, admission, left.PartitionOrdinal,
+            new EtlHttpRequestBuilder(source, binding, pipeline.Http), left.PollGeneration);
+        await cache.DeleteAsync(position.PageSequence, position.Request, cancellationToken);
     }
 
     private async ValueTask<EtlHttpSourceAcquisition> CaptureAsync(EtlConnectorPartitionLease lease,

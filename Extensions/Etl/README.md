@@ -73,15 +73,27 @@ is finite and keeps its exact artifact bytes. Each host shard is still one indep
   started after the request, retained as a final empty page; then the run settles `Succeeded`, or `BusinessError` if
   records were rejected. Cancellation still settles `Cancelled`, and the first terminal outcome wins. A native workflow
   waits on `RunEtl` until the run settles; it cannot request completion itself yet.
-- **Limits.** Until accepted state is compacted (a follow-up), every non-empty page still accumulates page, request,
-  batch and retained-byte state, so a run's lifetime is bounded by `MaxPagesPerPartition` and the retention budgets.
-  Each idle poll claims its partition and audits the shard's retained history, so its cost grows with that history. A
-  feed outage longer than the fetch deadline (`DeadlineSeconds`) fails the run. Workers without this feature refuse a
-  continuous artifact; upgrade every worker in a scope before admitting one. Claims are ordered by run creation, so a
-  continuous run whose shards are never idle can keep every connector slot in its scope and delay newer runs. Deciding
-  whether a caught-up response ends a draining shard compares host clocks, which must agree, as leases already require.
-  A worker that stalls past its lease while the feed answers its request late can fail the whole run closed with
-  `etl.http.page-provenance-invalid` ([spec 1192](../../specs/1192-etl-continuous-http/spec.md) FR-004).
+- **Bounded state** ([spec 1196](../../specs/1196-etl-continuous-compaction/spec.md)). Every claim in a continuous
+  run deletes the rows behind every shard's window, in the claim transaction and before any work is charged: it keeps the
+  current request, the predecessor page and request, and that page's batches. The partition keeps the deleted rows'
+  counts as a compacted summary, so page, batch, record and effect counts stay lifetime totals. A shard holds at most
+  2 pages, 3 requests and 2 pages' batches; size the retention budgets for that peak once per shard, since they are per
+  run. The worker deletes a batch's retained route bodies after its acceptance and a left page's cached files after the
+  advance; a crash in between leaves those files behind once. `MaxPagesPerPartition` does not limit a continuous
+  shard, which may accept up to 2³¹ − 1 pages over its life.
+- **Limits.** In a continuous run, a continuation that revisits a request older than the window is not detected as a
+  cycle and is fetched again, so a continuous feed must move its cursor forward. A feed outage longer than the fetch
+  deadline (`DeadlineSeconds`) fails the run. Workers without these features refuse a continuous artifact; upgrade every
+  worker in a scope before admitting one. Claims are ordered by run creation, so a continuous run whose shards are never
+  idle can keep every connector slot in its scope and delay newer runs. Deciding whether a caught-up response ends a
+  draining shard compares host clocks, which must agree, as leases already require. Each caught-up poll increments the
+  shard's poll generation, which is part of its page-cache key, so a stalled worker's late page never reaches a later
+  poll; that orphaned page stays on disk. Because every claim compacts every shard, a shard
+  whose rows fail the compaction's safety check (which needs corruption) fails every claim whose candidate is in its run,
+  even when the candidate is a peer. Claims pick the first eligible shard in a fixed order, so this stalls claims across
+  the scope, as a corrupt candidate's own audit already did. The first claim after upgrading a long-running run compacts
+  every shard's whole history in one write transaction; peers' lease renewals wait on it, and a slow one can cost a
+  lease. This happens once and loses nothing.
 
 ## Implemented boundaries
 
