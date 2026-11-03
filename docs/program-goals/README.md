@@ -37,6 +37,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Studio Expression Developer Experience](studio-expression-developer-experience.md) | Active; owner authorization, 23 October | Studio activity-input code authoring and Foundation expression tooling | Sipke | Program #2310; plan #2367 and the permission-hash fix first; milestones 2 and 3 wait on the #3204 read-model ADR |
 | [Weaver across Studio](weaver-across-studio.md) | Active; owner authorization, 29 October | Module-owned assistant context, tools, review and effects across Studio | Sipke | Program #3428; M0 baseline, then M1 contribution contract and independent module witness; Project #65 |
 | [Elsa Agents](elsa-agents.md) | Active; end-to-end owner authorization, 31 October | Reusable specialists, native/BPMN integration and bounded teams | Sipke | Program #3519; M0 research, then reviewed product/architecture design before production contract freeze |
+| [User Tasks](user-tasks.md) | Active; end-to-end owner authorization, 2 November | Durable human work, forms and Studio inbox | Sipke | Program #3688; research/design, then feature #3577 and resulting-main qualification |
 
 The Active table above is the complete list of active programs. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the

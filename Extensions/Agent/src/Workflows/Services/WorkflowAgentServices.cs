@@ -6,6 +6,7 @@ using Elsa.Agent.Workflows.Contracts;
 using Elsa.Agent.Workflows.Models;
 using Elsa.Agent.Workflows.Tools;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Exceptions;
 
 namespace Elsa.Agent.Workflows.Services;
 
@@ -51,8 +52,8 @@ public sealed class DefaultWorkflowAgentContextProvider(
             {
                 if (TryAdmitRequest(caller, out var admitted))
                 {
-                    if (await CanDiscloseAsync(session, null, cancellationToken)) attachments.Add(admitted!);
-                    else diagnostics.Add(PermissionDenied());
+                    if (await RefuseDisclosureAsync(session, null, cancellationToken) is { } refused) diagnostics.Add(refused);
+                    else attachments.Add(admitted!);
                 }
                 else diagnostics.Add(new(Descriptor.Id, "agent.workflow.request_invalid", "The workflow request must contain bounded request-kind and reference metadata.", true));
                 continue;
@@ -72,9 +73,9 @@ public sealed class DefaultWorkflowAgentContextProvider(
                 diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_target_mismatch", "The workflow snapshot does not match the requested target and revision.", true));
                 continue;
             }
-            if (!await CanDiscloseAsync(session, snapshot.Target, cancellationToken))
+            if (await RefuseDisclosureAsync(session, snapshot.Target, cancellationToken) is { } refusal)
             {
-                diagnostics.Add(PermissionDenied());
+                diagnostics.Add(refusal);
                 continue;
             }
             attachments.Add(new($"workflow:{snapshot!.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
@@ -86,8 +87,8 @@ public sealed class DefaultWorkflowAgentContextProvider(
                 Origin = AgentContextOrigin.ClientSnapshot, Client = snapshot.Client, AgentScopes = ["/workflows"]
             });
         }
-        if (request.CallerAttachments.Count == 0 && !await CanDiscloseAsync(session, null, cancellationToken))
-            diagnostics.Add(PermissionDenied());
+        if (request.CallerAttachments.Count == 0 && await RefuseDisclosureAsync(session, null, cancellationToken) is { } withheld)
+            diagnostics.Add(withheld);
         attachments.Add(InstalledGuidance());
         return new(attachments, diagnostics);
     }
@@ -126,8 +127,8 @@ public sealed class DefaultWorkflowAgentContextProvider(
         }
         if (targets.Count == 0) targets.Add(null);
         foreach (var target in targets.Distinct())
-            if (!await CanDiscloseAsync(session, target, cancellationToken))
-                return new([], [PermissionDenied()]);
+            if (await RefuseDisclosureAsync(session, target, cancellationToken) is { } refusal)
+                return new([], [refusal]);
 
         // An editor revision belongs to its unsaved working state. A persisted revision read
         // cannot establish its freshness. Historical disclosure preserves the original binding;
@@ -147,19 +148,27 @@ public sealed class DefaultWorkflowAgentContextProvider(
             && !string.IsNullOrWhiteSpace(session.TenantId) && (session.ExpiresAt is null || session.ExpiresAt > DateTimeOffset.UtcNow) ? session : null;
     }
 
-    private async Task<bool> CanDiscloseAsync(AgentSession session, AgentResourceTarget? target, CancellationToken cancellationToken)
+    /// <summary>Null when the context may be disclosed; otherwise the required diagnostic that withholds it.</summary>
+    private async Task<AgentContributionDiagnostic?> RefuseDisclosureAsync(AgentSession session, AgentResourceTarget? target, CancellationToken cancellationToken)
     {
-        if (!(await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed) return false;
+        if (!(await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed) return PermissionDenied();
         // Supplemental caller request metadata and public installed guidance do not claim a live
         // resource. Concrete snapshots/results require the owner domain's current read decision.
-        return target is null || (await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers,
-            session.ActorId, session.TenantId, target, false, cancellationToken)).Allowed;
+        if (target is null) return null;
+        var owner = await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers,
+            session.ActorId, session.TenantId, target, false, cancellationToken);
+        // An owner that cannot decide withholds the context too, reported as unavailable rather than denied.
+        return owner.Allowed ? null : WorkflowResourceAuthority.IsUnavailable(owner) ? AuthorizationUnavailable() : PermissionDenied();
     }
 
     private AgentContextContribution SessionDenied() => new([], [new(Descriptor.Id, "agent.workflow.session_denied",
         "A current workflow session with an authenticated actor and tenant is required.", true)]);
     private AgentContributionDiagnostic PermissionDenied() => new(Descriptor.Id, "agent.workflow.permission_denied",
         "Current read permission for the workflow context is required.", true);
+    // Marked as the owner being unavailable, so a collection refused only by this reports the same stable code as the
+    // Design API (503). Only this diagnostic carries the marker; a denial stays the ordinary incomplete-context refusal.
+    private AgentContributionDiagnostic AuthorizationUnavailable() => new(Descriptor.Id, WorkflowDefinitionAuthorizationException.UnavailableCode,
+        WorkflowResourceAuthority.UnavailableMessage, true) { OwnerUnavailable = true };
     private AgentContextContribution ContextDenied() => new([], [new(Descriptor.Id, "agent.workflow.disclosure_invalid",
         "The retained workflow evidence does not match this module's supported context and resource identities.", true)]);
 

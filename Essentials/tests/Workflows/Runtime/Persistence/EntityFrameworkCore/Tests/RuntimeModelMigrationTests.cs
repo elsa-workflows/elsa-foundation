@@ -37,13 +37,14 @@ public sealed class RuntimeModelMigrationTests
             }
             var after = await LegacyRows(connection);
             foreach (var (table, digest) in before) Assert.Equal(digest, after[table]);
-            Assert.Equal(before.Count + 2, after.Count);
+            Assert.Equal(before.Count + 4, after.Count);
+            Assert.Contains("UserTasks", after.Keys); Assert.Contains("UserTaskForms", after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.StateTable, after.Keys);
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 2, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 3, upgradedHistory.Length);
             await using (var nativeKinds = connection.CreateCommand())
             {
                 nativeKinds.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\" WHERE IsModelMaterial <> 0";
