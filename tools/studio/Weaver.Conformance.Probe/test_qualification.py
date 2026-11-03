@@ -17,6 +17,8 @@ from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceE
 from restart_journeys import RESTART_QUALIFICATION
 from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES, SECTION as TRUTH_SEAM_SECTION, synthetic_actors, synthetic_browser, synthetic_registrations
 from batch_journeys import EXPECTED_CASES as BATCH_CASES, SECTION as BATCH_SECTION, synthetic_browser as synthetic_batch_browser, synthetic_native
+from explain_journeys import (EXPECTED_CASES as EXPLAIN_CASES, SECTION as EXPLAIN_SECTION, synthetic_browser as synthetic_explain_browser,
+                              synthetic_native as synthetic_explain_native, synthetic_search)
 from test_autonomy_journeys import complete_autonomy_section
 from test_restart_journeys import complete_restart_section
 
@@ -187,6 +189,12 @@ def complete_witness_report(base):
         "source": base.source, "caseIDs": batch, "stages": [],
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
                                                                            "native": synthetic_native(), "browser": synthetic_batch_browser()})} for name in batch]}
+    explain = sorted(EXPLAIN_CASES)
+    report[EXPLAIN_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": explain, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "native": synthetic_explain_native(), "browser": synthetic_explain_browser(),
+                                                                           "canarySearch": synthetic_search()})} for name in explain]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
     report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
@@ -209,15 +217,16 @@ class CompleteWitnessTests(unittest.TestCase):
 
     def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 2, 2, 2, 26, 20, 1, 95), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+        self.assertEqual((38, 4, 2, 2, 2, 2, 26, 20, 1, 97), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
                                                      len(manifest["workflowAuthorizationCases"]), len(manifest["workflowTruthSeamCases"]),
-                                                     len(manifest["workflowBatchCases"]),
+                                                     len(manifest["workflowBatchCases"]), len(manifest["workflowExplainCases"]),
                                                      len(manifest["autonomyCases"]), len(manifest["restartCases"]),
                                                      len(manifest["restartControls"]), manifest["expectedCaseCount"]))
         self.assertEqual(["anthropic-workflow-authorization-unavailable", "copilot-workflow-authorization-unavailable"],
                          manifest["workflowAuthorizationCases"])
         self.assertEqual(["anthropic-workflow-truth-seams", "copilot-workflow-truth-seams"], manifest["workflowTruthSeamCases"])
         self.assertEqual(["anthropic-workflow-batch", "copilot-workflow-batch"], manifest["workflowBatchCases"])
+        self.assertEqual(["anthropic-workflow-explain", "copilot-workflow-explain"], manifest["workflowExplainCases"])
         self.assertEqual(10, len({name.split("-", 1)[1] for name in manifest["restartCases"]}))
         self.assertTrue(all(name.split("-", 1)[0] in ("copilot", "anthropic") for name in manifest["autonomyCases"]))
         self.assertEqual(13, len({name.split("-", 1)[1] for name in manifest["autonomyCases"]}))
@@ -332,6 +341,23 @@ class CompleteWitnessTests(unittest.TestCase):
                 {"id": r[BATCH_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[BATCH_SECTION]["records"][0]["id"].split("-", 1)[0],
                  "native": synthetic_native(), "browser": {**synthetic_batch_browser(), "observations": {**synthetic_batch_browser()["observations"], "autosaveSuspended": False}}})),
             "manifest-without-batch": lambda r: r["witnessManifest"].pop("workflowBatchCases"),
+            "explain-absent": lambda r: r.pop(EXPLAIN_SECTION),
+            "explain-failed": lambda r: r[EXPLAIN_SECTION].update(status="failed"),
+            "explain-live-claim": lambda r: r[EXPLAIN_SECTION].update(liveProvider=True),
+            "explain-missing": lambda r: (r[EXPLAIN_SECTION]["caseIDs"].pop(), r[EXPLAIN_SECTION]["records"].pop()),
+            "explain-record-changed": lambda r: r[EXPLAIN_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "explain-turn-missing": lambda r: r[EXPLAIN_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[EXPLAIN_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[EXPLAIN_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": {key: value for key, value in synthetic_explain_native().items() if key != "validation"},
+                 "browser": synthetic_explain_browser(), "canarySearch": synthetic_search()})),
+            "explain-canary-found": lambda r: r[EXPLAIN_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[EXPLAIN_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[EXPLAIN_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": synthetic_explain_native(), "browser": synthetic_explain_browser(), "canarySearch": {"files": 3, "found": 1}})),
+            "explain-saved": lambda r: r[EXPLAIN_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[EXPLAIN_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[EXPLAIN_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": synthetic_explain_native(), "canarySearch": synthetic_search(),
+                 "browser": {**synthetic_explain_browser(), "observations": {**synthetic_explain_browser()["observations"], "draftUnchanged": False}}})),
+            "manifest-without-explain": lambda r: r["witnessManifest"].pop("workflowExplainCases"),
             "matrix-stage-missing": lambda r: r["stages"].pop(),
             "matrix-stage-repeated": lambda r: r["stages"].append(copy.deepcopy(r["stages"][-1])),
             "failed-stage": lambda r: r["stages"][0].update(exitCode=1),

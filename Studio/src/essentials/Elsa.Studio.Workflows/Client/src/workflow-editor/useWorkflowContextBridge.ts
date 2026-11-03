@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import { collectWorkflowContextActivities, collectWorkflowContextConnections, collectWorkflowContextStructure, getDraftContentRevision, type WorkflowContextStructure } from "./editorHelpers";
 import { readSecretReference, type SecretReferenceView } from "../maskedInput";
@@ -7,6 +7,7 @@ import { getChildSlots } from "../workflowAdapter";
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { indexActivityPresentation } from "../activityPresentation";
+import { collectGraphActivityReferences, collectSelectedActivityContext, collectWorkflowContextDiagnostics, hostSerializedLength } from "./workflowExplainContext";
 
 interface WorkflowContextBridgeParams {
   controller?: WorkflowAgentController;
@@ -22,6 +23,11 @@ interface WorkflowContextBridgeParams {
   catalogByVersion: Map<string, ActivityCatalogItem>;
   /** True while the designer shows a historical (read-only) snapshot instead of the editable working draft. */
   historical?: boolean;
+  /**
+   * The validation the designer shows for this working state (its panel's combined, humanized list). Explanations use only
+   * these (spec 1193 FR-018); without it the draft's own reconciled errors are disclosed.
+   */
+  validationErrors?: ValidationError[] | null;
 }
 
 function resolveActivityType(node: ActivityNode | null, descriptor: StudioActivityDescriptor | null, catalogByVersion: Map<string, ActivityCatalogItem>) {
@@ -40,7 +46,8 @@ export function useWorkflowContextBridge({
   inspectedDescriptor,
   inspectedIsScopeOwner,
   catalogByVersion,
-  historical = false
+  historical = false,
+  validationErrors
 }: WorkflowContextBridgeParams) {
   // The full-tree walks depend only on the draft + catalog; memoized so selection/inspection changes
   // (which re-fire the effect) only rewrite the scalar snapshot fields.
@@ -56,14 +63,20 @@ export function useWorkflowContextBridge({
   const connections = useMemo(() => draft ? collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
   // Structure (spec 1193 FR-014): each activity's exact version, parent and slot, and its own slots, so an Operation
   // Batch can name an explicit scope path and slot. Compact, by index into `activities`, so it stays small.
-  const structure = useMemo(() => draft ? compactWorkflowStructure(activities, collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion),
-    [...(draft.layout ?? []), ...(draft.activityPresentation ?? [])].map(record => record.nodeId)) : null, [activities, catalogByVersion, draft]);
+  const structureByNode = useMemo(() => draft ? collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion) : null, [catalogByVersion, draft]);
+  const structure = useMemo(() => draft && structureByNode ? compactWorkflowStructure(activities, structureByNode,
+    [...(draft.layout ?? []), ...(draft.activityPresentation ?? [])].map(record => record.nodeId)) : null, [activities, draft, structureByNode]);
   // Visible Secret References are those the draft already binds: names, types and scopes only, never a value.
   const secretReferences = useMemo(() => draft ? collectVisibleSecretReferences(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
-  const diagnostics = useMemo(
-    () => (draft?.validationErrors ?? []).map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." })),
-    [draft]
-  );
+  // Spec 1193 slice D: the designer's own validation (FR-018), graph activities by definition and version, never their
+  // bodies (FR-014), and the selected activity's declared properties with withheld credentials (FR-016, FR-017).
+  const diagnostics = useMemo(() => collectWorkflowContextDiagnostics(validationErrors ?? draft?.validationErrors ?? []), [draft, validationErrors]);
+  const graphActivities = useMemo(
+    () => collectGraphActivityReferences(activities, nodeId => structureByNode?.get(nodeId)?.activityVersionId, catalogByVersion),
+    [activities, catalogByVersion, structureByNode]);
+  const selectedActivity = useMemo(
+    () => selectedNode && selectedDescriptor && selectedNode.nodeId === selectedNodeId ? collectSelectedActivityContext(selectedNode, selectedDescriptor) : null,
+    [selectedDescriptor, selectedNode, selectedNodeId]);
 
   const selectionKey = JSON.stringify([details?.definition?.id, selectedNodeId]);
   const activeGeneration = useRef<string | null>(null);
@@ -103,16 +116,29 @@ export function useWorkflowContextBridge({
         selectedActivityType: resolveActivityType(selectedNode, selectedDescriptor, catalogByVersion),
         inspectedNodeId: inspectedNode?.nodeId ?? null, inspectedActivityType: resolveActivityType(inspectedNode, inspectedDescriptor, catalogByVersion), inspectedIsScopeOwner,
         workingState: historical ? "historical" : "draft",
-        activities, connections, diagnostics, positions: draft.layout.map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })), secretReferences,
+        activities, connections, diagnostics: diagnostics.diagnostics, ...(diagnostics.omitted ? { diagnosticsOmitted: diagnostics.omitted } : {}),
+        positions: draft.layout.map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })), secretReferences,
+        ...(graphActivities.length ? { graphActivities } : {}), ...(selectedActivity ? { selectedActivity } : {}),
         structure } as Record<string, unknown>
     };
+    // The host admits at most 32 KiB of one context attachment's serialized content. The explanation additions never push a
+    // snapshot over it: the property context is left out first, then the diagnostics (their count is still reported).
+    const content = attachment.content;
+    if (hostSerializedLength(content) > workflowContextCandidateBudget - workflowSnapshotStructureMargin) delete content.selectedActivity;
+    if (hostSerializedLength(content) > workflowContextCandidateBudget - workflowSnapshotStructureMargin && diagnostics.diagnostics.length) {
+      content.diagnostics = [];
+      content.diagnosticsOmitted = diagnostics.omitted + diagnostics.diagnostics.length;
+    }
     // The server admits at most 64 KiB of snapshot content. Structure is left out rather than letting a draft that fits
     // without it be refused: explanation keeps working, and an Operation Batch then says the structure is required.
-    if (JSON.stringify(attachment.content).length > workflowSnapshotContentLimit - workflowSnapshotStructureMargin) delete attachment.content.structure;
+    if (JSON.stringify(content).length > workflowSnapshotContentLimit - workflowSnapshotStructureMargin) delete content.structure;
     controller.snapshot = attachment;
     return () => { if (controller.snapshot === attachment) controller.snapshot = null; };
-  }, [activities, catalogByVersion, clientId, connections, controller, details, diagnostics, draft, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, secretReferences, selectedDescriptor, selectedNode, selectedNodeId, selectionKey, structure]);
+  }, [activities, catalogByVersion, clientId, connections, controller, details, diagnostics, draft, graphActivities, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, secretReferences, selectedActivity, selectedDescriptor, selectedNode, selectedNodeId, selectionKey, structure]);
 }
+
+/** The host's bound on one context attachment's serialized content (`AgentContextServices`), in characters. */
+export const workflowContextCandidateBudget = 32768;
 
 /** The server's bound on `workflow.definition` content (`WorkflowAgentSnapshot`), in UTF-16 code units of its JSON text. */
 export const workflowSnapshotContentLimit = 65536;

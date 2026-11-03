@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -1505,6 +1505,7 @@ async function workflowReadOnly() {
 // operations of six kinds with three in a nested flowchart and a hand edit in its base revision, observed through the designer's own
 // export, validation, autosave, Undo and Redo; and last an approval from a second tab. Weaver never saves or publishes.
 const BATCH_TOOL = "workflow_apply_operation_batch";
+const READ_TOOL = "workflow_read_graph";
 async function workflowBatch() {
   const wf = config.workflow ?? {};
   const { definitionId, definitionPath, nodes, batch, followUp } = wf;
@@ -1716,6 +1717,100 @@ async function workflowBatch() {
     undoRestored: true, redoRestored: true, noSaveOrPublish: true };
 }
 
+// Spec 1193 T028: explaining the active draft in the actual packaged editor. With autosave off for this editor (component
+// state, not a stored preference), the reader selects the activity whose input the designer's own validation flags and
+// asks Weaver to read the draft: the admitted context names that input's expression type, the server's unavailable
+// interpretation and the designer's diagnostic for it. A hand edit then changes the unsaved working state, and the next
+// read is attributed to the new revision with the moved position, equal to the editor's own export. Nothing is saved.
+async function workflowExplain() {
+  const wf = config.workflow ?? {};
+  const { definitionId, definitionPath, nodes, explain } = wf;
+  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.nested && explain?.property && explain?.moveNode,
+    "The explanation journey needs exact owning IDs, node IDs and the expected selected input.");
+  owningDraftPath = wf.draftPath;
+  const node = id => page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId));
+  for (const id of [nodes.a, nodes.b, nodes.nested]) await expect(node(id)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  const panel = page.locator(".wf-validation");
+  await expect(panel).not.toContainText("No validation errors");
+  result.evidence.push(retain("validation-panel", { text: await panel.innerText() }));
+  // Autosave off, through the editor's own menu; the hand edit below then stays in the unsaved working state.
+  await nativeEnter("autosave-menu", page.getByRole("button", { name: "More workflow actions", exact: true }), "More workflow actions");
+  const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
+  const autosave = menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ });
+  await expect(autosave).toBeFocused();
+  await expect(autosave).toHaveAttribute("aria-checked", "true");
+  await nativeEnter("autosave-off", autosave, "Autosave");
+  await expect(autosave).toHaveAttribute("aria-checked", "false");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const ask = async name => {
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    const selected = command(READ_TOOL, {});
+    commands[name] = selected.commandId;
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    const answers = dock().locator('.weaver-message[data-role="assistant"]'), earlier = await answers.count();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: READ_TOOL, arguments: {} }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    const sent = await accepted(message, name + "-message");
+    // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+    const admitted = sent.value.data?.message?.context;
+    need(Array.isArray(admitted), name + ": the accepted message carries no admitted context.");
+    const drafts = admitted.filter(item => item.contentType === "workflow.definition");
+    need(drafts.length === 1 && drafts[0].target?.resourceId === definitionId, name + ": the message did not admit exactly the open working draft.");
+    // This turn's own answer, never an earlier turn's completed one.
+    await expect.poll(() => answers.count(), { timeout: 120000 }).toBeGreaterThan(earlier);
+    const answer = answers.nth(earlier);
+    await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 120000 });
+    await expect(answer).toContainText("Tool outcome received");
+    result.evidence.push(retain(name + "-outcome", { status: await answer.getAttribute("data-status"), revision: drafts[0].target.revision }));
+    return drafts[0];
+  };
+
+  await node(nodes.b).click({ position: { x: 12, y: 12 } });
+  await expect(node(nodes.b)).toHaveClass(/\bselected\b/);
+  result.evidence.push(retain("select-interaction", { method: "pointer-click", nodeId: nodes.b }));
+  const first = await ask("before");
+  const content = first.content ?? {};
+  need(content.selectedNodeId === nodes.b && content.selectedActivity?.nodeId === nodes.b, "The admitted context does not describe the selected activity.");
+  const property = (content.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.property);
+  need(property?.value?.kind === "expression" && property.value.expressionType === explain.expressionType && property.value.interpretation === explain.interpretation,
+    "The selected input's expression was not disclosed by type, content and the unavailable interpretation: " + JSON.stringify(property ?? null));
+  const diagnostic = (content.diagnostics ?? []).find(item => item.nodeId === nodes.b && item.property === explain.property && item.type === explain.diagnosticType);
+  need(diagnostic, "The designer's diagnostic for the selected input was not disclosed.");
+
+  // A hand edit with autosave off: the working state changes and stays unsaved.
+  const writes = owningWrites.length;
+  const position = (content.positions ?? []).find(item => item.nodeId === explain.moveNode);
+  const box = await node(explain.moveNode).boundingBox();
+  need(box && position, "The node to move by hand is not on the canvas or not in the admitted positions.");
+  await page.mouse.move(box.x + 12, box.y + 12); await page.mouse.down();
+  await page.mouse.move(box.x + 72, box.y + 52, { steps: 12 }); await page.mouse.up();
+  result.evidence.push(retain("move-interaction", { method: "pointer-drag", nodeId: explain.moveNode, dx: 60, dy: 40 }));
+  const second = await ask("after");
+  need(second.target.revision !== first.target.revision, "The read after the hand edit was attributed to the earlier revision.");
+  const moved = (second.content?.positions ?? []).find(item => item.nodeId === explain.moveNode);
+  need(moved && (moved.x !== position.x || moved.y !== position.y), "The admitted position did not follow the hand edit.");
+  const working = await workingDraft("working-after");
+  const exported = (working.layout ?? []).find(item => item.nodeId === explain.moveNode);
+  need(exported && exported.x === moved.x && exported.y === moved.y, "The admitted position is not the editor's working state.");
+  need(owningWrites.length === writes, "The hand edit was saved although autosave was off.");
+  const after = await owner("owner-after", definitionPath);
+  result.ownerAfter = after.receipt;
+  expect(after.value.draft).toEqual(before.value.draft);
+  need(owningWrites.length === 0, "The explanation journey wrote the owning draft.");
+  await screenshot("explained");
+  result.commands = commands;
+  result.observations = { explainCompleted: true, selectedExpressionType: property.value.expressionType, interpretation: property.value.interpretation,
+    diagnosticOnSelectedInput: true, autosaveOff: true, revisionChanged: true, positionFollowed: true, draftUnchanged: true, owningWrites: owningWrites.length };
+}
+
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1726,6 +1821,7 @@ try {
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
   else if (config.journey === "workflow-read-only") await workflowReadOnly();
   else if (config.journey === "workflow-batch") await workflowBatch();
+  else if (config.journey === "workflow-explain") await workflowExplain();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;

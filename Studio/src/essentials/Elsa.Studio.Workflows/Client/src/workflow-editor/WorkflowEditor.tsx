@@ -635,7 +635,7 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned });
+  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.

@@ -30,6 +30,7 @@ from disclosure_journeys import qualify_context_disclosure
 from authorization_journeys import SECTION as AUTHORIZATION_SECTION, qualify_workflow_authorization
 from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, qualify_workflow_truth_seams, truth_principals
 from batch_journeys import SECTION as BATCH_SECTION, qualify_workflow_batch
+from explain_journeys import SECTION as EXPLAIN_SECTION, qualify_workflow_explain
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -670,9 +671,12 @@ def qualify_distributions(run):
         # Spec 1193 T022: one reviewed Operation Batch, its negative controls and the packaged editor journey, through a
         # test-only catalog seam (a credential input and an excluded activity) the driver selects for this inventory alone.
         qualify_workflow_batch(runtime)
+        # Spec 1193 T028: explanation and troubleshooting of the active draft, its credential-disclosure control, a canary
+        # search over every retained file and the packaged editor journey, through the same test-only catalog seam.
+        qualify_workflow_explain(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION)})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)

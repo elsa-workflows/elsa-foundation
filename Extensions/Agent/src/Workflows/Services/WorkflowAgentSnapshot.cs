@@ -9,7 +9,9 @@ namespace Elsa.Agent.Workflows.Services;
 /// <remarks>
 /// The compact containment structure (each activity's exact version, parent, slot and its own slots), the working-state
 /// kind and the visible Secret References are optional additions to schema <c>1</c>. A snapshot that carries structure
-/// must describe every activity and one tree; the Operation Batch tool requires it.
+/// must describe every activity and one tree; the Operation Batch tool requires it. The designer's diagnostics, the selected
+/// activity's property context and the graph activity references are further optional additions, read strictly by
+/// <see cref="WorkflowAgentExplainContext"/>.
 /// </remarks>
 internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentClientBinding Client, string DraftId,
     WorkflowAgentGraph Graph, JsonElement Content)
@@ -23,10 +25,24 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     /// <summary>Ids the document holds outside its tree (layout and presentation records); a new node never reuses one.</summary>
     internal IReadOnlyList<string> ReservedIds { get; init; } = [];
     internal string? SelectedNodeId { get; init; }
+    /// <summary>The validation diagnostics the designer shows for this working state (FR-018); empty when none were disclosed.</summary>
+    internal IReadOnlyList<WorkflowAgentDiagnostic> Diagnostics { get; init; } = [];
+    /// <summary>The selected activity's declared property context (FR-016, FR-017), or null when none was disclosed.</summary>
+    internal WorkflowAgentSelectedActivity? SelectedActivity { get; init; }
+    /// <summary>The graph activities the draft references by definition identity and version (FR-014).</summary>
+    internal IReadOnlyList<WorkflowAgentGraphActivity> GraphActivities { get; init; } = [];
 
     internal const string ModuleId = "Elsa.Studio.Workflows";
     internal const string ResourceType = "workflow-definition";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>The same snapshot without the selected activity's property context, for when the owning catalog cannot confirm it.</summary>
+    internal WorkflowAgentSnapshot WithoutSelectedActivity()
+    {
+        var body = System.Text.Json.Nodes.JsonNode.Parse(Content.GetRawText())!.AsObject();
+        body.Remove("selectedActivity");
+        return this with { Content = JsonSerializer.SerializeToElement(body, JsonOptions), SelectedActivity = null };
+    }
 
     internal static bool SameTarget(AgentResourceTarget left, AgentResourceTarget right) =>
         left.ModuleId == right.ModuleId && left.ResourceType == right.ResourceType &&
@@ -82,8 +98,13 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         if (body.TryGetProperty("workingState", out var stateValue) && (stateValue.ValueKind != JsonValueKind.String || workingState is not ("draft" or "historical")))
             return false;
         if (!TryReadSecretReferences(body, out var secretReferences)) return false;
-        // Only declared graph metadata is copied. Caller summaries, permission claims, guidance,
-        // property values, diagnostics with authored payloads and arbitrary extra fields are discarded.
+        // Slice D: the designer's diagnostics, the selected activity's property context and the graph activity references.
+        if (!WorkflowAgentExplainContext.TryReadDiagnostics(body, out var diagnostics, out var diagnosticsOmitted)
+            || !WorkflowAgentExplainContext.TryReadSelectedActivity(body, selectedNodeId, structure, out var selectedActivity)
+            || !WorkflowAgentExplainContext.TryReadGraphActivities(body, activities.Count, activities.Select(item => item.Id).ToArray(), structure, out var graphActivities))
+            return false;
+        // Only declared graph metadata is copied. Caller summaries, permission claims, guidance, property values outside the
+        // selected activity's bounded property context, and arbitrary extra fields are discarded.
         // The optional additions are copied only when the editor disclosed them, so an older snapshot admits unchanged.
         var admittedBody = new Dictionary<string, object?>
         {
@@ -97,13 +118,17 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         admittedBody["positions"] = admittedPositions;
         if (body.TryGetProperty("secretReferences", out _))
             admittedBody["secretReferences"] = secretReferences.Select(item => new { name = item.Name, typeName = item.TypeName, scope = item.Scope }).ToArray();
+        if (body.TryGetProperty("diagnostics", out _)) admittedBody["diagnostics"] = WorkflowAgentExplainContext.Project(diagnostics);
+        if (diagnosticsOmitted is not null) admittedBody["diagnosticsOmitted"] = diagnosticsOmitted;
+        if (selectedActivity is not null) admittedBody["selectedActivity"] = WorkflowAgentExplainContext.Project(selectedActivity);
+        if (body.TryGetProperty("graphActivities", out _)) admittedBody["graphActivities"] = WorkflowAgentExplainContext.Project(graphActivities);
         var admitted = JsonSerializer.SerializeToElement(admittedBody, JsonOptions);
         snapshot = new(new(ModuleId, ResourceType, target.ResourceId, target.Revision), client, Text(body, "draftId")!,
             new(target.Revision, activities, connections), admitted)
         {
             // An empty draft has no structure to withhold, so it is structured (and empty) by definition.
             Structure = structure ?? (activities.Count == 0 ? new Dictionary<string, WorkflowAgentNode>() : null), ReservedIds = reservedIds, WorkingState = workingState, SecretReferences = secretReferences,
-            SelectedNodeId = selectedNodeId
+            SelectedNodeId = selectedNodeId, Diagnostics = diagnostics, SelectedActivity = selectedActivity, GraphActivities = graphActivities
         };
         error = string.Empty;
         return true;

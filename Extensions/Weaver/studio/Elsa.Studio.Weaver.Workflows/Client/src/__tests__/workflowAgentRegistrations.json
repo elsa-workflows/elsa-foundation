@@ -1,0 +1,12 @@
+{
+  "description": "Spec 1193 SC-007: the server registrations of the Workflows agent module (Elsa.Agent.Workflows), as composed by FoundationWorkflowsAgentFeature. Elsa.Agent.Tests asserts this file equals the composed server registrations; the Weaver Workflows Vitest asserts that every Workflows-package prompt, guidance text and renderer references only these tools, capabilities, context kinds and result kinds.",
+  "moduleId": "Elsa.Studio.Workflows",
+  "contextSourceId": "workflows.context",
+  "contextKinds": ["workflow.definition", "workflow.request", "workflow.guidance", "workflow.catalog", "workflow.permissions"],
+  "capabilities": ["workflow.explain", "workflow.propose-change"],
+  "tools": [
+    { "name": "workflow_read_graph", "resultType": "workflows.graph", "rendererId": null, "executionLocation": "server" },
+    { "name": "workflow_set_designer_position", "resultType": "workflows.layout-change", "rendererId": "workflows.agent.layout-result", "executionLocation": "clientWorkingState" },
+    { "name": "workflow_apply_operation_batch", "resultType": "workflows.batch-result", "rendererId": "weaver.workflows.batch-result", "executionLocation": "clientWorkingState" }
+  ]
+}

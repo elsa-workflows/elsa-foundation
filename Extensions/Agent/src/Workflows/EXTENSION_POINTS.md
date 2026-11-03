@@ -7,15 +7,15 @@ Domain: `Elsa.Agent.Workflows`
 
 The module contributes to [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) through contracts in `Elsa.Agent.Core`.
 
-- `IAgentContextProvider`: `DefaultWorkflowAgentContextProvider` (`internal sealed`) admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Property values, caller permission claims and arbitrary diagnostics are excluded. A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics. With admitted workflow context it also contributes two server-produced kinds, described under [Truth seams](#truth-seams-spec-1193); a caller cannot supply either.
+- `IAgentContextProvider`: `DefaultWorkflowAgentContextProvider` (`internal sealed`) admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Caller permission claims, arbitrary fields and every property value outside the selected activity's bounded property context are excluded; the designer's diagnostics and that property context are admitted strictly, as described under [Explain and troubleshoot](#explain-and-troubleshoot-spec-1193-slice-d). A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics. With admitted workflow context it also contributes two server-produced kinds, described under [Truth seams](#truth-seams-spec-1193); a caller cannot supply either.
 - `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` (`internal sealed`) declares explanation of the admitted graph and a reviewed change journey (a position change or one Operation Batch, below). It does not advertise runtime investigation, save or publish.
-- `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result. `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
+- `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result: the admitted snapshot plus each activity's scope-path address (slice D). `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
 - `IAgentClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.agent.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
 - `IAgentToolAuthorization`: both installed tools also implement this optional companion. The graph tool asks the owner `IWorkflowDefinitionAuthorizer.CanReadAsync`; layout asks `CanManageAsync`. Generic orchestration combines this with host authority during advertisement, prepared invocation admission, duplicate delivery and reviewed dispatch/completion. No second tool registry is installed. When the owner throws `WorkflowDefinitionAuthorizationException`, the tools and the context provider fail closed as unavailable with the Design API's code `workflow.authorization.unavailable`, distinct from `agent.workflow.permission_denied`, and disclose no cause. The tools report an owner-unavailable violation, so dispatch reports 503. The context provider reports an owner-unavailable required diagnostic, so collection and turn admission, including the re-admission before each tool call, fail with that code and 503 instead of `agent.context.incomplete`. A denial keeps `agent.context.incomplete` with 400. `agent.workflow.authority_unavailable` keeps its meaning: zero or several authorizers are composed.
 
 The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
-This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. [Final-head qualification/CI, independent review, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches and activity creation are delivered by [draft authoring](#draft-authoring-spec-1193-slice-c); expression authoring and troubleshooting remain [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442); a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
+This is the accepted M1 workflow subset. The [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) executes the original and restored position/validation/whole-Undo/explicit-Save journeys through both actual provider adapters. [Final-head qualification/CI, independent review, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); Program M2–M5 and durable recovery remain open. Graph batches and activity creation are delivered by [draft authoring](#draft-authoring-spec-1193-slice-c), and explanation and troubleshooting of the draft by [slice D](#explain-and-troubleshoot-spec-1193-slice-d); expression authoring belongs to Expression Modules, none of which registers Weaver tools yet; a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
 
 ## Truth seams (spec 1193)
 
@@ -145,6 +145,65 @@ revision and the client binding. No persisted revision is read in its place.
 **SemVer: Minor.** A new tool contract, result kind and optional snapshot fields; nothing existing changes meaning.
 The working-state revision string changes format (a 32-bit hex hash becomes `sha256:<64 hex>`); it is an opaque
 identity that consumers compare for equality only, so this is Minor.
+
+## Explain and troubleshoot (spec 1193 slice D)
+
+`workflow.definition` schema `1` admits three further optional additions from the open editor, each read strictly by
+`WorkflowAgentExplainContext`: an unknown field, a wrong type or a bound exceeded refuses the whole snapshot with
+`agent.workflow.context_invalid`. All three are resource content (untrusted data, never guidance); the installed guidance
+says so.
+
+- **Diagnostics** (FR-018). `diagnostics`: at most 64, in the designer's order, each `severity` (`error` or `warning`),
+  `message` (at most 1,024 characters) and optional `type`, `nodeId` and `property` (an input reference key; only with a
+  `nodeId`). `diagnosticsOmitted` counts the rest. Studio sends exactly what its validation panel shows (server draft
+  validations, the draft's reconciled errors and the designer's structural checks, humanized); Weaver runs no validation.
+- **Selected activity property context** (FR-016, FR-017). `selectedActivity`: the selected node (it must equal
+  `selectedNodeId`) and its exact `activityVersionId` (it must equal the structure's), `truncated`, and at most 64
+  declared properties, each `name`, `referenceKey`, `typeName`, `isCredential`, `isSensitive` and a `value` that is one of
+  `unset`; `expression` (`expressionType`, `content` of at most 2,048 characters, `truncated` exactly when `length`
+  exceeds the content); `withheld` (`expressionType` only: a sensitive or credential value is present and never
+  disclosed, as is a Secret syntax that names no Secret); or `secretReference` (name, type and scope). A sensitive input
+  never carries content, a credential input is always sensitive, and the properties carry at most 16 KiB of content
+  together. On admission the server stamps `interpretation: "unavailable"` on every non-literal expression: interpretation,
+  semantic diagnostics and edits belong to the owning Expression Module's Weaver Tools (Studio ADR 0002), and no Expression
+  Module registers any; an editor cannot claim another status. During collection the property context is checked against
+  the owning catalog's declared inputs for that exact version (read once per collection and shared with the
+  `workflow.catalog` attachment): an undeclared input, a different credential flag, or a catalog-sensitive input reported
+  as not sensitive refuses the snapshot; an editor may mask more (a password hint), never less. When the catalog cannot
+  answer for the version (denied, unavailable or not listed) the property context is left out and the optional
+  `agent.workflow.property_context_unverified` diagnostic says so; the draft is still explained.
+- **Graph activities** (FR-014). `graphActivities`: at most 64 references, each the `activityDefinitionId`, exact
+  `activityVersionId` and `version`, and the activity indexes that use it (each index at most once, and in the
+  structure's version). A graph activity's body belongs to its definition and is never inlined.
+- **Scope paths** (FR-014). `workflow_read_graph` returns the admitted snapshot plus `addresses`: for each activity, its
+  `scopePath` (the container ids from the root to the container that holds it, as an Operation Batch names a scope) and
+  its `slot`; the root's path is empty. The addresses are bounded to 24 KiB, and `addressesTruncated` says when some were
+  left out.
+- **Size.** The host admits at most 32 KiB of one attachment's serialized content (`AgentContextServices`). Studio
+  measures the host's escaped serialization and leaves the property context out first, then the diagnostics (reporting
+  their count in `diagnosticsOmitted`), so the additions never push a snapshot that fitted over that budget; the
+  structure keeps slice C's rule (`workflowExplainContext.test.tsx`).
+- **Expression edits** stay refused at preparation (`agent.workflow.batch.expression_unsupported`), consistent with the
+  unavailable interpretation.
+- **Guidance** names the revision rule (an explanation names the revision it read and never attributes an answer to
+  another), takes validation findings only from the designer's diagnostics, describes addresses, graph activity
+  references, withheld values and unavailable interpretation, and marks workflow content as untrusted.
+- **Registered references** (FR-019, SC-007). The composed server registrations (context source and kinds, capabilities,
+  tools with their result kinds, renderers and execution locations) are recorded in
+  `Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/workflowAgentRegistrations.json`.
+  `WorkflowExplainContextTests` holds it equal to the composed host and checks that the guidance, tool and capability
+  texts name only registered tools and kinds; the Weaver Workflows Vitest `registeredReferences.test.tsx` composes both
+  Workflows Studio packages and checks every prompt, starter, renderer, result control and client tool contract against
+  it, and each contribution's module identity. Studio's snapshot and the server's admission share
+  `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowExplainSnapshot.json`.
+- **Studio side.** `Elsa.Studio.Weaver.Workflows` no longer registers the `workflows.proposal` renderer (no tool
+  produced that kind, and it was registered under the Workflows module's identity), the explain-executable prompt (it
+  named a `get-executable-detail` tool that was never registered; slice F restores it against `workflow_read_executable`)
+  or the test-only `getExecutableDetail` helper. Its propose-update prompt now asks for one reviewed Operation Batch.
+
+**SemVer.** The snapshot additions, the read result's `addresses` and the new diagnostic code are **Minor** (optional,
+additive). The removed `workflows.proposal` renderer and explain-executable prompt are **Major** for any host that
+dispatched them (pre-GA cleanup, constitution §4.2).
 
 ## Removed legacy seams
 

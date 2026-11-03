@@ -192,6 +192,7 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 - Diagnostics come only from the designer's current validation.
 - Fix FR-019: remove the unused `workflows.proposal` renderer, and remove the explain-executable prompt until slice F registers its tool. A behaviour test asserts that every Workflows prompt, guidance text and renderer references a registered tool or result kind (SC-007).
 - **Probe**: `workflow-explain`, with a canary search over every disclosed payload and audit record.
+- **Catalogs** (FR-034): the "Explain and troubleshoot" section of `Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`, its link from `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, and the Agent Workflows README.
 
 ## Slice E: Library, create-dialog intent and templates
 
@@ -232,6 +233,8 @@ Concrete file seams are recorded in [research.md](research.md).
 | The working-state content revision becomes `sha256:` plus 64 hex digits instead of an 8-hex 32-bit hash. Consumers compare it for equality only. A proposal prepared before the upgrade and recovered after it carries the old format, so it fails closed as stale and is never applied | C | Minor |
 | The SDK's optional `resourceModuleIds` on result renderers, the `resultControls` registry with `StudioAgentResultControlContribution`, the `studio.weaver.result-controls` slot and `presentsResourceModule` | C | Minor, additive |
 | The removed `workflows.proposal` renderer | D | Major |
+| The removed explain-executable prompt and the test-only `getExecutableDetail` export of Weaver Workflows; slice F restores the prompt against its registered tool | D | Major (pre-GA cleanup) |
+| The active-draft snapshot's optional `diagnostics`, `diagnosticsOmitted`, `selectedActivity` and `graphActivities`, the read result's `addresses`, and the optional diagnostic `agent.workflow.property_context_unverified` | D | Minor, additive |
 | The operation-key overloads on `IWorkflowLibraryStore` | E | Minor, additive |
 | The new `Elsa.Agent.Workflows.Runtime` package | F | Minor |
 | The new `.Core` contracts of D4 | B, E, F, G | Minor, additive |
