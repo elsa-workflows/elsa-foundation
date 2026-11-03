@@ -79,20 +79,21 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
             // The cause is not attached: a URI parser's message can echo the AMQP URI, password included.
             throw new EtlBindingException("etl.binding-unavailable", "The RabbitMQ binding's AMQP URI is invalid.");
         }
-        var handle = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            FormatVersion = 1,
-            ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope(binding)),
-            binding.Alias,
-            binding.Role,
-            binding.Revision,
-            target.Host,
-            target.Port,
-            target.VirtualHost,
-            target.User,
-            AllowedExchanges = binding.AllowedExchanges.Order(StringComparer.Ordinal).ToArray(),
-            AllowedQueues = binding.AllowedQueues.Order(StringComparer.Ordinal).ToArray()
-        })));
+        var exchanges = binding.AllowedExchanges.Order(StringComparer.Ordinal).ToArray();
+        // A source's handle also covers its allowed queues; a destination's keeps spec 1200's shape, so its pinned runs resolve.
+        object identity = source
+            ? new
+            {
+                FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope(binding)), binding.Alias, binding.Role,
+                binding.Revision, target.Host, target.Port, target.VirtualHost, target.User, AllowedExchanges = exchanges,
+                AllowedQueues = binding.AllowedQueues.Order(StringComparer.Ordinal).ToArray()
+            }
+            : new
+            {
+                FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope(binding)), binding.Alias, binding.Role,
+                binding.Revision, target.Host, target.Port, target.VirtualHost, target.User, AllowedExchanges = exchanges
+            };
+        var handle = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(identity)));
         return new(binding.Alias, binding.Revision, handle, _publisher, binding.ConnectionString) { Consumer = _consumer };
     }
 

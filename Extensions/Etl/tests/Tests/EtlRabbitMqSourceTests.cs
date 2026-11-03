@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design;
@@ -65,6 +67,29 @@ public sealed class EtlRabbitMqSourceTests : IDisposable
         wider.AllowedQueues = ["people", "orders"];
         Assert.NotEqual(resolved.Handle, new HostRabbitMqBindings([wider], [new TestRabbitMqPublisher()], [new TestRabbitMqConsumer()])
             .ResolveCurrent(Scope, "events-in", "Source", "people").Handle);
+    }
+
+    [Fact]
+    public void A_destination_binding_keeps_its_spec_1200_handle_whatever_queues_it_lists()
+    {
+        var destination = new EtlHostRabbitMqBindingOptions
+        {
+            TenantId = Scope.TenantId, PersistencePartition = Scope.PersistencePartition, Alias = "events-out", Role = "MainOutput",
+            Revision = "v1", ConnectionString = "amqp://etl:secret@broker:5672/sales", AllowedExchanges = ["etl.orders"],
+            AllowedQueues = ["people"]
+        };
+        var target = new TestRabbitMqPublisher().DescribeTarget(destination.ConnectionString);
+        // The identity spec 1200 pinned, so runs admitted before this source existed still resolve their destination.
+        var spec1200 = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope), destination.Alias, destination.Role,
+            destination.Revision, target.Host, target.Port, target.VirtualHost, target.User, AllowedExchanges = new[] { "etl.orders" }
+        })));
+
+        var resolved = new HostRabbitMqBindings([destination], [new TestRabbitMqPublisher()])
+            .ResolveCurrent(Scope, "events-out", "MainOutput", "etl.orders");
+
+        Assert.Equal(spec1200, resolved.Handle);
     }
 
     [Theory]

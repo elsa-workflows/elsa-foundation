@@ -54,7 +54,7 @@ An author picks a RabbitMQ source binding in Studio, names the queue, declares t
 - **Fields.** The declared fields follow the JSON Lines source's rules (spec 1190): JSON pointers, scalar types, required flags.
 - **Requeue limits.** A quorum queue counts each return; RabbitMQ 4 drops a message after 20 by default, so messages a pipeline keeps failing on are lost unless the queue has a dead-letter exchange or a higher delivery limit. The README states this.
 - **One reader per queue.** Two runs reading the same queue at once each take different messages; the runtime does not serialise them.
-- **Bindings.** A RabbitMQ binding with role `Source` lists `AllowedQueues`. Its pinned handle hashes the target and the allowed queues and exchanges, never the password. Without `Elsa.Etl.RabbitMq`, admission refuses the run with `etl.rabbitmq-unavailable`.
+- **Bindings.** A RabbitMQ binding with role `Source` lists `AllowedQueues`. Its pinned handle hashes the target and the allowed queues and exchanges, never the password; a destination binding's handle keeps spec 1200's shape, so runs pinned under spec 1200 still resolve. Without `Elsa.Etl.RabbitMq`, admission refuses the run with `etl.rabbitmq-unavailable`.
 
 ## Requirements *(mandatory)*
 

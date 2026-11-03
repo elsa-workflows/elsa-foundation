@@ -12,7 +12,8 @@ public interface IEtlRabbitMqConsumer
     /// acknowledging them, and hands each body to <paramref name="accept"/> as it arrives; the body is valid only during that
     /// call. Stops when the queue is empty, at the first body <paramref name="accept"/> refuses, which goes back to the
     /// queue with every later message, or, after at least one message, once a time bound well inside the broker's
-    /// <c>consumer_timeout</c> is spent; whatever was not taken stays queued.
+    /// <c>consumer_timeout</c> is spent; whatever was not taken stays queued. An exception <paramref name="accept"/> throws
+    /// propagates unchanged, so the runtime can tell its own failures from the broker's.
     /// </summary>
     ValueTask<IEtlRabbitMqReceipt> ReceiveAsync(string connectionString, string queue, int maxMessages,
         Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>> accept, CancellationToken cancellationToken);
