@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from authorization_journeys import (EXPECTED_CASES, SECTION, TOOL_OUTCOMES, UNAVAILABLE_CODE, authorization_manifest_gaps,
-                                    qualify_workflow_authorization, require_denied_problem, require_tool_outcome,
+from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_REFUSALS, UNAVAILABLE_CODE, authorization_manifest_gaps,
+                                    qualify_workflow_authorization, require_denied_problem, require_turn_refusal,
                                     require_unavailable_problem, require_workflow_authorization, snapshot_attachment)
 from artifacts import sha
 
@@ -56,78 +56,81 @@ class DefinitionOutcomeTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError): require_denied_problem(status, body(value))
 
 
-class ToolOutcomeTests(unittest.TestCase):
+class TurnRefusalTests(unittest.TestCase):
+    """The frame and trace shapes observed on 300d3c286 (copilot-workflow-authorization-unavailable-tool-unavailable)."""
     command = "command-1"
 
-    def frames(self, expected, *, extra=None):
-        summary = TOOL_OUTCOMES[expected]["summary"]
-        result = {"toolCallId": self.command, "toolName": "workflow_read_graph", "succeeded": False, "content": summary}
-        values = [{"kind": "started", "payload": {"turnId": "turn-1"}}, {"kind": "contextAdmitted", "payload": {"attachments": [], "diagnostics": []}},
-                  {"kind": "toolCallCompleted", "payload": {"toolCallId": self.command, "toolName": "workflow_read_graph", "succeeded": False,
-                                                           "summary": summary, "result": result}},
-                  {"kind": "contributedResult", "payload": result}, {"kind": "completed", "payload": {}}]
-        return values + (extra or [])
+    def frames(self, expected):
+        return [{"kind": "started", "payload": {"turnId": "turn-1"}},
+                {"kind": "contextAdmitted", "payload": {"attachments": [{"contentType": "workflow.definition"}, {"contentType": "workflow.guidance"}],
+                                                        "diagnostics": []}},
+                {"kind": "toolCallStarted", "payload": {"toolCallId": "call-1", "toolName": "workflow_read_graph"}},
+                {"kind": "error", "error": dict(TURN_REFUSALS[expected])}]
 
-    def rows(self, provider, expected):
-        outcome = TOOL_OUTCOMES[expected]
-        rows = [{"kind": provider + ".request", "data": {"commandId": self.command}},
-                {"kind": provider + ".call", "data": {"commandId": self.command, "toolName": "workflow_read_graph", "arguments": {}}}]
-        if provider == "copilot":
-            rows.append({"kind": "copilot.return", "data": {"commandId": self.command, "result": {"status": "denied", "executed": False,
-                "error": {"code": outcome["code"], "message": outcome["summary"], "statusCode": outcome["statusCode"]}}}})
-        else:
-            result = {"toolCallId": self.command, "toolName": "workflow_read_graph", "succeeded": False, "content": outcome["summary"]}
-            rows.append({"kind": "anthropic.continuation", "data": {"commandId": self.command, "results": [
-                {"kind": "functionResult", "callId": self.command, "result": json.dumps(result)}]}})
-        return rows
+    def rows(self, provider):
+        return [{"kind": provider + ".request", "data": {"commandId": self.command}},
+                {"kind": "protocol.gate.waiting", "data": {"commandId": self.command}},
+                {"kind": "protocol.gate.released", "data": {"commandId": self.command}},
+                {"kind": provider + ".call", "data": {"commandId": self.command, "toolName": "workflow_read_graph"}}]
 
     def check(self, provider, expected, frames=None, rows=None):
-        return require_tool_outcome(frames if frames is not None else self.frames(expected), rows if rows is not None else self.rows(provider, expected),
+        return require_turn_refusal(frames if frames is not None else self.frames(expected), rows if rows is not None else self.rows(provider),
                                     provider=provider, command_id=self.command, expected=expected, cause=CAUSE)
 
-    def test_each_adapter_observes_the_unavailable_and_denied_outcomes(self):
+    def test_the_observed_pre_dispatch_refusal_qualifies_on_each_adapter(self):
         for provider in ("copilot", "anthropic"):
             for expected in ("unavailable", "denied"):
                 with self.subTest(provider=provider, expected=expected):
-                    observed = self.check(provider, expected)
-                    self.assertEqual(TOOL_OUTCOMES[expected]["summary"], observed["summary"])
-                    self.assertEqual(TOOL_OUTCOMES[expected]["code"] if provider == "copilot" else None, observed["code"])
+                    self.assertEqual(TURN_REFUSALS[expected], self.check(provider, expected))
+        self.assertEqual({"code": UNAVAILABLE_CODE, "statusCode": 503, "message": "The owning module could not establish current authority for this operation."},
+                         TURN_REFUSALS["unavailable"])
+        self.assertEqual({"code": "agent.context.incomplete", "statusCode": 400, "message": "Current read permission for the workflow context is required."},
+                         TURN_REFUSALS["denied"])
+
+    def test_the_pre_change_incomplete_context_shape_no_longer_qualifies_as_unavailable(self):
+        # Observed on 300d3c286 before the engine reported the owner's code: code and status were collapsed.
+        frames = self.frames("unavailable")
+        frames[3]["error"] = {"code": "agent.context.incomplete", "statusCode": 400, "message": "Workflow definition authorization could not be completed."}
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=frames)
 
     def test_unavailable_and_denied_cannot_stand_in_for_each_other(self):
         for provider in ("copilot", "anthropic"):
             with self.subTest(provider=provider):
                 with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=self.frames("denied"))
-                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", rows=self.rows(provider, "denied"))
                 with self.assertRaises(RuntimeError): self.check(provider, "denied", frames=self.frames("unavailable"))
 
-    def test_copilot_return_must_carry_the_stable_code_and_status(self):
-        for change in (lambda e: e.update(code="agent.tool.forbidden"), lambda e: e.update(statusCode=403), lambda e: e.pop("code"),
-                       lambda e: e.update(message="Owner detail")):
-            rows = self.rows("copilot", "unavailable")
-            change(rows[-1]["data"]["result"]["error"])
-            with self.subTest(change=change):
-                with self.assertRaises(RuntimeError): self.check("copilot", "unavailable", rows=rows)
-
-    def test_disclosed_cause_success_proposal_or_missing_call_never_qualifies(self):
-        def leak_frame(frames): frames[2]["payload"]["summary"] += " " + CAUSE
-        def leak_extra(frames): frames.append({"kind": "messageDelta", "payload": CAUSE})
-        def succeeded(frames): frames[2]["payload"]["succeeded"] = True
-        def proposal(frames): frames.append({"kind": "proposalCreated", "payload": {}})
-        def contributed(frames): frames[3]["payload"] = {**frames[3]["payload"], "succeeded": True}
-        def twice(frames): frames.append(copy.deepcopy(frames[2]))
+    def test_a_dispatched_returned_or_otherwise_shaped_turn_never_qualifies(self):
+        def completed(frames): frames.insert(3, {"kind": "toolCallCompleted", "payload": {"toolName": "workflow_read_graph", "succeeded": False}})
+        def finished(frames): frames[3] = {"kind": "completed", "payload": {}}
+        def message(frames): frames.insert(3, {"kind": "messageDelta", "payload": "text"})
+        def no_context(frames): frames.pop(1)
+        def context_refused(frames): frames[1]["payload"].update(attachments=[], diagnostics=[{"code": UNAVAILABLE_CODE, "required": True}])
+        def no_snapshot(frames): frames[1]["payload"].update(attachments=[{"contentType": "workflow.guidance"}])
         def other_tool(frames): frames[2]["payload"]["toolName"] = "workflow_set_designer_position"
-        for change in (leak_frame, leak_extra, succeeded, proposal, contributed, twice, other_tool):
+        def wrong_code(frames): frames[3]["error"]["code"] = "agent.tool.admission_unavailable"
+        def wrong_status(frames): frames[3]["error"]["statusCode"] = 500
+        def owner_text(frames): frames[3]["error"]["message"] = "Workflow definition authorization could not be completed."
+        def leaked(frames): frames[3]["error"]["message"] += " " + CAUSE
+        for change in (completed, finished, message, no_context, context_refused, no_snapshot, other_tool, wrong_code, wrong_status, owner_text, leaked):
             for provider in ("copilot", "anthropic"):
                 with self.subTest(change=change.__name__, provider=provider):
                     frames = self.frames("unavailable"); change(frames)
                     with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=frames)
+
+    def test_the_actual_adapter_called_once_and_received_no_outcome(self):
         for provider in ("copilot", "anthropic"):
-            rows = self.rows(provider, "unavailable")
-            with self.subTest(provider=provider, change="no-call"):
-                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", rows=[row for row in rows if not row["kind"].endswith(".call")])
-            with self.subTest(provider=provider, change="trace-cause"):
-                leaked = rows + [{"kind": provider + ".request", "data": {"commandId": self.command, "prompt": CAUSE}}]
-                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", rows=leaked)
+            rows = self.rows(provider)
+            for name, changed in (("no-call", rows[:-1]), ("two-calls", rows + [rows[-1]]),
+                                  ("returned", rows + [{"kind": provider + ".return", "data": {"commandId": self.command}}]),
+                                  ("continued", rows + [{"kind": provider + ".continuation", "data": {"commandId": self.command}}]),
+                                  ("trace-cause", rows + [{"kind": provider + ".request", "data": {"commandId": self.command, "prompt": CAUSE}}])):
+                with self.subTest(provider=provider, change=name):
+                    with self.assertRaises(RuntimeError): self.check(provider, "unavailable", rows=changed)
+            other = [dict(row, data={"commandId": "another-command"}) if row["kind"] == provider + ".return" else row
+                     for row in rows + [{"kind": provider + ".return", "data": {}}]]
+            self.check(provider, "unavailable", rows=other)
 
 
 class SnapshotTests(unittest.TestCase):

@@ -119,9 +119,14 @@ internal sealed class DefaultAgentContextCollector(
             requiredFailures.Count == 0 ? "Context admitted through installed modules and host policy." : "Required context admission failed.",
             DateTimeOffset.UtcNow,
             new Dictionary<string, string> { ["attachmentCount"] = attachments.Count.ToString(), ["diagnosticCount"] = diagnostics.Count.ToString() }), cancellationToken);
-        return requiredFailures.Count == 0
-            ? AgentResult<AgentContextContribution>.Success(contribution)
-            : new(contribution, new("agent.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
+        if (requiredFailures.Count == 0)
+            return AgentResult<AgentContextContribution>.Success(contribution);
+        // An owner that could not decide stays a refusal, but reports as unavailable with its own stable code and the
+        // engine's fixed message, never its own text. Only when every required failure says so: any definite refusal,
+        // host diagnostic or reserved code keeps the ordinary incomplete-context failure exactly.
+        if (requiredFailures.All(AgentToolAccess.IsOwnerUnavailable))
+            return new(contribution, new(requiredFailures[0].Code, AgentToolAccess.OwnerUnavailableMessage, 503));
+        return new(contribution, new("agent.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
     }
 }
 

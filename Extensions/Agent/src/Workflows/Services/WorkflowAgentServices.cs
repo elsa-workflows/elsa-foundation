@@ -165,8 +165,10 @@ public sealed class DefaultWorkflowAgentContextProvider(
         "A current workflow session with an authenticated actor and tenant is required.", true)]);
     private AgentContributionDiagnostic PermissionDenied() => new(Descriptor.Id, "agent.workflow.permission_denied",
         "Current read permission for the workflow context is required.", true);
+    // Marked as the owner being unavailable, so a collection refused only by this reports the same stable code as the
+    // Design API (503). Only this diagnostic carries the marker; a denial stays the ordinary incomplete-context refusal.
     private AgentContributionDiagnostic AuthorizationUnavailable() => new(Descriptor.Id, WorkflowDefinitionAuthorizationException.UnavailableCode,
-        WorkflowResourceAuthority.UnavailableMessage, true);
+        WorkflowResourceAuthority.UnavailableMessage, true) { OwnerUnavailable = true };
     private AgentContextContribution ContextDenied() => new([], [new(Descriptor.Id, "agent.workflow.disclosure_invalid",
         "The retained workflow evidence does not match this module's supported context and resource identities.", true)]);
 

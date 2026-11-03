@@ -127,9 +127,11 @@ public sealed class WorkflowAuthorizationUnavailableTests
         var collected = await fixture.CollectAsync();
 
         Assert.False(collected.Succeeded);
+        Assert.Equal(new AgentError(Code, "The owning module could not establish current authority for this operation.", 503), collected.Error);
         Assert.DoesNotContain(collected.Value?.Attachments ?? [], item => item.ContentType == "workflow.definition");
         var diagnostic = Assert.Single(collected.Value!.Diagnostics, item => item.Code == Code);
         Assert.True(diagnostic.Required);
+        Assert.True(diagnostic.OwnerUnavailable);
         Assert.DoesNotContain(collected.Value.Diagnostics, item => item.Code == "agent.workflow.permission_denied");
         Assert.DoesNotContain(Cause, JsonSerializer.Serialize(collected), StringComparison.Ordinal);
     }
@@ -150,6 +152,8 @@ public sealed class WorkflowAuthorizationUnavailableTests
         var diagnostic = Assert.Single(admission.Diagnostics);
         Assert.Equal(expected, diagnostic.Code);
         Assert.True(diagnostic.Required);
+        // Only the unavailable diagnostic carries the owner-unavailable marker; a denial never does.
+        Assert.Equal(mode == OwnerMode.Throw, diagnostic.OwnerUnavailable);
         Assert.DoesNotContain(Cause, diagnostic.Message, StringComparison.Ordinal);
     }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Agent.Core.Models;
 
@@ -118,7 +119,23 @@ public sealed record AgentContextProviderDescriptor(
 }
 
 /// <summary>Source limitations are data. Required outcomes block collection; unexpected required-source faults retain Sequential failure semantics.</summary>
-public sealed record AgentContributionDiagnostic(string ContributorId, string Code, string Message, bool Required);
+public sealed record AgentContributionDiagnostic(string ContributorId, string Code, string Message, bool Required)
+{
+    /// <summary>
+    /// Preview: the owning module could not decide whether this context may be disclosed, as opposed to refusing it. A
+    /// required diagnostic is still a refusal (fail closed). When every required diagnostic of a collection says so, the
+    /// collection fails as unavailable (503) with the first one's <see cref="Code"/> and a fixed engine message, instead of
+    /// <c>agent.context.incomplete</c>; this diagnostic's <see cref="Message"/> is never forwarded.
+    /// </summary>
+    /// <remarks>
+    /// Honoured only on a diagnostic an installed context source returns under its own descriptor id; the engine clears it
+    /// on any other diagnostic, and engine (<c>host</c>) diagnostics never carry it. The code must be the owner's dotted
+    /// identifier (ASCII letters, digits, <c>.</c>, <c>_</c> or <c>-</c>, at most 128 characters) outside the reserved
+    /// <c>agent.</c> namespace; any other code keeps the ordinary incomplete-context failure. Omitted from the wire when unset.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool OwnerUnavailable { get; init; }
+}
 
 public sealed record AgentContextContribution(
     IReadOnlyCollection<AgentContextAttachment> Attachments,

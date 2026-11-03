@@ -2,11 +2,11 @@
 
 On each actual adapter, a replacement workflow definition authorizer that cannot decide must answer the
 native definition API as unavailable (503, errorCode workflow.authorization.unavailable, no cause) and
-must fail the Weaver read-graph tool closed as unavailable; a replacement that denies must keep the
-existing denied outcomes. The replacement is the host's test-only QualificationWorkflowAuthority feature,
+must stop a Weaver read-graph turn closed, with the workflow module's fixed unavailable text, before the
+tool dispatches; a replacement that denies must keep the existing denied outcomes. The replacement is the host's test-only QualificationWorkflowAuthority feature,
 selected through the ordinary native feature apply for this inventory only. Its private mode file switches
-decisions without a reload, and a pre-call gate holds the actual adapter so the tool's owner check meets
-the replacement after context admission. Nothing is retried.
+decisions without a reload, and a pre-call gate holds the actual adapter so the call's pre-dispatch
+admission refresh meets the replacement after the actual owner admitted the context. Nothing is retried.
 """
 from __future__ import annotations
 
@@ -37,12 +37,17 @@ UNAVAILABLE_CODE = "workflow.authorization.unavailable"
 DESIGN_ENVELOPE = "One or more errors occurred!"
 UNAVAILABLE_MESSAGE = "Workflow definition authorization could not be completed."
 DENIED_MESSAGE = "The requested workflow definition is not readable in the current application context."
-# The tool invoker's fixed texts: an owner-unavailable refusal never forwards the owner's own message.
-TOOL_OUTCOMES = {
+# A native turn's tool dispatch first refreshes the turn's current context admission (the #3439 current-authority
+# boundary), which asks the same owner before the tool's own owner check can run. A replacement owner therefore stops
+# the turn at that refresh. An owner that cannot decide reports as unavailable: the workflow module marks its
+# diagnostic as owner-unavailable, so the refusal carries the Design API's stable code with 503 and the engine's fixed
+# text. A denying owner keeps the ordinary incomplete-context refusal with the module's fixed read-permission text. The
+# tool's own owner check is never reached through a native turn; its 503 is component evidence (Elsa.Agent.Tests).
+TURN_REFUSALS = {
     "unavailable": {"code": UNAVAILABLE_CODE, "statusCode": 503,
-                    "summary": "The owning module could not establish current authority for this operation."},
-    "denied": {"code": "agent.tool.forbidden", "statusCode": 403,
-               "summary": "Current server authority does not permit the prepared target."},
+                    "message": "The owning module could not establish current authority for this operation."},
+    "denied": {"code": "agent.context.incomplete", "statusCode": 400,
+               "message": "Current read permission for the workflow context is required."},
 }
 
 
@@ -81,47 +86,30 @@ def _no_cause(value, cause):
     check(cause not in text and "IOException" not in text, "An observed surface disclosed the owner's private cause")
 
 
-def require_tool_outcome(frames, rows, *, provider, command_id, expected, cause):
-    """One refused read-graph call: the engine's fixed outcome on the native stream and in the actual adapter's record."""
-    check(provider in PROVIDERS and expected in TOOL_OUTCOMES, "Unknown adapter or tool outcome")
-    outcome = TOOL_OUTCOMES[expected]
+def require_turn_refusal(frames, rows, *, provider, command_id, expected, cause):
+    """The gated read-graph turn stops at its pre-dispatch admission refresh, before any tool dispatch or adapter return."""
+    check(provider in PROVIDERS and expected in TURN_REFUSALS, "Unknown adapter or refusal")
     values = [frame for frame in frames if isinstance(frame, dict)]
     check(len(values) == len(frames), "Malformed native stream frame")
-    completed = [frame.get("payload") for frame in values if frame.get("kind") == "toolCallCompleted"]
-    check(len(completed) == 1 and isinstance(completed[0], dict) and completed[0].get("toolName") == READ_TOOL
-          and completed[0].get("succeeded") is False and completed[0].get("summary") == outcome["summary"],
-          "The read-graph call did not complete once as the expected refused outcome")
-    check(not any(frame.get("kind") in ("proposalCreated", "toolApprovalRequested") for frame in values),
-          "A refused read became a proposal")
-    contributed = [frame.get("payload") for frame in values if frame.get("kind") == "contributedResult"]
-    check(all(isinstance(item, dict) and item.get("succeeded") is False and not item.get("payload") and not item.get("receipt")
-              for item in contributed), "A refused read contributed a result")
+    check([frame.get("kind") for frame in values] == ["started", "contextAdmitted", "toolCallStarted", "error"],
+          "The read-graph turn did not stop at its pre-dispatch admission refresh after admitting context once")
+    admitted = values[1].get("payload")
+    check(isinstance(admitted, dict) and admitted.get("diagnostics") == [] and isinstance(admitted.get("attachments"), list)
+          and any(isinstance(item, dict) and item.get("contentType") == "workflow.definition" for item in admitted["attachments"]),
+          "The actual owner did not admit the workflow snapshot before the replacement decided")
+    started = values[2].get("payload")
+    check(isinstance(started, dict) and started.get("toolName") == READ_TOOL, "The held call was not the read-graph tool")
+    error = values[3].get("error")
+    check(isinstance(error, dict) and {key: error.get(key) for key in ("code", "statusCode", "message")} == TURN_REFUSALS[expected],
+          "Wrong refusal at the pre-dispatch admission refresh; expected the " + expected + " owner's code, status and fixed text")
     owned = [row for row in rows if isinstance(row, dict) and (row.get("data") or {}).get("commandId") == command_id]
     calls = [row for row in owned if row.get("kind") == provider + ".call"]
     check(len(calls) == 1 and calls[0]["data"].get("toolName") == READ_TOOL, "The actual adapter did not make exactly one read-graph call")
-    if provider == "copilot":
-        # The supplied function returns the dispatch error itself, so its stable code is observable here.
-        returns = [row["data"].get("result") for row in owned if row.get("kind") == "copilot.return"]
-        check(len(returns) == 1 and isinstance(returns[0], dict) and returns[0].get("status") == "denied"
-              and returns[0].get("executed") is False and isinstance(returns[0].get("error"), dict)
-              and {key: returns[0]["error"].get(key) for key in ("code", "statusCode", "message")}
-              == {"code": outcome["code"], "statusCode": outcome["statusCode"], "message": outcome["summary"]},
-              "The actual Copilot function return lost the refusal's code, status or fixed message")
-    else:
-        # The host orchestrator hands Anthropic the refused generic result, which carries the fixed text only.
-        results = []
-        for row in owned:
-            if row.get("kind") == "anthropic.continuation":
-                for item in (row["data"].get("results") or []):
-                    if isinstance(item, dict) and item.get("kind") == "functionResult" and item.get("callId") == command_id:
-                        results.append(strict_json(item.get("result")) if isinstance(item.get("result"), str) else None)
-        check(len(results) == 1 and isinstance(results[0], dict) and results[0].get("succeeded") is False
-              and results[0].get("content") == outcome["summary"] and not results[0].get("payload") and not results[0].get("receipt"),
-              "The actual Anthropic continuation did not carry exactly the refused result")
+    check(not any(row.get("kind") in (provider + ".return", provider + ".continuation") for row in owned),
+          "A refused admission still returned a tool outcome to the actual adapter")
     _no_cause(values, cause)
     _no_cause(rows, cause)
-    return {"summary": outcome["summary"], "code": outcome["code"] if provider == "copilot" else None,
-            "statusCode": outcome["statusCode"] if provider == "copilot" else None}
+    return {"code": error["code"], "statusCode": error["statusCode"], "message": error["message"]}
 
 
 def snapshot_attachment(seed, revision):
@@ -172,7 +160,7 @@ def _definition(runtime, name, seed, mode_file, mode):
 
 
 def _tool(runtime, name, seed, mode_file, decision, expected, cause):
-    """A gated read-graph turn: context is admitted by the actual owner, then the owner check meets the replacement."""
+    """A gated read-graph turn: context is admitted by the actual owner, then the pre-dispatch refresh meets the replacement."""
     atomic_json(mode_file, {"mode": "native"})
     command_id, epoch = str(uuid.uuid4()), str(uuid.uuid4())
     atomic_json(runtime.gate_file, {"commandId": command_id, "epoch": epoch, "state": "hold", "timeoutMilliseconds": 60000})
@@ -197,17 +185,17 @@ def _tool(runtime, name, seed, mode_file, decision, expected, cause):
                     break
                 check(time.monotonic() < deadline, "The actual adapter's pre-call gate never reported waiting")
                 time.sleep(0.02)
-            # Context was admitted by the actual owner; only the tool's own owner check meets the replacement.
+            # Context was admitted by the actual owner; the dispatch's admission refresh now meets the replacement.
             atomic_json(mode_file, decision)
             atomic_json(runtime.gate_file, {"commandId": command_id, "epoch": epoch, "state": "release", "timeoutMilliseconds": 60000})
             terminal = stream.until_turn_end(turn_id=turn_id)
     finally:
         atomic_json(mode_file, {"mode": "native"})
         atomic_json(runtime.gate_file, {"commandId": "not-an-active-command", "epoch": str(uuid.uuid4()), "state": "release"})
-    check(terminal.value["kind"] in ("completed", "error"), "The gated read turn did not settle")
+    check(terminal.value["kind"] == "error", "The gated read turn did not stop with a native refusal")
     trace = transport.protocol_trace(offset)
     check(trace["incompleteTailBytes"] == 0, "An incomplete adapter trace cannot establish the refused call")
-    observed = require_tool_outcome([frame.value for frame in stream.frames], trace["records"], provider=runtime.provider,
+    observed = require_turn_refusal([frame.value for frame in stream.frames], trace["records"], provider=runtime.provider,
                                     command_id=command_id, expected=expected, cause=cause)
     _no_cause(bytes(stream.raw), cause)
     return {"commandId": command_id, "sessionId": session, "turnId": turn_id, "terminal": terminal.value["kind"], "outcome": observed,

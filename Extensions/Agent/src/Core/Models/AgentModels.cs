@@ -197,8 +197,9 @@ public sealed record AgentViolation(string Code, string Message, string? Target 
     /// Honoured only on a violation from the installed tool's own <c>IAgentToolAuthorization</c> decision; a host
     /// <c>IAgentToolAuthorizer</c> violation that sets it stays an ordinary denial. The code must be the owner's own dotted
     /// identifier (ASCII letters, digits, <c>.</c>, <c>_</c> or <c>-</c>, at most 128 characters), outside the engine's
-    /// reserved <c>agent.</c> namespace; any other code stays an ordinary denial.
+    /// reserved <c>agent.</c> namespace; any other code stays an ordinary denial. Omitted from the wire when unset.
     /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool OwnerUnavailable { get; init; }
 }
 

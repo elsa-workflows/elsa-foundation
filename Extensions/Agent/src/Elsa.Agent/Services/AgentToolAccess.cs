@@ -39,6 +39,10 @@ internal static class AgentToolAccess
             ? new(unavailable.Code, OwnerUnavailableMessage, 503)
             : null;
 
+    /// <summary>Whether a context diagnostic is a source's owner-unavailable refusal with an owner code (never the engine's).</summary>
+    internal static bool IsOwnerUnavailable(AgentContributionDiagnostic diagnostic) =>
+        diagnostic.OwnerUnavailable && !string.Equals(diagnostic.ContributorId, "host", StringComparison.Ordinal) && IsOwnerCode(diagnostic.Code);
+
     private static bool IsOwnerCode(string? code) =>
         code is { Length: > 0 and <= 128 } && code.Contains('.')
         && !code.StartsWith("agent.", StringComparison.OrdinalIgnoreCase)

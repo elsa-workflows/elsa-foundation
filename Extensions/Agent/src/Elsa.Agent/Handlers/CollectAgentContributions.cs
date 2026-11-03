@@ -61,7 +61,7 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             if (contribution is null)
                 continue;
             foreach (var diagnostic in contribution.Diagnostics)
-                domainEvent.Diagnostics.Add(diagnostic);
+                domainEvent.Diagnostics.Add(OwnedMarker(diagnostic, descriptor.Id));
             foreach (var attachment in contribution.Attachments)
             {
                 if (attachment.ModuleId != descriptor.ModuleId)
@@ -104,7 +104,7 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
             var contribution = await CollectSourceAsync(source, request with { CallerAttachments = [], Disclosure = owned },
                 domainEvent.Diagnostics, cancellationToken);
             if (contribution is null) continue;
-            foreach (var diagnostic in contribution.Diagnostics) domainEvent.Diagnostics.Add(diagnostic);
+            foreach (var diagnostic in contribution.Diagnostics) domainEvent.Diagnostics.Add(OwnedMarker(diagnostic, source.Descriptor.Id));
             foreach (var attachment in contribution.Attachments)
             {
                 if (attachment.ModuleId != source.Descriptor.ModuleId
@@ -166,6 +166,13 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
         try { await pending; }
         catch (Exception) { }
     }
+
+    // The owner-unavailable marker counts only on a diagnostic a source reports under its own descriptor id, so a source
+    // cannot impersonate the engine's "host" diagnostics or another source to claim it.
+    private static AgentContributionDiagnostic OwnedMarker(AgentContributionDiagnostic diagnostic, string sourceId) =>
+        diagnostic.OwnerUnavailable && !string.Equals(diagnostic.ContributorId, sourceId, StringComparison.Ordinal)
+            ? diagnostic with { OwnerUnavailable = false }
+            : diagnostic;
 
     private static AgentContextAttachment Snapshot(AgentContextAttachment attachment)
     {

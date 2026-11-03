@@ -78,7 +78,7 @@ The spec leaves three decisions to the plan (D1–D3). The planning review added
 
 A `WorkflowDefinitionAuthorizationException` maps to HTTP 503 with the stable code `workflow.authorization.unavailable`. The body keeps the design error shape. The top-level `message` stays "One or more errors occurred!", as in every design body. The exception's fixed text, "Workflow definition authorization could not be completed.", is the `generalErrors` entry, and it carries no cause. Consumers read `errorCode`, never the message.
 
-The design error body gains an optional `errorCode` property, written only when a code is set, so every existing body is unchanged. The name matches the Publishing API's `errorCode`. The design API's compatibility baseline is updated for the additive property. The 503 is written by a new keyed Design `IEndpointFaultRenderer`, as Publishing and Runtime do, because `EndpointProblem` carries no code. The writer's shape stays in one place.
+The design error body gains an optional `errorCode` property, written only when a code is set, so every existing body is unchanged. The name matches the Publishing API's `errorCode`. The design compatibility cases pin no error bodies, so the 503 shape and the unchanged 403 and 404 bodies are pinned byte for byte by `DefinitionReadAuthorizationTests`. The 503 is written by a new keyed Design `IEndpointFaultRenderer`, as Publishing and Runtime do, because `EndpointProblem` carries no code. The writer's shape stays in one place.
 
 Weaver workflow tools and context admission get the same code. `WorkflowResourceAuthority` catches the exception and returns a decision carrying `workflow.authorization.unavailable`.
 
