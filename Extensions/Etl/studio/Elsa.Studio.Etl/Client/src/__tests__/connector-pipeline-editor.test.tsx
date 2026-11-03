@@ -212,6 +212,20 @@ describe("connector pipeline editor", () => {
     });
   });
 
+  it("keeps an existing SQL source key's order and appends a newly selected column", () => {
+    const initial = createDefaultEtlConnectorPipeline();
+    initial.source = {
+      kind: "sql", binding: "people-db", table: "people",
+      columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: ["name"]
+    };
+    const editor = renderEditor(initial, { bindings: [...bindings, { alias: "people-db", role: "Source", kind: "sql" }] });
+
+    // The key orders the snapshot; adding "id" must not reorder it to the column order.
+    clickCheckbox(control<HTMLInputElement>(editor.host, "id"));
+
+    expect(editor.pipeline.source).toMatchObject({ key: ["name", "id"] });
+  });
+
   it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
     const editor = renderEditor();
     expect(editor.pipeline.continuous).toBeUndefined();

@@ -138,8 +138,9 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
             <input type="checkbox" checked={source.key.includes(name)} disabled={disabled}
               onChange={event => onChange({
                 ...source,
+                // The key orders the snapshot, so an existing key keeps its order and a new column is appended.
                 key: event.currentTarget.checked
-                  ? required.filter(column => column === name || source.key.includes(column))
+                  ? [...source.key.filter(column => column !== name), name]
                   : source.key.filter(column => column !== name)
               })} />
             {name}

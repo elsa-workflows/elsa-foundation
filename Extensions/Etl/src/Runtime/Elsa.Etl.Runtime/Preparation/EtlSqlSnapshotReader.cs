@@ -151,10 +151,11 @@ internal static class EtlSqlSnapshotReader
         {
             value = reader.GetValue(index);
         }
-        catch (Exception exception) when (exception is InvalidCastException or OverflowException or NotSupportedException or IOException)
+        catch (Exception exception) when (exception is InvalidCastException or OverflowException or NotSupportedException or IOException or
+            System.Text.DecoderFallbackException)
         {
-            // A value the provider cannot materialise: a numeric beyond decimal range, an unmapped type, or a type whose
-            // assembly is not installed (SqlClient's spatial and hierarchy types).
+            // A value the provider cannot materialise: a numeric beyond decimal range, an unmapped type, a type whose
+            // assembly is not installed (SqlClient's spatial and hierarchy types), or text that is not valid in its encoding.
             throw Failure("etl.sql-column-type-unsupported", column.Name, exception);
         }
         switch (column.Type)
@@ -169,6 +170,10 @@ internal static class EtlSqlSnapshotReader
                         writer.WriteStringValue(text);
                         return;
                     case Guid guid: writer.WriteStringValue(guid.ToString("D", CultureInfo.InvariantCulture)); return;
+                    // Npgsql maps PostgreSQL's infinity and -infinity to the extreme values; they are not dates, so refuse them.
+                    case DateTime extreme when extreme == DateTime.MaxValue || extreme == DateTime.MinValue: break;
+                    case DateOnly extreme when extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue: break;
+                    case DateTimeOffset extreme when extreme == DateTimeOffset.MaxValue || extreme == DateTimeOffset.MinValue: break;
                     // SqlClient returns DateTime for a date column (Npgsql returns DateOnly, written below); write the date
                     // alone so it compares as one.
                     case DateTime date when string.Equals(reader.GetDataTypeName(index), "date", StringComparison.OrdinalIgnoreCase):

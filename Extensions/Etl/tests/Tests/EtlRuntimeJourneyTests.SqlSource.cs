@@ -46,6 +46,39 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     [Fact]
+    public async Task A_sql_source_delivers_into_a_keyed_sql_table_with_typed_columns()
+    {
+        await using var files = new RuntimeFiles("");
+        var source = CreateSqlSourceTable(files);
+        ExecuteSql(source, "UPDATE people SET name = 'Dee' WHERE id = 2");
+        ExecuteSql(source, "CREATE TABLE people_copy (id INTEGER NOT NULL, name TEXT NOT NULL, CONSTRAINT people_copy_key UNIQUE (id))");
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime =>
+            {
+                runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source));
+                runtime.SqlBindings.Add(new EtlHostSqlBindingOptions
+                {
+                    TenantId = files.Scope.TenantId, PersistencePartition = files.Scope.PersistencePartition, Alias = "people-copy",
+                    Role = "MainOutput", Revision = "v1", Provider = "sqlite", ConnectionString = source, AllowedTables = ["people_copy"]
+                });
+            });
+        var pipeline = SqlSourcePipeline() with
+        {
+            Routes = new(new EtlSqlDestination("people-copy", "people_copy", ["id"]), new EtlJsonlDestination("errors"))
+        };
+        var invocation = ConnectorInvocation(files.Scope, "sql-source-to-sql", pipeline);
+
+        await files.AdmitAsync(host, invocation);
+        var run = await files.WaitForTerminalAsync(host, invocation.RunId);
+
+        // The SQL route types its parameters from the source columns: id binds as an integer, name as text.
+        Assert.Equal((EtlRunStatus.Succeeded, 4L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(["1|Ada|integer|text", "2|Dee|integer|text", "3|Bram|integer|text", "4|Cleo|integer|text"],
+            QuerySql(source, "SELECT id, name, typeof(id), typeof(name) FROM people_copy ORDER BY id"));
+    }
+
+    [Fact]
     public async Task An_empty_sql_table_settles_as_success_with_no_records()
     {
         await using var files = new RuntimeFiles("");
@@ -133,6 +166,8 @@ public sealed partial class EtlRuntimeJourneyTests
 
         Assert.Equal((EtlRunStatus.BusinessError, 3L, 1L), (run.Status, run.AcceptedRecords, run.RejectedRecords));
         Assert.Equal(["Ada", "Bram", "Cleo"], ReadJsonlNames(files.OutputRoot));
+        await using (var partitions = host.Services.CreateAsyncScope())
+            Assert.Equal(2, await partitions.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().ConnectorPartitions.CountAsync(deadline.Token));
         // The recorded preparation is the predecessor's snapshot, byte for byte.
         await using var scope = host.Services.CreateAsyncScope();
         var retained = Assert.IsType<EtlConnectorRunView>(await scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>()

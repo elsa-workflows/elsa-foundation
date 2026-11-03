@@ -225,6 +225,44 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
         Assert.Equal(("etl.sql-column-type-unsupported", "clock"), (failure.Diagnostic.Code, failure.Diagnostic.Field));
     }
 
+    [SkippableTheory]
+    [InlineData("timestamp", "'infinity'")]
+    [InlineData("timestamptz", "'-infinity'")]
+    [InlineData("date", "'infinity'")]
+    public async Task An_infinite_date_or_timestamp_is_refused_rather_than_written_as_an_extreme_date(string type, string literal)
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL, at {type} NULL)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, at) VALUES (1, {literal})");
+
+        var failure = await Assert.ThrowsAsync<EtlConnectorPreparationFailure>(() => ReadSnapshotOnAsync(fixture.ConnectionString,
+            new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true), new("at", EtlColumnType.String, false)], ["id"])));
+
+        Assert.Equal(("etl.sql-column-type-unsupported", "at"), (failure.Diagnostic.Code, failure.Diagnostic.Field));
+    }
+
+    [SkippableFact]
+    public async Task Text_that_is_not_valid_utf8_is_a_rejected_read_not_an_oversized_snapshot()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        var database = "etl_ascii_" + Guid.NewGuid().ToString("N")[..8];
+        await fixture.ExecuteAsync($"CREATE DATABASE {database} ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0");
+        var connection = new Npgsql.NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Database = database }.ConnectionString;
+        await using (var setup = new Npgsql.NpgsqlConnection(connection))
+        {
+            await setup.OpenAsync();
+            await using var command = setup.CreateCommand();
+            command.CommandText = "CREATE TABLE people (id bigint NOT NULL, name text NULL); INSERT INTO people VALUES (1, E'caf\\xe9')";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var failure = await Assert.ThrowsAsync<EtlConnectorPreparationFailure>(() => ReadSnapshotOnAsync(connection,
+            new EtlSqlSource("db", "people", [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, false)], ["id"])));
+
+        // Npgsql fails the row before the value is read, so the read is rejected as a whole.
+        Assert.Equal("etl.sql-read-rejected", failure.Diagnostic.Code);
+    }
+
     [SkippableFact]
     public async Task An_interval_is_a_duration_not_a_time_and_is_refused()
     {

@@ -39,7 +39,7 @@ Writers keep changing the table while the run reads it. The run sees the table a
 
 **Independent Test**:
 - On each real engine, commit a change while the read is paused part-way; the snapshot must not hold it.
-- Through the worker, change the table after preparation and before the partitions run; the delivered records must equal the table before the change. This holds whatever the engine, because the run reads the retained snapshot, so it is proven on the SQLite test engine.
+- Change the table after preparation and before the batches are built; the batches must hold the table before the change. Through worker processes, change it between the snapshot's publication and the preparation record; the delivered records must equal the table before the change. Both hold whatever the engine, because the run reads the retained snapshot, so they are proven on the SQLite test engine.
 
 **Acceptance Scenarios**:
 
@@ -120,7 +120,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
 ## Success Criteria *(mandatory)*
 
 - **SC-001** Against real PostgreSQL 16 and SQL Server 2022 containers, preparation reads a table into a snapshot whose records equal the rows in key order, including NULLs, an empty table, and each accepted kind of value (16-, 32- and 64-bit integers on PostgreSQL, which has no 8-bit type, and 8-, 32- and 64-bit on SQL Server; an exact decimal and a decimal read from an integer column, a boolean, a GUID, text including non-ASCII, a timestamp, a zoned timestamp and a date), and refuses a floating-point column and a decimal beyond .NET range.
-- **SC-002** On each real engine, a change committed while the read is paused does not reach the snapshot, and a missing table is refused with `etl.sql-read-rejected`. On SQL Server, a database without snapshot isolation is refused. Through the worker, a change committed after preparation does not reach the run.
+- **SC-002** On each real engine, a change committed while the read is paused does not reach the snapshot, and a missing table is refused with `etl.sql-read-rejected`. On SQL Server, a database without snapshot isolation is refused. A change committed after preparation does not reach the batches, and through worker processes a change committed before the preparation record does not reach the run.
 - **SC-003** In real worker processes, a worker killed between the snapshot publication and the preparation record is replaced, and the replacement reuses the snapshot after the table changed. The run delivers the original rows across two or more partitions.
 - **SC-004** A transient read failure records nothing and a later preparation attempt succeeds, at the preparer, on the SQLite test engine. On each real engine, an unreachable database is classified as transient.
 - **SC-005** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof, except the guards the evidence README names.
