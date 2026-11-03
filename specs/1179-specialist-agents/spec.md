@@ -216,7 +216,7 @@ An author manages typed Agent source independently of its generated activity. Wo
 - Lease loss, late result, duplicate approval, changed tool arguments and crash after effect before acknowledgement.
 - Partial team cohort, bounded feedback exhaustion, cancelled child and a parent waiting on the team's completion.
 - Evaluation case failure/cancellation, history access without edit permission and redacted inspection.
-- Mixed package versions, disabled features, migrations interrupted between modules and an in-flight old artifact.
+- Incompatible package/schema profiles, disabled admission with in-flight work, and interrupted clean initialization before readiness. A planned reset does not promise cross-break artifact recovery.
 
 ## Requirements *(mandatory)*
 
@@ -245,7 +245,7 @@ An author manages typed Agent source independently of its generated activity. Wo
 - **FR-021**: Studio MUST support discovery, create/edit/test/publish/use/inspect/history with consistent permissions, content authority, working-state/save behavior, keyboard and narrow layouts.
 - **FR-022**: Inspection MUST expose permitted observable execution evidence and redact credentials, protected content and private model reasoning.
 - **FR-023**: Runtime-only consumers MUST execute supported published native/BPMN artifacts without authoring data or Design/Publishing assembly dependencies.
-- **FR-024**: Supported deployment/provider/store combinations MUST qualify installation, restart, migration, rollback, retained old-artifact interpretation and independent package consumption.
+- **FR-024**: Supported deployment/provider/store combinations MUST qualify clean installation, within-deployment restart/artifact interpretation/replay, independent package consumption and declared pre-GA reset/recreation/republish. Cross-break migration, old-format readers and old-data rollback are not required.
 - **FR-025**: Delivered editorial examples MUST run with an authorized real model through native and BPMN workflows, with evidence distinguished from fixtures.
 - **FR-026**: Users, module authors and operators MUST receive usable documentation, configuration examples, extension contracts and failure/recovery guidance.
 - **FR-027**: Operators MUST be able to define specialists in host configuration as well as in Studio (plan D10). A configuration-defined specialist:

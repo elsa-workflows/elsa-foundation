@@ -13,7 +13,7 @@ specialist acceptance. FR-023–FR-026 and Program A13–A15 own completion.
 | Shared revision/publishing persistence through Workflow and Agent adapters | SQLite, PostgreSQL, SQL Server, MySQL | Shared CAS/snapshot/history/pin storage, publication reservation/repair, revision/release separation and clean-store readiness W1–W7 |
 | Activity/publication/runtime persistence | SQLite, PostgreSQL, SQL Server, MySQL | Existing real provider contexts/migrations plus exact specialist publication, runtime checkpoint and restart behavior |
 | Specialist journal/evaluation persistence | EF implementations for those same four providers | Tenant/CAS/fence/acceptance/receipt/protection/retention/recovery tests and actual native handoff |
-| Connection metadata | New durable existing-repository implementation for those four providers | Restart, create/version-CAS/revoke/delete/rollback/secret-reference behavior; durable Secrets composed separately |
+| Connection metadata | New durable existing-repository implementation for those four providers | Restart, create/version-CAS/revoke/delete/transaction-rollback/secret-reference behavior; durable Secrets composed separately |
 | Model providers | Anthropic; Azure OpenAI | Official SDK protocol fixtures through actual MAF, verified capability profiles and authorized live editorial examples |
 | Assistant regressions | Existing Weaver Anthropic and GitHub Copilot | Existing turn/tool/session/provider suites and normal single-harness composition after MEAI upgrade |
 | Normal development/product journey | Elsa.Workbench + Elsa.Studio.Web | Real create/test/publish/use/evaluate/inspect, permissions and browser evidence |

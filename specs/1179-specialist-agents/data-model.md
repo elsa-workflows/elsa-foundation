@@ -124,9 +124,9 @@ inputs are explicitly unsupported/refused before dispatch, not decrypted or down
 A handle alone grants no access. Qualify supported redacted flow and unsupported-policy negatives;
 do not infer native encryption support from the journal or the M0 plain fixture.
 
-## Source publication and adoption boundaries
+## Shared source and publication boundaries
 
-The proposed candidate/reservation/shared-receipt/index-repair protocol, W1–W8 and ownership epoch are specified in [agent-ownership.md](contracts/agent-ownership.md). Publication identity remains distinct from journal acceptance and process application; migrating source does not enlist these stores into one transaction or create a turn. Historical version records associate to retained templates without reserialization. Partial transfer, different-content/same-version and rollback-reader conflicts leave explicit resumable/blocked states with a single writable source.
+The [revision contract](contracts/revision-management.md) owns shared snapshot/capture-intent/pin, publication reservation and receipt/index-repair semantics, mapped through both Workflow and Agent adapters. The source store atomically persists capture intent/pin with its snapshot and reserves source authority; publishing commits its executable material and receipt in its owning boundary. These stores do not form a distributed transaction. Publication success remains distinct from journal acceptance and process application; source capture/index repair causes no turn or inference. W1–W8 qualify both adapters and within-deployment runtime recovery. Pre-GA delivery may recreate stores under the declared reset procedure; no historical association, mixed-schema ownership transfer or old-reader rollback protocol is required.
 
 ## Separate transaction boundaries
 

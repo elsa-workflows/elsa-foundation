@@ -89,7 +89,7 @@ and document source-package moves without pretending a runtime forwarder can saf
 
 ## Required proofs
 
-Concurrent save/publish, invalidated review, repeated publish, prompt/schema hash controls, old-artifact
+Concurrent save/publish, invalidated review, repeated publish, prompt/schema hash controls, within-deployment frozen-artifact
 isolation, source/read-only forks, unpublished/mixed-provider/same-ID cross-scope discovery, stable cursor
 counts/retention, public port/result mapping, picker refresh and exact native/BPMN persistence. Include
 all four EF providers and independent authoring/runtime/combined package consumers. M0's direct
