@@ -35,7 +35,9 @@ red without the change.
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
   `WorkflowExecutableCompiler.cs` (data-model.md)
 - [ ] T007 Add `IsNullable` to `WorkflowDeclaredInput` in `WorkflowExecutableInputContract.cs` and fill it in
-  `WorkflowExecutableCompiler.BuildInputContract` from `InputDefinition.IsNullable` (R-4)
+  `WorkflowExecutableCompiler.BuildInputContract` from `InputDefinition.IsNullable` (R-4). Publication refuses an
+  optional, non-nullable workflow input whose type has no non-null default and that declares no default
+  (`VF-ACT-003`, FR-006), as it already does for activity inputs
 - [ ] T008 Add `UndefinedPolicy` to `RuntimeExpressionBinding` in `RuntimeInputBinding.cs` and pin it on JavaScript
   bindings at publication from `ValuePolicies` (R-2)
 - [ ] T009 Write `valuePolicies`, input `isNullable` and binding `undefinedPolicy` in
