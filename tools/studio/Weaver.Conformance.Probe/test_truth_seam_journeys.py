@@ -19,12 +19,13 @@ COMMAND = "command-1"
 def entry(version_id, available=True, version="1.0.0", inputs=()):
     return {"activityVersionId": version_id, "available": available, "version": version,
             "availabilityReason": None if available else "Excluded by the effective activity availability policy.",
-            "inputs": [{"referenceKey": name, "name": name, "type": "String", "isRequired": False, "isSensitive": credential,
-                        "isCredential": credential} for name, credential in inputs]}
+            "inputs": [{"referenceKey": item[0], "name": item[0], "type": "String", "isRequired": False, "isSensitive": item[1],
+                        "isCredential": item[1], "uiHint": item[2] if len(item) > 2 else None} for item in inputs]}
 
 
 def owner_entries(tenant_only=True):
-    rows = [entry("flowchart-v1"), entry("write-line-v1", inputs=(("text", False), ("apiKey", True))), entry("excluded-v2", False, "2.0.0")]
+    rows = [entry("flowchart-v1"), entry("write-line-v1", inputs=(("text", False), ("apiKey", True), ("passphrase", False, "password"))),
+            entry("excluded-v2", False, "2.0.0")]
     return ([entry(TENANT_ONLY_VERSION)] if tenant_only else []) + rows
 
 
@@ -33,7 +34,8 @@ def catalog_content(entries, included=None):
     truncated = included < len(entries)
     return {"status": "available", "reason": None, "totalCount": len(entries), "includedCount": included, "truncated": truncated,
             "budgetBytes": 1000, "includedBytes": 900 if truncated else 400, "nextEntryBytes": 200 if truncated else None,
-            "entries": copy.deepcopy(entries[:included])}
+            "entries": [{**item, "inputs": [{**field, "isMasked": field["isSensitive"] or field["isCredential"] or field.get("uiHint") == "password"}
+                                            for field in item["inputs"]]} for item in copy.deepcopy(entries[:included])]}
 
 
 DENIED = {"status": "denied", "reason": "The actor may not read the activity authoring catalog.", "totalCount": 0, "includedCount": 0,
@@ -165,6 +167,8 @@ class CatalogTests(unittest.TestCase):
             "tenant-activity-leaked": (catalog_content(owner), owner, False),
             "credential-dropped": (content(lambda v: v["entries"][2]["inputs"][1].update(isCredential=False)), owner, True),
             "input-missing": (content(lambda v: v["entries"][2]["inputs"].pop()), owner, True),
+            "hint-dropped": (content(lambda v: v["entries"][2]["inputs"][2].update(uiHint=None)), owner, True),
+            "masked-dropped": (content(lambda v: v["entries"][2]["inputs"][2].update(isMasked=False)), owner, True),
             "reason-changed": (content(lambda v: v["entries"][3].update(availabilityReason=None)), owner, True),
             "prefix-not-maximal": (catalog_content(owner, 2) | {"includedBytes": 500}, owner, True),
             "over-budget": (catalog_content(owner) | {"includedBytes": 1001}, owner, True),

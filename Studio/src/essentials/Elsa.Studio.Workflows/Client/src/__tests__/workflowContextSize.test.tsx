@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
-import { useWorkflowContextBridge, workflowSnapshotContentLimit } from "../workflow-editor/useWorkflowContextBridge";
+import { buildWorkflowSnapshotContent, useWorkflowContextBridge, workflowContextCandidateBudget, workflowSnapshotContentLimit } from "../workflow-editor/useWorkflowContextBridge";
+import { admittedSnapshotLength } from "../workflow-editor/workflowExplainContext";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { flowchartActivity, writeLine } from "./fixtures";
 
@@ -65,5 +66,30 @@ describe("workflow context snapshot size", () => {
     expect(sizes.previous).toBeLessThanOrEqual(workflowSnapshotContentLimit);
     expect(sizes.disclosed).toBeLessThanOrEqual(workflowSnapshotContentLimit);
     expect(sizes.structured).toBe(false);
+  });
+
+  // The host admits at most 32 KiB of one attachment's admitted projection (AgentContextServices), tighter than the
+  // module's 64 KiB bound, so the guard measures that projection. Measured on this chained flowchart: 100 activities admit
+  // 27,136 characters with structure and 120 admit 32,496; from 121 the structure is left out (31,695 without it) and the
+  // draft is still explained up to 125 (32,735); from 126 (32,995) even the structure-free projection exceeds the budget.
+  const header = { workflowDefinitionId: "definition", draftId: "draft", revision: "sha256:" + "0".repeat(64), selectedNodeId: null, workingState: "draft" };
+  const catalogByVersion = new Map([versionedWriteLine, versionedFlowchart].map(item => [item.activityVersionId, item]));
+  it.each([50, 100, 120])("keeps the structure of a %i-activity draft that fits the host's attachment budget", count => {
+    const content = buildWorkflowSnapshotContent(largeDraft(count), catalogByVersion, { header });
+    expect(content).toHaveProperty("structure");
+    expect(admittedSnapshotLength(content)).toBeLessThanOrEqual(workflowContextCandidateBudget);
+  });
+
+  it.each([121, 125])("leaves the structure of a %i-activity draft out so that it still fits the host's attachment budget", count => {
+    const content = buildWorkflowSnapshotContent(largeDraft(count), catalogByVersion, { header });
+    expect(content).not.toHaveProperty("structure");
+    expect(admittedSnapshotLength(content)).toBeLessThanOrEqual(workflowContextCandidateBudget);
+  });
+
+  it.each([126, 150])("cannot fit a %i-activity draft, whose structure-free projection exceeds the host's attachment budget", count => {
+    // A known limit, not a guarantee: such a draft is refused by the host (agent.context.budget_exceeded) whatever is left out.
+    const content = buildWorkflowSnapshotContent(largeDraft(count), catalogByVersion, { header });
+    expect(content).not.toHaveProperty("structure");
+    expect(admittedSnapshotLength(content)).toBeGreaterThan(workflowContextCandidateBudget);
   });
 });

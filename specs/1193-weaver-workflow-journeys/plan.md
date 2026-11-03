@@ -187,11 +187,14 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 ## Slice D: Explain and troubleshoot
 
 - The active-draft snapshot adds the selected activity's declared properties. For expressions it adds the expression type and bounded content, with truncation marked. Credential literals are disclosed as present and withheld. Visible Secret References are disclosed by name, type and scope.
-- Expression interpretation and edits are routed to the owning Expression Module's tools when one is registered, and otherwise reported unavailable.
+- Expression interpretation, semantic diagnostics and edits are unconditionally unavailable: the server stamps `interpretation: "unavailable"` on every non-literal expression, and expression edits are refused at preparation. No Expression Module registers Weaver tools and no contract maps an expression type to one; routing to the owning Expression Module is deferred to [#3711](https://github.com/elsa-workflows/elsa-foundation/issues/3711).
 - The graph read addresses activities by scope path, and graph activities by definition identity and version.
 - Diagnostics come only from the designer's current validation.
 - Fix FR-019: remove the unused `workflows.proposal` renderer, and remove the explain-executable prompt until slice F registers its tool. A behaviour test asserts that every Workflows prompt, guidance text and renderer references a registered tool or result kind (SC-007).
 - **Probe**: `workflow-explain`, with a canary search over every disclosed payload and audit record.
+- **Packaged consumer limits**: its catalog has no Parallel activity (`Elsa.Activities.ControlFlow.Parallel` is not a consumer package), so the probe's parallel branches are a flowchart fan-out (a's Done port to b and to the nested flowchart), and scope paths through a Parallel container are proven by component tests (`WorkflowExplainContextTests`). It has no graph activity definition either, so graph activity references are proven by component tests only (server admission and Studio's bridge, sharing `workflowExplainSnapshot.json`); the spec's acceptance evidence records the same.
+- **Size**: the snapshot is sized against the host's 32 KiB per-attachment budget on the admitted projection; drafts above it (about 126 activities on a chained flowchart) cannot be disclosed at all. The follow-up is [#3710](https://github.com/elsa-workflows/elsa-foundation/issues/3710).
+- **Catalogs** (FR-034): the "Explain and troubleshoot" section of `Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`, its link from `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, and the Agent Workflows README.
 
 ## Slice E: Library, create-dialog intent and templates
 
@@ -232,6 +235,12 @@ Concrete file seams are recorded in [research.md](research.md).
 | The working-state content revision becomes `sha256:` plus 64 hex digits instead of an 8-hex 32-bit hash. Consumers compare it for equality only. A proposal prepared before the upgrade and recovered after it carries the old format, so it fails closed as stale and is never applied | C | Minor |
 | The SDK's optional `resourceModuleIds` on result renderers, the `resultControls` registry with `StudioAgentResultControlContribution`, the `studio.weaver.result-controls` slot and `presentsResourceModule` | C | Minor, additive |
 | The removed `workflows.proposal` renderer | D | Major |
+| The removed explain-executable prompt and the test-only `getExecutableDetail` export of Weaver Workflows; slice F restores the prompt against its registered tool | D | Major (pre-GA cleanup) |
+| The active-draft snapshot's optional `diagnostics`, `diagnosticsOmitted`, `selectedActivity` and `graphActivities`, the read result's `addresses`, and the optional diagnostic `agent.workflow.property_context_unverified` | D | Minor, additive |
+| The removed explain-instance prompt of Weaver Workflows; slice G restores it against the Run context and tool | D | Major (pre-GA cleanup) |
+| `ActivityAuthoringCatalogInput.UiHint` and the computed `IsMasked` in `Elsa.Activities.Design.Core` | D | Minor, additive (init-only property; the positional constructor is unchanged). Record value equality now includes `UiHint`: two inputs that differ only in their hint are no longer equal |
+| `workflow.catalog` v1 inputs gain `uiHint` and `isMasked` | D | Minor, additive |
+| The removed `ai-context-providers` and `ai-tools` capability tags of the Weaver Workflows Studio module manifest | D | Patch (correction): the tags described contributions the module never registered. The module's scope (frontend) and every contribution it does register are unchanged; a host that filtered modules by those tags found a module without such contributions |
 | The operation-key overloads on `IWorkflowLibraryStore` | E | Minor, additive |
 | The new `Elsa.Agent.Workflows.Runtime` package | F | Minor |
 | The new `.Core` contracts of D4 | B, E, F, G | Minor, additive |

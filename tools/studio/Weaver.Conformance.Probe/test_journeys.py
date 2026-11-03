@@ -270,7 +270,7 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
 
     def qualify(self, **overrides):
         names = (*ORIGINAL_SEQUENCE, "owned_origin", "configure_runtime", "_seed_principals", "JourneyRuntime", "private_json", "CaseRecords",
-                 "server", "RestartableServer", "qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
+                 "server", "RestartableServer", "qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
                  "capture_consumer_after", "validate_complete_witness")
         order = []
         def recorder(name):
@@ -285,6 +285,7 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
                 if name == "qualify_workflow_authorization": self.run.report["workflowAuthorizationQualification"] = {"status": "passed"}
                 if name == "qualify_workflow_truth_seams": self.run.report["workflowTruthSeamQualification"] = {"status": "passed"}
                 if name == "qualify_workflow_batch": self.run.report["workflowBatchQualification"] = {"status": "passed"}
+                if name == "qualify_workflow_explain": self.run.report["workflowExplainQualification"] = {"status": "passed"}
                 if name == "qualify_witness_autonomy": self.run.report["autonomyLifecycleQualification"] = {"status": "passed"}
                 if name == "JourneyRuntime":
                     return SimpleNamespace(gate_file=self.root / "gate.json", root=self.root, select_provider=Mock(), browser=Mock(),
@@ -305,17 +306,18 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         sequence = [name for name in order if name in ORIGINAL_SEQUENCE]
         self.assertEqual("qualify_context_disclosure", sequence[-1])
         tail = order[order.index("qualify_context_disclosure") + 1:]
-        self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
+        self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
                           "capture_consumer_after", "validate_complete_witness", "validate_complete_witness"], tail)
         self.assertEqual(1, order.count("qualify_workflow_authorization"))
         self.assertEqual(1, order.count("qualify_workflow_truth_seams"))
         self.assertEqual(1, order.count("qualify_workflow_batch"))
+        self.assertEqual(1, order.count("qualify_workflow_explain"))
         self.assertEqual(1, order.count("qualify_witness_autonomy"))
         self.assertEqual(1, order.count("qualify_witness_restarts"))
         self.assertEqual(1, order.count("RestartableServer"))
         self.assertEqual([{"reason": "synthetic"}], self.run.report["hostRestarts"])
         self.assertEqual(("passed", True), (self.run.report["status"], self.run.report["independentPackageWitness"]))
-        self.assertEqual(95, self.run.report["witnessManifest"]["expectedCaseCount"])
+        self.assertEqual(97, self.run.report["witnessManifest"]["expectedCaseCount"])
         self.assertNotIn("stageCount", json.dumps(self.run.report["witnessManifest"]))
 
     def test_failed_matrix_changed_original_records_or_failed_gate_never_promote(self):
