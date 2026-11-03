@@ -18,7 +18,7 @@ import "./workflowOrganization.css";
 
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, refreshKey = 0 }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, refreshKey = 0, visibleTagIds = [] }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
@@ -26,6 +26,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
   refreshKey?: number;
+  visibleTagIds?: readonly string[];
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
@@ -33,7 +34,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const [catalogCursor, setCatalogCursor] = useState<string | null>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogTerm, setCatalogTerm] = useState("");
-  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(support.tags);
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(Boolean(location.tagFilters?.length || location.publicationState));
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -65,18 +66,22 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   }, [catalogTerm, context, onPermissions, refresh, refreshKey, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
-  const missingFilterTags = !catalogLoading ? JSON.stringify([...new Set((location.tagFilters ?? []).map(filter => filter.tagId))].filter(id => !tags.some(tag => tag.id === id))) : "[]";
+  const missingTagIds = !catalogLoading ? JSON.stringify([...new Set([...(location.tagFilters ?? []).map(filter => filter.tagId), ...visibleTagIds])].filter(id => !tags.some(tag => tag.id === id))) : "[]";
   useEffect(() => {
-    const ids = JSON.parse(missingFilterTags) as string[];
+    const ids = JSON.parse(missingTagIds) as string[];
     if (!ids.length || !support.tags) return;
     let active = true;
-    void Promise.allSettled(ids.map(id => getWorkflowTag(context, id))).then(results => {
-      if (!active) return;
-      const found = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
-      if (found.length) setTags(current => mergeTags(current, found));
-    });
+    void (async () => {
+      const found: WorkflowTag[] = [];
+      // Resolve only references in this page or its filters; catalog continuation stays user-driven.
+      for (let start = 0; active && start < ids.length; start += 8) {
+        const results = await Promise.allSettled(ids.slice(start, start + 8).map(id => getWorkflowTag(context, id)));
+        found.push(...results.flatMap(result => result.status === "fulfilled" ? [result.value] : []));
+      }
+      if (active && found.length) setTags(current => mergeTags(current, found));
+    })();
     return () => { active = false; };
-  }, [context, missingFilterTags, support.tags]);
+  }, [context, missingTagIds, support.tags]);
 
   const loadMoreTags = async () => {
     if (!catalogCursor || catalogLoading) return;

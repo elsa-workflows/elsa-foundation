@@ -10,7 +10,7 @@ test("separate folder and chip-tag flows persist without changing authored workf
   const suffix = Date.now();
   const name = `Organization UX ${suffix}`;
   const folderName = `Organization review ${suffix}`;
-  const tagName = `Customer-facing ${suffix}`;
+  const tagName = `ZZZ Customer-facing ${suffix}`;
   let bearer = "";
   page.on("request", request => { if (request.headers().authorization?.startsWith("Bearer ")) bearer = request.headers().authorization; });
   await signIn(page);
@@ -40,6 +40,17 @@ test("separate folder and chip-tag flows persist without changing authored workf
     return { draft: value.draft, versions: value.versions };
   };
   const before = await readAuthoring();
+  const tagCatalogUrl = created.url().replace(/\/definitions$/, "/tags");
+  // Keep the new label beyond the catalog's first 100 items, independently of UI search.
+  for (let start = 0; start < 100; start += 8) {
+    await Promise.all(Array.from({ length: Math.min(8, 100 - start) }, async (_, offset) => {
+      const response = await page.request.post(tagCatalogUrl, {
+        headers: { Authorization: bearer },
+        data: { name: `AAA catalog ${suffix} ${start + offset}`, mode: "marker", cardinality: "single", values: [] }
+      });
+      expect(response.ok()).toBe(true);
+    }));
+  }
   const search = page.getByRole("searchbox", { name: "Search all workflows", exact: true });
   await search.fill(name);
   const row = page.getByRole("row", { name: `Open workflow definition ${name}`, exact: true });
@@ -47,7 +58,14 @@ test("separate folder and chip-tag flows persist without changing authored workf
   await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
   const tags = page.getByRole("dialog", { name: `Tags for ${name}`, exact: true });
   await tags.getByRole("combobox", { name: "Tags", exact: true }).fill(tagName);
+  const tagCreatedResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/tags$/.test(new URL(response.url()).pathname));
   await tags.getByRole("option", { name: `Create “${tagName}”`, exact: true }).click();
+  const createdTag = await (await tagCreatedResponse).json() as { id: string };
+  const firstCatalogResponse = await page.request.get(`${tagCatalogUrl}?pageSize=100`, { headers: { Authorization: bearer } });
+  expect(firstCatalogResponse.ok()).toBe(true);
+  const firstCatalog = await firstCatalogResponse.json() as { items: { id: string }[]; nextContinuationToken?: string };
+  expect(firstCatalog.nextContinuationToken).toBeTruthy();
+  expect(firstCatalog.items.some(tag => tag.id === createdTag.id)).toBe(false);
   await expect(tags.getByRole("button", { name: `Remove ${tagName}`, exact: true })).toBeVisible();
   await expect(tags.getByText("Finding tags…", { exact: true })).toHaveCount(0);
   await expect(tags.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
