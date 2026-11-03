@@ -67,6 +67,16 @@ describe("task form rendering and decision delivery", () => {
     await click("Retry"); await act(async () => release(task()));
     expect(container.textContent).toContain("Completed"); expect([...container.querySelectorAll("button")].some(item => item.textContent === "Approve")).toBe(false);
   });
+  it("removes the pending-delivery notice when refresh confirms completion", async () => {
+    const accepted = { ...task(), status: "CompletionPending", revision: 2, decision: { response: { action: "Approve", data: {} } } };
+    const get = vi.fn().mockResolvedValueOnce(task()).mockResolvedValue({ ...accepted, status: "Completed", revision: 3 });
+    const post = vi.fn().mockResolvedValue(accepted);
+    await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} changed={vi.fn()} />));
+    await click("Approve"); expect(container.textContent).toContain("The workflow will continue when delivery completes.");
+    await click("Refresh task");
+    expect(container.textContent).toContain("Completed");
+    expect(container.textContent).not.toContain("The workflow will continue when delivery completes.");
+  });
   it("renders server errors against the exact field key and refuses a missing integration", async () => {
     const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "AccountID", label: "Account", kind: "text", required: true, readOnly: false }] } };
     const post = vi.fn().mockRejectedValue(new StudioHttpError(400, "Correct the form", null, { errors: { AccountID: "Account is required" } }));

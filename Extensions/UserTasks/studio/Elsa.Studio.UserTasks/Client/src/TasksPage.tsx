@@ -5,6 +5,8 @@ import { StudioButton, StudioCollectionToolbar, StudioPage, StudioPageHeader, St
 import { FormsPage } from "./FormsPage";
 import { actor, list, read, mutate, message, statusOf, type TaskActor, type TaskItem, type TaskPage } from "./taskApi";
 
+const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes.";
+
 export function TasksPage({ api, initialId }: { api: ElsaStudioModuleApi; initialId?: string }) {
   const [identity, setIdentity] = useState<TaskActor>();
   const [view, setView] = useState("mine"); const [page, setPage] = useState<TaskPage>();
@@ -53,6 +55,7 @@ export function TaskDetail({ api, id, identity, changed }: { api: ElsaStudioModu
     try {
       const next = await read(api, id); if (current !== sequence.current) return;
       setTask(next); setMissing(false); setStale(false);
+      setNotice(next.status === "CompletionPending" ? responsePendingNotice : "");
       if (!edited.current || next.decision) setData(next.decision?.response.data ?? next.prefill ?? {});
       // A newer unaccepted revision proves the previous conditional write cannot still win.
       if (next.status === "Completed" || next.status === "Cancelled" ||
@@ -77,7 +80,7 @@ export function TaskDetail({ api, id, identity, changed }: { api: ElsaStudioModu
       const result = await mutate(api, task, operation, request);
       setTask(result); if (result.decision) { setData(result.decision.response.data); edited.current = false; }
       if (result.status !== "CompletionPending") attempt.current = null;
-      setNotice(result.status === "CompletionPending" ? "Your response is recorded. The workflow will continue when delivery completes." : "Task updated."); changed();
+      setNotice(result.status === "CompletionPending" ? responsePendingNotice : "Task updated."); changed();
     } catch (failure) {
       const status = statusOf(failure); setNotice(status === 409 ? "This task changed. Refresh to review its current state; your entered values are preserved." : message(failure));
       if (status === 409 || status === 403 || status === 404) setStale(true);

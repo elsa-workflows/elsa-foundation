@@ -46,6 +46,7 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Refresh task", exact: true }).press("Enter");
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Your response is recorded. The workflow will continue when delivery completes.", { exact: true })).toHaveCount(0);
   const screenshot = testInfo.outputPath(`user-task-${width}.png`);
   await page.screenshot({ path: screenshot });
   await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });

@@ -31,6 +31,8 @@ Current main 8a92746d4 was integrated cleanly before the final review, including
 
 The complete local independent Weaver package witness passed on 3f22e14063cafbc1745dc7f2399143b1aa05a8ea: 89 required cases, including the previously failed remount case, 26 autonomy cases and 20 restart cases, with no evidence gaps. The in-memory restart negative control was observed. No product change was needed for the earlier remount failure. Final UI inspection then found a long task title clipping at 390px (357px content in a 332px box); the detail now wraps unbroken text, and the real live journey checks the heading's own overflow and retains its screenshots. Final reviewed-head CI remains required.
 
+The retained live screenshot also exposed the accepted-response notice remaining after a Completed refresh. A mounted regression failed on the prior component; successful refresh now replaces that notice from the current task status. The live journey additionally refuses pending-delivery text after committed completion.
+
 Provider-suite local limitation: the whole native provider project had247 passes and one PostgreSQL covering-index plan assertion failure. That assertion also failed on the unmodified original base329ec72b. No unrelated planner assertion was changed. Exact-head Linux required-provider CI is still required.
 
 Hosting-suite local result:57/58 passed, with the existing legacy-controls upgrade journey failing. The focused journey passed on unmodified current mainfa8b4a292, then passed on the same branch binaries at lower load. Preserve the initial failure; use whole exact-head CI as the final gate.
