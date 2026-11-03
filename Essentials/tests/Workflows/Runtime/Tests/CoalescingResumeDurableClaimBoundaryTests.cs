@@ -289,6 +289,32 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     /// <summary>
+    /// The same race across a durable claim boundary. The resume after schedule-1 ends the first segment and runs durably,
+    /// and the drain waits for the held continuation before it starts the post-boundary segment. That segment fills its
+    /// overlay from durable state, so it runs schedule-2, coalesced, before the drain reports quiescence. This boundary
+    /// restart predates #3659, which leaves it unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Post_boundary_segment_drains_work_a_competing_delivery_queued_while_the_resume_settled(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromMinutes(10), mode, resumeAfterFirstStep: true);
+
+        await race.DeliverHeldAtFirstPollAsync();
+
+        var result = await race.Draining.WaitAsync(race.Timeout);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(["schedule-1", "resume-1", "schedule-2"], result.Items.Select(item => item.WorkItemId));
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        AssertDurableResumeSnapshot(Assert.Single(race.Probe.ResumeSnapshots), schedulerVersion: 1, durableCommitCount: 1);
+        // Only the boundary flush is durable when schedule-2 commits: it ran in a fresh segment, not the closed one.
+        Assert.Equal([0, 1], race.Probe.ScheduleDurableCommitCounts);
+        await race.AssertRanBothStepsAsync();
+    }
+
+    /// <summary>
     /// The other deliverer died holding the continuation. Once its claim lapses the drain takes the item back through the
     /// durable claim path, which an active segment would route to its overlay and never find (#3659).
     /// </summary>
@@ -687,9 +713,12 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
         public const string FlushedOutboxId = "outbox-flushed";
 
-        public static async Task<HeldContinuationRace> StartAsync(TimeSpan claimVisibility, PersistenceMode mode)
+        public static async Task<HeldContinuationRace> StartAsync(
+            TimeSpan claimVisibility,
+            PersistenceMode mode,
+            bool resumeAfterFirstStep = false)
         {
-            var race = await HoldAsync(claimVisibility, mode);
+            var race = await HoldAsync(claimVisibility, mode, resumeAfterFirstStep: resumeAfterFirstStep);
             race.Draining = race._scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
                 .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask();
             return race;
@@ -716,7 +745,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             TimeSpan claimVisibility,
             PersistenceMode mode,
             bool flushedFirstStep = false,
-            bool resumptionSweep = false)
+            bool resumptionSweep = false,
+            bool resumeAfterFirstStep = false)
         {
             var clock = new TimerClock(Now);
             var shared = new SharedPersistence(clock);
@@ -726,6 +756,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             var firstStep = ScheduleWork("schedule-1", 1);
             if (!flushedFirstStep)
                 await shared.Queue.EnqueueAsync(firstStep);
+            // A resume ends the first step's segment at a durable claim boundary.
+            if (resumeAfterFirstStep)
+                await shared.Queue.EnqueueAsync(ResumeWork("resume-1", 2));
             await race.Commits.AddPendingForTestingAsync(Continuation("outbox-held", race.Held));
             race.OtherClaim = Assert.Single(await race.Commits.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
                 "other-continuation-worker",
