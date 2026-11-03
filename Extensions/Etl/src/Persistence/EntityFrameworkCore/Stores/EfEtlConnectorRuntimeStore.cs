@@ -201,7 +201,14 @@ internal sealed partial class EfEtlRuntimeStore
         var owed = await ReadConnectorOwedBatchAsync(row, new(invocation, state.Bindings),
             state.Pipeline, state.Prepared!, position, cancellationToken);
         // Every connector step starts with a claim, so compacting here precedes any work the lease is charged for.
-        await CompactConnectorHttpHistoryAsync(row, candidate.Connector, state.Pipeline, cancellationToken);
+        // Retention budgets are per run, so every shard is compacted, not only this one: a peer's history could
+        // otherwise exhaust a shared budget before that peer is claimed. A peer's window still holds every row its
+        // live lease could replay, because the window always keeps the predecessor of its current request.
+        if (state.Pipeline.Continuous is not null)
+            foreach (var partition in await db.ConnectorPartitions
+                         .Where(partition => partition.ScopeKey == row.ScopeKey && partition.RunKey == row.RunKey)
+                         .OrderBy(partition => partition.PartitionOrdinal).ToListAsync(cancellationToken))
+                await CompactConnectorHttpHistoryAsync(partition, candidate.Connector, state.Pipeline, cancellationToken);
         now = NowTicks();
         row.Owner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
         row.Fence = checked(row.Fence + 1);

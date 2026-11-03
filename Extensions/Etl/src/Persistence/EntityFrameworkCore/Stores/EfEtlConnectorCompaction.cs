@@ -91,6 +91,7 @@ internal sealed partial class EfEtlRuntimeStore
         row.BatchMetadataBytes = checked(row.BatchMetadataBytes - batchMetadata);
         row.MetadataBytes = checked(row.MetadataBytes - metadata);
         row.RetainedOutputBytes = checked(row.RetainedOutputBytes - outputBytes);
+        row.Revision = checked(row.Revision + 1);
         connector.RetainedInputBytes = checked(connector.RetainedInputBytes - pages.Bytes);
         connector.RetainedMetadataBytes = checked(connector.RetainedMetadataBytes - metadata);
         connector.RetainedOutputBytes = checked(connector.RetainedOutputBytes - outputBytes);
