@@ -19,7 +19,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
       expect(empty).toBeGreaterThanOrEqual(workbench - 2);
       await page.addScriptTag({ content: axe.source });
       const violations = await page.evaluate(async () => {
-        const engine = (window as Window & { axe: typeof axe }).axe;
+        const engine = (window as unknown as { axe: typeof axe }).axe;
         return (await engine.run(document.querySelector(".ad-public-interface-view")!)).violations.map(item => item.id);
       });
       expect(violations).toEqual([]);
