@@ -136,16 +136,24 @@ which member a key was meant for. A JSON member fills a .NET member only when it
 name: the name the baseline's naming policy gives it, or the name an annotation gives it
 (`[JsonPropertyName("customer_name")]`). Matching never changes data; it only decides which .NET member a JSON member
 fills.
-- **A JSON key that matches no member gives a diagnostic** that names the key and the target type
-  (System.Text.Json's unmapped-member handling), so a key is never dropped silently. A required member that is missing
-  already fails under D-10.
+- **A JSON key that matches no member gives a recorded warning** that names the key and the target type, so a key is
+  never dropped silently. It is a warning, not a refusal: the step runs, and the stored JSON keeps the key. So
+  System.Text.Json's `JsonUnmappedMemberHandling.Disallow`, which refuses, is not the default; how the warning is
+  detected is left to the implementing spec (S-9). An activity that wants strict reads declares that itself. A required
+  member that is missing still fails under D-10.
+- **Elsa 3 conversion rewrites case-only differences.** Elsa 3 read member names case-insensitively. The converter
+  rewrites a literal key that differs from the exact JSON name only in case to that name, which keeps Elsa 3's
+  behaviour (D-13, faithful). It refuses with guidance only when the rewrite is ambiguous, for example `Name` and
+  `NAME` in one object. Data that only arrives at run time gets the warning above.
 - Because the match is exact, two keys can no longer match one member (`id` and `ID`), so that ambiguity needs no
   rule.
 - This applies to data becoming a .NET type (decision 5) and to Elsa's own contracts, which keep the camelCase naming
   policy in both directions.
 
 This follows A-1 as corrected by @FransVanEk on 2026-10-29
-([comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6496154563)). It replaces the
+([comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6496154563)), with his answers
+of 2026-10-30 on which name is exact, the warning and the conversion rule
+([comment](https://github.com/elsa-workflows/elsa-foundation/pull/3408#issuecomment-6524143894)). It replaces the
 case-insensitive reads this ADR first proposed.
 
 ### 3. Data passes through as the exact text received
@@ -344,4 +352,7 @@ proposes, @j03y-nxxbz agrees, so questions 1 to 5 wait only for @sfmskywalker:
    migration, or keep re-escaping as a recorded exception? **Answered (2026-10-29): a stamped migration, in S-9.**
    @FransVanEk proposed it and @j03y-nxxbz agrees: suspended state is the most important store, identical bytes
    (question 1) cannot exempt it, and before 4.0 the change costs regenerated migrations and fixtures, while after 4.0
-   it would need an upcaster for every old row. Decision 7's register row says so. @sfmskywalker: agreed?
+   it would need an upcaster for every old row. Decision 7's register row says so. @sfmskywalker answered on
+   2026-10-30 ([comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6519741754)):
+   reset and republish before 4.0 is enough, with no backward reads for state saved before 4.0, as long as S-9 states
+   the migration path from 4.0 on.
