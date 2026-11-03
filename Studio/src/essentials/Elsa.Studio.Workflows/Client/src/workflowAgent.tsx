@@ -24,9 +24,6 @@ export interface WorkflowAgentController {
   targetAvailability?: ((invocation: StudioAgentPreparedInvocation) => StudioAgentToolAvailability) | null;
 }
 
-/** The registry id of the Studio-owned batch Undo control that a Weaver result renderer embeds. */
-export const workflowBatchUndoControlId = "workflows.agent.batch-undo";
-
 /** Registration closes over one native module instance; live editor objects never enter shared state. */
 export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgentController {
   const controller: WorkflowAgentController = { snapshot: null, execute: null, undo: null, batch: null, targetAvailability: null };
@@ -72,11 +69,11 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
       default: (props: StudioAgentResultRendererProps) => <module.WorkflowLayoutResult {...props} controller={controller} />
     })))
   });
-  // Not a result renderer of its own: no result or resource type selects it. The Weaver batch-result renderer embeds it
-  // by id, so the Undo that designer history owns stays with the module that owns the designer.
-  agent.resultRenderers.add({
-    id: workflowBatchUndoControlId, moduleId: "Elsa.Studio.Workflows", displayName: "Workflow batch Undo",
-    resultTypes: [], resourceTypes: [], schemaVersions: ["1"], order: 10_000, supports: () => false,
+  // The designer-history Undo of an applied batch belongs to the module that owns the designer. It is a result control:
+  // the host shows it after whichever renderer presents the batch result (Weaver Workflows' card).
+  agent.resultControls.add({
+    id: "workflows.agent.batch-undo", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow batch Undo",
+    resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
     component: lazy(() => import("./workflowAgentResult").then(module => ({
       default: (props: StudioAgentResultRendererProps) => <module.WorkflowBatchUndoControl {...props} controller={controller} />
     })))

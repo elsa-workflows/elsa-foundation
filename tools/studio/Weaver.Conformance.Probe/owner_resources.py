@@ -96,6 +96,83 @@ def seed_workflow(http, output):
             "evidence": [activity_capability, workflow_capability, catalog_receipt, request_receipt, create_receipt, observed_receipt, validation_receipt]}
 
 
+# Spec 1193 slice C (T022): the containers an Operation Batch addresses, with their structure kinds as the activities
+# declare them ([ActivityStructure]) and the one slot each declares, as Studio resolves it ("<kind>:<property>").
+BATCH_CONTAINERS = {"Flowchart": ("Elsa.Activities.Flowchart.Activities.Flowchart", "elsa.flowchart.structure", "flowchart"),
+                    "Sequence": ("Elsa.Activities.Sequence.Activities.Sequence", "elsa.sequence.structure", "sequence")}
+BATCH_WRITE_LINE = "Elsa.Activities.Primitives.Activities.WriteLine"
+BATCH_NODES = {"root": "batch-flow", "a": "batch-a", "b": "batch-b", "seq": "batch-seq", "inner": "batch-inner"}
+
+
+def seed_batch_workflow(http, output):
+    """Create the real nested draft the Operation Batch journeys address: a root flowchart holding two Write Lines and a
+    sequence that holds a third, connected a -> b and a -> sequence. Retains the catalog entries and slot identities."""
+    output = _new_output(output)
+    activities, activity_capability = capability_links(http, "elsa.api.activity-design", output / "activities")
+    workflows, workflow_capability = capability_links(http, "elsa.api.workflow-design", output / "workflows")
+    check(all(key in workflows for key in ("workflow-definitions", "workflow-drafts", "workflow-draft-validations")),
+          "The native batch witness needs the real create/save/validation relations")
+    catalog, _ = http.json(owner_path(http, activities["activity-catalog"]))
+    catalog_receipt = _retain(output, "activity-catalog", catalog)
+    def entry(type_key):
+        matches = [item for item in catalog["activities"] if item["activityTypeKey"] == type_key and item.get("available") is True]
+        check(len(matches) == 1 and bool(matches[0]["activityVersionId"]), "The actual catalog must uniquely supply " + type_key)
+        return matches[0]
+    write = entry(BATCH_WRITE_LINE)
+    check(any(item["referenceKey"] == "text" for item in write["inputs"]), "Actual WriteLine contract has no text input")
+    containers = {}
+    for name, (type_key, kind, mode) in BATCH_CONTAINERS.items():
+        item = entry(type_key)
+        template = ((item.get("authoringTemplate") or {}).get("structure") or {})
+        check(template.get("kind") == kind and isinstance(template.get("payload"), dict) and isinstance(template["payload"].get("activities"), list),
+              "The actual " + name + " entry does not author the expected '" + kind + "' structure")
+        containers[name] = {"entry": item, "kind": kind, "mode": mode, "slot": kind + ":activities", "payload": template["payload"]}
+    def leaf(node_id, text):
+        return {"nodeId": node_id, "activityVersionId": write["activityVersionId"], "outputs": [], "structure": None,
+                "inputs": [{"referenceKey": "text", "value": {"value": text, "expressionType": "Literal"}}]}
+    def container(name, node_id, children, **extra):
+        payload = json.loads(json.dumps(containers[name]["payload"]))
+        payload.update(activities=children, **extra)
+        return {"nodeId": node_id, "activityVersionId": containers[name]["entry"]["activityVersionId"], "inputs": [], "outputs": [],
+                "structure": {"kind": containers[name]["kind"], "schemaVersion": "1.0.0", "payload": payload}}
+    n = BATCH_NODES
+    sequence = container("Sequence", n["seq"], [leaf(n["inner"], "Inside the sequence")])
+    connections = [{"id": "batch-a-b", "source": {"nodeId": n["a"], "port": "Done"}, "target": {"nodeId": n["b"]}},
+                   {"id": "batch-a-seq", "source": {"nodeId": n["a"], "port": "Done"}, "target": {"nodeId": n["seq"]}}]
+    root = container("Flowchart", n["root"], [leaf(n["a"], "First"), leaf(n["b"], "Second"), sequence],
+                     connections=connections, startNodeId=n["a"])
+    request = {
+        "operationKey": str(uuid.uuid4()), "name": "Weaver batch witness " + uuid.uuid4().hex[:8],
+        "description": "Owned spec 1193 Operation Batch qualification; no runtime dispatch or publication.",
+        "initialState": {"variables": [], "inputs": [], "outputs": [], "rootActivity": root},
+        "layout": [{"nodeId": n["a"], "x": 120, "y": 160}, {"nodeId": n["b"], "x": 420, "y": 160}, {"nodeId": n["seq"], "x": 120, "y": 420},
+                   {"nodeId": n["inner"], "x": 80, "y": 80}],
+        "activityPresentation": []}
+    request_receipt = _retain(output, "create-request", request)
+    definitions_path = owner_path(http, workflows["workflow-definitions"])
+    created, _ = http.json(definitions_path, request, method="POST")
+    create_receipt = _retain(output, "created", created)
+    definition_id, draft_id = created["definition"]["id"], created["draft"]["id"]
+    check(created["draft"]["definitionId"] == definition_id and bool(draft_id), "Native create returned inconsistent owning identities")
+    definition_path = definitions_path.rstrip("/") + "/" + quote(definition_id, safe="")
+    observed, _ = http.json(definition_path)
+    check(observed["definition"]["id"] == definition_id and observed["draft"]["id"] == draft_id,
+          "Independent workflow owner readback did not confirm creation")
+    observed_receipt = _retain(output, "owner-readback", observed)
+    validations, _ = http.json(owner_path(http, workflows["workflow-draft-validations"], draftId=draft_id))
+    validation_receipt = _retain(output, "validation-readback", validations)
+    check(validations["draftId"] == draft_id and validations["errors"] == [], "The native batch seed failed ordinary validation")
+    return {"definitionId": definition_id, "draftId": draft_id, "definitionPath": definition_path,
+            "draftPath": owner_path(http, workflows["workflow-drafts"], draftId=draft_id),
+            "validationPath": owner_path(http, workflows["workflow-draft-validations"], draftId=draft_id),
+            "nodes": dict(n), "writeLine": {"activityTypeKey": write["activityTypeKey"], "version": write["version"],
+                                            "activityVersionId": write["activityVersionId"], "displayName": write["displayName"]},
+            "containers": {name: {"activityVersionId": value["entry"]["activityVersionId"], "activityTypeKey": value["entry"]["activityTypeKey"],
+                                  "displayName": value["entry"]["displayName"], "slot": value["slot"], "mode": value["mode"]}
+                           for name, value in containers.items()},
+            "evidence": [activity_capability, workflow_capability, catalog_receipt, request_receipt, create_receipt, observed_receipt, validation_receipt]}
+
+
 def seed_personal_layout(http, output):
     """Create an explicit personal document only when absent; never overwrite an existing resource."""
     output = _new_output(output)

@@ -193,6 +193,8 @@ export function applyWorkflowOperationBatch(draft: WorkflowDraft, batch: FrozenW
   const reserved = new Set<string>([...(root ? collectOwnedNodeIds(root, catalogByVersion) : []), ...layout.map(record => record.nodeId), ...presentation.map(record => record.nodeId)]);
   const rootCandidates = new Map<string, ActivityNode>();
   const added: string[] = [];
+  let rootInstalled = false;
+  let addedRoot = false;
   const removed = new Set<string>();
 
   for (const operation of batch.operations) {
@@ -218,6 +220,9 @@ export function applyWorkflowOperationBatch(draft: WorkflowDraft, batch: FrozenW
             if (!holding) return refuse(`The scope path is not a containment chain at '${segment}'.`);
             owner = holding.activities.find(child => child.nodeId === segment)!;
           }
+          // As the server prepares it: nothing is added into an activity this batch adds, whose slots it could not confirm.
+          if (added.includes(owner.nodeId) || rootCandidates.has(owner.nodeId) || owner === root && addedRoot)
+            refuse(`'${owner.nodeId}' is added by this batch; activities are added into it in a following batch.`);
           const slot = getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === operation.slot);
           if (!slot) return refuse(`'${owner.nodeId}' has no slot '${operation.slot}'.`);
           if (slot.mode === "bpmn") refuse("BPMN scopes are not changed by an Operation Batch.");
@@ -232,11 +237,14 @@ export function applyWorkflowOperationBatch(draft: WorkflowDraft, batch: FrozenW
         break;
       }
       case "set-root": {
+        if (rootInstalled) refuse("A batch installs at most one root.");
         const candidate = rootCandidates.get(operation.nodeId) ?? refuse(`'${operation.nodeId}' is not a root candidate of this batch.`);
         if (operation.replacesRoot !== !!root) refuse("The working draft's root changed since the batch was reviewed.");
         if (root) for (const id of collectOwnedNodeIds(root, catalogByVersion)) removed.add(id);
         rootCandidates.delete(operation.nodeId);
         root = candidate;
+        rootInstalled = true;
+        addedRoot = true;
         break;
       }
       case "position":
@@ -251,7 +259,14 @@ export function applyWorkflowOperationBatch(draft: WorkflowDraft, batch: FrozenW
         const expression = "literal" in operation.value
           ? { type: "Literal", value: operation.value.literal }
           : { type: "Secret", value: secretValue(operation.value.secretReference) };
-        root = updateActivity(root!, node.nodeId, current => ({ ...current, [operation.property]: { typeName: operation.typeName, expression } }), catalogByVersion);
+        // Only the authored value changes: an existing wrapper keeps its type, memory reference, conversion and extras.
+        root = updateActivity(root!, node.nodeId, current => {
+          const previous = current[operation.property];
+          const wrapper = isPlainRecord(previous) && isPlainRecord(previous.expression) ? previous : null;
+          return { ...current, [operation.property]: wrapper
+            ? { ...wrapper, typeName: typeof wrapper.typeName === "string" && wrapper.typeName ? wrapper.typeName : operation.typeName, expression }
+            : { typeName: operation.typeName, expression } };
+        }, catalogByVersion);
         break;
       }
       case "update": {
@@ -288,6 +303,7 @@ export function applyWorkflowOperationBatch(draft: WorkflowDraft, batch: FrozenW
       case "connect": {
         const owner = root ? findActivityNode(root, operation.scopeOwnerId, catalogByVersion) : null;
         if (!owner || owner.structure?.kind !== flowchartStructureKind) return refuse(`'${operation.scopeOwnerId}' is not a flowchart.`);
+        if (added.includes(owner.nodeId) || owner === root && addedRoot) refuse(`'${owner.nodeId}' is added by this batch; its activities are connected in a following batch.`);
         const slot = getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === operation.slot);
         if (!slot || slot.mode !== "flowchart") return refuse(`'${operation.slot}' is not the flowchart's slot.`);
         if (!slot.activities.some(child => child.nodeId === operation.source) || !slot.activities.some(child => child.nodeId === operation.target))

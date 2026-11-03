@@ -47,6 +47,13 @@ Known host-owned Slot IDs:
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
+- `studio.weaver.result-controls`
+
+A result renderer may present another module's results: set `resourceModuleIds` to the resource modules it presents,
+and the host matches the result's resource module against them instead of the renderer's own `moduleId` (unset keeps the
+previous match). A result control (`api.agent.resultControls`) is the resource-owning module's interactive control for
+a result type, such as a designer-history Undo of a change it applied; the host renders every matching control after
+the renderer, so a renderer from another package never needs the owning module's internals.
 
 ## Related run links
 

@@ -1,8 +1,7 @@
-import React, { Suspense } from "react";
+import React from "react";
 import type {
   ElsaStudioModuleApi,
   StudioAgentContextAttachment,
-  StudioAgentResultRendererContribution,
   StudioAgentResultRendererProps,
   StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
@@ -129,14 +128,12 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  // The resource-owning module id, so the host selects it for workflow results (its renderer lookup matches the
-  // result's resource module). The Undo it shows is Studio Workflows' own designer-history control, found by id.
+  // Contributed by this package for the Workflows module's results; the host matches the result's resource module
+  // against resourceModuleIds. The designer-history Undo is Studio Workflows' own result control, shown after this card.
   api.agent.resultRenderers.add({
-    id: "weaver.workflows.batch-result", moduleId: "Elsa.Studio.Workflows",
+    id: "weaver.workflows.batch-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
     displayName: "Workflow change", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
-    component: (props: StudioAgentResultRendererProps) => (
-      <WorkflowBatchResult {...props} undoControl={api.agent.resultRenderers.list().find(item => item.id === workflowBatchUndoControlId)} />
-    )
+    component: (props: StudioAgentResultRendererProps) => <WorkflowBatchResult {...props} />
   });
 
   api.agent.resultRenderers.add({
@@ -146,22 +143,17 @@ export function register(api: ElsaStudioModuleApi) {
   });
 }
 
-/** The Studio Workflows control that owns the batch's designer-history Undo; embedded by id, never re-implemented. */
-export const workflowBatchUndoControlId = "workflows.agent.batch-undo";
-
 interface BatchOperationLabel { index?: number; kind?: string; summary?: string; risk?: string; reasons?: string[] }
 
 /**
  * The review and result card of a reviewed Operation Batch (spec 1193 FR-011, FR-012): each operation with its risk
  * label, the batch's highest risk and complexity label, what applying clears, the outcome in product words, and the
- * whole-change Undo that Studio Workflows owns through designer history.
+ * outcome in product words. The whole-change Undo and the saved state are Studio Workflows' result control, shown after it.
  */
-export function WorkflowBatchResult({ undoControl, ...props }: StudioAgentResultRendererProps & { undoControl?: StudioAgentResultRendererContribution }) {
-  const { proposal, preparedInvocation, toolResult } = props;
+export function WorkflowBatchResult({ proposal, preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
   const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
   const operations = Array.isArray(data.operations) ? data.operations.filter(isRecord) as BatchOperationLabel[] : [];
   const risk = typeof data.risk === "string" ? data.risk : preparedInvocation?.risk;
-  const UndoControl = undoControl?.component;
   return (
     <section aria-label="Workflow change" className="weaver-workflow-batch">
       <p><strong>{batchOutcome(proposal, toolResult)}</strong></p>
@@ -181,13 +173,13 @@ export function WorkflowBatchResult({ undoControl, ...props }: StudioAgentResult
       ) : null}
       <p>The last test-run result and published-artifact association are cleared; Undo does not restore them. Saving and publishing remain your explicit actions.</p>
       {toolResult?.content ? <p>{toolResult.content}</p> : null}
-      {UndoControl && toolResult?.succeeded ? <Suspense fallback={null}><UndoControl {...props} /></Suspense> : null}
     </section>
   );
 }
 
 function batchOutcome(proposal: unknown, toolResult: StudioAgentResultRendererProps["toolResult"]) {
-  if (toolResult?.succeeded && toolResult.receipt?.scope === "clientWorkingState") return "Applied locally to the unsaved draft — not saved or published";
+  // The receipt's own fact. Whether the user has since saved it is the owning module's live state, in its result control.
+  if (toolResult?.succeeded && toolResult.receipt?.scope === "clientWorkingState") return "Applied locally to the working draft as one Undo step";
   const status = isRecord(proposal) && typeof proposal.status === "string" ? proposal.status : "";
   switch (status) {
     case "awaiting-approval": case "edited": return "Proposed — awaiting your review";

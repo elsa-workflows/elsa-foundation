@@ -1380,14 +1380,43 @@ export interface StudioAgentResultRendererProps {
 
 export interface StudioAgentResultRendererContribution extends StudioBackendAwareContribution {
   id: string;
+  /** The contributing module. Unless `resourceModuleIds` is set, it is also the resource module whose results this presents. */
   moduleId?: string;
   displayName: string;
   order?: number;
+  /**
+   * The resource modules whose results this renderer presents, when they differ from the contributing module. When set,
+   * the host matches a result's resource module against these instead of `moduleId`; when absent, behaviour is unchanged.
+   */
+  resourceModuleIds?: string[];
   resourceTypes?: string[];
   resultTypes?: string[];
   schemaVersions?: string[];
   component: ComponentType<StudioAgentResultRendererProps>;
   supports?(props: StudioAgentResultRendererProps): boolean;
+}
+
+/**
+ * An interactive control the resource-owning module shows beside whichever renderer presents a result type, for an
+ * action only that module can perform (for example a designer-history Undo of a change it applied). The host renders
+ * every matching control after the renderer; a control renders nothing when it has nothing to offer.
+ */
+export interface StudioAgentResultControlContribution extends StudioBackendAwareContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  order?: number;
+  /** The resource modules whose results this control acts on; `moduleId` when absent. */
+  resourceModuleIds?: string[];
+  resultTypes: string[];
+  schemaVersions?: string[];
+  component: ComponentType<StudioAgentResultRendererProps>;
+}
+
+/** Whether a renderer or control presents results of a resource module, by `resourceModuleIds` when set, else `moduleId`. */
+export function presentsResourceModule(contribution: { moduleId?: string; resourceModuleIds?: string[] }, resourceModuleId: string | null | undefined): boolean {
+  if (contribution.resourceModuleIds) return !!resourceModuleId && contribution.resourceModuleIds.includes(resourceModuleId);
+  return !contribution.moduleId || contribution.moduleId === resourceModuleId;
 }
 
 export interface StudioAgentRegistry extends StudioAgentPromptDispatcher {
@@ -1402,6 +1431,7 @@ export interface StudioAgentRegistry extends StudioAgentPromptDispatcher {
   readonly toolSlots: StudioContributionRegistry<StudioAgentToolSlotContribution>;
   readonly toolContracts: StudioContributionRegistry<StudioAgentToolContractContribution>;
   readonly resultRenderers: StudioContributionRegistry<StudioAgentResultRendererContribution>;
+  readonly resultControls: StudioContributionRegistry<StudioAgentResultControlContribution>;
 }
 
 export type StudioAiPromptMode = "enqueue" | "steer";
@@ -1528,6 +1558,7 @@ export const studioSlotIds = {
   agentToolSlots: "studio.weaver.tool-slots",
   agentToolContracts: "studio.weaver.tool-contracts",
   agentResultRenderers: "studio.weaver.result-renderers",
+  agentResultControls: "studio.weaver.result-controls",
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
@@ -1619,6 +1650,7 @@ export const studioSlots = {
   agentToolSlots: defineStudioSlot({ id: studioSlotIds.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
   agentToolContracts: defineStudioSlot({ id: studioSlotIds.agentToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
   agentResultRenderers: defineStudioSlot({ id: studioSlotIds.agentResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
+  agentResultControls: defineStudioSlot({ id: studioSlotIds.agentResultControls, kind: "weaver-result-control", title: "Weaver result controls", owner: hostSlotOwner() }),
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
@@ -2001,7 +2033,8 @@ export function createAgentRegistry(options: Pick<CreateStudioContributionRegist
     actions: createContributionRegistry<StudioAgentActionContribution>({ ...options, slot: studioSlots.agentActions }),
     toolSlots: createContributionRegistry<StudioAgentToolSlotContribution>({ ...options, slot: studioSlots.agentToolSlots }),
     toolContracts: createContributionRegistry<StudioAgentToolContractContribution>({ ...options, slot: studioSlots.agentToolContracts }),
-    resultRenderers: createContributionRegistry<StudioAgentResultRendererContribution>({ ...options, slot: studioSlots.agentResultRenderers })
+    resultRenderers: createContributionRegistry<StudioAgentResultRendererContribution>({ ...options, slot: studioSlots.agentResultRenderers }),
+    resultControls: createContributionRegistry<StudioAgentResultControlContribution>({ ...options, slot: studioSlots.agentResultControls })
   };
 }
 

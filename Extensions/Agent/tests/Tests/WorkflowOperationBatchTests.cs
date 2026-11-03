@@ -254,13 +254,26 @@ public sealed class WorkflowOperationBatchTests
     }
 
     [Fact]
-    public async Task A_new_root_replaces_the_existing_tree_destructively_and_takes_children()
+    public async Task A_new_root_replaces_the_existing_tree_destructively_and_is_filled_in_a_following_batch()
     {
         var result = await PrepareAsync(
             new { kind = "add", @ref = "new-root", activityTypeKey = "Acme.version-flowchart", version = "1.0.0", scopePath = Array.Empty<string>(), slot = "root" },
+            new { kind = "set-root", activity = new { @ref = "new-root" } });
+        // The catalog does not disclose a new activity's slots, so nothing is added into it in the same batch.
+        var filled = await PrepareAsync(
+            new { kind = "add", @ref = "new-root", activityTypeKey = "Acme.version-flowchart", version = "1.0.0", scopePath = Array.Empty<string>(), slot = "root" },
             new { kind = "set-root", activity = new { @ref = "new-root" } },
             new { kind = "add", @ref = "first", activityTypeKey = "Acme.version-write-line", version = "1.0.0", scopePath = new[] { "new-root" }, slot = FlowSlot });
+        var twice = await PrepareAsync(
+            new { kind = "add", @ref = "one", activityTypeKey = "Acme.version-flowchart", version = "1.0.0", scopePath = Array.Empty<string>(), slot = "root" },
+            new { kind = "add", @ref = "two", activityTypeKey = "Acme.version-flowchart", version = "1.0.0", scopePath = Array.Empty<string>(), slot = "root" },
+            new { kind = "set-root", activity = new { @ref = "one" } },
+            new { kind = "set-root", activity = new { @ref = "two" } });
 
+        Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, filled.Error?.Code);
+        Assert.StartsWith("Operation 2 (add)", filled.Error!.Message);
+        Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, twice.Error?.Code);
+        Assert.Contains("at most one root", twice.Error!.Message);
         Assert.True(result.Succeeded, result.Error?.Message);
         Assert.Equal(AgentRisk.Destructive, result.Value!.Risk);
         Assert.True(result.Value.Arguments.GetProperty("operations")[1].GetProperty("replacesRoot").GetBoolean());
@@ -270,6 +283,19 @@ public sealed class WorkflowOperationBatchTests
             new { kind = "set-root", activity = new { @ref = "new-root" } },
             new { kind = "position", activity = new { id = "write-1" }, x = 1, y = 1 });
         Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, after.Error?.Code);
+    }
+
+    [Fact]
+    public async Task A_BPMN_scope_is_refused_at_preparation_as_the_applier_refuses_it()
+    {
+        var bpmn = Snapshot(mutate: activities => activities[0]["slots"] = new object[] { new { id = FlowSlot, mode = "bpmn", cardinality = "many" } });
+        var add = await PrepareAsync(Invocation(bpmn, new { kind = "add", @ref = "x", activityTypeKey = "Acme.version-write-line", version = "1.0.0", scopePath = new[] { "flow" }, slot = FlowSlot }));
+        var remove = await PrepareAsync(Invocation(bpmn, new { kind = "remove", activity = new { id = "write-2" } }));
+
+        Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, add.Error?.Code);
+        Assert.Contains("BPMN", add.Error!.Message);
+        Assert.Equal(WorkflowOperationBatch.ReferenceInvalid, remove.Error?.Code);
+        Assert.Contains("BPMN", remove.Error!.Message);
     }
 
     [Fact]

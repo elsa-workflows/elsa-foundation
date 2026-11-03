@@ -86,7 +86,9 @@ revision and the client binding. No persisted revision is read in its place.
     gets the shared `agent.workflow.permission_denied` (explanation stays available) and learns nothing else. The
     catalog is read fresh from `IActivityAuthoringCatalog` when an operation needs it. Outcomes, each naming the failing
     operation, with nothing changed: `agent.workflow.batch.schema_invalid` (400), `agent.workflow.batch.reference_invalid`
-    (dangling, reused or removed references, a root-scope add without `set-root`, cross-scope connections; 422),
+    (dangling, reused or removed references, a new id the document still holds in a layout or presentation record, a
+    root-scope add without `set-root`, a second `set-root`, an add into or a connection within an activity the same
+    batch adds, an add into or a removal from a BPMN scope, cross-scope connections; 422),
     `agent.workflow.batch.clarification_required` (an absent, hidden or non-addable activity, an undeclared input, an
     ambiguous name with candidates by scope path, a Secret Reference that is not visible, an unreadable catalog; 422),
     `agent.workflow.batch.credential_literal` (with an offer to bind a visible Secret Reference; 422),
@@ -108,7 +110,8 @@ revision and the client binding. No persisted revision is read in its place.
   activity indexes (into `activities`) by exact `activityVersionId`, and `containers` lists the root and every activity
   that declares slots, each with its `parentId`, its `slot` in the parent and its `slots` (`id`, `mode`, `cardinality`,
   member `nodes` by index). Every activity has exactly one version and, except the root, exactly one slot; the result
-  must be one tree. It also admits the snapshot's `workingState` (`draft` or `historical`) and up to 64 visible
+  must be one tree. Optional `reservedIds` lists ids the document holds only in its layout or presentation records, so
+  preparation never reuses one. It also admits the snapshot's `workingState` (`draft` or `historical`) and up to 64 visible
   `secretReferences` (name, type and scope only). The additions are copied only when sent, so an older snapshot admits
   unchanged, and activities keep their pre-existing `id`, `type` and `displayName` shape.
   - **Size.** The compact form keeps the 64 KiB content bound: measured on a chained flowchart with GUID catalog
@@ -132,11 +135,12 @@ revision and the client binding. No persisted revision is read in its place.
   from the latest committed draft; each entry carries its line's batch ids, and autosave is held while the current
   line holds a batch the user has not explicitly saved. The `workflow.definition` snapshot's revision is now the
   SHA-256 content revision; the 32-bit hash remains for change detection only. `Elsa.Studio.Weaver.Workflows` renders
-  `workflows.batch-result` (`weaver.workflows.batch-result`) with each operation's risk label and embeds the Studio
-  Workflows control `workflows.agent.batch-undo`, which owns the designer-history Undo; that control is registered as a
-  renderer that no result kind selects. The batch renderer is registered under the resource module id
-  `Elsa.Studio.Workflows`, because the host selects renderers by the result's resource module; FR-019's own-package
-  registration needs a host matching change and is a slice D item.
+  `workflows.batch-result` (`weaver.workflows.batch-result`) with each operation's risk label, registered under its own
+  module identity with `resourceModuleIds: ["Elsa.Studio.Workflows"]`. The designer-history Undo and the live saved
+  state ("Persisted by your explicit save") are Studio Workflows' result control `workflows.agent.batch-undo`
+  (`api.agent.resultControls`), which the host renders after the renderer. Preparation and the applier share one case
+  file, `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowBatchConformance.json`, run by
+  `WorkflowBatchConformanceTests` and `workflowBatchConformance.test.ts`.
 
 **SemVer: Minor.** A new tool contract, result kind and optional snapshot fields; nothing existing changes meaning.
 The working-state revision string changes format (a 32-bit hex hash becomes `sha256:<64 hex>`); it is an opaque

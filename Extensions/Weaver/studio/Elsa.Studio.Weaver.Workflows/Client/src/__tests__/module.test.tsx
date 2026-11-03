@@ -1,7 +1,8 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioAgentResultRendererContribution, StudioAgentResultRendererProps, StudioContributionRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getExecutableDetail, register, WorkflowBatchResult, workflowBatchUndoControlId } from "../module";
+import type { ElsaStudioModuleApi, StudioAgentResultRendererProps, StudioContributionRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { presentsResourceModule } from "@elsa-workflows/studio-sdk";
+import { getExecutableDetail, register, WorkflowBatchResult } from "../module";
 
 describe("weaver workflows module", () => {
   it("registers prompts and presentation on the canonical agent path", () => {
@@ -46,10 +47,15 @@ describe("weaver workflows module", () => {
       ]
     } };
 
-    it("registers for the batch result kind under the resource-owning module", () => {
+    it("registers under its own package for the Workflows module's results", () => {
       const api = testApi(); register(api);
-      expect(api.agent.resultRenderers.list().find(item => item.id === "weaver.workflows.batch-result"))
-        .toMatchObject({ moduleId: "Elsa.Studio.Workflows", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"] });
+      const renderer = api.agent.resultRenderers.list().find(item => item.id === "weaver.workflows.batch-result")!;
+      expect(renderer).toMatchObject({ moduleId: "Elsa.Studio.Weaver.Workflows", resourceModuleIds: ["Elsa.Studio.Workflows"],
+        resultTypes: ["workflows.batch-result"], schemaVersions: ["1"] });
+      // The host's own match: the Workflows module's results, never another module's.
+      expect(presentsResourceModule(renderer, "Elsa.Studio.Workflows")).toBe(true);
+      expect(presentsResourceModule(renderer, "Elsa.Studio.Weaver.Workflows")).toBe(false);
+      expect(presentsResourceModule(renderer, null)).toBe(false);
     });
 
     it("labels each operation's risk, the batch's highest risk and its complexity while proposed", () => {
@@ -62,17 +68,12 @@ describe("weaver workflows module", () => {
       expect(text).toContain("Saving and publishing remain your explicit actions");
     });
 
-    it("reports an applied batch as local working state and embeds the Studio-owned Undo only then", () => {
-      const control = vi.fn(() => <button type="button">Studio undo</button>);
-      const undoControl = { id: workflowBatchUndoControlId, displayName: "Undo", component: control } as unknown as StudioAgentResultRendererContribution;
-      const proposed = render({ proposal: { status: "awaiting-approval" }, result: undefined, preparedInvocation: { preview } as never }, undoControl);
-      expect(proposed).not.toContain("Studio undo");
+    it("reports an applied batch by its receipt and leaves Undo and the saved state to the owning module", () => {
       const applied = render({ proposal: null, result: undefined, preparedInvocation: { preview } as never,
         toolResult: { toolCallId: "call", toolName: "workflow_apply_operation_batch", succeeded: true, content: "Applied all 2 operations.", payload: preview,
-          receipt: { invocationId: "i", before: {} as never, after: {} as never, scope: "clientWorkingState", evidence: preview } } }, undoControl);
-      expect(applied).toContain("Applied locally to the unsaved draft — not saved or published");
-      expect(applied).toContain("Studio undo");
-      expect(control).toHaveBeenCalled();
+          receipt: { invocationId: "i", before: {} as never, after: {} as never, scope: "clientWorkingState", evidence: preview } } });
+      expect(applied).toContain("Applied locally to the working draft as one Undo step");
+      expect(applied).not.toContain("Undo whole change");
     });
 
     it("reports a refused batch as nothing changed", () => {
@@ -153,11 +154,11 @@ function registry<T>(): StudioContributionRegistry<T> {
   };
 }
 
-function render(props: StudioAgentResultRendererProps, undoControl?: StudioAgentResultRendererContribution) {
-  return text(<WorkflowBatchResult {...props} undoControl={undoControl} />);
+function render(props: StudioAgentResultRendererProps) {
+  return text(<WorkflowBatchResult {...props} />);
 }
 
-// The renderer and the embedded control are hook-free, so their element tree is read directly: this package's tests do
+// The renderer is hook-free, so their element tree is read directly: this package's tests do
 // not depend on a DOM renderer.
 function text(node: React.ReactNode): string {
   if (node === null || node === undefined || typeof node === "boolean") return "";

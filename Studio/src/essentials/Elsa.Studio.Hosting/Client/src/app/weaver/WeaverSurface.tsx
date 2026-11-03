@@ -46,6 +46,7 @@ export function WeaverSurface({
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
+  const resultControls = useMemo(() => api.agent.resultControls?.list() ?? [], [api]);
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
@@ -138,12 +139,13 @@ export function WeaverSurface({
           onWithdraw={session.withdrawMessage}
         />
         <WeaverTimeline entries={session.timeline} plan={session.plan} />
-        <AgentToolResults results={session.toolResults} renderers={resultRenderers} />
+        <AgentToolResults results={session.toolResults} renderers={resultRenderers} controls={resultControls} />
         <AgentProposalReview
           proposals={session.proposals}
           disabled={session.busy}
           pendingProposalIds={session.pendingProposalIds}
           resultRenderers={resultRenderers}
+          resultControls={resultControls}
           onApprove={session.approveProposal}
           onDeny={session.denyProposal}
           onExecute={session.executeProposal}

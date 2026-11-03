@@ -100,16 +100,26 @@ describe("strict workflow operation batch applier", () => {
     expect(() => applyWorkflowOperationBatch(nestedDraft(), batch(add({ scopePath: ["flow", "inner"] })), catalog)).toThrow("containment chain");
   });
 
-  it("installs a new root only through set-root and classifies replacing a root as destructive", () => {
-    const frozen = batch(
-      op({ kind: "add", nodeId: "fresh", activityVersionId: flowchartActivity.activityVersionId, activityTypeKey: flowchartActivity.activityTypeKey, version: "1.0.0", scopePath: [], slot: "root", position: null }),
-      op({ kind: "set-root", nodeId: "fresh", replacesRoot: true }, "destructive"),
-      op({ kind: "add", nodeId: "first", activityVersionId: writer.activityVersionId, activityTypeKey: writer.activityTypeKey, version: "1.0.0", scopePath: ["fresh"], slot: flowSlot, position: null }));
+  it("installs a new root only through set-root, once, classifies replacing a root as destructive, and fills it in a later batch", () => {
+    const addRoot = op({ kind: "add", nodeId: "fresh", activityVersionId: flowchartActivity.activityVersionId, activityTypeKey: flowchartActivity.activityTypeKey, version: "1.0.0", scopePath: [], slot: "root", position: null });
+    const frozen = batch(addRoot, op({ kind: "set-root", nodeId: "fresh", replacesRoot: true }, "destructive"));
     const result = applyWorkflowOperationBatch(nestedDraft(), frozen, catalog);
     expect(result.draft.state.rootActivity?.nodeId).toBe("fresh");
     expect(result.removedNodeIds).toEqual(expect.arrayContaining(["flow", "a", "b", "seq", "inner"]));
-    expect(classifyWorkflowOperationRisk(nestedDraft(), frozen)).toEqual(["reviewRequired", "destructive", "reviewRequired"]);
-    expect(() => applyWorkflowOperationBatch(nestedDraft(), batch(frozen.operations[0]), catalog)).toThrow("never installed");
+    expect(classifyWorkflowOperationRisk(nestedDraft(), frozen)).toEqual(["reviewRequired", "destructive"]);
+    expect(() => applyWorkflowOperationBatch(nestedDraft(), batch(addRoot), catalog)).toThrow("never installed");
+    // As the server prepares it: nothing goes into an activity this batch adds, and a batch installs one root.
+    expect(() => applyWorkflowOperationBatch(nestedDraft(), batch(...frozen.operations, op({ kind: "add", nodeId: "first", activityVersionId: writer.activityVersionId,
+      activityTypeKey: writer.activityTypeKey, version: "1.0.0", scopePath: ["fresh"], slot: flowSlot, position: null })), catalog)).toThrow("added by this batch");
+  });
+
+  it("changes only the authored value of an existing input, keeping its wrapper's other fields", () => {
+    const draft = nestedDraft();
+    const a = (draft.state.rootActivity!.structure!.payload.activities as ActivityNode[])[0];
+    a.text = { typeName: "String", expression: { type: "Literal", value: "Old" }, memoryReference: { id: "m1" }, conversion: { mode: "Strict" }, argumentExtras: { keep: true } };
+    const result = applyWorkflowOperationBatch(draft, batch(op({ kind: "set-property", nodeId: "a", property: "text", inputName: "Text", typeName: "String", value: { literal: "New" } })), catalog);
+    expect(child(result.draft.state.rootActivity!, "a").text).toEqual({ typeName: "String", expression: { type: "Literal", value: "New" },
+      memoryReference: { id: "m1" }, conversion: { mode: "Strict" }, argumentExtras: { keep: true } });
   });
 
   it("classifies removals and disconnections as destructive and everything else as review-required", () => {

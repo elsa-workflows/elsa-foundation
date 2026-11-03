@@ -20,6 +20,8 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     internal string? WorkingState { get; init; }
     /// <summary>The Secret References the editor reports as visible to the user: names, types and scopes only.</summary>
     internal IReadOnlyList<WorkflowAgentSecretReference> SecretReferences { get; init; } = [];
+    /// <summary>Ids the document holds outside its tree (layout and presentation records); a new node never reuses one.</summary>
+    internal IReadOnlyList<string> ReservedIds { get; init; } = [];
     internal string? SelectedNodeId { get; init; }
 
     internal const string ModuleId = "Elsa.Studio.Workflows";
@@ -58,7 +60,7 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
                 !nodeIds.Add(Text(node, "id")!)) return false;
             activities.Add(new(Text(node, "id")!, Text(node, "type")!, Bounded(Text(node, "displayName"))));
         }
-        if (!TryReadStructure(body, activities, out var structure, out var admittedStructure)) return false;
+        if (!TryReadStructure(body, activities, out var structure, out var admittedStructure, out var reservedIds)) return false;
         var connections = new List<WorkflowAgentConnectionSummary>();
         foreach (var edge in edges.EnumerateArray())
         {
@@ -100,7 +102,7 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
             new(target.Revision, activities, connections), admitted)
         {
             // An empty draft has no structure to withhold, so it is structured (and empty) by definition.
-            Structure = structure ?? (activities.Count == 0 ? new Dictionary<string, WorkflowAgentNode>() : null), WorkingState = workingState, SecretReferences = secretReferences,
+            Structure = structure ?? (activities.Count == 0 ? new Dictionary<string, WorkflowAgentNode>() : null), ReservedIds = reservedIds, WorkingState = workingState, SecretReferences = secretReferences,
             SelectedNodeId = selectedNodeId
         };
         error = string.Empty;
@@ -120,18 +122,20 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
 
     /// <summary>
     /// Reads the optional compact containment structure: <c>versions</c> groups activity indexes by exact activity version,
+    /// optional <c>reservedIds</c> lists ids the document holds only in its layout or presentation records,
     /// and <c>containers</c> lists the root and every activity that declares slots, each with its parent, its slot in the
     /// parent and its slots, whose <c>nodes</c> are indexes into <c>activities</c>. Every activity has exactly one version and,
     /// except the root, exactly one slot; the result must be one tree. False when present but malformed.
     /// </summary>
     /// <remarks>Indexes keep the structure small: a draft that fits the 64 KiB bound without structure still fits with it.</remarks>
     private static bool TryReadStructure(JsonElement body, IReadOnlyList<WorkflowAgentActivitySummary> activities,
-        out Dictionary<string, WorkflowAgentNode>? structure, out object? admitted)
+        out Dictionary<string, WorkflowAgentNode>? structure, out object? admitted, out IReadOnlyList<string> reservedIds)
     {
         structure = null;
         admitted = null;
+        reservedIds = [];
         if (!body.TryGetProperty("structure", out var value)) return true;
-        if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Any(property => property.Name is not ("versions" or "containers"))
+        if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Any(property => property.Name is not ("versions" or "containers" or "reservedIds"))
             || !value.TryGetProperty("versions", out var versions) || versions.ValueKind != JsonValueKind.Array || versions.GetArrayLength() > 256
             || !value.TryGetProperty("containers", out var containers) || containers.ValueKind != JsonValueKind.Array || containers.GetArrayLength() > 256)
             return false;
@@ -217,7 +221,21 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
             structure[activity.Id] = new(activity.Id, activity.Type, activity.DisplayName, versionOf[index]!,
                 step is null ? null : activities[step.Value.Parent].Id, step?.Slot, slotsOf.GetValueOrDefault(index) ?? []);
         }
-        admitted = new { versions = admittedVersions, containers = admittedContainers };
+        var reserved = new List<string>();
+        if (value.TryGetProperty("reservedIds", out var reservedItems))
+        {
+            if (reservedItems.ValueKind != JsonValueKind.Array || reservedItems.GetArrayLength() > 256) return false;
+            foreach (var item in reservedItems.EnumerateArray())
+            {
+                var id = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+                if (!ValidString(id) || indexOf.ContainsKey(id!) || reserved.Contains(id!)) return false;
+                reserved.Add(id!);
+            }
+        }
+        reservedIds = reserved;
+        admitted = value.TryGetProperty("reservedIds", out _)
+            ? new { versions = admittedVersions, containers = admittedContainers, reservedIds = reserved }
+            : (object)new { versions = admittedVersions, containers = admittedContainers };
         return true;
     }
 

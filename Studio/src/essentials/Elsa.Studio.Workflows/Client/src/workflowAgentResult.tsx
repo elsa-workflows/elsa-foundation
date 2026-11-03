@@ -50,7 +50,10 @@ export function WorkflowBatchUndoControl({ controller, toolResult }: StudioAgent
     finally { setPending(false); }
   }
   return <div className="wf-agent-batch-undo">
-    {availability.persisted ? <p>Persisted by your explicit save.</p> : null}
+    {/* FR-011: the live outcome of an applied batch, applied locally until the user's explicit save persists it. */}
+    <p data-outcome={availability.persisted ? "persisted" : "applied-locally"}>{availability.persisted
+      ? "Persisted by your explicit save."
+      : "Not saved: the change is in the unsaved working draft. Saving and publishing stay with you."}</p>
     <button type="button" disabled={pending || availability.status !== "available"} title={availability.reason} onClick={() => void undo()}>Undo whole change</button>
     {availability.status !== "available" && availability.reason ? <p role="note">{availability.reason}</p> : null}
     {status ? <p role="status">{status}</p> : null}

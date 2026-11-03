@@ -341,6 +341,9 @@ internal static partial class WorkflowOperationBatch
         var refs = new Dictionary<string, AddOperation>(StringComparer.Ordinal);
         var pendingRoots = new HashSet<string>(StringComparer.Ordinal);
         var root = nodes.Values.SingleOrDefault(node => node.ParentId is null)?.Id;
+        var rootInstalled = false;
+        // Ids the document still holds in its side tables (layout, presentation) are never reused for a new node either.
+        foreach (var id in snapshot.ReservedIds) existingIds.Add(id);
         var connections = snapshot.Graph.Connections
             .Select(edge => new Connection(edge.Source, edge.Target, Port(edge.SourcePort), string.IsNullOrEmpty(edge.TargetPort) ? null : edge.TargetPort)).ToList();
         var frozen = new List<FrozenOperation>();
@@ -412,7 +415,7 @@ internal static partial class WorkflowOperationBatch
                 return (null, Clarify(add.Index, "add", $"the activity type '{add.ActivityTypeKey}' version '{add.Version}' names {matches.Length} catalog entries ({string.Join(", ", matches.Take(4).Select(entry => entry.ActivityVersionId))}). Ask the user which one is meant."));
             var entry = matches[0];
             if (!entry.Available)
-                return (null, Clarify(add.Index, "add", $"'{entry.DisplayName}' ({entry.ActivityTypeKey} {entry.Version}) is installed but cannot be added here: {entry.AvailabilityReason ?? "the activity availability policy excludes it"}. Existing activities of this type stay editable. Ask the user which available activity to use."));
+                return (null, Clarify(add.Index, "add", $"'{entry.DisplayName}' ({entry.ActivityTypeKey} {entry.Version}) is installed but cannot be added here: {(entry.AvailabilityReason ?? "the activity availability policy excludes it").TrimEnd('.')}. Existing activities of this type stay editable. Ask the user which available activity to use."));
             string? parentId = null;
             if (add.ScopePath.Count == 0)
             {
@@ -425,11 +428,16 @@ internal static partial class WorkflowOperationBatch
                 var (container, problem) = ResolveScope(add);
                 if (problem is not null) return (null, problem);
                 parentId = container!.Id;
-                if (!container.Added)
+                // The catalog does not disclose a new activity's slots, so nothing is added into an activity this batch
+                // adds: its slots could not be confirmed before review. A following batch can fill it.
+                if (container.Added)
+                    return (null, Reference(add.Index, "add", $"'{container.Id}' is added by this batch, so its slots cannot be confirmed yet; add activities into it in a following batch."));
                 {
                     var slot = container.Slots!.FirstOrDefault(item => item.Id == add.Slot);
                     if (slot is null)
                         return (null, Clarify(add.Index, "add", $"'{Label(container)}' has no slot '{add.Slot}'. Its slots: {SlotList(container)}."));
+                    if (slot.Mode == "bpmn")
+                        return (null, Reference(add.Index, "add", $"the slot '{add.Slot}' of {Label(container)} is a BPMN scope, which an Operation Batch does not change."));
                     if (slot.Cardinality == "single" && nodes.Values.Any(node => node.ParentId == container.Id && node.Slot == add.Slot && !removed.Contains(node.Id)))
                         return (null, Reference(add.Index, "add", $"the slot '{add.Slot}' of '{Label(container)}' holds a single activity and is occupied. Remove that activity first."));
                 }
@@ -451,9 +459,13 @@ internal static partial class WorkflowOperationBatch
 
         (FrozenOperation?, Failure?) SetRoot(SetRootOperation setRoot)
         {
+            // One root per batch: a second set-root would replace the root the first one installed.
+            if (rootInstalled)
+                return (null, Reference(setRoot.Index, "set-root", "a batch installs at most one root."));
             if (setRoot.Activity.Ref is not { } reference || !pendingRoots.Contains(reference))
                 return (null, Reference(setRoot.Index, "set-root", "set-root takes the 'ref' of an earlier add with an empty 'scopePath' and 'slot': 'root'. An existing activity is never moved to the root."));
             pendingRoots.Remove(reference);
+            rootInstalled = true;
             var replaces = root is not null && !refs.ContainsKey(root);
             if (root is not null)
                 foreach (var node in nodes.Values.Where(node => node.Id != reference && !removed.Contains(node.Id)).ToArray())
@@ -558,6 +570,8 @@ internal static partial class WorkflowOperationBatch
             if (problem is not null) return (null, problem);
             if (node!.ParentId is null)
                 return (null, Reference(remove.Index, "remove", "the root cannot be removed. Add a new root candidate and install it with set-root instead."));
+            if (nodes[node.ParentId].Slots?.FirstOrDefault(slot => slot.Id == node.Slot)?.Mode == "bpmn")
+                return (null, Reference(remove.Index, "remove", $"{Label(node)} is in a BPMN scope, which an Operation Batch does not change."));
             var subtree = Subtree(node.Id);
             foreach (var id in subtree) removed.Add(id);
             connections.RemoveAll(edge => subtree.Contains(edge.Source) || subtree.Contains(edge.Target));
@@ -579,7 +593,9 @@ internal static partial class WorkflowOperationBatch
             if (source.ParentId is null || source.ParentId != target.ParentId || source.Slot != target.Slot)
                 return (null, Reference(connect.Index, "connect", $"{Label(source)} and {Label(target)} are not in the same flowchart scope ({ScopePath(source.ParentId)} vs {ScopePath(target.ParentId)})."));
             var owner = nodes[source.ParentId];
-            if (!owner.Added && owner.Slots!.FirstOrDefault(slot => slot.Id == source.Slot)?.Mode != "flowchart")
+            if (owner.Added)
+                return (null, Reference(connect.Index, "connect", $"'{owner.Id}' is added by this batch, so whether it is a flowchart cannot be confirmed yet; connect its activities in a following batch."));
+            if (owner.Slots!.FirstOrDefault(slot => slot.Id == source.Slot)?.Mode != "flowchart")
                 return (null, Reference(connect.Index, "connect", $"the slot '{source.Slot}' of {Label(owner)} is not a flowchart, so it has no connections."));
             var port = Port(connect.SourcePort);
             if (connections.Any(edge => edge.Source == source.Id && edge.Target == target.Id && edge.SourcePort == port))

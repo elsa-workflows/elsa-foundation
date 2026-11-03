@@ -56,8 +56,8 @@ export function useWorkflowContextBridge({
   const connections = useMemo(() => draft ? collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
   // Structure (spec 1193 FR-014): each activity's exact version, parent and slot, and its own slots, so an Operation
   // Batch can name an explicit scope path and slot. Compact, by index into `activities`, so it stays small.
-  const structure = useMemo(() => draft ? compactWorkflowStructure(activities, collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion)) : null,
-    [activities, catalogByVersion, draft]);
+  const structure = useMemo(() => draft ? compactWorkflowStructure(activities, collectWorkflowContextStructure(draft.state.rootActivity, catalogByVersion),
+    [...(draft.layout ?? []), ...(draft.activityPresentation ?? [])].map(record => record.nodeId)) : null, [activities, catalogByVersion, draft]);
   // Visible Secret References are those the draft already binds: names, types and scopes only, never a value.
   const secretReferences = useMemo(() => draft ? collectVisibleSecretReferences(draft.state.rootActivity, catalogByVersion) : [], [catalogByVersion, draft]);
   const diagnostics = useMemo(
@@ -123,7 +123,7 @@ const workflowSnapshotStructureMargin = 2048;
  * The compact containment structure: activity indexes grouped by exact version, and the root plus every activity with
  * slots, each with its parent, its slot in the parent and its slots' member indexes.
  */
-export function compactWorkflowStructure(activities: Array<{ id: string }>, structure: Map<string, WorkflowContextStructure>) {
+export function compactWorkflowStructure(activities: Array<{ id: string }>, structure: Map<string, WorkflowContextStructure>, sideTableIds: string[] = []) {
   const indexOf = new Map(activities.map((activity, index) => [activity.id, index]));
   const versions = new Map<string, number[]>();
   activities.forEach((activity, index) => {
@@ -136,7 +136,9 @@ export function compactWorkflowStructure(activities: Array<{ id: string }>, stru
     return [{ id: activity.id, parentId: node.parentId, slot: node.slot, slots: node.slots.map(slot => ({ ...slot,
       nodes: activities.flatMap(child => { const member = structure.get(child.id); return member?.parentId === activity.id && member.slot === slot.id ? [indexOf.get(child.id)!] : []; }) })) }];
   });
-  return { versions: [...versions].map(([id, nodes]) => ({ id, nodes })), containers };
+  // Ids only the side tables still hold: a new node never reuses one, so the server must know them too (bounded).
+  const reservedIds = [...new Set(sideTableIds.filter(id => !indexOf.has(id)))].slice(0, 256);
+  return { versions: [...versions].map(([id, nodes]) => ({ id, nodes })), containers, ...(reservedIds.length ? { reservedIds } : {}) };
 }
 
 /** The distinct Secret References the draft binds, bounded to 64. A Secret Reference names a secret; it holds no value. */

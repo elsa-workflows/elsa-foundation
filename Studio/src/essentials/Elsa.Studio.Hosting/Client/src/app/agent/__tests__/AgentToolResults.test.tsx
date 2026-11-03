@@ -19,3 +19,33 @@ it.each(["supports", "component"])("keeps owner evidence and shared review usabl
     expect(approve.disabled).toBe(false); flushSync(() => approve.click()); expect(approved).toHaveBeenCalledTimes(1);
   } finally { flushSync(() => root.unmount()); error.mockRestore(); }
 });
+
+// Spec 1193 FR-019: a renderer contributed by another package presents a resource module's results through
+// resourceModuleIds, and the resource-owning module's result controls render after it, for the matching result type only.
+it("matches renderers by resource module and renders the owning module's result controls after them", () => {
+  const container = document.createElement("div"); const root = createRoot(container);
+  const target = { moduleId: "Owner", resourceType: "doc", resourceId: "one", revision: "r2" };
+  const payload = { typeId: "owner.changed", schemaVersion: "1", data: {} };
+  const result = { toolCallId: "call", toolName: "owner_change", succeeded: true, content: "Changed.", payload,
+    receipt: { invocationId: "i", before: { ...target, revision: "r1" }, after: target, scope: "clientWorkingState" as const, evidence: payload } };
+  const renderers = [
+    { id: "presenter", moduleId: "Presenter", resourceModuleIds: ["Owner"], displayName: "Presenter", resultTypes: ["owner.changed"], component: () => <span>Presented by another package</span> },
+    { id: "foreign", moduleId: "Presenter", resourceModuleIds: ["Someone.Else"], displayName: "Foreign", resultTypes: ["owner.changed"], component: () => <span>Foreign renderer</span> }
+  ];
+  const controls = [
+    { id: "undo", moduleId: "Owner", displayName: "Undo", resultTypes: ["owner.changed"], component: () => <button type="button">Owner undo</button> },
+    { id: "other-type", moduleId: "Owner", displayName: "Other", resultTypes: ["owner.other"], component: () => <span>Wrong type control</span> },
+    { id: "other-module", moduleId: "Stranger", displayName: "Stranger", resultTypes: ["owner.changed"], component: () => <span>Stranger control</span> }
+  ];
+  try {
+    flushSync(() => root.render(<><AgentToolResults results={[result]} renderers={renderers} controls={controls} />
+      <AgentProposalReview proposals={[{ id: "p", title: "Change", summary: "Changed", risk: "review-required", status: "executed", revision: "r2",
+        resourceTarget: target, resultRendererId: "presenter", toolResult: result }]} resultRenderers={renderers} resultControls={controls}
+        onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} /></>));
+    expect(container.textContent?.match(/Presented by another package/g)).toHaveLength(2);
+    expect(container.textContent).not.toContain("Foreign renderer");
+    expect(container.textContent?.match(/Owner undo/g)).toHaveLength(2);
+    expect(container.textContent).not.toContain("Wrong type control");
+    expect(container.textContent).not.toContain("Stranger control");
+  } finally { flushSync(() => root.unmount()); }
+});

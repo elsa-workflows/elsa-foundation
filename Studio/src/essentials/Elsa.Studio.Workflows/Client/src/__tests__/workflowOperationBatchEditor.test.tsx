@@ -29,13 +29,18 @@ const noop = () => {};
 let agent: ReturnType<typeof createAgentRegistry>, controller: ReturnType<typeof registerWorkflowAgent>;
 let doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>, persistence: ReturnType<typeof useWorkflowPersistence>;
 let editingAllowed: boolean, root: Root, container: HTMLDivElement, sequence = 0;
+// When set, the editor's compare-and-replace is held back so a test can commit it after the observation deadline.
+let deferDispatch = false, deferred: (() => void) | null = null;
 
 function Probe() {
   doc = useWorkflowDocument();
   const current = doc;
   history = useDraftHistory({ draft: doc.state.draft, restoreDraft: snapshot => current.editDraft(() => snapshot) });
   persistence = useWorkflowPersistence({ context, draft: doc.state.draft, editDraft: doc.editDraft, setStatus: noop, setError: noop, lineageHold: history.lineageHold });
-  useWorkflowGraphOperationBatch({ draft: doc.state.draft, details, catalog: batchCatalog, document: doc, controller, holdForReview: persistence.holdForReview,
+  const document = deferDispatch ? { ...doc, compareAndReplaceDraftByBatch: (...args: Parameters<WorkflowDocumentApi["compareAndReplaceDraftByBatch"]>) => {
+    deferred = () => current.compareAndReplaceDraftByBatch(...args);
+  } } : doc;
+  useWorkflowGraphOperationBatch({ draft: doc.state.draft, details, catalog: batchCatalog, document, controller, holdForReview: persistence.holdForReview,
     reviewHeld: persistence.reviewHeld, canEdit: () => editingAllowed, setStatus: noop, setError: noop, history: history.batchHistory });
   useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: doc.state.draft, selectedNode: null, selectedNodeId: doc.state.selectedNodeId,
     selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion });
@@ -49,7 +54,7 @@ function load() {
 
 beforeEach(() => {
   vi.mocked(updateDraft).mockReset().mockImplementation(async (_context, snapshot) => snapshot);
-  vi.useFakeTimers(); editingAllowed = true; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
+  vi.useFakeTimers(); editingAllowed = true; deferDispatch = false; deferred = null; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); load();
 });
@@ -131,6 +136,46 @@ describe("reviewed Operation Batch in the editor", () => {
     expect(getDraftSignature(doc.state.draft!)).toBe(getDraftSignature(expected));
     expect(history.lineageHold.isHeld()).toBe(false);
     if (kind !== "read-only") expect(result.summary).toMatch(/stale/);
+  });
+
+  it.each(["select", "navigate"])("refuses a same-tick %s race at the reducer, comparing selection and scope frame", async race => {
+    const invocation = request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]);
+    const before = structuredClone(doc.state.draft!);
+    let completion!: Promise<StudioAgentClientExecutionResult>;
+    flushSync(() => {
+      // Queued before the batch in the same tick: the binding check still sees the old render, the reducer does not.
+      if (race === "select") doc.select("b");
+      // The selection stays null; only the scope frame differs, so only the frame comparison can refuse it.
+      else doc.navigateToScope([{ ownerNodeId: "seq", slotId: sequenceSlot, label: "Inner sequence / Activities" }], null);
+      completion = controller.execute!(invocation);
+    });
+    const result = await completion;
+    expect(result.outcome).toBe("refused");
+    expect(result.summary).toMatch(/stale/);
+    expect(getDraftSignature(doc.state.draft!)).toBe(getDraftSignature(before));
+    expect(history.lineageHold.isHeld()).toBe(false);
+  });
+
+  it("refuses a change too close to its deadline to be observed", async () => {
+    const before = structuredClone(doc.state.draft!);
+    const result = await run({ ...request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]), expiresAt: new Date(Date.now() + 3000).toISOString() });
+    expect(result).toMatchObject({ outcome: "refused", summary: expect.stringContaining("too close to its deadline") });
+    expect(getDraftSignature(doc.state.draft!)).toBe(getDraftSignature(before));
+  });
+
+  it("records a batch the reducer applies after its observation timed out, with its history entry and autosave hold", async () => {
+    deferDispatch = true;
+    flushSync(() => root.render(<Probe />));
+    const invocation = { ...request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]), expiresAt: new Date(Date.now() + 6000).toISOString() };
+    const completion = run(invocation);
+    await vi.advanceTimersByTimeAsync(7000);
+    expect((await completion).outcome).toBe("uncertain");
+    expect(deferred).not.toBeNull();
+    flushSync(() => deferred!());
+    expect(history.lineageHold.isHeld()).toBe(true);
+    expect(controller.batch!.state("workflow-batch-" + invocation.invocationId).status).toBe("available");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(updateDraft).not.toHaveBeenCalled();
   });
 
   it("fails closed when Studio's live risk recheck disagrees with the reviewed classification", async () => {

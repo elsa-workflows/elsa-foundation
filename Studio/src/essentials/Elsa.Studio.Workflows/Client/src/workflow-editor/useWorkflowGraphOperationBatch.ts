@@ -19,6 +19,11 @@ export const workflowBatchToolName = "workflow_apply_operation_batch";
 export const workflowLayoutToolName = "workflow_set_designer_position";
 export const workflowBatchResultType = "workflows.batch-result";
 const batchUndoPrefix = "workflow-batch-";
+/**
+ * A change is dispatched only while its observation still has this long to run, so the editor's own commit is observed
+ * before the deadline. Should the reducer still commit later, the batch is recorded anyway (see the observation effect).
+ */
+export const workflowObservationMarginMs = 5000;
 
 type UndoPoint = { before: WorkflowDraft; afterRevision: string; generationId: string; previousReviewHold: boolean };
 type Pending = {
@@ -37,22 +42,30 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
 }) {
   const undoPoints = useRef(new Map<string, UndoPoint>());
   const pending = useRef<Pending | null>(null);
+  // Every dispatched batch until the reducer reports it, independent of its observation: a batch the reducer applies is
+  // always one history entry with its autosave hold, even if its observation already timed out as uncertain.
+  const dispatchedBatches = useRef(new Map<string, { id: string; applied: WorkflowDraft }>());
   const latest = useRef({ draft, details, catalog, document, canEdit, reviewHeld, history });
   latest.current = { draft, details, catalog, document, canEdit, reviewHeld, history };
 
   useEffect(() => {
+    const transaction = document.state.batchTransaction;
+    const dispatched = transaction ? dispatchedBatches.current.get(transaction.id) : undefined;
+    if (transaction && dispatched) {
+      dispatchedBatches.current.delete(transaction.id);
+      // Applied by the reducer: from this moment the batch is one designer-history entry, whatever follows it.
+      if (transaction.applied) latest.current.history?.recordBatch(dispatched.id, dispatched.applied);
+    }
     const item = pending.current;
-    if (!item || document.state.batchTransaction?.id !== item.id) return;
+    if (!item || !transaction || transaction.id !== item.id) return;
     pending.current = null; clearTimeout(item.timeout);
-    if (!document.state.batchTransaction.applied) {
+    if (!transaction.applied) {
       if (!item.batch) holdForReview(item.previousReviewHold);
       item.resolve({ outcome: "refused", summary: item.batch
         ? "The working draft, its selection or its scope changed after the change was reviewed, so nothing was applied. The change is stale; ask Weaver to prepare it again."
         : "The workflow changed before the atomic edit could apply." });
       return;
     }
-    // Applied by the reducer: from this moment the batch is one designer-history entry, whatever follows it.
-    if (item.batch) latest.current.history?.recordBatch(item.batch.id, item.batch.applied);
     if (draft && getDraftContentRevision(draft) === item.expectedRevision) {
       item.resolve(item.result);
       setStatus(item.result.summary); setError("");
@@ -141,7 +154,8 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       catch (error) { return refuse(`The whole batch was refused and nothing was applied. ${error instanceof Error ? error.message : String(error)}`); }
       const afterRevision = getDraftContentRevision(applied.draft);
       if (afterRevision === target.revision) return refuse("The batch produces no working-state change.");
-      if (signal?.aborted || Date.parse(invocation.expiresAt) <= Date.now()) return refuse("The reviewed workflow change expired before dispatch.");
+      if (signal?.aborted || Date.parse(invocation.expiresAt) - Date.now() < workflowObservationMarginMs)
+        return refuse("The reviewed workflow change is too close to its deadline to be applied and observed. Nothing was applied; ask Weaver to prepare it again.");
 
       // FR-008: the selection survives unless the batch removed the selected node; then the inspector moves to the
       // nearest surviving ancestor scope (no node selected), or clears when nothing survives. The scope frame stays when
@@ -166,6 +180,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
         } }
       };
       // The receipt answers the originating binding: it is computed now, before the selection change rotates the binding.
+      dispatchedBatches.current.set(invocation.invocationId, { id: batchId, applied: applied.draft });
       const completion = observe(invocation.invocationId, afterRevision, result, invocation.expiresAt, false, { id: batchId, applied: applied.draft });
       current.document.compareAndReplaceDraftByBatch(invocation.invocationId, target.resourceId!, target.revision!, state.selectedNodeId, applied.draft, selection,
         state.frames, frames);
