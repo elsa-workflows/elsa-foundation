@@ -340,6 +340,62 @@
    "original": "        BrokerUnreachableException => EtlRabbitMqErrorKind.Transient,",
    "mutated_text": "        BrokerUnreachableException => EtlRabbitMqErrorKind.Rejected,",
    "sourceRevision": "5fc2122e4728deff4697b589904429221552c73f"
+  },
+  {
+   "mutation": "binding-handle-host",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            target.Host,\n",
+   "mutated_text": "",
+   "sourceRevision": "069d41663629f2b47dd22b40340cd2b560544bd5"
+  },
+  {
+   "mutation": "binding-handle-port",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            target.Port,\n",
+   "mutated_text": "",
+   "sourceRevision": "069d41663629f2b47dd22b40340cd2b560544bd5"
+  },
+  {
+   "mutation": "binding-handle-exchanges",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.A_binding_pins",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_an_exchange_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            AllowedExchanges = binding.AllowedExchanges.Order(StringComparer.Ordinal).ToArray()\n",
+   "mutated_text": "            AllowedExchanges = 0\n",
+   "sourceRevision": "069d41663629f2b47dd22b40340cd2b560544bd5"
+  },
+  {
+   "mutation": "compiler-routing-key-length",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqDestinationTests.Names_longer",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqDestinationTests.Names_longer_than_a_protocol_short_string_are_refused"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "IsRabbitMqRoutingKey(string? routingKey) => routingKey is { Length: <= 255 } &&",
+   "mutated_text": "IsRabbitMqRoutingKey(string? routingKey) => routingKey is not null &&",
+   "sourceRevision": "069d41663629f2b47dd22b40340cd2b560544bd5"
   }
  ]
 }
