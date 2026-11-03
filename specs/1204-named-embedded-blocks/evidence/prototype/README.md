@@ -6,7 +6,7 @@ The actual Studio/Workbench products and retained native harness were built from
 
 The temporary extraction experiment lived in commit `c48331a1632cd2d7eed031cb0916a2b1df27643d` and was exercised again at the qualified source above. It was removed after the experiment. This PR retains the supporting runtime/history fixes and proof harness; it does not ship a partly implemented extraction command.
 
-The controller checked every browser asset individually. The committed receipt retains the complete asset inventory digest/count and per-module digests, plus individual Workflows assets; this avoids copying thousands of unchanged editor-vendor paths into the spec. The full per-file manifest remains in the owned run's original receipt, whose digest is retained.
+The controller checked every browser asset individually. The committed receipt retains the complete asset inventory digest/count and per-module digests, plus relevant individual Workflows editor assets; this avoids copying thousands of unchanged icon/vendor paths into the spec. The full per-file manifest remains in the owned run's original receipt, whose digest is retained.
 
 | Proof | Result and evidence |
 |---|---|
