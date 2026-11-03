@@ -176,8 +176,8 @@ this applies the same rule to both surfaces. The conservative choice is correct 
 while a false one is visible and can be overridden (decision 6).
 
 **A read alone never produces a write.** Only an explicit write enters this rule: a capture, a `Set`, or a session write
-(an assignment, or in a script a change the JSON-backed view recorded). The ADR 0090 amendment ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425), C1 and
-C2) makes session reads untracked, so a step that only read X has no write to X, and so no lost update on X. Under
+(an assignment, or in a script a change found by comparing JavaScript with JavaScript, ADR 0046 V9). The ADR 0090 amendment ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425), C1 and
+C2) never turns a read into a write, so a step that only read X has no write to X, and so no lost update on X. Under
 ADR 0090 as first written, every session read was tracked and compared at commit, and a lossy adapter could turn a
 read into a write (see the evidence on [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)).
 
