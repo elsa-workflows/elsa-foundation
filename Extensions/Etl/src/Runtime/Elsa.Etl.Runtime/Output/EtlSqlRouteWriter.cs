@@ -52,7 +52,7 @@ internal sealed class EtlSqlRouteWriter(IEtlSqlEngine engine, TimeProvider clock
             var keys = Convert.ToInt64(await ScalarAsync(connection, transaction, engine.CountUniqueKeys(delivery.Table, delivery.Key), [],
                 cancellationToken), CultureInfo.InvariantCulture);
             if (keys < 0)
-                throw new EtlEffectException("etl.sql-write-rejected", "The SQL destination table does not exist.");
+                throw new EtlEffectException("etl.sql-write-rejected", "The SQL destination table does not exist or is not a base table.");
             if (keys == 0)
                 throw new EtlEffectException("etl.sql-key-constraint-missing",
                     "The SQL destination table has no unique constraint on exactly its key columns.");

@@ -29,7 +29,7 @@ The plan adds a main-route `sql` destination:
   - SQL shares the persisted recorded-publication `EffectMechanism` value (research R7);
   - no migration, because the batch publication flags are reused.
 - **Extension points.**
-  - The Core `EXTENSION_POINTS.md` gains `IEtlSqlEngine`, a contributor keyed by provider name, of which the runtime resolves one per binding.
+  - The Core `EXTENSION_POINTS.md` gains `IEtlSqlEngine`, an adapter keyed by provider name (not a fan-in contributor), of which the runtime resolves one per binding.
   - Each engine package gets a README.
 - **Tests.**
   - Behaviour tests cover the compiler, bindings, writer, publication and journeys.
