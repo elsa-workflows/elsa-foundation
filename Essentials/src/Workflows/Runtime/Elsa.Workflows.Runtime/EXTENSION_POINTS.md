@@ -700,7 +700,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** reads each bounded page of work together with its current visibility deadline, including active claims and released retry delays, in the same provider read. The coalescing working set uses it under the workflow execution's single-writer lease; it does not acquire ownership or replace claim fencing.
 - **Default implementations:** `InMemoryWorkflowSchedulerWorkQueue` (`Elsa.Workflows.Runtime`) and `EfSchedulerWorkQueueStore` (`Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore`). Visibility pages follow actual claim FIFO order with scope-bound continuations; the in-memory provider keeps its existing item-only keyset listing unchanged. EF does not issue an additional query for visibility.
 - **When to implement:** on a custom scheduler queue that should keep bookmark resumes and delayed releases coalesced, together with `IWorkflowSchedulerWorkDeferral`. A queue decorator must forward it when its inner queue implements it.
-- **What depends on it:** `RuntimeCoalescingSession` seeds its overlay and each item's visibility deadline from it, and stops both the drain loop's claim and the inline fused pump at an item whose deadline has not passed.
+- **What depends on it:** when the queue also supports claim transitions and `IWorkflowSchedulerWorkDeferral`, `RuntimeCoalescingSession` seeds its overlay and each item's visibility deadline from it, and stops both the drain loop's claim and the inline fused pump at an item whose deadline has not passed.
 - **Fallback:** a queue without this reader, or without `IWorkflowSchedulerWorkDeferral`, retains the durable pre-claim boundary for bookmark resumes. A queue with both can keep successful resumes coalesced; on explicit temporary unavailability or an honored `RetryAfter`, the flush persists the delay on the released item through `IWorkflowSchedulerWorkDeferral`. A durable copy that is gone, or that another owner holds under a live claim, fails the drain rather than reporting a durable deferral.
 
 ### `IWorkflowSchedulerWorkDeferral` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -1152,8 +1152,9 @@ that boundary. An unavailable terminal workflow checkpoint preserves an already 
 its prior nonterminal control; it publishes the terminal barrier only after the checkpoint succeeds.
 
 Coalescing asks whether the exact claim can persist deferred visibility before releasing unavailable
-work. A legacy queue without visibility snapshots keeps its established bookmark-resume boundary;
-other ordinary work remains coalescible. Unsupported overlay deferral propagates the original
+work. A queue that lacks claim transitions, visibility snapshots (`IWorkflowSchedulerWorkVisibilityReader`)
+or deferral by identity (`IWorkflowSchedulerWorkDeferral`) keeps its established bookmark-resume
+boundary; other ordinary work remains coalescible. Unsupported overlay deferral propagates the original
 unavailable signal with its source retained, including after overlay deactivation. It never reports
 a durable retry delay that exists only in memory.
 

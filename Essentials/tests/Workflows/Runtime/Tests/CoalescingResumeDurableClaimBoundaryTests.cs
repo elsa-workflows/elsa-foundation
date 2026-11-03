@@ -809,6 +809,53 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Visibility_reader_without_deferral_by_identity_keeps_the_conservative_path(bool unavailable)
+    {
+        // A queue that lists visibility but cannot delay an item by its identity cannot persist a delay at the flush, so
+        // the overlay never records one (#3690). An honored RetryAfter is not released and is poisoned, and temporary
+        // unavailability propagates with its source retained, as for a queue without visibility snapshots. The flush
+        // never reaches the deferral the queue lacks.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, invokeUnavailable: unavailable);
+        await using var provider = BuildProvider(shared, probe, retryAfter: unavailable ? null : RetryDelay,
+            queue: new VisibilityReaderOnlyQueue(shared.Queue));
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var orchestrator = scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>();
+            var records = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+            if (unavailable)
+            {
+                var exception = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                    orchestrator.DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+                Assert.Equal("probe.invoke-unavailable", exception.Code);
+                Assert.Empty(await records.ListAsync(WorkflowExecutionId));
+            }
+            else
+            {
+                var result = await orchestrator.DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+                Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+                var record = Assert.Single(await records.ListAsync(WorkflowExecutionId));
+                Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+                Assert.Null(record.NextRetryAt);
+            }
+        }
+
+        Assert.True(Assert.Single(probe.InvokeSessionActive));
+        // No durable delay was advertised or invented: the unavailable source stays runnable at once, and the poisoned
+        // step is gone.
+        var queued = (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items
+            .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter));
+        if (unavailable)
+            Assert.Equal([("invoke-1", (DateTimeOffset?)null)], queued);
+        else
+            Assert.Empty(queued);
+    }
+
     private static void AssertCoalescedVersions(IServiceProvider services, params long[] versions)
     {
         var commits = InnerCommitStore(services).ListCommits();
@@ -1038,6 +1085,14 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     {
         public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
             new(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after");
+    }
+
+    // Lists visibility but cannot delay an item by its identity, as a third-party provider written before #3690 does.
+    private sealed class VisibilityReaderOnlyQueue(InMemoryWorkflowSchedulerWorkQueue inner)
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+    {
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
+            inner.ListWithVisibilityAsync(query, token);
     }
 
     // Fails the first targeted deletion after the boundary's durable commit, as a provider timeout would.

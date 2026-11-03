@@ -1250,7 +1250,7 @@ public sealed class RuntimeCoalescingSession
         {
             // A refusal means this drain lost the item: its durable copy is gone or held under another owner's live
             // claim. The flush fails as it does when any other tracked work goes missing, although its commit may have
-            // landed; whoever holds the durable copy decides when the item runs.
+            // landed; whoever holds the durable copy decides when the item runs (#3700).
             if (await TryPersistReleaseAsync(pending, cancellationToken) is { } failure)
                 throw new InvalidOperationException(failure);
             _pendingReleases.Remove(workItemId);
@@ -1264,7 +1264,14 @@ public sealed class RuntimeCoalescingSession
         // the overlay holds the segment, ahead of a continuation the flush persists only now (#3690). Delay the released
         // item by its identity, never by position, so no other queued item receives its delay. FIFO still decides what
         // runs: work ahead of it runs first, and once it is the head nothing behind it overtakes it before it is due.
-        var deferred = await ((IWorkflowSchedulerWorkDeferral)_innerQueue).DeferAsync(
+        // SupportsDeferredOverlayRelease keeps a queue without the capability from recording a release to persist.
+        if (_innerQueue is not IWorkflowSchedulerWorkDeferral deferral)
+        {
+            throw new InvalidOperationException(
+                $"The durable scheduler queue does not implement {nameof(IWorkflowSchedulerWorkDeferral)}, so it cannot persist a deferred release.");
+        }
+
+        var deferred = await deferral.DeferAsync(
             WorkflowExecutionId, pending.Claim.Item.WorkItemId, _timeProvider.GetUtcNow(), pending.VisibleAt, cancellationToken);
         return deferred
             ? null

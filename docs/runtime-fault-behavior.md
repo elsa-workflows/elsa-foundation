@@ -249,8 +249,13 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      - the same delayed-release rule as temporarily unavailable work: a step kind that supports it
        (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
        `DeliverChildControl`, `Checkpoint`), a live claim not yet consumed by a commit, and a queue
-       that can persist the delay (inside a coalescing segment, one that can also delay a queued item by its
-       identity, `IWorkflowSchedulerWorkDeferral`);
+       that can persist the delay. Inside a coalescing segment that queue must support claim transitions,
+       list items with their visibility (`IWorkflowSchedulerWorkVisibilityReader`) and delay a queued item
+       by its identity (`IWorkflowSchedulerWorkDeferral`). Lacking any of these, the segment keeps the
+       conservative path of a queue without visibility snapshots: a `ResumeBookmark` step is claimed from
+       the durable queue after a flush, and any other step claimed from the segment is not delayed, so
+       `RetryAfter` is poisoned and temporary unavailability propagates with the step still queued and
+       no delay;
      - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
        `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
      - the fault was not caused by a checkpoint rule;
@@ -267,7 +272,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      coalescing segment that a boundary deactivated refuses this way when the step's durable copy is gone,
      or another owner holds it under a live claim.
 
-     One case is left (#3690). An active segment records the release in its overlay at once and persists
+     One case is left ([#3700](https://github.com/elsa-workflows/elsa-foundation/issues/3700)). An active segment records the release in its overlay at once and persists
      it only at its flush, after the flush commit has landed. If by then the step's durable copy is gone, or another owner
      holds it under a live claim, this drain has lost the step. The flush fails with an
      `InvalidOperationException`, as it does when any other work it tracks goes missing, although its
