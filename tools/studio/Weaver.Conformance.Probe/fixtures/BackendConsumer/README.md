@@ -71,6 +71,6 @@ registration with a wrapper over the host's actual commands. With the mode `{"dr
 keyed tag (or view) creation is committed by the actual library, then its response is lost once per operation key: the
 wrapper appends `{kind, operationKey, committedId}` to the log and throws. The Weaver tool must then resolve the outcome by
 rereading the key, and the driver proves exactly one tag (or view) exists with the logged identity. `{"drop":"none"}`
-delegates every call unchanged. While it is selected, the library endpoints that have a Core counterpart also reach the
-actual commands through this wrapper (spec 1193 D4: one decision for both paths); the driver keeps the mode `none` for its
-own owner writes and reads. The seam changes no product code.
+delegates every call unchanged. Only Weaver's library writes reach it: the HTTP library endpoints keep the built-in
+decisions whatever `IWorkflowLibraryCommands` is installed, so the driver's own owner writes and reads never pass through
+the seam. The seam changes no product code.

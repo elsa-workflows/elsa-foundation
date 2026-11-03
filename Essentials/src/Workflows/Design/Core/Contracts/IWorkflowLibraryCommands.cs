@@ -11,12 +11,13 @@ namespace Elsa.Workflows.Design.Core.Contracts;
 /// This is a single-implementation replacement contract in the current application context: exactly one implementation
 /// is installed, and a second registration fails startup. Consumers must fail closed when no implementation or several
 /// implementations are installed. The default, in the Workflows Design API, makes exactly the native granular authority
-/// decisions the library endpoints make (the endpoints call the same service), for the explicit actor and tenant, which
+/// decisions the library endpoints make, for the explicit actor and tenant, which
 /// must be the current request's own; any other actor or tenant is denied. Every command reports a status from
 /// <see cref="WorkflowLibraryCommandStatus"/>: with workflow organization disabled each is
 /// <see cref="WorkflowLibraryCommandStatus.Unavailable"/> with the backend's reason. Messages are cause-free. Delete and
 /// permanent delete are not offered. An infrastructure failure propagates: for a create, its outcome is then decided by
-/// rereading the resource by its operation key.
+/// rereading the resource by its operation key. A replacement decides Weaver's library writes; the library's HTTP
+/// endpoints keep the built-in decisions.
 /// </remarks>
 public interface IWorkflowLibraryCommands
 {

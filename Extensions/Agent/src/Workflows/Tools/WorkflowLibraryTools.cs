@@ -407,6 +407,8 @@ internal sealed class WorkflowLibrarySaveViewTool(IEnumerable<IWorkflowLibraryCo
             if (list.Content.GetProperty("view") is not { ValueKind: JsonValueKind.Object } view || !view.GetProperty("canEdit").GetBoolean())
                 return Task.FromResult(Failure("agent.workflow.library_clarify", "No view the actor may edit is applied to the list; save a new view instead. Nothing was changed.", 400));
             viewId = view.GetProperty("id").GetString(); revision = view.GetProperty("revision").GetString();
+            if (string.IsNullOrWhiteSpace(viewId) || string.IsNullOrWhiteSpace(revision))
+                return Task.FromResult(Failure("agent.workflow.library_clarify", "The applied view has no identity or revision to update; save a new view instead. Nothing was changed.", 400));
         }
         var query = list.Content.GetProperty("query"); var columns = list.Content.GetProperty("columns");
         var key = update ? null : NewKey("view");
@@ -429,6 +431,10 @@ internal sealed class WorkflowLibrarySaveViewTool(IEnumerable<IWorkflowLibraryCo
             arguments.GetProperty("shared").GetBoolean(), arguments.GetProperty("columns").EnumerateArray().Select(column => column.GetString()!).ToArray(),
             WorkflowAgentSnapshot.Text(arguments, "revision"));
         var viewId = WorkflowAgentSnapshot.Text(arguments, "viewId"); var key = WorkflowAgentSnapshot.Text(arguments, "operationKey");
+        // Weaver creates only under a key, so a lost response can be resolved by rereading it; an update names its view.
+        if (viewId is null && key is null)
+            return ("refused", "The view change names neither an existing view nor an operation key for a new one; nothing was saved.",
+                JsonSerializer.SerializeToElement(new { kind = "view", status = "refused", view = (object?)null, targets = Array.Empty<object>() }, JsonOptions), []);
         WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot> result;
         try { result = await library.SaveViewAsync(actor, viewId, input, key, cancellationToken); }
         catch (Exception) when (key is not null && !cancellationToken.IsCancellationRequested)

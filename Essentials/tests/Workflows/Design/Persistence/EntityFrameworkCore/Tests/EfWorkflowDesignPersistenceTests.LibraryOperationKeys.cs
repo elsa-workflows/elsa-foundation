@@ -162,7 +162,10 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         // The hierarchy lease is taken after the keyed create's own reread and before its write, so a hook there commits the
         // racing create exactly in the window the in-writer key check guards.
         var hook = new HookLockProvider();
-        await using var host = LibraryHost(database.ConnectionString, locking: hook);
+        // Observes every command: the in-writer key check rolls the loser back before it inserts, so no insert of the loser
+        // runs and nothing fails; the catch fallback (a unique-index violation) would show a failed insert instead.
+        var sql = new KeyedInsertRecorder(kind == "tag" ? "elsa_workflow_tags" : "elsa_workflow_library_views");
+        await using var host = LibraryHost(database.ConnectionString, locking: hook, failure: sql);
         using (var setup = host.CreateScope()) await setup.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().Database.MigrateAsync();
         Task<string> CreateAsync(IServiceProvider services) => kind == "tag"
             ? services.GetRequiredService<IWorkflowLibraryStore>().CreateTagAsync(new("Raced"), "alice", "raced-key").ContinueWith(task => task.Result.Id)
@@ -180,9 +183,25 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             committed = await CountsAsync();
         };
         using var scope = host.CreateScope();
-        var loser = await CreateAsync(scope.ServiceProvider);
+        var insertsBefore = 0;
+        var winnerInserts = 0;
+        hook.After = () => { winnerInserts = sql.Inserts - insertsBefore; };
+        insertsBefore = sql.Inserts;
+        // The branch itself, observed: the loser's write found the key committed and rolled back (never a name conflict,
+        // never a unique-index failure).
+        var causes = new List<string>();
+        var keyHash = Stores.EfWorkflowLibraryStore.ClientKeyHashOf("raced-key");
+        void Record(string hash, string cause) { if (hash == keyHash) lock (causes) causes.Add(cause); }
+        Stores.EfWorkflowLibraryStore.KeyedCreateResolved += Record;
+        string loser;
+        try { loser = await CreateAsync(scope.ServiceProvider); }
+        finally { Stores.EfWorkflowLibraryStore.KeyedCreateResolved -= Record; }
+        Assert.Equal(new[] { "KeyedCreateRaced" }, causes);
         Assert.True(hook.Fired);
         Assert.Equal(winner, loser);
+        Assert.Equal(1, winnerInserts);
+        Assert.Equal(1, sql.Inserts - insertsBefore);
+        Assert.Empty(sql.Failures);
         // The loser wrote nothing: the same fence revision, ledger rows and audit rows the winner left.
         Assert.Equal(committed, await CountsAsync());
         using var final = host.CreateScope(); var rows = final.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
@@ -192,16 +211,36 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     private sealed class HookLockProvider : IDistributedLockProvider
     {
         public Func<Task>? Once { get; set; }
+        public Action? After { get; set; }
         public bool Fired { get; private set; }
         public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            if (Once is { } hook) { Once = null; Fired = true; await hook(); }
+            if (Once is { } hook) { Once = null; Fired = true; await hook(); After?.Invoke(); }
             return new Handle();
         }
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
         private sealed class Handle : IDistributedSynchronizationHandle { public CancellationToken HandleLostToken => CancellationToken.None; public void Dispose() { } public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
+    }
+
+    private sealed class KeyedInsertRecorder(string table) : Microsoft.EntityFrameworkCore.Diagnostics.DbCommandInterceptor
+    {
+        private int inserts;
+        public int Inserts => Volatile.Read(ref inserts);
+        public List<string> Failures { get; } = [];
+        private void Observe(System.Data.Common.DbCommand command)
+        {
+            if (command.CommandText.Contains("INSERT INTO \"" + table + "\"", StringComparison.Ordinal)) Interlocked.Increment(ref inserts);
+        }
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<System.Data.Common.DbDataReader>> ReaderExecutingAsync(System.Data.Common.DbCommand command,
+            Microsoft.EntityFrameworkCore.Diagnostics.CommandEventData eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<System.Data.Common.DbDataReader> result, CancellationToken cancellationToken = default)
+        { Observe(command); return ValueTask.FromResult(result); }
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> NonQueryExecutingAsync(System.Data.Common.DbCommand command,
+            Microsoft.EntityFrameworkCore.Diagnostics.CommandEventData eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        { Observe(command); return ValueTask.FromResult(result); }
+        public override Task CommandFailedAsync(System.Data.Common.DbCommand command, Microsoft.EntityFrameworkCore.Diagnostics.CommandErrorEventData eventData, CancellationToken cancellationToken = default)
+        { lock (Failures) Failures.Add(eventData.Exception.GetType().Name); return Task.CompletedTask; }
     }
 }

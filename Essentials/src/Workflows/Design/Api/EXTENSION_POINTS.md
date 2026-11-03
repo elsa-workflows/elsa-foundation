@@ -26,7 +26,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 | `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
-| `IWorkflowLibraryCommands` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowLibraryCommands` (internal, this package); duplicates fail configuration and shell startup | A host replaces the library organization commands other domains (such as Weaver) call through Workflows Design Core; the library endpoints with a Core counterpart then call the replacement too, so both paths share one decision. |
+| `IWorkflowLibraryCommands` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowLibraryCommands` (internal, this package); duplicates fail configuration and shell startup | A host replaces the library organization commands other domains (such as Weaver) call through Workflows Design Core. A replacement decides Weaver's library writes; the HTTP endpoints keep the built-in decisions. |
 | `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied optional replacement; at most one implementation, duplicates fail shell startup | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
 
 ### `IWorkflowDefinitionAuthorizer` *(Contract — `Elsa.Workflows.Design.Core`)*
@@ -87,24 +87,18 @@ The library's organization commands for an explicit `WorkflowLibraryActor(actorI
 with a cause-free message; multi-target commands report one `WorkflowLibraryTargetOutcome` per target, and a folder move,
 which the store applies atomically, reports the same outcome for every target. Delete and permanent delete are not offered.
 
-The default, `WorkflowLibraryCommands`, is the library endpoints' own logic, extracted: with it installed the endpoints call
-its request-bound methods, so both paths share one decision in the same order and every route is unchanged. With a
-replacement installed, the endpoints that have a Core counterpart (tag create, bulk tag edit, favorites, definition folder
-move, view list, create and update) call the replacement for the request's own actor and tenant and render its outcomes
-with the module's errors (denied 403, unavailable and unsupported 501, conflict 409, not found 404, invalid 400); the
-others (folder hierarchy, tag pages and updates, organization reads and full tag replacement, view deletion) keep the
-built-in logic. Through any installed implementation these routes answer exactly as the built-in ones for every input: the
-Core create shapes carry everything the routes accept (a tag's and its values' deprecation, a view's schema version), the
-key is passed exactly as sent (no key is the library's ordinary non-idempotent create, which a keyless store still
-serves; Weaver always passes one), a bulk tag edit is validated as the route validates it and must report exactly one
-outcome per requested target (answered in request order; anything else is the implementation's defect, 500), and a
-folder move or favorite whose target is not applied is the route's refusal for that target's status. A blank key, or a
-key on a view update, is `invalid`. For an explicit actor it serves only the
+The default, `WorkflowLibraryCommands`, is the library endpoints' own logic, extracted: the endpoints run its request-bound
+methods over their injected store, exactly as before the extraction, and the Core contract runs the same methods. A
+replacement `IWorkflowLibraryCommands` decides Weaver's library writes; the HTTP endpoints keep the built-in decisions.
+For an explicit actor the default serves only the
 current request's own authenticated subject and tenant (any other is `denied`), applies the permission the matching
 endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for tag edits, `Manage` for folder moves,
 `Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's
-reason before any actor or permission decision. Infrastructure failures and cancellation propagate. One registration per
-shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
+reason before any actor or permission decision. Infrastructure failures and cancellation propagate. The Core create
+shapes carry everything the library's own create accepts (a tag's and its values' deprecation and identities, which the
+store validates as on its own create; a view's schema version). A create's operation key is optional (none is the
+library's ordinary non-idempotent create; Weaver always passes one); a blank key, or a key on a view update, is `invalid`.
+One registration per shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
 
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 

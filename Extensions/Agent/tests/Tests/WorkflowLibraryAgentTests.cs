@@ -255,6 +255,19 @@ public sealed class WorkflowLibraryAgentTests
     }
 
     [Fact]
+    public async Task A_view_save_with_neither_a_view_nor_a_key_is_refused_and_nothing_is_saved()
+    {
+        var commands = new FakeCommands();
+        var tool = new WorkflowLibrarySaveViewTool([commands]);
+        var prepared = await PreparedAsync(tool, Invocation(WorkflowLibrarySaveViewTool.ToolName, new { name = "Finance", shared = false }));
+        var arguments = JsonNode.Parse(prepared.Arguments.GetRawText())!.AsObject();
+        arguments["operationKey"] = null; arguments["viewId"] = null;
+        var executed = await tool.ExecuteAsync(prepared with { Arguments = JsonSerializer.SerializeToElement(arguments) });
+        Assert.False(executed.Succeeded);
+        Assert.Empty(commands.SavedViews);
+    }
+
+    [Fact]
     public async Task A_folder_move_reports_one_outcome_for_every_target_and_favorites_are_per_target()
     {
         var commands = new FakeCommands();

@@ -50,8 +50,9 @@ public sealed record WorkflowLibraryTagSnapshot(string Id, string Name, string? 
 public sealed record WorkflowLibraryTagCreate(string Name, string? Description = null, string Mode = "marker", string Cardinality = "single",
     IReadOnlyList<WorkflowLibraryTagValueCreate>? Values = null, bool Deprecated = false);
 
-/// <summary>A controlled value of a tag being created; its identity is generated.</summary>
-public sealed record WorkflowLibraryTagValueCreate(string Name, bool Deprecated = false);
+/// <summary>A controlled value of a tag being created. Its identity is generated: a supplied <paramref name="Id"/> is refused by
+/// the library as its own create refuses it.</summary>
+public sealed record WorkflowLibraryTagValueCreate(string Name, bool Deprecated = false, string? Id = null);
 
 /// <summary>A definition's current organization: its folder, tags and the revision a tag edit binds to.</summary>
 public sealed record WorkflowLibraryOrganizationSnapshot(string DefinitionId, string? FolderId, IReadOnlyList<WorkflowLibraryTagReference> Tags, string Revision);

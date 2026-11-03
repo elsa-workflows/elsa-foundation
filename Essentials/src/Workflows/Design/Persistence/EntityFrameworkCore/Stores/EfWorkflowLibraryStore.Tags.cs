@@ -125,9 +125,11 @@ internal sealed partial class EfWorkflowLibraryStore
                 db.Tags.Add(row); var result = Tag(row); Audit(row.Id, actorId, "tag.create", key, null, result); return result;
             }, cancellationToken);
         }
-        catch (Exception) when (keyHash is not null && !cancellationToken.IsCancellationRequested)
+        catch (Exception error) when (keyHash is not null && !cancellationToken.IsCancellationRequested)
         {
-            // A concurrent create under the same key wins the unique index; its committed tag is this create's outcome.
+            // A concurrent create under the same key won, in the write's own key check or at the unique index; its committed
+            // tag is this create's outcome.
+            KeyedCreateResolved?.Invoke(keyHash, error.GetType().Name);
             if (await KeyedTagAsync(keyHash, fingerprint!, cancellationToken) is { } winner) return winner;
             throw;
         }

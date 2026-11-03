@@ -102,13 +102,11 @@ public sealed class FolderDeleteEndpoint(IWorkflowLibraryStore? store = null) : 
 
 [Post("definitions/move")]
 [RequirePermission(WorkflowDesignPermissions.Manage)]
-public sealed class DefinitionFolderMoveEndpoint : ApiEndpoint<MoveWorkflowDefinitions>
+public sealed class DefinitionFolderMoveEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<MoveWorkflowDefinitions>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryDefinitionFolderMove";
     public override Task HandleAsync(MoveWorkflowDefinitions request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.MoveDefinitionsAsync(HttpContext, request.DefinitionIds, request.FolderId, request.OperationKey, cancellationToken)
-            : WorkflowLibraryEndpointCommands.MoveDefinitionsAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.DefinitionIds, request.FolderId, request.OperationKey, cancellationToken);
+        WorkflowLibraryCommands.Http(store).MoveDefinitionsAsync(HttpContext, request.DefinitionIds, request.FolderId, request.OperationKey, cancellationToken);
 }
 
 [Get("definitions/page")]
@@ -161,32 +159,33 @@ public sealed class DefinitionPageEndpoint(IWorkflowLibraryStore? store = null,
 
 [Get("definitions/{definitionId}/organization")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class OrganizationGetEndpoint(IWorkflowDefinitionStore? definitions = null) : ApiEndpoint<GetWorkflowOrganization, WorkflowOrganizationView>
+public sealed class OrganizationGetEndpoint(IWorkflowLibraryStore? store = null,
+    IWorkflowDefinitionStore? definitions = null) : ApiEndpoint<GetWorkflowOrganization, WorkflowOrganizationView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryOrganizationGet";
     public override async Task<WorkflowOrganizationView> HandleAsync(GetWorkflowOrganization request, CancellationToken cancellationToken)
     {
-        var (organization, permissions) = await WorkflowLibraryCommands.For(HttpContext).GetOrganizationAsync(HttpContext, request.DefinitionId, definitions, cancellationToken);
+        var (organization, permissions) = await WorkflowLibraryCommands.Http(store).GetOrganizationAsync(HttpContext, request.DefinitionId, definitions, cancellationToken);
         return WorkflowOrganizationView.From(organization, permissions);
     }
 }
 
 [Put("definitions/{definitionId}/organization")]
 [RequirePermission(WorkflowDesignPermissions.AssignTags)]
-public sealed class OrganizationReplaceEndpoint : ApiEndpoint<ReplaceWorkflowTags, WorkflowOrganizationView>
+public sealed class OrganizationReplaceEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<ReplaceWorkflowTags, WorkflowOrganizationView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryOrganizationReplace";
     public override Task<WorkflowOrganizationView> HandleAsync(ReplaceWorkflowTags request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).ReplaceTagsAsync(HttpContext, request, cancellationToken);
+        WorkflowLibraryCommands.Http(store).ReplaceTagsAsync(HttpContext, request, cancellationToken);
 }
 
 [Get("tags")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class TagListEndpoint : ApiEndpoint<ListWorkflowTags, WorkflowTagPageView>
+public sealed class TagListEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<ListWorkflowTags, WorkflowTagPageView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryTagList";
     public override Task<WorkflowTagPageView> HandleAsync(ListWorkflowTags request, CancellationToken cancellationToken) =>
-        WorkflowLibraryCommands.For(HttpContext).ListTagsAsync(HttpContext, request.Search, request.PageSize, request.ContinuationToken, cancellationToken);
+        WorkflowLibraryCommands.Http(store).ListTagsAsync(HttpContext, request.Search, request.PageSize, request.ContinuationToken, cancellationToken);
 }
 
 [Get("tags/{tagId}")]
@@ -201,13 +200,11 @@ public sealed class TagGetEndpoint(IWorkflowLibraryStore? store = null) : ApiEnd
 
 [Post("tags")]
 [RequirePermission(WorkflowDesignPermissions.ManageTags)]
-public sealed class TagCreateEndpoint : ApiEndpoint<CreateWorkflowTag, WorkflowTag>
+public sealed class TagCreateEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<CreateWorkflowTag, WorkflowTag>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryTagCreate";
     public override Task<WorkflowTag> HandleAsync(CreateWorkflowTag request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.CreateTagAsync(HttpContext, request.ToInput(), request.OperationKey, cancellationToken)
-            : WorkflowLibraryEndpointCommands.CreateTagAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.ToInput(), request.OperationKey, cancellationToken);
+        WorkflowLibraryCommands.Http(store).CreateTagAsync(HttpContext, request.ToInput(), request.OperationKey, cancellationToken);
 }
 
 [Put("tags/{tagId}")]
@@ -226,46 +223,38 @@ public sealed class TagUpdateEndpoint(IWorkflowLibraryStore? store = null) : Api
 
 [Post("tags/bulk")]
 [RequirePermission(WorkflowDesignPermissions.AssignTags)]
-public sealed class TagBulkEndpoint : ApiEndpoint<WorkflowTagBulkEdit, IReadOnlyList<WorkflowTagEditOutcome>>
+public sealed class TagBulkEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<WorkflowTagBulkEdit, IReadOnlyList<WorkflowTagEditOutcome>>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryTagBulk";
     public override Task<IReadOnlyList<WorkflowTagEditOutcome>> HandleAsync(WorkflowTagBulkEdit request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.EditTagsAsync(HttpContext, request, cancellationToken)
-            : WorkflowLibraryEndpointCommands.EditTagsAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request, cancellationToken);
+        WorkflowLibraryCommands.Http(store).EditTagsAsync(HttpContext, request, cancellationToken);
 }
 
 [Get("views")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class ViewListEndpoint : ApiEndpoint<ListWorkflowViews, WorkflowLibraryViewsView>
+public sealed class ViewListEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<ListWorkflowViews, WorkflowLibraryViewsView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryViewList";
     public override Task<WorkflowLibraryViewsView> HandleAsync(ListWorkflowViews request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.ListViewsAsync(HttpContext, cancellationToken)
-            : WorkflowLibraryEndpointCommands.ListViewsAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), cancellationToken);
+        WorkflowLibraryCommands.Http(store).ListViewsAsync(HttpContext, cancellationToken);
 }
 
 [Post("views")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class ViewCreateEndpoint : ApiEndpoint<CreateWorkflowView, WorkflowLibraryViewView>
+public sealed class ViewCreateEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<CreateWorkflowView, WorkflowLibraryViewView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryViewCreate";
     public override Task<WorkflowLibraryViewView> HandleAsync(CreateWorkflowView request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.SaveViewAsync(HttpContext, null, request.ToInput(), request.OperationKey, cancellationToken)
-            : WorkflowLibraryEndpointCommands.SaveViewAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), null, request.ToInput(), request.OperationKey, cancellationToken);
+        WorkflowLibraryCommands.Http(store).SaveViewAsync(HttpContext, null, request.ToInput(), request.OperationKey, cancellationToken);
 }
 
 [Put("views/{viewId}")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class ViewUpdateEndpoint : ApiEndpoint<SaveWorkflowView, WorkflowLibraryViewView>
+public sealed class ViewUpdateEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<SaveWorkflowView, WorkflowLibraryViewView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryViewUpdate";
     public override Task<WorkflowLibraryViewView> HandleAsync(SaveWorkflowView request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.SaveViewAsync(HttpContext, request.ViewId, request.ToInput(), null, cancellationToken)
-            : WorkflowLibraryEndpointCommands.SaveViewAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.ViewId, request.ToInput(), null, cancellationToken);
+        WorkflowLibraryCommands.Http(store).SaveViewAsync(HttpContext, request.ViewId, request.ToInput(), null, cancellationToken);
 }
 
 [Delete("views/{viewId}")]
@@ -284,22 +273,18 @@ public sealed class ViewDeleteEndpoint(IWorkflowLibraryStore? store = null) : Ap
 
 [Put("definitions/{definitionId}/favorite")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class FavoritePutEndpoint : ApiEndpoint<SetWorkflowFavorite>
+public sealed class FavoritePutEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<SetWorkflowFavorite>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryFavoritePut";
     public override Task HandleAsync(SetWorkflowFavorite request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.SetFavoriteAsync(HttpContext, request.DefinitionId, true, cancellationToken)
-            : WorkflowLibraryEndpointCommands.SetFavoriteAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.DefinitionId, true, cancellationToken);
+        WorkflowLibraryCommands.Http(store).SetFavoriteAsync(HttpContext, request.DefinitionId, true, cancellationToken);
 }
 
 [Delete("definitions/{definitionId}/favorite")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class FavoriteDeleteEndpoint : ApiEndpoint<SetWorkflowFavorite>
+public sealed class FavoriteDeleteEndpoint(IWorkflowLibraryStore? store = null) : ApiEndpoint<SetWorkflowFavorite>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowLibraryFavoriteDelete";
     public override Task HandleAsync(SetWorkflowFavorite request, CancellationToken cancellationToken) =>
-        WorkflowLibraryEndpointCommands.Installed(HttpContext) is WorkflowLibraryCommands builtin
-            ? builtin.SetFavoriteAsync(HttpContext, request.DefinitionId, false, cancellationToken)
-            : WorkflowLibraryEndpointCommands.SetFavoriteAsync(HttpContext, WorkflowLibraryEndpointCommands.Installed(HttpContext), request.DefinitionId, false, cancellationToken);
+        WorkflowLibraryCommands.Http(store).SetFavoriteAsync(HttpContext, request.DefinitionId, false, cancellationToken);
 }

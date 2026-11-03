@@ -118,9 +118,11 @@ internal sealed partial class EfWorkflowLibraryStore
                 var result = View(row); Audit(row.Id, subjectId, "view.save", key, before, result); return result;
             }, cancellationToken);
         }
-        catch (Exception) when (keyHash is not null && !cancellationToken.IsCancellationRequested)
+        catch (Exception error) when (keyHash is not null && !cancellationToken.IsCancellationRequested)
         {
-            // A concurrent create under the same key wins the unique index; its committed view is this create's outcome.
+            // A concurrent create under the same key won, in the write's own key check or at the unique index; its committed
+            // view is this create's outcome.
+            KeyedCreateResolved?.Invoke(keyHash, error.GetType().Name);
             if (await KeyedViewAsync(keyHash, fingerprint!, subjectId, cancellationToken) is { } winner) return winner;
             throw;
         }
