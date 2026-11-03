@@ -708,7 +708,7 @@ Cancelling a **progressing** drain on another node did **not** qualify, and no C
   owner) therefore failed, correctly. Placement and the executing node can disagree during a long inline drain.
 - In `c7` and in the one-run comparisons `p-main` and `p-branch`, placement was on node A before and after the Cancel
   (`p-main` and `p-branch` were also sampled 150 times at one-second intervals per build on the database host; the
-  archive keeps only those commands' output tails, and `c7` records only the before and after rows), yet the sender
+  samples and their command output are not in the archive, and `c7` records only the before and after rows), yet the sender
   never progressed past picking up its request. The cause is not established. #3669 later found a placement pump that
   awaited each dispatched drain and stopped renewing, but that does not match these runs: node A's placement row kept
   renewing (revision 26 to 163 in each), and #3669's own runs on `main` saw placement move to node B, unlike `p-main`.
