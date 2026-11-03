@@ -2532,6 +2532,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Primitives",
           "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
         },
@@ -10535,6 +10540,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "DeliveryRecoveryRead",
           "path": "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj"
         },
@@ -10551,6 +10561,11 @@
         {
           "type": "external",
           "id": "Microsoft.Data.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
         },
         {
@@ -20707,6 +20722,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Scheduling",
           "path": "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Scripting",
+          "path": "Essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj"
         },
         {
           "type": "internal",
