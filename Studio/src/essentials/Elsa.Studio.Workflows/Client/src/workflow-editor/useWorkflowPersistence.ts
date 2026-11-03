@@ -75,10 +75,10 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     // reviewed edit, even when that old request only starts after the new hold was acquired.
     const requestedReviewGeneration = reviewHoldGenerationRef.current;
     const requestedSignature = getDraftSignature(draftSnapshot);
-    // The batches this save would cover: the live line's, captured when the save is requested and only when it asks to
-    // save the live draft. A save of an older snapshot covers none.
+    // The line of the state this save writes: the live line's, captured when the save is requested and only when it asks
+    // to save the live draft. A save of an older snapshot writes a state whose line is not known (null).
     const requestedLive = latestDraftRef.current;
-    const coveredBatches = requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : [];
+    const writtenLineage = requestedLive && getDraftSignature(requestedLive) === requestedSignature ? [...(lineageHoldRef.current?.lineage() ?? [])] : null;
     const queuedSave = async () => {
       if (savedStatus === "Autosaved" && (reviewHoldRef.current || lineageHoldRef.current?.isHeld())) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
@@ -94,7 +94,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
         if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
-        if (savedStatus !== "Autosaved" && coversLiveDraft) lineageHoldRef.current?.markSaved(coveredBatches);
+        lineageHoldRef.current?.recordSave(writtenLineage, savedStatus !== "Autosaved" && coversLiveDraft);
         // Reconcile the just-persisted draft: if the live draft still matches what we sent, adopt the
         // server copy wholesale; otherwise the author kept editing, so only fold in the fresh validation.
         editDraft(({ draft: current }) => {

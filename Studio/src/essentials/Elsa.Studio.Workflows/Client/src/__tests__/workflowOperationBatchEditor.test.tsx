@@ -281,6 +281,60 @@ describe("reviewed Operation Batch in the editor", () => {
     card.unmount();
   });
 
+  it("after an explicit save and the card's Undo, the undone status wins over the save", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    const card = mountCard(token(result));
+    expect(outcome(card)).toBe("persisted");
+
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result))).toMatchObject({ status: "unavailable", persisted: false });
+    expect(outcome(card)).toBeNull();
+    expect(card.container.textContent).not.toContain("Persisted");
+    expect(card.container.querySelector("[role=note]")!.textContent).toContain("This change is undone");
+    card.unmount();
+  });
+
+  it("a Redo straight after save and Undo restores exactly the saved state: persisted, not held, nothing written", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    flushSync(() => history.redo());
+    const card = mountCard(token(result));
+
+    expect(controller.batch!.state(token(result))).toEqual({ status: "available", persisted: true });
+    expect(outcome(card)).toBe("persisted");
+    expect(history.lineageHold.isHeld()).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    // The live draft is the saved one, so autosave has nothing to write.
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes);
+    card.unmount();
+  });
+
+  it("once an autosave persists the pre-batch state after Undo, a Redo is held again and the card says not saved", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    // Undo released the hold: the ordinary autosave writes the pre-batch state, so the owner no longer holds the batch.
+    await vi.advanceTimersByTimeAsync(10_000);
+    flushSync(noop);
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    expect(JSON.stringify(vi.mocked(updateDraft).mock.calls.at(-1)![1])).not.toContain("greet");
+
+    flushSync(() => history.redo());
+    const card = mountCard(token(result));
+    expect(controller.batch!.state(token(result))).toEqual({ status: "available", persisted: false });
+    expect(outcome(card)).toBe("applied-locally");
+    expect(history.lineageHold.isHeld()).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes);
+    card.unmount();
+  });
+
   it("disables the review card's Undo with a reason after a later edit; designer history stays the path", async () => {
     const result = await run(request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]));
     expect(controller.batch!.state(token(result)).status).toBe("available");
@@ -385,6 +439,12 @@ async function run(invocation: StudioAgentPreparedInvocation) {
   let completion!: Promise<StudioAgentClientExecutionResult>;
   flushSync(() => { completion = controller.execute!(invocation); });
   return completion;
+}
+
+async function explicitSave() {
+  await persistence.saveDraft(doc.state.draft!, "Saved");
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync(noop);
 }
 
 function mountCard(undoToken: string) {

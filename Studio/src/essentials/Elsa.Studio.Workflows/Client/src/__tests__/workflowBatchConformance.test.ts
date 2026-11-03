@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyWorkflowOperationBatch, parseFrozenWorkflowBatch, WorkflowBatchRefusal } from "../workflowGraphOperationBatch";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
-import { collectWorkflowContextActivities, collectWorkflowContextConnections, collectWorkflowContextStructure } from "../workflow-editor/editorHelpers";
-import { compactWorkflowStructure } from "../workflow-editor/useWorkflowContextBridge";
-import { indexActivityPresentation } from "../activityPresentation";
+import { buildWorkflowSnapshotContent } from "../workflow-editor/useWorkflowContextBridge";
 import fixture from "./workflowBatchConformance.json";
 
 // Spec 1193 slice C: the same cases Elsa.Agent.Tests prepares on the server (WorkflowBatchConformanceTests). What the
@@ -13,17 +11,12 @@ const draft = () => structuredClone(fixture.draft) as unknown as WorkflowDraft;
 
 describe("workflow batch contract shared with the server", () => {
   it("shares the snapshot the Studio bridge builds from the shared draft", () => {
-    // The same calls useWorkflowContextBridge makes, including the side-table ids that become reservedIds.
-    const source = draft();
+    // The very builder useWorkflowContextBridge sends, side-table ids (reservedIds) included.
     const catalogByVersion = new Map(catalog.map(item => [item.activityVersionId, item]));
-    const activities = collectWorkflowContextActivities(source.state.rootActivity, catalogByVersion, [], indexActivityPresentation(source.activityPresentation));
-    const structure = compactWorkflowStructure(activities, collectWorkflowContextStructure(source.state.rootActivity, catalogByVersion),
-      [...(source.layout ?? []), ...(source.activityPresentation ?? [])].map(record => record.nodeId));
-    const built = { activities, connections: collectWorkflowContextConnections(source.state.rootActivity, catalogByVersion),
-      positions: source.layout.map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })), structure };
-
-    const { activities: sharedActivities, connections, positions, structure: sharedStructure } = fixture.snapshot;
-    expect(built).toEqual({ activities: sharedActivities, connections, positions, structure: sharedStructure });
+    const { activities, connections, positions, secretReferences, structure } = buildWorkflowSnapshotContent(draft(), catalogByVersion);
+    const shared = fixture.snapshot;
+    expect({ activities, connections, positions, secretReferences, structure })
+      .toEqual({ activities: shared.activities, connections: shared.connections, positions: shared.positions, secretReferences: shared.secretReferences, structure: shared.structure });
   });
 
   it.each(fixture.cases.filter(item => item.accepted).map(item => [item.name, item] as const))("applies the server's frozen %s batch", (_name, item) => {

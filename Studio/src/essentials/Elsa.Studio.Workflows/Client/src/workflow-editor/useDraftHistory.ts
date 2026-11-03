@@ -49,8 +49,12 @@ export interface WorkflowLineageHold {
   held: boolean;
   isHeld(): boolean;
   lineage(): ReadonlySet<string>;
-  /** An explicit save covered these batches. */
-  markSaved(batchIds: Iterable<string>): void;
+  /**
+   * A save wrote the owning draft. `lineage` is the line of the state it wrote (null when that is not known); an
+   * explicit save of the live state marks that line's batches saved. Either way only batches in the written line stay
+   * saved: a batch undone before an autosave is no longer what the owner holds, so its Redo is held again.
+   */
+  recordSave(lineage: Iterable<string> | null, explicit: boolean): void;
 }
 
 // User-facing undo/redo. Snapshots are whole drafts; nodes/edges rebuild from them. Signature-driven
@@ -181,7 +185,8 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     const undoState = (batchId: string): WorkflowBatchUndoState => {
       if (!knownBatchesRef.current.has(batchId))
         return { status: "unavailable", persisted: null, reason: "This change was applied in an editor whose history is no longer open here. Use the designer's own history." };
-      const persisted = savedBatchesRef.current.has(batchId);
+      // Persisted only while the current line still holds the batch: an undone batch is undone, whatever was saved.
+      const persisted = lineageRef.current.has(batchId) && savedBatchesRef.current.has(batchId);
       const latest = latestDraftRef.current;
       const laterEdit = !latest || getDraftSignature(latest) !== lastCapturedSignatureRef.current;
       if (originRef.current === batchId && !laterEdit && canUndo(historyRef.current)) return { status: "available", persisted };
@@ -219,10 +224,12 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     held: lineageHeld,
     isHeld: isLineageHeld,
     lineage: () => lineageRef.current,
-    markSaved(batchIds) {
-      let added = false;
-      for (const id of batchIds) if (!savedBatchesRef.current.has(id)) { savedBatchesRef.current.add(id); added = true; }
-      if (added) changed();
+    recordSave(lineage, explicit) {
+      const written = lineage ? new Set(lineage) : null;
+      const before = [...savedBatchesRef.current].sort().join("\n");
+      const next = new Set(explicit && written ? [...savedBatchesRef.current, ...written] : savedBatchesRef.current);
+      savedBatchesRef.current = new Set([...next].filter(id => written?.has(id) ?? false));
+      if ([...savedBatchesRef.current].sort().join("\n") !== before) changed();
     }
   }), [changed, isLineageHeld, lineageHeld]);
 
