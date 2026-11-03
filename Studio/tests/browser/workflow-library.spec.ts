@@ -119,7 +119,7 @@ for (const theme of ["light", "dark"] as const) {
     test(`row actions stay available while browsing overflow columns (${theme}, ${width}px)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 780 });
       await page.goto(`/?mode=workflow-library&theme=${theme}`);
-      await expect(page.getByRole("button", { name: "Manage tags", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Manage tags", exact: true })).toBeVisible();
       const table = page.getByRole("region", { name: "Workflow definitions table" });
       await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
       await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
@@ -165,19 +165,24 @@ test("Escape cancels a row move without opening a second dialog", async ({ page 
 
 test("catalog management creates controlled values and retires their stable tag identity", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
-  await page.getByRole("button", { name: "Manage tags", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Manage workflow tags" });
+  await page.getByRole("link", { name: "Manage tags", exact: true }).click();
+  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  const dialog = page.locator(".wf-tag-page");
   await dialog.getByRole("textbox", { name: "Tag name", exact: true }).fill("Region");
   await dialog.getByRole("combobox", { name: "Tag kind" }).selectOption("controlled");
   await dialog.getByRole("combobox", { name: "Tag cardinality" }).selectOption("multiple");
   await dialog.getByRole("button", { name: "Add controlled value" }).click();
   await dialog.getByRole("textbox", { name: "Value name 1" }).fill("Europe");
   await dialog.getByRole("button", { name: "Create tag", exact: true }).click();
-  await expect(dialog.getByRole("status")).toContainText("Saved tag Region");
+  await expect(dialog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Tag kind" })).toBeDisabled();
-  await dialog.getByRole("checkbox", { name: "Retire this tag" }).check();
+  const retirement = dialog.getByRole("checkbox", { name: "Retire this tag" });
+  await retirement.check();
+  const focusedBounds = await retirement.boundingBox();
   await dialog.getByRole("button", { name: "Save tag", exact: true }).click();
-  await expect(dialog.getByRole("status")).toContainText("Saved tag Region");
+  expect(await retirement.boundingBox()).toEqual(focusedBounds);
+  await expect(dialog.getByRole("button", { name: "Save tag", exact: true })).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { workflowLibraryRequests: { method: string }[] }).workflowLibraryRequests.filter(request => request.method === "PUT").length)).toBe(1);
   const writes = await page.evaluate(() => (window as unknown as Window & { workflowLibraryRequests: { method: string; url: string; body?: unknown }[] }).workflowLibraryRequests.filter(request => request.method === "POST" || request.method === "PUT"));
   expect(writes[0].body).toMatchObject({ values: [{ id: "", name: "Europe" }] });
   expect(writes[1].body).toMatchObject({ deprecated: true, revision: "1", values: [{ id: expect.stringMatching(/^value-/), name: "Europe" }] });
@@ -185,13 +190,13 @@ test("catalog management creates controlled values and retires their stable tag 
 
 test("catalog management preserves existing server identities when adding controlled values", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
-  await page.getByRole("button", { name: "Manage tags", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Manage workflow tags" });
-  await dialog.getByRole("combobox", { name: "Tag to manage" }).selectOption("team");
+  await page.getByRole("link", { name: "Manage tags", exact: true }).click();
+  await page.getByRole("link", { name: "Owning team", exact: true }).click();
+  const dialog = page.locator(".wf-tag-page");
   await dialog.getByRole("button", { name: "Add controlled value" }).click();
   await dialog.getByRole("textbox", { name: "Value name 3" }).fill("Operations");
   await dialog.getByRole("button", { name: "Save tag", exact: true }).click();
-  await expect(dialog.getByRole("status")).toContainText("Saved tag Owning team");
+  await expect(dialog.getByRole("button", { name: "Save tag", exact: true })).toBeEnabled();
   const write = await page.evaluate(() => (window as unknown as { workflowLibraryRequests: { method: string; url: string; body?: unknown }[] }).workflowLibraryRequests.find(request => request.method === "PUT" && request.url.endsWith("/tags/team")));
   expect(write?.body).toMatchObject({ revision: "1", values: [{ id: "value-billing", name: "Billing" }, { id: "value-support", name: "Support" }, { id: "", name: "Operations" }] });
 });
@@ -199,7 +204,7 @@ test("catalog management preserves existing server identities when adding contro
 test("reader permissions preserve browsing and private views while withholding mutations", async ({ page }) => {
   await page.goto("/?mode=workflow-library&permissions=read");
   await expect(page.getByRole("button", { name: "Save view", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Manage tags", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Manage tags", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create folder", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Manage folders", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
@@ -379,3 +384,29 @@ test("bulk deletion from a later page focuses the result after returning to the 
   await expect(page.getByText("Page 1", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "1 workflow definition deleted." })).toBeFocused();
 });
+
+for (const theme of ["light", "dark"]) for (const width of [320, 1440]) {
+  test(`tag collection and edit pages support keyboard navigation (${theme}, ${width}px)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=workflow-library&palette=classic&theme=${theme}`);
+    await page.getByRole("link", { name: "Manage tags", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Workflow tags", exact: true })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Workflow tags", exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`tags-list-${theme}-${width}.png`), fullPage: true });
+    const tag = page.getByRole("link", { name: "Owning team", exact: true });
+    await tag.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/workflows\/tags\/team/);
+    await expect(page.getByRole("textbox", { name: "Tag name", exact: true })).toHaveValue("Owning team");
+    await expect(page.getByRole("combobox", { name: "Tag to manage", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save tag", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`tags-edit-${theme}-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Back to tags", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Owning team", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Back to workflows", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Workflow definitions", exact: true })).toBeVisible();
+  });
+}

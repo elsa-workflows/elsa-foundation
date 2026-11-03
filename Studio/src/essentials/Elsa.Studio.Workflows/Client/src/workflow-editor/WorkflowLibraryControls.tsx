@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { ArrowDownAZ, Bookmark, Save, SlidersHorizontal, Star, Tags } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -12,10 +12,10 @@ import {
   workflowFolderSelectionKey, workflowLibraryFilterKey,
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
+import { StudioLink } from "../StudioLink";
 import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 
-const WorkflowTagCatalogDialog = lazy(() => import("./WorkflowTagCatalogDialog").then(module => ({ default: module.WorkflowTagCatalogDialog })));
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
 export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, refreshKey = 0 }: {
@@ -36,7 +36,6 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(Boolean(location.tagFilters?.length || location.publicationState));
-  const [catalogOpen, setCatalogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const generationRef = useRef(0);
@@ -126,7 +125,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
         </select></label>
         <StudioButton onClick={() => setViewDialogOpen(true)}><Save size={15} aria-hidden="true" />Save view</StudioButton>
       </> : null}
-      {permissions.canManageTags === true ? <StudioButton onClick={() => setCatalogOpen(true)}><Tags size={15} aria-hidden="true" />Manage tags</StudioButton> : null}
+      {permissions.canManageTags === true ? <StudioLink className="studio-button" data-variant="default" href="/workflows/tags"><Tags size={15} aria-hidden="true" />Manage tags</StudioLink> : null}
       </div>
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
@@ -165,7 +164,6 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       </> : null}
       {support.tags || support.folders ? <fieldset className="wf-library-values"><legend>Optional columns</legend>{[...(support.tags ? ["tags"] : []), ...(support.folders ? ["location"] : [])].map(column => <label key={column}><input type="checkbox" checked={location.columns?.includes(column) ?? false} onChange={event => change({ columns: event.target.checked ? [...(location.columns ?? []), column] : location.columns?.filter(item => item !== column) })} />{column === "tags" ? "Tags" : "Location"}</label>)}</fieldset> : null}
     </div> : null}
-    {catalogOpen ? <Suspense fallback={<p role="status">Loading tag manager…</p>}><WorkflowTagCatalogDialog context={context} tags={tags} onClose={() => setCatalogOpen(false)} onSaved={() => setRefresh(value => value + 1)} /></Suspense> : null}
     {viewDialogOpen ? <WorkflowViewDialog context={context} location={location} existing={selectedView} canShare={permissions.canShareViews === true} onClose={() => setViewDialogOpen(false)} onSaved={viewsSaved} onDeleted={() => { change({ viewId: undefined }); viewsSaved(); }} /> : null}
   </section>;
 }

@@ -255,7 +255,7 @@ test("Classic dark keeps library fields and buttons aligned beside folders", asy
     }
     const view = await controls.getByLabel("Saved workflow view", { exact: true }).boundingBox();
     for (const name of ["Save view", "Manage tags"]) {
-      const bounds = await controls.getByRole("button", { name, exact: true }).boundingBox();
+      const bounds = await controls.getByRole(name === "Manage tags" ? "link" : "button", { name, exact: true }).boundingBox();
       expect(Math.abs(bounds!.y + bounds!.height - view!.y - view!.height)).toBeLessThanOrEqual(1);
     }
     const navigation = await page.getByRole("complementary", { name: "Workflow folders", exact: true }).boundingBox();
