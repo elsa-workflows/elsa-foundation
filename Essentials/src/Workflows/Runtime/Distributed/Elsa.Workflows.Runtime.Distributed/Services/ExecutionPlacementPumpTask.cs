@@ -238,7 +238,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurr
         }
         // `bounded` links the caller's token with its own lease-duration timer, so a caller cancellation and the timer
         // both surface as OperationCanceledException on `bounded.Token`; only the timer firing is a hand-off failure to
-        // swallow, as the class remarks say a drain that outlasts the lease is left as a crash would be. A caller
+        // swallow, as HandOffAllAsync says a step that outlasts the lease is left as a crash would be. A caller
         // cancellation must still propagate.
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

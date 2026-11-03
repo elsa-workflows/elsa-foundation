@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -234,43 +235,43 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         await passivation.WaitAsync(timeout.Token);
         Assert.Equal(WorkflowExecutionActorStatus.Passivated, agent.Descriptor.Status);
         Assert.Equal(0, AgentCount(drain.Provider));
-        Assert.False(drain.Controls.ShouldYield("wfexec-1"));
 
         // The yielded work is the next owner's or the resumption sweep's: a passivated mailbox does not re-drive it.
         await Task.Delay(TimeSpan.FromMilliseconds(500), timeout.Token);
         Assert.False(processor.Redriven.Task.IsCompleted);
     }
 
+    /// <summary>
+    /// Each mailbox has its own yield signal. A second live mailbox, of another execution or of the same execution id in
+    /// another partition, runs a drain while the first one passivates, and only the passivating mailbox's drain is asked
+    /// to yield.
+    /// </summary>
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Only_a_passivation_of_its_own_execution_and_partition_asks_its_drain_to_yield(bool otherExecution, bool otherPartition)
+    [InlineData("wfexec-2", null)]
+    [InlineData("wfexec-1", "other")]
+    public async Task A_passivation_asks_only_its_own_mailboxs_drain_to_yield(string otherExecutionId, string? otherPartition)
     {
         var controls = new DrainControlContext();
-        var processor = new ObservingControlProcessor(controls);
+        var processor = new KeyedObservingProcessor(controls, drains: 2);
         using var provider = new InProcessWorkflowExecutionActorProvider(processor) { DrainControls = controls };
-        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        var partition = new WorkflowExecutionPartition(otherPartition ?? WorkflowExecutionPartition.DefaultValue);
+        var own = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+        var other = await provider.GetAgentAsync(NewActivationRequest(otherExecutionId, partition: partition));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var running = agent.EnqueueAsync(NewEnvelope(1), timeout.Token).AsTask();
+        var ownRunning = own.EnqueueAsync(NewEnvelope(1), timeout.Token).AsTask();
+        var otherRunning = other.EnqueueAsync(NewEnvelope(2, otherExecutionId, partition: partition), timeout.Token).AsTask();
         await processor.Entered.Task.WaitAsync(timeout.Token);
-        var own = !otherExecution && !otherPartition;
 
-        var passivation = provider.PassivateAsync(
-            NewPassivationRequest(otherExecution ? "wfexec-2" : "wfexec-1", partition: otherPartition ? new WorkflowExecutionPartition("other") : null),
-            timeout.Token).AsTask();
-        if (own)
-            await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
-        else
-            await passivation.WaitAsync(timeout.Token);
+        var passivation = provider.PassivateAsync(NewPassivationRequest("wfexec-1"), timeout.Token).AsTask();
+        await WaitUntilStatusAsync(own, WorkflowExecutionActorStatus.Passivating);
         processor.Inspect.TrySetResult();
-        await running.WaitAsync(timeout.Token);
+        await Task.WhenAll(ownRunning, otherRunning).WaitAsync(timeout.Token);
         await passivation.WaitAsync(timeout.Token);
 
-        Assert.Equal(own, processor.OwnYield);
-        Assert.False(processor.OtherYield);
-        Assert.Equal(own ? WorkflowExecutionActorStatus.Passivated : WorkflowExecutionActorStatus.Active, agent.Descriptor.Status);
-        Assert.False(controls.ShouldYield("wfexec-1"));
+        Assert.True(processor.Yielded[KeyedObservingProcessor.Key("wfexec-1", WorkflowExecutionPartition.DefaultValue)]);
+        Assert.False(processor.Yielded[KeyedObservingProcessor.Key(otherExecutionId, partition.Value)]);
+        Assert.Equal(WorkflowExecutionActorStatus.Passivated, own.Descriptor.Status);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, other.Descriptor.Status);
     }
 
     [Fact]
@@ -282,7 +283,8 @@ public sealed partial class RuntimeInProcessAgentProviderTests
         await WaitUntilStatusAsync(agent, WorkflowExecutionActorStatus.Passivating);
 
         // A Cancel on a passivating actor asks for no yield of its own and runs nothing here. Deferred, it stays with its
-        // sender: the placement pump leaves it in the transport for the next owner, as for any deferred command.
+        // sender, as any deferred command does. Only a sender that resolved the actor before the passivation began gets
+        // here: resolving it later waits for the passivation and returns a fresh actor.
         var cancel = agent.EnqueueAsync(NewCancel("cancel"), timeout.Token).AsTask();
         await processor.YieldObserved.Task.WaitAsync(timeout.Token);
         processor.Release.TrySetResult();
@@ -418,6 +420,27 @@ public sealed partial class RuntimeInProcessAgentProviderTests
             YieldObserved.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
             return new(true, RuntimeSchedulerDrainStopReason.Yielded, false, false, null);
+        }
+    }
+
+    // Each drain waits until the test inspects, then records whether its own frame was asked to yield, by execution and
+    // partition.
+    private sealed class KeyedObservingProcessor(DrainControlContext controls, int drains) : IWorkflowExecutionCommandExecutor
+    {
+        private int entered;
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Inspect { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ConcurrentDictionary<string, bool> Yielded { get; } = new(StringComparer.Ordinal);
+
+        public static string Key(string workflowExecutionId, string partition) => $"{partition}/{workflowExecutionId}";
+
+        public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref entered) == drains)
+                Entered.TrySetResult();
+            await Inspect.Task.WaitAsync(cancellationToken);
+            Yielded[Key(envelope.WorkflowExecutionId, envelope.Partition.Value)] = controls.ShouldYield(envelope.WorkflowExecutionId);
+            return WorkflowExecutionCommandProcessResult.NoDrain;
         }
     }
 

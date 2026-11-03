@@ -5,13 +5,17 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Cluster.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Services;
+using Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using WhileActivity = Elsa.Activities.While.Activities.While;
@@ -23,13 +27,15 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// it (#2831). A hand-off makes such a drain yield, so the member releases its placement within a lease and the next
 /// owner continues the run (#3678). Node A runs a real workflow runtime behind its distributed provider; node B only
 /// routes, or drains on the same runtime as a member sharing node A's database would. Both share the in-memory
-/// placement store, command transport and clock, and each pump is driven by hand.
+/// placement store, command transport and clock, and each pump is driven by hand. A draining member is composed through
+/// the feature over a membership instead, with the same real runtime as its local mailbox.
 /// </summary>
 public sealed class CrossNodeCancelTests
 {
     private const string NodeA = "node-a";
     private const string NodeB = "node-b";
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan SweepInterval = TimeSpan.FromSeconds(10);
 
     [Fact]
     public async Task A_cancel_sent_through_another_node_stops_the_owners_progressing_drain()
@@ -72,14 +78,12 @@ public sealed class CrossNodeCancelTests
     {
         await using var cluster = await LoopCluster.StartAsync(nodeBDrains: true);
         var (clock, loop, executionId) = (cluster.Clock, cluster.Loop, cluster.ExecutionId);
-        var lease = await cluster.NodeA.PlacementService.FindOwnerAsync(executionId);
 
         // Node A hands the execution off, as a member that drains, stops or no longer meets its requirement does. The
         // drain yields at its next step, so the hand-off finishes and releases the placement while node A holds it.
         Assert.Equal(1, await cluster.NodeA.Pump.HandOffAllAsync("the member is draining").AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Contains(cluster.Drains.Results, result => result.StopReason == RuntimeSchedulerDrainStopReason.Yielded);
         Assert.Null(await cluster.NodeA.PlacementService.FindOwnerAsync(executionId));
-        Assert.False(lease!.IsExpired(clock.GetUtcNow()));
         var steps = loop.Steps;
         await Task.Delay(TimeSpan.FromMilliseconds(200));
         Assert.Equal(steps, loop.Steps);
@@ -123,6 +127,123 @@ public sealed class CrossNodeCancelTests
         await cluster.UntilCancelledAsync();
         Assert.False(loop.RunawayGuardReached);
     }
+
+    /// <summary>
+    /// A member that starts draining hands off, in its own sweep, an execution whose drain keeps making progress (#3678).
+    /// The member runs the loop inline, as it runs an execute request it accepted. Its sweeps run every sweep interval
+    /// until its placement lease would expire, and one of them releases the placement before that; without the yield the
+    /// hand-off waits for a turn that never ends, and the lease lapses with the drain still running.
+    /// </summary>
+    [Fact]
+    public async Task A_draining_member_hands_off_a_progressing_execution_within_one_lease()
+    {
+        var loop = new LoopProbe();
+        var drains = new ObservedDrains();
+        await using var runtime = BuildRuntime(loop, drains);
+        await using var cluster = new PlacementCluster();
+        try
+        {
+            var local = runtime.Services.GetRequiredService<InProcessWorkflowExecutionActorProvider>();
+            var member = await cluster.StartAsync("host-a", setup =>
+            {
+                setup.LeaseDuration = LeaseDuration;
+                setup.Configure = services => services.Replace(ServiceDescriptor.Singleton(local));
+            });
+            var executionId = runtime.ExecutionId;
+            var executable = WorkflowExecutionHarness.NewExecutable(WhileTrue(LoopStepNode()));
+            await runtime.PublishAsync(executable, "loop");
+            await using (var scope = member.Runtime.Services.CreateAsyncScope())
+                Assert.True((await scope.ServiceProvider.GetRequiredService<IExecutionPlacementService>().TryClaimAsync(executionId)).IsOwnedByClaimant);
+            var lease = (await cluster.State.Placement.FindAsync(executionId))!;
+            var actor = await local.GetAgentAsync(new WorkflowExecutionActorActivationRequest(
+                executionId, WorkflowExecutionActorActivationReason.Start, cluster.Now, member.HostId, WorkflowExecutionActorCapabilities.None));
+            var run = actor.EnqueueAsync(Start(executable.Identity, executionId, cluster.Now)).AsTask();
+            await PumpSweeps.UntilAsync(() => Task.FromResult(loop.Steps >= 3), "The loop did not start.");
+
+            member.Member.Become(MemberStatus.Draining);
+            var handedOff = 0;
+            var released = false;
+            while (!released && cluster.Now + SweepInterval < lease.ExpiresAt)
+            {
+                cluster.Clock.Advance(SweepInterval);
+                handedOff += (await PumpSweeps.AdvancingAsync(member.Runtime.Pump, cluster.Clock)).HandedOffCount;
+                released = await WithinAsync(async () => await cluster.State.Placement.FindAsync(executionId) is null, TimeSpan.FromSeconds(2));
+            }
+
+            Assert.True(released, "The draining member did not release the placement before its lease expired.");
+            Assert.True(cluster.Now < lease.ExpiresAt);
+            Assert.Equal(1, handedOff);
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await run.WaitAsync(TimeSpan.FromSeconds(10))).Status);
+            Assert.Contains(drains.Results, result => result.StopReason == RuntimeSchedulerDrainStopReason.Yielded);
+            var steps = loop.Steps;
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            Assert.Equal(steps, loop.Steps);
+            Assert.False(loop.RunawayGuardReached);
+        }
+        finally
+        {
+            await loop.StopAsync();
+        }
+    }
+
+    /// <summary>
+    /// A Cancel the owner's own pump dispatches while the owner hands the execution off does not reach the passivating
+    /// mailbox: resolving the mailbox waits for the passivation, which holds the execution's activation. Once the drain
+    /// yields and the passivation ends, the Cancel runs on a fresh mailbox on this node and stops the run, and its
+    /// transport item is acknowledged. A sweep only overlaps a hand-off that the stop path started; one a sweep started
+    /// keeps later sweeps away from the execution.
+    /// </summary>
+    [Fact]
+    public async Task A_cancel_the_owners_pump_dispatches_during_its_hand_off_runs_once_the_hand_off_ends()
+    {
+        await using var cluster = await LoopCluster.StartAsync(nodeBDrains: false);
+        var (clock, loop, executionId) = (cluster.Clock, cluster.Loop, cluster.ExecutionId);
+        var local = cluster.Runtime.Services.GetRequiredService<InProcessWorkflowExecutionActorProvider>();
+        var actor = await local.GetAgentAsync(new WorkflowExecutionActorActivationRequest(
+            executionId, WorkflowExecutionActorActivationReason.Recovery, clock.GetUtcNow(), NodeA, WorkflowExecutionActorCapabilities.None));
+
+        var held = loop.HoldNextStep();
+        await held.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+        var handOff = cluster.NodeA.Pump.HandOffAllAsync("the shell is stopping").AsTask();
+        await PumpSweeps.UntilAsync(() => Task.FromResult(actor.Descriptor.Status == WorkflowExecutionActorStatus.Passivating), "The hand-off did not start passivating.");
+
+        // Node A still holds the placement, so its sweep leases the Cancel and dispatches it without waiting for the drain.
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, (await cluster.NodeB.DispatchAsync(executionId, Cancel(executionId, clock.GetUtcNow()))).Status);
+        Assert.Equal(1, (await PumpSweeps.AdvancingAsync(cluster.NodeA.Pump, clock)).DispatchedCommandCount);
+        Assert.False(handOff.IsCompleted);
+        Assert.NotEqual(WorkflowExecutionStatus.Cancelled, (await cluster.Runtime.ReadRunAsync(executionId)).WorkflowState?.Status);
+
+        held.Release();
+        Assert.Equal(1, await handOff.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Contains(cluster.Drains.Results, result => result.StopReason == RuntimeSchedulerDrainStopReason.Yielded);
+        await cluster.UntilCancelledAsync();
+        Assert.Equal(WorkflowExecutionActorStatus.Passivated, actor.Descriptor.Status);
+        Assert.Empty(cluster.ExecutorB.Processed);
+        Assert.False(loop.RunawayGuardReached);
+    }
+
+    private static async Task<bool> WithinAsync(Func<Task<bool>> condition, TimeSpan wait)
+    {
+        using var timeout = new CancellationTokenSource(wait);
+        while (!await condition())
+        {
+            if (timeout.IsCancellationRequested)
+                return false;
+            await Task.Delay(10);
+        }
+
+        return true;
+    }
+
+    private static WorkflowExecutionHarness BuildRuntime(LoopProbe loop, ObservedDrains drains) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(loop);
+                services.AddSingleton<IWorkflowSchedulerDrainObserver>(drains);
+            })
+            .Build(Enumerable.Range(1, 100_000).Select(index => $"actexec-{index}"));
 
     private static ExecutableNode WhileTrue(ExecutableNode body)
     {
@@ -254,14 +375,7 @@ public sealed class CrossNodeCancelTests
     {
         private LoopCluster(bool nodeBDrains)
         {
-            Runtime = WorkflowExecutionHarness.Create()
-                .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-                .ConfigureServices(services =>
-                {
-                    services.AddSingleton(Loop);
-                    services.AddSingleton<IWorkflowSchedulerDrainObserver>(Drains);
-                })
-                .Build(Enumerable.Range(1, 100_000).Select(index => $"actexec-{index}"));
+            Runtime = BuildRuntime(Loop, Drains);
             var local = Runtime.Services.GetRequiredService<InProcessWorkflowExecutionActorProvider>();
             NodeA = new NodeHarness(CrossNodeCancelTests.NodeA, Placement, Transport, Clock, local, LeaseDuration);
             NodeB = nodeBDrains

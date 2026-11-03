@@ -87,11 +87,15 @@ wait for the old owner's lease to expire, which keeps recovery fast, so keeping 
 nodes from running one execution (#3667).
 
 A hand-off or passivation makes the drain yield at its next step (#3678), so it waits only for the step that is running.
+A drain that is waiting for a continuation another deliverer holds yields at its next poll, within half a second, and
+leaves that continuation with its holder (see [durable resumption](../../../../../../docs/runtime-durable-resumption.md#a-live-drains-continuation-in-the-sweeps-hands-2225)).
 Only a step that outlasts the lease, such as an activity blocked on I/O, lets the placement lapse first; another member
 then claims the execution, and fencing refuses the old drain's next commit. A Cancel sent meanwhile waits in the
-transport, because the pump leases nothing for an execution it is handing off, and takes effect on the next owner. A
-Cancel that reaches the mailbox while it passivates is deferred and keeps its transport lease until the lease lapses,
-then goes to the next owner too.
+transport, because a sweep leases nothing for an execution it is handing off, and takes effect on the next owner. A
+sweep that overlaps a hand-off the stop path started can still lease the Cancel and dispatch it. Resolving the mailbox
+then waits for the passivation, so the Cancel runs on a fresh mailbox on this member once the hand-off has passivated
+the old one. Only a caller that resolved the mailbox before the passivation began reaches the passivating mailbox; its
+Cancel is answered `Deferred` and runs nothing there.
 
 An execution with a drain this pump left running gets no inline wait:
 - A Cancel for it is dispatched without waiting, reaches the drain's mailbox, and the drain yields to it. A Cancel
@@ -99,7 +103,7 @@ An execution with a drain this pump left running gets no inline wait:
   it, usually within `SweepInterval` (default 10 seconds). A sweep lists a scope's pending work once, after renewing and
   before dispatching there; a Cancel sent while that scope's dispatches are waited for (at most a third of the lease in
   all) goes to the sweep after. Failure backoff (up to `MaxBackoffInterval`) can delay it further. One sent while
-  this node hands the execution off takes effect on the next owner.
+  this node hands the execution off takes effect on the next owner, or here as described above.
 - Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
   the pump releases the leases of exactly those commands and the next sweep dispatches them. A command dispatched
   earlier that came back deferred or rejected keeps its lease until it lapses.
