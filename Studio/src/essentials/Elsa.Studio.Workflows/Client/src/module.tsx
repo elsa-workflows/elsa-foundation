@@ -53,7 +53,7 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
 export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
-export { workflowExecutableAttachment, workflowVersionAttachment } from "./workflowAgentContext";
+export { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "./workflowAgentContext";
 
 /** A screen that edits one resource named by a query parameter; its list view (no parameter) may open in several tabs. */
 function workspaceResource(kind: string, parameter: string): StudioRouteWorkspaceOptions {
@@ -198,7 +198,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.agent} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} backendSession={api.backendSession} runRelatedLinks={runRelatedLinks()} ai={api.agent} weaver={weaver} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],

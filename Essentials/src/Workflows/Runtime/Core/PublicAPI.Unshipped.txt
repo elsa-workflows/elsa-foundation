@@ -6965,6 +6965,7 @@ const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.LoopIterationIte
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.LoopIterationOwnerNodeId = "runtime.loop.iterationOwnerNodeId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId" -> string!
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ChildControlActivityExecutionId = "runtime.childControlActivityExecutionId" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OperationKey = "runtime.operationKey" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OutputName = "runtime.outputName" -> string!
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OwnershipFencingToken = "runtime.ownership.fencingToken" -> string!
@@ -10002,3 +10003,333 @@ static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.opera
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSlot? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? left, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInspectionSourceReference? right) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowRunInspection
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowRunInspection.GetAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails?>
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.AttemptNumber.get -> int?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.AttemptNumber.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Bookmarks.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Bookmarks.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary! Summary, out string? ParentActivityExecutionId, out string? SchedulingActivityExecutionId, out int? AttemptNumber, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark!>! Bookmarks, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!>! Incidents, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue!>! Values, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView! StateView) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Incidents.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Incidents.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.ParentActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.ParentActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.SchedulingActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.SchedulingActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.StateView.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.StateView.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Summary.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Summary.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Values.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Values.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.WorkflowRunInspectionActivityExecution(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary! Summary, string? ParentActivityExecutionId, string? SchedulingActivityExecutionId, int? AttemptNumber, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark!>! Bookmarks, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!>! Incidents, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue!>! Values, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView! StateView) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary!>! Items, out long TotalCount, out string? NextContinuationToken) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.Items.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.NextContinuationToken.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.NextContinuationToken.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.TotalCount.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.TotalCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.WorkflowRunInspectionActivityPage(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary!>! Items, long TotalCount, string? NextContinuationToken) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ActivityType.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ActivityType.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ActivityTypeVersion.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ActivityTypeVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.AuthoredActivityId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.AuthoredActivityId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.BookmarkCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.BookmarkCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.CompletedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.Deconstruct(out string! ActivityExecutionId, out string! ExecutableNodeId, out string! AuthoredActivityId, out string! ActivityType, out string! ActivityTypeVersion, out string! Status, out string? SubStatus, out long ExecutionSequence, out System.DateTimeOffset ScheduledAt, out System.DateTimeOffset? StartedAt, out System.DateTimeOffset? CompletedAt, out System.Collections.Generic.IReadOnlyList<string!>! OutcomeNames, out int BookmarkCount, out int IncidentCount, out int ValueSnapshotCount) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ExecutableNodeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ExecutableNodeId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ExecutionSequence.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ExecutionSequence.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.IncidentCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.IncidentCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.OutcomeNames.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ScheduledAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ScheduledAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.StartedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.StartedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.Status.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.Status.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.SubStatus.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.SubStatus.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ValueSnapshotCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ValueSnapshotCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.WorkflowRunInspectionActivitySummary(string! ActivityExecutionId, string! ExecutableNodeId, string! AuthoredActivityId, string! ActivityType, string! ActivityTypeVersion, string! Status, string? SubStatus, long ExecutionSequence, System.DateTimeOffset ScheduledAt, System.DateTimeOffset? StartedAt, System.DateTimeOffset? CompletedAt, System.Collections.Generic.IReadOnlyList<string!>! OutcomeNames, int BookmarkCount, int IncidentCount, int ValueSnapshotCount) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.BookmarkId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.BookmarkId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.Deconstruct(out string! BookmarkId, out string! StimulusType, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset? ExpiresAt) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.ExpiresAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.StimulusType.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.StimulusType.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.WorkflowRunInspectionBookmark(string! BookmarkId, string! StimulusType, System.DateTimeOffset CreatedAt, System.DateTimeOffset? ExpiresAt) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Activities.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Activities.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.CanInspectValues.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.CanInspectValues.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.CanResolveValues.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.CanResolveValues.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance! Instance, out System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!>! Incidents, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage! Activities, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? Selection, out bool CanInspectValues, out bool CanResolveValues, out string! PersistenceMode, out string! InspectionGranularity, out System.DateTimeOffset ReadAt) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Incidents.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Incidents.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.InspectionGranularity.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.InspectionGranularity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Instance.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Instance.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.PersistenceMode.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.PersistenceMode.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.ReadAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.ReadAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Selection.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Selection.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.WorkflowRunInspectionDetails(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance! Instance, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!>! Incidents, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage! Activities, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? Selection, bool CanInspectValues, bool CanResolveValues, string! PersistenceMode, string! InspectionGranularity, System.DateTimeOffset ReadAt) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Deconstruct(out string! IncidentId, out string? ActivityExecutionId, out string? ExecutableNodeId, out string! Severity, out string! Status, out string! FailureType, out string! Message, out bool MessageRedacted, out bool SensitiveInputs, out bool IsBlocking, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset? ResolvedAt) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ExecutableNodeId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ExecutableNodeId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.FailureType.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.FailureType.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.IncidentId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.IncidentId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.IsBlocking.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.IsBlocking.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Message.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Message.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.MessageRedacted.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.MessageRedacted.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ResolvedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ResolvedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.SensitiveInputs.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.SensitiveInputs.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Severity.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Severity.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Status.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Status.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.WorkflowRunInspectionIncident(string! IncidentId, string? ActivityExecutionId, string? ExecutableNodeId, string! Severity, string! Status, string! FailureType, string! Message, bool MessageRedacted, bool SensitiveInputs, bool IsBlocking, System.DateTimeOffset CreatedAt, System.DateTimeOffset? ResolvedAt) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ActiveIncidentCount.get -> int?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ActiveIncidentCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ActivityCount.get -> long
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ActivityCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ArtifactHash.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ArtifactHash.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ArtifactId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ArtifactId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ArtifactVersion.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ArtifactVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.BlockingIncidentCount.get -> int?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.BlockingIncidentCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.CompletedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.CreatedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.Deconstruct(out string! WorkflowExecutionId, out string! ArtifactId, out string! ArtifactHash, out string! DefinitionId, out string! DefinitionVersionId, out string! ArtifactVersion, out string! Status, out string? SubStatus, out string! RunKind, out bool IsTerminal, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset? StartedAt, out System.DateTimeOffset? UpdatedAt, out System.DateTimeOffset? CompletedAt, out string? ParentWorkflowExecutionId, out long ActivityCount, out int IncidentCount, out int? ActiveIncidentCount, out int? BlockingIncidentCount, out string? SourceReferenceId, out string? PublicationId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.DefinitionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.DefinitionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.DefinitionVersionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.DefinitionVersionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.IncidentCount.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.IncidentCount.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.IsTerminal.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.IsTerminal.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ParentWorkflowExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ParentWorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.PublicationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.PublicationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.RunKind.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.RunKind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.SourceReferenceId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.SourceReferenceId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.StartedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.StartedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.Status.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.Status.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.SubStatus.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.SubStatus.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.UpdatedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.UpdatedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.WorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.WorkflowRunInspectionInstance(string! WorkflowExecutionId, string! ArtifactId, string! ArtifactHash, string! DefinitionId, string! DefinitionVersionId, string! ArtifactVersion, string! Status, string? SubStatus, string! RunKind, bool IsTerminal, System.DateTimeOffset CreatedAt, System.DateTimeOffset? StartedAt, System.DateTimeOffset? UpdatedAt, System.DateTimeOffset? CompletedAt, string? ParentWorkflowExecutionId, long ActivityCount, int IncidentCount, int? ActiveIncidentCount, int? BlockingIncidentCount, string? SourceReferenceId, string? PublicationId) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ActivityContinuationToken.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ActivityContinuationToken.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ActivityExecutionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ActivityPageSize.get -> int
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ActivityPageSize.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.Deconstruct(out string! WorkflowExecutionId, out string? ActivityExecutionId, out int ActivityPageSize, out string? ActivityContinuationToken, out System.Collections.Generic.IReadOnlySet<string!>? ResolveEvidenceIds) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ResolveEvidenceIds.get -> System.Collections.Generic.IReadOnlySet<string!>?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ResolveEvidenceIds.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.WorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.WorkflowRunInspectionRequest(string! WorkflowExecutionId, string? ActivityExecutionId = null, int ActivityPageSize = 25, string? ActivityContinuationToken = null, System.Collections.Generic.IReadOnlySet<string!>? ResolveEvidenceIds = null) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.ActivityExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.ActivityExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.Deconstruct(out string! ActivityExecutionId, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? Execution, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason? UnavailableReason) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.Execution.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.Execution.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.UnavailableReason.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.UnavailableReason.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.WorkflowRunInspectionSelection(string! ActivityExecutionId, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? Execution, Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason? UnavailableReason) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Available.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Available.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Deconstruct(out bool Available, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason? UnavailableReason, out string? ViewKind, out int? ViewVersion, out System.Text.Json.JsonElement? View, out bool Withheld) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.UnavailableReason.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.UnavailableReason.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.View.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.View.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.ViewKind.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.ViewKind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.ViewVersion.get -> int?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.ViewVersion.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Withheld.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Withheld.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.WorkflowRunInspectionStateView(bool Available, Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason? UnavailableReason, string? ViewKind, int? ViewVersion, System.Text.Json.JsonElement? View, bool Withheld = false) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.AccessState.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.AccessState.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CaptureMode.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CaptureMode.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CaptureReason.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CaptureReason.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CaptureState.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CaptureState.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CapturedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.CapturedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Deconstruct(out string! EvidenceId, out string! Name, out string! Subject, out string? InputKey, out string! CaptureMode, out string! CaptureState, out string! AccessState, out bool IsSensitive, out System.DateTimeOffset CapturedAt, out string! CaptureReason, out string? TypeKind, out string? TypeId, out string? WithheldKind, out string? SecretReferenceName, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure Disclosure, out Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason? UnavailableReason, out System.Text.Json.JsonElement? Value) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Disclosure.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Disclosure.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.EvidenceId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.EvidenceId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.InputKey.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.InputKey.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.IsSensitive.get -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.IsSensitive.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Name.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Name.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.SecretReferenceName.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.SecretReferenceName.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Subject.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Subject.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.TypeId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.TypeId.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.TypeKind.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.TypeKind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.UnavailableReason.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.UnavailableReason.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Value.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Value.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.WithheldKind.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.WithheldKind.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.WorkflowRunInspectionValue(string! EvidenceId, string! Name, string! Subject, string? InputKey, string! CaptureMode, string! CaptureState, string! AccessState, bool IsSensitive, System.DateTimeOffset CapturedAt, string! CaptureReason, string? TypeKind, string? TypeId, string? WithheldKind, string? SecretReferenceName, Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure Disclosure, Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason? UnavailableReason, System.Text.Json.JsonElement? Value) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason.NotCaptured = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason.NotPermitted = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason.Pruned = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason.Unsupported = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunUnavailableReason
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure.Resolvable = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure.Resolved = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure.Unavailable = 1 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure
+Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure.Withheld = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowRunValueDisclosure
+const Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.DefaultActivityPageSize = 25 -> int
+const Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.MaxActivityPageSize = 50 -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityExecution? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivityPage? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionActivitySummary? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionBookmark? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionDetails? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionIncident? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionInstance? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionRequest? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionSelection? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionStateView? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? left, Elsa.Workflows.Runtime.Core.Models.WorkflowRunInspectionValue? right) -> bool

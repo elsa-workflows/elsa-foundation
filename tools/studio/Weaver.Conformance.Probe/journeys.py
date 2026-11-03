@@ -33,6 +33,7 @@ from batch_journeys import SECTION as BATCH_SECTION, qualify_workflow_batch
 from explain_journeys import SECTION as EXPLAIN_SECTION, qualify_workflow_explain
 from library_journeys import SECTION as LIBRARY_SECTION, library_principal, qualify_workflow_library
 from inspection_journeys import SECTION as INSPECTION_SECTION, qualify_workflow_inspection
+from run_journeys import SECTION as RUN_SECTION, qualify_workflow_run, run_principal
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -115,6 +116,10 @@ def _seed_principals(run):
         "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
     # Spec 1193 T036: the library actor (tag assignment without tag management or view sharing), appended likewise.
     principals.extend(library_principal(principals, lambda prefix, tenant, grants: {
+        "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
+        "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
+    # Spec 1193 T045: the Run actor (runtime read and structure inspection, no value inspection), appended likewise.
+    principals.extend(run_principal(principals, lambda prefix, tenant, grants: {
         "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
         "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
     path = run.profiles["backend"]["published"] / "appsettings.json"
@@ -687,9 +692,13 @@ def qualify_distributions(run):
         # Spec 1193 T041: read-only versions (explain, compare, refused edits) and Executables (explain, stale hash, refused
         # edits), with each agent feature deselected once for its deployment-shape control and selected again.
         qualify_workflow_inspection(runtime)
+        # Spec 1193 T045: one exact Run explained read-only (a fault with a sensitive canary input, an in-progress Run, a limited
+        # actor, refused run controls), with the Runtime-side agent feature deselected once and selected again, and a canary
+        # search over every retained file.
+        qualify_workflow_run(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION, LIBRARY_SECTION, INSPECTION_SECTION)})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION, LIBRARY_SECTION, INSPECTION_SECTION, RUN_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)
