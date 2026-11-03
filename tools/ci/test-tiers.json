@@ -697,7 +697,7 @@
       "medianMinutes": null
     },
     {
-      "project": "Extensions/Etl/tests/SqlProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
       "medianMinutes": null
@@ -1087,7 +1087,7 @@
     },
     {
       "suite": "etl-sql",
-      "project": "Extensions/Etl/tests/SqlProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
       "require": "ELSA_ETL_SQL_REQUIRE_NATIVE_PROVIDERS"
     },
     {

@@ -14,9 +14,9 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
-    <ProjectReference Include="../../src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
-    <ProjectReference Include="../../src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
+    <ProjectReference Include="../../../src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
+    <ProjectReference Include="../../../src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
+    <ProjectReference Include="../../../src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
