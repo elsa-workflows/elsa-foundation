@@ -45,6 +45,7 @@ internal sealed partial class EtlArtifactCompiler
         }
         var mapped = ValidateMapping(pipeline.Mapping, source, lookup, diagnostics);
         ValidateFilters(pipeline.Filters, mapped, diagnostics);
+        ValidateSqlDestination(pipeline, mapped, diagnostics);
         if (pipeline.Source is not null && EtlContinuousRunPolicy.FindViolation(pipeline) is { } continuousViolation)
             diagnostics.Add(continuousViolation["etl.".Length..], "continuous", continuousViolation switch
             {
@@ -163,11 +164,42 @@ internal sealed partial class EtlArtifactCompiler
             case EtlJsonlDestination file: ValidateAlias(file.Binding, path + ".binding", diagnostics); break;
             case EtlHttpDestination http: ValidateAlias(http.Binding, path + ".binding", diagnostics); break;
             case EtlCsvDestination csv: ValidateAlias(csv.Binding, path + ".binding", diagnostics); break;
+            case EtlSqlDestination sql: ValidateAlias(sql.Binding, path + ".binding", diagnostics); break;
             default:
                 diagnostics.Add(destination is null ? "destination.required" : "destination.unsupported", path, "A supported output destination is required.");
                 break;
         }
     }
+
+    /// <summary>
+    /// A SQL destination's table and columns are identifiers the dialect quotes, and its key must never be null, because a
+    /// null key never conflicts (spec 1197). Only the main route may be SQL: the error route's shape is the runtime's.
+    /// </summary>
+    private static void ValidateSqlDestination(EtlPipelineV2 pipeline, IReadOnlyDictionary<string, EtlColumn> mapped,
+        DiagnosticCollector diagnostics)
+    {
+        if (pipeline.Routes?.Errors is EtlSqlDestination)
+            diagnostics.Add("destination.sql-route-unsupported", "routes.errors", "Only the main route can deliver to SQL.");
+        if (pipeline.Routes?.Main is not EtlSqlDestination sql)
+            return;
+        var parts = sql.Table?.Split('.') ?? [];
+        if (parts.Length is not (1 or 2) || !parts.All(IsSqlIdentifier))
+            diagnostics.Add("destination.sql-identifier-invalid", "routes.main.table",
+                "The table must be name or schema.name, each a letter or underscore followed by up to 62 letters, digits or underscores.");
+        var names = pipeline.Mapping?.Where(field => field is not null).Select(field => field.Name).ToArray() ?? [];
+        if (!names.All(IsSqlIdentifier) || names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != names.Length)
+            diagnostics.Add("destination.sql-identifier-invalid", "mapping",
+                "SQL columns are the output field names, which must be identifiers that stay distinct when case is ignored.");
+        if (sql.Key is not { Count: >= 1 and <= 8 } key || key.Distinct(StringComparer.Ordinal).Count() != key.Count ||
+            !key.All(field => field is not null && mapped.TryGetValue(field, out var column) && column.Required &&
+                pipeline.Mapping!.Any(output => output?.Name == field && output.Origin == EtlFieldOrigin.Source)))
+            diagnostics.Add("destination.sql-key-invalid", "routes.main.key",
+                "The key must be one to eight distinct output fields, each mapped from a required source field.");
+    }
+
+    private static bool IsSqlIdentifier(string? value) =>
+        value is { Length: >= 1 and <= 63 } && (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
+        value.All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
 
     private static void ValidatePagination(EtlHttpPagination? pagination, DiagnosticCollector diagnostics)
     {
@@ -246,6 +278,15 @@ internal sealed partial class EtlArtifactCompiler
         EtlJsonlDestination file => AddText(file.Binding, ref budget),
         EtlHttpDestination http => AddText(http.Binding, ref budget),
         EtlCsvDestination csv => AddText(csv.Binding, ref budget),
+        EtlSqlDestination sql => AddText(sql.Binding, ref budget) && AddText(sql.Table, ref budget) && AddKeyText(sql.Key, ref budget),
         _ => true
     };
+
+    private static bool AddKeyText(IReadOnlyList<string>? key, ref int budget)
+    {
+        if (key is null) return true;
+        foreach (var field in key)
+            if (!AddText(field, ref budget)) return false;
+        return true;
+    }
 }

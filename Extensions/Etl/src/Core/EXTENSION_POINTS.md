@@ -72,6 +72,9 @@ transaction, because no partition exists to complete it; an identical replay ret
 outputs as file routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)): `RecordConnectorFilePublicationAsync`
 matches a CSV publication against `EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, kind)` (a `.csv` key, refusing the
 `.jsonl` one), and a CSV route counts as a file publication for delivery, acceptance and inspection state.
+A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)):
+the runtime records an applied SQL route through `RecordConnectorFilePublicationAsync` under
+`EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`, and it counts as a recorded publication (effect mechanism 2).
 
 `EtlPipelineV2.Continuous` is an optional, init-only run policy; a null policy is never serialized, so finite artifacts
 keep their bytes and identities. `EtlContinuousRunPolicy.FindViolation` is the one rule every reader applies (HTTP
@@ -107,3 +110,32 @@ temporary pressure and settles a safe fenced diagnostic for a proven permanent s
 unaccepted descriptors and accounting as evidence; it never fabricates acceptance to clear counters. Providers
 must retain the request/page history needed to classify irreversible growth and must not mistake another live
 partition's releasable reservation for permanent exhaustion.
+
+## SQL engines
+
+**`IEtlSqlEngine`** — adapter keyed by provider name (§2.7), layer: Core contract, no default implementation
+([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)).
+
+```csharp
+public interface IEtlSqlEngine
+{
+    string Provider { get; }
+    int MaxParameters { get; }
+    string? SessionSetup { get; }
+    DbConnection CreateConnection(string connectionString);
+    EtlSqlTarget DescribeTarget(string connectionString);
+    string CreateLedger(string ledgerTable);
+    string InsertLedger(string ledgerTable);
+    string ReadLedgerHash(string ledgerTable);
+    string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns);
+    string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row);
+    string Parameter(string column, int row);
+    EtlSqlErrorKind Classify(Exception exception);
+}
+```
+
+- **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction); an engine never commits or retries.
+- **Registration:** `services.AddSingleton<IEtlSqlEngine, …>()` from an engine feature.
+- **When to implement:** to deliver to another engine. Supply connections, a target without secrets for the pinned handle, dialect text, and exception classification.
+- **What depends on it:** `HostSqlBindings` and `EtlSqlRouteWriter` in `Elsa.Etl.Runtime`.
+- **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).

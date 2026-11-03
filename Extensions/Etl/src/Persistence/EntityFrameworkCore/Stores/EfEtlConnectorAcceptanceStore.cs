@@ -34,8 +34,14 @@ internal sealed partial class EfEtlRuntimeStore
             state.Prepared!, position, cancellationToken);
         if (owed?.Output is not { } output) return EtlStoreStatus.Conflict;
         var planned = route == EtlOutputRoute.Main ? output.Main : output.Errors;
-        if (planned?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv)) return EtlStoreStatus.Invalid;
-        var expected = planned.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId, planned.Kind) };
+        if (planned?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql)) return EtlStoreStatus.Invalid;
+        // A SQL write is recorded like a file publication, under its effect's ledger key (spec 1197).
+        var expected = planned.Body with
+        {
+            Key = planned.Kind == EtlConnectorKind.Sql
+                ? EtlRuntimeIdentity.ConnectorSqlEffectKey(planned.EffectId)
+                : EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId, planned.Kind)
+        };
         if (publication != expected) return EtlStoreStatus.Conflict;
         if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return EtlStoreStatus.LeaseLost;
         if (route == EtlOutputRoute.Main ? owed.FilePublications.Main : owed.FilePublications.Errors) return EtlStoreStatus.Replay;
@@ -225,8 +231,8 @@ internal sealed partial class EfEtlRuntimeStore
 
     private static EtlConnectorFilePublications ReadConnectorFilePublications(EtlConnectorBatchRecord batch, EtlConnectorBatchOutput? output)
     {
-        if (batch.MainFilePublished && output?.Main?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) ||
-            batch.ErrorFilePublished && output?.Errors?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv))
+        if (batch.MainFilePublished && output?.Main?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) ||
+            batch.ErrorFilePublished && output?.Errors?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql))
             throw new InvalidDataException("The connector file publication has no matching file route.");
         return new(batch.MainFilePublished, batch.ErrorFilePublished);
     }
@@ -238,7 +244,7 @@ internal sealed partial class EfEtlRuntimeStore
     private static bool Delivered(EtlConnectorRouteOutput? route, EtlConnectorHttpDelivery? delivery, bool published) => route?.Kind switch
     {
         null => true,
-        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => published,
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql => published,
         EtlConnectorKind.Http => delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged,
         _ => false
     };

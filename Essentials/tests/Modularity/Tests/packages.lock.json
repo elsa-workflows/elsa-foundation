@@ -1639,6 +1639,22 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.etl.sql.postgresql": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Npgsql": "[10.0.3, )"
+        }
+      },
+      "elsa.etl.sql.sqlserver": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Microsoft.Data.SqlClient": "[7.0.2, )"
+        }
+      },
       "elsa.etl.workflows.design": {
         "type": "Project",
         "dependencies": {
@@ -2270,6 +2286,8 @@
           "Elsa.Etl.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Etl.Runtime": "[4.0.0-dev, )",
           "Elsa.Etl.Runtime.Api": "[4.0.0-dev, )",
+          "Elsa.Etl.Sql.PostgreSql": "[4.0.0-dev, )",
+          "Elsa.Etl.Sql.SqlServer": "[4.0.0-dev, )",
           "Elsa.Etl.Workflows.Design": "[4.0.0-dev, )",
           "Elsa.Etl.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Events": "[4.0.0-dev, )",

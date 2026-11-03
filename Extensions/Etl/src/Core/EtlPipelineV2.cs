@@ -123,6 +123,7 @@ public sealed record EtlRoutes(
 [JsonDerivedType(typeof(EtlJsonlDestination), "jsonl")]
 [JsonDerivedType(typeof(EtlHttpDestination), "http")]
 [JsonDerivedType(typeof(EtlCsvDestination), "csv")]
+[JsonDerivedType(typeof(EtlSqlDestination), "sql")]
 public abstract record EtlDestination;
 
 /// <summary>A host-bound JSON Lines file destination.</summary>
@@ -137,6 +138,34 @@ public sealed record EtlCsvDestination([property: JsonRequired] string Binding) 
 /// <remarks>The binding is a host-approved alias; the destination URL and credentials are never authored here.</remarks>
 /// <param name="Binding">The host-approved destination alias.</param>
 public sealed record EtlHttpDestination([property: JsonRequired] string Binding) : EtlDestination;
+
+/// <summary>
+/// A host-bound PostgreSQL or SQL Server table that each batch upserts by key in one transaction, together with a ledger
+/// row that makes every batch's effect apply exactly once (spec 1197). Main route only.
+/// </summary>
+/// <remarks>The binding is a host-approved alias; the connection string is never authored here.</remarks>
+/// <param name="Binding">The host-approved destination alias.</param>
+/// <param name="Table">The target table, <c>name</c> or <c>schema.name</c>; its columns are the output field names.</param>
+/// <param name="Key">One to eight output fields, mapped from required source fields, that identify a row.</param>
+public sealed record EtlSqlDestination(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] string Table,
+    [property: JsonRequired] IReadOnlyList<string> Key) : EtlDestination
+{
+    /// <inheritdoc />
+    public bool Equals(EtlSqlDestination? other) => other is not null && Binding == other.Binding && Table == other.Table &&
+        (ReferenceEquals(Key, other.Key) || Key is not null && other.Key is not null && Key.SequenceEqual(other.Key));
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Binding);
+        hash.Add(Table);
+        foreach (var field in Key ?? []) hash.Add(field);
+        return hash.ToHashCode();
+    }
+}
 
 /// <summary>A closed set of supported HTTP JSON pagination selectors.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]
