@@ -3,6 +3,20 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there. An entry with supersededBy mutated code a later round rewrote; the entries it names cover that guard at the current code.",
  "results": [
   {
+   "mutation": "execution-acks-on-replay",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_preparation_record_the_store_replays",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_preparation_record_the_store_replays_still_acknowledges_the_messages"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "status is EtlStoreStatus.Applied or EtlStoreStatus.Replay && receipt is not null",
+   "mutated_text": "status is EtlStoreStatus.Applied && receipt is not null",
+   "sourceRevision": "8ac2de5366bdd855b8b1826a9d5eaef9be1a9179"
+  },
+  {
    "mutation": "binding-source-exempt-from-exchanges",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
