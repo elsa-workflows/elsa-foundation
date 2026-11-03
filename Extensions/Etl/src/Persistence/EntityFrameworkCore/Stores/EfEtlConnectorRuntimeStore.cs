@@ -165,6 +165,10 @@ internal sealed partial class EfEtlRuntimeStore
         run.Revision = checked(run.Revision + 1);
         run.UpdatedAtUtcTicks = now;
         await db.SaveChangesAsync(cancellationToken);
+        // A zero-record file run has no partition whose acceptance could complete it; settle it with the
+        // preparation so its terminal result, outbox row and lease check share this transaction.
+        if (partitions.Count == 0)
+            await CompleteConnectorRunIfReadyAsync(key, run, EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), cancellationToken);
         if (expiry <= NowTicks()) return EtlStoreStatus.LeaseLost;
         await tx.CommitAsync(cancellationToken);
         return EtlStoreStatus.Applied;

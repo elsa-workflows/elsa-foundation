@@ -34,8 +34,8 @@ internal sealed partial class EfEtlRuntimeStore
             state.Prepared!, position, cancellationToken);
         if (owed?.Output is not { } output) return EtlStoreStatus.Conflict;
         var planned = route == EtlOutputRoute.Main ? output.Main : output.Errors;
-        if (planned?.Kind != EtlConnectorKind.Jsonl) return EtlStoreStatus.Invalid;
-        var expected = planned.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId) };
+        if (planned?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv)) return EtlStoreStatus.Invalid;
+        var expected = planned.Body with { Key = EtlRuntimeIdentity.ConnectorFileOutputKey(planned.EffectId, planned.Kind) };
         if (publication != expected) return EtlStoreStatus.Conflict;
         if (!HasConnectorAuthority(partition, lease.Owner, lease.Fence, NowTicks())) return EtlStoreStatus.LeaseLost;
         if (route == EtlOutputRoute.Main ? owed.FilePublications.Main : owed.FilePublications.Errors) return EtlStoreStatus.Replay;
@@ -225,9 +225,9 @@ internal sealed partial class EfEtlRuntimeStore
 
     private static EtlConnectorFilePublications ReadConnectorFilePublications(EtlConnectorBatchRecord batch, EtlConnectorBatchOutput? output)
     {
-        if (batch.MainFilePublished && output?.Main?.Kind != EtlConnectorKind.Jsonl ||
-            batch.ErrorFilePublished && output?.Errors?.Kind != EtlConnectorKind.Jsonl)
-            throw new InvalidDataException("The connector file publication has no matching JSONL route.");
+        if (batch.MainFilePublished && output?.Main?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) ||
+            batch.ErrorFilePublished && output?.Errors?.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv))
+            throw new InvalidDataException("The connector file publication has no matching file route.");
         return new(batch.MainFilePublished, batch.ErrorFilePublished);
     }
 
@@ -238,7 +238,7 @@ internal sealed partial class EfEtlRuntimeStore
     private static bool Delivered(EtlConnectorRouteOutput? route, EtlConnectorHttpDelivery? delivery, bool published) => route?.Kind switch
     {
         null => true,
-        EtlConnectorKind.Jsonl => published,
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => published,
         EtlConnectorKind.Http => delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged,
         _ => false
     };

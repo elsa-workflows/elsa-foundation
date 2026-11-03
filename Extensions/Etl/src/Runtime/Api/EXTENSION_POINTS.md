@@ -35,7 +35,7 @@ implementing their four original operations: the default connector-inspection me
 override that method; unavailable support is not an empty successful page. A malformed inspector projection returns a fixed
 `etl.provider-invalid` error instead of contradictory progress or arbitrary provider state text.
 
-Accepted-effect totals count settled route bodies. A receiver acknowledgement or JSONL publication can still
+Accepted-effect totals count settled route bodies. A receiver acknowledgement or a JSONL or CSV file publication can still
 await batch acceptance, and cancelled runs can retain owed effects. Raw URLs, continuation tokens, bodies,
 authentication details and request/effect identities are excluded. See the
 [inspection checkpoint](../../../../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).

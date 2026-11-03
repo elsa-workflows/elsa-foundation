@@ -88,6 +88,30 @@ describe("ETL run inspection", () => {
     expect(container.textContent).toContain("not records, attempts, or physical executions");
   });
 
+  it("labels CSV outputs as files while a CSV source stays CSV, and shows a published CSV effect", () => {
+    const run = {
+      ...fixture(),
+      status: "running" as const,
+      connector: { sourceKind: "csv", mainKind: "csv", errorKind: "csv", acceptedMainEffects: 1, acceptedErrorEffects: 0 }
+    };
+    flushSync(() => root.render(<EtlRunInspection run={run} />));
+    expect(container.textContent).toContain("Source typeCSV");
+    expect(container.textContent).not.toContain("Source typeCSV file");
+    expect(container.textContent).toContain("Main output typeCSV file");
+    expect(container.textContent).toContain("Error output typeCSV file");
+
+    const partitions: EtlRunConnectorPartitionView[] = [{
+      partitionOrdinal: 0, file: { startOrdinal: 1, endOrdinalExclusive: 3, nextOrdinal: 1 }, http: null,
+      isClaimed: true, claimFence: 2, claimExpiresAt: "2026-10-20T13:00:00Z", notBefore: null,
+      owedBatch: { recordCount: 2, inputBytes: 40, outputRetained: true,
+        main: { kind: "csv", recordCount: 2, state: "published", retry: null }, errors: null },
+      acceptedMainEffects: 0, acceptedErrorEffects: 0
+    }];
+    flushSync(() => root.render(<EtlConnectorPartitionTable partitions={partitions} now={Date.parse("2026-10-20T12:00:00Z")} />));
+    expect(container.textContent).toContain("CSV file");
+    expect(container.textContent).toContain("published");
+  });
+
   it("renders file and HTTP connector positions and keeps acknowledged output visibly pending", () => {
     const retry = {
       phase: "waiting", attemptCount: 3, deadline: "2026-10-20T12:00:00Z",
