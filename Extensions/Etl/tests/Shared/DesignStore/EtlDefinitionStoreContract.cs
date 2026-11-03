@@ -4,7 +4,9 @@ using Elsa.Etl.Design.Stores;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Tests;
 
@@ -251,6 +253,57 @@ public abstract class EtlDefinitionStoreContract
         Assert.Equal(3, statuses.Count(status => status == EtlDefinitionWriteStatus.Conflict));
         await using (var context = database.CreateContext())
             Assert.Equal(2, (await Store(context).FindDraftAsync(scope, "orders"))!.Revision);
+    }
+
+    [SkippableFact]
+    public async Task A_draft_update_racing_a_publication_settles_without_a_provider_failure()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var pipeline = EtlTestPipelines.Create();
+        await using (var context = database.CreateContext())
+            await Store(context).CreateDraftAsync(scope, "orders", pipeline);
+
+        // The update starts while the publication holds its transaction, just before the publication advances the draft.
+        Task<EtlDefinitionWriteResult>? update = null;
+        var interleave = new BeforeFirstDraftUpdate(async () =>
+        {
+            update = Task.Run(async () =>
+            {
+                await using var other = database.CreateContext();
+                return await Store(other).UpdateDraftAsync(scope, "orders", 1, EtlTestPipelines.Create("other"));
+            });
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        });
+        EtlPublicationResult published;
+        await using (var context = database.CreateContext(interleave))
+            published = await Store(context).PublishAsync(scope, "orders", 1, Compile("orders", 1, pipeline));
+        Assert.NotNull(update);
+        var updated = await update;
+
+        // Publishing does not advance the revision, so the update wins its revision whichever commits first.
+        Assert.Equal(EtlDefinitionWriteStatus.Updated, updated.Status);
+        Assert.Contains(published.Status, new[] { EtlPublicationStatus.Published, EtlPublicationStatus.Conflict });
+        await using (var context = database.CreateContext())
+            Assert.Equal(2, (await Store(context).FindDraftAsync(scope, "orders"))!.Revision);
+    }
+
+    /// <summary>Runs an action once, just before the first UPDATE of a draft this context sends.</summary>
+    private sealed class BeforeFirstDraftUpdate(Func<Task> action) : DbCommandInterceptor
+    {
+        private bool _fired;
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (!_fired && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains(EtlDesignEfModule.DraftTableName, StringComparison.Ordinal))
+            {
+                _fired = true;
+                await action();
+            }
+            return result;
+        }
     }
 
     private protected static EfEtlDefinitionStore Store(EtlDesignDbContext context) => new(context, new EtlArtifactCompiler());

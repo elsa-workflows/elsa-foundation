@@ -32,7 +32,7 @@ internal sealed class EtlDesignTestDatabase(string directory) : IEtlDesignTestDa
         return new EtlDesignSqliteDbContext(options);
     }
 
-    EtlDesignDbContext IEtlDesignTestDatabase.CreateContext() => CreateContext();
+    EtlDesignDbContext IEtlDesignTestDatabase.CreateContext(params IInterceptor[] interceptors) => CreateContext(interceptors);
 
     public ValueTask DisposeAsync()
     {

@@ -15,6 +15,8 @@ internal sealed class EfEtlDefinitionStore(
     IEtlArtifactCompilerV2? artifactCompilerV2 = null) : IEtlDefinitionStore, IEtlDefinitionStoreV2
 {
     private static readonly EfWriteRetry PublishRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);
+    // A draft update racing a publication can be a deadlock victim on SQL Server; its one statement rolls back whole.
+    private static readonly EfWriteRetry UpdateRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);
 
     public async ValueTask<EtlDefinitionDraft?> FindDraftAsync(
         EtlScope scope,
@@ -105,17 +107,24 @@ internal sealed class EfEtlDefinitionStore(
             var pipelineHash = EtlDefinitionRecordCodec.HashPipeline(pipelineJson);
             var updatedAtUtcTicks = DateTimeOffset.UtcNow.UtcTicks;
             // A v2 update can explicitly upgrade a v1 draft. Old v1 clients cannot downgrade a v2 draft.
-            var changed = await DraftQuery(identity)
-                .Where(row => row.Revision == expectedRevision &&
-                    (row.FormatVersion == EtlArtifact.CurrentFormatVersion ||
-                     formatVersion == EtlArtifactV2Json.FormatVersion && row.FormatVersion == EtlArtifactV2Json.FormatVersion))
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(row => row.PipelineJson, pipelineJson)
-                    .SetProperty(row => row.PipelineHash, pipelineHash)
-                    .SetProperty(row => row.FormatVersion, formatVersion)
-                    .SetProperty(row => row.SchemaVersion, EtlDesignEfModule.SchemaVersion)
-                    .SetProperty(row => row.Revision, row => row.Revision + 1)
-                    .SetProperty(row => row.UpdatedAtUtcTicks, updatedAtUtcTicks), cancellationToken);
+            var changed = await UpdateRetry.RunAsync(dbContext,
+                async () => await DraftQuery(identity)
+                    .Where(row => row.Revision == expectedRevision &&
+                        (row.FormatVersion == EtlArtifact.CurrentFormatVersion ||
+                         formatVersion == EtlArtifactV2Json.FormatVersion && row.FormatVersion == EtlArtifactV2Json.FormatVersion))
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(row => row.PipelineJson, pipelineJson)
+                        .SetProperty(row => row.PipelineHash, pipelineHash)
+                        .SetProperty(row => row.FormatVersion, formatVersion)
+                        .SetProperty(row => row.SchemaVersion, EtlDesignEfModule.SchemaVersion)
+                        .SetProperty(row => row.Revision, row => row.Revision + 1)
+                        .SetProperty(row => row.UpdatedAtUtcTicks, updatedAtUtcTicks), cancellationToken),
+                conflict =>
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(conflict!);
+                    return ValueTask.FromResult(0);
+                },
+                cancellationToken);
             if (changed == 1)
             {
                 var updated = await FindDraftRowAsync(identity, cancellationToken)

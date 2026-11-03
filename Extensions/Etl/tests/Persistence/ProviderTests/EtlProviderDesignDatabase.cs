@@ -2,6 +2,7 @@ using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Tests;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Elsa.Etl.Persistence.ProviderTests;
 
@@ -21,19 +22,20 @@ internal sealed class EtlProviderDesignDatabase(EtlProviderDatabase database) : 
         return design;
     }
 
-    public EtlDesignDbContext CreateContext() => database.Provider switch
+    public EtlDesignDbContext CreateContext(params IInterceptor[] interceptors) => database.Provider switch
     {
-        "PostgreSql" => Create<EtlDesignPostgreSqlDbContext>(),
-        "SqlServer" => Create<EtlDesignSqlServerDbContext>(),
-        "MySql" => Create<EtlDesignMySqlDbContext>(),
+        "PostgreSql" => Create<EtlDesignPostgreSqlDbContext>(interceptors),
+        "SqlServer" => Create<EtlDesignSqlServerDbContext>(interceptors),
+        "MySql" => Create<EtlDesignMySqlDbContext>(interceptors),
         _ => throw new ArgumentOutOfRangeException(nameof(database), database.Provider, "No ETL design context for this provider.")
     };
 
-    private TContext Create<TContext>() where TContext : EtlDesignDbContext
+    private TContext Create<TContext>(IInterceptor[] interceptors) where TContext : EtlDesignDbContext
     {
         var builder = new DbContextOptionsBuilder<TContext>();
         EfRelationalProviderBinding.UseMigrationsFrom(builder, database.Provider, database.ConnectionString,
             EtlDesignEfModule.HistoryTableName, typeof(TContext).Assembly);
+        builder.AddInterceptors(interceptors);
         return (TContext)Activator.CreateInstance(typeof(TContext), builder.Options)!;
     }
 
