@@ -39,7 +39,7 @@ public interface IEtlSqlEngine
 
     /// <summary>
     /// Counts unique constraints or indexes on exactly the key columns of the table, or returns -1 when the table does not
-    /// exist, so a missing table is not mistaken for a missing key.
+    /// exist or is not a base table, so a missing table is not mistaken for a missing key.
     /// </summary>
     string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns);
 
