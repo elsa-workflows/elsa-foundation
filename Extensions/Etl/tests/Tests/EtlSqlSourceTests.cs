@@ -88,6 +88,51 @@ public sealed class EtlSqlSourceTests : IDisposable
     }
 
     [Fact]
+    public void A_watermark_must_be_a_declared_required_int64_column_and_is_omitted_when_absent()
+    {
+        AssertRejected(Pipeline(Source() with { Watermark = "missing" }), "source.sql-watermark-invalid");
+        AssertRejected(Pipeline(Source() with { Watermark = "name" }), "source.sql-watermark-invalid");
+        AssertRejected(Pipeline(Source(columns: [new("id", EtlColumnType.Int64, true), new("version", EtlColumnType.Int64, false)]) with
+            { Watermark = "version" }), "source.sql-watermark-invalid");
+
+        var watermarked = Assert.IsType<EtlArtifact>(Compile(Pipeline(Source() with { Watermark = "id" })).Artifact);
+        Assert.Equal("id", Assert.IsType<EtlSqlSource>(EtlArtifactV2Json.Read(watermarked.Pipeline).Source).Watermark);
+        // Without a watermark the artifact keeps spec 1198's bytes.
+        Assert.DoesNotContain("watermark", Compile(Pipeline()).Artifact!.Pipeline.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_watermark_reads_only_rows_above_the_floor_and_records_the_snapshot_high_watermark()
+    {
+        Execute("CREATE TABLE versioned (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL)");
+        Execute("INSERT INTO versioned VALUES (1, 'Ada', 5), (2, 'Bram', 9), (3, 'Cleo', 7)");
+        var source = new EtlSqlSource("people-db", "main.versioned",
+            [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("version", EtlColumnType.Int64, true)], ["id"])
+            { Watermark = "version" };
+        var preparer = new EtlConnectorPreparer(new HostFileBindings([]), SnapshotRoot) { SqlBindings = Sql("main.versioned") };
+
+        var all = await preparer.PrepareAsync(Admission(Pipeline(source), "main.versioned"));
+        var above = await preparer.PrepareAsync(Admission(Pipeline(source), "main.versioned"), default, watermarkFloor: 6);
+        var none = await preparer.PrepareAsync(Admission(Pipeline(source), "main.versioned"), default, watermarkFloor: 9);
+
+        Assert.Equal((3L, 9L), (all.Prepared!.File!.RecordCount, all.Prepared.SourceWatermark!.Value));
+        Assert.Equal((2L, 9L), (above.Prepared!.File!.RecordCount, above.Prepared.SourceWatermark!.Value));
+        Assert.Equal(0L, none.Prepared!.File!.RecordCount);
+        Assert.Null(none.Prepared.SourceWatermark);
+        Assert.Equal("{\"id\":2,\"name\":\"Bram\",\"version\":9}\n{\"id\":3,\"name\":\"Cleo\",\"version\":7}\n",
+            await File.ReadAllTextAsync(Path.Combine(SnapshotRoot, above.Prepared.File.Source.Key)));
+    }
+
+    [Fact]
+    public void A_prepared_run_without_a_watermark_keeps_its_persisted_bytes()
+    {
+        var prepared = new EtlConnectorPreparedRun(null, null);
+
+        Assert.Equal("{\"file\":null,\"lookup\":null}", EtlRuntimeJson.Write(prepared));
+        Assert.Contains("\"sourceWatermark\":9", EtlRuntimeJson.Write(prepared with { SourceWatermark = 9 }), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_continuous_sql_source_is_refused() =>
         Assert.Equal("etl.continuous-source-unsupported",
             EtlContinuousRunPolicy.FindViolation(Pipeline() with { Continuous = new EtlContinuousRunPolicy(5) }));
@@ -344,10 +389,10 @@ public sealed class EtlSqlSourceTests : IDisposable
 
     private EtlConnectorPreparer Preparer() => new(new HostFileBindings([]), SnapshotRoot) { SqlBindings = Sql() };
 
-    private HostSqlBindings Sql() => new([new EtlHostSqlBindingOptions
+    private HostSqlBindings Sql(string table = "main.people") => new([new EtlHostSqlBindingOptions
     {
         TenantId = Scope.TenantId, PersistencePartition = Scope.PersistencePartition, Alias = "people-db", Role = "Source", Revision = "v1",
-        Provider = "sqlite", ConnectionString = ConnectionString, AllowedTables = ["main.people"]
+        Provider = "sqlite", ConnectionString = ConnectionString, AllowedTables = [table]
     }], [_engine]);
 
     private HostConnectorBindings Connector() => new(new HostFileBindings([
@@ -355,11 +400,11 @@ public sealed class EtlSqlSourceTests : IDisposable
         new HostFileBinding(Scope, "errors", EtlFileRole.ErrorOutput, "v1", Path.Combine(_root, "errors"), true, AtomicPublication: true)
     ]), new HostHttpBindings([]), 8, Sql());
 
-    private EtlConnectorRunAdmission Admission(EtlPipelineV2 pipeline)
+    private EtlConnectorRunAdmission Admission(EtlPipelineV2 pipeline, string table = "main.people")
     {
         var artifact = Compile(pipeline).Artifact ?? EtlArtifactFor(pipeline);
         var invocation = EtlRuntimeFixtures.Admission("sql-source-" + Guid.NewGuid().ToString("N"), Scope).Invocation with { Artifact = artifact };
-        var resolved = Sql().ResolveCurrent(Scope, "people-db", "Source", "main.people");
+        var resolved = Sql(table).ResolveCurrent(Scope, "people-db", "Source", table);
         return new EtlConnectorRunAdmission(invocation, new EtlConnectorRunBindings(
             new EtlConnectorBindingRevision(EtlConnectorKind.Sql, new EtlBindingRevision(resolved.Alias, resolved.Revision, resolved.Handle, null)),
             null,

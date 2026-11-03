@@ -176,6 +176,109 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Equal(published, await File.ReadAllTextAsync(snapshot, deadline.Token));
     }
 
+    [Fact]
+    public async Task A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs()
+    {
+        await using var files = new RuntimeFiles("");
+        var source = CreateVersionedTable(files);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source)));
+
+        var first = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-first", WatermarkPipeline()));
+        Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (first.Status, first.AcceptedRecords, await CheckpointAsync(host, files)));
+
+        ExecuteSql(source, "UPDATE people SET name = 'Bram II', version = 4 WHERE id = 2; INSERT INTO people VALUES (4, 'Dee', 5)");
+        var second = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-second", WatermarkPipeline()));
+        Assert.Equal((EtlRunStatus.Succeeded, 2L, 5L), (second.Status, second.AcceptedRecords, await CheckpointAsync(host, files)));
+
+        var third = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-third", WatermarkPipeline()));
+        Assert.Equal((EtlRunStatus.Succeeded, 0L, 5L), (third.Status, third.AcceptedRecords, await CheckpointAsync(host, files)));
+        Assert.Equal(["Ada", "Bram", "Bram II", "Cleo", "Dee"], ReadJsonlNames(files.OutputRoot));
+    }
+
+    [Fact]
+    public async Task A_faulted_watermarked_run_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again()
+    {
+        await using var files = new RuntimeFiles("");
+        var source = CreateVersionedTable(files);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime =>
+            {
+                runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source));
+                runtime.SqlBindings.Add(new EtlHostSqlBindingOptions
+                {
+                    TenantId = files.Scope.TenantId, PersistencePartition = files.Scope.PersistencePartition, Alias = "copy",
+                    Role = "MainOutput", Revision = "v1", Provider = "sqlite", ConnectionString = source, AllowedTables = ["people_copy"]
+                });
+            });
+        var toCopy = WatermarkPipeline() with { Routes = new(new EtlSqlDestination("copy", "people_copy", ["id"]), new EtlJsonlDestination("errors")) };
+
+        // The destination table does not exist yet, so delivery is rejected after the snapshot was read.
+        var faulted = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-faulted", toCopy));
+        Assert.Equal((EtlRunStatus.BusinessError, "etl.sql-write-rejected"), (faulted.Status, faulted.TerminalResult?.Diagnostic?.Code));
+        Assert.Null(await CheckpointAsync(host, files));
+
+        ExecuteSql(source, "CREATE TABLE people_copy (id INTEGER NOT NULL, name TEXT NOT NULL, version INTEGER NOT NULL, CONSTRAINT people_copy_key UNIQUE (id))");
+        var retried = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "watermark-retried", toCopy));
+        Assert.Equal((EtlRunStatus.Succeeded, 3L, 3L), (retried.Status, retried.AcceptedRecords, await CheckpointAsync(host, files)));
+        Assert.Equal(["1|Ada", "2|Bram", "3|Cleo"], QuerySql(source, "SELECT id, name FROM people_copy ORDER BY id"));
+    }
+
+    [Fact]
+    public async Task A_watermarked_run_whose_worker_was_killed_after_publishing_records_the_snapshot_high_watermark()
+    {
+        await using var files = new RuntimeFiles("");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var source = CreateVersionedTable(files);
+        EtlHostSqlBindingOptions[] sql = [SqlSourceBinding(files.Scope, source)];
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.AddRange(sql));
+        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(deadline.Token);
+        var invocation = ConnectorInvocation(files.Scope, "watermark-process", WatermarkPipeline());
+        await files.AdmitAsync(host, invocation);
+
+        var predecessor = await files.StartWorkerAsync("watermark-predecessor", deadline.Token,
+            connectorGate: EtlConnectorWorkerGate.BeforePreparationCommit, sqlBindings: sql);
+        await predecessor.WaitForConnectorCheckpointAsync(deadline.Token);
+        await predecessor.CrashAsync();
+        // A row with a higher watermark arrives after the snapshot; the reused snapshot does not contain it.
+        ExecuteSql(source, "INSERT INTO people VALUES (9, 'Late', 9)");
+        _ = await files.StartWorkerAsync("watermark-survivor", deadline.Token, sqlBindings: sql);
+        var run = await files.WaitForTerminalAsync(host.Services, invocation.RunId);
+
+        Assert.Equal((EtlRunStatus.Succeeded, 3L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(3L, await CheckpointAsync(host, files));
+    }
+
+    private static string CreateVersionedTable(RuntimeFiles files)
+    {
+        var source = $"Data Source={Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "source.db")};Pooling=False";
+        ExecuteSql(source, "CREATE TABLE people (id INTEGER NOT NULL PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL)");
+        ExecuteSql(source, "INSERT INTO people VALUES (1, 'Ada', 1), (2, 'Bram', 2), (3, 'Cleo', 3)");
+        return source;
+    }
+
+    private static EtlPipelineV2 WatermarkPipeline()
+    {
+        var baseline = SqlSourcePipeline();
+        return baseline with
+        {
+            Source = new EtlSqlSource("people-db", "people", [new EtlColumn("id", EtlColumnType.Int64, true),
+                new EtlColumn("name", EtlColumnType.String, true), new EtlColumn("version", EtlColumnType.Int64, true)], ["id"]) { Watermark = "version" },
+            Mapping = [new("id", EtlFieldOrigin.Source, "id"), new("name", EtlFieldOrigin.Source, "name"), new("version", EtlFieldOrigin.Source, "version")]
+        };
+    }
+
+    private static async Task<long?> CheckpointAsync(Microsoft.Extensions.Hosting.IHost host, RuntimeFiles files)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>()
+            .FindConnectorSourceWatermarkAsync(files.Scope, new("orders", "people-db", "people", "version"));
+    }
+
     private static string CreateSqlSourceTable(RuntimeFiles files)
     {
         var source = $"Data Source={Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "source.db")};Pooling=False";
