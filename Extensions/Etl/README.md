@@ -82,6 +82,30 @@ host, port, database and user, never the password.
 - **Ledger retention.** The runtime never deletes ledger rows. Delete only the rows of terminal runs: deleting a running
   run's row can allow a second write.
 
+## RabbitMQ delivery
+
+[Spec 1200](../../specs/1200-etl-rabbitmq-delivery/spec.md) adds a `rabbitmq` destination for the main route: a
+host-approved exchange and routing key to which each accepted record is published as one persistent JSON message. Install
+`Elsa.Etl.RabbitMq` and add an `EtlRuntimeFeature.RabbitMqBindings` entry: alias, an AMQP URI as `ConnectionString` from
+host configuration, and `AllowedExchanges` (an empty name allows the default exchange). The pinned binding handle hashes
+the parsed host, port, virtual host and user, and the allowed exchanges, never the password. The runtime never declares
+exchanges, queues or bindings.
+
+- **Publisher confirms.** A batch's messages are published in order on one channel with confirmation tracking, mandatory
+  and persistent, with content type `application/json`. The route is recorded, and the batch may be accepted, only once the
+  broker has confirmed every message.
+- **At least once, with stable ids.** RabbitMQ has no ledger the runtime could consult, so a batch whose publication was
+  interrupted, or whose worker died after the confirms and before the record, is published again in full. Every message
+  carries the message id `{effectId}:{index}` and the headers `elsa-etl-run-id`, `elsa-etl-batch-id`,
+  `elsa-etl-effect-id` and `elsa-etl-record-index`, identical on every replay, so consumers deduplicate by message id. A
+  replayed batch can arrive after messages of later batches.
+- **Failures.** A message no queue matches is returned and fails the run with `etl.rabbitmq-unroutable`. A negative
+  acknowledgement (for example a queue at its length limit with `reject-publish`), an unreachable broker or a closed
+  connection retries after two seconds, so an outage pauses the run. Access refused, a missing exchange or failed
+  authentication fails the run with `etl.rabbitmq-publish-rejected`. Without `Elsa.Etl.RabbitMq`, admission refuses the run
+  with `etl.rabbitmq-unavailable`. The error route cannot be RabbitMQ.
+- **Ordering.** Messages of one batch keep their order; batches of different partitions or shards interleave.
+
 ## SQL snapshot reads
 
 [Spec 1198](../../specs/1198-etl-sql-source/spec.md) adds a `sql` source: a host-approved PostgreSQL or SQL Server table,
