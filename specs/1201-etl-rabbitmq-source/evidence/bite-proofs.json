@@ -3,6 +3,20 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there. An entry with supersededBy mutated code a later round rewrote; the entries it names cover that guard at the current code.",
  "results": [
   {
+   "mutation": "output-sql-columns-rabbitmq",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_queue_drains_into_a_sql",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_queue_drains_into_a_sql_destination_typed_by_the_source_fields"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            EtlRabbitMqSource queue => queue.Fields.ToDictionary(field => field.Name, field => field.Type, StringComparer.Ordinal),\n",
+   "mutated_text": "",
+   "sourceRevision": "e4106a31c964d77a1192f4f3150828dc9eae75d3"
+  },
+  {
    "mutation": "execution-acks-on-replay",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorExecution.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
