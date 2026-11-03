@@ -321,9 +321,12 @@ node or a switch's cases, compared normalized) and `childOrder` (`reorderedSlots
 container that wires its children with connections, such as a flowchart, runs them by its connections, so its list order is
 not compared), and connections added, removed and changed. A connection is identified as the flowchart identifies it: its
 `id`, or without one `{source}:{sourcePort}->{target}` (FlowchartGraph's key), which is also the key of its
-`connectionMetadata` entry. Connections are read as the runtime deserializes them: property names in any letter case, a
+`connectionMetadata` entry. Connections are read as the runtime deserializes them: property names in any letter case, the
+last of several matching properties (and of exact duplicate dictionary keys) winning, a
 blank or padded id is none or trimmed (as `FlowchartConnection` does), a blank port is `Done` and a port is trimmed (as
-`FlowchartEndpoint.NormalizePort` does), and node ids are kept as written; reported ports are the normalized ones; `connectionsChanged` names each by `connectionId` with the aspects `endpoints` (rewired) and
+`FlowchartEndpoint.NormalizePort` does), and node ids are kept as written; reported ports are the normalized ones. A connection list the runtime would refuse (not an
+array, a connection without a source or target object, a blank or non-string node id, a non-string id or port) is not read
+as valid: none of that container's connections are reported, and the reading is `incomplete` with the reason; `connectionsChanged` names each by `connectionId` with the aspects `endpoints` (rewired) and
 `metadata` (label, default flag, policy or configuration). Two connections with the same endpoints under different ids are
 two connections. A metadata entry no connection or child claims stays part of the container's `structure`. A container whose structure no
 installed handler projects is never read as empty: the reading and the comparison say `incomplete` with

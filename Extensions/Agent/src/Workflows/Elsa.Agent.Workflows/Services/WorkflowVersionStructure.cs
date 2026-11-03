@@ -81,7 +81,8 @@ internal static class WorkflowVersionStructure
                 }
             }
             var children = projections.SelectMany(item => item.Activities).Select(child => child.NodeId).ToHashSet(StringComparer.Ordinal);
-            var wired = Connections(node).ToArray();
+            var (wired, malformed) = Connections(node);
+            if (malformed is not null) reasons.Add(malformed);
             var claimed = wired.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
             var graph = node.Structure?.Payload is { ValueKind: JsonValueKind.Object } payload
                 && Property(payload, "connections") is { ValueKind: JsonValueKind.Array };
@@ -224,7 +225,7 @@ internal static class WorkflowVersionStructure
     private static string? StructureSignature(ActivityNodeStructure? structure, IReadOnlySet<string> children, IReadOnlySet<string> connections)
     {
         if (structure is null) return null;
-        var payload = JsonNode.Parse(structure.Payload.GetRawText());
+        var payload = ToNode(structure.Payload);
         // The connections, and each metadata entry claimed by a connection or a projected child, are compared with what they
         // describe; an entry no connection or child claims stays part of the container's own structure.
         if (payload is JsonObject body)
@@ -258,61 +259,106 @@ internal static class WorkflowVersionStructure
         value.TryGetPropertyValue("nodeId", out var id) && id is JsonValue nodeId && nodeId.TryGetValue<string>(out var text) && children.Contains(text)
         && value.ContainsKey("activityVersionId");
 
-    // The connections as the runtime deserializes them (System.Text.Json web defaults: property names case-insensitive), with
-    // FlowchartConnection's and FlowchartEndpoint's own normalization: a blank id is none and an id is trimmed, a blank port
-    // is Done and a port is trimmed, and node ids are kept as written. The key and the metadata lookup then match the runtime's.
-    private static IEnumerable<Connection> Connections(ActivityNode node)
+    // The connections as the runtime deserializes them (System.Text.Json web defaults: property names case-insensitive, and
+    // the last of several matching properties wins), with FlowchartConnection's and FlowchartEndpoint's own normalization: a
+    // blank id is none and an id is trimmed, a blank port is Done and a port is trimmed, and node ids are kept as written.
+    // The key and the metadata lookup then match the runtime's. A list the runtime would refuse (a connection without a
+    // source or target object, a blank or non-string node id, a non-string id or port) is not read as valid: none of the
+    // container's connections are reported, and the reason makes the reading incomplete.
+    private static (IReadOnlyList<Connection> Connections, string? Malformed) Connections(ActivityNode node)
     {
-        if (node.Structure?.Payload is not { ValueKind: JsonValueKind.Object } payload
-            || Property(payload, "connections") is not { ValueKind: JsonValueKind.Array } list) yield break;
+        if (node.Structure?.Payload is not { ValueKind: JsonValueKind.Object } payload || Property(payload, "connections") is not { } list
+            || list.ValueKind == JsonValueKind.Null) return ([], null);
+        var refused = $"The connections of '{node.NodeId}' are not ones the runtime reads; they were not compared.";
+        if (list.ValueKind != JsonValueKind.Array) return ([], refused);
+        var result = new List<Connection>();
         foreach (var item in list.EnumerateArray())
         {
-            if (item.ValueKind != JsonValueKind.Object || Property(item, "source") is not { } source || Property(item, "target") is not { } target) continue;
-            if (Endpoint(source) is not { } from || Endpoint(target) is not { } to) continue;
-            var raw = Property(item, "id") is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
+            if (item.ValueKind != JsonValueKind.Object || Property(item, "source") is not { ValueKind: JsonValueKind.Object } source
+                || Property(item, "target") is not { ValueKind: JsonValueKind.Object } target
+                || Endpoint(source) is not { } from || Endpoint(target) is not { } to
+                || !OptionalString(Property(item, "id"), out var raw)) return ([], refused);
             var id = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
             var key = ConnectionKey(id, from.NodeId, from.Port, to.NodeId);
-            yield return new(node.NodeId, key, from.NodeId, from.Port, to.NodeId, to.Port) { Metadata = Metadata(node.Structure, "connectionMetadata", key) };
+            result.Add(new(node.NodeId, key, from.NodeId, from.Port, to.NodeId, to.Port) { Metadata = Metadata(node.Structure, "connectionMetadata", key) });
         }
+        return (result, null);
+    }
+
+    // An optional string as the runtime binds it: absent or null is none, a string is itself, anything else is refused.
+    private static bool OptionalString(JsonElement? value, out string? text)
+    {
+        text = null;
+        if (value is not { } element || element.ValueKind == JsonValueKind.Null) return true;
+        if (element.ValueKind != JsonValueKind.String) return false;
+        text = element.GetString();
+        return true;
     }
 
     /// <summary>A blank port is the Done outcome and a port is trimmed, as <c>FlowchartEndpoint.NormalizePort</c> does.</summary>
     internal static string NormalizePort(string? port) => string.IsNullOrWhiteSpace(port) ? "Done" : port.Trim();
 
-    // A property of a JSON object by name, case-insensitively as the runtime's web serializer binds it; the first match wins.
+    // A property of a JSON object by name, case-insensitively as the runtime's web serializer binds it; as the serializer
+    // does, the last matching property wins (an exact duplicate or another letter case).
     private static JsonElement? Property(JsonElement value, string name)
     {
         if (value.ValueKind != JsonValueKind.Object) return null;
+        JsonElement? last = null;
         foreach (var property in value.EnumerateObject())
-            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) return property.Value;
-        return null;
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) last = property.Value;
+        return last;
     }
 
-    // Removes every property of a JSON object with this name, case-insensitively, returning the first removed value.
+    // Removes every property of a JSON object with this name, case-insensitively, returning the last one, which the runtime binds.
     private static JsonNode? Take(JsonObject body, string name)
     {
-        JsonNode? first = null;
+        JsonNode? last = null;
         foreach (var key in body.Select(entry => entry.Key).Where(key => string.Equals(key, name, StringComparison.OrdinalIgnoreCase)).ToArray())
         {
-            first ??= body[key];
+            last = body[key];
             body.Remove(key);
         }
-        return first;
+        return last;
+    }
+
+    // A JSON value as a node, an exact duplicate property collapsed to its last value as the runtime binds it (a JsonObject
+    // holds each name once).
+    private static JsonNode? ToNode(JsonElement value)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var body = new JsonObject();
+                foreach (var property in value.EnumerateObject()) body[property.Name] = ToNode(property.Value);
+                return body;
+            case JsonValueKind.Array:
+                return new JsonArray(value.EnumerateArray().Select(ToNode).ToArray());
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+                return null;
+            default:
+                return JsonValue.Create(value.Clone());
+        }
     }
 
     // A container's metadata entry for one element (a child or a connection) by its id, as normalized JSON text, or null.
     private static string? Metadata(ActivityNodeStructure? structure, string property, string key)
     {
-        if (structure?.Payload is not { ValueKind: JsonValueKind.Object } payload || Property(payload, property) is not { ValueKind: JsonValueKind.Object } map
-            || !map.TryGetProperty(key, out var entry)) return null;
-        return Normalize(JsonNode.Parse(entry.GetRawText()), new HashSet<string>())?.ToJsonString();
+        if (structure?.Payload is not { ValueKind: JsonValueKind.Object } payload || Property(payload, property) is not { ValueKind: JsonValueKind.Object } map)
+            return null;
+        // Dictionary keys are exact; of exact duplicates the last wins, as the runtime binds a dictionary.
+        JsonElement? found = null;
+        foreach (var candidate in map.EnumerateObject())
+            if (string.Equals(candidate.Name, key, StringComparison.Ordinal)) found = candidate.Value;
+        if (found is not { } entry) return null;
+        return Normalize(ToNode(entry), new HashSet<string>())?.ToJsonString();
     }
 
+    // An endpoint as FlowchartEndpoint binds it, or null when the runtime would refuse it (a blank or non-string node id, a non-string port).
     private static (string NodeId, string Port)? Endpoint(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object || Property(value, "nodeId") is not { ValueKind: JsonValueKind.String } id
-            || string.IsNullOrWhiteSpace(id.GetString())) return null;
-        var port = Property(value, "port") is { ValueKind: JsonValueKind.String } portValue ? portValue.GetString() : null;
+            || string.IsNullOrWhiteSpace(id.GetString()) || !OptionalString(Property(value, "port"), out var port)) return null;
         return (id.GetString()!, NormalizePort(port));
     }
 }

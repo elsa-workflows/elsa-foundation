@@ -255,6 +255,51 @@ public sealed class WorkflowVersionAgentTests
         Assert.Equal("True", WorkflowVersionStructure.NormalizePort(" True "));
     }
 
+    [Theory]
+    // Of several case-insensitively matching properties the runtime binds the last; so does the reading.
+    [InlineData("""{"connections":[{"id":"x","Id":"y","source":{"nodeId":"a"},"target":{"nodeId":"b"}}]}""", "y", "Done")]
+    [InlineData("""{"connections":[{"id":"x","id":"z","source":{"nodeId":"a"},"target":{"nodeId":"b"}}]}""", "z", "Done")]
+    [InlineData("""{"connections":[{"source":{"nodeId":"a","port":"Skip","Port":" True "},"target":{"nodeId":"b"}}]}""", "a:True->b", "True")]
+    [InlineData("""{"Connections":[],"connections":[{"source":{"nodeId":"a"},"target":{"nodeId":"b"}}]}""", "a:Done->b", "Done")]
+    [InlineData("""{"connections":[{"source":{"nodeId":"q"},"Source":{"nodeId":"a"},"target":{"nodeId":"b"}}]}""", "a:Done->b", "Done")]
+    public void Duplicate_properties_read_as_the_runtime_binds_them(string payload, string key, string port)
+    {
+        var read = WorkflowVersionStructure.Flatten(Raw(payload), new DefaultActivityStructureService([new FlowHandler()]));
+        Assert.False(read.Incomplete);
+        var connection = Assert.Single(read.Connections);
+        Assert.Equal((key, port), (connection.Key, connection.SourcePort));
+    }
+
+    [Fact]
+    public void Duplicate_metadata_entries_read_as_the_runtime_binds_them()
+    {
+        var read = WorkflowVersionStructure.Flatten(Raw("""
+            {"connections":[{"id":"ab","source":{"nodeId":"a"},"target":{"nodeId":"b"}}],
+             "connectionMetadata":{"ab":{"label":"first"}},"ConnectionMetadata":{"ab":{"label":"one"},"ab":{"label":"last"}}}
+            """), new DefaultActivityStructureService([new FlowHandler()]));
+        Assert.Contains("last", Assert.Single(read.Connections).Metadata);
+    }
+
+    [Theory]
+    [InlineData("""{"connections":[{"id":5,"source":{"nodeId":"a"},"target":{"nodeId":"b"}}]}""")]
+    [InlineData("""{"connections":[{"source":{"nodeId":"a","port":true},"target":{"nodeId":"b"}}]}""")]
+    [InlineData("""{"connections":[{"source":{"nodeId":"  "},"target":{"nodeId":"b"}}]}""")]
+    [InlineData("""{"connections":[{"source":"a","target":{"nodeId":"b"}}]}""")]
+    [InlineData("""{"connections":[{"target":{"nodeId":"b"}}]}""")]
+    [InlineData("""{"connections":{"source":{"nodeId":"a"}}}""")]
+    public void Connections_the_runtime_would_refuse_make_the_reading_incomplete_instead_of_valid(string payload)
+    {
+        var read = WorkflowVersionStructure.Flatten(Raw(payload), new DefaultActivityStructureService([new FlowHandler()]));
+        Assert.True(read.Incomplete);
+        Assert.Contains("connections of 'raw'", Assert.Single(read.IncompleteReasons));
+        Assert.Empty(read.Connections);
+    }
+
+    // A container with the given raw payload (duplicate properties kept) and the children a and b.
+    private static ActivityNode Raw(string payload) =>
+        FlowHandler.Register(new ActivityNode("raw", "version-flow", [], [], new ActivityNodeStructure("Acme.Flow", "1", JsonDocument.Parse(payload).RootElement.Clone())),
+            [Leaf("a", "same"), Leaf("b", "same")]);
+
     [Fact]
     public async Task A_retained_result_is_admitted_by_definition_lookup_then_owner_then_one_read()
     {

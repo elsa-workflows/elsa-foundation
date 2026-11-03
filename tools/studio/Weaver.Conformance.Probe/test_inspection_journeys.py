@@ -8,7 +8,7 @@ import unittest
 from artifacts import sha
 from batch_journeys import OUTCOME_ROWS, REFUSED_FRAMES
 from explain_journeys import READ_FRAMES
-from inspection_journeys import (normalize_port, require_values_withheld, ADMISSION_REFUSAL, COMPUTED_BY, EXECUTABLE_BROWSER, EXECUTABLE_KIND, EXECUTABLE_NATIVE, EXECUTABLE_OBSERVATIONS,
+from inspection_journeys import (member, normalize_port, require_values_withheld, ADMISSION_REFUSAL, COMPUTED_BY, EXECUTABLE_BROWSER, EXECUTABLE_KIND, EXECUTABLE_NATIVE, EXECUTABLE_OBSERVATIONS,
                                  EXECUTABLE_TOOL, EXPECTED_CASES, MUTATING_TOOLS, TEXTS, VERSION_BROWSER, VERSION_KIND, VERSION_NATIVE, VERSION_OBSERVATIONS,
                                  VERSION_TOOL, BATCH_TOOL, executable_attachment, expected_comparison, flatten_executable, flatten_version,
                                  inspection_manifest_gaps, other_hash, require_admission_refused, require_browser, require_executable_context,
@@ -131,6 +131,18 @@ class Response:
 
 
 class PortTests(unittest.TestCase):
+    def test_properties_are_read_as_the_runtime_binds_them(self):
+        self.assertEqual("y", member(json.loads('{"id":"x","Id":"y"}'), "id"))
+        self.assertEqual("z", member(json.loads('{"id":"x","id":"z"}'), "id"))
+        self.assertIsNone(member(json.loads('{"other":1}'), "id"))
+        self.assertIsNone(member(None, "id"))
+        state = {"rootActivity": {"nodeId": "root", "activityVersionId": "flow", "inputs": [], "structure": {"payload": json.loads(
+            '{"Connections":[],"connections":[{"Source":{"NodeId":"a","port":"x","Port":" True "},"target":{"nodeId":"b"}}],'
+            '"Activities":[{"nodeId":"a","activityVersionId":"w","inputs":[]},{"nodeId":"b","activityVersionId":"w","inputs":[]}]}')}}}
+        activities, connections = flatten_version(state)
+        self.assertEqual(["root", "a", "b"], [item["nodeId"] for item in activities])
+        self.assertEqual([("root", "a", "True", "b", "Done")], connections)
+
     def test_ports_are_normalized_as_the_flowchart_reads_them(self):
         self.assertEqual(["Done", "Done", "Done", "True"], [normalize_port(value) for value in (None, "", "   ", " True ")])
 
