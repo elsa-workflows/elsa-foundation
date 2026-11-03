@@ -44,4 +44,6 @@ ELSA_WEAVER_ACTIVITY_ID=owned-node-id \
 pnpm --dir Studio exec playwright test --config tests/browser/playwright.weaver-composed.config.ts
 ```
 
+Set `ELSA_WEAVER_OWNED_READER_AUTH_STATE` to a second fresh normal-login state for an actor with `workflows/design:read` and `activities/design:read` but not `workflows/design:manage` to run the spec 1193 read-only journey: its context must carry the owning catalog and `manage: denied` permissions, explanation completes, and the layout tool is never offered, so no proposal or edit follows. Without it that journey reports as skipped. The host must compose the Activities Design API, so the catalog is available.
+
 The dedicated suite starts no host, uses no mocked network routes, and rejects the known developer ports. It observes native working state/undo without implicit persistence, and the unrelated note's actual file-backed revision/value/write count, including duplicate execution. Its results are deterministic composed-host evidence; they are separate from provider-protocol tests and any opt-in live-provider qualification.

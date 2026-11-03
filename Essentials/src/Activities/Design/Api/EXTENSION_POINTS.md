@@ -24,6 +24,30 @@ The owner contributes `activities/design:read`, `activities/design:manage`, `act
 
 These are single-owner seams. Replace them through DI; do not register competing implementations and rely on resolution order.
 
+### `IActivityAuthoringCatalog` *(Contract — `Elsa.Activities.Design.Core`)*
+
+| Contract | Default | Purpose |
+|---|---|---|
+| `IActivityAuthoringCatalog` | `HttpActivityAuthoringCatalog` (`internal sealed`) | The actor-gated authoring catalog for consumers that may couple only to `.Core` contracts, such as Weaver's workflow context (spec 1193, FR-003). |
+
+`ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
+gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
+`IPermissionAuthorizationService`. A missing request, an unnormalized principal or a refused permission is a denied result
+with no entries, and no catalog read. An allowed read is the designer's own `IActivityAuthoringCatalogReader` read with
+`Availability = All`, projected into Core models: every entry, addable or not, with `Available`, `AvailabilityReason`,
+activity type and exact version identity, display data and declared inputs with `IsRequired`, `IsSensitive` and
+`IsCredential`. No default value or authored binding is carried. The catalog is not narrowed per actor, because the
+designer offers no per-actor narrowing; tenant scoping is the stores'. `CanReadAsync` is the gate alone and reads no entries.
+
+Infrastructure failures become `ActivityAuthoringCatalogUnavailableException` (Core), with a fixed message, the stable code
+`activities.catalog.unavailable` and the original cause as `InnerException`; cancellation propagates.
+
+It is a replacement contract with one implementation per shell. The feature registers the default with `TryAdd`, so a host
+registration made first is kept. `ActivityAuthoringCatalogStartupTask` fails startup when the configuring collection holds
+more than one registration; it owns only that collection, so a copied child shell checks its own registrations, and
+repeated configuration keeps one validator. Consumers must still fail closed on zero or several implementations. Adding
+the contract is **Minor**, additive.
+
 ## Provider contributors
 
 | Contract | Kind and registration | Consumer | Known implementation |

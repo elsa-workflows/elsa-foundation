@@ -15,6 +15,7 @@ from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASE
 from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceError, validate_complete_witness, validate_report,
                       witness_gaps, witness_manifest)
 from restart_journeys import RESTART_QUALIFICATION
+from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES, SECTION as TRUTH_SEAM_SECTION, synthetic_actors
 from test_autonomy_journeys import complete_autonomy_section
 from test_restart_journeys import complete_restart_section
 
@@ -174,6 +175,11 @@ def complete_witness_report(base):
         "source": base.source, "caseIDs": workflow, "stages": [],
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
                                                                            "causeDisclosed": False})} for name in workflow]}
+    truth = sorted(TRUTH_SEAM_CASES)
+    report[TRUTH_SEAM_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": truth, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "actors": synthetic_actors()})} for name in truth]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
     report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
@@ -196,12 +202,13 @@ class CompleteWitnessTests(unittest.TestCase):
 
     def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 2, 26, 20, 1, 91), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
-                                                     len(manifest["workflowAuthorizationCases"]),
+        self.assertEqual((38, 4, 2, 2, 26, 20, 1, 93), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+                                                     len(manifest["workflowAuthorizationCases"]), len(manifest["workflowTruthSeamCases"]),
                                                      len(manifest["autonomyCases"]), len(manifest["restartCases"]),
                                                      len(manifest["restartControls"]), manifest["expectedCaseCount"]))
         self.assertEqual(["anthropic-workflow-authorization-unavailable", "copilot-workflow-authorization-unavailable"],
                          manifest["workflowAuthorizationCases"])
+        self.assertEqual(["anthropic-workflow-truth-seams", "copilot-workflow-truth-seams"], manifest["workflowTruthSeamCases"])
         self.assertEqual(10, len({name.split("-", 1)[1] for name in manifest["restartCases"]}))
         self.assertTrue(all(name.split("-", 1)[0] in ("copilot", "anthropic") for name in manifest["autonomyCases"]))
         self.assertEqual(13, len({name.split("-", 1)[1] for name in manifest["autonomyCases"]}))
@@ -287,6 +294,18 @@ class CompleteWitnessTests(unittest.TestCase):
                 {"id": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"], "status": "passed",
                  "adapter": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"].split("-", 1)[0], "causeDisclosed": True})),
             "workflow-authorization-record-changed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "manifest-without-truth-seams": lambda r: r["witnessManifest"].pop("workflowTruthSeamCases"),
+            "truth-seams-absent": lambda r: r.pop(TRUTH_SEAM_SECTION),
+            "truth-seams-failed": lambda r: r[TRUTH_SEAM_SECTION].update(status="failed"),
+            "truth-seams-live-claim": lambda r: r[TRUTH_SEAM_SECTION].update(liveProvider=True),
+            "truth-seams-missing": lambda r: (r[TRUTH_SEAM_SECTION]["caseIDs"].pop(), r[TRUTH_SEAM_SECTION]["records"].pop()),
+            "truth-seams-record-changed": lambda r: r[TRUTH_SEAM_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "truth-seams-reader-could-manage": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "actors": {**synthetic_actors(), "reader": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True}}}})),
+            "truth-seams-tenant-activity-leaked": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "actors": {**synthetic_actors(), "tenant-manager": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True}}}})),
             "matrix-stage-missing": lambda r: r["stages"].pop(),
             "matrix-stage-repeated": lambda r: r["stages"].append(copy.deepcopy(r["stages"][-1])),
             "failed-stage": lambda r: r["stages"][0].update(exitCode=1),

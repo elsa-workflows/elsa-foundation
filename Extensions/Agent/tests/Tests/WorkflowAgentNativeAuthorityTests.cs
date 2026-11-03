@@ -2,6 +2,11 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text.Json;
+using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
+using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Agent.Api.Extensions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
@@ -293,6 +298,76 @@ public sealed class WorkflowAgentNativeAuthorityTests
         Assert.Equal("dirty-revision", Assert.Single(context.Value!.Attachments, item => item.ContentType == "workflow.definition").Target?.Revision);
     }
 
+    private static readonly string[] LegacyPlaceholders =
+    [
+        "IWorkflowAgentContextProvider", "IWorkflowActivityCatalogProvider", "DefaultWorkflowActivityCatalogProvider",
+        "IWorkflowRevisionProvider", "DefaultWorkflowRevisionProvider", "IWorkflowChangePermissionEvaluator",
+        "DenyAllWorkflowChangePermissionEvaluator", "IWorkflowChangeProposalService", "DefaultWorkflowChangeProposalService",
+        "IWorkflowGraphOperationBatchRiskClassifier", "DefaultWorkflowGraphOperationBatchRiskClassifier",
+        "IWorkflowAuthoringAuditService", "DefaultWorkflowAuthoringAuditService", "WorkflowAgentContext", "WorkflowAgentPermissionSummary"
+    ];
+
+    [Fact]
+    public async Task Composed_host_has_no_placeholder_and_reads_catalog_and_permissions_from_the_owning_services()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var registrations = fixture.Services.GetRequiredService<IServiceCollection>();
+
+        // SC-003: no supported path can fall back to a placeholder, because none is shipped or composed.
+        Assert.DoesNotContain(typeof(FoundationWorkflowsAgentFeature).Assembly.GetTypes(), type => LegacyPlaceholders.Contains(type.Name));
+        Assert.DoesNotContain(registrations, item => LegacyPlaceholders.Contains(item.ServiceType.Name)
+            || LegacyPlaceholders.Contains(item.ImplementationType?.Name) || LegacyPlaceholders.Contains(item.ImplementationInstance?.GetType().Name));
+        Assert.Equal("HttpActivityAuthoringCatalog", Assert.Single(registrations, item => item.ServiceType == typeof(IActivityAuthoringCatalog)).ImplementationType?.Name);
+        Assert.Equal("HttpWorkflowDefinitionAuthorizer", Assert.Single(registrations, item => item.ServiceType == typeof(IWorkflowDefinitionAuthorizer)).ImplementationType?.Name);
+
+        var context = await fixture.CollectAsync();
+
+        Assert.True(context.Succeeded, context.Error?.Message);
+        var owned = await fixture.Services.GetRequiredService<IActivityAuthoringCatalog>().ListAsync();
+        var catalog = Assert.IsType<JsonElement>(Assert.Single(context.Value!.Attachments, item => item.ContentType == "workflow.catalog").Content);
+        Assert.Equal(owned.Entries.Select(entry => (entry.ActivityVersionId, entry.Available, entry.Version)),
+            catalog.GetProperty("entries").EnumerateArray().Select(entry => (entry.GetProperty("activityVersionId").GetString()!,
+                entry.GetProperty("available").GetBoolean(), entry.GetProperty("version").GetString()!)));
+        var authorizer = fixture.Services.GetRequiredService<IWorkflowDefinitionAuthorizer>();
+        Assert.True(await authorizer.CanManageAsync("wf-1"));
+        var permissions = Assert.IsType<JsonElement>(Assert.Single(context.Value.Attachments, item => item.ContentType == "workflow.permissions").Content);
+        Assert.Equal("allowed", permissions.GetProperty("manage").GetString());
+        Assert.Equal(0, fixture.Provider.Calls);
+    }
+
+    [Fact]
+    public async Task A_read_only_actor_gets_explanation_without_a_change_tool_as_the_native_owner_decides()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        fixture.Policy.Deny = "manage";
+        var authorizer = fixture.Services.GetRequiredService<IWorkflowDefinitionAuthorizer>();
+        Assert.True(await authorizer.CanReadAsync("wf-1"));
+        Assert.False(await authorizer.CanManageAsync("wf-1"));
+
+        var context = await fixture.CollectAsync();
+
+        Assert.True(context.Succeeded, context.Error?.Message);
+        Assert.Contains(context.Value!.Attachments, item => item.ContentType == "workflow.definition");
+        var permissions = Assert.IsType<JsonElement>(Assert.Single(context.Value.Attachments, item => item.ContentType == "workflow.permissions").Content);
+        Assert.Equal("allowed", permissions.GetProperty("read").GetString());
+        Assert.Equal("denied", permissions.GetProperty("manage").GetString());
+        Assert.Equal([WorkflowReadGraphTool.ToolName], permissions.GetProperty("tools").EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
+    public async Task An_actor_without_activity_design_read_gets_no_catalog_entries()
+    {
+        using var fixture = await Fixture.CreateAsync(permissions: ["workflows/design:manage"]);
+
+        var context = await fixture.CollectAsync();
+
+        Assert.True(context.Succeeded, context.Error?.Message);
+        var catalog = Assert.IsType<JsonElement>(Assert.Single(context.Value!.Attachments, item => item.ContentType == "workflow.catalog").Content);
+        Assert.Equal("denied", catalog.GetProperty("status").GetString());
+        Assert.Equal(0, catalog.GetProperty("entries").GetArrayLength());
+        Assert.Equal(0, fixture.Catalog.Reads);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly ServiceProvider root;
@@ -317,12 +392,15 @@ public sealed class WorkflowAgentNativeAuthorityTests
         internal IAgentSessionService Sessions => Services.GetRequiredService<IAgentSessionService>();
         internal IAgentProposalService Proposals => Services.GetRequiredService<IAgentProposalService>();
         internal DefaultWorkflowAgentContextProvider Source => Services.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
-        private readonly ClaimsPrincipal principal = new(new ClaimsIdentity([
-            new Claim(ClaimTypes.NameIdentifier, "actor"), new Claim(IdentityClaimTypes.Normalized, "v1"),
-            new Claim(IdentityClaimTypes.TenantId, "tenant"), new Claim(IdentityClaimTypes.Permission, "workflows/design:manage")], "WorkflowNativeAuthority"));
+        internal CatalogReader Catalog { get; } = new();
+        private readonly ClaimsPrincipal principal;
 
-        private Fixture(Action<IServiceCollection>? configure)
+        private Fixture(Action<IServiceCollection>? configure, string[] permissions)
         {
+            principal = new(new ClaimsIdentity([
+                new Claim(ClaimTypes.NameIdentifier, "actor"), new Claim(IdentityClaimTypes.Normalized, "v1"),
+                new Claim(IdentityClaimTypes.TenantId, "tenant"),
+                ..permissions.Select(permission => new Claim(IdentityClaimTypes.Permission, permission))], "WorkflowNativeAuthority"));
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddRouting().AddElsaEndpoints();
@@ -330,6 +408,9 @@ public sealed class WorkflowAgentNativeAuthorityTests
             services.AddFoundationAgentAbstractions();
             services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(["WorkflowNativeAuthority"], StringComparer.Ordinal));
             new WorkflowsDesignApiFeature().ConfigureServices(services);
+            // The real actor-gated catalog contract over the designer's catalog read; only the stores behind the read are a fixture.
+            services.AddScoped<IActivityAuthoringCatalogReader>(_ => Catalog);
+            new ActivitiesDesignApiFeature().ConfigureServices(services);
             services.AddFoundationAgentApi();
             new FoundationWorkflowsAgentFeature().ConfigureServices(services);
             services.AddSingleton<IPermissionResourceHandler>(Policy);
@@ -348,9 +429,9 @@ public sealed class WorkflowAgentNativeAuthorityTests
             Assert.IsType<PermissionAuthorizationService>(Services.GetRequiredService<IPermissionAuthorizationService>());
         }
 
-        internal static async Task<Fixture> CreateAsync(Action<IServiceCollection>? configure = null)
+        internal static async Task<Fixture> CreateAsync(Action<IServiceCollection>? configure = null, string[]? permissions = null)
         {
-            var fixture = new Fixture(configure);
+            var fixture = new Fixture(configure, permissions ?? ["workflows/design:manage", "activities/design:read"]);
             fixture.Session = await fixture.Sessions.CreateAsync(new("tenant", "actor", "conversation", fixture.Provider.ProviderId,
                 "build", null, AgentPolicy.Default, new Dictionary<string, string>()));
             return fixture;
@@ -426,6 +507,23 @@ public sealed class WorkflowAgentNativeAuthorityTests
         }
 
         public void Dispose() { scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = null; scope.Dispose(); root.Dispose(); }
+    }
+
+    /// <summary>The designer's catalog read over fixture rows; the gate and Core mapping in front of it are the real ones.</summary>
+    private sealed class CatalogReader : IActivityAuthoringCatalogReader
+    {
+        internal int Reads;
+        public Task<ActivityAuthoringCatalogView> ListAsync(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
+        {
+            Reads++;
+            Assert.Equal(ActivityCatalogAvailability.All, request.Availability);
+            return Task.FromResult(new ActivityAuthoringCatalogView([Entry("write-line-v1", true), Entry("restricted-v2", false)]));
+        }
+
+        private static ActivityAuthoringDescriptorView Entry(string versionId, bool available) => new(versionId, "Acme." + versionId, "1.0.0",
+            versionId, "Acme", null, "Activity", available, available ? null : "Excluded by the effective activity availability policy.", [], [], [], null,
+            new("activity", versionId, new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(),
+                new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(), null));
     }
 
     private sealed class TypedPolicy : IPermissionResourceHandler
