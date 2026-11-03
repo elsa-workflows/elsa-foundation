@@ -96,7 +96,8 @@ endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for t
 `Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's
 reason before any actor or permission decision. Infrastructure failures and cancellation propagate. The Core create
 shapes carry everything the library's own create accepts (a tag's and its values' deprecation and identities, which the
-store validates as on its own create; a view's schema version). A create's operation key is optional (none is the
+store validates as on its own create). A view's schema version is output only: the store creates version 1 and
+`WorkflowLibraryViewSnapshot.SchemaVersion` reports the stored version; a view save never supplies it. A create's operation key is optional (none is the
 library's ordinary non-idempotent create; Weaver always passes one); a blank key, or a key on a view update, is `invalid`.
 One registration per shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
 
