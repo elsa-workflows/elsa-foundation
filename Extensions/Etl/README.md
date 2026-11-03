@@ -92,7 +92,8 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   `REPEATABLE READ READ ONLY` on PostgreSQL, which first takes an `ACCESS SHARE` table lock so a read behind a
   truncate-and-reload sees the reloaded rows rather than an empty table (where PostgreSQL refuses the lock, as for a role
   with column-level grants only, a materialized view or a foreign table, the read runs without it; a lock that times out
-  or is cancelled fails the read instead), and `SNAPSHOT` on
+  or is cancelled never falls back to an unlocked read: the read fails, or retries when the engine classes the error as
+  transient), and `SNAPSHOT` on
   SQL Server, which needs `ALLOW_SNAPSHOT_ISOLATION ON` for the
   database (`etl.sql-read-rejected` otherwise). The rows are retained as a JSON Lines input snapshot, and from there the
   run is a JSON Lines run: its partitions, positions and replay are unchanged, every partition sees the same rows, and no

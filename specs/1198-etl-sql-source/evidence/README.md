@@ -71,6 +71,8 @@ At `68ba92078` (review round 7), Studio ETL Vitest passed 119 of 119 and the ETL
 - **Two SQL source branches without a SQL-specific test:** the compiler's artifact size pre-check (`artifact.too-large` is tested through an oversized mapping only), and `etl.binding-ambiguous` for a SQL source alias that a file or HTTP approval also uses.
 - **The preparer's other SQL pin conditions** (an invalid handle or an empty revision; only the digest condition is bite-proven), and its `etl.sql-unavailable` refusal when no SQL bindings are configured. They are not tested.
 - **SQL Server 3961** (concurrent DDL under `SNAPSHOT`) classified as transient. It is not tested.
+- **The engines' `ORDER BY` and identifier quoting in `SelectSnapshot`.** Key order is checked by the typed container test, but no bite-proof mutates it; quoting is untested beyond lowercase, unreserved names.
+- **The SQL source binding alias checks** in the compiler and the worker. No test uses an invalid SQL source alias.
 - **The read-only snapshot setup** (`SET TRANSACTION READ ONLY` on PostgreSQL) is not tested; no test attempts a write inside the read.
 - **A transient read through a lease re-claim** is proven at the preparer only.
 
