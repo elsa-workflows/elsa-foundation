@@ -64,8 +64,10 @@ internal sealed class EtlConnectorExecution(
                 return;
             }
             var status = await store.CommitConnectorPreparationAsync(lease, prepared.Prepared!, token);
+            // The recorded run ends this preparation's lease, so its heartbeat may cancel the claim token at any moment now;
+            // the acknowledgement uses the caller's token, so only stopping the host can abandon it.
             if (status is EtlStoreStatus.Applied or EtlStoreStatus.Replay && receipt is not null)
-                await AcknowledgeAsync(lease, receipt, token);
+                await AcknowledgeAsync(lease, receipt, cancellationToken);
             if (status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay or EtlStoreStatus.LeaseLost or EtlStoreStatus.Terminal))
                 await SettleAsync(lease, new("etl.connector-preparation-refused"), token);
         }

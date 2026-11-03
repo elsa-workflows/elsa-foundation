@@ -20,17 +20,19 @@ public sealed class EtlRabbitMqConsumerProviderTests(EtlRabbitMqBrokerFixture br
         Skip.If(broker.SkipReason is not null, broker.SkipReason);
         await FillAsync("""{"id":1}""", """{"id":2}""", """{"id":3}""");
 
-        await using (var abandoned = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10, 1_000_000, default))
+        var (abandoned, abandonedBodies, _) = await ReceiveAsync(10, 1_000_000);
+        await using (abandoned)
         {
-            Assert.Equal(["""{"id":1}""", """{"id":2}""", """{"id":3}"""], abandoned.Bodies.Select(Text));
+            Assert.Equal(["""{"id":1}""", """{"id":2}""", """{"id":3}"""], abandonedBodies);
             Assert.Equal(0u, await ReadyAsync());
         }
         // Closed unacknowledged, as when a worker dies before the snapshot is recorded: the broker requeues them in order.
         Assert.Equal(3u, await ReadyAsync());
 
-        await using (var acknowledged = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10, 1_000_000, default))
+        var (acknowledged, acknowledgedBodies, _) = await ReceiveAsync(10, 1_000_000);
+        await using (acknowledged)
         {
-            Assert.Equal(["""{"id":1}""", """{"id":2}""", """{"id":3}"""], acknowledged.Bodies.Select(Text));
+            Assert.Equal(["""{"id":1}""", """{"id":2}""", """{"id":3}"""], acknowledgedBodies);
             await acknowledged.AcknowledgeAsync(default);
         }
         Assert.Equal(0u, await ReadyAsync());
@@ -42,22 +44,25 @@ public sealed class EtlRabbitMqConsumerProviderTests(EtlRabbitMqBrokerFixture br
         Skip.If(broker.SkipReason is not null, broker.SkipReason);
         await FillAsync("""{"id":1}""", """{"id":2}""", """{"id":3}""", """{"id":4}""");
 
-        await using (var two = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, 2, 1_000_000, default))
+        var (two, _, _) = await ReceiveAsync(2, 1_000_000);
+        await using (two)
         {
-            Assert.Equal(2, two.Bodies.Count);
+            Assert.Equal(2, two.Count);
             await two.AcknowledgeAsync(default);
         }
-        // Each body counts with its line end: one 8-byte body takes 9 of the 10 bytes, so a second does not fit.
-        await using (var bounded = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10, 10, default))
+        // A refused body goes back to the queue: one 8-byte body with its line end takes 9 of 10 bytes, so a second does not fit.
+        var (bounded, boundedBodies, boundedRefusedFirst) = await ReceiveAsync(10, 10);
+        await using (bounded)
         {
-            Assert.Equal(["""{"id":3}"""], bounded.Bodies.Select(Text));
-            Assert.False(bounded.FirstMessageTooLarge);
+            Assert.Equal(["""{"id":3}"""], boundedBodies);
+            Assert.False(boundedRefusedFirst);
             await bounded.AcknowledgeAsync(default);
         }
-        await using (var tooLarge = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10, 5, default))
+        var (tooLarge, tooLargeBodies, refusedFirst) = await ReceiveAsync(10, 5);
+        await using (tooLarge)
         {
-            Assert.Empty(tooLarge.Bodies);
-            Assert.True(tooLarge.FirstMessageTooLarge);
+            Assert.Empty(tooLargeBodies);
+            Assert.True(refusedFirst);
         }
         Assert.Equal(1u, await ReadyAsync());
     }
@@ -68,18 +73,39 @@ public sealed class EtlRabbitMqConsumerProviderTests(EtlRabbitMqBrokerFixture br
         Skip.If(broker.SkipReason is not null, broker.SkipReason);
         await FillAsync();
 
-        await using (var empty = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, 10, 1_000, default))
-            Assert.Empty(empty.Bodies);
+        var (empty, emptyBodies, _) = await ReceiveAsync(10, 1_000);
+        await using (empty)
+            Assert.Empty(emptyBodies);
         var missing = await Assert.ThrowsAnyAsync<Exception>(() =>
-            _consumer.ReceiveAsync(broker.ConnectionString, "missing-" + _queue, 10, 1_000, default).AsTask());
+            _consumer.ReceiveAsync(broker.ConnectionString, "missing-" + _queue, 10, Accept, default).AsTask());
         var unreachable = await Assert.ThrowsAnyAsync<Exception>(() =>
-            _consumer.ReceiveAsync("amqp://etl:unused@127.0.0.1:1/", _queue, 10, 1_000, default).AsTask());
+            _consumer.ReceiveAsync("amqp://etl:unused@127.0.0.1:1/", _queue, 10, Accept, default).AsTask());
 
         Assert.Equal(EtlRabbitMqErrorKind.Rejected, _consumer.Classify(missing));
         Assert.Equal(EtlRabbitMqErrorKind.Transient, _consumer.Classify(unreachable));
     }
 
-    private static string Text(ReadOnlyMemory<byte> body) => Encoding.UTF8.GetString(body.Span);
+    private static ValueTask<bool> Accept(ReadOnlyMemory<byte> body, CancellationToken cancellationToken) => ValueTask.FromResult(true);
+
+    /// <summary>Receives with the runtime's bound: each body counts with its line end, and the first that would not fit is refused.</summary>
+    private async Task<(IEtlRabbitMqReceipt Receipt, List<string> Bodies, bool RefusedFirst)> ReceiveAsync(int maxMessages, long maxBytes)
+    {
+        var bodies = new List<string>();
+        long written = 0;
+        var refusedFirst = false;
+        var receipt = await _consumer.ReceiveAsync(broker.ConnectionString, _queue, maxMessages, (body, _) =>
+        {
+            if (written + body.Length + 1 > maxBytes)
+            {
+                refusedFirst = written == 0;
+                return ValueTask.FromResult(false);
+            }
+            written += body.Length + 1;
+            bodies.Add(Encoding.UTF8.GetString(body.Span));
+            return ValueTask.FromResult(true);
+        }, default);
+        return (receipt, bodies, refusedFirst);
+    }
 
     private async Task FillAsync(params string[] messages)
     {

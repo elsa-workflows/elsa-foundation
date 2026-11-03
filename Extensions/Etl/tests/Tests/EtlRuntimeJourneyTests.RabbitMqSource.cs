@@ -62,15 +62,49 @@ public sealed partial class EtlRuntimeJourneyTests
         Assert.Equal(2, consumer.Ready.Count);
     }
 
+    [Fact]
+    public async Task A_failed_acknowledgement_does_not_fail_the_recorded_run_and_leaves_the_messages_to_the_broker()
+    {
+        await using var files = new RuntimeFiles("");
+        var consumer = new TestRabbitMqConsumer("""{"id":1,"name":"Ada"}""") { AcknowledgementFailure = new IOException("connection reset") };
+        var host = await StartRabbitMqSourceHostAsync(files, consumer);
+
+        var run = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-ack-lost", EtlRabbitMqSourceTests.Pipeline()));
+
+        // The snapshot was recorded, so the run completes; the unacknowledged message goes back to the broker for a later run.
+        Assert.Equal((EtlRunStatus.Succeeded, 1L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(["receive 1", "record Applied", "requeue 1"], consumer.Log);
+        Assert.Single(consumer.Ready);
+    }
+
+    [Fact]
+    public async Task The_acknowledgement_survives_the_preparation_heartbeat_stopping_once_the_run_is_recorded()
+    {
+        await using var files = new RuntimeFiles("");
+        var consumer = new TestRabbitMqConsumer("""{"id":1,"name":"Ada"}""");
+        // The record ends the preparation lease, so the heartbeat, renewing every second, cancels its token before the ack.
+        var host = await StartRabbitMqSourceHostAsync(files, consumer, holdAfterRecord: TimeSpan.FromSeconds(2.5));
+
+        var run = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-heartbeat", EtlRabbitMqSourceTests.Pipeline()));
+        // The run can complete while preparation still holds after the record; wait for preparation to settle its receipt.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (consumer.Log.Count < 3 && DateTime.UtcNow < deadline)
+            await Task.Delay(100);
+
+        Assert.Equal((EtlRunStatus.Succeeded, 1L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(["receive 1", "record Applied", "ack 1"], consumer.Log);
+        Assert.Empty(consumer.Ready);
+    }
+
     private static async Task<Microsoft.Extensions.Hosting.IHost> StartRabbitMqSourceHostAsync(RuntimeFiles files,
-        TestRabbitMqConsumer consumer, bool refuseRecord = false) =>
+        TestRabbitMqConsumer consumer, bool refuseRecord = false, TimeSpan holdAfterRecord = default) =>
         await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
             configureServices: services =>
             {
                 services.AddSingleton<IEtlRabbitMqPublisher>(new TestRabbitMqPublisher());
                 services.AddSingleton<IEtlRabbitMqConsumer>(consumer);
                 services.Replace(ServiceDescriptor.Scoped<IEtlConnectorRuntimeStore>(provider =>
-                    new PreparationRecordingStore(provider.GetRequiredService<IEtlRuntimeStore>(), consumer, refuseRecord)));
+                    new PreparationRecordingStore(provider.GetRequiredService<IEtlRuntimeStore>(), consumer, refuseRecord, holdAfterRecord)));
             },
             configureRuntime: runtime => runtime.RabbitMqBindings.Add(new EtlHostRabbitMqBindingOptions
             {
@@ -79,7 +113,8 @@ public sealed partial class EtlRuntimeJourneyTests
             }));
 
     /// <summary>Notes the preparation record in the consumer's log, or refuses it, so tests see when acknowledgement happens.</summary>
-    private sealed class PreparationRecordingStore(IEtlRuntimeStore runtime, TestRabbitMqConsumer consumer, bool refuse)
+    private sealed class PreparationRecordingStore(IEtlRuntimeStore runtime, TestRabbitMqConsumer consumer, bool refuse,
+        TimeSpan holdAfterRecord)
         : ForwardingEtlConnectorRuntimeStore(runtime, (IEtlConnectorRuntimeStore)runtime)
     {
         public override async ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease,
@@ -87,6 +122,8 @@ public sealed partial class EtlRuntimeJourneyTests
         {
             var status = refuse ? EtlStoreStatus.Conflict : await Connector.CommitConnectorPreparationAsync(lease, prepared, cancellationToken);
             consumer.Note("record " + status);
+            if (holdAfterRecord > TimeSpan.Zero)
+                await Task.Delay(holdAfterRecord, CancellationToken.None);
             return status;
         }
     }

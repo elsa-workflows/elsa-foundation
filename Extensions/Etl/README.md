@@ -119,8 +119,9 @@ provides the consumer. The runtime never declares queues.
   Lines snapshot, and acknowledges them only once the store has recorded that snapshot as the run's prepared input. A
   preparation that fails, is refused or whose worker dies before the record leaves them unacknowledged; the broker
   requeues them, and the next attempt reads them again into a snapshot of its own.
-- **At least once.** A worker that dies after the record and before the acknowledgement reaches the broker leaves the run
-  with the messages, which the broker also requeues, so a later run reads them again. Records carry no message id, so
+- **At least once.** A worker that dies, or a connection that is lost, after the messages were received and before the
+  acknowledgement reaches the broker can leave the run with messages the broker also requeues, so a later run reads them
+  again. Records carry no message id, so
   destinations should be idempotent (a keyed SQL destination is) or tolerate duplicates.
 - **Bounds and bodies.** A run takes at most `maxMessages` and stops before a message that would take the snapshot past
   `MaxSnapshotBytes`; the rest stay queued. A single message larger than that fails preparation with
@@ -129,6 +130,11 @@ provides the consumer. The runtime never declares queues.
 - **Failures.** An unreachable broker or a closed connection leaves preparation to run again after its lease lapses; access
   refused, a missing queue or failed authentication fails the run with `etl.rabbitmq-read-rejected`. Two runs reading one
   queue at once take different messages.
+- **Requeue limits.** Every preparation that does not record its snapshot returns the messages to the queue. A quorum queue
+  counts those returns: by default RabbitMQ 4 drops a message after 20 of them, so a pipeline that keeps failing (a broken
+  lookup, a refused record) loses the messages. Give such queues a dead-letter exchange, or a higher `x-delivery-limit`.
+- **Snapshots of failed attempts.** Each preparation attempt writes its own snapshot, under a random key, so an attempt that
+  does not record it leaves a snapshot behind that no later attempt reuses; retention must account for these.
 
 ## SQL snapshot reads
 
@@ -285,6 +291,6 @@ Native invocation/result delivery and native cancellation now have real durable 
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 
-Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot; process loss can leave attempt staging. Retention must account for these deterministic candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
+Snapshots and output use a shared filesystem whose atomicity and durability the host must support. A failed preparation can leave a complete unreferenced source snapshot (for a RabbitMQ source, under a random per-attempt key rather than a deterministic one); process loss can leave attempt staging. Retention must account for these deterministic candidate keys and remove abandoned files only after their writer has stopped. No automatic orphan collector is implemented. No power-loss durability qualification is claimed by the process-level tests.
 
 Physical effects remain at least once. Lease expiry cannot terminate a worker or release its live buffers. Only the fenced manifest/cursor transaction makes output authoritative. Logical payload allowances are not a heap/RSS limit, and retained chunks are not automatically removed or compensated.

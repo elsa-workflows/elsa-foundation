@@ -165,7 +165,7 @@ public interface IEtlRabbitMqPublisher
 - **Registration:** `services.AddSingleton<IEtlRabbitMqPublisher, …>()` from `EtlRabbitMqFeature` in `Elsa.Etl.RabbitMq`. Register at most one: with two, building the runtime's connector bindings throws `InvalidOperationException`, so no ETL attempt runs, as for two SQL engines with one provider name.
 - **When to implement:** to publish through another client or transport with the same confirm semantics. Bound every confirm and round trip: a broker under a resource alarm blocks publishers without closing their connections, so an unbounded wait would hold the attempt and its host capacity until the alarm clears; a bounded one surfaces as a transient failure. `DescribeTarget` must exclude the password, because its result is hashed into the binding's pinned handle.
 - **What depends on it:** `HostRabbitMqBindings` and `EtlRabbitMqRouteWriter` in `Elsa.Etl.Runtime`.
-- **Known implementations** (intra-domain, ETL): `RabbitMqEtlPublisher` (`Elsa.Etl.RabbitMq`).
+- **Known implementations** (intra-domain, ETL): `RabbitMqEtlPublisher` (`Elsa.Etl.RabbitMq`). `DescribeTarget` throws `ArgumentException` or `FormatException` for an invalid URI, which binding resolution reports as `etl.binding-unavailable`.
 
 **`IEtlRabbitMqConsumer`** — single-implementation adapter (§2.7), layer: Core contract, no default implementation
 ([spec 1201](../../../../specs/1201-etl-rabbitmq-source/spec.md)).
@@ -190,5 +190,5 @@ public interface IEtlRabbitMqReceipt : IAsyncDisposable
 - **Registration:** `services.AddSingleton<IEtlRabbitMqConsumer, …>()` from `EtlRabbitMqFeature`, beside the publisher, which binding resolution also uses to describe a source binding's target. More than one registration makes connector binding resolution throw.
 - **When to implement:** to receive through another client with the same unacknowledged-until-told semantics. Stop before a message that would take the bodies, each counted with one byte for its line end, past `maxBytes`, and leave it queued.
 - **What depends on it:** `HostRabbitMqBindings`, `EtlConnectorPreparer` and `EtlConnectorExecution` in `Elsa.Etl.Runtime`.
-- **Known implementations** (intra-domain, ETL): `RabbitMqEtlConsumer` (`Elsa.Etl.RabbitMq`). `DescribeTarget` throws `ArgumentException` or `FormatException` for an invalid URI, which binding resolution reports as `etl.binding-unavailable`.
+- **Known implementations** (intra-domain, ETL): `RabbitMqEtlConsumer` (`Elsa.Etl.RabbitMq`).
 

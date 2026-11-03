@@ -256,9 +256,17 @@ describe("connector pipeline editor", () => {
     editor.render();
 
     expect(editor.pipeline.source).toMatchObject({ kind: "rabbitmq", binding: "events-in", queue: "people", maxMessages: 250 });
-    // The declared JSON fields carry over when the kind changes back.
+    // A cleared maximum is 0, which the compiler refuses, never NaN.
+    setInput(control<HTMLInputElement>(editor.host, "Messages per run"), "");
+    editor.render();
+    expect(editor.pipeline.source).toMatchObject({ maxMessages: 0 });
+    setInput(control<HTMLInputElement>(editor.host, "Messages per run"), "250");
+    editor.render();
+    // The source's JSON fields are those the previous source declared, and they carry over when the kind changes back.
+    const fields = [{ name: "id", pointer: "/id", type: "int64", required: true }, { name: "name", pointer: "/name", type: "string", required: true }];
+    expect(editor.pipeline.source).toMatchObject({ fields });
     setSelect(control<HTMLSelectElement>(editor.host, "Source kind"), "jsonl");
-    expect(editor.pipeline.source).toMatchObject({ kind: "jsonl", binding: "events-in" });
+    expect(editor.pipeline.source).toEqual({ kind: "jsonl", binding: "events-in", fields });
   });
 
   it("keeps an existing SQL source key's order and appends a newly selected column", () => {

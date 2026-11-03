@@ -15,7 +15,7 @@ A v2 pipeline reads a CSV or JSON Lines file, an HTTP JSON feed or a SQL table. 
 This slice adds a finite `rabbitmq` source. Preparation drains up to an authored number of messages from a host-approved queue without acknowledging them, retains their JSON bodies as a JSON Lines input snapshot, and acknowledges them only after the runtime has durably recorded that snapshot as the run's prepared input. The run then processes the snapshot like a JSON Lines source.
 
 - A worker that dies, or a preparation that fails, before the record leaves the messages unacknowledged; the broker requeues them when the connection closes, and the next preparation attempt reads them again.
-- A worker that dies after the record and before the acknowledgement leaves the run prepared with the messages, which the broker then requeues; a later run reads them again. Ingestion is therefore at least once. The window is the time between the record's commit and the broker receiving the acknowledgement.
+- A worker that dies, or a connection that is lost, after the messages were received and before the broker received the acknowledgement, can leave the run prepared with messages the broker then requeues; a later run reads them again. Ingestion is therefore at least once. The window runs from the receipt to the acknowledgement: the runtime cannot tell that a receipt's connection was lost before it records the snapshot.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -38,7 +38,7 @@ An author points a pipeline's source at a host-approved RabbitMQ binding and a q
 
 1. **Given** a preparation that fails or whose worker dies before the snapshot is recorded, **Then** no message is acknowledged, the broker requeues them, and the next attempt reads them again.
 2. **Given** a snapshot that is recorded, **Then** its messages are acknowledged; until the acknowledgement reaches the broker they may be redelivered to a later run.
-3. **Given** a broker that cannot be reached or closes the connection during preparation, **Then** preparation records nothing and is retried after its lease lapses; a deterministic refusal (access refused, a missing queue, failed authentication) fails the run with `etl.rabbitmq-read-rejected`.
+3. **Given** a broker that cannot be reached, or closes the connection while messages are being received, **Then** preparation records nothing and is retried after its lease lapses (a connection lost after the messages were received is the at-least-once window above); a deterministic refusal (access refused, a missing queue, failed authentication) fails the run with `etl.rabbitmq-read-rejected`.
 
 ### User Story 3 — Author and inspect a RabbitMQ source (Priority: P2)
 
@@ -50,8 +50,9 @@ An author picks a RabbitMQ source binding in Studio, names the queue, declares t
 
 - **Names.** The queue is 1 to 255 characters of letters, digits, `_`, `-`, `.` or `:` (`source.rabbitmq-name-invalid`). The host binding must allow the queue, compared exactly (`etl.rabbitmq-queue-not-allowed`). The runtime never declares queues.
 - **Maximum.** `MaxMessages` is 1 to 100,000 (`source.rabbitmq-max-messages-invalid`). The snapshot is also bounded by `MaxSnapshotBytes`: a run stops taking messages at the first one that would exceed it, and that message stays in the queue. A single message larger than the bound fails preparation with `etl.snapshot-too-large`.
-- **Bodies.** A valid JSON body is written to the snapshot on one line in compact form; any other body is written so that the JSON Lines reader rejects it as a record error. Records carry no message properties or headers.
+- **Bodies.** A body without a line break is written to the snapshot as received; a valid JSON body spread over several lines is rewritten compactly on one line; any other body with a line break, or a blank body, is written so that the JSON Lines reader rejects it as a record error. Records carry no message properties or headers.
 - **Fields.** The declared fields follow the JSON Lines source's rules (spec 1190): JSON pointers, scalar types, required flags.
+- **Requeue limits.** A quorum queue counts each return; RabbitMQ 4 drops a message after 20 by default, so messages a pipeline keeps failing on are lost unless the queue has a dead-letter exchange or a higher delivery limit. The README states this.
 - **One reader per queue.** Two runs reading the same queue at once each take different messages; the runtime does not serialise them.
 - **Bindings.** A RabbitMQ binding with role `Source` lists `AllowedQueues`. Its pinned handle hashes the target and the allowed queues and exchanges, never the password. Without `Elsa.Etl.RabbitMq`, admission refuses the run with `etl.rabbitmq-unavailable`.
 

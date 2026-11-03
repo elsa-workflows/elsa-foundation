@@ -221,26 +221,54 @@ internal sealed class EtlConnectorPreparer
         var binding = bindings.ResolveExact(admission.Invocation.Scope, queue.Binding, EtlFileRole.Source.ToString(),
             revision.Revision, revision.Handle, queue.Queue);
         var consumer = binding.Consumer ?? throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ consumer is installed.");
-        IEtlRabbitMqReceipt receipt;
-        try
+        // Each body is written to the snapshot as it arrives, so preparation never holds the messages in memory; the bound is
+        // checked on the written line, and the first body that would pass it goes back to the queue.
+        return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes, async (destination, ct) =>
         {
-            receipt = await consumer.ReceiveAsync(binding.ConnectionString, queue.Queue, queue.MaxMessages, maxBytes, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is not (EtlConnectorPreparationFailure or EtlBindingException))
-        {
-            throw consumer.Classify(exception) == EtlRabbitMqErrorKind.Transient
-                ? new EtlSourceTransientException(exception)
-                : new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.rabbitmq-read-rejected", exception));
-        }
-        received(receipt);
-        if (receipt.FirstMessageTooLarge)
-            throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.snapshot-too-large"));
-        return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
-            (destination, ct) => EtlRabbitMqSnapshotWriter.WriteAsync(receipt.Bodies, destination, ct), cancellationToken);
+            long written = 0;
+            var refusedFirst = false;
+            // A failure writing the snapshot is the snapshot's, not the broker's, so it is not classified as a read failure.
+            Exception? writeFailure = null;
+            IEtlRabbitMqReceipt receipt;
+            try
+            {
+                receipt = await consumer.ReceiveAsync(binding.ConnectionString, queue.Queue, queue.MaxMessages, async (body, token) =>
+                {
+                    var line = EtlRabbitMqSnapshotWriter.Line(body);
+                    if (written + line.Length + 1 > maxBytes)
+                    {
+                        refusedFirst = written == 0;
+                        return false;
+                    }
+                    try
+                    {
+                        await destination.WriteAsync(line, token);
+                        await destination.WriteAsync(EtlRabbitMqSnapshotWriter.LineFeed, token);
+                    }
+                    catch (Exception exception)
+                    {
+                        writeFailure = exception;
+                        throw;
+                    }
+                    written += line.Length + 1;
+                    return true;
+                }, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not (EtlConnectorPreparationFailure or EtlBindingException) &&
+                                              !ReferenceEquals(exception, writeFailure))
+            {
+                throw consumer.Classify(exception) == EtlRabbitMqErrorKind.Transient
+                    ? new EtlSourceTransientException(exception)
+                    : new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.rabbitmq-read-rejected", exception));
+            }
+            received(receipt);
+            if (refusedFirst)
+                throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.snapshot-too-large"));
+        }, cancellationToken);
     }
 
     private async ValueTask<EtlChunk> PublishInputSnapshotAsync(EtlConnectorRunAdmission admission,

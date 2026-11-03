@@ -21,6 +21,9 @@ internal sealed class TestRabbitMqConsumer : IEtlRabbitMqConsumer
     public IReadOnlyList<string> Log { get { lock (_gate) return _log.ToArray(); } }
     public int Acknowledged { get; private set; }
 
+    /// <summary>When set, acknowledging throws it, as a connection lost before the acknowledgement does.</summary>
+    public Exception? AcknowledgementFailure { get; set; }
+
     /// <summary>Throws the exception on the next receive.</summary>
     public TestRabbitMqConsumer Then(Exception exception)
     {
@@ -34,44 +37,49 @@ internal sealed class TestRabbitMqConsumer : IEtlRabbitMqConsumer
         lock (_gate) _log.Add(step);
     }
 
-    public ValueTask<IEtlRabbitMqReceipt> ReceiveAsync(string connectionString, string queue, int maxMessages, long maxBytes,
-        CancellationToken cancellationToken)
+    public async ValueTask<IEtlRabbitMqReceipt> ReceiveAsync(string connectionString, string queue, int maxMessages,
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>> accept, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        lock (_gate)
+        Exception? scripted;
+        lock (_gate) scripted = _script.Count > 0 ? _script.Dequeue() : null;
+        if (scripted is not null) throw scripted;
+        var taken = new List<byte[]>();
+        while (taken.Count < maxMessages)
         {
-            if (_script.Count > 0) throw _script.Dequeue();
-            var taken = new List<byte[]>();
-            long bytes = 0;
-            var tooLarge = false;
-            while (taken.Count < maxMessages && _ready.Count > 0)
+            byte[] next;
+            lock (_gate)
             {
-                if (bytes + _ready[0].Length + 1 > maxBytes)
-                {
-                    tooLarge = taken.Count == 0;
-                    break;
-                }
-                bytes += _ready[0].Length + 1;
-                taken.Add(_ready[0]);
+                if (_ready.Count == 0) break;
+                next = _ready[0];
                 _ready.RemoveAt(0);
             }
-            _log.Add($"receive {taken.Count}");
-            return ValueTask.FromResult<IEtlRabbitMqReceipt>(new Receipt(this, taken, tooLarge));
+            if (!await accept(next, cancellationToken))
+            {
+                lock (_gate) _ready.Insert(0, next);
+                break;
+            }
+            taken.Add(next);
         }
+        lock (_gate) _log.Add($"receive {taken.Count}");
+        return new Receipt(this, taken);
     }
 
     public EtlRabbitMqErrorKind Classify(Exception exception) =>
         exception is IOException or TimeoutException ? EtlRabbitMqErrorKind.Transient : EtlRabbitMqErrorKind.Rejected;
 
-    private sealed class Receipt(TestRabbitMqConsumer owner, List<byte[]> taken, bool tooLarge) : IEtlRabbitMqReceipt
+    private sealed class Receipt(TestRabbitMqConsumer owner, List<byte[]> taken) : IEtlRabbitMqReceipt
     {
         private bool _settled;
 
-        public IReadOnlyList<ReadOnlyMemory<byte>> Bodies { get; } = taken.Select(body => (ReadOnlyMemory<byte>)body).ToArray();
-        public bool FirstMessageTooLarge => tooLarge;
+        public int Count => taken.Count;
 
         public ValueTask AcknowledgeAsync(CancellationToken cancellationToken)
         {
+            // As the driver does, a cancelled token abandons the acknowledgement.
+            cancellationToken.ThrowIfCancellationRequested();
+            if (owner.AcknowledgementFailure is { } failure)
+                throw failure;
             lock (owner._gate)
             {
                 _settled = true;

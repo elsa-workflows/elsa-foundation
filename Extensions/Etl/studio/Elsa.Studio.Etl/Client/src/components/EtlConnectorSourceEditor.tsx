@@ -131,7 +131,8 @@ function RabbitMqQueueFields({ source, disabled, onChange }: {
         <label htmlFor={`${id}-max`}>Messages per run</label>
         <input id={`${id}-max`} type="number" min={1} max={100000} value={source.maxMessages} disabled={disabled}
           aria-describedby={`${id}-max-help`}
-          onChange={event => onChange({ ...source, maxMessages: event.currentTarget.valueAsNumber })} />
+          // A cleared or fractional value becomes a whole number, so the compiler judges it instead of the request failing.
+          onChange={event => onChange({ ...source, maxMessages: Math.trunc(Number(event.currentTarget.value)) || 0 })} />
         <small id={`${id}-max-help`}>A run takes at most this many messages, 1 to 100,000; the rest stay queued for the next run.</small>
       </div>
     </div>

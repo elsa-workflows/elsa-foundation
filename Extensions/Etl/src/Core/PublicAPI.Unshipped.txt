@@ -2143,8 +2143,7 @@ static Elsa.Etl.Core.EtlRabbitMqSource.operator !=(Elsa.Etl.Core.EtlRabbitMqSour
 static Elsa.Etl.Core.EtlRabbitMqSource.operator ==(Elsa.Etl.Core.EtlRabbitMqSource? left, Elsa.Etl.Core.EtlRabbitMqSource? right) -> bool
 Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer
 Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.Classify(System.Exception! exception) -> Elsa.Etl.Core.Runtime.EtlRabbitMqErrorKind
-Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.ReceiveAsync(string! connectionString, string! queue, int maxMessages, long maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt!>
 Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt
 Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.AcknowledgeAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
-Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.Bodies.get -> System.Collections.Generic.IReadOnlyList<System.ReadOnlyMemory<byte>>!
-Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.FirstMessageTooLarge.get -> bool
+Elsa.Etl.Core.Runtime.IEtlRabbitMqConsumer.ReceiveAsync(string! connectionString, string! queue, int maxMessages, System.Func<System.ReadOnlyMemory<byte>, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<bool>>! accept, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt!>
+Elsa.Etl.Core.Runtime.IEtlRabbitMqReceipt.Count.get -> int

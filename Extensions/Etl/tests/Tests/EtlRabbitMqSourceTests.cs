@@ -69,7 +69,9 @@ public sealed class EtlRabbitMqSourceTests : IDisposable
 
     [Theory]
     [InlineData("{\"id\":1}", "{\"id\":1}")]
-    [InlineData("{\n  \"id\": 1,\n  \"name\": \"Ada\"\n}", "{\"id\":1,\"name\":\"Ada\"}")]
+    [InlineData("{\n  \"id\": 1,\r\n  \"name\": \"Ada\"\n}", "{   \"id\": 1,    \"name\": \"Ada\" }")]
+    [InlineData("\uFEFF{\"id\":1}", "{\"id\":1}")]
+    [InlineData("\uFEFF", "\u0001")]
     [InlineData("not json", "not json")]
     [InlineData("not\njson", "\u0001")]
     [InlineData("", "\u0001")]
