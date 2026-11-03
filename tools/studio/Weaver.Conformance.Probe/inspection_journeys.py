@@ -291,7 +291,7 @@ def require_version_context(item, attachment, version, versions):
     activities, _ = flatten_version(version["state"])
     check(isinstance(content, dict) and content.get("versionId") == version["id"] and content.get("version") == version["version"]
           and content.get("definitionId") == version["definition"]["id"] and content.get("definitionName") == version["definition"]["name"]
-          and content.get("activityCount") == len(activities), "The admitted version is not the version API's read of that version")
+          and content.get("activityCount") == len(activities) and content.get("activitiesTruncated") is False, "The admitted version is not the version API's read of that version")
     listed = content.get("versions")
     check(isinstance(listed, list) and content.get("versionsTruncated") is False
           and sorted((row.get("versionId"), row.get("version")) for row in listed if isinstance(row, dict))

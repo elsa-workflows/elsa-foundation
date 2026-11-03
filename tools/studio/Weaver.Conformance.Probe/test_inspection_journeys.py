@@ -58,7 +58,7 @@ def version_item(attachment, version):
             "content": {"definitionId": DEFINITION["id"], "definitionName": DEFINITION["name"], "versionId": version["id"], "version": version["version"],
                         "createdAt": "2026-11-03T00:00:00Z", "activityCount": len(activities),
                         "versions": [{"versionId": item["id"], "version": item["version"], "createdAt": item["createdAt"]} for item in LISTED],
-                        "versionsTruncated": False}}
+                        "versionsTruncated": False, "activitiesTruncated": False}}
 
 
 EXECUTABLE = {"artifactId": "artifact-1", "artifactHash": "abc123", "rootActivityType": "Elsa.Activities.Flowchart.Activities.Flowchart",
