@@ -74,7 +74,7 @@ public sealed class EtlSqlDestinationTests
         var binding = Binding("Data Source=one.db;Password=secret");
         var bindings = new HostSqlBindings([binding], [new SqliteEtlSqlEngine()]);
 
-        var resolved = bindings.ResolveCurrent(Scope, "warehouse", "MainOutput", "DBO.People");
+        var resolved = bindings.ResolveCurrent(Scope, "warehouse", "MainOutput", "dbo.people");
         var otherSecret = new HostSqlBindings([Binding("Data Source=one.db;Password=other")], [new SqliteEtlSqlEngine()])
             .ResolveCurrent(Scope, "warehouse", "MainOutput", "dbo.people");
         var otherTarget = new HostSqlBindings([Binding("Data Source=two.db;Password=secret")], [new SqliteEtlSqlEngine()])
@@ -86,6 +86,13 @@ public sealed class EtlSqlDestinationTests
         Assert.Equal(resolved.Handle, bindings.ResolveExact(Scope, "warehouse", "MainOutput", "v1", resolved.Handle, "dbo.people").Handle);
         Assert.Equal("etl.sql-table-not-allowed",
             Assert.Throws<EtlBindingException>(() => bindings.ResolveCurrent(Scope, "warehouse", "MainOutput", "dbo.other")).Code);
+        // PostgreSQL's quoted identifiers are case-sensitive, so the allow-list compares exactly.
+        Assert.Equal("etl.sql-table-not-allowed",
+            Assert.Throws<EtlBindingException>(() => bindings.ResolveCurrent(Scope, "warehouse", "MainOutput", "DBO.People")).Code);
+        var badLedger = Binding("Data Source=one.db");
+        badLedger.LedgerTable = "my-ledger";
+        Assert.Equal("etl.binding-unavailable", Assert.Throws<EtlBindingException>(() =>
+            new HostSqlBindings([badLedger], [new SqliteEtlSqlEngine()]).ResolveCurrent(Scope, "warehouse", "MainOutput", "dbo.people")).Code);
         Assert.Equal("etl.binding-revision-unavailable",
             Assert.Throws<EtlBindingException>(() => bindings.ResolveExact(Scope, "warehouse", "MainOutput", "v1", new string('0', 64), "dbo.people")).Code);
         Assert.Equal("etl.sql-unavailable",

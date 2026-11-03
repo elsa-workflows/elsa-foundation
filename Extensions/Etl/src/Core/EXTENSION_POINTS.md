@@ -76,14 +76,6 @@ A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](..
 the runtime records an applied SQL route through `RecordConnectorFilePublicationAsync` under
 `EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`, and it counts as a recorded publication (effect mechanism 2).
 
-**`IEtlSqlEngine`** (contributor, Core). One driver-specific adapter per provider name: connections, the parsed target for
-the pinned handle, dialect text for the ledger, unique-key check and single-row upsert, and exception classification
-(transient, duplicate key, already exists, missing object or constraint, rejected). Registration:
-`services.AddSingleton<IEtlSqlEngine, …>()`; the runtime's SQL bindings resolve one engine per binding provider and refuse
-two engines with the same name. Known implementations: `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and
-`SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`), cross-domain. The runtime owns the delivery protocol; an engine never
-commits or retries.
-
 `EtlPipelineV2.Continuous` is an optional, init-only run policy; a null policy is never serialized, so finite artifacts
 keep their bytes and identities. `EtlContinuousRunPolicy.FindViolation` is the one rule every reader applies (HTTP
 source with token or next-link pagination, interval 1–86,400 s). For continuous runs a connector provider implements two
@@ -109,3 +101,32 @@ temporary pressure and settles a safe fenced diagnostic for a proven permanent s
 unaccepted descriptors and accounting as evidence; it never fabricates acceptance to clear counters. Providers
 must retain the request/page history needed to classify irreversible growth and must not mistake another live
 partition's releasable reservation for permanent exhaustion.
+
+## SQL engines
+
+**`IEtlSqlEngine`** — adapter keyed by provider name (§2.7), layer: Core contract, no default implementation
+([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)).
+
+```csharp
+public interface IEtlSqlEngine
+{
+    string Provider { get; }
+    int MaxParameters { get; }
+    string? SessionSetup { get; }
+    DbConnection CreateConnection(string connectionString);
+    EtlSqlTarget DescribeTarget(string connectionString);
+    string CreateLedger(string ledgerTable);
+    string InsertLedger(string ledgerTable);
+    string ReadLedgerHash(string ledgerTable);
+    string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns);
+    string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row);
+    string Parameter(string column, int row);
+    EtlSqlErrorKind Classify(Exception exception);
+}
+```
+
+- **What it is.** An adapter that isolates one SQL driver. It is not a fan-in contributor: the runtime's SQL bindings resolve exactly one engine per binding provider, and refuse two engines with the same name. The runtime's writer owns the delivery protocol (ledger row, unique-key check, ordered single-row upserts, one transaction); an engine never commits or retries.
+- **Registration:** `services.AddSingleton<IEtlSqlEngine, …>()` from an engine feature.
+- **When to implement:** to deliver to another engine. Supply connections, a target without secrets for the pinned handle, dialect text, and exception classification.
+- **What depends on it:** `HostSqlBindings` and `EtlSqlRouteWriter` in `Elsa.Etl.Runtime`.
+- **Known implementations** (intra-domain, ETL): `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and `SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`).

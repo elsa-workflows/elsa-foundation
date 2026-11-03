@@ -51,9 +51,10 @@ internal sealed class HostSqlBindings(IEnumerable<EtlHostSqlBindingOptions> opti
     {
         if (!_engines.TryGetValue(binding.Provider, out var engine))
             throw new EtlBindingException("etl.sql-unavailable", "No ETL SQL engine is installed for the binding's provider.");
-        if (!binding.AllowedTables.Contains(table, StringComparer.OrdinalIgnoreCase))
+        // Exact comparison: PostgreSQL's quoted identifiers are case-sensitive, so "Orders" never approves "orders".
+        if (!binding.AllowedTables.Contains(table, StringComparer.Ordinal))
             throw new EtlBindingException("etl.sql-table-not-allowed", "The SQL binding does not allow the destination table.");
-        if (string.IsNullOrWhiteSpace(binding.ConnectionString) || string.IsNullOrWhiteSpace(binding.LedgerTable))
+        if (string.IsNullOrWhiteSpace(binding.ConnectionString) || !IsTableIdentifier(binding.LedgerTable))
             throw Unavailable();
         EtlSqlTarget target;
         try
@@ -76,12 +77,17 @@ internal sealed class HostSqlBindings(IEnumerable<EtlHostSqlBindingOptions> opti
             target.Port,
             target.Database,
             target.User,
-            AllowedTables = binding.AllowedTables.Select(item => item.ToLowerInvariant()).Order(StringComparer.Ordinal).ToArray(),
+            AllowedTables = binding.AllowedTables.Order(StringComparer.Ordinal).ToArray(),
             binding.LedgerTable,
             binding.CreateLedger
         })));
         return new(binding.Alias, binding.Revision, handle, engine, binding.ConnectionString, binding.LedgerTable, binding.CreateLedger);
     }
+
+    /// <summary><c>name</c> or <c>schema.name</c>, each part <c>[A-Za-z_][A-Za-z0-9_]{0,62}</c>, as the compiler requires of tables.</summary>
+    private static bool IsTableIdentifier(string? value) => value?.Split('.') is { Length: 1 or 2 } parts && parts.All(part =>
+        part is { Length: >= 1 and <= 63 } && (char.IsAsciiLetter(part[0]) || part[0] == '_') &&
+        part.All(character => char.IsAsciiLetterOrDigit(character) || character == '_'));
 
     private static bool Matches(EtlHostSqlBindingOptions item, EtlScope scope, string alias, string role) =>
         Scope(item) == scope && item.Alias == alias && item.Role == role;

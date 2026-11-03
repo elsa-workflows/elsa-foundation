@@ -22,7 +22,7 @@ The plan adds a main-route `sql` destination:
   - the contract carries no external dependency;
   - each driver stays in its own provider package;
   - no umbrella package, because the shared logic is in the runtime, over BCL types;
-  - the provider packages reference only `Elsa.Etl.Core` and `Elsa.Etl.Runtime`.
+  - the provider packages reference only `Elsa.Etl.Core`.
 - **Wrapping** (§2.19): infrastructure exceptions are wrapped at the writer boundary.
 - **Compatibility:**
   - existing artifacts and identities are byte-identical (`Sql` is appended);
@@ -69,17 +69,16 @@ The plan adds a main-route `sql` destination:
 - `src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj`: `EtlSqlServerFeature` and `SqlServerEtlSqlEngine` (Microsoft.Data.SqlClient, under `XACT_ABORT`).
 
 ### Studio
-- `etlTypes.ts`, the pipeline editor's destination picker, the table and key controls, and inspection, each with tests.
+- `etlTypes.ts`, the pipeline editor's destination picker, and the table and key controls, with tests. Inspection gets a SQL label, which is not tested.
 
 ### Tests
 - **`Elsa.Etl.Tests`:**
   - the compiler, bindings and publication sites;
   - the writer against a SQLite test engine (ledger, replay, conflict, rejection, transient yield, repeated keys);
-  - a CSV-to-SQL journey on the test engine.
-- **New `tests/SqlProviderTests/Elsa.Etl.Sql.ProviderTests.csproj`** (container suite), on PostgreSQL 16 and SQL Server 2022:
-  - the writer protocol and missing-key detection per engine;
-  - a host journey;
-  - real worker processes killed between the commit and the delivery record.
+  - a CSV-to-SQL journey on the test engine;
+  - real worker processes killed between the commit and the delivery record, on the test engine.
+- **New `tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj`** (container suite), on PostgreSQL 16 and SQL Server 2022: the writer protocol, missing-key detection and error classification per engine.
+- **The host journey on a real engine** is the Workbench journey against PostgreSQL.
 
 ### CI and maps
 - `tools/ci/test-tiers.json`: the new project, as integration with Testcontainers, plus its `containerSuites` entry.

@@ -11,7 +11,11 @@ namespace Elsa.Etl.Runtime.Output;
 internal sealed record EtlSqlRouteDelivery(
     string ConnectionString, string LedgerTable, bool CreateLedger, string Table, IReadOnlyList<string> Key,
     IReadOnlyList<EtlColumn> Columns, ReadOnlyMemory<byte> Body, string EffectId, string RunId, string BatchId,
-    string ContentHash);
+    string ContentHash)
+{
+    // The connection string holds credentials; never print it.
+    public override string ToString() => nameof(EtlSqlRouteDelivery);
+}
 
 internal enum EtlSqlWriteOutcome { Applied, Replay, Yield }
 
@@ -74,8 +78,6 @@ internal sealed class EtlSqlRouteWriter(IEtlSqlEngine engine, TimeProvider clock
                 EtlSqlErrorKind.Transient => EtlSqlWriteOutcome.Yield,
                 EtlSqlErrorKind.MissingConstraint => throw new EtlEffectException("etl.sql-key-constraint-missing",
                     "The SQL destination table has no unique constraint on exactly its key columns.", exception),
-                EtlSqlErrorKind.MissingObject when !delivery.CreateLedger => throw new EtlEffectException("etl.sql-ledger-missing",
-                    "The SQL destination's ledger table or a target table or column does not exist.", exception),
                 _ => throw new EtlEffectException("etl.sql-write-rejected", "The SQL destination refused the batch.", exception)
             };
         }
@@ -111,6 +113,11 @@ internal sealed class EtlSqlRouteWriter(IEtlSqlEngine engine, TimeProvider clock
         {
             // Already applied, possibly by a writer whose commit this one waited on.
             return false;
+        }
+        catch (DbException exception) when (engine.Classify(exception) == EtlSqlErrorKind.MissingObject)
+        {
+            // Only the ledger insert distinguishes a missing ledger; a missing target table or column is a rejection.
+            throw new EtlEffectException("etl.sql-ledger-missing", "The SQL destination's ledger table does not exist.", exception);
         }
     }
 

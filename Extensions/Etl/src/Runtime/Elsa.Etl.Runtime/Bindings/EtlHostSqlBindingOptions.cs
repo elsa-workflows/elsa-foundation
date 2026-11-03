@@ -30,10 +30,10 @@ public sealed class EtlHostSqlBindingOptions
     /// <summary>The connection string, supplied through host configuration; it is never pinned or exposed.</summary>
     public string ConnectionString { get; set; } = string.Empty;
 
-    /// <summary>The tables pipelines may write, as <c>name</c> or <c>schema.name</c>, compared ignoring case.</summary>
+    /// <summary>The tables pipelines may write, as <c>name</c> or <c>schema.name</c>, compared exactly as authored.</summary>
     public IList<string> AllowedTables { get; set; } = new List<string>();
 
-    /// <summary>The ledger table recording applied effects, as <c>name</c> or <c>schema.name</c>.</summary>
+    /// <summary>The ledger table recording applied effects, as an identifier <c>name</c> or <c>schema.name</c>.</summary>
     public string LedgerTable { get; set; } = DefaultLedgerTable;
 
     /// <summary>Whether the writer creates a missing ledger table; otherwise a missing ledger fails the run.</summary>

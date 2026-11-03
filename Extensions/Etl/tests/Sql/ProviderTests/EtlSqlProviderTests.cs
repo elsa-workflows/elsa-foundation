@@ -134,8 +134,61 @@ public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
 public sealed class EtlSqlPostgreSqlProviderTests(EtlSqlPostgreSqlFixture fixture)
     : EtlSqlProviderTests(fixture), IClassFixture<EtlSqlPostgreSqlFixture>
 {
+    private static readonly EtlColumn[] RowColumns =
+        [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true), new("score", EtlColumnType.Decimal, false)];
+
     protected override string CreateTableSql(string table, bool keyed) =>
         $"CREATE TABLE {table} (id bigint NOT NULL, name text NOT NULL, score numeric(18, 4) NULL{(keyed ? $", CONSTRAINT {table}_key UNIQUE (id)" : "")})";
+
+    [SkippableFact]
+    public async Task A_role_that_may_only_write_a_pre_created_ledger_delivers_without_running_ddl()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var (table, ledger, role) = ("people_" + suffix, "ledger_" + suffix, "etl_" + suffix);
+        await fixture.ExecuteAsync(CreateTableSql(table, keyed: true));
+        await fixture.ExecuteAsync(fixture.Engine.CreateLedger(ledger));
+        // PostgreSQL 15+ grants PUBLIC no CREATE on schema public; this role may only read and write the two tables.
+        await fixture.ExecuteAsync($"CREATE ROLE {role} LOGIN PASSWORD 'etl'; GRANT USAGE ON SCHEMA public TO {role}; " +
+                                   $"GRANT SELECT, INSERT, UPDATE ON {table}, {ledger} TO {role}");
+        var connection = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Username = role, Password = "etl" }.ConnectionString;
+
+        Assert.Equal(EtlSqlWriteOutcome.Applied, await WriteAsync(connection, ledger, table, "effect-1"));
+        Assert.Equal(["1|Ada"], await fixture.QueryAsync($"SELECT id, name FROM {table}"));
+    }
+
+    [SkippableFact]
+    public async Task The_key_check_follows_search_path_counts_only_key_columns_and_refuses_a_deferrable_constraint()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var (included, deferrable) = ("included_" + suffix, "deferrable_" + suffix);
+        // The search_path is "$user", public: with a schema named after the user, unqualified names still resolve to public.
+        await fixture.ExecuteAsync($"CREATE TABLE public.{included} (id bigint NOT NULL, name text NOT NULL, score numeric NULL)");
+        await fixture.ExecuteAsync($"CREATE UNIQUE INDEX {included}_key ON public.{included} (id) INCLUDE (name)");
+        await fixture.ExecuteAsync($"CREATE TABLE public.{deferrable} (id bigint NOT NULL, name text NOT NULL, score numeric NULL, " +
+                                   $"CONSTRAINT {deferrable}_key UNIQUE (id) DEFERRABLE INITIALLY IMMEDIATE)");
+        await fixture.ExecuteAsync("CREATE SCHEMA postgres");
+        try
+        {
+            Assert.Equal(EtlSqlWriteOutcome.Applied, await WriteAsync(fixture.ConnectionString, "public.ledger_" + suffix, included, "effect-1"));
+            var failure = await Assert.ThrowsAsync<EtlEffectException>(() =>
+                WriteAsync(fixture.ConnectionString, "public.ledger_" + suffix, deferrable, "effect-2"));
+
+            Assert.Equal("etl.sql-key-constraint-missing", failure.Code);
+            Assert.Equal(["1|Ada"], await fixture.QueryAsync($"SELECT id, name FROM public.{included}"));
+        }
+        finally
+        {
+            // The schema would capture other tests' unqualified names; drop it so they keep resolving to public.
+            await fixture.ExecuteAsync("DROP SCHEMA postgres CASCADE");
+        }
+    }
+
+    private Task<EtlSqlWriteOutcome> WriteAsync(string connection, string ledger, string table, string effect) =>
+        new EtlSqlRouteWriter(fixture.Engine, TimeProvider.System).WriteAsync(new EtlSqlRouteDelivery(connection, ledger, true, table,
+            ["id"], RowColumns, Encoding.UTF8.GetBytes("[{\"id\":1,\"name\":\"Ada\"}]"), effect, "run", "batch-" + effect,
+            new string('a', 64)), default).AsTask();
 
     [Fact]
     public void Deadlocks_serialization_failures_and_lost_connections_are_transient_and_constraint_errors_are_not()
@@ -155,4 +208,9 @@ public sealed class EtlSqlServerProviderTests(EtlSqlServerFixture fixture)
 {
     protected override string CreateTableSql(string table, bool keyed) =>
         $"CREATE TABLE {table} (id bigint NOT NULL, name nvarchar(200) NOT NULL, score decimal(18, 4) NULL{(keyed ? $", CONSTRAINT {table}_key UNIQUE (id)" : "")})";
+
+    [Fact]
+    public void An_exhausted_connection_pool_is_transient() =>
+        Assert.Equal(EtlSqlErrorKind.Transient, new EtlSqlServerFixture().Engine.Classify(new InvalidOperationException(
+            "Timeout expired. The timeout period elapsed prior to obtaining a connection from the pool.")));
 }

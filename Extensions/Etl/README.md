@@ -70,7 +70,8 @@ host, port, database and user, never the password.
   `etl.effect-conflict`.
 - **Keys and columns.** The key is one to eight output fields mapped from required source fields, and the table needs a
   unique constraint or index on exactly those columns (`etl.sql-key-constraint-missing` otherwise). Columns are the output
-  field names, which must be identifiers distinct ignoring case; identifiers are quoted exactly as authored. A key repeated
+  field names, which must be identifiers distinct ignoring case; identifiers are quoted exactly as authored (case-sensitive
+  on PostgreSQL), and `AllowedTables` compares them exactly. A key repeated
   in a batch resolves under the database's collation, the later record winning. Across concurrently processed partitions
   or shards, the winner for a shared key is unspecified.
 - **Failures.** A deterministic refusal (a type the column rejects, a NOT NULL or permission error, a missing table)

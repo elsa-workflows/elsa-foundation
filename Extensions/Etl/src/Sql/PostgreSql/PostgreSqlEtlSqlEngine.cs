@@ -24,23 +24,27 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
         return new(builder.Host ?? string.Empty, builder.Port.ToString(CultureInfo.InvariantCulture), builder.Database ?? string.Empty, builder.Username);
     }
 
+    // PostgreSQL checks CREATE permission before IF NOT EXISTS, so an existing ledger is detected first: a role that may
+    // only write a pre-created ledger never runs the DDL.
     public string CreateLedger(string ledgerTable) =>
-        $"CREATE TABLE IF NOT EXISTS {Quote(ledgerTable)} (effect_id text PRIMARY KEY, run_id text NOT NULL, " +
-        "batch_id text NOT NULL, content_hash text NOT NULL, applied_at bigint NOT NULL)";
+        $"DO $ledger$ BEGIN IF to_regclass('{Quote(ledgerTable)}') IS NULL THEN CREATE TABLE IF NOT EXISTS {Quote(ledgerTable)} " +
+        "(effect_id text PRIMARY KEY, run_id text NOT NULL, batch_id text NOT NULL, content_hash text NOT NULL, applied_at bigint NOT NULL); " +
+        "END IF; END $ledger$";
 
     public string InsertLedger(string ledgerTable) =>
         $"INSERT INTO {Quote(ledgerTable)} (effect_id, run_id, batch_id, content_hash, applied_at) VALUES (@effect, @run, @batch, @hash, @applied)";
 
     public string ReadLedgerHash(string ledgerTable) => $"SELECT content_hash FROM {Quote(ledgerTable)} WHERE effect_id = @effect";
 
+    // The table resolves through search_path exactly as the statements do; only key columns count (not INCLUDE columns),
+    // and a deferrable constraint is excluded because ON CONFLICT cannot use it.
     public string CountUniqueKeys(string table, IReadOnlyList<string> keyColumns)
     {
-        var (schema, name) = Split(table);
         var keys = string.Join(", ", keyColumns.Order(StringComparer.Ordinal).Select(column => $"'{column}'"));
-        return "SELECT COUNT(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
-               $"WHERE i.indisunique AND i.indpred IS NULL AND c.relname = '{name}' AND n.nspname = {(schema is null ? "current_schema()" : $"'{schema}'")} " +
+        return $"SELECT COUNT(*) FROM pg_index i WHERE i.indrelid = to_regclass('{Quote(table)}') AND i.indisunique AND i.indpred IS NULL " +
                $"AND i.indnkeyatts = {keyColumns.Count} AND (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a " +
-               $"WHERE a.attrelid = c.oid AND a.attnum = ANY(i.indkey)) = ARRAY[{keys}]::text[]";
+               "WHERE a.attrelid = i.indrelid AND a.attnum = ANY((i.indkey::int2[])[0:i.indnkeyatts - 1])) = " +
+               $"ARRAY[{keys}]::text[] AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.condeferrable)";
     }
 
     public string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row)
@@ -69,6 +73,4 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
 
     private static string Quote(string identifier) => string.Join('.', identifier.Split('.').Select(part => $"\"{part}\""));
 
-    private static (string? Schema, string Name) Split(string table) =>
-        table.IndexOf('.') is var dot and >= 0 ? (table[..dot], table[(dot + 1)..]) : (null, table);
 }
