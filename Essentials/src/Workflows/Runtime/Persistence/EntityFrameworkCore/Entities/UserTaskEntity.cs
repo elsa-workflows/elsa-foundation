@@ -20,7 +20,7 @@ internal sealed class UserTaskEntity
     public int Status { get; set; }
     public long Revision { get; set; }
     public string ContentJson { get; set; } = null!;
-    public string SchemaVersion { get; set; } = "1.0.0";
+    public string SchemaVersion { get; set; } = UserTasksEfModule.SchemaVersion;
 }
 
 internal sealed class UserTaskFormEntity
@@ -33,5 +33,5 @@ internal sealed class UserTaskFormEntity
     public string FormKey { get; set; } = null!;
     public string VersionKey { get; set; } = null!;
     public string ContentJson { get; set; } = null!;
-    public string SchemaVersion { get; set; } = "1.0.0";
+    public string SchemaVersion { get; set; } = UserTasksEfModule.SchemaVersion;
 }

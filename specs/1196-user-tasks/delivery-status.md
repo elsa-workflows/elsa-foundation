@@ -33,6 +33,14 @@ The complete local independent Weaver package witness passed on 3f22e14063cafbc1
 
 The retained live screenshot also exposed the accepted-response notice remaining after a Completed refresh. A mounted regression failed on the prior component; successful refresh now replaces that notice from the current task status. The live journey additionally refuses pending-delivery text after committed completion.
 
+The separately owned remount probe repair #3693 was integrated from main 19b063e767925bcd178ae7e724292d9e76093a76 in b92687e32c119a0e5c08f4a5c72bae21651d5cd9. The feature patch was byte-identical against its updated base. All 279 probe controls and the complete local 89-case witness passed on that integrated head. The prior passing run 41565508614 was the repair PR's run, not a main run; the corrected attribution is recorded on the Program. An owner clarification is pending about extending the six-round review limit under the earlier 20-attempt continuation.
+
+Broader CI then found missing shared coverage wiring: the activity had no behavioral drive, the schema-family chain handle was absent, and tooling inventories omitted the new family/two content columns. The new drive measures Done/Approve/Reject through real durable acceptance/delivery and records actual outputs and required-input refusal; the whole activity suite passes 229/229. The canonical UserTasks schema chain now owns both task and form reads; two regressions failed on the previous corruption classification and pass with structured schema-skew refusal. Whole Runtime EF passes 1,880/1,880 and migration/tooling passes 508/508. Independent pinned inventories remain in place. No activity outcome metadata or persisted format changed.
+
+Runtime count reconciliation: local Debug executes 3,255; hosted Release executes 3,254. Comparing their TRX method inventories finds exactly one Debug-only test (`BurstScopeCacheTests.GetOrAddAsync_RejectsMustSurviveValue_InDebug`), with no other missing methods. This is a build-configuration difference, not a lost runtime case.
+
+The repaired suites' listed/executed counts reconcile: Behavioral 229/229, Runtime EF 1,880/1,880 and migrations 494/508 (14 deferred theory rows, no missing listed case). Architecture remains 614/614 after the canonical schema-reader change.
+
 Provider-suite local limitation: the whole native provider project had247 passes and one PostgreSQL covering-index plan assertion failure. That assertion also failed on the unmodified original base329ec72b. No unrelated planner assertion was changed. Exact-head Linux required-provider CI is still required.
 
 Hosting-suite local result:57/58 passed, with the existing legacy-controls upgrade journey failing. The focused journey passed on unmodified current mainfa8b4a292, then passed on the same branch binaries at lower load. Preserve the initial failure; use whole exact-head CI as the final gate.

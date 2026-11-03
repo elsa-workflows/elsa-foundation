@@ -138,9 +138,10 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     };
     private static UserTaskRecord Read(UserTaskEntity row, string scope)
     {
-        var value = JsonSerializer.Deserialize<UserTaskRecord>(row.ContentJson) ?? throw new InvalidDataException("The task journal is invalid.");
+        var content = UserTasksEfModule.Chain.Upcast<UserTaskEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+        var value = JsonSerializer.Deserialize<UserTaskRecord>(content) ?? throw new InvalidDataException("The task journal is invalid.");
         var expected = ToRow(value, scope);
-        if (row.SchemaVersion != "1.0.0" || row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||
+        if (row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||
             row.TenantKey != expected.TenantKey || row.TenantHash != expected.TenantHash || row.ClaimantHash != expected.ClaimantHash || row.ExecutionHash != expected.ExecutionHash || row.AssigneeHash != expected.AssigneeHash || row.GroupHash != expected.GroupHash || row.TaskId != expected.TaskId || row.ExecutionKey != expected.ExecutionKey ||
             row.AssigneeKey != expected.AssigneeKey || row.GroupKey != expected.GroupKey || row.ClaimantKey != expected.ClaimantKey ||
             row.Status != expected.Status || row.Revision != expected.Revision || row.SearchTitle != expected.SearchTitle)
@@ -149,8 +150,9 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     }
     private static UserTaskFormVersion ReadForm(UserTaskFormEntity row, string scope)
     {
-        var value = JsonSerializer.Deserialize<UserTaskFormVersion>(row.ContentJson) ?? throw new InvalidDataException("The form version is invalid.");
-        if (row.SchemaVersion != "1.0.0" || row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
+        var content = UserTasksEfModule.Chain.Upcast<UserTaskFormEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+        var value = JsonSerializer.Deserialize<UserTaskFormVersion>(content) ?? throw new InvalidDataException("The form version is invalid.");
+        if (row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
             row.FormKey != Encode(value.Form.Id) || row.VersionKey != Encode(value.Form.Version) || row.Id != CompositeId(scope, value.TenantId, value.Form.Id, value.Form.Version))
             throw new InvalidDataException("The form identity or projection differs.");
         return value;

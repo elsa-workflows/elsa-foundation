@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.UserTasks;
@@ -14,6 +15,34 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfUserTaskStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Unknown_task_and_form_stamps_are_schema_skew_not_corrupt_content(bool form)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync(); await Executions(context).SaveAsync(Execution("run"));
+        var journal = new EfUserTaskStore(context, new Accessor("tenant"));
+        if (form)
+        {
+            Assert.True(await journal.TryCreateFormAsync(new("tenant", new("purchase", "1", "Purchase", UserTaskProtocol.BasicForms, []), Now, "author")));
+            await context.UserTaskForms.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, "999.0.0"));
+        }
+        else
+        {
+            Assert.True(await journal.TryWriteAsync(Task("run", "task"), null));
+            await context.UserTasks.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, "999.0.0"));
+        }
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(async () =>
+        {
+            if (form) await journal.FindFormAsync("tenant", "purchase", "1");
+            else await journal.FindAsync("tenant", "task");
+        });
+        Assert.Equal("UserTasks", skew.Family);
+        Assert.Equal(["1.0.0"], skew.ReadableVersions);
+    }
 
     [Fact]
     public async Task Durable_journal_CAS_history_and_form_snapshots_survive_a_new_context()
