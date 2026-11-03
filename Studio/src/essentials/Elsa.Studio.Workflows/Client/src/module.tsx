@@ -18,6 +18,7 @@ import {
 import { registerWorkflowAgent } from "./workflowAgent";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
+const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
 const BpmnWorkflowsPage = lazy(() => import("./bpmn/BpmnWorkflowsPage").then(module => ({ default: module.BpmnWorkflowsPage })));
 const WorkflowTemplatesPage = lazy(() => import("./workflow-editor/WorkflowTemplatesPage").then(module => ({ default: module.WorkflowTemplatesRoute })));
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
@@ -130,6 +131,12 @@ export function register(api: ElsaStudioModuleApi) {
       ]
     },
     routes: [
+      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "Create workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
+        id: `workflows-tags-${view}`,
+        requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-tags", "workflow-tag"] }],
+        path, label,
+        component: ({ navigate }: { navigate(path: string): void }) => deferred("workflow tags", <WorkflowTagsRoute key={view} context={api.backend} view={view} navigate={navigate} />)
+      })),
       ...(api.backendSession ? [
         { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], path: "/workflows/bpmn", label: "BPMN processes",
           component: ({ navigate }: { navigate(path: string): void }) => deferred("BPMN processes", <BpmnWorkflowsPage session={api.backendSession!} view="processes" navigate={navigate} />) },
