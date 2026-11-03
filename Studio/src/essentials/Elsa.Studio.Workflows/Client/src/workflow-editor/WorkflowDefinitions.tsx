@@ -216,6 +216,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const usesCursorPaging = snapshotVisible?.usesCursorPaging ?? false;
   const hasKnownTotal = snapshotVisible?.hasKnownTotal ?? false;
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
+  const visibleTagIds = useMemo(() => [...new Set(definitions.flatMap(definition => (definition.tags ?? []).map(tag => tag.tagId)))], [definitions]);
   const continuationToken = continuationTokens[page];
   const effectiveFolderSelection: WorkflowFolderSelection =
     folderCapability === "available" ? folderSelection : "all";
@@ -780,7 +781,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
         {hasLibrarySupport ? <Suspense fallback={<p role="status">Loading library organization…</p>}><WorkflowLibraryControls
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
-          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={reportLibraryPermissions} onViews={setLibraryViews} refreshKey={libraryRefresh}
+          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={reportLibraryPermissions} onViews={setLibraryViews} refreshKey={libraryRefresh} visibleTagIds={visibleTagIds}
         /></Suspense> : null}
         </div>
         {browseScopeBlocked && browseSupport ? <div className="wf-alert" role="alert">

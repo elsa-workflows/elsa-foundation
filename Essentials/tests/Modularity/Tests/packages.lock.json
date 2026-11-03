@@ -1330,6 +1330,15 @@
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.agent.workflows.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Agent": "[4.0.0-dev, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
@@ -2225,6 +2234,7 @@
           "Elsa.Agent.Specialists.Review": "[4.0.0-dev, )",
           "Elsa.Agent.Specialists.Review.Api": "[4.0.0-dev, )",
           "Elsa.Agent.Workflows": "[4.0.0-dev, )",
+          "Elsa.Agent.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Attention.Api": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",

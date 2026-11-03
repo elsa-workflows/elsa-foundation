@@ -23,8 +23,19 @@ export interface WorkflowLibraryAgentController {
   revert?: ((token: string) => string) | null;
 }
 
+/**
+ * The read-only page contexts of spec 1193 story 8: the open Executable Inspector's exact Executable and the selected
+ * persisted workflow version, each keyed by its page instance's generation so two mounted pages never replace each other.
+ */
+export interface WorkflowInspectionAgentController {
+  executables: Map<string, StudioAgentContextAttachment>;
+  versions: Map<string, StudioAgentContextAttachment>;
+}
+
 export interface WorkflowAgentController {
   snapshot: StudioAgentContextAttachment | null;
+  /** The Executable Inspector's and version history's read-only contexts (spec 1193 slice F). */
+  inspection?: WorkflowInspectionAgentController;
   /** The library pages' contexts (by kind and page generation) and working-state handlers (by tool and page generation). */
   library?: WorkflowLibraryAgentController;
   execute: ((invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => Promise<StudioAgentClientExecutionResult>) | null;
@@ -42,7 +53,8 @@ export interface WorkflowAgentController {
 /** Registration closes over one native module instance; live editor objects never enter shared state. */
 export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgentController {
   const controller: WorkflowAgentController = { snapshot: null, execute: null, undo: null, batch: null, targetAvailability: null,
-    library: { snapshots: new Map(), handlers: new Map(), reverts: new Map(), revert: null } };
+    library: { snapshots: new Map(), handlers: new Map(), reverts: new Map(), revert: null },
+    inspection: { executables: new Map(), versions: new Map() } };
   controller.library!.revert = token => controller.library!.reverts.get(token)?.() ?? "This change can no longer be reverted on this page.";
   agent.contextProviders.add({
     id: "workflows.active-draft", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow working draft",
@@ -55,6 +67,19 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
     id: "workflows.library-view", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow library page",
     surfaces: ["/workflows"], sensitivity: "internal",
     async collect() { return { attachments: [...(controller.library?.snapshots.values() ?? [])], diagnostics: [] }; }
+  });
+  // The open Executable Inspector's exact Executable, bound to its Artifact Hash (spec 1193 FR-028). The Runtime-side server
+  // package (Elsa.Agent.Workflows.Runtime) admits it; a host without it reports the context kind as unsupported.
+  agent.contextProviders.add({
+    id: "workflows.executable-inspector", moduleId: "Elsa.Studio.Workflows", displayName: "Executable Inspector",
+    surfaces: ["/workflows"], sensitivity: "internal",
+    async collect() { return { attachments: [...(controller.inspection?.executables.values() ?? [])], diagnostics: [] }; }
+  });
+  // The selected persisted workflow version, bound to its version identity (spec 1193 FR-026).
+  agent.contextProviders.add({
+    id: "workflows.version-history", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow version history",
+    surfaces: ["/workflows"], sensitivity: "internal",
+    async collect() { return { attachments: [...(controller.inspection?.versions.values() ?? [])], diagnostics: [] }; }
   });
   for (const capability of workflowAgentCapabilities) agent.capabilities.add({ ...capability, moduleId: "Elsa.Studio.Workflows" });
   for (const starter of workflowPromptStarters) agent.promptStarters.add({ ...starter, moduleId: "Elsa.Studio.Workflows" });

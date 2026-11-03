@@ -24,10 +24,14 @@ describe("weaver workflows module", () => {
     expect(review).toContain("Creates the new tag(s) first");
   });
 
-  it("removes the unbound proposal renderer and the explain-executable prompt until its tool is registered (spec 1193 FR-019)", () => {
+  it("removes the unbound proposal renderer and restores the explain-executable prompt against its registered tool (spec 1193 FR-019)", () => {
     const api = testApi(); register(api);
     expect(api.agent.resultRenderers.list().flatMap(item => item.resultTypes)).not.toContain("workflows.proposal");
-    expect(api.agent.promptActions.list().map(item => item.id)).not.toContain("weaver.workflows.explain-executable");
+    const executable = api.agent.promptActions.list().find(item => item.id === "weaver.workflows.explain-executable")!;
+    const prompt = executable.createPrompt({ artifactId: "artifact-1", artifactHash: "sha256:abc" });
+    expect(prompt.message).toContain("workflow_read_executable");
+    expect(prompt.message).toContain("current draft");
+    expect(prompt.message).not.toContain("get-executable-detail");
     // Instance state, incidents and bookmarks have no context or tool until the Run journey (slice G).
     expect(api.agent.promptActions.list().map(item => item.id)).not.toContain("weaver.workflows.explain-instance");
   });

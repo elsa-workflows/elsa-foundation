@@ -533,10 +533,16 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Equal(moduleId, library.Descriptor.ModuleId);
         Assert.Equal(fixture["librarySource"]!["id"]!.GetValue<string>(), library.Descriptor.Id);
         Assert.Equal(Strings(fixture["librarySource"]!["contextKinds"]!), library.Descriptor.ContextKinds);
+        // The version context source (slice F) is the module's third source.
+        var versions = scope.ServiceProvider.GetServices<IAgentContextProvider>().OfType<WorkflowVersionContextProvider>().Single();
+        Assert.Equal(moduleId, versions.Descriptor.ModuleId);
+        Assert.Equal(fixture["versionSource"]!["id"]!.GetValue<string>(), versions.Descriptor.Id);
+        Assert.Equal(Strings(fixture["versionSource"]!["contextKinds"]!), versions.Descriptor.ContextKinds);
         Assert.All(capabilities, capability =>
         {
             Assert.Equal(moduleId, capability.ModuleId);
-            Assert.All(capability.ContextKinds, kind => Assert.True(source.Descriptor.ContextKinds.Contains(kind) || library.Descriptor.ContextKinds.Contains(kind), kind));
+            Assert.All(capability.ContextKinds, kind => Assert.True(source.Descriptor.ContextKinds.Contains(kind) || library.Descriptor.ContextKinds.Contains(kind)
+                || versions.Descriptor.ContextKinds.Contains(kind), kind));
         });
         var expected = fixture["tools"]!.AsArray().Select(item => (item!["name"]!.GetValue<string>(), item["resultType"]!.GetValue<string>(),
             item["rendererId"]?.GetValue<string>(), item["executionLocation"]!.GetValue<string>())).ToArray();
@@ -547,7 +553,7 @@ public sealed partial class WorkflowExplainContextTests
         // The guidance and the tool and capability texts name only registered tools and context kinds: any tool-like
         // snake_case token, whatever its prefix, must be a tool the composed registry holds.
         var names = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync()).Select(tool => tool.Descriptor.Name).ToHashSet();
-        foreach (var text in new[] { GuidanceText() }.Concat(tools.Select(tool => tool.Description)).Concat(capabilities.Select(item => item.Description)))
+        foreach (var text in new[] { GuidanceText(), WorkflowVersionContext.Guidance().Summary }.Concat(tools.Select(tool => tool.Description)).Concat(capabilities.Select(item => item.Description)))
         {
             foreach (Match match in ToolToken().Matches(text)) Assert.Contains(match.Value, names);
             foreach (Match match in KindToken().Matches(text))

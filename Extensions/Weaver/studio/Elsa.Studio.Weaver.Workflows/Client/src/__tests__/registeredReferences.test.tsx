@@ -12,9 +12,13 @@ import server from "./workflowAgentRegistrations.json";
 // under its own package's module identity.
 const workflowsModule = "Elsa.Studio.Workflows";
 const weaverWorkflowsModule = "Elsa.Studio.Weaver.Workflows";
-const toolNames = new Set(server.tools.map(tool => tool.name));
-const resultTypes = new Set(server.tools.map(tool => tool.resultType));
-const capabilities = new Set(server.capabilities);
+// The Design-side module (Elsa.Agent.Workflows) and the Runtime-side package (Elsa.Agent.Workflows.Runtime, spec 1193 slice F)
+// register under the same Studio module identity; a combined host composes both.
+const allTools = [...server.tools, ...server.runtime.tools];
+const toolNames = new Set(allTools.map(tool => tool.name));
+const resultTypes = new Set(allTools.map(tool => tool.resultType));
+const capabilities = new Set([...server.capabilities, ...server.runtime.capabilities]);
+const contextKinds = new Set([...server.contextKinds, ...server.librarySource.contextKinds, ...server.versionSource.contextKinds, ...server.runtime.contextKinds]);
 
 function compose() {
   const workflows = createAgentRegistry();
@@ -39,7 +43,9 @@ function namedTools(text: string) {
 }
 
 const samples: unknown[] = [{ id: "definition-1", name: "Onboard customer" }, { definition: { id: "definition-1" }, draft: { id: "draft-1" } },
-  { intent: "Send a welcome email", draft: { name: "", description: "" } }, { instanceId: "instance-1" }];
+  { intent: "Send a welcome email", draft: { name: "", description: "" } }, { instanceId: "instance-1" },
+  { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: "ref-1" }, { artifactId: "artifact-1", artifactHash: "sha256:abc", attached: true },
+  { definitionId: "definition-1", versionId: "version-1", version: "1.0.0" }, { definitionId: "definition-1", versionId: "version-1", attached: true }];
 
 describe("registered references of the Workflows packages (spec 1193 SC-007)", () => {
   it("registers each contribution under its own package's module identity", () => {
@@ -101,16 +107,55 @@ describe("registered references of the Workflows packages (spec 1193 SC-007)", (
         for (const name of namedTools(prompt.message)) expect([action.id, name, toolNames.has(name)]).toEqual([action.id, name, true]);
         for (const attachment of prompt.attachments ?? []) {
           expect(attachment.moduleId).toBe(workflowsModule);
-          expect(server.contextKinds).toContain(attachment.contentType);
+          expect([action.id, attachment.contentType, contextKinds.has(attachment.contentType)]).toEqual([action.id, attachment.contentType, true]);
         }
         expect(prompt.source?.moduleId).toBe(weaverWorkflowsModule);
       }
     }
   });
 
+  it("explains an Executable and a version only through their registered read tools, attaching each exact identity once (slice F)", () => {
+    const { weaver } = compose();
+    const executable = weaver.promptActions.list().find(item => item.id === "weaver.workflows.explain-executable")!;
+    const version = weaver.promptActions.list().find(item => item.id === "weaver.workflows.explain-version")!;
+    expect(executable).toMatchObject({ placement: "selection", contextKind: "workflow-executable", moduleId: weaverWorkflowsModule });
+    expect(version).toMatchObject({ placement: "selection", contextKind: "workflow-version", moduleId: weaverWorkflowsModule });
+
+    const fromList = executable.createPrompt({ artifactId: "artifact-1", artifactHash: "sha256:abc", definitionId: "definition-1" });
+    expect(new Set(namedTools(fromList.message))).toEqual(new Set(["workflow_read_executable"]));
+    expect(fromList.attachments).toEqual([expect.objectContaining({
+      id: "workflows.executable:artifact-1", moduleId: workflowsModule, contentType: "workflows.executable", schemaVersion: "1",
+      target: { moduleId: workflowsModule, resourceType: "workflow-executable", resourceId: "artifact-1", revision: "sha256:abc" },
+      content: { artifactId: "artifact-1", artifactHash: "sha256:abc", sourceReferenceId: null }
+    })]);
+    expect(server.runtime.contextKinds).toContain(fromList.attachments![0].contentType);
+    // The inspector contributes the context itself; a context without the hash is never sent half-formed.
+    expect(executable.createPrompt({ artifactId: "artifact-1", artifactHash: "sha256:abc", attached: true }).attachments).toEqual([]);
+    expect(executable.createPrompt({ artifactId: "artifact-1" }).attachments).toEqual([]);
+
+    const fromHistory = version.createPrompt({ definitionId: "definition-1", versionId: "version-1", version: "1.0.0" });
+    expect(new Set(namedTools(fromHistory.message))).toEqual(new Set(["workflow_read_version"]));
+    expect(fromHistory.message).toContain("compareToVersionId");
+    expect(fromHistory.attachments).toEqual([expect.objectContaining({
+      id: "workflows.version:version-1", moduleId: workflowsModule, contentType: "workflows.version",
+      target: { moduleId: workflowsModule, resourceType: "workflow-version", resourceId: "version-1", revision: "version-1" },
+      content: { definitionId: "definition-1", versionId: "version-1" }
+    })]);
+    expect(server.versionSource.contextKinds).toContain(fromHistory.attachments![0].contentType);
+    expect(version.createPrompt({ definitionId: "definition-1", versionId: "version-1", attached: true }).attachments).toEqual([]);
+    expect(version.createPrompt({ versionId: "version-1" }).attachments).toEqual([]);
+  });
+
+  it("contributes the Executable Inspector's and the version history's context under the Workflows module", () => {
+    const { workflows } = compose();
+    const ids = workflows.contextProviders.list().map(item => item.id);
+    expect(ids).toEqual(expect.arrayContaining(["workflows.executable-inspector", "workflows.version-history"]));
+  });
+
   it("fails on the dangling references this slice removed", () => {
     expect(namedTools("call the get-executable-detail tool with this artifact id")).toContain("get-executable-detail");
     expect(toolNames.has("get-executable-detail")).toBe(false);
+    expect(toolNames.has("workflow_read_executable")).toBe(true);
     expect(resultTypes.has("workflows.proposal")).toBe(false);
   });
 });
