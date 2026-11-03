@@ -89,3 +89,15 @@ it("a validation-only save response does not add an author edit", async () => {
   expect(doc.state.draft!.validationErrors[0].message).toBe("Review this draft");
   expect(history.canUndoNow).toBe(false);
 });
+
+it("two queued acknowledgements of one snapshot do not create another edit", async () => {
+  extract(); await vi.advanceTimersByTimeAsync(historyCaptureDelayMs + 1);
+  const snapshot = doc.state.draft!;
+  await Promise.all([persistence.saveDraft(snapshot, "Saved"), persistence.saveDraft(snapshot, "Saved")]);
+  await settle();
+  flushSync(() => history.undo()); expect(firstStep()).toBe("child");
+  const undone = doc.state.draft!;
+  await Promise.all([persistence.saveDraft(undone, "Autosaved"), persistence.saveDraft(undone, "Saved")]);
+  await settle(); expect(history.canRedoNow).toBe(true);
+  flushSync(() => history.redo()); expect(firstStep()).toBe("block");
+});

@@ -146,6 +146,9 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     if (getDraftSignature(latest) !== lastCapturedSignatureRef.current) capture(latest);
     lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(saved);
     lastCapturedSignatureRef.current = getDraftSignature(saved);
+    // The persistence hook adopts this copy immediately after acknowledgement. A second queued save can
+    // acknowledge the same request before React renders that adoption; it must see this accepted position.
+    latestDraftRef.current = saved;
   }, [capture]);
 
   // Collapses any pending (debounced-but-not-yet-captured) edit into the history stack so
