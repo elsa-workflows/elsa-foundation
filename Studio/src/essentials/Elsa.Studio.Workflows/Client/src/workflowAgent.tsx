@@ -30,6 +30,8 @@ export interface WorkflowLibraryAgentController {
 export interface WorkflowInspectionAgentController {
   executables: Map<string, StudioAgentContextAttachment>;
   versions: Map<string, StudioAgentContextAttachment>;
+  /** The run page's exact Run and selected activity execution (spec 1193 slice G). */
+  runs?: Map<string, StudioAgentContextAttachment>;
 }
 
 export interface WorkflowAgentController {
@@ -54,7 +56,7 @@ export interface WorkflowAgentController {
 export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgentController {
   const controller: WorkflowAgentController = { snapshot: null, execute: null, undo: null, batch: null, targetAvailability: null,
     library: { snapshots: new Map(), handlers: new Map(), reverts: new Map(), revert: null },
-    inspection: { executables: new Map(), versions: new Map() } };
+    inspection: { executables: new Map(), versions: new Map(), runs: new Map() } };
   controller.library!.revert = token => controller.library!.reverts.get(token)?.() ?? "This change can no longer be reverted on this page.";
   agent.contextProviders.add({
     id: "workflows.active-draft", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow working draft",
@@ -74,6 +76,13 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
     id: "workflows.executable-inspector", moduleId: "Elsa.Studio.Workflows", displayName: "Executable Inspector",
     surfaces: ["/workflows"], sensitivity: "internal",
     async collect() { return { attachments: [...(controller.inspection?.executables.values() ?? [])], diagnostics: [] }; }
+  });
+  // The run page's exact Run and the activity execution selected on it (spec 1193 FR-029). The Runtime-side server package
+  // admits it; a host without it reports the context kind as unsupported.
+  agent.contextProviders.add({
+    id: "workflows.run-inspector", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow run",
+    surfaces: ["/workflows"], sensitivity: "internal",
+    async collect() { return { attachments: [...(controller.inspection?.runs?.values() ?? [])], diagnostics: [] }; }
   });
   // The selected persisted workflow version, bound to its version identity (spec 1193 FR-026).
   agent.contextProviders.add({

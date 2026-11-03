@@ -217,7 +217,8 @@ says so.
   produced that kind, and it was registered under the Workflows module's identity), the explain-executable prompt (it
   named a `get-executable-detail` tool that was never registered; slice F restores it against `workflow_read_executable`)
   or the test-only `getExecutableDetail` helper, nor the explain-instance prompt (it named instance state, incidents and
-  bookmarks with no instance context or tool; slice G restores it). Its propose-update prompt now asks for one reviewed Operation Batch.
+  bookmarks with no instance context or tool; slice G restored it against the Runtime-side `workflow_read_run` and the
+  run page's `workflows.run` context). Its propose-update prompt now asks for one reviewed Operation Batch.
 
 **SemVer.** The snapshot additions, the read result's `addresses` and the new diagnostic code are **Minor** (optional,
 additive). The removed `workflows.proposal` renderer and the explain-executable and explain-instance prompts are

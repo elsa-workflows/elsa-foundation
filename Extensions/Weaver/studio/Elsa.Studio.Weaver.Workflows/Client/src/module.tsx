@@ -4,12 +4,13 @@ import type {
   StudioAgentContextAttachment,
   StudioAgentResultRendererProps
 } from "@elsa-workflows/studio-sdk";
-import { workflowExecutableAttachment, workflowVersionAttachment } from "@elsa-workflows/studio-workflows";
+import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "@elsa-workflows/studio-workflows";
 
 // Every prompt and renderer below is registered under this package's own module identity, and names only tools and
 // result kinds the Workflows packages register (spec 1193 FR-019, SC-007). The explain-executable prompt reads through the
 // Runtime-side workflow_read_executable (Elsa.Agent.Workflows.Runtime) and the explain-version prompt through
-// workflow_read_version (slice F); the explain-instance prompt returns with the Run context and tool (slice G).
+// workflow_read_version (slice F); the explain-instance prompt reads one exact Run through the Runtime-side
+// workflow_read_run (slice G).
 const moduleId = "Elsa.Studio.Weaver.Workflows";
 
 export function register(api: ElsaStudioModuleApi) {
@@ -79,6 +80,34 @@ export function register(api: ElsaStudioModuleApi) {
         mode: "enqueue",
         attachments: attachment ? [attachment] : [],
         source: { moduleId, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
+      };
+    }
+  });
+
+  // One exact Run, read-only (spec 1193 story 9, FR-029). The run page contributes its own workflows.run context (the Run and
+  // the selected activity execution) and dispatches with attached: true, so this prompt never duplicates it; elsewhere the
+  // prompt attaches the exact identity itself. Never "the latest run" of a definition.
+  api.agent.promptActions.add({
+    id: "weaver.workflows.explain-instance",
+    label: "Explain run",
+    description: "Ask Weaver to explain one exact workflow run read-only: why it faulted, where it waits and what the selected activity execution recorded.",
+    moduleId,
+    placement: "selection",
+    contextKind: "workflow-instance",
+    createPrompt: context => {
+      const attachment = isRecord(context) && context.attached === true ? null : workflowRunAttachment(context);
+      const selected = isRecord(context) && typeof context.activityExecutionId === "string" ? context.activityExecutionId.slice(0, 256) : null;
+      return {
+        message: [
+          "Explain this workflow run read-only: its status, why it faulted or where it is waiting, citing its recorded incidents and activity executions by id" +
+            (selected ? `, and what the selected activity execution ${selected} recorded.` : "."),
+          "Read it with workflow_read_run and name the Run you describe. If it is still in progress, say so and describe it as of the read time the result gives.",
+          "A withheld value stays withheld: never guess it. Report unavailable data as unavailable, with the reason the result gives.",
+          "Weaver never changes a run: refuse any request to retry, cancel, delete or dispatch it again, change nothing, and point to the run page's own controls."
+        ].join("\n"),
+        mode: "enqueue",
+        attachments: attachment ? [attachment] : [],
+        source: { moduleId, actionId: "weaver.workflows.explain-instance", label: "Explain run" }
       };
     }
   });

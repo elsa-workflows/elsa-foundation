@@ -7,10 +7,11 @@ import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent, type WorkflowAgentController } from "../workflowAgent";
 import { useWorkflowInspectionContext } from "../workflow-editor/useWorkflowInspectionContext";
 import { WorkflowVersionHistory } from "../workflow-editor/WorkflowVersionHistory";
-import { workflowExecutableAttachment, workflowVersionAttachment } from "../workflowAgentContext";
+import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "../workflowAgentContext";
 import { renderRegisteredRoute, response } from "./routeRenderingHelpers";
 
-// Spec 1193 slice F (story 8): the Executable Inspector's and the version history's read-only page contexts.
+// Spec 1193 slices F and G (stories 8 and 9): the Executable Inspector's, the version history's and the run page's read-only
+// page contexts.
 
 async function collect(agent: StudioAgentRegistry, id: string): Promise<StudioAgentContextAttachment[]> {
   const provider = agent.contextProviders.list().find(item => item.id === id)!;
@@ -31,8 +32,8 @@ async function click(element: HTMLElement) {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-function Inspected({ controller, identity }: { controller: WorkflowAgentController; identity: Record<string, unknown> | null }) {
-  useWorkflowInspectionContext({ controller, clientId: "client-1", kind: "executable", identity });
+function Inspected({ controller, identity, kind = "executable" }: { controller: WorkflowAgentController; identity: Record<string, unknown> | null; kind?: "executable" | "run" }) {
+  useWorkflowInspectionContext({ controller, clientId: "client-1", kind, identity });
   return null;
 }
 
@@ -54,6 +55,45 @@ describe("read-only page context attachments", () => {
       content: { definitionId: "d-1", versionId: "v-1" }
     });
     expect(workflowVersionAttachment({ versionId: "v-1" })).toBeNull();
+  });
+});
+
+describe("run page context (spec 1193 FR-005, FR-029)", () => {
+  it("binds one exact Run to its instance and the selected activity execution, never the latest run or a half-formed reference", () => {
+    expect(workflowRunAttachment({ workflowExecutionId: "run-1", activityExecutionId: "act-1" }, { clientId: "c", generationId: "g" })).toEqual({
+      id: "workflows.run:run-1", moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", contentType: "workflows.run",
+      sensitivity: "internal", scope: "screen", origin: "clientSnapshot", source: "workflow-run", sourceId: "run-1", label: "Run run-1 · act-1",
+      summary: "Workflow Run run-1, activity execution act-1",
+      target: { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-run", resourceId: "run-1", revision: "act-1" },
+      client: { clientId: "c", generationId: "g" }, content: { workflowExecutionId: "run-1", activityExecutionId: "act-1" }
+    });
+    expect(workflowRunAttachment({ workflowExecutionId: "run-1" })).toMatchObject({
+      target: { resourceId: "run-1", revision: "run-1" }, content: { workflowExecutionId: "run-1", activityExecutionId: null } });
+    expect(workflowRunAttachment({ definitionId: "d-1", latest: true })).toBeNull();
+    expect(workflowRunAttachment({ workflowExecutionId: "run-1", activityExecutionId: "" })).toBeNull();
+    expect(workflowRunAttachment({ workflowExecutionId: "run-1", activityExecutionId: "run-1" })).toBeNull();
+    expect(workflowRunAttachment({ workflowExecutionId: "x".repeat(257) })).toBeNull();
+  });
+
+  it("publishes the shown Run, follows the selected activity execution and withdraws it when unloaded or unmounted", async () => {
+    const agent = createAgentRegistry();
+    const controller = registerWorkflowAgent(agent);
+    const host = mount();
+    host.render(<Inspected kind="run" controller={controller} identity={{ workflowExecutionId: "run-1", activityExecutionId: null }} />);
+    const [first] = await collect(agent, "workflows.run-inspector");
+    expect(first).toMatchObject({ contentType: "workflows.run", target: { resourceId: "run-1", revision: "run-1" }, client: { clientId: "client-1" } });
+    host.render(<Inspected kind="run" controller={controller} identity={{ workflowExecutionId: "run-1", activityExecutionId: "act-2" }} />);
+    const current = await collect(agent, "workflows.run-inspector");
+    expect(current.map(item => item.target?.revision)).toEqual(["act-2"]);
+    expect(current[0].client?.generationId).toBe(first.client?.generationId);
+    // Never mixed into the Executable Inspector's context.
+    expect(await collect(agent, "workflows.executable-inspector")).toEqual([]);
+    host.render(<Inspected kind="run" controller={controller} identity={null} />);
+    expect(await collect(agent, "workflows.run-inspector")).toEqual([]);
+    host.render(<Inspected kind="run" controller={controller} identity={{ workflowExecutionId: "run-1", activityExecutionId: "act-2" }} />);
+    expect(await collect(agent, "workflows.run-inspector")).toHaveLength(1);
+    host.unmount();
+    expect(await collect(agent, "workflows.run-inspector")).toEqual([]);
   });
 });
 

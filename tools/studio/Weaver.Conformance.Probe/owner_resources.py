@@ -1,8 +1,10 @@
 """Native, explicitly owned resources for the witness; no shadow store or validation engine."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
+import time
 from urllib.parse import quote, urljoin, urlparse
 import uuid
 
@@ -339,3 +341,129 @@ def seed_versioned_workflow(http, output, *, publish=True):
         seed.update(publishedVersionId=published["id"], publications=publications, artifactId=artifact_id, artifactHash=executable["artifactHash"],
                     executablePath=executable_path, executable=executable, executableLink=runtime["workflow-executable"])
     return seed
+
+
+# Spec 1193 slice G (T045): one Run of a seeded workflow that faults. Its first activity is a Write Line whose text, a
+# private canary, is authored sensitive (the run case selects the QualificationRunCapture seam first, so the runtime captures
+# it into value evidence, which the run API never returns inline); its second is a Fault, which faults
+# the Run with one blocking incident. A second, waiting Run (an Event that does not start the workflow, so its activity
+# suspends on a bookmark while the Run stays Running) is still in progress while it is explained.
+RUN_NODES = {"root": "run-flow", "sensitive": "run-sensitive", "fault": "run-fault", "wait": "run-wait"}
+RUN_FAULT = {"code": "qualification.run.fault", "message": "Qualification Run fault."}
+RUN_WAIT_EVENT = "qualification-run-wait"
+RUN_FAULT_TYPES = ("Elsa.Activities.Primitives.Activities.Fault", "Elsa.Fault")
+RUN_EVENT_TYPES = ("Elsa.Activities.Primitives.Activities.Event", "Elsa.Event")
+TERMINAL_RUN_STATUSES = ("Completed", "Faulted", "Cancelled")
+
+
+def run_terminal(value):
+    """A Workflow Instance read that has settled finally: Completed, Faulted or Cancelled."""
+    return isinstance(value, dict) and (value.get("instance") or {}).get("status") in TERMINAL_RUN_STATUSES
+
+
+def run_waiting(value, node_id):
+    """A Workflow Instance read that is still in progress and waiting: the runtime reports such a Run as Running (observed
+    natively on d5d731de2), with the waiting activity execution Suspended on its bookmark (subStatus BookmarkWaiting, one
+    bookmark at least). The Run's own status never says Suspended, so the activity's is the waiting signal."""
+    if not isinstance(value, dict) or run_terminal(value) or (value.get("instance") or {}).get("status") not in ("Running", "Suspended"):
+        return False
+    return any(isinstance(item, dict) and item.get("authoredActivityId") == node_id and item.get("status") == "Suspended"
+               and item.get("subStatus") == "BookmarkWaiting" and (item.get("bookmarkCount") or 0) >= 1 for item in value.get("activities") or [])
+
+
+def _digest(root, name, value):
+    """Retains only the SHA-256 of a read that carries the private canary (the definition's own sensitive literal): the
+    evidence proves which read it was without holding the value."""
+    data = json.dumps(value, sort_keys=True).encode()
+    return _retain(root, name + "-digest", {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)})
+
+
+def _run_once(http, output, evidence, workflows, runtime, publishing, name, state, layout, *, settled):
+    """Create, promote and publish one definition, then execute it once and read its Workflow Instance until `settled`
+    accepts it. Every design read that holds the authored state is retained by digest only."""
+    request = {"operationKey": str(uuid.uuid4()), "name": "Weaver run witness " + name + " " + uuid.uuid4().hex[:8],
+               "description": "Owned spec 1193 Run qualification.", "initialState": state, "layout": layout, "activityPresentation": []}
+    evidence.append(_digest(output, name + "-create-request", request))
+    created, _ = http.json(owner_path(http, workflows["workflow-definitions"]), request, method="POST")
+    evidence.append(_digest(output, name + "-created", created))
+    draft_id = created["draft"]["id"]
+    promoted, _ = http.json(owner_path(http, workflows["workflow-draft-promote-exact-version"], draftId=draft_id), {"operationKey": str(uuid.uuid4())},
+                            method="POST", expected=201)
+    evidence.append(_digest(output, name + "-promoted", promoted))
+    publication, _ = http.json(owner_path(http, publishing["workflow-publish"], versionId=promoted["id"]), {}, method="POST", expected=201)
+    evidence.append(_retain(output, name + "-publication", publication))
+    started, _ = http.json(owner_path(http, runtime["workflow-execute"], artifactId=publication["artifactId"]),
+                           {"sourceReferenceId": publication["sourceReferenceId"]}, method="POST")
+    evidence.append(_retain(output, name + "-started", started))
+    run_id = started["workflowExecutionId"]
+    check(isinstance(run_id, str) and run_id, "The runtime did not start the " + name + " Run")
+    instance_path = owner_path(http, runtime["workflow-instance"], workflowExecutionId=run_id)
+    # Execution is asynchronous: read the instance until it settles, without retrying anything.
+    deadline = time.monotonic() + 60
+    while True:
+        instance, _ = http.json(instance_path)
+        if settled(instance) or time.monotonic() > deadline: break
+        time.sleep(0.5)
+    evidence.append(_retain(output, name + "-instance", instance))
+    check(settled(instance), "The " + name + " Run did not settle: " + str((instance.get("instance") or {}).get("status")))
+    return {"workflowExecutionId": run_id, "instancePath": instance_path, "instance": instance, "publication": publication,
+            "definitionId": created["definition"]["id"], "versionId": promoted["id"]}
+
+
+def seed_faulted_run(http, output, canary):
+    """Seed the faulted Run (with the sensitive canary input) and the waiting Run, and read each one's activity executions
+    through the run API. Returns the owning paths and reads the driver compares every Weaver answer with."""
+    check(isinstance(canary, str) and len(canary) >= 24, "Use a distinct Run canary")
+    output = _new_output(output)
+    activities, activity_capability = capability_links(http, "elsa.api.activity-design", output / "activities")
+    workflows, workflow_capability = capability_links(http, "elsa.api.workflow-design", output / "workflows")
+    publishing, publishing_capability = capability_links(http, "elsa.api.publishing", output / "publishing")
+    runtime, runtime_capability = capability_links(http, "elsa.api.runtime", output / "runtime")
+    check(all(key in runtime for key in ("workflow-execute", "workflow-instance", "activity-execution", "workflow-incidents"))
+          and "workflow-publish" in publishing and "workflow-draft-promote-exact-version" in workflows,
+          "The native Run witness needs the real publish, execute, instance, activity execution and incident relations")
+    evidence = [activity_capability, workflow_capability, publishing_capability, runtime_capability]
+    catalog, _ = http.json(owner_path(http, activities["activity-catalog"]))
+    evidence.append(_retain(output, "activity-catalog", catalog))
+    def entry(*type_keys):
+        matches = [item for item in catalog["activities"] if item["activityTypeKey"] in type_keys and item.get("available") is True]
+        check(len(matches) == 1 and bool(matches[0]["activityVersionId"]), "The actual catalog must uniquely supply one of " + ", ".join(type_keys))
+        return matches[0]
+    write, flowchart, fault, event = entry(BATCH_WRITE_LINE), entry(BATCH_FLOWCHART), entry(*RUN_FAULT_TYPES), entry(*RUN_EVENT_TYPES)
+    container, n = _container(flowchart), RUN_NODES
+    literal = lambda key, value, sensitive=None: {"referenceKey": key, "value": {"value": value, "expressionType": "Literal"}, "autoEvaluate": None,
+                                                  "evaluatorType": None, "storageDriverType": None, "isSensitive": sensitive}
+    def root(children, connections, start):
+        payload = json.loads(json.dumps(container["payload"]))
+        payload.update(activities=children, connections=connections, startNodeId=start)
+        return {"variables": [], "inputs": [], "outputs": [], "rootActivity": {"nodeId": n["root"], "activityVersionId": flowchart["activityVersionId"],
+                "inputs": [], "outputs": [], "structure": {"kind": container["kind"], "schemaVersion": "1.0.0", "payload": payload}}}
+    leaf = lambda node_id, version, inputs: {"nodeId": node_id, "activityVersionId": version, "outputs": [], "structure": None, "inputs": inputs}
+    faulted = root([leaf(n["sensitive"], write["activityVersionId"], [literal("text", canary, True)]),
+                    leaf(n["fault"], fault["activityVersionId"], [literal("code", RUN_FAULT["code"]), literal("message", RUN_FAULT["message"])])],
+                   [{"id": n["sensitive"] + "-" + n["fault"], "source": {"nodeId": n["sensitive"], "port": "Done"}, "target": {"nodeId": n["fault"]}}], n["sensitive"])
+    waiting = root([leaf(n["wait"], event["activityVersionId"], [literal("EventName", RUN_WAIT_EVENT), literal("CanStartWorkflow", False)])], [], n["wait"])
+    layout = lambda nodes: [{"nodeId": node, "x": 120 + 300 * index, "y": 160} for index, node in enumerate(nodes)]
+    fault_run = _run_once(http, output, evidence, workflows, runtime, publishing, "faulted", faulted, layout([n["sensitive"], n["fault"]]), settled=run_terminal)
+    check(fault_run["instance"]["instance"]["status"] == "Faulted", "The seeded Run did not fault")
+    wait_run = _run_once(http, output, evidence, workflows, runtime, publishing, "waiting", waiting, layout([n["wait"]]),
+                         settled=lambda value: run_waiting(value, n["wait"]) or run_terminal(value))
+    check(run_waiting(wait_run["instance"], n["wait"]), "The seeded waiting Run is not in progress, waiting on its bookmark: "
+          + str((wait_run["instance"].get("instance") or {}).get("status")))
+    # The run API's own reads of each activity execution, by authored node.
+    for run in (fault_run, wait_run):
+        run["activities"] = {}
+        for item in run["instance"].get("activities") or []:
+            path = owner_path(http, runtime["activity-execution"], workflowExecutionId=run["workflowExecutionId"], activityExecutionId=item["activityExecutionId"])
+            detail, _ = http.json(path)
+            evidence.append(_retain(output, "activity-" + item["activityExecutionId"], detail))
+            run["activities"][item["authoredActivityId"]] = {"path": path, "detail": detail}
+        incidents, _ = http.json(owner_path(http, runtime["workflow-incidents"], workflowExecutionId=run["workflowExecutionId"]))
+        evidence.append(_retain(output, "incidents-" + run["workflowExecutionId"], incidents))
+        run["incidents"] = incidents
+    check(n["sensitive"] in fault_run["activities"] and n["fault"] in fault_run["activities"] and n["wait"] in wait_run["activities"],
+          "The run API does not list every seeded activity execution")
+    # Retained evidence must never hold the canary: every retained read above is the run API's, which never discloses it.
+    for ref in evidence:
+        check(canary.encode() not in Path(ref["path"]).read_bytes(), "A retained seed read holds the Run canary: " + Path(ref["path"]).name)
+    return {"faulted": fault_run, "waiting": wait_run, "nodes": dict(n), "fault": dict(RUN_FAULT), "runtimeLinks": runtime, "evidence": evidence}

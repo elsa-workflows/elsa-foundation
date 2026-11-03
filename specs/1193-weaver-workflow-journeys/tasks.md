@@ -66,17 +66,17 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 ## Slice G: One exact Run (story 9)
 
-- [ ] T042 Add `IWorkflowRunInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Add the `workflows.run` context and `workflow_read_run`, bound to the instance and the activity execution (FR-029, D4).
-- [ ] T043 Redaction and unavailable-by-reason. Refuse run controls.
-- [ ] T044 Studio run-page context provider.
-- [ ] T045 Probe case `workflow-run` with a canary search, and a normal-host journey on the run page (SC-005, FR-036).
-- [ ] T046 Full package conformance witness and the composed Studio suite on the final source. Record the acceptance evidence in spec.md, set its status to Implemented, and close #3442 (SC-010).
+- [x] T042 Add `IWorkflowRunInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Add the `workflows.run` context and `workflow_read_run`, bound to the instance and the activity execution (FR-029, D4).
+- [x] T043 Redaction and unavailable-by-reason. Refuse run controls.
+- [x] T044 Studio run-page context provider.
+- [x] T045 Probe case `workflow-run` with a canary search, and a normal-host journey on the run page (SC-005, FR-036). Implemented (`run_journeys.py`, the `workflow-run` browser journey and the `QualificationRunCapture` seam); native evidence: `{copilot,anthropic}-workflow-run` passed in the complete witness on `8e5657d39`. Pruned and unsupported-backend evidence is unit-tested only (see the plan's Slice G deviation).
+- [x] T046 Full package conformance witness and the composed Studio suite on the final source. Record the acceptance evidence in spec.md, set its status to Implemented, and close #3442 (SC-010).
 
 ## Cross-cutting, in every slice
 
-- [ ] T047 Every new replacement contract has a single-registration guard with a clear diagnostic. Every new implementation is `internal sealed` (FR-032).
-- [ ] T048 Catalogs are updated in the same PR as their code (FR-034), including `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, which lists `DefaultWorkflowAgentContextProvider`.
-- [ ] T049 Evidence is recorded by category, with failures, skips and quarantines as they occurred (FR-037).
+- [x] T047 Every new replacement contract has a single-registration guard with a clear diagnostic. Every new implementation is `internal sealed` (FR-032).
+- [x] T048 Catalogs are updated in the same PR as their code (FR-034), including `Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`, which lists `DefaultWorkflowAgentContextProvider`.
+- [x] T049 Evidence is recorded by category, with failures, skips and quarantines as they occurred (FR-037).
 
 ## Traceability
 
