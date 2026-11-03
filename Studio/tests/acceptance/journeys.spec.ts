@@ -55,6 +55,9 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.getByRole("button", { name: /clear search/i }).press("Enter");
   await expect(search).toHaveValue("");
   await capture(page, info, "connections-list");
+  if (info.project.name === "desktop-light") {
+    await expect(page.getByRole("table", { name: "Connections", exact: true }).getByRole("button", { name: "Create connection", exact: true })).toBeVisible();
+  }
 
   await page.goto("/security/secrets");
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
@@ -82,7 +85,12 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: /^Connection / })).toContainText(`Connection 'qa-${stamp}' created.`);
-  await expect(page.getByRole("row").filter({ hasText: `qa-${stamp}` })).toBeVisible();
+  const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
+  await expect(createdRow).toBeVisible();
+  const nameLink = createdRow.getByRole("button", { name: `qa-${stamp}`, exact: true });
+  // A table can stay inside the viewport while its flexible name column collapses to one character.
+  expect((await nameLink.boundingBox())!.width).toBeGreaterThan(100);
+  expect((await createdRow.boundingBox())!.height).toBeLessThan(160);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
   await capture(page, info, "completed");
@@ -97,6 +105,9 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await create.press("Enter");
   await expect(page.getByRole("searchbox", { name: "Search agents", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(create).toBeFocused();
+  await create.press("Enter");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill(`Acceptance ${info.project.name} ${Date.now()}`);
   await page.getByRole("textbox", { name: /^Purpose/ }).fill("Proofread a supplied text.");
   await capture(page, info, "agent-create");
@@ -113,8 +124,10 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await expect(advanced).not.toHaveAttribute("open");
   await page.getByRole("tab", { name: "Designer", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "agent-designer");
+  await editor.getByRole("combobox", { name: /^Model connection/ }).scrollIntoViewIfNeeded();
+  await capture(page, info, "agent-model");
   await advanced.locator("summary").press("Enter");
-  await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toBeVisible();
+  await advanced.getByRole("textbox", { name: /^Maximum model calls/ }).scrollIntoViewIfNeeded();
   await capture(page, info, "advanced-settings");
   await advanced.locator("summary").press("Enter");
   await page.getByRole("tab", { name: "Inputs & outputs", exact: true }).click();

@@ -18,3 +18,7 @@ Tooling unit tests cover routing, result omissions/skips/failures, lifecycle cle
 ## Initial source dependencies
 
 The strict Agent/creation assertions intentionally cover fixes in unmerged PRs #3769 and #3774. Main a7ed7ac6 reproduces the combined create/list defect (four theme/viewport Agent cases fail); that is negative qualification, not an accepted run. Use an owned local integration commit carrying both prerequisites to qualify the new proof without modifying those PRs or claiming their changes are on main. The quality PR must not be called accepted on main until the prerequisites land and the exact head is revalidated.
+
+## Pilot refinement
+
+Independent inspection of the composed narrow Connections capture found names wrapping one character per line after the earlier collection patch. Preserve the name column's readable minimum width within the existing horizontal table scroller and add a real-row width/height regression. Expand captures to show model and advanced controls inside Studio's inner scroll container; page-level fullPage images alone do not cover that content. This is a reproduced pilot defect and targeted prevention, not a new redesign.
