@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f34a8cd3c4ea6f87138b54c5922ce60b72c03e4f",
+  "last_publish_commit": "02ede10b3eda770ea3e7b818f91f3be7d9fe7875",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -219,8 +219,8 @@
     },
     {
       "package_id": "Elsa.Agent.Workflows",
-      "version": "4.0.16-preview",
-      "commit": "f34a8cd3c4ea6f87138b54c5922ce60b72c03e4f"
+      "version": "4.0.17-preview",
+      "commit": "02ede10b3eda770ea3e7b818f91f3be7d9fe7875"
     },
     {
       "package_id": "Elsa.Api.AspNetCore",
