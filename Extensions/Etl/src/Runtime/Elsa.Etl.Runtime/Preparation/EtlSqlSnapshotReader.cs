@@ -175,7 +175,11 @@ internal static class EtlSqlSnapshotReader
                         writer.WriteStringValue(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                         return;
                     case DateTime dateTime: writer.WriteStringValue(dateTime.ToString("O", CultureInfo.InvariantCulture)); return;
-                    case DateTimeOffset offset: writer.WriteStringValue(offset.ToString("O", CultureInfo.InvariantCulture)); return;
+                    // Npgsql returns a zoned time of day as DateTimeOffset with a placeholder date; refuse it rather than
+                    // invent a timestamp.
+                    case DateTimeOffset offset when !reader.GetDataTypeName(index).StartsWith("time with", StringComparison.OrdinalIgnoreCase):
+                        writer.WriteStringValue(offset.ToString("O", CultureInfo.InvariantCulture));
+                        return;
                     case DateOnly date: writer.WriteStringValue(date.ToString("O", CultureInfo.InvariantCulture)); return;
                     case TimeOnly time: writer.WriteStringValue(time.ToString("O", CultureInfo.InvariantCulture)); return;
                     // A time of day arrives as TimeSpan from SqlClient (and older Npgsql); an interval is a duration, not
@@ -211,7 +215,7 @@ internal static class EtlSqlSnapshotReader
         throw Failure("etl.sql-column-type-unsupported", column.Name);
     }
 
-    // SQL Server names it "time"; PostgreSQL "time without time zone" (a zoned time arrives as DateTimeOffset).
+    // SQL Server names it "time"; PostgreSQL "time without time zone" (a zoned time is refused above).
     private static bool IsTimeOfDay(string dataTypeName) =>
         string.Equals(dataTypeName, "time", StringComparison.OrdinalIgnoreCase) ||
         dataTypeName.StartsWith("time without time zone", StringComparison.OrdinalIgnoreCase);

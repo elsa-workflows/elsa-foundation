@@ -18,7 +18,9 @@ This slice adds a finite `sql` source:
 ## Constitution check
 
 - **Packages and dependencies.** No new package or reference. The contract stays driver-free.
-- **Wrapping** (§2.19). The preparer wraps the reader's driver exceptions, classified by the engine.
+- **Wrapping** (framework §2.23.5). The snapshot reader wraps driver exceptions, classified by the engine, as a preparation failure or a transient exception with the original as the cause; the preparer maps those to its result.
+- **Naming** (§E6). `EtlSqlSource`, `EtlSqlSnapshotReader` and `EtlSqlTransientException` stay within four components.
+- **Public API** (§4.2). `IEtlSqlEngine` gains three required members; it is unshipped (`PublicAPI.Unshipped.txt`), so this is not a breaking change.
 - **Compatibility.**
   - Existing artifacts and identities are byte-identical.
   - No migration: the prepared file input and file positions are reused.

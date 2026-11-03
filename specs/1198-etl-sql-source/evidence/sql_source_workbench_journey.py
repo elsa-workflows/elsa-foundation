@@ -15,6 +15,7 @@ import hashlib
 import http.cookiejar
 import json
 import os
+import secrets
 from pathlib import Path
 import shutil
 import subprocess
@@ -80,7 +81,9 @@ def psql(container: str, sql: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-SQLSERVER_PASSWORD = "Etl_Journey_1198"
+# A throwaway container's administrator password, generated per run so no credential is committed. It meets SQL Server's
+# complexity rule: upper case, lower case, digits and a symbol.
+SQLSERVER_PASSWORD = "Etl!" + secrets.token_hex(12)
 
 
 def sqlcmd(container: str, sql: str, database: str = "warehouse") -> list[str]:

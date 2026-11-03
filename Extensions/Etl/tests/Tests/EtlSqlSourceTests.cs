@@ -64,6 +64,11 @@ public sealed class EtlSqlSourceTests : IDisposable
         AssertRejected(Pipeline(Source(key: ["id", "id"])), "source.sql-key-invalid");
         AssertRejected(Pipeline(Source(key: ["missing"])), "source.sql-key-invalid");
         AssertRejected(Pipeline(Source(key: ["score"])), "source.sql-key-invalid");
+        var longest = "c" + new string('x', 62);
+        Assert.NotNull(Compile(Pipeline(Source(table: "p" + new string('x', 62),
+            columns: [new("id", EtlColumnType.Int64, true), new(longest, EtlColumnType.String, false)]))).Artifact);
+        AssertRejected(Pipeline(Source(columns: [new("id", EtlColumnType.Int64, true), new(longest + "x", EtlColumnType.String, false)])),
+            "source.sql-identifier-invalid");
         var nine = Enumerable.Range(0, 9).Select(index => new EtlColumn($"k{index}", EtlColumnType.Int64, true)).ToArray();
         AssertRejected(Pipeline(Source(columns: nine, key: nine.Select(column => column.Name).ToArray())), "source.sql-key-invalid");
         Assert.NotNull(Compile(Pipeline(Source(columns: nine, key: nine.Take(8).Select(column => column.Name).ToArray()))).Artifact);
@@ -278,6 +283,21 @@ public sealed class EtlSqlSourceTests : IDisposable
         Assert.Equal("Ada", batch.Records[0].Row!.Values["name"].Value);
         Assert.Equal(1.5m, batch.Records[0].Row!.Values["score"].Value);
         Assert.Equal(false, batch.Records[2].Row!.Values["active"].Value);
+    }
+
+    [Fact]
+    public async Task A_change_committed_after_preparation_does_not_reach_the_batches()
+    {
+        Execute("INSERT INTO people VALUES (1, 'Ada', NULL, NULL, NULL), (2, 'Bram', NULL, NULL, NULL)");
+        var admission = Admission(Pipeline());
+        var prepared = (await Preparer().PrepareAsync(admission)).Prepared!;
+
+        // After the preparation and before any partition runs.
+        Execute("UPDATE people SET name = 'changed'; DELETE FROM people WHERE id = 2; INSERT INTO people VALUES (3, 'Cleo', NULL, NULL, NULL)");
+        await using var builder = await EtlConnectorInputBatchBuilder.OpenAsync(SnapshotRoot, admission, prepared, 0);
+        var batch = (await builder.BuildNextAsync(new EtlConnectorFilePosition(1, 3, 1))).Batch!;
+
+        Assert.Equal(["Ada", "Bram"], batch.Records.Select(record => (string)record.Row!.Values["name"].Value!));
     }
 
     [Fact]

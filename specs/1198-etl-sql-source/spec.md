@@ -59,7 +59,7 @@ Writers keep changing the table while the run reads it. The run sees the table a
 
 ### User Story 4 — Author and inspect a SQL source (Priority: P2)
 
-An author picks a SQL source binding in Studio, names the table, declares columns and selects key columns. Inspection shows the run's source as a SQL snapshot with its record count.
+An author picks a SQL source binding in Studio, names the table, declares columns and selects key columns. Inspection shows the run's source as a SQL snapshot; the source record count is the generic run detail.
 
 **Independent Test**: component tests cover the authoring controls, and a fixture-backed browser test checks them with axe at 320 px and 1024 px.
 
@@ -72,13 +72,13 @@ An author picks a SQL source binding in Studio, names the table, declares column
 
   | Declared type | Accepted database values |
   |---------------|--------------------------|
-  | `String` | text; a GUID; a timestamp or time of day in ISO 8601 invariant form; a `date` column as `yyyy-MM-dd`. An interval is refused. |
+  | `String` | text; a GUID; a timestamp or time of day in ISO 8601 invariant form; a `date` column as `yyyy-MM-dd`. An interval and a zoned time of day are refused. |
   | `Int64` | 8-, 16-, 32- and 64-bit integers |
   | `Decimal` | exact decimals within .NET `decimal` range, and integers |
   | `Boolean` | booleans (`bit` on SQL Server) |
 
   Floating-point columns are refused, so a value is never rounded silently. Text is retained as raw UTF-8. SQL Server's driver replaces an unpaired surrogate in `nvarchar` text with U+FFFD before the reader sees it; PostgreSQL never stores one.
-- **Size.** The snapshot is bounded by the pipeline's `MaxSnapshotBytes` and each record by `MaxRecordBytes`, with `etl.snapshot-too-large`. A row longer than `MaxRecordBytes` is a record error, `etl.record-too-large`, on the error route, as for JSON Lines input. The record count is bounded as for JSON Lines input.
+- **Size.** The snapshot is bounded by the pipeline's `MaxSnapshotBytes`, with `etl.snapshot-too-large`. A row longer than `MaxRecordBytes` is a record error, `etl.record-too-large`, on the error route, as for JSON Lines input. The record count is bounded as for JSON Lines input.
 - **Isolation.**
   - PostgreSQL reads in a `REPEATABLE READ READ ONLY` transaction, which is snapshot isolation there.
   - SQL Server reads under `SNAPSHOT` isolation, which needs the database option `ALLOW_SNAPSHOT_ISOLATION ON`.

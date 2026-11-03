@@ -100,7 +100,7 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   warning, and preparation runs again once its lease lapses, so an outage pauses the run. The read has no command
   timeout; the lease bounds it.
 - **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and timestamps or times of day (ISO 8601 invariant
-  text); a `date` column is written as `yyyy-MM-dd`, and an interval is refused; `Int64` accepts 8- to
+  text); a `date` column is written as `yyyy-MM-dd`, and an interval or a zoned time of day (PostgreSQL `timetz`) is refused; `Int64` accepts 8- to
   64-bit integers; `Decimal` accepts exact decimals within .NET `decimal` range and integers; `Boolean` accepts booleans
   (`bit` on SQL Server). Any other value, including a floating-point column, fails preparation with
   `etl.sql-column-type-unsupported`, naming the column. A NULL in a required column is a record error on the error route.

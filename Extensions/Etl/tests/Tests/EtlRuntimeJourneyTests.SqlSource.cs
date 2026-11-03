@@ -21,8 +21,9 @@ public sealed partial class EtlRuntimeJourneyTests
     {
         await using var files = new RuntimeFiles("");
         var source = CreateSqlSourceTable(files);
+        var engine = new SqliteEtlSqlEngine();
         var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
-            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(engine),
             configureRuntime: runtime => runtime.SqlBindings.Add(SqlSourceBinding(files.Scope, source)));
         var invocation = ConnectorInvocation(files.Scope, "sql-source", SqlSourcePipeline());
 
@@ -31,6 +32,8 @@ public sealed partial class EtlRuntimeJourneyTests
 
         Assert.Equal((EtlRunStatus.BusinessError, "etl.rows-rejected"), (run.Status, run.TerminalResult!.Diagnostic!.Code));
         Assert.Equal((3, 1, 0, 0), (run.AcceptedRecords, run.RejectedRecords, run.OutstandingRecords, run.OutstandingBytes));
+        // Both partitions read the one retained snapshot; the table is read once.
+        Assert.Equal(1, engine.SnapshotReads);
         Assert.Equal(["Ada", "Bram", "Cleo"], ReadJsonlNames(files.OutputRoot));
         await using var scope = host.Services.CreateAsyncScope();
         Assert.Equal(2, await scope.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().ConnectorPartitions

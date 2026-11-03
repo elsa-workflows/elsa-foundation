@@ -213,6 +213,19 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
     protected override string ZonedLiteral => "'2026-11-03 10:15:30+01'";
 
     [SkippableFact]
+    public async Task A_zoned_time_of_day_is_refused_rather_than_given_a_placeholder_date()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL, clock timetz NULL)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, clock) VALUES (1, '10:15:30+01')");
+
+        var failure = await Assert.ThrowsAsync<EtlConnectorPreparationFailure>(() => ReadSnapshotOnAsync(fixture.ConnectionString,
+            new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true), new("clock", EtlColumnType.String, false)], ["id"])));
+
+        Assert.Equal(("etl.sql-column-type-unsupported", "clock"), (failure.Diagnostic.Code, failure.Diagnostic.Field));
+    }
+
+    [SkippableFact]
     public async Task An_interval_is_a_duration_not_a_time_and_is_refused()
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
