@@ -122,6 +122,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                 case WorkflowExecutableReferenceRejectedException rejected when runtime.ExecutableArms:
                     await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status409Conflict, rejected.Message);
                     return true;
+                case WorkflowExecutableStartRejectedException { Category: WorkflowExecutableStartRejectionCategory.Input } refused when runtime.ExecutableArms:
+                    await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status400BadRequest, refused.Message);
+                    return true;
                 case WorkflowAlterationResourceNotFoundException when runtime.NotFoundArms:
                 case EntityNotFoundException when runtime.NotFoundArms:
                     context.Response.StatusCode = StatusCodes.Status404NotFound;

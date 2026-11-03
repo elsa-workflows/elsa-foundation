@@ -1185,6 +1185,7 @@ Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException.
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Authority = 0 -> Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Policy = 1 -> Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
+Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory.Input = 2 -> Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectionCategory
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerExtractionException
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerExtractionException.ArtifactId.get -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowTriggerExtractionException.ExecutableNodeId.get -> string!

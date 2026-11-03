@@ -267,6 +267,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     [Theory]
     [InlineData(typeof(WorkflowExecutableNotFoundException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(WorkflowExecutableReferenceRejectedException), HttpStatusCode.Conflict)]
+    [InlineData(typeof(WorkflowExecutableStartRejectedException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(ArgumentException), HttpStatusCode.BadRequest)]
     [InlineData(typeof(InvalidOperationException), HttpStatusCode.InternalServerError)]
     public async Task Execute_maps_expected_failures_to_problem_details_without_disclosing_unexpected_errors(
@@ -278,6 +279,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
             ? new WorkflowExecutableNotFoundException("artifact-1")
             : exceptionType == typeof(WorkflowExecutableReferenceRejectedException)
                 ? new WorkflowExecutableReferenceRejectedException("artifact-1", WorkflowExecutableReferenceScope.Published, WorkflowExecutableReferenceRejectionReason.SelectionNotFound)
+                : exceptionType == typeof(WorkflowExecutableStartRejectedException)
+                    ? new WorkflowExecutableStartRejectedException(WorkflowExecutableStartRejectionCategory.Input, "runtime.input.missing-required", "Required workflow input 'count' was not supplied.")
                 : exceptionType == typeof(ArgumentException)
                     ? new ArgumentException("invalid execute request", "sourceReferenceId")
                     : new InvalidOperationException(secret);
