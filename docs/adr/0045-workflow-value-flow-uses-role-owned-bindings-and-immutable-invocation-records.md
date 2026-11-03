@@ -109,9 +109,14 @@ a visible policy, never through where it came from.
   That policy substitutes the target's default instead of failing. Where it is set (for the workflow, per input, or
   both) and which default it uses (declared or type default) is settled in the implementing spec. It is visible in
   the workflow and pinned in the executable.
+  - **A type without a non-null default** (for example a non-nullable `String`, or a JSON object) leaves the policy
+    nothing to substitute, so `null` for such a target still fails with `VF-ACT-004`. Where an activity handles
+    `null` correctly, its input is declared nullable instead; the policy never works around an activity's contract.
+    Found by the implementing spec ([#3726](https://github.com/elsa-workflows/elsa-foundation/pull/3726), Q5).
 - **An omitted member** takes its declared default first.
   - An optional member without a declared default materializes as `null` when its type is nullable, and otherwise as
-    its type's default. This is defined behaviour from the contract, not a silent fallback.
+    its type's default. This is defined behaviour from the contract, not a silent fallback. A non-nullable type
+    without a non-null default needs a declared default; publication refuses the member without one (`VF-ACT-003`).
   - An omitted required activity input still fails publication (`VF-ACT-003`).
   - An omitted required workflow-request member is refused when the workflow instance is admitted, before the start
     checkpoint, not when a later step reads it.
