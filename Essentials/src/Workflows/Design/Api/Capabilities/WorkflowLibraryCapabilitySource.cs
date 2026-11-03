@@ -6,7 +6,7 @@ using Elsa.Workflows.Design.Api.Services;
 namespace Elsa.Workflows.Design.Api.Capabilities;
 
 internal sealed class WorkflowLibraryCapabilitySource(IWorkflowLibraryStore? store = null,
-    WorkflowOrganizationOptions? organization = null) : IApiCapabilitySource
+    WorkflowOrganizationOptions? organization = null, IWorkflowFolderDeletionStore? deletion = null) : IApiCapabilitySource
 {
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(store is null ? [] :
@@ -17,6 +17,9 @@ internal sealed class WorkflowLibraryCapabilitySource(IWorkflowLibraryStore? sto
              new("workflow-folder-rename", "design/workflows/folders/{folderId}/rename", templated: true),
              new("workflow-folder-move", "design/workflows/folders/{folderId}/move", templated: true),
              new("workflow-folder-delete-empty", "design/workflows/folders/{folderId}", templated: true),
+             ..deletion is null ? Array.Empty<ApiCapabilityLink>() : [
+                 new("workflow-folder-deletion-preview", "design/workflows/folders/{folderId}/deletion-preview", templated: true),
+                 new("workflow-folder-delete", "design/workflows/folders/{folderId}/delete", templated: true)],
              new("workflow-definition-folder-move", "design/workflows/definitions/move"),
              new("workflow-organization", "design/workflows/definitions/{definitionId}/organization", templated: true),
              new("workflow-tags", "design/workflows/tags"),

@@ -10,7 +10,11 @@ Open **Workflows** to browse **All workflows**, **Unfiled**, or a folder. Expand
 
 Create a folder at the current level, then create a workflow inside it. Use **Move to folder** for one workflow or a selected group. A group move succeeds for the entire selection or leaves it unchanged. Rename or move folders as your organization evolves; workflow links retain their identity.
 
-Delete a folder only after moving its child folders and workflows elsewhere. Deleted workflows retain their placement and also prevent an empty-folder deletion. Restoring a workflow restores its organization.
+Deleting a folder previews its contents independently of the current list filters. By default, workflows move to the parent folder, or **Unfiled** for a top-level folder. Child folders move up one level with their hierarchy and workflows intact. A conflicting child-folder name must be resolved before deletion.
+
+The **Also delete** checkbox starts unchecked and applies only to active workflows directly in that folder. The confirmation button names the number affected. These workflows remain restorable from the Deleted view; workflows inside child folders are preserved. Already deleted workflows move to the surviving destination and retain their deletion state. The folder itself cannot be restored.
+
+If contents change after the preview, reload and confirm again. Older backends support only empty-folder deletion; move their child folders and workflows elsewhere first, including deleted workflows.
 
 ## Tags and classifications
 

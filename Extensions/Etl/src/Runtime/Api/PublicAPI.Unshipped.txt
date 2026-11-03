@@ -440,3 +440,27 @@ static Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.operator !=(Elsa.Etl.Runtime.
 static Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? left, Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? right) -> bool
 Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.FormatVersion.get -> int
 Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.FormatVersion.init -> void
+Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint
+Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView!
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Deconstruct(out string! Result) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.EtlRunCompletionView(string! Result) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Result.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Result.init -> void
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.CompleteAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView!>!
+const Elsa.Etl.Runtime.Api.EtlRuntimePermissions.CompleteRuns = "etl/runs:complete" -> string!
+override Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.CompleteRun.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView!>!
+override Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.ToString() -> string!
+static Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView? left, Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView? left, Elsa.Etl.Runtime.Api.Models.EtlRunCompletionView? right) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.NextPollAt.get -> System.DateTimeOffset?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.NextPollAt.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.CompletionRequestedAt.get -> System.DateTimeOffset?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.CompletionRequestedAt.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.Mode.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.Mode.init -> void

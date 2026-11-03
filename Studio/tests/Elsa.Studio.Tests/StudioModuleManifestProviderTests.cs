@@ -85,7 +85,7 @@ public sealed class StudioModuleManifestProviderTests
         // Weaver is a backend-only AI module: it carries capabilities but ships no frontend bundle, so AssetPath stays null.
         new("Elsa.Studio.Weaver.Workflows", "Weaver workflows",
             ShellFeatureName: "WeaverWorkflowsStudio",
-            Capabilities: ["weaver-workflows", "ai-context-providers", "ai-prompt-actions", "ai-proposal-renderers", "ai-tools"])
+            Capabilities: ["weaver-workflows", "ai-prompt-actions", "ai-proposal-renderers"])
     };
 
     [Theory]
@@ -248,8 +248,10 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(featureManagement.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
 
         var weaver = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
-        Assert.Contains(weaver.Contributions, x => x.Type == "ai-context-providers" && x.Label == "AI context providers");
         Assert.Contains(weaver.Contributions, x => x.Type == "ai-prompt-actions" && x.Label == "AI prompt actions");
+        Assert.Contains(weaver.Contributions, x => x.Type == "ai-proposal-renderers" && x.Label == "AI proposal renderers");
+        // Its context provider and tool contracts are the Workflows module's own (spec 1193 FR-030), so it declares neither.
+        Assert.DoesNotContain(weaver.Contributions, x => x.Type is "ai-context-providers" or "ai-tools");
     }
 
     [Fact]

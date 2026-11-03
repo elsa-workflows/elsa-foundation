@@ -11,9 +11,15 @@ import zipfile
 
 from autonomy_journeys import MATRIX_QUALIFICATION, MODE_QUALIFICATION, autonomy_stages
 from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
+from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASES, SECTION as WORKFLOW_AUTHORIZATION_SECTION
 from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceError, validate_complete_witness, validate_report,
                       witness_gaps, witness_manifest)
 from restart_journeys import RESTART_QUALIFICATION
+from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES, SECTION as TRUTH_SEAM_SECTION, synthetic_actors, synthetic_browser, synthetic_registrations
+from batch_journeys import EXPECTED_CASES as BATCH_CASES, SECTION as BATCH_SECTION, synthetic_browser as synthetic_batch_browser, synthetic_native
+from library_journeys import EXPECTED_CASES as LIBRARY_CASES, SECTION as LIBRARY_SECTION, synthetic_browser as synthetic_library_browser, synthetic_native as synthetic_library_native
+from explain_journeys import (EXPECTED_CASES as EXPLAIN_CASES, SECTION as EXPLAIN_SECTION, synthetic_browser as synthetic_explain_browser,
+                              synthetic_native as synthetic_explain_native, synthetic_search)
 from test_autonomy_journeys import complete_autonomy_section
 from test_restart_journeys import complete_restart_section
 
@@ -161,13 +167,40 @@ class QualificationTests(unittest.TestCase):
 
 
 def complete_witness_report(base):
-    """Extend the synthetic original38 report with the four current-authority, 26 autonomy and 20 + 1 restart records."""
+    """Extend the synthetic original38 report with the four current-authority, two workflow-authorization, 26 autonomy and 20 + 1 restart records."""
     report = copy.deepcopy(base.report)
     report["witnessManifest"] = witness_manifest()
     names = sorted(AUTHORITY_CASES)
     report["contextDisclosureQualification"] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
         "source": base.source, "caseIDs": names, "stages": [],
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed"})} for name in names]}
+    workflow = sorted(WORKFLOW_AUTHORIZATION_CASES)
+    report[WORKFLOW_AUTHORIZATION_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": workflow, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "causeDisclosed": False})} for name in workflow]}
+    truth = sorted(TRUTH_SEAM_CASES)
+    report[TRUTH_SEAM_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": truth, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "actors": synthetic_actors(),
+                                                                           "registrations": synthetic_registrations(), "browser": synthetic_browser()})} for name in truth]}
+    batch = sorted(BATCH_CASES)
+    report[BATCH_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": batch, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "native": synthetic_native(), "browser": synthetic_batch_browser()})} for name in batch]}
+    explain = sorted(EXPLAIN_CASES)
+    report[EXPLAIN_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": explain, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "native": synthetic_explain_native(), "browser": synthetic_explain_browser(),
+                                                                           "canarySearch": synthetic_search()})} for name in explain]}
+    library = sorted(LIBRARY_CASES)
+    report[LIBRARY_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": library, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "native": synthetic_library_native(name), "browser": synthetic_library_browser(name)})} for name in library]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
     report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
@@ -190,9 +223,16 @@ class CompleteWitnessTests(unittest.TestCase):
 
     def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 26, 20, 1, 89), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
-                                                  len(manifest["autonomyCases"]), len(manifest["restartCases"]),
-                                                  len(manifest["restartControls"]), manifest["expectedCaseCount"]))
+        self.assertEqual((38, 4, 2, 2, 2, 2, 4, 26, 20, 1, 101), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+                                                     len(manifest["workflowAuthorizationCases"]), len(manifest["workflowTruthSeamCases"]),
+                                                     len(manifest["workflowBatchCases"]), len(manifest["workflowExplainCases"]), len(manifest["workflowLibraryCases"]),
+                                                     len(manifest["autonomyCases"]), len(manifest["restartCases"]),
+                                                     len(manifest["restartControls"]), manifest["expectedCaseCount"]))
+        self.assertEqual(["anthropic-workflow-authorization-unavailable", "copilot-workflow-authorization-unavailable"],
+                         manifest["workflowAuthorizationCases"])
+        self.assertEqual(["anthropic-workflow-truth-seams", "copilot-workflow-truth-seams"], manifest["workflowTruthSeamCases"])
+        self.assertEqual(["anthropic-workflow-batch", "copilot-workflow-batch"], manifest["workflowBatchCases"])
+        self.assertEqual(["anthropic-workflow-explain", "copilot-workflow-explain"], manifest["workflowExplainCases"])
         self.assertEqual(10, len({name.split("-", 1)[1] for name in manifest["restartCases"]}))
         self.assertTrue(all(name.split("-", 1)[0] in ("copilot", "anthropic") for name in manifest["autonomyCases"]))
         self.assertEqual(13, len({name.split("-", 1)[1] for name in manifest["autonomyCases"]}))
@@ -264,6 +304,66 @@ class CompleteWitnessTests(unittest.TestCase):
             "manifest-absent": lambda r: r.pop("witnessManifest"),
             "manifest-shrunk": lambda r: r["witnessManifest"].update(autonomyCases=r["witnessManifest"]["autonomyCases"][:8]),
             "manifest-without-restarts": lambda r: r["witnessManifest"].pop("restartCases"),
+            "manifest-without-workflow-authorization": lambda r: r["witnessManifest"].pop("workflowAuthorizationCases"),
+            "workflow-authorization-absent": lambda r: r.pop(WORKFLOW_AUTHORIZATION_SECTION),
+            "workflow-authorization-failed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION].update(status="failed"),
+            "workflow-authorization-live-claim": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION].update(liveProvider=True),
+            "workflow-authorization-foreign-source": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION].update(source="b" * 40),
+            "workflow-authorization-missing": lambda r: (r[WORKFLOW_AUTHORIZATION_SECTION]["caseIDs"].pop(), r[WORKFLOW_AUTHORIZATION_SECTION]["records"].pop()),
+            "workflow-authorization-duplicate": lambda r: (r[WORKFLOW_AUTHORIZATION_SECTION]["caseIDs"].append(r[WORKFLOW_AUTHORIZATION_SECTION]["caseIDs"][0]),
+                                                           r[WORKFLOW_AUTHORIZATION_SECTION]["records"].append(r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0])),
+            "workflow-authorization-record-failed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"], "status": "failed"})),
+            "workflow-authorization-record-disclosed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"], "status": "passed",
+                 "adapter": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"].split("-", 1)[0], "causeDisclosed": True})),
+            "workflow-authorization-record-changed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "manifest-without-truth-seams": lambda r: r["witnessManifest"].pop("workflowTruthSeamCases"),
+            "truth-seams-absent": lambda r: r.pop(TRUTH_SEAM_SECTION),
+            "truth-seams-failed": lambda r: r[TRUTH_SEAM_SECTION].update(status="failed"),
+            "truth-seams-live-claim": lambda r: r[TRUTH_SEAM_SECTION].update(liveProvider=True),
+            "truth-seams-missing": lambda r: (r[TRUTH_SEAM_SECTION]["caseIDs"].pop(), r[TRUTH_SEAM_SECTION]["records"].pop()),
+            "truth-seams-record-changed": lambda r: r[TRUTH_SEAM_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "truth-seams-reader-could-manage": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "actors": {**synthetic_actors(), "reader": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}},
+                 "registrations": synthetic_registrations(), "browser": synthetic_browser()})),
+            "truth-seams-tenant-activity-leaked": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "actors": {**synthetic_actors(), "tenant-reader": {"permissions": None, "catalog": {"tenantOnly": True, "status": "available"}}},
+                 "registrations": synthetic_registrations(), "browser": synthetic_browser()})),
+            "batch-absent": lambda r: r.pop(BATCH_SECTION),
+            "batch-failed": lambda r: r[BATCH_SECTION].update(status="failed"),
+            "batch-live-claim": lambda r: r[BATCH_SECTION].update(liveProvider=True),
+            "batch-missing": lambda r: (r[BATCH_SECTION]["caseIDs"].pop(), r[BATCH_SECTION]["records"].pop()),
+            "batch-record-changed": lambda r: r[BATCH_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "batch-control-missing": lambda r: r[BATCH_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[BATCH_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[BATCH_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": {key: value for key, value in synthetic_native().items() if key != "credential-literal"}, "browser": synthetic_batch_browser()})),
+            "batch-offered-to-reader": lambda r: r[BATCH_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[BATCH_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[BATCH_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": {**synthetic_native(), "no-manage": {"offered": True}}, "browser": synthetic_batch_browser()})),
+            "batch-autosaved": lambda r: r[BATCH_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[BATCH_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[BATCH_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": synthetic_native(), "browser": {**synthetic_batch_browser(), "observations": {**synthetic_batch_browser()["observations"], "autosaveSuspended": False}}})),
+            "manifest-without-batch": lambda r: r["witnessManifest"].pop("workflowBatchCases"),
+            "explain-absent": lambda r: r.pop(EXPLAIN_SECTION),
+            "explain-failed": lambda r: r[EXPLAIN_SECTION].update(status="failed"),
+            "explain-live-claim": lambda r: r[EXPLAIN_SECTION].update(liveProvider=True),
+            "explain-missing": lambda r: (r[EXPLAIN_SECTION]["caseIDs"].pop(), r[EXPLAIN_SECTION]["records"].pop()),
+            "explain-record-changed": lambda r: r[EXPLAIN_SECTION]["records"][0]["record"].update(sha256="0" * 64),
+            "explain-turn-missing": lambda r: r[EXPLAIN_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[EXPLAIN_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[EXPLAIN_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": {key: value for key, value in synthetic_explain_native().items() if key != "validation"},
+                 "browser": synthetic_explain_browser(), "canarySearch": synthetic_search()})),
+            "explain-canary-found": lambda r: r[EXPLAIN_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[EXPLAIN_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[EXPLAIN_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": synthetic_explain_native(), "browser": synthetic_explain_browser(), "canarySearch": {"files": 3, "found": 1}})),
+            "explain-saved": lambda r: r[EXPLAIN_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[EXPLAIN_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[EXPLAIN_SECTION]["records"][0]["id"].split("-", 1)[0],
+                 "native": synthetic_explain_native(), "canarySearch": synthetic_search(),
+                 "browser": {**synthetic_explain_browser(), "observations": {**synthetic_explain_browser()["observations"], "draftUnchanged": False}}})),
+            "manifest-without-explain": lambda r: r["witnessManifest"].pop("workflowExplainCases"),
             "matrix-stage-missing": lambda r: r["stages"].pop(),
             "matrix-stage-repeated": lambda r: r["stages"].append(copy.deepcopy(r["stages"][-1])),
             "failed-stage": lambda r: r["stages"][0].update(exitCode=1),

@@ -6,8 +6,9 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.Schedu
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The claimable-backlog discovery contract (#2188) every scheduler work queue provider meets, written once so the
-/// in-memory queue and each EF Core provider are held to the same semantics. Each scenario expects an empty queue.
+/// The claimable-backlog discovery contract (#2188) every scheduler work queue provider meets, with the head-of-line rule
+/// a delay by identity keeps (#3690), written once so the in-memory queue and each EF Core provider are held to the same
+/// semantics. Each scenario expects an empty queue.
 /// </summary>
 internal static class SchedulerWorkQueueClaimableDiscoveryContract
 {
@@ -73,6 +74,51 @@ internal static class SchedulerWorkQueueClaimableDiscoveryContract
         Assert.Equal("work-1", next["wf-claimed"].WorkItemId);
         var claim = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-two", "owner-probe", Now, Lease));
         Assert.Equal(next["wf-two"].WorkItemId, claim?.Item.WorkItemId);
+    }
+
+    /// <summary>
+    /// Delays one item by its identity behind a head another writer queued first (#3690). The head stays claimable and is
+    /// served first; the delayed item, once it is the head, hides its execution until it is due, so later work does not
+    /// overtake it. A claim that has not lapsed keeps its item; a lapsed one is fenced out by the delay.
+    /// </summary>
+    public static async Task DefersOneItemByIdentityBehindAnEarlierHeadAsync(IWorkflowSchedulerWorkQueue queue)
+    {
+        var deferral = Assert.IsAssignableFrom<IWorkflowSchedulerWorkDeferral>(queue);
+        await queue.EnqueueAsync(Work("wf-deferred", "work-1", 1));
+        await queue.EnqueueAsync(Work("wf-deferred", "work-2", 2));
+        await queue.EnqueueAsync(Work("wf-deferred", "work-3", 3));
+        var due = Now + Lease;
+
+        Assert.True(await deferral.DeferAsync("wf-deferred", "work-2", Now, due));
+        Assert.False(await deferral.DeferAsync("wf-deferred", "work-absent", Now, due));
+
+        Assert.Equal([("work-1", (DateTimeOffset?)null), ("work-2", due), ("work-3", null)],
+            (await Assert.IsAssignableFrom<IWorkflowSchedulerWorkVisibilityReader>(queue)
+                .ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-deferred"))).Items
+            .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter)));
+        Assert.Equal(["wf-deferred"], await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(Now)));
+        var head = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-deferred", "owner-a", Now, Lease));
+        Assert.Equal("work-1", head?.Item.WorkItemId);
+        Assert.True((await queue.CompleteClaimAsync(head!)).Succeeded);
+
+        Assert.Empty(await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(due - TimeSpan.FromTicks(1))));
+        Assert.Null(await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-deferred", "owner-a", due - TimeSpan.FromTicks(1), Lease)));
+        Assert.Equal(["wf-deferred"], await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(due)));
+        var live = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-deferred", "owner-b", due, Lease));
+        Assert.Equal("work-2", live?.Item.WorkItemId);
+
+        Assert.False(await deferral.DeferAsync("wf-deferred", "work-2", due, due + Lease + Lease));
+        var kept = Assert.Single(await Assert.IsAssignableFrom<IWorkflowSchedulerWorkClaimInspection>(queue).ListActiveClaimsAsync("wf-deferred", due));
+        Assert.Equal((live!.Item.WorkItemId, live.FencingToken, live.VisibleAfter), (kept.Item.WorkItemId, kept.FencingToken, kept.VisibleAfter));
+
+        Assert.True(await deferral.DeferAsync("wf-deferred", "work-2", due + Lease, due + Lease));
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, (await queue.CompleteClaimAsync(live)).Status);
+        var redelivered = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-deferred", "owner-c", due + Lease, Lease));
+        Assert.Equal("work-2", redelivered?.Item.WorkItemId);
+        // The deferral advanced the fencing token itself, as the claim of a claim and release would, so the claim that
+        // redelivers the item is fenced past both the lapsed claim and the deferral; a plain release would leave it one past.
+        Assert.True(redelivered!.FencingToken > live.FencingToken + 1,
+            $"Expected the redelivering claim's token past {live.FencingToken + 1}, saw {redelivered.FencingToken}.");
     }
 
     /// <summary>Queues one item for the execution and claims it at <paramref name="claimedAt"/> for one lease.</summary>

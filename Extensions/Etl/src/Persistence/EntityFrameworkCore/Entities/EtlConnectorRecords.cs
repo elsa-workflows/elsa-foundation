@@ -6,6 +6,8 @@ internal sealed class EtlConnectorRunRecord
     public string RunKey { get; set; } = null!;
     public string BindingsJson { get; set; } = null!;
     public string? PreparedJson { get; set; }
+    /// <summary>When a continuous run's completion was requested; null for finite runs and before any request.</summary>
+    public long? CompletionRequestedAtUtcTicks { get; set; }
     public long RetainedInputBytes { get; set; }
     public long SourceInputReservedBytes { get; set; }
     public long RetainedMetadataBytes { get; set; }

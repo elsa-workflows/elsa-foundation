@@ -183,7 +183,8 @@ def _retained_ref(root, value):
 
 
 def witness_manifest():
-    """The complete witness inventory: original38 + four current-authority + 13 cases per actual adapter
+    """The complete witness inventory: original38 + four current-authority + one workflow-authorization-unavailable
+    and one workflow-truth-seams, one workflow-batch and one workflow-explain case per actual adapter (spec 1193) + 13 cases per actual adapter
     + the #3441 restart inventory (ten restart cases per actual adapter and one negative control).
 
     Stage expectations are only the matrix's own named browser stages. No total stage count
@@ -192,10 +193,19 @@ def witness_manifest():
     from autonomy_journeys import EXPECTED_CASES as AUTONOMY_CASES, autonomy_stages
     from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
     from restart_journeys import CONTROL_ID as RESTART_CONTROL, EXPECTED_CASES as RESTART_CASES
+    from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASES
+    from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES
+    from batch_journeys import EXPECTED_CASES as BATCH_CASES
+    from explain_journeys import EXPECTED_CASES as EXPLAIN_CASES
+    from library_journeys import EXPECTED_CASES as LIBRARY_CASES
     return {"originalCases": sorted(REQUIRED_CASES), "currentAuthorityCases": sorted(AUTHORITY_CASES),
+            "workflowAuthorizationCases": sorted(WORKFLOW_AUTHORIZATION_CASES), "workflowTruthSeamCases": sorted(TRUTH_SEAM_CASES),
+            "workflowBatchCases": sorted(BATCH_CASES), "workflowExplainCases": sorted(EXPLAIN_CASES),
+            "workflowLibraryCases": sorted(LIBRARY_CASES),
             "autonomyCases": sorted(AUTONOMY_CASES), "autonomyStages": sorted(autonomy_stages()),
             "restartCases": sorted(RESTART_CASES), "restartControls": [RESTART_CONTROL],
-            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(AUTONOMY_CASES) + len(RESTART_CASES) + 1}
+            "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(WORKFLOW_AUTHORIZATION_CASES) + len(TRUTH_SEAM_CASES)
+                                 + len(BATCH_CASES) + len(EXPLAIN_CASES) + len(LIBRARY_CASES) + len(AUTONOMY_CASES) + len(RESTART_CASES) + 1}
 
 
 def witness_gaps(report):
@@ -220,6 +230,16 @@ def witness_gaps(report):
             or [row.get("id") if isinstance(row, dict) else None for row in records] != authority
             or not all(isinstance(row, dict) and row.get("status") == "passed" and isinstance(row.get("record"), dict) for row in records)):
         gaps.append("The four current-authority cases were not each observed passed exactly once")
+    from authorization_journeys import SECTION as AUTHORIZATION_SECTION, authorization_manifest_gaps
+    gaps += authorization_manifest_gaps(report.get(AUTHORIZATION_SECTION), report.get("source"))
+    from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, truth_seam_manifest_gaps
+    gaps += truth_seam_manifest_gaps(report.get(TRUTH_SEAM_SECTION), report.get("source"))
+    from batch_journeys import SECTION as BATCH_SECTION, batch_manifest_gaps
+    gaps += batch_manifest_gaps(report.get(BATCH_SECTION), report.get("source"))
+    from explain_journeys import SECTION as EXPLAIN_SECTION, explain_manifest_gaps
+    gaps += explain_manifest_gaps(report.get(EXPLAIN_SECTION), report.get("source"))
+    from library_journeys import SECTION as LIBRARY_SECTION, library_manifest_gaps
+    gaps += library_manifest_gaps(report.get(LIBRARY_SECTION), report.get("source"))
     if MODE_QUALIFICATION in report:
         gaps.append("A diagnostic mode section cannot stand in for the complete matrix")
     gaps += autonomy_manifest_gaps(report.get(MATRIX_QUALIFICATION), report.get("source"))
@@ -242,6 +262,16 @@ def validate_complete_witness(report, root, allowed_controls):
         for row in report["contextDisclosureQualification"]["records"]:
             observed = json.loads(_retained_ref(root, row["record"]).read_text())
             _need(observed.get("id") == row["id"] and observed.get("status") == "passed", "Current-authority record differs: " + row["id"])
+        from authorization_journeys import SECTION as AUTHORIZATION_SECTION, require_workflow_authorization
+        require_workflow_authorization(report[AUTHORIZATION_SECTION], root, source=report["source"])
+        from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, require_workflow_truth_seams
+        require_workflow_truth_seams(report[TRUTH_SEAM_SECTION], root, source=report["source"])
+        from batch_journeys import SECTION as BATCH_SECTION, require_workflow_batch
+        require_workflow_batch(report[BATCH_SECTION], root, source=report["source"])
+        from explain_journeys import SECTION as EXPLAIN_SECTION, require_workflow_explain
+        require_workflow_explain(report[EXPLAIN_SECTION], root, source=report["source"])
+        from library_journeys import SECTION as LIBRARY_SECTION, require_workflow_library
+        require_workflow_library(report[LIBRARY_SECTION], root, source=report["source"])
         from autonomy_journeys import MATRIX_QUALIFICATION, require_complete_autonomy
         require_complete_autonomy(report[MATRIX_QUALIFICATION], root, source=report["source"])
         from restart_journeys import RESTART_QUALIFICATION, require_restart_inventory

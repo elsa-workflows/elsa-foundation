@@ -174,13 +174,14 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md) |
+| Workflows design — model, activity-input option providers, mutation events, commands, diff engine, safe folder deletion | [`Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md) |
 | Workflows design — draft validators | [`Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands and stores (opt-in EF Core) | [`Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows publishing engine — compiler, slot authority/policy/preflight, publication activation, compilation fan-in, and activity-template registries | [`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md) |
 | Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
+| User Tasks (durable human work, journal/retention/eligibility/form integration and recovery cadence) | [`Runtime domain User Tasks`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
 | Workflows runtime distributed EF Core placement persistence | [`Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |

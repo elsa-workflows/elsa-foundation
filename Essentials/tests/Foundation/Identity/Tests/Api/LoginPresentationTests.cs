@@ -1,5 +1,6 @@
 using System.Net;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
@@ -7,6 +8,94 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 [Collection(FastEndpointsHostCollection.Name)]
 public sealed class LoginPresentationTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Field_guide_configuration_serves_drawn_logo_and_art_under_both_prefixes(bool proxyPathBase)
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync(services =>
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Identity:Login:Layout"] = "field-guide",
+                    ["Identity:Login:Palette"] = "field-guide",
+                    ["Identity:Login:Artwork"] = "field-guide"
+                }).Build()), pathBase: proxyPathBase ? "/tenant-a" : null,
+            routePrefix: proxyPathBase ? null : "/tenant-a");
+        var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login?returnUrl=/studio&error=1");
+        Assert.Contains("data-layout=\"field-guide\"", html);
+        Assert.Contains("data-palette=\"field-guide\"", html);
+        Assert.Contains("name=\"color-scheme\" content=\"light\"", html);
+        Assert.Contains("action=\"/tenant-a/_elsa/identity/login\"", html);
+        Assert.Contains("name=\"__csrf\"", html);
+        Assert.Contains("name=\"returnUrl\" value=\"/studio\"", html);
+        Assert.Contains("role=\"alert\"", html);
+        foreach (var (name, mime) in new[] { ("field-guide.jpg", "image/jpeg"), ("field-guide-logo.png", "image/png") })
+        {
+            var url = $"/tenant-a/_elsa/identity/login-assets/{name}";
+            Assert.Contains($"src=\"{url}\"", html);
+            using var response = await fixture.Client.GetAsync(url);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(mime, response.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("public, max-age=86400", response.Headers.CacheControl?.ToString());
+            Assert.True((await response.Content.ReadAsByteArrayAsync()).Length > 10000);
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync("/tenant-a/_elsa/identity/login-assets/arbitrary.png")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Field_guide_keeps_real_csrf_protected_cookie_signin()
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync(services =>
+            services.Configure<LoginPageOptions>(options =>
+            {
+                options.Layout = options.Palette = options.Artwork = "field-guide";
+            }));
+        using var client = fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        Assert.Contains(client.DefaultRequestHeaders.GetValues("Cookie"), value => value.StartsWith("Elsa.Identity.Cookie=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Default_login_uses_unfolding_map()
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync();
+        var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
+        Assert.Contains("src=\"/_elsa/identity/login-assets/unfolding-map.jpg\"", html);
+        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/unfolding-map.jpg");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("river-to-sea")]
+    [InlineData("open-architecture")]
+    [InlineData("flowing-ribbons")]
+    [InlineData("paper-landscape")]
+    [InlineData("creative-studio")]
+    [InlineData("botanical-growth")]
+    [InlineData("constellation")]
+    [InlineData("miniature-world")]
+    [InlineData("glass-and-light")]
+    [InlineData("unfolding-map")]
+    public async Task Configured_artwork_is_rendered_and_served_under_route_prefix(string artwork)
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync(services =>
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Identity:Login:Artwork"] = artwork }).Build()),
+            routePrefix: "/tenant-a");
+        var imageUrl = $"/tenant-a/_elsa/identity/login-assets/{artwork}.jpg";
+        var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login");
+        Assert.Contains($"src=\"{imageUrl}\"", html);
+        var response = await fixture.Client.GetAsync(imageUrl);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/jpeg", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("public, max-age=86400", response.Headers.CacheControl?.ToString());
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.True(bytes.Length > 10000);
+        Assert.Equal(0xff, bytes[0]);
+        Assert.Equal(0xd8, bytes[1]);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

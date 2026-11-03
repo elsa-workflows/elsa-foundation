@@ -32,6 +32,9 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
             EtlConnectorBindingRevision source;
             if (pipeline.Source is EtlCsvSource csv)
                 source = File(scope, csv.Binding, EtlFileRole.Source);
+            else if (pipeline.Source is EtlJsonlSource jsonl)
+                // File approvals are format-neutral; the pin records the declared input format.
+                source = File(scope, jsonl.Binding, EtlFileRole.Source) with { Kind = EtlConnectorKind.Jsonl };
             else if (pipeline.Source is EtlHttpJsonSource json)
             {
                 CheckUnambiguous(scope, json.Binding, "Source");
@@ -65,6 +68,9 @@ internal sealed class HostConnectorBindings(HostFileBindings files, HostHttpBind
     {
         if (destination is EtlJsonlDestination file)
             return File(scope, file.Binding, role);
+        if (destination is EtlCsvDestination csv)
+            // Output folder approvals are format-neutral; the pin records the declared output format.
+            return File(scope, csv.Binding, role) with { Kind = EtlConnectorKind.Csv };
         if (destination is not EtlHttpDestination endpoint)
             throw Unavailable();
         CheckUnambiguous(scope, endpoint.Binding, role.ToString());

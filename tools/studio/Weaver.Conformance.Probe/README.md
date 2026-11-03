@@ -18,7 +18,7 @@ python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
 
 Producer/module-author steps need .NET 10, Python 3, Node/pnpm 11.9 and Chromium automation. Ordinary consumer restore/build/publish/run uses the prebuilt distributions with frontend tools denied and audited. The driver retains locks, closure/cache/archive hashes, common published bytes, actual native membership/serving generations and owner/browser receipts. It only starts owned processes with isolated native state and normal authentication. Nothing publishes remotely or consumes existing developer credentials/hosts. [Consumer recipes](../../../specs/1174-weaver-package-witness/contracts/hosts.md) and the [validation guide](../../../specs/1174-weaver-package-witness/quickstart.md) describe the sequence.
 
-The [integration workflow](../../../.github/workflows/weaver-conformance.yml) runs the same complete qualifier with read-only repository permissions. Partial execution, missing observations, wrong-cause failures, altered artifacts and source/frontend consumer shortcuts cannot qualify. Common changes require fresh complete distributions and all cases again.
+The [integration workflow](../../../.github/workflows/ci.yml) runs the same complete qualifier with read-only repository permissions. Partial execution, missing observations, wrong-cause failures, altered artifacts and source/frontend consumer shortcuts cannot qualify. Common changes require fresh complete distributions and all cases again.
 
 ## Cross-domain contributions
 
@@ -111,6 +111,164 @@ the run fails. Only that passing run sets `independentPackageWitness`. `export_e
 python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
   --output /absolute/new-owned-complete-witness --version 4.0.0-weaver3440.local3
 ```
+
+### Workflow authorization unavailable (spec 1193 T006)
+
+Right after the four current-authority cases, the complete witness runs
+`authorization_journeys.py` once on each actual adapter (`{copilot,anthropic}-workflow-authorization-unavailable`).
+It selects the backend's test-only `QualificationWorkflowAuthority` feature through the native feature apply, which
+wraps the actual workflow definition authorizer behind a private mode file. On a freshly seeded workflow, a denying
+replacement must keep the existing design 403 body structurally identical (compared as parsed JSON), with no `errorCode`; `DefinitionReadAuthorizationTests` pins its exact bytes. A replacement that cannot decide
+must answer 503 with `errorCode` `workflow.authorization.unavailable` and the fixed message. A pre-call gate then holds a
+`workflow_read_graph` turn after its context was admitted by the actual owner, and the mode changes. The released call's
+pre-dispatch admission refresh asks the same owner before the tool can, so the turn must stop there, before any
+dispatch or adapter return. For the unavailable owner the stop is `workflow.authorization.unavailable` with 503 and the
+engine's fixed owner-unavailable text. For the denying owner it stays `agent.context.incomplete` (400) with the
+existing read-permission text. The
+tool's own 503 outcome is component evidence, because no native turn reaches it. A random private cause canary must appear on no HTTP body, SSE frame or adapter
+trace. Deselecting the seam must restore the unchanged native definition read. `evidence.witness_manifest()` lists
+the two cases, and `require_workflow_authorization` refuses a missing, failed, duplicated or changed record.
+Each admitted context there must also carry the host's available `workflow.catalog`: the consumer composes the
+Activities Design API, so the catalog is the real one.
+
+### Workflow truth seams (spec 1193 T012)
+
+Next, `truth_seam_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-truth-seams`). Four
+dedicated principals are appended after the original five. A manager, a read-only reader and a reader without
+`activities/design:read` in the admin's tenant run one `workflow_read_graph` turn each against the admin's seeded
+workflow. A reader in a second tenant compares catalogs only: the packaged consumer's workflow persistence has one scope,
+so every definition is stored under `default` whatever tenant creates it, and the owner rightly refuses another
+tenant's principal. Its Weaver catalog is the collection admitted with a message over a target-free `workflow.request`,
+and no stream, turn or provider call follows. The backend's test-only `QualificationTenantActivity` feature, selected through the native
+feature apply for this inventory only, adds one activity to the designer's catalog read for the first tenant. For each
+actor, every admitted context must carry one server-read `workflow.catalog` and the exact target's
+`workflow.permissions`, identical across the turn's admissions. The catalog must equal the designer's own
+`GET /design/activities/catalog?availability=all` for the same actor: the same entries, order, availability and
+versions, or its marked prefix. The tenant-restricted activity must appear in exactly the first tenant's two answers.
+The permissions must equal the owning design API's answers: the definition GET for read, and the manage-gated promotion
+preflight (200 or 403) for manage. The tools the actual adapter is offered must follow them: the layout tool only for a
+manager. Each dedicated actor holds exactly the grants its journey reaches (`truth_seam_journeys.py` lists them):
+`api-capabilities:read` for owner-link discovery through `GET /capabilities`, the design read or manage it exercises (the evaluator lets manage satisfy read),
+`activities/design:read` except for the catalog-denied actor, and `expressions:read` for the reader's Studio editor. The
+browser journey fails with the exact paths when Studio is refused a read it depends on (owner-link discovery, the
+definition and its draft, the activity catalog and expression descriptors). Other refused reads, such as runtime
+executables or publishing profiles the reader is not granted, are retained as evidence only; layout absence is proven
+from the adapter trace, not from what the browser shows. The actor without `activities/design:read` must get a 403 from the designer catalog and a denied
+catalog with no entries from Weaver. The host's generation observation must report no placeholder type in the loaded
+Agent Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
+journey `workflow-read-only` in `browser.mjs`, with a fresh normal-login state of its own: the accepted message's
+context must carry `manage: denied` and only `workflow_read_graph`, explanation must complete, and a layout request
+must end without a proposal, node move, review or effect request, or owning write, with the stored draft unchanged.
+The driver checks the adapter trace for each command the browser retained: the layout tool was never offered and never
+called. `require_workflow_truth_seams` refuses a missing, failed, duplicated or changed record.
+
+The tenant-restricted activity is synthesized by the seam's reader wrapper. It proves that the designer and Weaver share
+one tenant-aware catalog read path for the request principal, not that the activity stores scope rows by tenant; store
+tenant scoping is the Activities Design persistence tests' evidence.
+
+### Workflow Operation Batch (spec 1193 T022)
+
+Next, `batch_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-batch`) against a nested
+workflow it seeds (a root flowchart holding two Write Lines and a nested flowchart that holds a third; the packaged
+consumer's catalog has no other container, and each container's payload is its catalog `initialPayload`). The backend's test-only
+`QualificationBatchCatalog` feature adds a credential-input activity and a listed-but-excluded activity to the designer's
+catalog read for this inventory only. Native turns, each in its own full-auto session, send the open editor's compact
+structured snapshot:
+
+- one `workflow_apply_operation_batch` call of seven operations of six kinds (an add into the nested flowchart wired
+  after its own activity, so validation stays clean) must pause at exactly one review, in each adapter's own pinned
+  frame order: `requiresApproval`, client working state, destructive (it disconnects), per-operation risk labels,
+  the exact target by identity; it is then denied;
+- six negative controls must each end at preparation, with no review, with the module's own text: an activity the
+  catalog does not offer, the excluded activity, an undeclared input, a display name that matches three activities, a
+  literal on the credential input (a random canary appears in no admitted context, result or refusal), and a historical
+  working state;
+- the truth-seam reader, without manage permission, is never offered the batch tool and never calls it.
+
+The owner's draft is unchanged across all of them. Then the admin runs the actual packaged Studio journey
+`workflow-batch` in `browser.mjs` with a fresh normal-login state. An edit after the proposal, a selection change and a
+remount (SPA navigation away and back, same document) are each refused with zero change. Then a hand edit, whose
+ordinary autosave settles first, is part of the base revision of the seven-operation batch, which is approved and applied:
+the designer's own export, validation and owner reads show the nested add, the declared input, the display name, the
+move and the rewiring, a dirty working draft, no owning write past the autosave interval, an exact restore of the base
+through the review card's Undo (designer history), the whole batch again through the designer's Redo, and still no
+save or publish. Last, a proposal approved and applied from a second tab of the same Studio is refused by that tab's
+host before anything is applied. The driver checks the adapter trace for every command the browser retained.
+`require_workflow_batch` refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two
+cases.
+
+### Workflow explanation (spec 1193 T028)
+
+Next, `explain_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-explain`) against the same
+nested shape, seeded with b's text bound to a workflow variable that does not exist, so the owner's draft validation
+reports it by activity and input; the seed also holds one activity of the `QualificationBatchCatalog` seam's
+password-hinted activity (input `passphrase`, a name no probe redactor rewrites), with no value. With that seam selected, the native unsaved working state adds a JavaScript
+expression on the nested activity and two credential activities: one holding a credential literal, one bound to a
+visible Secret Reference. Four native read turns (`workflow_read_graph`, each in its own
+`auto-read-only` session, in each adapter's own pinned frame order) select the credential literal, the invalid input,
+the JavaScript expression and the Secret Reference in turn. The accepted message's admitted context
+(`data.message.context`), every admission in the turn and the read result must each equal the working state as Studio's
+bridge discloses it: activities and nested structure, the designer's diagnostics (the owner's validations by activity
+and input), the visible Secret Reference, and the selected activity's declared properties, with the credential literal
+only withheld and the server's own `interpretation: "unavailable"` on every non-literal expression (no Expression Module
+registers Weaver tools). The read result addresses each activity by its scope path. A control snapshot that reports the
+credential input as an ordinary literal with a value of its own is refused at admission (`agent.context.incomplete`,
+400, with the module's reason) before any provider call. The owner's draft is unchanged. The packaged consumer ships no
+JavaScript Expression Module and no graph activity definition: JavaScript is disclosed by type and content only, and
+graph activity references are covered by the server and Studio unit tests.
+
+Then the admin runs the actual packaged Studio journey `workflow-explain` with a fresh normal-login state: with autosave
+turned off for that editor, the invalid activity is selected and read (its input's Variable expression, the unavailable
+interpretation and the designer's own diagnostic for it are admitted); a hand edit moves an activity, and the next read
+is attributed to a new revision with the moved position, equal to the editor's own export. (Before the first read the
+journey waits until the designer's panel names the seeded unresolved variable: its structural checks render at once, the
+server's draft validations later, and the snapshot discloses what the panel shows.) Then the driver types a random
+credential canary into the password-hinted input's own masked field (Studio offers a credential input only the secret
+picker), as an unsaved edit, and the next read must disclose that input only as withheld; nothing is saved. The canary
+exists only in Studio's working state: it is searched for, in memory and unredacted, in every request the page sent to
+the agent API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
+agent stream it received (counted only when every stream was captured without a capture or validation error and at
+least one agent event stream's bytes were read; the driver checks the retained capture the same way); then in the
+browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
+adapter traces, HTTP receipts, owner reads, browser captures), and must appear in none, so a regression in Studio's
+withholding fails the case. `require_workflow_explain` refuses a missing, failed, duplicated or changed
+record, a missing turn or control, or a canary search that found anything; `witness_manifest()` counts the two cases
+(97 in all).
+
+### Workflow library and templates (spec 1193 T036)
+
+Then `library_journeys.py` runs four cases, `{copilot,anthropic}-workflow-{library,templates}`, against two seeded
+definitions and a template the template service creates from the batch seed. The library cases select the backend's
+test-only `QualificationLibraryResponses` seam (see the backend consumer README) and deselect it afterwards. Each native
+turn is its own full-auto session with the page context Studio sends (`workflows.library`, `workflows.create-dialog`,
+`workflows.template-list` or `workflows.template-editor`), compared by target identity in every admission:
+
+- `workflow_library_assign_tags` with an existing tag and a new one pauses at one review (server execution,
+  `requiresApproval`, the tag creation shown); once approved, the seam loses the committed creation's response, the tool
+  rereads by the frozen key, the change reports every target applied, and the owner holds exactly one such tag with the
+  identity the seam logged; `workflow_library_save_view` likewise resolves a lost response to exactly one view of the
+  visible query; `workflow_library_set_favorite` applies per target; each executed continuation completes the
+  originating turn once with no new call (checked structurally, as the lifecycle inventory checks it);
+- `workflow_library_set_list_state` is a reviewed client working-state proposal (denied); a commanded delete tool is never
+  advertised;
+- the library actor (tag assignment, neither tag management nor view sharing; its native page flags say so) is refused at
+  preparation for a new tag and for a shared view, and nothing is created;
+- with `WorkflowsDesignApi`'s `WorkflowOrganizationEnabled` false through the ordinary feature apply, the server's
+  `workflows.library-organization` read is unavailable with the backend's reason, a tag change is refused with it, and
+  list narrowing is still proposed; the original configuration is restored;
+- the template cases propose one batch for the template editor's working state (target `workflow-template`, the preview
+  naming the template and its persisted revision, never a definition) and a create-dialog prefill choosing the listed
+  template, both denied; the seed definition's draft and the template's revision are unchanged.
+
+The packaged Studio journeys: `workflow-library` applies a reviewed list narrowing on the list page, reverts it, and fills
+the open create dialog, whose Create is never pressed (no design API write, the page's total unchanged);
+`workflow-templates` applies a reviewed batch in the template editor as one history step (Undo and Redo), with autosave
+held past its interval, and the user's own Save carries the template's expected revision. An executed write's continuation is pinned per
+adapter (Copilot's as the c58c9f149 witness observed it, the same order as a denied proposal's continuation) and also
+checked structurally. Every control in these two journeys, on the page and in the dock, is activated through the keyboard:
+the nonmodal dock overlaps page controls (the c58c9f149 witness saw it intercept the list's Create workflow click) and an
+open page dialog overlaps the dock. `require_workflow_library` refuses a missing, failed,
+duplicated or changed record; `witness_manifest()` counts the four cases.
 
 ### Restart inventory over the packaged durable store (#3441 T031)
 

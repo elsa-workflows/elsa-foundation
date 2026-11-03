@@ -350,7 +350,7 @@ describe("canonical domain clients", () => {
     const deleteJson = vi.fn(async () => ({}));
     const context = createContext({ getJson, postJson, deleteJson });
 
-    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: true, move: true, deleteEmpty: true });
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: true, move: true, deleteEmpty: true, deleteContents: false });
     await renameWorkflowFolder(context, "folder/a", "Operations");
     await moveWorkflowFolder(context, "folder/a", null);
     await deleteEmptyWorkflowFolder(context, "folder/a");
@@ -365,7 +365,7 @@ describe("canonical domain clients", () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
     const context = createContext({ getJson });
 
-    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: false, move: false, deleteEmpty: false });
+    expect(await getWorkflowFolderMutationSupport(context)).toEqual({ rename: false, move: false, deleteEmpty: false, deleteContents: false });
     expect(getJson).toHaveBeenCalledTimes(1);
   });
 

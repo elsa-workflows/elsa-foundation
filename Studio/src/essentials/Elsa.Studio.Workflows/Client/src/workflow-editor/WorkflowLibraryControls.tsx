@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { ArrowDownAZ, Bookmark, Save, SlidersHorizontal, Star, Tags } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -12,22 +12,27 @@ import {
   workflowFolderSelectionKey, workflowLibraryFilterKey,
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
+import { StudioLink } from "../StudioLink";
 import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 
-const WorkflowTagCatalogDialog = lazy(() => import("./WorkflowTagCatalogDialog").then(module => ({ default: module.WorkflowTagCatalogDialog })));
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, onViews, refreshKey = 0 }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
   onChange(next: WorkflowDefinitionBrowseLocation): void;
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
+  /** The visible library views once read, so the page can disclose the applied view's identity, owner kind and revision. */
+  onViews?(views: WorkflowLibraryView[]): void;
+  refreshKey?: number;
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
+  // Null until the view list has been read: the page then does not disclose a view it cannot yet identify.
+  const [loadedViews, setLoadedViews] = useState<WorkflowLibraryView[] | null>(null);
   const [permissions, setPermissions] = useState<WorkflowOrganizationPermissions>({});
   const [catalogCursor, setCatalogCursor] = useState<string | null>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -35,10 +40,10 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(Boolean(location.tagFilters?.length || location.publicationState));
-  const [catalogOpen, setCatalogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const generationRef = useRef(0);
+  const permissionsReported = useRef(false);
   const filtersId = useId();
 
   useEffect(() => {
@@ -50,21 +55,31 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       setTags(current => catalogTerm ? mergeTags(current, page.items) : page.items);
       setCatalogCursor(page.nextContinuationToken ?? null);
       setPermissions(current => ({ ...current, ...page.permissions }));
+      permissionsReported.current = true;
       onPermissions(page.permissions ?? {});
     }).catch(caught => {
-      if (generation === generationRef.current) setError(message(caught, "Couldn't read workflow tags."));
+      if (generation !== generationRef.current) return;
+      setError(message(caught, "Couldn't read workflow tags."));
+      // A first read that fails still settles the permissions: the page then offers none of the gated actions.
+      if (!permissionsReported.current) { permissionsReported.current = true; onPermissions({}); }
     }).finally(() => { if (generation === generationRef.current) setCatalogLoading(false); });
     if (support.views) void listWorkflowViews(context).then(response => {
       if (generation !== generationRef.current) return;
       setViews(response.items);
+      setLoadedViews(response.items);
       setPermissions(current => ({ ...current, ...response.permissions }));
     }).catch(caught => {
-      if (generation === generationRef.current) setError(message(caught, "Couldn't read saved views."));
+      if (generation !== generationRef.current) return;
+      setError(message(caught, "Couldn't read saved views."));
+      // A first read that fails still settles the view list as empty: the page then discloses no view it cannot identify,
+      // rather than never settling.
+      setLoadedViews(current => current ?? []);
     });
     return () => { generationRef.current += 1; };
-  }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);
+  }, [catalogTerm, context, onPermissions, refresh, refreshKey, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
+  useEffect(() => { if (loadedViews) onViews?.(loadedViews); }, [onViews, loadedViews]);
   const missingFilterTags = !catalogLoading ? JSON.stringify([...new Set((location.tagFilters ?? []).map(filter => filter.tagId))].filter(id => !tags.some(tag => tag.id === id))) : "[]";
   useEffect(() => {
     const ids = JSON.parse(missingFilterTags) as string[];
@@ -125,7 +140,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
         </select></label>
         <StudioButton onClick={() => setViewDialogOpen(true)}><Save size={15} aria-hidden="true" />Save view</StudioButton>
       </> : null}
-      {permissions.canManageTags === true ? <StudioButton onClick={() => setCatalogOpen(true)}><Tags size={15} aria-hidden="true" />Manage tags</StudioButton> : null}
+      {permissions.canManageTags === true ? <StudioLink className="studio-button" data-variant="default" href="/workflows/tags"><Tags size={15} aria-hidden="true" />Manage tags</StudioLink> : null}
       </div>
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
@@ -164,7 +179,6 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       </> : null}
       {support.tags || support.folders ? <fieldset className="wf-library-values"><legend>Optional columns</legend>{[...(support.tags ? ["tags"] : []), ...(support.folders ? ["location"] : [])].map(column => <label key={column}><input type="checkbox" checked={location.columns?.includes(column) ?? false} onChange={event => change({ columns: event.target.checked ? [...(location.columns ?? []), column] : location.columns?.filter(item => item !== column) })} />{column === "tags" ? "Tags" : "Location"}</label>)}</fieldset> : null}
     </div> : null}
-    {catalogOpen ? <Suspense fallback={<p role="status">Loading tag manager…</p>}><WorkflowTagCatalogDialog context={context} tags={tags} onClose={() => setCatalogOpen(false)} onSaved={() => setRefresh(value => value + 1)} /></Suspense> : null}
     {viewDialogOpen ? <WorkflowViewDialog context={context} location={location} existing={selectedView} canShare={permissions.canShareViews === true} onClose={() => setViewDialogOpen(false)} onSaved={viewsSaved} onDeleted={() => { change({ viewId: undefined }); viewsSaved(); }} /> : null}
   </section>;
 }

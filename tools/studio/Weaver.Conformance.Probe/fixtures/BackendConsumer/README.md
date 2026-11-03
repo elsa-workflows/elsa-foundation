@@ -36,3 +36,41 @@ does not select them. For the #3441 restart inventory, `consumers.enable_durable
 the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
 root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
 starts a new generation of the same published application through `runtime.RestartableServer`.
+
+`QualificationWorkflowAuthority.cs` is a test-only host feature for the spec 1193 workflow-authorization-unavailable
+inventory. No baseline shell selects it. `authorization_journeys.py` selects it through the ordinary native feature
+apply with a private absolute `ModeFile`, and deselects it before anything later runs. It replaces the single
+`IWorkflowDefinitionAuthorizer` registration with a wrapper that reads that file on every decision: `native` delegates to
+the host's actual authorizer, `deny` refuses, and `throw` raises `WorkflowDefinitionAuthorizationException` with the
+file's private `cause` canary as its inner cause. A missing, malformed or unknown mode is a fixture error, never a
+decision. The seam supplies no other service and changes no product code.
+
+`QualificationTenantActivity.cs` is a test-only host feature for the spec 1193 workflow-truth-seams inventory. No
+baseline shell selects it. `truth_seam_journeys.py` selects it through the ordinary native feature apply with one
+`Tenant`, and deselects it afterwards. The host's CLR-reconciled catalog is tenant-agnostic, so the seam replaces the
+single `IActivityAuthoringCatalogReader` registration with a wrapper over the host's actual `ActivityAuthoringCatalogReader`
+that adds one activity, first, for requests whose principal is in that tenant. The designer's catalog GET and Weaver's
+`IActivityAuthoringCatalog` both read through it, so the driver compares each tenant's two answers. The seam supplies no
+other service and changes no product code.
+
+`QualificationBatchCatalog.cs` is a test-only host feature for the spec 1193 workflow-batch and workflow-explain
+inventories. No baseline shell selects it. `batch_journeys.py` and `explain_journeys.py` each select it through the
+ordinary native feature apply and deselect it afterwards. The
+host's CLR-reconciled catalog has no credential input, no password-hinted input and no activity its availability policy
+excludes, so the seam replaces the single `IActivityAuthoringCatalogReader` registration with a wrapper over the host's
+actual `ActivityAuthoringCatalogReader` that adds activities first: one with a credential input (`apiKey`), one with a
+password-hinted input (`passphrase`, neither sensitive nor a credential, which the designer masks only for its hint;
+named so that no probe redactor rewrites it), and,
+only when every entry is requested, one that is listed but not addable. The designer's catalog GET and Weaver's
+`IActivityAuthoringCatalog` both read through it. The seam supplies no other service and changes no product code.
+
+`QualificationLibraryResponses.cs` is a test-only host feature for the spec 1193 workflow-library inventory (SC-008). No
+baseline shell selects it. `library_journeys.py` selects it through the ordinary native feature apply with a private
+absolute `ModeFile` and `LogFile`, and deselects it afterwards. It replaces the single `IWorkflowLibraryCommands`
+registration with a wrapper over the host's actual commands. With the mode `{"drop":"create-tag"}` (or `"save-view"`) a
+keyed tag (or view) creation is committed by the actual library, then its response is lost once per operation key: the
+wrapper appends `{kind, operationKey, committedId}` to the log and throws. The Weaver tool must then resolve the outcome by
+rereading the key, and the driver proves exactly one tag (or view) exists with the logged identity. `{"drop":"none"}`
+delegates every call unchanged. Only Weaver's library writes reach it: the HTTP library endpoints keep the built-in
+decisions whatever `IWorkflowLibraryCommands` is installed, so the driver's own owner writes and reads never pass through
+the seam. The seam changes no product code.

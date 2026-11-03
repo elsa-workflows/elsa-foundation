@@ -8,7 +8,7 @@ namespace Elsa.Agent.Workflows.Services;
 /// Parses the live workflow graph out of a <c>workflow.definition</c> context attachment. Studio sends the
 /// graph inline as the attachment <see cref="AgentContextAttachment.Content"/> (a JSON object); the server
 /// builds the same shape. This reader normalizes either representation into a <see cref="WorkflowAgentGraph"/>
-/// so the risk classifier and authoring tools can validate operations against real activity node ids.
+/// so authoring tools can validate operations against real activity node ids.
 /// </summary>
 public static class WorkflowAgentGraphReader
 {

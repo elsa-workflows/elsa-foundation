@@ -3,9 +3,8 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 using Elsa.Agent.Core.Models;
-using Elsa.Agent.Workflows.Models;
 using Elsa.Agent.Workflows.Services;
-using Elsa.Agent.Workflows.Contracts;
+using Elsa.Activities.Design.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 
@@ -214,28 +213,11 @@ public sealed class WorkflowAgentTests
     }
 
     [Fact]
-    public async Task Module_has_no_invented_activity_catalog_or_runtime_journey()
+    public async Task Module_advertises_no_runtime_journey_and_only_the_reviewed_position_change()
     {
-        Assert.Empty(await new DefaultWorkflowActivityCatalogProvider().ListAsync());
         var capabilities = await new WorkflowAgentCapabilityProvider().GetCapabilitiesAsync();
         Assert.DoesNotContain(capabilities, capability => capability.Id == "workflow.troubleshoot");
         Assert.Contains(capabilities, capability => capability.Id == "workflow.propose-change" && capability.Description.Contains("position"));
-        using var root = WorkflowServices();
-        using var scope = root.CreateScope();
-        var context = await Provider(scope.ServiceProvider).GetContextAsync(new("session-1", "wf-1", "draft"));
-        Assert.Empty(context.ActivityCatalog);
-        Assert.False(context.Permissions.CanDirectApply);
-        Assert.False(context.Permissions.CanProposeChange);
-        Assert.Equal([WorkflowGraphOperationKind.SetDesignerPosition], context.DesignerConstraints.SupportedOperations);
-    }
-
-    [Fact]
-    public async Task Legacy_broad_graph_proposal_fails_explicitly_without_creating_a_proposal()
-    {
-        var result = await new DefaultWorkflowChangeProposalService().ProposeAsync(new("session-1", "actor-1", "wf-1", "rev-1",
-            "Add activity", "Unsupported broader authoring", [], [], null));
-        Assert.False(result.Succeeded);
-        Assert.Equal("agent.workflow.operation_unsupported", result.Error?.Code);
     }
 
     [Fact]
@@ -289,7 +271,7 @@ public sealed class WorkflowAgentTests
         {
             new FoundationWorkflowsAgentFeature().ConfigureServices(services);
             services.AddSingleton<IWorkflowDefinitionAuthorizer>(new FixtureWorkflowDefinitionAuthorizer());
-            services.Replace(ServiceDescriptor.Scoped<IWorkflowRevisionProvider>(_ => new UnexpectedPersistedRevisionRead()));
+            services.AddSingleton<IActivityAuthoringCatalog>(new FixtureActivityCatalog());
         });
         using var scope = root.CreateScope();
         var original = Snapshot();
@@ -320,6 +302,7 @@ public sealed class WorkflowAgentTests
         var request = await AuthorizedRequestAsync(scope.ServiceProvider, Snapshot());
         var provider = Provider(scope.ServiceProvider);
         var accepted = await provider.CollectAsync(request);
+        var collectionChecks = authority.Calls.Count;
         var before = Snapshot().Target!;
         var after = before with { Revision = "new-unsaved-revision" };
         var payload = new AgentPayload("workflows.layout-change", "1", JsonSerializer.SerializeToElement(new { applied = true }));
@@ -339,7 +322,7 @@ public sealed class WorkflowAgentTests
         Assert.Same(originalReceipt, result.Receipt);
         Assert.Equal(after, result.Receipt.After);
         Assert.Equal(AgentEffectScope.ClientWorkingState, result.Receipt.Scope);
-        Assert.All(authority.Calls, check => Assert.Equal(["workflows/design:read"], check.Permissions));
+        Assert.All(authority.Calls.Skip(collectionChecks), check => Assert.Equal(["workflows/design:read"], check.Permissions));
     }
 
     [Fact]
@@ -369,8 +352,10 @@ public sealed class WorkflowAgentTests
         var tools = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync())
             .Where(tool => tool.Descriptor.ModuleId == source.Descriptor.ModuleId).ToArray();
 
-        Assert.Equal(2, tools.Length);
-        Assert.All(tools, tool => Assert.Equal(source.Descriptor.Id, tool.Descriptor.DisclosureSourceId));
+        // Three working-draft tools disclosed by the workflow context; the six library tools (slice E) by the library context.
+        Assert.Equal(3, tools.Count(tool => tool.Descriptor.DisclosureSourceId == source.Descriptor.Id));
+        Assert.Equal(6, tools.Count(tool => tool.Descriptor.DisclosureSourceId == WorkflowLibraryContext.ContextSourceId));
+        Assert.Equal(9, tools.Length);
     }
 
     [Theory]
@@ -415,12 +400,6 @@ public sealed class WorkflowAgentTests
         }
     }
 
-    private sealed class UnexpectedPersistedRevisionRead : IWorkflowRevisionProvider
-    {
-        public Task<string> GetCurrentRevisionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("Working-state admission must not substitute a persisted workflow revision.");
-    }
-
     private sealed class DisclosureAuthority : IAgentToolAuthorizer
     {
         public bool Allowed { get; set; } = true;
@@ -438,6 +417,7 @@ public sealed class WorkflowAgentTests
     {
         new FoundationWorkflowsAgentFeature().ConfigureServices(services);
         services.AddSingleton<IWorkflowDefinitionAuthorizer>(new FixtureWorkflowDefinitionAuthorizer());
+        services.AddSingleton<IActivityAuthoringCatalog>(new FixtureActivityCatalog());
         if (authority is not null)
             services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
     });
