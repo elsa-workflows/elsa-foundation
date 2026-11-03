@@ -67,6 +67,8 @@ export interface PlaygroundEvidence {
   workflowExecutionId: string;
   status: string;
   invocation?: InvocationEvidence | null;
+  /** False when the caller may not see captured values; the result's value is then left out. */
+  valuesPermitted?: boolean;
 }
 
 export function getDraft(context: StudioEndpointContext, draftId: string, signal?: AbortSignal) {

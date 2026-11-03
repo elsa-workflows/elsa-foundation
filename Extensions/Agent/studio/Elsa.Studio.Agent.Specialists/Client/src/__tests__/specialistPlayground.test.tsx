@@ -171,6 +171,14 @@ describe("agent playground", () => {
     expect(button(container, "Continue this conversation")).toBeNull();
   });
 
+  it("says the result needs the value permission when it was left out for the caller", async () => {
+    const container = await render(fakeContext({ evidence: [{ ...evidence("Completed", {}, { output: { captureMode: "Payload", value: null } }), valuesPermitted: false }] }).context);
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+
+    expect(container.querySelector("[data-testid='playground-output-withheld']")!.textContent).toContain("permission to inspect captured values");
+  });
+
   it("explains a result the host's capture policy keeps out", async () => {
     const container = await render(fakeContext({ evidence: [evidence("Completed", {}, { output: { captureMode: "DiagnosticSnapshot", value: null } })] }).context);
     type(container, "Brief", "moss gardens");

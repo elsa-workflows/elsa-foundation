@@ -296,7 +296,7 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
       {invocation?.fault ? (
         <StudioAlert tone="danger"><span data-testid="playground-fault">{invocation.fault.message ?? "The agent did not complete."}</span> <code>{invocation.fault.code}</code></StudioAlert>
       ) : null}
-      {invocation?.output ? <Output output={invocation.output} /> : null}
+      {invocation?.output ? <Output output={invocation.output} valuesPermitted={evidence?.valuesPermitted !== false} /> : null}
       {invocation ? (
         <dl className="agent-playground__facts">
           <dt>Candidate</dt><dd>{invocation.specialist.version} <CopyableIdentifier label="Candidate version" value={invocation.specialist.definitionVersionId} /></dd>
@@ -315,7 +315,9 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
   );
 }
 
-function Output({ output }: { output: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["output"]> }) {
+function Output({ output, valuesPermitted }: { output: NonNullable<NonNullable<PlaygroundEvidence["invocation"]>["output"]>; valuesPermitted: boolean }) {
+  if (!valuesPermitted)
+    return <p className="agent-playground__hint" data-testid="playground-output-withheld">Seeing the result needs permission to inspect captured values in this run.</p>;
   if (output.captureMode !== "Payload" || output.value === undefined || output.value === null)
     return <p className="agent-playground__hint" data-testid="playground-output-withheld">The host's capture policy keeps this result out of the playground ({output.captureMode}).</p>;
   return typeof output.value === "string"
