@@ -223,8 +223,9 @@ arm, ahead of the general one, which writes no poison record. For a step kind th
 release (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
 `DeliverChildControl`, `Checkpoint`), a live claim that no commit has consumed, and a queue that can
 persist the delay, the claim is released until `RuntimeSchedulerWorkClaimOptions.UnavailableRetryDelay`
-(5 seconds by default) has passed. The item result is `Deferred` and the drain stops. Anything else
-propagates the exception and leaves the step queued, or already consumed by its own commit.
+(5 seconds by default) has passed. The item result is `Deferred` and the drain stops. Apart from the
+case below, anything else propagates the exception and leaves the step queued, or already consumed by
+its own commit.
 
 One case is settled differently ([#3683](https://github.com/elsa-workflows/elsa-foundation/issues/3683)).
 If the dispatch sent a non-retaining checkpoint to the checkpoint store before it threw, and that
@@ -233,10 +234,16 @@ the coalescing segment's flush, so running the step again would repeat its effec
 replay-conflict check. Inside an active segment the commit consumes nothing: it is buffered, folded at
 the cap, or committed by a boundary the segment continues past, and a handler that commits through a
 DI scope of its own holds no claim either. The dispatch frame that the `RetryAfter` release reads below
-records the attempt in every one of these cases. This applies even when the queue could not have
-persisted the delay.
+records the attempt in every one of these cases. The drainer opens that frame for every claimed
+dispatch of a delayed-release kind, so this holds whatever the provider: on a queue that cannot persist
+the delay (an overlay without visibility snapshots, say) such a step is handled as a fault too, instead
+of propagating. A step of another kind, or on a queue without claims, opens no frame and propagates.
 
-Such a step goes to the general arm below and is treated as a handler fault. It is acknowledged
+Such a step skips the unavailable arm and is treated as a handler fault. For an execution with a
+selected model protocol, the model-protocol arm catches it first and rethrows it: no acknowledgement,
+no record, and the segment's flush is skipped. No model path reaches that today: a model execution
+accepts only `ExecuteModel` work, and `ExpectedModelExecution` is set only on the `Start` kind's commit,
+and neither kind opens a frame. Every other such step goes to the general arm below. It is acknowledged
 (through the segment's overlay, so the flush commits the effect and removes the durable copy
 together), recorded, and its result is `Faulted`, so with the default policy it surfaces as a blocking
 incident. It is recorded rather than dropped quietly because the attempt only says the checkpoint may
@@ -244,9 +251,17 @@ be durable: a store that refused the commit throws this same exception, and a st
 record would then be lost without a trace. A `RetryAfter` decision is not released for it, for the same
 reason as any dispatch that attempted a non-retaining checkpoint; `RetryNow` re-enqueues it, as for any
 fault. A step whose own commit consumed its claim is unchanged: the exception propagates and nothing is
-recorded. The handlers known to throw this exception (BPMN, child control, bookmark material) throw
-before any effect, and the stores throw it for bookmark trigger claims, which retain the step, so they
-are all still released as before.
+recorded.
+
+Every current throw site still gets the delayed release. The stores throw it only to refuse a bookmark
+trigger claim (EF and in-memory, keyed on `ExpectedBookmarkResume`, which only the retaining
+`InitialTriggerClaim` carries) or a model or parent-wait commit (model executions only, which open no
+frame). Checkpoint enrichers that refuse with it, such as `WorkflowDispatchControlPolicy.CheckpointFailure`,
+run before the committer records the attempt. Handlers throw it before any commit or after only a
+retaining claim: `ResumeBookmark` before its commit or after only its retaining trigger claim;
+`InvokeActivity`, parent completion and structural callback evaluation after only the retaining attempt
+claim, which covers an activity that throws it inside `ExecuteAsync`, such as Rules' `RunRules`; BPMN and
+child control before their commits.
 
 ### What it does
 

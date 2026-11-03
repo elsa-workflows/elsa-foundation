@@ -4,10 +4,11 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// Signals that scheduler work could not be evaluated because a durable runtime dependency is temporarily unavailable.
 /// The safe code and summary deliberately exclude provider diagnostics and retained workflow data.
 /// Delayed retry supports bookmark resumes, invocation and structural notification/control/completion delivery and workflow checkpoints with a live, unconsumed durable queue claim.
-/// Unsupported command/provider combinations propagate this signal without acknowledging or poisoning the work.
-/// Supported work whose dispatch already sent a non-retaining checkpoint to the checkpoint store, without that commit
-/// consuming its claim, is handled as a handler fault instead of released: that checkpoint is durable, or will be at the
-/// coalescing segment's flush, so running the work again would repeat it.
+/// Whatever the provider, a claimed dispatch of those kinds that already sent a non-retaining checkpoint to the checkpoint
+/// store, without that commit consuming its claim, is handled as a handler fault (acknowledged and recorded,
+/// <c>Poisoned</c> by default) instead: running it again would repeat that checkpoint (#3683).
+/// Otherwise, unsupported command/provider combinations propagate this signal without acknowledging or poisoning the work.
+/// See <c>docs/runtime-fault-behavior.md</c>, "Temporarily unavailable work".
 /// </summary>
 public sealed class RuntimeSchedulerWorkUnavailableException : Exception
 {
