@@ -281,21 +281,32 @@ public sealed class WorkflowRunInspectionTests
     [InlineData("plain", false)]
     [InlineData("unreadable", true)]
     [InlineData("partial", true)]
+    [InlineData("blank", true)]
+    [InlineData("completed-sensitive", true)]
+    [InlineData("completed-plain", false)]
+    [InlineData("completed-blank", true)]
     public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
     {
         const string ChildId = "actexec-child";
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
-        if (child is "sensitive" or "plain")
+        if (child is "sensitive" or "plain" or "completed-sensitive" or "completed-plain")
             await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ChildId, RunId, "node-child", "authored-child", "Test.Child", "1.0.0",
                 ActivityExecutionStatus.Faulted, null, 2, Now, Now, null, "checkpoint-2", "checkpoint-2", Now, ActivitySchedulingProvenance.Empty, [], [], [],
-                child == "sensitive" ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
-        var causal = child == "partial"
-            ? new Dictionary<string, string> { [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalExecutableNodeId] = "node-child" }
-            : new Dictionary<string, string>
+                child.EndsWith("sensitive", StringComparison.Ordinal) ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
+        var causal = child switch
+        {
+            "partial" => new Dictionary<string, string> { [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalExecutableNodeId] = "node-child" },
+            // A present but blank causal key, with no incident id or node beside it, is not "no causation".
+            "blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.CausalActivityExecutionId] = " " },
+            // A structural parent (a Flowchart) records the child it completed from, as the packaged runtime does.
+            "completed-sensitive" or "completed-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = ChildId },
+            "completed-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = "" },
+            _ => new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalActivityExecutionId] = ChildId,
                 [RuntimeMetadataKeys.CausalExecutableNodeId] = "node-child", [RuntimeMetadataKeys.CausationKind] = "child-fault"
-            };
+            }
+        };
         // The parent's own projection records the propagated incident, as the fault recorder leaves it.
         await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ActivityId, RunId, "node-1", "authored-1", "Test.Activity", "1.0.0",
             ActivityExecutionStatus.Faulted, null, 1, Now, Now, null, "checkpoint-1", "checkpoint-1", Now, ActivitySchedulingProvenance.Empty, [], [],

@@ -8,7 +8,8 @@ evidence APIs. The seed (owner_resources.seed_faulted_run) publishes and execute
   "canary absent" check vacuous, so the case selects the test-only host seam QualificationRunCapture first: it captures
   sensitive activity inputs as full payloads, and the driver requires the run API to report the canary input captured before
   it checks that Weaver withholds it;
-- a Run that is still in progress: an Event that does not start the workflow, so the Run suspends on its bookmark.
+- a Run that is still in progress: an Event that does not start the workflow. The runtime keeps the Run Running and suspends
+  the Event's activity execution on its bookmark (Suspended, BookmarkWaiting), the waiting signal the seed settles on.
 
 Native controls, each a fresh session and turn:
 - explain-fault: the run page's workflows.run reference (the faulted Run, the Fault's activity execution selected) is admitted

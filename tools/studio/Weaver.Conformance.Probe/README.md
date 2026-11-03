@@ -315,7 +315,8 @@ record; `witness_manifest()` counts the four cases.
 Then `run_journeys.py` runs two cases, `{copilot,anthropic}-workflow-run`. Each case seeds, through the design, publishing
 and runtime APIs' own relations (`owner_resources.seed_faulted_run`), two Runs in the packaged consumer: one that faults (a
 Write Line whose text, a fresh private canary, is authored sensitive, then a Fault with one blocking incident) and one still
-in progress (an Event that does not start the workflow, so it suspends on its bookmark). The runtime's default capture
+in progress (an Event that does not start the workflow: the runtime keeps the Run `Running` and suspends the Event's activity
+execution on its bookmark, `Suspended`/`BookmarkWaiting`, which is the waiting signal the seed settles on, `run_waiting`). The runtime's default capture
 policy never captures a sensitive payload, so the case first selects the test-only host seam `QualificationRunCapture`
 (`fixtures/BackendConsumer/QualificationRunCapture.cs`), which captures sensitive activity inputs as full payloads; the
 driver requires the run API to report the canary input `payloadCaptured` (and sensitive), and confirms with one admin

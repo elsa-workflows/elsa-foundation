@@ -119,21 +119,28 @@ internal sealed class WorkflowRunInspection(
     /// <summary>
     /// Whether an incident's message may echo a sensitive input. Non-sensitivity must be established from both sources, the
     /// Executable's input bindings and the activity execution's own value evidence, for the activity the incident names and,
-    /// when it propagated from a child's fault, for that causal activity execution too, whose exception text it may carry.
-    /// An incident without an activity execution, or whose causal execution is named only partly, counts as sensitive.
+    /// when it propagated from a child's fault, for that causal activity execution too (the fault recorder's causal execution,
+    /// or a structural parent's completed child). Only one causal level is checked: this assumes, as the runtime's fault
+    /// recorders do, that a propagated fault message names its child but never carries the child's own exception text.
+    /// An incident without an activity execution, or whose causal execution is blank or named only partly, counts as sensitive.
     /// </summary>
     private async Task<bool> IncidentSensitiveAsync(string workflowExecutionId, string? activityExecutionId, string? executableNodeId,
         IReadOnlyDictionary<string, string> metadata, HashSet<string>? sensitive, Dictionary<string, bool> lookups, CancellationToken cancellationToken)
     {
         if (activityExecutionId is null) return true;
         if (await ActivitySensitiveAsync(workflowExecutionId, activityExecutionId, executableNodeId, sensitive, lookups, cancellationToken)) return true;
-        metadata.TryGetValue(RuntimeMetadataKeys.CausalActivityExecutionId, out var causal);
-        metadata.TryGetValue(RuntimeMetadataKeys.CausalExecutableNodeId, out var causalNode);
-        if (!string.IsNullOrWhiteSpace(causal))
-            return await ActivitySensitiveAsync(workflowExecutionId, causal, string.IsNullOrWhiteSpace(causalNode) ? null : causalNode, sensitive, lookups,
-                cancellationToken);
-        // A causal node or incident without its activity execution cannot be established non-sensitive.
-        return !string.IsNullOrWhiteSpace(causalNode) || metadata.ContainsKey(RuntimeMetadataKeys.CausalIncidentId);
+        // A causal child: the fault recorder's (IActivityFaultCausation) or a structural parent's completed child. A key that is
+        // present but blank, or a causal node or incident without its activity execution, cannot be established non-sensitive.
+        foreach (var key in new[] { RuntimeMetadataKeys.CausalActivityExecutionId, RuntimeMetadataKeys.CompletedChildActivityExecutionId })
+        {
+            if (!metadata.TryGetValue(key, out var child)) continue;
+            if (string.IsNullOrWhiteSpace(child)) return true;
+            var childNode = key == RuntimeMetadataKeys.CausalActivityExecutionId && metadata.TryGetValue(RuntimeMetadataKeys.CausalExecutableNodeId, out var node)
+                            && !string.IsNullOrWhiteSpace(node) ? node : null;
+            if (await ActivitySensitiveAsync(workflowExecutionId, child, childNode, sensitive, lookups, cancellationToken)) return true;
+        }
+        return !metadata.ContainsKey(RuntimeMetadataKeys.CausalActivityExecutionId)
+               && (metadata.ContainsKey(RuntimeMetadataKeys.CausalExecutableNodeId) || metadata.ContainsKey(RuntimeMetadataKeys.CausalIncidentId));
     }
 
     /// <summary>

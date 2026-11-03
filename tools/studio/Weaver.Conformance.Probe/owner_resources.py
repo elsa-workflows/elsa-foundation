@@ -346,14 +346,29 @@ def seed_versioned_workflow(http, output, *, publish=True):
 # Spec 1193 slice G (T045): one Run of a seeded workflow that faults. Its first activity is a Write Line whose text, a
 # private canary, is authored sensitive (the run case selects the QualificationRunCapture seam first, so the runtime captures
 # it into value evidence, which the run API never returns inline); its second is a Fault, which faults
-# the Run with one blocking incident. A second, waiting Run (an Event that does not start the workflow, so it suspends)
-# is still in progress while it is explained.
+# the Run with one blocking incident. A second, waiting Run (an Event that does not start the workflow, so its activity
+# suspends on a bookmark while the Run stays Running) is still in progress while it is explained.
 RUN_NODES = {"root": "run-flow", "sensitive": "run-sensitive", "fault": "run-fault", "wait": "run-wait"}
 RUN_FAULT = {"code": "qualification.run.fault", "message": "Qualification Run fault."}
 RUN_WAIT_EVENT = "qualification-run-wait"
 RUN_FAULT_TYPES = ("Elsa.Activities.Primitives.Activities.Fault", "Elsa.Fault")
 RUN_EVENT_TYPES = ("Elsa.Activities.Primitives.Activities.Event", "Elsa.Event")
 TERMINAL_RUN_STATUSES = ("Completed", "Faulted", "Cancelled")
+
+
+def run_terminal(value):
+    """A Workflow Instance read that has settled finally: Completed, Faulted or Cancelled."""
+    return isinstance(value, dict) and (value.get("instance") or {}).get("status") in TERMINAL_RUN_STATUSES
+
+
+def run_waiting(value, node_id):
+    """A Workflow Instance read that is still in progress and waiting: the runtime reports such a Run as Running (observed
+    natively on d5d731de2), with the waiting activity execution Suspended on its bookmark (subStatus BookmarkWaiting, one
+    bookmark at least). The Run's own status never says Suspended, so the activity's is the waiting signal."""
+    if not isinstance(value, dict) or run_terminal(value) or (value.get("instance") or {}).get("status") not in ("Running", "Suspended"):
+        return False
+    return any(isinstance(item, dict) and item.get("authoredActivityId") == node_id and item.get("status") == "Suspended"
+               and item.get("subStatus") == "BookmarkWaiting" and (item.get("bookmarkCount") or 0) >= 1 for item in value.get("activities") or [])
 
 
 def _digest(root, name, value):
@@ -429,13 +444,12 @@ def seed_faulted_run(http, output, canary):
                    [{"id": n["sensitive"] + "-" + n["fault"], "source": {"nodeId": n["sensitive"], "port": "Done"}, "target": {"nodeId": n["fault"]}}], n["sensitive"])
     waiting = root([leaf(n["wait"], event["activityVersionId"], [literal("EventName", RUN_WAIT_EVENT), literal("CanStartWorkflow", False)])], [], n["wait"])
     layout = lambda nodes: [{"nodeId": node, "x": 120 + 300 * index, "y": 160} for index, node in enumerate(nodes)]
-    terminal = lambda value: (value.get("instance") or {}).get("status") in TERMINAL_RUN_STATUSES
-    suspended = lambda value: (value.get("instance") or {}).get("status") == "Suspended"
-    fault_run = _run_once(http, output, evidence, workflows, runtime, publishing, "faulted", faulted, layout([n["sensitive"], n["fault"]]), settled=terminal)
+    fault_run = _run_once(http, output, evidence, workflows, runtime, publishing, "faulted", faulted, layout([n["sensitive"], n["fault"]]), settled=run_terminal)
     check(fault_run["instance"]["instance"]["status"] == "Faulted", "The seeded Run did not fault")
     wait_run = _run_once(http, output, evidence, workflows, runtime, publishing, "waiting", waiting, layout([n["wait"]]),
-                         settled=lambda value: suspended(value) or terminal(value))
-    check(wait_run["instance"]["instance"]["status"] == "Suspended", "The seeded waiting Run is not in progress")
+                         settled=lambda value: run_waiting(value, n["wait"]) or run_terminal(value))
+    check(run_waiting(wait_run["instance"], n["wait"]), "The seeded waiting Run is not in progress, waiting on its bookmark: "
+          + str((wait_run["instance"].get("instance") or {}).get("status")))
     # The run API's own reads of each activity execution, by authored node.
     for run in (fault_run, wait_run):
         run["activities"] = {}

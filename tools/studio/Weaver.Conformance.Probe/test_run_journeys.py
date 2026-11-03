@@ -49,15 +49,15 @@ def context(attachment, value, selected=None, *, read_at=None):
             "target": dict(attachment["target"]),
             "content": {**{key: instance[key] for key in ("workflowExecutionId", "status", "artifactId", "artifactHash", "definitionId", "definitionVersionId",
                                                             "incidentCount")},
-                        "activityExecutionId": attachment["content"]["activityExecutionId"], "inProgress": instance["status"] == "Suspended",
+                        "activityExecutionId": attachment["content"]["activityExecutionId"], "inProgress": instance["status"] in ("Running", "Suspended"),
                         "readAt": read_at, "selectedActivity": chosen}}
 
 
 def result(value, selected=None, *, permitted=True, payloads=None, overrides=None):
     instance = value["instance"]["instance"]
-    terminal = instance["status"] != "Suspended"
+    terminal = instance["status"] not in ("Running", "Suspended")
     data = {"readOnly": True, "workflowExecutionId": instance["workflowExecutionId"], "readAt": "2026-11-03T12:00:00Z", "inProgress": not terminal,
-            "attribution": "This Run has finished (Faulted); its recorded state is final." if terminal else "This Run is still in progress (Suspended); read at ...",
+            "attribution": "This Run has finished (Faulted); its recorded state is final." if terminal else "This Run is still in progress (Running); read at ...",
             "instance": dict(instance), "canInspectValues": permitted, "canResolveValues": permitted, "runControls": "Retry ... use the run page's own controls (the run toolbar).",
             "incidents": [{**row, "messageRedacted": not permitted} for row in value["instance"]["incidents"]], "incidentsTruncated": False,
             "activities": {"items": value["instance"]["activities"], "itemsTruncated": False}, "selectedActivity": None,
@@ -136,7 +136,7 @@ class RunDisclosureTests(unittest.TestCase):
         other["target"]["revision"] = "act-write"
         with self.assertRaises(RuntimeError): require_run_context(other, attachment, run(), FAULT)
         # An in-progress Run carries its read time; a finished one never does.
-        waiting = run(status="Suspended")
+        waiting = run(status="Running")
         require_run_context(context(attachment, waiting, FAULT, read_at="2026-11-03T12:00:00Z"), attachment, waiting, FAULT)
         with self.assertRaises(RuntimeError): require_run_context(context(attachment, waiting, FAULT), attachment, waiting, FAULT)
 
@@ -176,10 +176,32 @@ class RunDisclosureTests(unittest.TestCase):
             require_run_result(result(limited, hidden, permitted=False, overrides={"unavailable": []}), limited, selected=hidden, permitted=False)
 
     def test_an_in_progress_read_is_attributed_to_its_read_time(self):
-        waiting = run(status="Suspended")
+        waiting = run(status="Running")
         self.assertTrue(require_run_result(result(waiting), waiting)["inProgress"])
         with self.assertRaises(RuntimeError):
-            require_run_result(result(waiting, overrides={"attribution": "This Run has finished (Suspended)."}), waiting)
+            require_run_result(result(waiting, overrides={"attribution": "This Run has finished (Running)."}), waiting)
+
+
+class RunSeedSettleTests(unittest.TestCase):
+    """The settle predicates over the instance reads the packaged runtime returned natively (d5d731de2), reduced."""
+    WAITING = {"instance": {"status": "Running"}, "activities": [
+        {"authoredActivityId": "run-flow", "status": "Running", "subStatus": None, "bookmarkCount": 0},
+        {"authoredActivityId": "run-wait", "status": "Suspended", "subStatus": "BookmarkWaiting", "bookmarkCount": 1}]}
+    FAULTED = {"instance": {"status": "Faulted"}, "activities": [
+        {"authoredActivityId": "run-sensitive", "status": "Completed", "subStatus": None, "bookmarkCount": 0},
+        {"authoredActivityId": "run-fault", "status": "Faulted", "subStatus": "ActivityReturnedFault", "bookmarkCount": 0}]}
+
+    def test_a_running_run_waiting_on_its_bookmark_is_in_progress_and_waiting(self):
+        from owner_resources import run_terminal, run_waiting
+        self.assertTrue(run_waiting(self.WAITING, "run-wait"))
+        self.assertFalse(run_terminal(self.WAITING))
+        self.assertTrue(run_terminal(self.FAULTED))
+        self.assertFalse(run_waiting(self.FAULTED, "run-wait"))
+        # Not yet waiting: scheduled but no bookmark, or the waiting activity another one.
+        starting = copy.deepcopy(self.WAITING); starting["activities"][1].update(status="Running", subStatus=None, bookmarkCount=0)
+        self.assertFalse(run_waiting(starting, "run-wait"))
+        self.assertFalse(run_waiting(self.WAITING, "run-other"))
+        self.assertFalse(run_waiting({"instance": {"status": "Pending"}, "activities": self.WAITING["activities"]}, "run-wait"))
 
 
 class RunTurnTests(unittest.TestCase):
