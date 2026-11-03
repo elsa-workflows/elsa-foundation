@@ -5,10 +5,11 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// <summary>
 /// One claimed scheduler dispatch on the current async flow, and whether it has sent a non-retaining checkpoint of its
 /// workflow execution to the commit store (#3275). <see cref="WorkflowSchedulerDrainer"/> opens one around each dispatch
-/// it could release for a <c>RetryAfter</c>, and <see cref="Checkpoints.RuntimeCheckpointCommitter"/> records the
-/// attempt just before its store call, whatever the store then does with it: a coalescing segment buffers, folds or
-/// passes it through, and a store can land it and still throw. The drainer releases the item only when no attempt was
-/// recorded, so the decision never rests on inferring afterwards whether a faulted commit left a durable effect.
+/// it could release with a delay, for a <c>RetryAfter</c> or for temporary unavailability (#3683), and
+/// <see cref="Checkpoints.RuntimeCheckpointCommitter"/> records the attempt just before its store call, whatever the store
+/// then does with it: a coalescing segment buffers, folds or passes it through, and a store can land it and still throw.
+/// The drainer releases the item only when no attempt was recorded, so the decision never rests on inferring afterwards
+/// whether a faulted commit left a durable effect.
 /// </summary>
 /// <remarks>
 /// The frame lives on the async flow rather than in the drain's DI scope because a handler may commit through a

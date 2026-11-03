@@ -217,6 +217,54 @@ public sealed class RuntimeSchedulerWorkDeferralTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Unavailable_dispatch_after_a_non_retaining_commit_is_never_released_to_run_again(bool commitConsumesClaim)
+    {
+        // #3683 outside a coalescing segment. A commit that consumed the claim leaves nothing to release, and the signal
+        // propagates as before, with no record. A commit through a committer of its own scope holds no claim and consumes
+        // nothing, so the item used to be released over a durable effect; it is acknowledged and recorded instead.
+        var queue = new ObservingWorkQueue(new InMemoryWorkflowSchedulerWorkQueue());
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var drainerAccessor = new RuntimeConsumedSchedulerWorkClaimAccessor();
+        var committer = new RuntimeCheckpointCommitter(
+            new ImmediateCheckpointPersistencePolicy(),
+            new InMemoryRuntimeCheckpointCommitStore(schedulerWorkQueue: queue),
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            enrichers: [],
+            intentHandlerContributions: [],
+            consumedWorkClaimAccessor: commitConsumesClaim ? drainerAccessor : new RuntimeConsumedSchedulerWorkClaimAccessor());
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [new CommittingThenUnavailableHandler(committer)],
+            new FakeTimeProvider(Now),
+            poisonStore: poisonStore,
+            consumedWorkClaimAccessor: drainerAccessor);
+        await queue.EnqueueAsync(Work("committed-source", 1));
+
+        if (commitConsumesClaim)
+        {
+            await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask());
+            Assert.Equal((1, 0), (queue.ConsumeClaimedCalls, queue.CompleteClaimCalls));
+            Assert.Empty(await poisonStore.ListAsync(WorkflowExecutionId));
+        }
+        else
+        {
+            var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.True(result.StoppedOnFault);
+            Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, Assert.Single(result.Items).Status);
+            Assert.Equal((0, 1), (queue.ConsumeClaimedCalls, queue.CompleteClaimCalls));
+            var poison = Assert.Single(await poisonStore.ListAsync(WorkflowExecutionId));
+            Assert.Equal(("committed-source", RuntimeSchedulerPoisonDisposition.Poisoned), (poison.WorkItemId, poison.Disposition));
+            Assert.Equal(typeof(RuntimeSchedulerWorkUnavailableException).FullName, poison.Fault.ExceptionType);
+        }
+
+        Assert.Equal(0, queue.ReleaseClaimCalls);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
+    }
+
     private static RuntimeSchedulerWorkItem Work(string workItemId, long sequence, WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.ResumeBookmark) =>
         new(
             workItemId,
@@ -287,6 +335,18 @@ public sealed class RuntimeSchedulerWorkDeferralTests
                 current.VisibleAfter,
                 TimeSpan.FromMinutes(1)));
             Assert.NotNull(SuccessorClaim);
+            throw new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable.");
+        }
+    }
+
+    private sealed class CommittingThenUnavailableHandler(RuntimeCheckpointCommitter committer) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(CommittingThenUnavailableHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            await committer.CommitAsync(Commit($"commit-{workItem.WorkItemId}", RuntimeCheckpointNames.ActivityCompleted), cancellationToken);
             throw new RuntimeSchedulerWorkUnavailableException("test.unavailable", "The test dependency is unavailable.");
         }
     }

@@ -5,6 +5,9 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// The safe code and summary deliberately exclude provider diagnostics and retained workflow data.
 /// Delayed retry supports bookmark resumes, invocation and structural notification/control/completion delivery and workflow checkpoints with a live, unconsumed durable queue claim.
 /// Unsupported command/provider combinations propagate this signal without acknowledging or poisoning the work.
+/// Supported work whose dispatch already sent a non-retaining checkpoint to the checkpoint store, without that commit
+/// consuming its claim, is handled as a handler fault instead of released: that checkpoint is durable, or will be at the
+/// coalescing segment's flush, so running the work again would repeat it.
 /// </summary>
 public sealed class RuntimeSchedulerWorkUnavailableException : Exception
 {

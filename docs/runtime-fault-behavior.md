@@ -216,6 +216,38 @@ A dispatch that breaches `RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration` 
 here on purpose: a hung dispatch becomes a bounded, visible outcome. A work item no handler accepts
 also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 
+### Temporarily unavailable work
+
+A handler that throws `RuntimeSchedulerWorkUnavailableException` is usually not a fault. It has its own
+arm, ahead of the general one, which writes no poison record. For a step kind that supports a delayed
+release (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
+`DeliverChildControl`, `Checkpoint`), a live claim that no commit has consumed, and a queue that can
+persist the delay, the claim is released until `RuntimeSchedulerWorkClaimOptions.UnavailableRetryDelay`
+(5 seconds by default) has passed. The item result is `Deferred` and the drain stops. Anything else
+propagates the exception and leaves the step queued, or already consumed by its own commit.
+
+One case is settled differently ([#3683](https://github.com/elsa-workflows/elsa-foundation/issues/3683)).
+If the dispatch sent a non-retaining checkpoint to the checkpoint store before it threw, and that
+commit did not consume the claim, the step is not deferred. That checkpoint is durable, or will be at
+the coalescing segment's flush, so running the step again would repeat its effect or hit the
+replay-conflict check. Inside an active segment the commit consumes nothing: it is buffered, folded at
+the cap, or committed by a boundary the segment continues past, and a handler that commits through a
+DI scope of its own holds no claim either. The dispatch frame that the `RetryAfter` release reads below
+records the attempt in every one of these cases. This applies even when the queue could not have
+persisted the delay.
+
+Such a step goes to the general arm below and is treated as a handler fault. It is acknowledged
+(through the segment's overlay, so the flush commits the effect and removes the durable copy
+together), recorded, and its result is `Faulted`, so with the default policy it surfaces as a blocking
+incident. It is recorded rather than dropped quietly because the attempt only says the checkpoint may
+be durable: a store that refused the commit throws this same exception, and a step acknowledged with no
+record would then be lost without a trace. A `RetryAfter` decision is not released for it, for the same
+reason as any dispatch that attempted a non-retaining checkpoint; `RetryNow` re-enqueues it, as for any
+fault. A step whose own commit consumed its claim is unchanged: the exception propagates and nothing is
+recorded. The handlers known to throw this exception (BPMN, child control, bookmark material) throw
+before any effect, and the stores throw it for bookmark trigger claims, which retain the step, so they
+are all still released as before.
+
 ### What it does
 
 1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`. An exception an
@@ -471,6 +503,7 @@ Changing the catalog default only affects workflows published afterwards.
 | the retry decision is read before the ack, and a policy that throws counts as no decision | `WorkflowSchedulerDrainer.DecideRetryAsync` |
 | ack-before-poison, and the release of an honored `RetryAfter` in its place | `WorkflowSchedulerDrainer.DispatchAsync` (fault arm), `CanReleaseWithDelay` |
 | a non-retaining checkpoint attempt is recorded before the store call, on the dispatch's async flow | `RuntimeSchedulerDispatchFrame`, `RuntimeCheckpointCommitter.CommitAsync` |
+| temporarily unavailable work is released with its delay, or handled as a fault after a non-retaining checkpoint attempt | `WorkflowSchedulerDrainer.DispatchAsync` (`RuntimeSchedulerWorkUnavailableException` arm and its filter) |
 | the retry-mode ladder that turns the decision into a record | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
@@ -498,6 +531,11 @@ Behavioral guards worth reading alongside the code:
   queue after a fault is always paired with a poison record.
 - `Essentials/tests/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs`:
   `Constructor_RequiresThePoisonStore_SoAnAckDeletedFaultCannotVanish`.
+- `Essentials/tests/Workflows/Runtime/Tests/CoalescingResumeDurableClaimBoundaryTests.cs`: the
+  `Unavailable_*` tests run a real active segment and show that a step which buffered, folded or
+  committed a non-retaining checkpoint before reporting unavailability is recorded and not run again
+  after the flush, while one that committed nothing, or only a retaining checkpoint, is still released
+  (#3683).
 - `Essentials/tests/Workflows/Runtime/Tests/BlockingIncidentWorkflowFaultObserverTests.cs`: every skip
   condition and the ancestor-faulting rule.
 - `Essentials/tests/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs`: batch atomicity and
