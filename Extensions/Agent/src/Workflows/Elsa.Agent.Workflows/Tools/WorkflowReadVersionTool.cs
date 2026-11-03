@@ -32,7 +32,8 @@ internal sealed class WorkflowReadVersionTool(
     internal static readonly AgentToolDescriptor Contract = new(ToolName, "Read workflow version",
         "Returns one exact, immutable workflow version named by an admitted workflows.version context (its versionId, or the only one): its activities by scope " +
         "path with their input names (never values) and its connections. With compareToVersionId, another version of the same definition, it also returns the " +
-        "tool's own structural comparison of the two exact versions: activities added, removed and changed, and connections added and removed. Read-only.",
+        "tool's own structural comparison of the two exact versions: activities added, removed and changed, and connections added, removed and changed " +
+        "(connectionsChanged: the same connection rewired or with other metadata). Read-only.",
         AgentToolMutability.ReadOnly, AgentRisk.ReadOnly,
         """{"type":"object","properties":{"versionId":{"type":"string","minLength":1,"maxLength":128},"compareToVersionId":{"type":"string","minLength":1,"maxLength":128}},"additionalProperties":false}""",
         ["workflows/design:read"], ["/workflows"])

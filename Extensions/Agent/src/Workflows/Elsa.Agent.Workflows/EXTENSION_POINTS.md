@@ -294,13 +294,14 @@ definition, which reads nothing else, and then that definition's owner, before t
 `agent.workflow.permission_denied` ("Current workflow design read permission is required for the workflow version.");
 `agent.workflow.version_not_found` ("The workflow version is unavailable.") for an unknown version, another definition's
 version and a withheld definition alike, so existence is disclosed no more than the owner discloses it;
-`workflow.authorization.unavailable` (owner threw; during an outage an unknown and an existing version answer alike, and
-nothing is read) and the composition faults `workflow.authority.composition_unavailable` (no or several definition
+`workflow.authorization.unavailable` (owner threw; for a reference that names its definition, an unknown and an existing
+version then answer alike and nothing is read) and the composition faults `workflow.authority.composition_unavailable` (no or several definition
 authorizers), `workflow.version.reader_unavailable` and `workflow.version.structure_unavailable` (no or several readers or
 activity structure services), each owner-namespaced so the engine reports it as unavailable (503); slice A's
 `agent.workflow.authority_unavailable` keeps its established meaning for the draft tools and is not used here. The order is
 always the host's permission, then (for a version named only by its id) the definition lookup, then the owner, then one read;
-during an owner outage a version id with no definition answers not found without asking the owner. With no version reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own
+for a version named only by its id (a retained result, a tool target), an unknown id has no definition to ask about, so
+during an owner outage it answers not found (404) while a known id answers unavailable (503). With no version reference it contributes nothing. `AdmitDisclosureAsync` accepts only its own
 retained read and reads it again for the current turn (an immutable version reads back identically), and re-authorizes a
 retained `workflow_read_version` result by its version's definition.
 
@@ -319,7 +320,13 @@ so), listing activities added (only in the version), removed (only in the compar
 container's structure other than its children, connections and their per-element metadata, such as a flowchart's start
 node or a switch's cases, compared normalized) and `childOrder` (`reorderedSlots`; only for an ordered container: a
 container that wires its children with connections, such as a flowchart, runs them by its connections, so its list order is
-not compared), and connections added, removed and changed (the same endpoints with other `connectionMetadata`). A container whose structure no
+not compared), and connections added, removed and changed. A connection is identified as the flowchart identifies it: its
+`id`, or without one `{source}:{sourcePort}->{target}` (FlowchartGraph's key), which is also the key of its
+`connectionMetadata` entry. Connections are read as the runtime deserializes them: property names in any letter case, a
+blank or padded id is none or trimmed (as `FlowchartConnection` does), a blank port is `Done` and a port is trimmed (as
+`FlowchartEndpoint.NormalizePort` does), and node ids are kept as written; reported ports are the normalized ones; `connectionsChanged` names each by `connectionId` with the aspects `endpoints` (rewired) and
+`metadata` (label, default flag, policy or configuration). Two connections with the same endpoints under different ids are
+two connections. A metadata entry no connection or child claims stays part of the container's `structure`. A container whose structure no
 installed handler projects is never read as empty: the reading and the comparison say `incomplete` with
 `incompleteReasons`. Input and output values are compared without being disclosed. Lists are bounded (at most 100 each,
 smaller when the result would exceed 24 KiB, well under the host's 32 KiB budget, #3710) and say when they were cut; a read

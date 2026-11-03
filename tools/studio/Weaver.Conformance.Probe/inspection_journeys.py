@@ -145,6 +145,11 @@ def other_hash(value):
 
 # ---- The probe's own reads of the owning APIs' answers. ----
 
+def normalize_port(port):
+    """A flowchart connection port as the runtime normalizes it."""
+    return port.strip() if isinstance(port, str) and port.strip() else "Done"
+
+
 def flatten_version(state):
     """Each activity of a version API state by scope path (container ids from the root to its container), with the names of
     its authored inputs, and each flowchart connection by its container; flowcharts are the consumer's only containers."""
@@ -161,7 +166,8 @@ def flatten_version(state):
         if not isinstance(payload, dict): return
         for item in payload.get("connections") or []:
             source, target = item.get("source") or {}, item.get("target") or {}
-            connections.append((node["nodeId"], source.get("nodeId"), source.get("port"), target.get("nodeId"), target.get("port")))
+            # Ports as the flowchart reads them (FlowchartEndpoint.NormalizePort): a blank port is Done, a port is trimmed.
+            connections.append((node["nodeId"], source.get("nodeId"), normalize_port(source.get("port")), target.get("nodeId"), normalize_port(target.get("port"))))
         for child in payload.get("activities") or []:
             visit(child, [*scope, node["nodeId"]])
     visit(root, [])
