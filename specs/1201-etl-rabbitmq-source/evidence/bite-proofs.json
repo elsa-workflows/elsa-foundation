@@ -3,6 +3,20 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there. An entry with supersededBy mutated code a later round rewrote; the entries it names cover that guard at the current code.",
  "results": [
   {
+   "mutation": "binding-source-exempt-from-exchanges",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostRabbitMqBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.A_source_binding",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.A_source_binding_allows_its_queues_exactly_and_needs_the_consumer"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "        if (!source && !binding.AllowedExchanges.Contains(entity, StringComparer.Ordinal))",
+   "mutated_text": "        if (!binding.AllowedExchanges.Contains(entity, StringComparer.Ordinal))",
+   "sourceRevision": "df4c946ca0e51217109bd8b01ed4db715a34a9e1"
+  },
+  {
    "mutation": "writer-single-line-as-received",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
