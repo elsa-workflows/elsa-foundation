@@ -49,7 +49,7 @@ public sealed class WorkflowTruthSeamTests
         var granted = Content(permissions);
         Assert.Equal("allowed", granted.GetProperty("read").GetString());
         Assert.Equal("allowed", granted.GetProperty("manage").GetString());
-        Assert.Equal(["workflow_read_graph", "workflow_set_designer_position"], Strings(granted, "tools"));
+        Assert.Equal(["workflow_read_graph", "workflow_set_designer_position", "workflow_apply_operation_batch"], Strings(granted, "tools"));
         Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(granted, "capabilities"));
     }
 
@@ -243,7 +243,7 @@ public sealed class WorkflowTruthSeamTests
         // The owner still allows managing the workflow; only the host policy withholds the tool. The capability is admitted
         // by its own id, as the Agent API admits it, so it stays.
         Assert.Equal("allowed", reported.GetProperty("manage").GetString());
-        Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
+        Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowApplyOperationBatchTool.ToolName], Strings(reported, "tools"));
         Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(reported, "capabilities"));
         var policies = host.Services.GetRequiredService<IAgentPolicyEvaluator>();
         var policy = AgentPolicy.Default with { DeniedCapabilityIds = [WorkflowSetDesignerPositionTool.ToolName] };
@@ -276,7 +276,7 @@ public sealed class WorkflowTruthSeamTests
             if ((await policies.EvaluateCapabilityAsync(policy, id)).Allowed) admitted.Add(id);
         Assert.Equal(admitted.Order(), Strings(reported, "capabilities").Order());
         var tools = new List<string>();
-        foreach (var name in new[] { WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName })
+        foreach (var name in new[] { WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName, WorkflowApplyOperationBatchTool.ToolName })
             if ((await policies.EvaluateCapabilityAsync(policy, name)).Allowed) tools.Add(name);
         Assert.Equal(tools, Strings(reported, "tools"));
     }
@@ -297,14 +297,25 @@ public sealed class WorkflowTruthSeamTests
     }
 
     [Fact]
-    public async Task A_host_authorizer_that_withholds_the_layout_tool_reports_explanation_only_tools()
+    public async Task A_host_authorizer_that_withholds_the_layout_tool_still_reports_the_batch_tool_the_engine_offers()
     {
         using var host = Host.Create(hostAuthorizer: new DenyTool(WorkflowSetDesignerPositionTool.ToolName));
         var reported = Content(Single(await host.CollectAsync(), DefaultWorkflowAgentContextProvider.PermissionsContentType));
 
+        // manage reports the layout tool's host decision; each tool follows its own host decision and the owner's answer.
         Assert.Equal("denied", reported.GetProperty("manage").GetString());
-        Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
+        Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowApplyOperationBatchTool.ToolName], Strings(reported, "tools"));
         Assert.Equal(["workflow.explain"], Strings(reported, "capabilities"));
+    }
+
+    [Fact]
+    public async Task A_host_authorizer_that_withholds_the_batch_tool_reports_the_layout_tool_only()
+    {
+        using var host = Host.Create(hostAuthorizer: new DenyTool(WorkflowApplyOperationBatchTool.ToolName));
+        var reported = Content(Single(await host.CollectAsync(), DefaultWorkflowAgentContextProvider.PermissionsContentType));
+
+        Assert.Equal("allowed", reported.GetProperty("manage").GetString());
+        Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName], Strings(reported, "tools"));
     }
 
     private sealed class DenyTool(string name) : IAgentToolAuthorizer

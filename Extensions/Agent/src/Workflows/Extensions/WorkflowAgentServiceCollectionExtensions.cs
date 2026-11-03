@@ -23,6 +23,8 @@ public static class WorkflowAgentServiceCollectionExtensions
         // by the tool invoker (read-only runs inline; mutating becomes a proposal).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowReadGraphTool>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowSetDesignerPositionTool>());
+        // The reviewed Operation Batch for the open working draft (spec 1193 slice C). Applied only by the originating editor.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowApplyOperationBatchTool>());
 
         return services;
     }

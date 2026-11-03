@@ -155,7 +155,9 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 ## Slice C: Draft authoring
 
 **Server, Agent Workflows**:
-- A versioned client working-state tool, `workflow_apply_operation_batch` v1, with strict per-operation JSON schemas (`additionalProperties: false`) for add, set-root, position, set-property, update, remove, connect and disconnect. Update allowlists `name`, `displayName`, `description` and `canStartWorkflow`. Set-property requires an explicit property name and a target activity. Add requires an explicit scope path and slot.
+- A versioned client working-state tool, `workflow_apply_operation_batch` v1, with strict per-operation JSON schemas (`additionalProperties: false`) for add, set-root, position, set-property, update, remove, connect and disconnect. Update allowlists `displayName`, `description` and `canStartWorkflow`. `name` is not offered: neither the designer's `ActivityNode` nor the backend node has a name field, and an activity's visible name is its `displayName` presentation record. Set-property requires an explicit property name and a target activity. Add requires an explicit scope path and slot.
+- Preparation refuses everything the designer applier would refuse, so an approved batch never fails only at application: at most one set-root per batch, no add into or connection within an activity the same batch adds (the catalog does not disclose a new activity's slots), no add into or removal from a BPMN scope, and no new id that the document still holds in a layout or presentation record. A shared case file (`workflowBatchConformance.json`) runs through both the server preparation and the applier.
+- The snapshot carries the structure in a compact form (activity indexes by version and by container slot), so a draft that fits the 64 KiB snapshot bound without it still fits; Studio leaves the structure out when the content would come within 2 KiB of the bound.
 - Preparation validates each operation against the actor's authorized catalog and the activity's declared inputs. It refuses or clarifies, naming the failing operation (FR-013), and refuses credential literals (FR-017). It classifies risk with `AgentRisk.ReviewRequired`, or `Destructive` for remove and disconnect, and the batch takes the highest. It returns `RequiresApproval` in every mode.
 - The existing `workflow_set_designer_position` tool stays, with its strict receipt.
 
@@ -168,7 +170,9 @@ A missing contract fails explicitly. The Agent tool or context reports an unavai
 - After applying: normal validation, dirty marking, the scope-frame and selection rules of FR-008, the test-run result and published-artifact association cleared, and a receipt issued for the originating client binding before it rotates.
 - Studio rechecks the server's risk classification against live working state. A disagreement fails closed into review or clarification.
 
-**Studio, Weaver Workflows**: a `workflows.batch-result` renderer with each operation's risk label and the whole-change Undo.
+**Studio, Weaver Workflows**: a `workflows.batch-result` renderer with each operation's risk label, registered under its own module identity for the Workflows module's results.
+
+**Studio host and SDK** (generic, no workflow knowledge): a result renderer may declare `resourceModuleIds`, the resource modules whose results it presents, so a renderer contributed by another package is matched by resource module rather than by its own `moduleId`; and `api.agent.resultControls` lets the resource-owning module contribute an interactive control for a result type, which the host renders after whichever renderer presents it. Studio Workflows contributes the batch's designer-history Undo and its saved state as such a control.
 
 **Tests**:
 - schema refusal per operation kind;
@@ -225,6 +229,8 @@ Concrete file seams are recorded in [research.md](research.md).
 | The `errorCode` property on design error bodies, the 503 outcome, and the public constant `WorkflowDefinitionAuthorizationException.UnavailableCode`, which is compiled into callers and so never changes value | A | Minor |
 | The removed legacy contracts, implementations and models in `Elsa.Agent.Workflows` | B | Major (pre-GA cleanup) |
 | `workflow_apply_operation_batch` v1 and the new context kinds | C, D, E, F, G | Minor |
+| The working-state content revision becomes `sha256:` plus 64 hex digits instead of an 8-hex 32-bit hash. Consumers compare it for equality only. A proposal prepared before the upgrade and recovered after it carries the old format, so it fails closed as stale and is never applied | C | Minor |
+| The SDK's optional `resourceModuleIds` on result renderers, the `resultControls` registry with `StudioAgentResultControlContribution`, the `studio.weaver.result-controls` slot and `presentsResourceModule` | C | Minor, additive |
 | The removed `workflows.proposal` renderer | D | Major |
 | The operation-key overloads on `IWorkflowLibraryStore` | E | Minor, additive |
 | The new `Elsa.Agent.Workflows.Runtime` package | F | Minor |

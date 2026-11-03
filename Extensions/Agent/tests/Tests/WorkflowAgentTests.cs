@@ -352,7 +352,7 @@ public sealed class WorkflowAgentTests
         var tools = (await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync())
             .Where(tool => tool.Descriptor.ModuleId == source.Descriptor.ModuleId).ToArray();
 
-        Assert.Equal(2, tools.Length);
+        Assert.Equal(3, tools.Length);
         Assert.All(tools, tool => Assert.Equal(source.Descriptor.Id, tool.Descriptor.DisclosureSourceId));
     }
 

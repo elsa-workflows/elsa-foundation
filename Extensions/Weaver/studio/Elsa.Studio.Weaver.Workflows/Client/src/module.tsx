@@ -128,11 +128,74 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
+  // Contributed by this package for the Workflows module's results; the host matches the result's resource module
+  // against resourceModuleIds. The designer-history Undo is Studio Workflows' own result control, shown after this card.
+  api.agent.resultRenderers.add({
+    id: "weaver.workflows.batch-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "Workflow change", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
+    component: (props: StudioAgentResultRendererProps) => <WorkflowBatchResult {...props} />
+  });
+
   api.agent.resultRenderers.add({
     id: "weaver.workflows.workflow-proposal-renderer", moduleId: "Elsa.Studio.Workflows",
     displayName: "Workflow proposal", resultTypes: ["workflows.proposal"], schemaVersions: ["1"],
     component: ({ result }: StudioAgentResultRendererProps) => <WorkflowProposalRenderer proposal={(isRecord(result) && isRecord(result.data) ? result.data : result) as WorkflowProposalSummary} />
   });
+}
+
+interface BatchOperationLabel { index?: number; kind?: string; summary?: string; risk?: string; reasons?: string[] }
+
+/**
+ * The review and result card of a reviewed Operation Batch (spec 1193 FR-011, FR-012): each operation with its risk
+ * label, the batch's highest risk and complexity label, what applying clears, the outcome in product words, and the
+ * outcome in product words. The whole-change Undo and the saved state are Studio Workflows' result control, shown after it.
+ */
+export function WorkflowBatchResult({ proposal, preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  const operations = Array.isArray(data.operations) ? data.operations.filter(isRecord) as BatchOperationLabel[] : [];
+  const risk = typeof data.risk === "string" ? data.risk : preparedInvocation?.risk;
+  return (
+    <section aria-label="Workflow change" className="weaver-workflow-batch">
+      <p><strong>{batchOutcome(proposal, toolResult)}</strong></p>
+      <p>
+        <span data-risk={risk}>{riskLabel(risk)}</span>
+        {data.highComplexity === true ? <> · <span data-complexity="high">High complexity: applied whole or not at all, never split</span></> : null}
+      </p>
+      {operations.length ? (
+        <ol aria-label="Operations">
+          {operations.map((operation, position) => (
+            <li key={operation.index ?? position} data-risk={operation.risk}>
+              <span>{riskLabel(operation.risk)}</span>{" "}
+              <span>{operation.summary ?? operation.kind ?? "Operation"}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      <p>The last test-run result and published-artifact association are cleared; Undo does not restore them. Saving and publishing remain your explicit actions.</p>
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
+    </section>
+  );
+}
+
+function batchOutcome(proposal: unknown, toolResult: StudioAgentResultRendererProps["toolResult"]) {
+  // The receipt's own fact. Whether the user has since saved it is the owning module's live state, in its result control.
+  if (toolResult?.succeeded && toolResult.receipt?.scope === "clientWorkingState") return "Applied locally to the working draft as one Undo step";
+  const status = isRecord(proposal) && typeof proposal.status === "string" ? proposal.status : "";
+  switch (status) {
+    case "awaiting-approval": case "edited": return "Proposed — awaiting your review";
+    case "approved": case "awaiting-client": return "Approved — not yet applied";
+    case "denied": case "rejected": case "refused": case "expired": case "cancelled": return "Refused — nothing changed";
+    case "uncertain": return "Uncertain — the editor could not confirm the change; it is never replayed";
+    default: return toolResult && !toolResult.succeeded ? "Refused — nothing changed" : "Proposed — awaiting your review";
+  }
+}
+
+function riskLabel(risk: unknown) {
+  return risk === "destructive" ? "Destructive" : risk === "reviewRequired" ? "Review required" : "Unclassified — review carefully";
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
 }
 
 export function WorkflowProposalRenderer({ proposal }: { proposal: WorkflowProposalSummary }) {
