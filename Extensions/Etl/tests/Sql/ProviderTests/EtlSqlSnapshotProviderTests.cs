@@ -227,6 +227,34 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
         Assert.Equal(("etl.sql-column-type-unsupported", "clock"), (failure.Diagnostic.Code, failure.Diagnostic.Field));
     }
 
+    /// <summary>
+    /// TRUNCATE is not MVCC-safe: a snapshot taken while a truncate-and-reload holds its lock would see the table empty once
+    /// the lock is released. The read must wait for the lock before it takes its snapshot.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_read_behind_a_truncate_and_reload_sees_the_reloaded_rows_not_an_empty_table()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL PRIMARY KEY)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id) VALUES (1), (2), (3)");
+        await using var reload = new Npgsql.NpgsqlConnection(fixture.ConnectionString);
+        await reload.OpenAsync();
+        await using var transaction = await reload.BeginTransactionAsync();
+        await using (var command = reload.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = $"TRUNCATE {_table}; INSERT INTO {_table} (id) VALUES (10), (11)";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var read = ReadRawSnapshotOnAsync(fixture.ConnectionString, new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true)], ["id"]));
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        Assert.False(read.IsCompleted);
+        await transaction.CommitAsync();
+
+        Assert.Equal("{\"id\":10}\n{\"id\":11}\n", await read.WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
     [SkippableTheory]
     [InlineData("timestamp", "'infinity'")]
     [InlineData("timestamptz", "'-infinity'")]

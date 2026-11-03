@@ -56,8 +56,11 @@ public interface IEtlSqlEngine
     /// <summary>The isolation level at which one transaction reads a whole table as of one point in time.</summary>
     IsolationLevel SnapshotIsolation { get; }
 
-    /// <summary>A statement run first inside the snapshot transaction, such as making it read-only, or null.</summary>
-    string? SnapshotSetup { get; }
+    /// <summary>
+    /// A statement run first inside the snapshot transaction, before the read takes its snapshot, or null: for example making
+    /// it read-only, or locking the table so a concurrent rewrite such as a truncation completes before the snapshot.
+    /// </summary>
+    string? SnapshotSetup(string table);
 
     /// <summary>
     /// Whether the driver returns the extreme <see cref="DateTime"/>, <see cref="DateOnly"/> and <see cref="DateTimeOffset"/>

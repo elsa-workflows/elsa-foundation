@@ -125,7 +125,7 @@ public interface IEtlSqlEngine
     string Parameter(string column, int row);
     EtlSqlErrorKind Classify(Exception exception);
     IsolationLevel SnapshotIsolation { get; }
-    string? SnapshotSetup { get; }
+    string? SnapshotSetup(string table);
     bool ExtremeDatesAreInfinite { get; }
     string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 }

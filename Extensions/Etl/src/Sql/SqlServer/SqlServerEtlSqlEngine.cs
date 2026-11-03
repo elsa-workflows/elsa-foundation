@@ -28,7 +28,7 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
     // Server raises 3952, which is a rejection.
     public IsolationLevel SnapshotIsolation => IsolationLevel.Snapshot;
 
-    public string? SnapshotSetup => null;
+    public string? SnapshotSetup(string table) => null;
 
     // SQL Server has no infinity: 9999-12-31 is a real value, such as a temporal table's open period end.
     public bool ExtremeDatesAreInfinite => false;

@@ -48,7 +48,7 @@ internal static class EtlSqlSnapshotReader
             if (engine.SessionSetup is { } session)
                 await ExecuteAsync(connection, null, session, cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(engine.SnapshotIsolation, cancellationToken);
-            if (engine.SnapshotSetup is { } setup)
+            if (engine.SnapshotSetup(source.Table) is { } setup)
                 await ExecuteAsync(connection, transaction, setup, cancellationToken);
             await using (var command = connection.CreateCommand())
             {

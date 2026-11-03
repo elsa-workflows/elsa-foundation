@@ -20,7 +20,9 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     // REPEATABLE READ is snapshot isolation in PostgreSQL: every statement of the transaction sees one snapshot.
     public IsolationLevel SnapshotIsolation => IsolationLevel.RepeatableRead;
 
-    public string? SnapshotSetup => "SET TRANSACTION READ ONLY";
+    // TRUNCATE and table-rewriting ALTER TABLE are not MVCC-safe: a snapshot taken before them sees the rewritten table as
+    // empty. LOCK TABLE takes no snapshot, so waiting for it here makes the SELECT's snapshot follow any such rewrite.
+    public string? SnapshotSetup(string table) => $"SET TRANSACTION READ ONLY; LOCK TABLE {Quote(table)} IN ACCESS SHARE MODE";
 
     // Npgsql maps infinity and -infinity to the extreme values, so a finite 9999-12-31 cannot be told apart from them.
     public bool ExtremeDatesAreInfinite => true;
