@@ -29,6 +29,9 @@ public class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "HTTP bindings", Description = "Trusted scoped HTTP endpoints, revision policies and optional connection aliases.", Category = "Bindings")]
     public List<EtlHostHttpBindingOptions> HttpBindings { get; set; } = [];
 
+    [ManifestSetting(DisplayName = "SQL bindings", Description = "Trusted scoped PostgreSQL or SQL Server targets for keyed SQL delivery; each provider needs its engine package. Holds connection strings.", Category = "Bindings", Secret = true)]
+    public List<EtlHostSqlBindingOptions> SqlBindings { get; set; } = [];
+
     [ManifestSetting(DisplayName = "Maximum concurrent attempts", Description = "Maximum actual ETL attempt tasks that may hold process-local capacity.", Category = "Capacity")]
     public int MaxConcurrentAttempts { get; set; } = 2;
 
@@ -78,8 +81,11 @@ public class EtlRuntimeFeature : IShellFeature
             provider.GetService<IConnectionTypeRegistry>(),
             provider.GetService<IAuthenticationSchemeRegistry>(),
             provider.GetServices<IHttpRequestAuthenticator>()));
+        var sqlBindings = SqlBindings.ToArray();
+        services.AddScoped(provider => new HostSqlBindings(sqlBindings, provider.GetServices<IEtlSqlEngine>()));
         services.AddScoped(provider => new HostConnectorBindings(
-            provider.GetRequiredService<HostFileBindings>(), provider.GetRequiredService<HostHttpBindings>(), options.MaxPartitions));
+            provider.GetRequiredService<HostFileBindings>(), provider.GetRequiredService<HostHttpBindings>(),
+            options.MaxPartitions, provider.GetRequiredService<HostSqlBindings>()));
         services.TryAddScoped<IEtlConnectorBindingCatalog>(provider => provider.GetRequiredService<HostConnectorBindings>());
         services.TryAddScoped<IEtlConnectorBindingResolver>(provider => provider.GetRequiredService<HostConnectorBindings>());
         services.AddScoped<EtlExecutableReader>();

@@ -15,6 +15,7 @@
     <Compile Include="../Shared/EtlWorkerProtocol.cs" Link="Support/EtlWorkerProtocol.cs" />
     <Compile Include="../Shared/ForwardingEtlRuntimeStore.cs" Link="Support/ForwardingEtlRuntimeStore.cs" />
     <Compile Include="../Shared/ForwardingEtlConnectorRuntimeStore.cs" Link="Support/ForwardingEtlConnectorRuntimeStore.cs" />
+    <Compile Include="../Shared/SqliteEtlSqlEngine.cs" Link="Support/SqliteEtlSqlEngine.cs" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

@@ -79,10 +79,10 @@ internal sealed partial class EtlRuntimeOperations
     private static EtlRunEffectView? Effect(EtlConnectorEffectInspection? effect)
     {
         if (effect is null) return null;
-        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) ||
+        if (effect.RecordCount <= 0 || effect.Kind is not (EtlConnectorKind.Http or EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) ||
             effect.State is not ("retained" or "acknowledged" or "published") ||
             effect.State == "acknowledged" && effect.Kind != EtlConnectorKind.Http ||
-            effect.State == "published" && effect.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv) ||
+            effect.State == "published" && effect.Kind is not (EtlConnectorKind.Jsonl or EtlConnectorKind.Csv or EtlConnectorKind.Sql) ||
             effect.Kind != EtlConnectorKind.Http && effect.Retry is not null ||
             effect.Kind == EtlConnectorKind.Http &&
             ((effect.State == "acknowledged") != (effect.Retry?.Phase == "acknowledged")))

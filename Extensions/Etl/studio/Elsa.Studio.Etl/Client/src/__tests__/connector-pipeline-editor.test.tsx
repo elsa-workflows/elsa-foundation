@@ -158,6 +158,28 @@ describe("connector pipeline editor", () => {
     expect(editor.host.textContent).toContain("Choose HTTP, JSONL or CSV independently");
   });
 
+  it("routes accepted records to a keyed SQL table selected from SQL approvals, never the rejected route", () => {
+    const editor = renderEditor(undefined, { bindings: [...bindings, { alias: "warehouse", role: "MainOutput", kind: "sql" }] });
+    expect(Array.from(control<HTMLSelectElement>(editor.host, "Rejected records destination kind").options).map(option => option.value))
+      .toEqual(["http", "jsonl", "csv"]);
+
+    setSelect(control<HTMLSelectElement>(editor.host, "Accepted records destination kind"), "sql");
+    editor.render();
+    expect(editor.pipeline.routes.main).toEqual({ kind: "sql", binding: "output", table: "", key: [] });
+    const accepted = control<HTMLSelectElement>(editor.host, "Accepted records binding");
+    expect(Array.from(accepted.options).map(option => option.value)).toEqual(["", "output", "warehouse"]);
+    setSelect(accepted, "warehouse");
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Accepted records table"), "dbo.people");
+    editor.render();
+    clickCheckbox(control<HTMLInputElement>(editor.host, "name"));
+    editor.render();
+
+    expect(editor.pipeline.routes.main).toEqual({ kind: "sql", binding: "warehouse", table: "dbo.people", key: ["name"] });
+    clickCheckbox(control<HTMLInputElement>(editor.host, "name"));
+    expect(editor.pipeline.routes.main).toMatchObject({ key: [] });
+  });
+
   it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
     const editor = renderEditor();
     expect(editor.pipeline.continuous).toBeUndefined();

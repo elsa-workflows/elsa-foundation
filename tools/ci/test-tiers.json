@@ -702,6 +702,12 @@
       "medianMinutes": null
     },
     {
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
       "project": "Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
@@ -953,7 +959,8 @@
           "locking-database",
           "mysql-feasibility",
           "runtime",
-          "secrets-sqlserver"
+          "secrets-sqlserver",
+          "etl-sql"
         ]
       }
     ]
@@ -1083,6 +1090,11 @@
       "suite": "rules",
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "etl-sql",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "require": "ELSA_ETL_SQL_REQUIRE_NATIVE_PROVIDERS"
     },
     {
       "suite": "connections",
