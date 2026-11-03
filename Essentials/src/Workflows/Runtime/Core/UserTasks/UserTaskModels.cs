@@ -50,7 +50,7 @@ public sealed record UserTaskCreation(string WorkflowExecutionId, string Invocat
 public sealed record UserTaskActor(string TenantId, string UserId, IReadOnlySet<string> GroupIds, bool CanRead,
     bool CanAct, bool CanManage, bool CanManageForms, bool CanReadForms = false);
 
-/// <summary>Cursor is an opaque last immutable ID, bound and reauthorized by the store to this query.</summary>
+/// <summary>Bounded provider query. After is a provider scan position; participant operations protect public cursors and reauthorize every returned row.</summary>
 public sealed record UserTaskQuery(string TenantId, string? UserId, IReadOnlySet<string> GroupIds, string View,
     int Limit = 25, string? After = null, string? Search = null);
 public sealed record UserTaskPage(IReadOnlyList<UserTaskRecord> Items, string? Next);
@@ -66,10 +66,13 @@ public sealed class UserTaskException(string code, string message, IReadOnlyDict
     public IReadOnlyDictionary<string, string>? Errors { get; } = errors;
 }
 
-/// <summary>Development-only opt-in; durable Runtime still requires a durable task journal.</summary>
+/// <summary>Task development policy and protected inbox paging configuration.</summary>
 public sealed class UserTaskOptions
 {
     public bool AllowVolatileTasksForDevelopment { get; set; }
-    /// <summary>Optional Base64-encoded 32-byte key shared by API replicas. Otherwise a configured recovery signing key is domain-separated for inbox cursors; unconfigured development hosts use a process-local key.</summary>
+    /// <summary>
+    /// Optional Base64-encoded 32-byte key shared by API replicas. Otherwise a configured recovery signing key
+    /// is domain-separated for inbox cursors; unconfigured development hosts use a process-local key.
+    /// </summary>
     public string? CursorEncryptionKey { get; set; }
 }
