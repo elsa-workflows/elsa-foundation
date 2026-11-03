@@ -121,6 +121,15 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
   names the exception type, not the error number.
   Watermark (incremental) reads, authored queries and log CDC are not supported.
+- **Watermark reads.** [Spec 1199](../../specs/1199-etl-sql-watermark/spec.md) adds an optional `watermark`: a declared,
+  required `Int64` column. A run then reads only rows whose watermark is above the high watermark of the last completed
+  run of the same definition, source alias, table and column; the first run reads every row. The run's highest watermark
+  is raised into that checkpoint in the transaction that completes it, so a run settled by a failure (a fault, a
+  cancellation or a rejected delivery) leaves it unchanged and the next run reads those rows again. Overlapping runs can
+  both read the same rows, and the checkpoint never moves backwards. Use a watermark assigned when a row is committed,
+  such as a sequence or version column: a row committed later with a watermark at or below a checkpoint already passed
+  is never read. Running the definition repeatedly, for example from a scheduled workflow, loads the table incrementally;
+  rows deleted from the source are not propagated.
 - **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
   retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope
   before such a pipeline is admitted.

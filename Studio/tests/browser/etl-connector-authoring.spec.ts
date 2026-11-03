@@ -44,7 +44,8 @@ async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvError
         expect(body.expectedRevision).toBe(revision);
         if (options.sqlSource) {
           expect(body.pipeline.source).toEqual({ kind: "sql", binding: "people-db", table: "dbo.people",
-            columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: ["id"] });
+            columns: [{ name: "id", type: "int64", required: true }, { name: "name", type: "string", required: true }], key: ["id"],
+            watermark: "id" });
           expect(body.pipeline.continuous).toBeUndefined();
         } else if (options.sqlMain) {
           expect(body.pipeline.routes.main).toEqual({ kind: "sql", binding: "warehouse", table: "dbo.people", key: ["name"] });
@@ -287,6 +288,7 @@ for (const width of [320, 1024]) {
     await page.getByLabel("Source SQL binding", { exact: true }).selectOption("people-db");
     await page.getByLabel("Source table", { exact: true }).fill("dbo.people");
     await page.getByRole("group", { name: "Source key" }).getByRole("checkbox", { name: "id", exact: true }).check();
+    await page.getByLabel("Watermark column", { exact: true }).selectOption("id");
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
