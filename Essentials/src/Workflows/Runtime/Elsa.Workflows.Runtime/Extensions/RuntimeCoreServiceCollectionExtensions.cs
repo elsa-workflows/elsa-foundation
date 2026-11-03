@@ -363,7 +363,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
         // live-drain accessor and the persistence-mode resolver are wired in every configuration (C1, #1227).
         services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>
-            WorkflowDrainOrchestrator.CreateScoped(
+        {
+            var orchestrator = WorkflowDrainOrchestrator.CreateScoped(
                 serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
                 serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
@@ -379,7 +380,10 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
-                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>()));
+                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>());
+            orchestrator.DrainControls = serviceProvider.GetService<DrainControlContext>();
+            return orchestrator;
+        });
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();

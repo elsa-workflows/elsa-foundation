@@ -25,7 +25,7 @@ Balanced/Ephemeral were 90, 104, 180 respectively; only fork/join changed, to 17
 
 ## Cooperative cancellation of a progressing native drain
 
-The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
+The default actor composition publishes a mailbox-local signal while a valid Cancel waits behind an active turn. Discrete and replay-safe fused steps notice it before the next step. The orchestrator flushes its folded segment through the existing fenced checkpoint path and returns `Yielded`, releasing the lease and mailbox so the normal Cancel handler can execute. A cancelled waiter withdraws its signal. The configured concrete local provider is shared with distributed placement. An activity already running must finish or cooperate before handoff; delivery through remote transport was qualified later for a parked execution only; a progressing drain on another node did not qualify until #3669 stopped the placement pump waiting for a dispatched drain, after which its two-node runs cancelled the loop three times out of three (see [Remote cancellation across a durable cluster](#remote-cancellation-across-a-durable-cluster)).
 
 Six real SQLite integration cases cover External and ReplaySafe loop bodies under Durable, Balanced and Ephemeral. Each starts an otherwise unbounded progressing While with no total-cycle cap, requests Cancel through the public actor API while the first body is executing, and proves one completed body, durable Cancelled state, a yielded turn and unchanged activity state after a resumption sweep. A bounded runaway guard makes removal of the behavior fail without hanging.
 
@@ -705,8 +705,10 @@ Cancelling a **progressing** drain on another node did **not** qualify, and no C
 - Before the fence fix, `c1`'s loop was poisoned on node A (one incident, rows stalled at 1,618); `c2` never formed
   the cluster, because its control folders already existed.
 
-The main build showed the same stalled sender in its single run. Local cooperative Cancel of a progressing drain
-remains covered by the in-process tests only; cross-node behaviour is recorded on #2831 as open.
+The main build showed the same stalled sender in its single run. Local cooperative Cancel of a progressing drain was
+covered by the in-process tests only. #3669 addresses the cross-node case (#2831): the placement pump no longer waits
+for a dispatched drain, so it keeps renewing placement and delivers a forwarded Cancel to the drain's mailbox. In its
+two-node runs, placement stayed on node A and the progressing loop was cancelled in 3 to 13 s, three times out of three.
 
 ### Second fixture cleanup
 

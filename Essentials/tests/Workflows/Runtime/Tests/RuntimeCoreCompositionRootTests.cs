@@ -439,6 +439,49 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddWorkflowRuntime_hands_the_drain_controls_to_the_orchestrator_so_a_yield_redrive_waits_for_a_cancel(bool cancelWaiting)
+    {
+        // #3647 through the container. A yield re-drive delivers the flushed continuations before its first segment only
+        // while no Cancel waits, and only the composition root hands the orchestrator the signal it checks: without it the
+        // re-drive would queue the next step ahead of that Cancel, while every hand-built orchestrator test stays green.
+        var outbox = new CountingOutboxProcessor();
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddPersistenceModes();
+        services.RemoveAll<IRuntimePostCommitOutboxProcessor>();
+        services.AddScoped<IRuntimePostCommitOutboxProcessor>(_ => outbox);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var control = new DrainControl();
+        using var waiting = cancelWaiting ? control.Wait() : null;
+        using var frame = provider.GetRequiredService<DrainControlContext>().Push("wfexec-scopes", control);
+        await using var scope = provider.CreateAsyncScope();
+        var command = new WorkflowExecutionCommand("redrive", "wfexec-scopes", WorkflowExecutionCommandKind.RunSchedulerWork, Now, null,
+            new Dictionary<string, string> { ["source"] = InProcessWorkflowExecutionActorProvider.YieldRedriveSource });
+        var redrive = new WorkflowExecutionCommandEnvelope("redrive", "wfexec-scopes", command, "redrive",
+            WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(redrive, new RuntimeSchedulerDrainRequest("wfexec-scopes"));
+
+        // With a Cancel waiting the drainer yields before its first step, so the orchestrator asked the outbox for nothing.
+        Assert.Equal(cancelWaiting ? RuntimeSchedulerDrainStopReason.Yielded : RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(!cancelWaiting, outbox.Calls > 0);
+    }
+
+    private sealed class CountingOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        private int calls;
+        public int Calls => Volatile.Read(ref calls);
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref calls);
+            return ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult([]));
+        }
+    }
+
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
         WorkflowExecutionPartition? partition = null,
