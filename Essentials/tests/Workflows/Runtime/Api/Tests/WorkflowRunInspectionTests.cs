@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
@@ -265,12 +266,73 @@ public sealed class WorkflowRunInspectionTests
         Assert.True((await Read(Incident(null, null))).MessageRedacted);
         // A node it names but no activity execution whose evidence could be read.
         Assert.True((await Read(Incident(null, "node-1"))).MessageRedacted);
-        // An activity execution but no node (and no activity state to resolve it).
-        Assert.True((await Read(Incident(ActivityId, null))).MessageRedacted);
+        // An activity execution but no node: the node is the execution's own, read with its evidence, so it is established...
+        Assert.False((await Read(Incident(ActivityId, null))).MessageRedacted);
+        // ...unless that execution cannot be read.
+        Assert.True((await Read(Incident(ActivityId, null), activities: false)).MessageRedacted);
         // An activity execution that cannot be read on this backend.
         Assert.True((await Read(Incident(ActivityId, "node-1"), activities: false)).MessageRedacted);
         // Established from both sources: kept.
         Assert.Equal("Fault summary: " + Sentinel, (await Read(Incident(ActivityId, "node-1"))).Message);
+    }
+
+    [Theory]
+    [InlineData("sensitive", true)]
+    [InlineData("plain", false)]
+    [InlineData("unreadable", true)]
+    [InlineData("partial", true)]
+    public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
+    {
+        const string ChildId = "actexec-child";
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        if (child is "sensitive" or "plain")
+            await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ChildId, RunId, "node-child", "authored-child", "Test.Child", "1.0.0",
+                ActivityExecutionStatus.Faulted, null, 2, Now, Now, null, "checkpoint-2", "checkpoint-2", Now, ActivitySchedulingProvenance.Empty, [], [], [],
+                child == "sensitive" ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
+        var causal = child == "partial"
+            ? new Dictionary<string, string> { [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalExecutableNodeId] = "node-child" }
+            : new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalActivityExecutionId] = ChildId,
+                [RuntimeMetadataKeys.CausalExecutableNodeId] = "node-child", [RuntimeMetadataKeys.CausationKind] = "child-fault"
+            };
+        // The parent's own projection records the propagated incident, as the fault recorder leaves it.
+        await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ActivityId, RunId, "node-1", "authored-1", "Test.Activity", "1.0.0",
+            ActivityExecutionStatus.Faulted, null, 1, Now, Now, null, "checkpoint-1", "checkpoint-1", Now, ActivitySchedulingProvenance.Empty, [], [],
+            [new ActivityExecutionIncidentSummary("incident-1", IncidentSeverity.Error, IncidentStatus.Blocking, null, "workflow.fault", "Child failed: " + Sentinel, Now,
+                null, true, causal, ActivityExecutionIncidentCausation.From(causal))],
+            [], new Dictionary<string, string>()));
+        var view = details.View! with
+        {
+            Incidents = [details.View!.Incidents.Single() with { Message = "Child failed: " + Sentinel, Metadata = causal }]
+        };
+
+        var run = (await Create(new Details(view)).GetAsync(new(RunId, ActivityId)))!;
+
+        var top = Assert.Single(run.Incidents);
+        var selected = Assert.Single(run.Selection!.Execution!.Incidents);
+        Assert.Equal((withheld, withheld), (top.MessageRedacted, selected.MessageRedacted));
+        if (withheld) Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(run), StringComparison.Ordinal);
+        else Assert.Equal(("Child failed: " + Sentinel, "Child failed: " + Sentinel), (top.Message, selected.Message));
+    }
+
+    [Fact]
+    public async Task Thousands_of_incidents_cost_a_bounded_number_of_activity_reads()
+    {
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        var template = details.View!.Incidents.Single();
+        // A retry loop: 2 000 node-less incidents naming the one readable execution, then 2 000 naming distinct executions.
+        var incidents = Enumerable.Range(0, 2000).Select(index => template with { IncidentId = "same-" + index, ExecutableNodeId = null })
+            .Concat(Enumerable.Range(0, 2000).Select(index => template with { IncidentId = "distinct-" + index, ActivityExecutionId = "retry-" + index, ExecutableNodeId = null }))
+            .ToArray();
+        var counting = new CountingActivities(new ActivityExecutionInspectionService(_workflows, _inspections, _access));
+
+        var run = (await Create(new Details(details.View! with { Incidents = incidents }), activityService: counting).GetAsync(new(RunId)))!;
+
+        Assert.InRange(counting.Reads, 1, 32);
+        Assert.All(run.Incidents.Where(item => item.IncidentId.StartsWith("distinct-", StringComparison.Ordinal)), item => Assert.True(item.MessageRedacted));
+        // The readable, non-sensitive execution is read once and established non-sensitive for all 2 000 of its incidents.
+        Assert.All(run.Incidents.Where(item => item.IncidentId.StartsWith("same-", StringComparison.Ordinal)), item => Assert.False(item.MessageRedacted));
     }
 
     [Fact]
@@ -334,10 +396,10 @@ public sealed class WorkflowRunInspectionTests
 
     private IWorkflowRunInspection Create(Details details, bool activities = true, StateViews? stateViews = null, bool payloads = true, bool pruned = false,
         bool stateViewsSupported = true, Access? payloadAccess = null, bool payloadPruned = false, bool sensitiveNode = false, bool executable = true,
-        TimeProvider? clock = null) =>
+        TimeProvider? clock = null, IActivityExecutionInspectionService? activityService = null) =>
         (IWorkflowRunInspection)Activator.CreateInstance(RuntimeApiEndpointTestFactory.FindType("Elsa.Workflows.Runtime.Api.Services.WorkflowRunInspection")!,
             details,
-            activities ? new ActivityExecutionInspectionService(_workflows, pruned ? new InMemoryActivityExecutionInspectionStore() : _inspections, _access) : null,
+            activityService ?? (activities ? new ActivityExecutionInspectionService(_workflows, pruned ? new InMemoryActivityExecutionInspectionStore() : _inspections, _access) : null),
             stateViewsSupported
                 ? stateViews ?? new StateViews(new ActivityStateView(RunId, ActivityId, "node-1", "Faulted", false, ActivityStateView.StateCleared, null, null, true, null))
                 : null,
@@ -415,6 +477,17 @@ public sealed class WorkflowRunInspectionTests
             onRead?.Invoke();
             Requests.Add(request);
             return Task.FromResult(view?.Instance.WorkflowExecutionId == request.WorkflowExecutionId ? view : null);
+        }
+    }
+
+    private sealed class CountingActivities(IActivityExecutionInspectionService inner) : IActivityExecutionInspectionService
+    {
+        public int Reads { get; private set; }
+
+        public Task<ActivityExecutionInspectionView?> GetAsync(GetActivityExecution request, CancellationToken cancellationToken)
+        {
+            Reads++;
+            return inner.GetAsync(request, cancellationToken);
         }
     }
 
