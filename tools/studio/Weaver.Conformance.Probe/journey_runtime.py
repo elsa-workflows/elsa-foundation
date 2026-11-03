@@ -73,6 +73,25 @@ def browser_inputs(config):
     return summary
 
 
+def safe_browser_failure(observation):
+    """Keep only a fixed error category and bounded numeric driver locations."""
+    value = observation.get("failureDiagnostic") if isinstance(observation, dict) else None
+    value = value if isinstance(value, dict) else {}
+    kind = value.get("kind")
+    kind = kind if kind in ("Error", "TimeoutError", "AssertionError") else "Unavailable"
+    frames, seen = [], set()
+    candidates = value.get("frames")
+    for item in candidates[:8] if isinstance(candidates, list) else []:
+        if not isinstance(item, dict) or item.get("file") != "browser.mjs":
+            continue
+        position = (item.get("line"), item.get("column"))
+        if not all(type(number) is int and 0 < number <= 1000000 for number in position) or position in seen:
+            continue
+        seen.add(position)
+        frames.append({"file": "browser.mjs", "line": position[0], "column": position[1]})
+    return {"kind": kind, "frames": frames}
+
+
 def expect_error(response, status, code, *, message=None):
     response.require_status(status)
     value = response.json()
@@ -269,8 +288,16 @@ class JourneyRuntime:
         offset = t.trace_file.stat().st_size if t.trace_file.exists() else 0
         node = shutil.which("node")
         check(node, "Actual browser driver needs Node")
-        self.run.run("browser-" + name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
-                     env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+        try:
+            self.run.run("browser-" + name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
+                         env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+        except RuntimeError:
+            try:
+                self.run.report["browserFailureDiagnostic"] = safe_browser_failure({"failureDiagnostic": json.loads((output / "failure-diagnostic.json").read_text())})
+                self.run.save()
+            except (OSError, ValueError, TypeError):
+                pass  # A missing diagnostic must preserve the original failed journey.
+            raise
         observed = json.loads((output / "observation.json").read_text())
         check(not observed.get("failure"), "Browser control stopped with an unexpected cause: " + name)
         observed["evidence"].append(self.save(root, "browser-inputs", browser_inputs(config)))
