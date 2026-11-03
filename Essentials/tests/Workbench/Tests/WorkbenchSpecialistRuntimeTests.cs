@@ -10,8 +10,9 @@ namespace Elsa.Workbench.Tests;
 /// <summary>
 /// #3525 T032 on the stock Workbench: user-defined agents can be published, so the stock Development shell composes the
 /// specialist runtime that publication preflight requires as the runtime consumer of <c>elsa.specialist</c>, with its
-/// model-turn workers and durable turn journal. No model is called: the connection carries a placeholder key, and the
-/// preflight reads only the connection's declared capabilities.
+/// model-turn workers and durable turn journal, and a draft Test Run's specialist evidence is read through the generic run's
+/// identity and authorization. No model is called: the connection carries a placeholder key, the preflight reads only the
+/// connection's declared capabilities, and the evidence run is refused before dispatch.
 /// </summary>
 public sealed class WorkbenchSpecialistRuntimeTests
 {
@@ -24,7 +25,50 @@ public sealed class WorkbenchSpecialistRuntimeTests
     {
         await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
         using var client = await SignedInClientAsync(workbench);
+        var draftId = await CreateAgentDraftAsync(client);
 
+        using var preflight = await client.PostAsync($"/design/activities/drafts/{draftId}/publication-preflight", Json(new JsonObject { ["expectedDraftRevision"] = 1 }));
+        await AssertStatusAsync(HttpStatusCode.OK, preflight, "The publication preflight");
+        var review = (await preflight.Content.ReadFromJsonAsync<JsonNode>())!;
+        var consumer = review["runtime"]!.AsArray().SingleOrDefault(entry => (string?)entry!["kind"] == "RuntimeConsumer" && (string?)entry["key"] == ProviderKey);
+        Assert.True((string?)consumer?["status"] == "Available", $"The specialist runtime consumer is not available: {review.ToJsonString()}");
+        Assert.True((bool)review["isPublishable"]!, $"The agent draft is not publishable: {review.ToJsonString()}");
+    }
+
+    [Fact]
+    public async Task Stock_development_shell_reads_specialist_evidence_through_the_generic_test_run()
+    {
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        using var client = await SignedInClientAsync(workbench);
+        var draftId = await CreateAgentDraftAsync(client);
+
+        // A stale revision is refused before any dispatch, so the receipt exists and no model is called.
+        using var started = await client.PostAsync($"/publishing/activity-drafts/{draftId}/test-runs",
+            Json(new JsonObject { ["expectedRevision"] = 99, ["idempotencyKey"] = "evidence-stale" }));
+        await AssertStatusAsync(HttpStatusCode.Accepted, started, "Starting the stale test run");
+        var run = (await started.Content.ReadFromJsonAsync<JsonNode>())!;
+        Assert.Equal("ValidationRejected", (string?)run["status"]);
+
+        var testRunId = (string)run["testRunId"]!;
+        using var evidence = await client.GetAsync($"/agent/specialists/test-runs/{testRunId}/evidence");
+        await AssertStatusAsync(HttpStatusCode.OK, evidence, "Reading the test run evidence");
+        var view = (await evidence.Content.ReadFromJsonAsync<JsonNode>())!;
+        Assert.Equal(testRunId, (string?)view["testRunId"]);
+        Assert.Equal(draftId, (string?)view["draftId"]);
+        Assert.Equal("ValidationRejected", (string?)view["status"]);
+        Assert.Null(view["invocation"]);
+
+        using var unknown = await client.GetAsync("/agent/specialists/test-runs/not-a-test-run/evidence");
+        await AssertStatusAsync(HttpStatusCode.NotFound, unknown, "Reading an unknown test run");
+        Assert.Equal("activity.test-run.not-found", (string?)(await unknown.Content.ReadFromJsonAsync<JsonNode>())!["errorCode"]);
+
+        using var anonymous = new HttpClient { BaseAddress = workbench.Client.BaseAddress };
+        using var denied = await anonymous.GetAsync($"/agent/specialists/test-runs/{testRunId}/evidence");
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+    }
+
+    private static async Task<string> CreateAgentDraftAsync(HttpClient client)
+    {
         using var connection = await client.PostAsync("/connections", Json(new JsonObject
         {
             ["name"] = "preflight-model",
@@ -74,14 +118,8 @@ public sealed class WorkbenchSpecialistRuntimeTests
             ["layout"] = new JsonArray()
         }));
         await AssertStatusAsync(HttpStatusCode.Created, created, "Creating the agent");
-        var draftId = (string)(await created.Content.ReadFromJsonAsync<JsonNode>())!["draft"]!["draftId"]!;
+        return (string)(await created.Content.ReadFromJsonAsync<JsonNode>())!["draft"]!["draftId"]!;
 
-        using var preflight = await client.PostAsync($"/design/activities/drafts/{draftId}/publication-preflight", Json(new JsonObject { ["expectedDraftRevision"] = 1 }));
-        await AssertStatusAsync(HttpStatusCode.OK, preflight, "The publication preflight");
-        var review = (await preflight.Content.ReadFromJsonAsync<JsonNode>())!;
-        var consumer = review["runtime"]!.AsArray().SingleOrDefault(entry => (string?)entry!["kind"] == "RuntimeConsumer" && (string?)entry["key"] == ProviderKey);
-        Assert.True((string?)consumer?["status"] == "Available", $"The specialist runtime consumer is not available: {review.ToJsonString()}");
-        Assert.True((bool)review["isPublishable"]!, $"The agent draft is not publishable: {review.ToJsonString()}");
     }
 
     private static async Task AssertStatusAsync(HttpStatusCode expected, HttpResponseMessage response, string step) =>

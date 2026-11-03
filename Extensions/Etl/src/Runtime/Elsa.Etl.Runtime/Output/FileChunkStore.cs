@@ -25,6 +25,15 @@ internal sealed class FileChunkStore : IFileChunkPublisher
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(effectIdentity))).ToLowerInvariant() + _extension;
     }
 
+    /// <summary>Removes one published chunk whose use has ended. An absent chunk or root is not an error.</summary>
+    internal void Delete(string outputRoot, string effectIdentity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputRoot);
+        var path = Path.Combine(outputRoot, KeyFor(effectIdentity));
+        try { File.Delete(path); }
+        catch (DirectoryNotFoundException) { }
+    }
+
     /// <summary>Reads one exact immutable chunk only after checking its finite physical bound.</summary>
     /// <remarks>Only a missing file under an existing root is reported as absent. An unavailable root is an I/O failure.</remarks>
     internal async ValueTask<byte[]?> ReadAsync(string outputRoot, string effectIdentity, long maxBytes,
