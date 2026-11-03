@@ -48,6 +48,8 @@ At `6b1c8b1c6` (review round 5):
 - **A type whose assembly is missing** (SqlClient's spatial and hierarchy types) is mapped to `etl.sql-column-type-unsupported`. It is not tested.
 - **The runtime API's `SourceInput` for a SQL source.** It is covered only by the Workbench journey's inspection check.
 - **A worker claiming a run whose engine is missing.** Only admission is tested.
+- **The Studio guards** (FR-007): continuous mode dropped for a `sql` source, the existing key order kept, the "SQL table snapshot" label and the digest wording. Vitest and Playwright test them, but no bite-proof mutates Studio code.
+- **The "a SQL source cannot have HTTP shards" checks** in the preparer and the record codec, and the reader's column-count check against the result set. They are not tested.
 - **Process-level kill and reuse on PostgreSQL or SQL Server.** It is not run. The worker fixture writes through the SQLite test engine.
 - **A change after preparation and before the partitions run, on PostgreSQL or SQL Server.** It is proven on the SQLite test engine, at the preparer and batch builder (`A_change_committed_after_preparation_does_not_reach_the_batches`), and through worker processes for a change between publication and the preparation record (the kill test). The run reads the retained snapshot whatever the engine.
 - **The read-only snapshot setup** (`SET TRANSACTION READ ONLY` on PostgreSQL) is not tested; no test attempts a write inside the read.

@@ -19,7 +19,7 @@ This slice adds a finite `sql` source:
 
 - **Packages and dependencies.** No new package or reference. The contract stays driver-free.
 - **Wrapping** (framework §2.23.5). The snapshot reader wraps driver exceptions, classified by the engine, as a preparation failure or a transient exception with the original as the cause; the preparer maps those to its result.
-- **Naming** (§E6). `EtlSqlSource`, `EtlSqlSnapshotReader` and `EtlSqlTransientException` stay within four components.
+- **Naming** (§E6). `EtlSqlSource`, `EtlSqlSnapshotReader` and `EtlSqlTransientException` stay within four components (R1). `EtlSqlSource` is an explicit R4 exception: it is a declaration record, not a "returns on request" extension point, and it joins the persisted `EtlSource` family (`EtlCsvSource`, `EtlHttpJsonSource`, `EtlJsonlSource`), whose names and `kind` discriminators the artifact format fixes.
 - **Public API** (§4.2). `IEtlSqlEngine` gains three required members; it is unshipped (`PublicAPI.Unshipped.txt`), so this is not a breaking change.
 - **Compatibility.**
   - Existing artifacts and identities are byte-identical.
