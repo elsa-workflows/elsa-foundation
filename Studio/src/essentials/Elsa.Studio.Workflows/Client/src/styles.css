@@ -5186,6 +5186,10 @@
 }
 
 .wf-toolbar-checkbox input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  padding: 0;
   margin: 0;
   accent-color: var(--wf-accent);
 }

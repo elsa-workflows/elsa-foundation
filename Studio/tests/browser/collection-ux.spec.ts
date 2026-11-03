@@ -6,6 +6,9 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await page.goto(`/collection-ux.html?theme=${theme}`);
     const table = page.getByRole("table", { name: "Workflow executables", exact: true });
     await expect(table.getByText("Hello World", { exact: true })).toBeVisible();
+    const checkbox = page.getByRole("checkbox", { name: "Include retired references" });
+    expect((await checkbox.boundingBox())!.width).toBeLessThanOrEqual(20);
+    expect((await checkbox.boundingBox())!.height).toBeLessThanOrEqual(20);
     const toolbar = page.locator(".studio-collection-toolbar");
     const bounds = (await table.boundingBox())!;
     expect(bounds.y - (await toolbar.boundingBox())!.y - (await toolbar.boundingBox())!.height).toBeGreaterThanOrEqual(12);
@@ -33,7 +36,11 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await page.screenshot({ path: testInfo.outputPath("runs-empty.png"), fullPage: true });
     await page.goto(`/collection-ux.html?view=agents&theme=${theme}`);
     await expect(page.getByRole("heading", { name: "No agents yet", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Create agent", exact: true }).click();
+    const createAgent = page.getByRole("button", { name: "Create agent", exact: true });
+    const createBounds = (await createAgent.boundingBox())!;
+    expect(createBounds.x).toBeGreaterThanOrEqual(0);
+    expect(createBounds.x + createBounds.width).toBeLessThanOrEqual(width);
+    await createAgent.click();
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
     await expect(page.getByRole("searchbox")).toHaveCount(0);
     await expect(page.getByRole("table")).toHaveCount(0);
@@ -57,4 +64,5 @@ test("connection empty state creates and returns to populated list without anoth
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("button", { name: "Details for Example", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "Search connections", exact: true })).toBeFocused();
 });

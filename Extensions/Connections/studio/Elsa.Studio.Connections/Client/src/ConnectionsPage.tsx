@@ -132,6 +132,6 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
   </StudioPage>;
 }

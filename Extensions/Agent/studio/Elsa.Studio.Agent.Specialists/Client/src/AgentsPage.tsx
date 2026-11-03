@@ -198,13 +198,14 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
       ) : null}
       {collection.kind === "ready" ? (
         <>
-          <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
-            onSelect={row => void open(row)}
-            gridColumns="minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)"
-            emptyState={<StudioResultState headingLevel={3} icon={<Bot aria-hidden="true" />}
+          {collection.items.length === 0 ? <div className="studio-table-container">
+            <StudioResultState headingLevel={3} icon={<Bot aria-hidden="true" />}
               title={query ? "No matching agents" : "No agents yet"}
               description={query ? "Try a different name or clear your search." : canCreate ? "Create an agent to use it in workflows." : "Agents will appear here when available."}
-              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} />} />
+              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} />
+          </div> : <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
+            onSelect={row => void open(row)}
+            gridColumns="minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)" />}
           <StudioCollectionFooter>
           <p ref={countRef} tabIndex={-1} className="agent-collection-count" role="status">{collection.totalCount === 1 ? "1 agent" : `${collection.totalCount.toLocaleString()} agents`}</p>
           {collection.continuation || collection.moreFailed || collection.restart ? (
