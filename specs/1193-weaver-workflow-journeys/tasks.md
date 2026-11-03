@@ -33,7 +33,7 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 - [x] T019 Studio risk recheck that fails closed (FR-012).
 - [x] T020 `workflows.batch-result` renderer (Weaver Workflows).
 - [x] T021 [P] Server and Vitest tests: the armed capture timer, a hand edit inside the capture delay, autosave across Undo and Redo, the 50-entry history cap, and the NIST vectors for the hash (SC-002, SC-004).
-- [ ] T022 Probe case `workflow-batch` and its negative controls, and a Playwright journey.
+- [x] T022 Probe case `workflow-batch` and its negative controls, and a Playwright journey.
 
 ## Slice D: Explain and troubleshoot (story 1)
 
