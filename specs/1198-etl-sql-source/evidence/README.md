@@ -28,7 +28,7 @@ At `68ba92078` (review round 7), which changes no runtime or engine code after `
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has 36 entries, each naming the tests that failed:
+[`bite-proofs.json`](bite-proofs.json) has 37 entries, each naming the tests that failed:
 - **15 recorded at `51fa1a20b`.** The table-identifier entry was re-recorded at `2fee631a8`, so that it lists all three failing theory rows. 14 bite: the compiler's table identifier, case-insensitive column distinctness and key-required rules; snapshot reuse; transient classification; the float refusal; the size limit; the batch builder's digest-free pin check; the source binding role; the preparer's kind check; the worker's identifier re-check; the codec's digest and hash rules; SQL Server's `SNAPSHOT` level.
 - **8 recorded at `f606d68cc`, for review round 1.** All bite: adoption of a concurrently published snapshot; the preparer's digest-free pin check; raw UTF-8 text; the catch-all rejection; the worker's case-insensitive column and repeated-key checks; null SQL entries; the `date` format.
 - **3 recorded at `2fee631a8`, for review round 2.** All bite: the interval refusal, the time-of-day format and the SQL column limit.
@@ -38,6 +38,7 @@ At `68ba92078` (review round 7), which changes no runtime or engine code after `
 - **1 recorded at `9bb6fb935`, for review round 4.** It bites: the refusal of a zoned time of day.
 - **3 recorded at `6b1c8b1c6`, for review round 5.** All bite: the transformer's and the output processor's SQL source branches, and the refusal of infinite dates.
 - **2 recorded at `7f7b177d7`, for review round 6.** Both bite: extreme dates refused only where the engine maps infinity to them, and a zoned time of day with a precision.
+- **1 recorded at `b6a886089`, for review round 9.** It bites: the worker's re-check that key columns are required.
 
 **Did not bite, by design:**
 - **PostgreSQL's isolation level.** In PostgreSQL a single `SELECT` already reads one snapshot under `READ COMMITTED`. `REPEATABLE READ READ ONLY` is kept for a future read of more than one statement.
@@ -50,7 +51,7 @@ At `68ba92078` (review round 7), which changes no runtime or engine code after `
 - **The command timeout of 0.** It is not tested; no test reads for longer than a driver's default timeout. Nothing bounds a read blocked on a lock; the README states it.
 - **Guards tested but not bite-proven:**
   - the compiler's column identifier format, its repeated-key check and its undeclared-key check (the key-required, case-collision, key-count and identifier-length rules are bite-proven);
-  - the worker re-check's column identifier format, key count, and key declared and required (its table identifier, case collision and repeated key are bite-proven);
+  - the worker re-check's column identifier format, key count and key declared (its table identifier, case collision, repeated key and key-required checks are bite-proven);
   - the executable reader's SQL column count against `MaxFields`, and the record codec's index bound for a SQL snapshot.
 - **Untested guards:**
   - the preparer's SQL shape check (`etl.pipeline-invalid` for missing columns or key, too many columns, or an empty table name);
