@@ -9,7 +9,7 @@ The [baseline assessment](native-runtime-performance-2026-10-31.md) and [first i
 Hydration metadata (#2657) merged in #3598 as `11a07e86686c68bb523334409e66f39deaed068c`, after review and required checks on `f445cea8d370e24c7b9f80a9ce89c4ce6e927e27`.
 The first main run was cancelled when main advanced. Containing main `1d77ed131de3305da8b8236f739c63085bff3e73` then passed [CI 41289485400](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41289485400).
 
-Integration head `36444c42792d96e13f9c05a98bd73e9c07ed3ddb` adds demand-driven input reads and weak immutable JavaScript/conversion preparation. Independent early review found fresh-hydration script misses and missing closed-scope read-budget proof; both were addressed and the next three-lens review was clear. Final integrated qualification remains due (point-in-time; #3601 later merged as `ea5c4de47` after it).
+Integration head `36444c42792d96e13f9c05a98bd73e9c07ed3ddb` adds demand-driven input reads and weak immutable JavaScript/conversion preparation. Independent early review found fresh-hydration script misses and missing closed-scope read-budget proof; both were addressed and the next three-lens review was clear. Final integrated qualification remains due (point-in-time; #3601 later merged as `ea5c4de47`).
 
 ## Owned activity reads: rejected experiment
 
@@ -60,7 +60,7 @@ that does no work. Replacing the first sweep with a no-op fails all twelve cases
 The corrected whole suites pass: runtime 3,122, Distributed 114, HTTP integration 107, zero failed/skipped. Discovery
 accounts for all cases (runtime's same three delayed theories expand 3,111 discoveries into 3,122 executions).
 All nine reference EF command counts remain unchanged. Final independent re-review and program gates are still due
-(point-in-time; see [Independent review corrections](#independent-review-corrections) and the #3601 merge `ea5c4de47`).
+(point-in-time; #3601 later merged as `ea5c4de47`).
 
 ## Unchanged native roots: candidate #2586
 
@@ -291,7 +291,7 @@ and an initial query-only candidate that omitted the overlay's claim path are re
 The restored whole suites pass: runtime 3,134, Distributed 114, EF 1,851 and HTTP integration 113, zero
 failed/skipped. Discovery reconciles every execution. The final source differs from the saved mutation candidate
 only in a comment describing the provenance handoff. Independent final review and program integration remain due
-(point-in-time; see [Independent review corrections](#independent-review-corrections) and the #3601 merge `ea5c4de47`).
+(point-in-time; #3601 later merged as `ea5c4de47`).
 
 The original memory harness counted successful state lookups over its submitted-ID bag, rather than independently
 counting distinct stored executions. Its raw `PendingOutbox: 0` field was a placeholder; the incomplete snapshot
@@ -655,7 +655,7 @@ container on a third host, all on one private subnet. Every case used a fresh da
 was published self-contained from this branch; `two-host-controller.py` drove both workers over a task-only SSH key.
 
 On the final engine (Worker r8, including the fence-renewal fix below) all **68 cases pass** (series `f4`; the preceding
-`f3` rerun of the 18 reclaim and interrupt cases also passed, 18/18):
+`f3` rerun of the 18 reclaim and interrupt cases, on Worker r7 before that fix, also passed 18/18):
 
 | Kind | Cases | What is checked |
 | --- | --- | --- |
@@ -671,10 +671,10 @@ series (`failure-r2`) the reclaim and default-interrupt cases hit a stale per-ca
 cases measured a host `RetryAfter` policy: all six runs stalled silently in Running with no incident, because nothing
 re-drives `RetryScheduled` scheduler poison records (the drainer records `nextRetryAt`, but no sweep reads it). That
 pre-existing defect is already tracked as [#3275](https://github.com/elsa-workflows/elsa-foundation/issues/3275) and is
-outside this delivery (point-in-time; #3656, merged as `180da1476`, closed #3275: a `RetryAfter` now releases the claim
-until it is due, for the resumption sweep to re-drive, when the handler threw before any non-retaining checkpoint and a
-re-driver is composed; every other `RetryAfter` is recorded `Poisoned` and raises an incident. It was not re-run on
-this fixture).
+outside this delivery (point-in-time; #3656, merged as `180da1476`, closed #3275: a `RetryAfter` is now either released
+until it is due, for the resumption sweep to re-drive, or recorded `Poisoned` with an incident; the conditions are in
+[What happens when something fails at runtime](../runtime-fault-behavior.md#what-it-does). It was not re-run on this
+fixture).
 
 ### A lease heartbeat failed fenced checkpoints (found and fixed)
 
