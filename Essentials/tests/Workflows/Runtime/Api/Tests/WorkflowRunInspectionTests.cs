@@ -239,6 +239,41 @@ public sealed class WorkflowRunInspectionTests
     }
 
     [Fact]
+    public async Task A_run_level_incident_of_an_activity_with_a_sensitive_input_is_withheld_wherever_it_is_listed()
+    {
+        // The Executable says node-1 has no sensitive binding, but the execution's own evidence holds a sensitive input.
+        var details = await SeedValuesAsync(WorkflowExecutionStatus.Faulted, Sensitive("password"));
+        foreach (var selected in new[] { ActivityId, null })
+        {
+            var run = (await Create(details).GetAsync(new(RunId, selected)))!;
+            var incident = Assert.Single(run.Incidents);
+            Assert.Equal((true, true, "Incident details are withheld because the activity has a sensitive input."), (incident.SensitiveInputs, incident.MessageRedacted, incident.Message));
+            if (selected is not null) Assert.True(run.Selection!.Execution!.StateView.Withheld);
+        }
+    }
+
+    [Fact]
+    public async Task An_incident_whose_non_sensitivity_cannot_be_established_is_withheld()
+    {
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        IncidentStateView Incident(string? activity, string? node) => new("incident-x", RunId, activity, node, "Error", "Active", null, "workflow.fault",
+            "Fault summary: " + Sentinel, Now, null, true, new Dictionary<string, string>());
+        async Task<WorkflowRunInspectionIncident> Read(IncidentStateView incident, bool activities = true) =>
+            Assert.Single((await Create(new Details(details.View! with { Incidents = [incident] }), activities: activities).GetAsync(new(RunId)))!.Incidents);
+
+        // A workflow-level incident (no activity execution, no node), as the poisoned-work observer records one.
+        Assert.True((await Read(Incident(null, null))).MessageRedacted);
+        // A node it names but no activity execution whose evidence could be read.
+        Assert.True((await Read(Incident(null, "node-1"))).MessageRedacted);
+        // An activity execution but no node (and no activity state to resolve it).
+        Assert.True((await Read(Incident(ActivityId, null))).MessageRedacted);
+        // An activity execution that cannot be read on this backend.
+        Assert.True((await Read(Incident(ActivityId, "node-1"), activities: false)).MessageRedacted);
+        // Established from both sources: kept.
+        Assert.Equal("Fault summary: " + Sentinel, (await Read(Incident(ActivityId, "node-1"))).Message);
+    }
+
+    [Fact]
     public async Task Pruned_does_not_depend_on_the_callers_activity_page()
     {
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted);

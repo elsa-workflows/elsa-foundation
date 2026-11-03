@@ -254,6 +254,8 @@ class RunBrowserAndGateTests(unittest.TestCase):
         self.assertNotIn(CANARY, json.dumps(value))
         self.assertNotIn("storageState", value)
         with self.assertRaises(RuntimeError): run_browser_inputs({**config, "workflow": {"run": {"workflowExecutionId": "run-1"}}})
+        with self.assertRaises(RuntimeError):
+            run_browser_inputs({**config, "workflow": {"run": {**config["workflow"]["run"], "path": "/runtime/run-1#fragment"}}})
 
     def test_the_canary_search_reads_every_retained_file(self):
         clean = [self.write("a.json", {"ok": True}), self.write("b.json", {"ok": False})]

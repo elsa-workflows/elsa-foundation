@@ -449,6 +449,38 @@ public sealed class WorkflowRunAgentTests
     }
 
     [Fact]
+    public async Task A_value_that_escapes_to_several_times_its_length_is_measured_as_serialized_and_never_refused_after_resolution()
+    {
+        // 3 000 non-ASCII characters: about 3 KB of raw JSON, about 18 KB once the host's serializer escapes it.
+        using var host = new WorkflowRuntimeAgentTestHost();
+        host.Runs.Read = request => Run(request, resultValue: string.Concat(Enumerable.Repeat("é", 3000)));
+        var session = await host.SessionAsync();
+        var admitted = (await host.CollectRunAsync(session, RunReference())).Attachments;
+
+        var prepared = await host.PrepareRunAsync(session, admitted);
+
+        Assert.True(prepared.Succeeded, prepared.Error?.Message);
+        var data = prepared.Value!.Preview.Data;
+        Assert.True(data.GetRawText().Length <= WorkflowReadRunTool.ResultBudget);
+        var result = data.GetProperty("selectedActivity").GetProperty("values").EnumerateArray().Single(item => item.GetProperty("name").GetString() == "result");
+        Assert.Equal("resolved", result.GetProperty("disclosure").GetString());
+        Assert.True(result.GetProperty("valueTruncated").GetBoolean());
+        Assert.Equal(["evidence-result"], host.Runs.Requests[^1].ResolveEvidenceIds!);
+    }
+
+    [Theory]
+    [InlineData("""{"canInspectValues":false,"selectedActivity":{"values":[{"disclosure":7}]}}""")]
+    [InlineData("""{"canInspectValues":false,"selectedActivity":{"values":[{"disclosure":"leaked"}]}}""")]
+    [InlineData("""{"canInspectValues":false,"selectedActivity":{"values":[{}]}}""")]
+    public void A_retained_disclosure_that_cannot_be_read_counts_as_released_and_never_throws(string data)
+    {
+        var current = Run(new("run-1")) with { CanResolveValues = false };
+        Assert.True(WorkflowReadRunTool.Exceeds(new("workflows.run", "1", JsonDocument.Parse(data).RootElement.Clone()), current));
+        Assert.False(WorkflowReadRunTool.Exceeds(new("workflows.run", "1",
+            JsonDocument.Parse("""{"canInspectValues":false,"selectedActivity":{"values":[{"disclosure":"withheld"}]}}""").RootElement.Clone()), current));
+    }
+
+    [Fact]
     public async Task A_run_that_cannot_fit_even_its_smallest_bound_is_refused_never_sent_over_budget()
     {
         using var host = new WorkflowRuntimeAgentTestHost();

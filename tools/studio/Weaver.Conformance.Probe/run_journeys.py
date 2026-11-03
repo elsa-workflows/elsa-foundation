@@ -48,6 +48,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import copy
+import hashlib
 import json
 from pathlib import Path
 import os
@@ -347,8 +348,18 @@ def _native(runtime, name, seed, canary):
     # The seam made the runtime capture the canary, so this control could fail: a regression that released a captured
     # sensitive value would put the canary in the disclosed payload.
     captured = [row for row in sensitive["detail"].get("valueSnapshots") or [] if (row.get("inputKey") or row.get("name")) == "text"]
-    check(len(captured) == 1 and captured[0].get("isSensitive") is True and captured[0].get("captureState") in ("payloadCaptured", "diagnosticSnapshotCaptured"),
+    check(len(captured) == 1 and captured[0].get("isSensitive") is True and captured[0].get("captureState") == "payloadCaptured",
           "The run API does not hold the captured sensitive input, so its withholding would prove nothing: " + json.dumps(captured)[:300])
+    # One admin resolve through the payload API confirms the captured payload really is the canary. Its body is never
+    # retained (the canary search would rightly find it); only its status, digest and the confirmation are.
+    template = seed["runtimeLinks"].get("activity-execution-value-payload")
+    check(template, "The run API advertises no value payload read")
+    path = owner_path(runtime.backend, template, workflowExecutionId=faulted["workflowExecutionId"],
+                      activityExecutionId=sensitive["detail"]["activityExecutionId"], evidenceId=captured[0]["evidenceId"])
+    status, body, _ = runtime.backend.request(path)
+    check(status == 200 and canary.encode() in body, "The payload API does not resolve the captured sensitive input to the canary (HTTP " + str(status) + ")")
+    evidence.append(runtime.save(runtime.output(name + "-canary-captured"), "payload-digest",
+                                 {"status": status, "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body), "containsCanary": True}))
     record, refs, _ = _read(runtime, name + "-explain-activity", runtime.backend, seed, faulted, sensitive, canary=canary)
     check(record["values"].get("text") == "withheld" and record["stateView"] == "withheld",
           "The captured sensitive input (or its activity's state view) was not disclosed only as withheld")
@@ -430,10 +441,12 @@ def _browser(runtime, name, seed, canary):
 
 
 def run_browser_inputs(config):
-    """The journey's allowlisted public inputs: the Run's identity and path, never the canary or the authentication state."""
+    """The journey's allowlisted public inputs: the Run's identity, its selected activity execution and path, never the canary
+    or the authentication state. Stricter than journey_runtime.browser_inputs, which does not require the selection."""
     run = (config.get("workflow") or {}).get("run") or {}
     check(all(isinstance(run.get(key), str) and run[key] for key in ("workflowExecutionId", "activityExecutionId", "path"))
-          and run["path"].startswith("/") and not run["path"].startswith("//") and "?" not in run["path"], "The Run journey needs native identities and a local path")
+          and run["path"].startswith("/") and not run["path"].startswith("//") and "?" not in run["path"] and "#" not in run["path"],
+          "The Run journey needs native identities and a local path")
     return {**{key: config[key] for key in ("journey", "provider", "studioOrigin", "backendOrigin")}, "driverSha256": sha(TOOL / "browser.mjs"),
             "run": {key: run[key] for key in ("workflowExecutionId", "activityExecutionId", "path")}}
 

@@ -147,8 +147,10 @@ internal sealed class WorkflowReadRunTool(
         if (!data.TryGetProperty("selectedActivity", out var selected) || selected.ValueKind != JsonValueKind.Object
             || !selected.TryGetProperty("values", out var values)) return false;
         if (values.ValueKind != JsonValueKind.Array) return true;
+        // A value whose disclosure is not a readable string counts as released (fails closed), never as an exception.
         var released = values.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.Object
-            || !value.TryGetProperty("disclosure", out var disclosure) || disclosure.GetString() == "resolved");
+            || !value.TryGetProperty("disclosure", out var disclosure) || disclosure.ValueKind != JsonValueKind.String
+            || disclosure.GetString() != "withheld" && disclosure.GetString() != "unavailable" && disclosure.GetString() != "resolvable");
         return released && !(current.CanInspectValues && current.CanResolveValues);
     }
 
@@ -191,7 +193,7 @@ internal sealed class WorkflowReadRunTool(
                         explanation = "withheld because the activity has a sensitive input that its state could echo" });
                 else if (!state.Available && state.UnavailableReason is { } stateReason)
                     unavailable.Add(new { data = "selected activity execution state view", reason = WorkflowRunContext.Reason(stateReason), explanation = WorkflowRunContext.Explain(stateReason) });
-                var view = state.View is { } projection && projection.GetRawText().Length <= tier.ValueChars ? (JsonElement?)projection : null;
+                var view = state.View is { } projection && Serialized(projection) <= tier.ValueChars ? (JsonElement?)projection : null;
                 selected = new
                 {
                     activityExecutionId, summary = Summary(execution.Summary), parentActivityExecutionId = execution.ParentActivityExecutionId,
@@ -278,6 +280,8 @@ internal sealed class WorkflowReadRunTool(
         return JsonSerializer.Serialize(prefix, JsonOptions).Length - 2 <= limit ? (prefix, true) : (null, true);
     }
 
+    private static int Serialized(JsonElement value) => JsonSerializer.Serialize(value, JsonOptions).Length;
+
     private static object Summary(WorkflowRunInspectionActivitySummary activity) => new
     {
         activityExecutionId = activity.ActivityExecutionId, executableNodeId = activity.ExecutableNodeId, authoredActivityId = activity.AuthoredActivityId,
@@ -300,11 +304,12 @@ internal sealed class WorkflowReadRunTool(
         };
         object? released = null;
         var truncated = false;
+        // Measured as the result itself is serialized (escaping included), so the estimate is an exact upper bound: a value
+        // shown whole is at most the bound when serialized, and a prefix is cut until its serialized text fits the bound.
         if (value.Disclosure == WorkflowRunValueDisclosure.Resolved && value.Value is { } payload && limit > 0)
         {
-            var text = payload.GetRawText();
-            if (text.Length <= limit) released = payload;
-            else (released, truncated) = Bounded(text, limit);
+            if (Serialized(payload) <= limit) released = payload;
+            else (released, truncated) = Bounded(payload.GetRawText(), limit);
         }
         else if (estimate && value.Disclosure == WorkflowRunValueDisclosure.Resolvable && limit > 0)
             released = new string('x', limit);

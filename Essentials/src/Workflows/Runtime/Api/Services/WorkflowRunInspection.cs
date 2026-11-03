@@ -55,13 +55,22 @@ internal sealed class WorkflowRunInspection(
         var canInspectValues = view.Permissions?.CanInspectValues == true;
         var canResolveValues = canInspectValues && await CanResolveAsync(id, cancellationToken);
         var sensitive = await SensitiveNodesAsync(view.Instance.ArtifactId, cancellationToken);
-        var selection = string.IsNullOrWhiteSpace(request.ActivityExecutionId) ? null
+        var (selection, selectedSensitive) = string.IsNullOrWhiteSpace(request.ActivityExecutionId) ? (null, false)
             : await SelectAsync(view, request.ActivityExecutionId, canInspectValues, request.ResolveEvidenceIds, sensitive, cancellationToken);
+        var lookups = new Dictionary<string, bool>(StringComparer.Ordinal);
+        if (selection?.Execution is not null) lookups[selection.ActivityExecutionId] = selectedSensitive;
+        var incidents = new List<WorkflowRunInspectionIncident>();
+        foreach (var incident in view.Incidents)
+        {
+            // Only a caller with value inspection reads incident messages at all, so only then is their sensitivity established.
+            var sensitiveInputs = canInspectValues
+                && await IncidentSensitiveAsync(id, incident.ActivityExecutionId, incident.ExecutableNodeId, sensitive, lookups, cancellationToken);
+            incidents.Add(Incident(incident.IncidentId, incident.ActivityExecutionId, incident.ExecutableNodeId, incident.Severity, incident.Status,
+                incident.FailureType, incident.Message, incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt, canInspectValues, sensitiveInputs));
+        }
         return new(
             Instance(view.Instance),
-            view.Incidents.Select(incident => Incident(incident.IncidentId, incident.ActivityExecutionId, incident.ExecutableNodeId, incident.Severity,
-                incident.Status, incident.FailureType, incident.Message, incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt, canInspectValues,
-                sensitive)).ToArray(),
+            incidents,
             new(view.Activities.Select(Summary).ToArray(), view.Instance.ActivityCount, view.ActivityNextContinuationToken),
             selection,
             canInspectValues,
@@ -95,13 +104,39 @@ internal sealed class WorkflowRunInspection(
         return nodes;
     }
 
+    // Whether a node may carry a sensitive input binding: unknown (no node, or no readable Executable) counts as sensitive.
     private static bool IsSensitiveNode(string? executableNodeId, HashSet<string>? sensitive) =>
-        executableNodeId is not null && (sensitive is null || sensitive.Contains(executableNodeId));
+        executableNodeId is null || sensitive is null || sensitive.Contains(executableNodeId);
 
-    private async Task<WorkflowRunInspectionSelection> SelectAsync(WorkflowInstanceDetailsView run, string activityExecutionId, bool canInspectValues,
+    /// <summary>At most this many unselected activity executions are read to establish their incidents' sensitivity; beyond it, they count as sensitive.</summary>
+    internal const int SensitivityLookupLimit = 32;
+
+    /// <summary>
+    /// Whether an incident's message may echo a sensitive input, decided conservatively from both sources: the Executable's
+    /// input bindings for its node (resolved through the run's activity state when the incident names no node) and the
+    /// activity execution's own value evidence (any sensitive input). Non-sensitivity must be established from both; an
+    /// incident without an activity execution, an execution that cannot be read, or one beyond the lookup bound counts as sensitive.
+    /// </summary>
+    private async Task<bool> IncidentSensitiveAsync(string workflowExecutionId, string? activityExecutionId, string? executableNodeId, HashSet<string>? sensitive,
+        Dictionary<string, bool> lookups, CancellationToken cancellationToken)
+    {
+        if (activityExecutionId is null) return true;
+        if (lookups.TryGetValue(activityExecutionId, out var known)) return known || executableNodeId is not null && IsSensitiveNode(executableNodeId, sensitive);
+        if (executableNodeId is null && activityStates is not null)
+            executableNodeId = (await activityStates.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken))?.Execution.ExecutableNodeId;
+        if (IsSensitiveNode(executableNodeId, sensitive)) return lookups[activityExecutionId] = true;
+        if (activities is null || lookups.Count >= SensitivityLookupLimit) return true;
+        var execution = await activities.GetAsync(new GetActivityExecution(workflowExecutionId, activityExecutionId), cancellationToken);
+        return lookups[activityExecutionId] = execution is null || execution.WorkflowExecutionId != workflowExecutionId || HasSensitiveInput(execution);
+    }
+
+    private static bool HasSensitiveInput(ActivityExecutionInspectionView execution) =>
+        execution.ValueSnapshots.Any(item => item.IsSensitive && item.Subject == nameof(ActivityExecutionInspectionValueSubject.ActivityInput));
+
+    private async Task<(WorkflowRunInspectionSelection Selection, bool Sensitive)> SelectAsync(WorkflowInstanceDetailsView run, string activityExecutionId, bool canInspectValues,
         IReadOnlySet<string>? resolve, HashSet<string>? sensitive, CancellationToken cancellationToken)
     {
-        if (activities is null) return new(activityExecutionId, null, WorkflowRunUnavailableReason.Unsupported);
+        if (activities is null) return (new(activityExecutionId, null, WorkflowRunUnavailableReason.Unsupported), true);
         var workflowExecutionId = run.Instance.WorkflowExecutionId;
         var execution = await activities.GetAsync(new GetActivityExecution(workflowExecutionId, activityExecutionId), cancellationToken);
         if (execution is null || execution.WorkflowExecutionId != workflowExecutionId || execution.ActivityExecutionId != activityExecutionId)
@@ -110,7 +145,7 @@ internal sealed class WorkflowRunInspection(
             // incident of the Run names it, or the Run's activity state still holds it. Otherwise the Run has no such execution.
             var recorded = run.Incidents.Any(item => item.ActivityExecutionId == activityExecutionId)
                 || activityStates is not null && await activityStates.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken) is not null;
-            return new(activityExecutionId, null, recorded ? WorkflowRunUnavailableReason.Pruned : null);
+            return (new(activityExecutionId, null, recorded ? WorkflowRunUnavailableReason.Pruned : null), true);
         }
         var values = new List<WorkflowRunInspectionValue>();
         var reads = 0;
@@ -121,24 +156,22 @@ internal sealed class WorkflowRunInspection(
             if (read) reads++;
             values.Add(value);
         }
-        var nodeSensitive = IsSensitiveNode(execution.ExecutableNodeId, sensitive)
-            || execution.ValueSnapshots.Any(item => item.IsSensitive && item.Subject == nameof(ActivityExecutionInspectionValueSubject.ActivityInput));
+        var nodeSensitive = IsSensitiveNode(execution.ExecutableNodeId, sensitive) || HasSensitiveInput(execution);
         var summary = new WorkflowRunInspectionActivitySummary(execution.ActivityExecutionId, execution.ExecutableNodeId, execution.AuthoredActivityId,
             execution.ActivityType, execution.ActivityTypeVersion, execution.Status, execution.SubStatus, execution.ExecutionSequence, execution.ScheduledAt,
             execution.StartedAt, execution.CompletedAt, execution.OutcomeNames.ToArray(), execution.Bookmarks.Count, execution.Incidents.Count,
             execution.ValueSnapshots.Count);
-        // The selected activity's own sensitivity also covers its incidents and state view, whatever its Executable says.
-        var incidentSensitivity = nodeSensitive ? null : sensitive;
-        return new(activityExecutionId, new(summary, execution.Provenance.ParentActivityExecutionId, execution.Provenance.SchedulingActivityExecutionId,
+        // The selected activity's sensitivity (its Executable node or its own value evidence) covers its incidents and state view.
+        return (new(activityExecutionId, new(summary, execution.Provenance.ParentActivityExecutionId, execution.Provenance.SchedulingActivityExecutionId,
             execution.Attempt?.AttemptNumber,
             execution.Bookmarks.Select(bookmark => new WorkflowRunInspectionBookmark(bookmark.Identity.BookmarkId, bookmark.StimulusType, bookmark.CreatedAt,
                 bookmark.ExpiresAt)).ToArray(),
             execution.Incidents.Select(incident => Incident(incident.IncidentId, execution.ActivityExecutionId,
                 incident.Causation?.ExecutableNodeId ?? execution.ExecutableNodeId, incident.Severity, incident.Status, incident.FailureType, incident.Message,
-                incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt, canInspectValues, incidentSensitivity)).ToArray(),
+                incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt, canInspectValues, canInspectValues && nodeSensitive)).ToArray(),
             values,
             nodeSensitive ? new(false, null, null, null, null, Withheld: true) : await StateViewAsync(workflowExecutionId, activityExecutionId, cancellationToken)),
-            null);
+            null), nodeSensitive);
     }
 
     // The evidence record as the activity execution read discloses it; the value itself only through the payload read.
@@ -202,9 +235,8 @@ internal sealed class WorkflowRunInspection(
     // Without value inspection the message is the endpoints' own redaction; with it, an incident of an activity with a
     // sensitive input is withheld here as well, because its exception text can echo that input.
     private static WorkflowRunInspectionIncident Incident(string incidentId, string? activityExecutionId, string? executableNodeId, string severity, string status,
-        string failureType, string message, bool isBlocking, DateTimeOffset createdAt, DateTimeOffset? resolvedAt, bool canInspectValues, HashSet<string>? sensitive)
+        string failureType, string message, bool isBlocking, DateTimeOffset createdAt, DateTimeOffset? resolvedAt, bool canInspectValues, bool sensitiveInputs)
     {
-        var sensitiveInputs = IsSensitiveNode(executableNodeId, sensitive);
         var withheld = canInspectValues && sensitiveInputs;
         return new(incidentId, activityExecutionId, executableNodeId, severity, status, failureType, withheld ? SensitiveIncidentMessage : message,
             !canInspectValues || withheld, sensitiveInputs, isBlocking, createdAt, resolvedAt);

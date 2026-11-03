@@ -318,7 +318,9 @@ Write Line whose text, a fresh private canary, is authored sensitive, then a Fau
 in progress (an Event that does not start the workflow, so it suspends on its bookmark). The runtime's default capture
 policy never captures a sensitive payload, so the case first selects the test-only host seam `QualificationRunCapture`
 (`fixtures/BackendConsumer/QualificationRunCapture.cs`), which captures sensitive activity inputs as full payloads; the
-driver requires the run API to report the canary input captured (and sensitive) before it checks that Weaver withholds it,
+driver requires the run API to report the canary input `payloadCaptured` (and sensitive), and confirms with one admin
+payload-API resolve (only its status and digest are retained) that the captured payload is the canary, before it checks
+that Weaver withholds it,
 so a regression that released a captured sensitive value would leak natively. Every design read that holds the authored
 canary is retained by digest only; every retained read is checked to hold no canary. The caller sends only the run
 page's reference (`workflows.run`: the Workflow Instance id and the selected activity execution id); the admitted context,
