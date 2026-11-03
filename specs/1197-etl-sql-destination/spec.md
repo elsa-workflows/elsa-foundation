@@ -94,7 +94,7 @@ An author picks a SQL binding for the main route in Studio, names the table and 
 - **Packages.** `IEtlSqlEngine` is in `Elsa.Etl.Core`, with no driver. The shared writer and bindings are in `Elsa.Etl.Runtime`. `Elsa.Etl.Sql.PostgreSql` (Npgsql) and `Elsa.Etl.Sql.SqlServer` (Microsoft.Data.SqlClient) each register one engine. Without the binding's engine:
   - binding resolution fails at admission with `etl.sql-unavailable`;
   - a worker that claims such a run fails it with the same code.
-- **Mixed versions.** A worker without this slice that claims a `sql` run fails it with `etl.executable.invalid-pipeline`, as for earlier slices' artifacts. All workers in a scope must run this slice before a `sql` pipeline is admitted.
+- **Mixed versions.** A worker without this slice cannot read a `sql` artifact: its preparation claim throws while reading the pinned artifact and is retried, without failing the run, so it can hold up other preparations in its scope (#3709). All workers in a scope must run this slice before a `sql` pipeline is admitted.
 
 ## Requirements *(mandatory)*
 
