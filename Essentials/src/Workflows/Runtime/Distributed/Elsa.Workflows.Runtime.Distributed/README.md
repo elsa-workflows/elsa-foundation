@@ -69,6 +69,41 @@ again, so the survivor that claims placement re-leases and re-drives it on failo
 and the ack-based hold-until-commit dequeue recorded in `docs/runtime-durable-resumption.md`. Re-driven commands are
 made safe — not merely deduplicated — by the fencing token described above.
 
+**A dispatch never holds the sweep** (#2831). A command can start a drain that runs as long as its workflow keeps making
+progress. The pump waits for each dispatch only up to `ExecutionPlacementPumpOptions.InlineDispatchWait` (default
+1 second, measured on the injected clock). A command still running after that finishes on its own and is acknowledged
+when it does, under the item's latest lease.
+
+All of one sweep's waits for local work, across every persistence scope, share a budget of a third of the placement
+lease. That includes passivating or handing off an execution whose drain is still running. Such a hand-off or
+passivation finishes on its own, and until it does, later sweeps neither hand the execution off again nor renew, claim
+or lease it. However many executions are busy, the sweep keeps renewing every placement the node holds, except one it
+is handing off or passivating. Without that, another node would claim a busy execution once its placement lease
+lapsed, take over its runtime ownership and run the same workflow. That takeover is deliberately immediate: it does not
+wait for the old owner's lease to expire, which keeps recovery fast, so keeping placement renewed is what stops two
+nodes from running one execution (#3667).
+
+That leaves one gap (#3678). A hand-off or passivation waits for the drain's turn to end, and nothing asks the drain to
+yield to it. A drain that keeps making progress on a draining member, or on one that no longer meets the execution's
+requirement, never ends its turn. Its placement lapses after one lease, another member claims it, and both run the
+execution until fencing stops the old drain.
+
+An execution with a drain this pump left running gets no inline wait:
+- A Cancel for it is dispatched without waiting, reaches the drain's mailbox, and the drain yields to it. A Cancel
+  forwarded from another node waits in the transport until this node's next sweep that lists the execution delivers
+  it, usually within `SweepInterval` (default 10 seconds). A sweep lists a scope's pending work once, after renewing and
+  before dispatching there; a Cancel sent while that scope's dispatches are waited for (at most a third of the lease in
+  all) goes to the sweep after. Failure backoff (up to `MaxBackoffInterval`) or a hand-off or passivation still pending for the execution
+  (#3678) can delay it further.
+- Its other commands stay leased while the drain runs, so the mailbox does not fill with waiters. When the drain ends,
+  the pump releases the leases of exactly those commands and the next sweep dispatches them. A command dispatched
+  earlier that came back deferred or rejected keeps its lease until it lapses.
+
+A drain the pump did not leave running, such as one for a command routed straight to the local mailbox, is not
+tracked. The pump's next dispatch for that execution is waited for like any other, then left running.
+
+An item whose transport lease lapses while its dispatch still runs is leased again but not dispatched twice.
+
 ## In-memory defaults and durable persistence stores
 
 The placement store and command transport in this unit are in-memory implementations, shared by every node container in

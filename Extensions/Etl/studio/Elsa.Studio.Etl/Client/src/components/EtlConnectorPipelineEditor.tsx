@@ -40,11 +40,11 @@ export function EtlConnectorPipelineEditor({
       </header>
 
       <ol className="etl-editor-order" aria-label="ETL operation order">
-        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : "Read bounded HTTP JSON pages"}</small></div></li>
+        <li><span>1</span><div><strong>Read source records</strong><small>{pipeline.source.kind === "csv" ? "Validate the declared CSV schema" : pipeline.source.kind === "jsonl" ? "Read one JSON object per line" : "Read bounded HTTP JSON pages"}</small></div></li>
         <li><span>2</span><div><strong>Match optional lookup</strong><small>{pipeline.lookup ? "Join CSV rows by exact typed keys" : "No lookup is configured"}</small></div></li>
         <li><span>3</span><div><strong>Map output fields</strong><small>Use declared source or lookup values</small></div></li>
         <li><span>4</span><div><strong>Apply output filters</strong><small>Equality or inequality over typed fields</small></div></li>
-        <li><span>5</span><div><strong>Route both outcomes</strong><small>Choose HTTP or JSONL independently</small></div></li>
+        <li><span>5</span><div><strong>Route both outcomes</strong><small>Choose HTTP, JSONL or CSV independently</small></div></li>
       </ol>
 
       {bindingsLoading ? <p className="etl-notice" role="status" aria-live="polite">Loading current approved connector aliases. Existing pipeline selections remain available while they load.</p> : null}
@@ -107,18 +107,20 @@ function DestinationEditor({ label, role, destination, bindings, bindingsLoading
       <div className="etl-editor-field">
         <label htmlFor={`${id}-kind`}>{label} destination kind</label>
         <select id={`${id}-kind`} value={destination.kind} disabled={disabled} onChange={event => {
-          const kind = event.currentTarget.value as "http" | "jsonl";
-          if (kind === "http") onChange({ kind: "http", binding: destination.binding });
-          else onChange({ kind: "jsonl", binding: destination.binding });
+          const kind = event.currentTarget.value as EtlPipelineV2["routes"]["main"]["kind"];
+          onChange({ kind, binding: destination.binding });
         }}>
           <option value="http">HTTP</option>
           <option value="jsonl">JSONL file</option>
+          <option value="csv">CSV file</option>
         </select>
       </div>
       <PipelineBindingSelect
         label={`${label} binding`}
         role={role}
+        // Hosts list output folder approvals under the jsonl kind; a CSV route publishes into the same folders.
         kind={destination.kind === "http" ? "http" : "jsonl"}
+        subjectLabel={destination.kind === "csv" ? (role === "MainOutput" ? "Accepted file output" : "Rejected file output") : undefined}
         value={destination.binding}
         bindings={bindings}
         bindingsLoading={bindingsLoading}

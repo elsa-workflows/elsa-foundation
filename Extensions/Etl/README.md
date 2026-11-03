@@ -10,6 +10,24 @@ extend the finite runtime with HTTP JSON sources and HTTP/JSONL routes. The
 HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable retries. These use the same worker
 capacity and terminal delivery as file ETL, with additive connector provider contracts.
 
+## JSON Lines file input
+
+[Spec 1190](../../specs/1190-etl-jsonl-input/spec.md), part of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908),
+adds a `jsonl` source: a host-approved file holding one JSON object per line, with fields selected by JSON Pointer.
+It reuses the CSV file path end to end (pinned approval, retained snapshot, byte index, file partitions, owed
+batches and fenced acceptance). Malformed, non-object and over-long lines are routed record errors rather than run
+failures. A file run with zero records settles as success when its preparation commits, for CSV and JSON Lines alike.
+
+## CSV file delivery
+
+[Spec 1191](../../specs/1191-etl-csv-delivery/spec.md) adds a `csv` destination for either route. Each published batch is
+one RFC 4180 file (comma, double-quote quoting, CRLF, UTF-8 without a BOM) beginning with its header row: the mapped
+field names on the main route, `recordOrdinal,code,field` on the error route. Values keep the canonical text of their
+typed values. The CSV bytes, header included, are what the batch output limit bounds; a row that does not fit is
+rejected as `etl.output-too-large`. Retention, effect identity, create-only `.csv` publication, verification and fenced
+acceptance are the JSON Lines file path. The connector store's effect columns record the delivery mechanism (HTTP or
+file), so CSV needed no migration. A single-column mapping writes a null as an empty line; Elsa's CSV reader reads it as one null field, but many external readers skip blank lines. An HTTP route's closing bracket is reserved with its first element: a file route filling the output limit can no longer fail the batch, and an HTTP main route's exact-limit first row is rejected instead of failing it.
+
 [Native continuation](../../specs/996-http-etl/evidence/http-native-checkpoint.md),
 [process recovery](../../specs/996-http-etl/evidence/http-process-checkpoint.md),
 [cancellation](../../specs/996-http-etl/evidence/http-cancellation-checkpoint.md),

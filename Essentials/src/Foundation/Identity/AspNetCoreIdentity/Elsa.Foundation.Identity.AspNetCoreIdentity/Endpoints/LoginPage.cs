@@ -22,7 +22,7 @@ public static class LoginPage
         static string Encode(string? value) => WebUtility.HtmlEncode(value ?? "");
         var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" ? options.Layout : "split";
         var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" ? options.Palette : "linen";
-        var artwork = options.Artwork is "ember" or "tidal" or "daybreak" or "canopy" ? options.Artwork : "ember";
+        var artwork = LoginArtwork.IsKnown(options.Artwork) ? options.Artwork : LoginArtwork.Default;
         var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
         var logoUrl = SafeUrl(options.LogoUrl) ?? $"{pathBase}/_elsa/identity/login-assets/elsa-logo.png";
         var logo = $"<img class=\"logo\" src=\"{Encode(logoUrl)}\" alt=\"\" />";

@@ -118,26 +118,35 @@ internal sealed partial class EtlArtifactCompiler
                 ValidateAlias(http.Binding, "source.binding", diagnostics);
                 ValidatePointer(http.RecordsPointer, "source.recordsPointer", diagnostics);
                 ValidatePagination(http.Pagination, diagnostics);
-                if (http.Fields is null)
-                    return ValidateSchema(null, "source.fields", maximumFields, diagnostics);
-                var columns = new EtlColumn[http.Fields.Count];
-                for (var index = 0; index < http.Fields.Count; index++)
-                {
-                    var field = http.Fields[index];
-                    if (field is null)
-                    {
-                        columns[index] = null!;
-                        continue;
-                    }
-                    ValidatePointer(field.Pointer, $"source.fields[{index}].pointer", diagnostics);
-                    columns[index] = new EtlColumn(field.Name, field.Type, field.Required);
-                }
-                // Share scalar declaration rules without treating JSON records as CSV at execution time.
-                return ValidateSchema(columns, "source.fields", maximumFields, diagnostics);
+                return ValidateJsonFields(http.Fields, maximumFields, diagnostics);
+            case EtlJsonlSource jsonl:
+                ValidateAlias(jsonl.Binding, "source.binding", diagnostics);
+                return ValidateJsonFields(jsonl.Fields, maximumFields, diagnostics);
             default:
                 diagnostics.Add(source is null ? "source.required" : "source.unsupported", "source", "A supported input source is required.");
                 return new Dictionary<string, EtlColumn>(StringComparer.Ordinal);
         }
+    }
+
+    private static Dictionary<string, EtlColumn> ValidateJsonFields(IReadOnlyList<EtlJsonField>? fields, int? maximumFields,
+        DiagnosticCollector diagnostics)
+    {
+        if (fields is null)
+            return ValidateSchema(null, "source.fields", maximumFields, diagnostics);
+        var columns = new EtlColumn[fields.Count];
+        for (var index = 0; index < fields.Count; index++)
+        {
+            var field = fields[index];
+            if (field is null)
+            {
+                columns[index] = null!;
+                continue;
+            }
+            ValidatePointer(field.Pointer, $"source.fields[{index}].pointer", diagnostics);
+            columns[index] = new EtlColumn(field.Name, field.Type, field.Required);
+        }
+        // Share scalar declaration rules without treating JSON records as CSV at execution time.
+        return ValidateSchema(columns, "source.fields", maximumFields, diagnostics);
     }
 
     private static void ValidateDestination(EtlDestination? destination, string path, DiagnosticCollector diagnostics)
@@ -146,6 +155,7 @@ internal sealed partial class EtlArtifactCompiler
         {
             case EtlJsonlDestination file: ValidateAlias(file.Binding, path + ".binding", diagnostics); break;
             case EtlHttpDestination http: ValidateAlias(http.Binding, path + ".binding", diagnostics); break;
+            case EtlCsvDestination csv: ValidateAlias(csv.Binding, path + ".binding", diagnostics); break;
             default:
                 diagnostics.Add(destination is null ? "destination.required" : "destination.unsupported", path, "A supported output destination is required.");
                 break;
@@ -188,7 +198,7 @@ internal sealed partial class EtlArtifactCompiler
 
     private static bool CheckConnectorStructureAndStrings(EtlPipelineV2 pipeline, string definitionId, int budget)
     {
-        var sourceCount = pipeline.Source switch { EtlCsvSource csv => csv.Schema?.Count ?? 0, EtlHttpJsonSource http => http.Fields?.Count ?? 0, _ => 0 };
+        var sourceCount = pipeline.Source switch { EtlCsvSource csv => csv.Schema?.Count ?? 0, EtlHttpJsonSource http => http.Fields?.Count ?? 0, EtlJsonlSource jsonl => jsonl.Fields?.Count ?? 0, _ => 0 };
         var itemCount = (long)sourceCount + (pipeline.Lookup?.Schema?.Count ?? 0) + (pipeline.Mapping?.Count ?? 0) + (pipeline.Filters?.Count ?? 0);
         if (itemCount > budget / 32 || !AddText(definitionId, ref budget))
             return false;
@@ -206,6 +216,12 @@ internal sealed partial class EtlArtifactCompiler
                     (!AddText(token.ContinuationPointer, ref budget) || !AddText(token.QueryParameter, ref budget))) return false;
                 if (http.Pagination is EtlNextLinkPagination link && !AddText(link.ContinuationPointer, ref budget)) return false;
                 break;
+            case EtlJsonlSource jsonl:
+                if (!AddText(jsonl.Binding, ref budget)) return false;
+                if (jsonl.Fields is not null)
+                    foreach (var field in jsonl.Fields)
+                        if (field is not null && (!AddText(field.Name, ref budget) || !AddText(field.Pointer, ref budget))) return false;
+                break;
         }
         if (pipeline.Lookup is { } lookup && (!AddText(lookup.Binding, ref budget) || !AddSchemaText(lookup.Schema, ref budget) ||
             !AddText(lookup.SourceKeyField, ref budget) || !AddText(lookup.LookupKeyField, ref budget))) return false;
@@ -222,6 +238,7 @@ internal sealed partial class EtlArtifactCompiler
     {
         EtlJsonlDestination file => AddText(file.Binding, ref budget),
         EtlHttpDestination http => AddText(http.Binding, ref budget),
+        EtlCsvDestination csv => AddText(csv.Binding, ref budget),
         _ => true
     };
 }

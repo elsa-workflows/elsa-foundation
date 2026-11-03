@@ -68,7 +68,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
             limits.MaxBatchRecords > options.Capacity.Records || limits.MaxBatchBytes > options.Capacity.InputBytes ||
             limits.MaxOutputBatchBytes > options.Capacity.OutputBytes || limits.MaxSnapshotBytes > options.MaxSnapshotBytes)
             throw Refused("etl.executable.limits-exceeded");
-        var sourceFields = pipeline.Source switch { EtlCsvSource csv => csv.Schema.Count, EtlHttpJsonSource json => json.Fields.Count, _ => 0 };
+        var sourceFields = pipeline.Source switch { EtlCsvSource csv => csv.Schema.Count, EtlHttpJsonSource json => json.Fields.Count, EtlJsonlSource jsonl => jsonl.Fields.Count, _ => 0 };
         if (sourceFields <= 0 || sourceFields > limits.MaxFields || pipeline.Mapping.Count is <= 0 or > 2048 || pipeline.Filters.Count > 2048)
             throw Refused("etl.executable.limits-exceeded");
         if (pipeline.Lookup is { } lookup &&
@@ -115,11 +115,15 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                     default: throw Refused("etl.executable.invalid-pipeline");
                 }
                 break;
+            case EtlJsonlSource jsonl:
+                RequireAlias(jsonl.Binding);
+                foreach (var field in jsonl.Fields) _ = new EtlJsonPointer(field.Pointer);
+                break;
             default: throw Refused("etl.executable.invalid-pipeline");
         }
         if (pipeline.Lookup is { } lookup) RequireAlias(lookup.Binding);
         foreach (var destination in new[] { pipeline.Routes.Main, pipeline.Routes.Errors })
-            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, _ => null });
+            RequireAlias(destination switch { EtlJsonlDestination file => file.Binding, EtlHttpDestination http => http.Binding, EtlCsvDestination csv => csv.Binding, _ => null });
     }
 
     private static void RequireAlias(string? value)
