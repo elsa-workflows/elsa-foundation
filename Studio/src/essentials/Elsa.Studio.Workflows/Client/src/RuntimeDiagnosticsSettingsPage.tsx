@@ -1,6 +1,6 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, DatabaseZap, Save, ShieldCheck } from "lucide-react";
+import { Info, DatabaseZap, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { useRuntimeDiagnosticsSettings, useSaveRuntimeDiagnosticsSettings } from "./api/runtime";
 import type {
@@ -96,14 +96,11 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
               <h3 className="wf-section-label"><ShieldCheck size={14} /> Default capture</h3>
               <p>Choose the level Studio should request. Save changes to apply it; Host Policy may lower the level used by the runtime.</p>
             </div>
-            {settings && (
-              <div className="runtime-diagnostics-effective">
-                <span>New capture events use</span>
-                <strong>{formatLevel(settings.effective.defaultLevel)}</strong>
-                {settings.requested.defaultLevel !== settings.effective.defaultLevel && (
-                  <small>Saved request: {formatLevel(settings.requested.defaultLevel)}. Host Policy applies a lower level.</small>
-                )}
-              </div>
+            {settings && settings.requested.defaultLevel !== settings.effective.defaultLevel && (
+              <p className="runtime-diagnostics-effective-note" role="status">
+                Host policy limits new capture events to {formatLevel(settings.effective.defaultLevel)}.
+                Saved request: {formatLevel(settings.requested.defaultLevel)}.
+              </p>
             )}
           </div>
           <LevelSelect
@@ -136,7 +133,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
                     <em>{subject.detail}</em>
                   </span>
                   <span className="runtime-diagnostics-subject-controls">
-                    {effective && <code>Runtime applies: {formatLevel(effective)}</code>}
+                    {effective && <span className="runtime-diagnostics-applied">Runtime applies: {formatLevel(effective)}</span>}
                     <select
                       value={requested}
                       disabled={loading || saving || !canManage}
@@ -154,7 +151,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
         {(hostReasons.length > 0 || effectiveReasons.length > 0 || !canManage) && (
           <section className="runtime-diagnostics-section">
-            <h3 className="wf-section-label"><AlertTriangle size={14} /> Policy</h3>
+            <h3 className="wf-section-label"><Info size={14} aria-hidden="true" /> Host policy</h3>
             <div className="runtime-diagnostics-policy">
               {!canManage && <span>Current user can view settings but cannot change them.</span>}
               {settings && <span>Maximum allowed by Host Policy: {formatLevel(settings.hostPolicy.maximumLevel)}</span>}

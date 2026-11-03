@@ -125,6 +125,12 @@ public sealed record EtlConnectorPartitionLease(EtlScope Scope, string RunId, in
 {
     /// <summary>Retained responsibility returned on acquisition; null only when no batch is owed.</summary>
     public EtlConnectorBatchReservation? OwedBatch { get; init; }
+
+    /// <summary>
+    /// The caught-up polls this continuous shard had recorded when it was claimed; 0 for every other shard. Above 0 it
+    /// is part of the page-cache key, so a stalled attempt's late page never lands under a later poll's key (spec 1196).
+    /// </summary>
+    public long PollGeneration { get; init; }
 }
 
 /// <summary>Authoritative position after an applied or identical replayed transition; no lease on refusal.</summary>
