@@ -18,13 +18,14 @@ import "./workflowOrganization.css";
 
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, refreshKey = 0 }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
   onChange(next: WorkflowDefinitionBrowseLocation): void;
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
+  refreshKey?: number;
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
@@ -61,7 +62,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       if (generation === generationRef.current) setError(message(caught, "Couldn't read saved views."));
     });
     return () => { generationRef.current += 1; };
-  }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);
+  }, [catalogTerm, context, onPermissions, refresh, refreshKey, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
   const missingFilterTags = !catalogLoading ? JSON.stringify([...new Set((location.tagFilters ?? []).map(filter => filter.tagId))].filter(id => !tags.some(tag => tag.id === id))) : "[]";
