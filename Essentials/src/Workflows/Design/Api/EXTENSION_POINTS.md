@@ -75,6 +75,29 @@ the evidence. A failed read discards earlier evidence, so a built-in GET makes t
 decisions on the definition, one per breadcrumb folder, one definition store read and one
 organization lookup, where it made six, two per folder, two and two.
 
+### `IWorkflowFolderDeletionStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+
+Optional scoped single-implementation port for safe folder removal:
+`PreviewFolderDeletionAsync(folderId, cancellationToken)` and
+`DeleteFolderAsync(folderId, previewRevision, deleteWorkflows, actorId, operationKey, cancellationToken)`.
+EF implements it on the library store; omission leaves the existing empty-only DELETE available.
+Only a registered port advertises `workflow-folder-deletion-preview` (GET) and
+`workflow-folder-delete` (POST), and both disappear when organization is disabled.
+
+Preview returns authoritative bounded direct workflow targets, affected descendant folders,
+destination and an opaque revision. The API checks Read/Manage on affected resources, ancestor
+visibility and the selected `IWorkflowDefinitionAuthorizer` before returning count-only inventory.
+Commit repeats authorization and the provider must validate the preview again inside its atomic
+hierarchy transaction. Never trust client-supplied counts or browser filters. EF limits direct
+workflow targets to 10,000 and hierarchy targets to the existing folder bound.
+
+Default removal moves direct workflow membership (including deleted workflows) and child folders
+to the surviving parent/top level. Descendant paths/depths change, while hierarchy and workflow
+identities remain intact. Name collisions reject the entire operation. The opt-in marks only
+active, directly assigned workflows soft-deleted; already deleted facts, tags, favorites, authored
+content, immutable versions, publication and runtime are preserved. Every move/deletion audit fact
+commits with the mutation. Stale previews and provider failures cannot leave partial changes.
+
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 
 The scoped optional port owns catalog organization independently of authored workflow state.

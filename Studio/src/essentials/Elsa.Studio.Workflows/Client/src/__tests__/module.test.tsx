@@ -5160,7 +5160,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Delete"));
 
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({
-      message: expect.stringContaining('Delete empty folder "Operations"'),
+      message: expect.stringContaining('Delete folder "Operations"? Only empty folders can be deleted'),
       tone: "danger"
     })));
     await waitForText(container, "Parent workflow");
