@@ -168,8 +168,11 @@ test("catalog management creates controlled values and retires their stable tag 
   await dialog.getByRole("button", { name: "Create tag", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Tag kind" })).toBeDisabled();
-  await dialog.getByRole("checkbox", { name: "Retire this tag" }).check();
+  const retirement = dialog.getByRole("checkbox", { name: "Retire this tag" });
+  await retirement.check();
+  const focusedBounds = await retirement.boundingBox();
   await dialog.getByRole("button", { name: "Save tag", exact: true }).click();
+  expect(await retirement.boundingBox()).toEqual(focusedBounds);
   await expect(dialog.getByRole("button", { name: "Save tag", exact: true })).toBeEnabled();
   await expect.poll(() => page.evaluate(() => (window as unknown as { workflowLibraryRequests: { method: string }[] }).workflowLibraryRequests.filter(request => request.method === "PUT").length)).toBe(1);
   const writes = await page.evaluate(() => (window as unknown as Window & { workflowLibraryRequests: { method: string; url: string; body?: unknown }[] }).workflowLibraryRequests.filter(request => request.method === "POST" || request.method === "PUT"));
