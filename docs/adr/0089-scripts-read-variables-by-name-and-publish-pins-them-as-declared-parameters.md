@@ -132,6 +132,21 @@ Names resolve against the node's visible scopes, nearest first, in the order dec
 through the scoped reader the runtime already has (`TryReadScopedVariableValue`). Liquid gets the same roots. The
 RunJavaScript activity body reads the same way; whether it may also write is A-3 and ADR 0090.
 
+**A1a. Which activity result a read sees** (@sfmskywalker, reconciliation row 13, 2026-10-30; the root name
+`activities.` agreed). `activities.<name>.<output>` reads one committed, successful occurrence of that activity: the
+occurrence in the reading node's own scope, resolved like a variable, nearest scope first. It never reads the globally
+latest occurrence. So an activity placed twice, or run again inside a graph-activity invocation, gives each reader the
+result its own producer made, as spec 265 already requires for graph bodies (FR-007; user story 2, scenario 2).
+- `activities.<name>.<output>`, and `getOutputs(name)` for an activity named by a computed `name`, are **required**
+  reads: they fail when no eligible successful occurrence exists.
+- `tryGetOutputs(name)` permits absence and returns `null` for it. A successful output may itself be `null`, so `null`
+  alone does not say which happened.
+- An invalid reference, an ambiguous occurrence (more than one eligible occurrence in the same scope) and denied
+  access fail in both forms. A read never waits for or schedules its producer.
+
+These forms are for activity outputs only. A computed **variable** name is question 3, which is open: variables get no
+`try` form.
+
 **A2. One consistent view per materialization.** Every read made while a node's inputs are materialized comes from the
 same committed state: the state the input snapshot is taken from (ADR 0045 §3). A script never sees a value that another
 branch commits while it runs. This is the read side of
