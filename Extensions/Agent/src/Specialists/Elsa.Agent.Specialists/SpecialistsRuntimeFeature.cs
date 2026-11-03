@@ -65,17 +65,19 @@ public class SpecialistsRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, SpecialistTypesStartupTask>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(new SpecialistJournalRegistrationStartupTask(services)));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(new SpecialistRegistrationStartupTask(services)));
     }
 }
 
-internal sealed class SpecialistJournalRegistrationStartupTask(IServiceCollection services) : IStartupTask
+internal sealed class SpecialistRegistrationStartupTask(IServiceCollection services) : IStartupTask
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (services.Count(descriptor => descriptor.ServiceType == typeof(ISpecialistTurnStore)) != 1)
             throw new InvalidOperationException("SpecialistsRuntime requires exactly one ISpecialistTurnStore backend per shell.");
+        if (services.Count(descriptor => descriptor.ServiceType == typeof(ISpecialistInvocationInspector)) != 1)
+            throw new InvalidOperationException("SpecialistsRuntime requires exactly one ISpecialistInvocationInspector per shell.");
         return Task.CompletedTask;
     }
 }

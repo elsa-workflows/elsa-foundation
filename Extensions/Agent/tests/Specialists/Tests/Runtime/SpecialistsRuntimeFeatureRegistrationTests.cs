@@ -23,6 +23,20 @@ public sealed class SpecialistsRuntimeFeatureRegistrationTests
         Assert.Equal(typeof(HostInspector), Assert.Single(replaced, x => x.ServiceType == typeof(ISpecialistInvocationInspector)).ImplementationType);
     }
 
+    [Fact]
+    public async Task Runtime_startup_refuses_a_second_invocation_inspector_instead_of_letting_the_last_one_win()
+    {
+        var services = new ServiceCollection();
+        new SpecialistsRuntimeFeature().ConfigureServices(services);
+        new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
+        var check = (SpecialistRegistrationStartupTask)Assert.Single(services, x => x.ImplementationInstance is SpecialistRegistrationStartupTask).ImplementationInstance!;
+        await check.ExecuteAsync(CancellationToken.None);
+
+        services.AddScoped<ISpecialistInvocationInspector, HostInspector>();
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => check.ExecuteAsync(CancellationToken.None));
+        Assert.Contains(nameof(ISpecialistInvocationInspector), refusal.Message, StringComparison.Ordinal);
+    }
+
     private sealed class HostInspector : ISpecialistInvocationInspector
     {
         public ValueTask<SpecialistInvocationEvidence?> InspectAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>

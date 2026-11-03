@@ -28,20 +28,39 @@ public sealed record SpecialistInvocationVersionEvidence(string DefinitionId, st
 /// </summary>
 public sealed record SpecialistInvocationFaultEvidence(string Code, string? Message);
 
-/// <summary>The accepted business result, present only when the native completion holds it inline without an encryption requirement.</summary>
-public sealed record SpecialistInvocationOutputEvidence(JsonElement Value);
+/// <summary>
+/// The native completion's result as the host's payload capture policy admits it. <see cref="CaptureMode"/> is that
+/// policy's decision (<c>None</c>, <c>MetadataOnly</c>, <c>DiagnosticSnapshot</c> or <c>Payload</c>). <see cref="Value"/>
+/// is present only for a full payload capture of an inline value that no policy marks sensitive or encryption-required.
+/// </summary>
+public sealed record SpecialistInvocationOutputEvidence(string CaptureMode, JsonElement? Value);
 
 /// <summary>The staged journal turn. Its status is the journal's own; accepted and applied are separate facts.</summary>
 public sealed record SpecialistTurnEvidence(
     SpecialistTurnStatus Status,
     string? FailureCode,
-    bool Applied,
+    SpecialistTurnApplicationStatus Application,
     DateTimeOffset Deadline,
     int MaximumModelCalls,
     IReadOnlyList<SpecialistModelRequestEvidence> ModelRequests,
     SpecialistUsageEvidence? Usage,
     SpecialistConversationEvidence? Conversation,
     DateTimeOffset? ContentPurgedAt);
+
+/// <summary>Whether this invocation's process took up the turn's accepted result.</summary>
+public enum SpecialistTurnApplicationStatus
+{
+    /// <summary>The turn has no accepted result.</summary>
+    NotAccepted,
+    /// <summary>The result is accepted and the native boundary has not settled yet.</summary>
+    Pending,
+    /// <summary>The native boundary completed with the accepted result; its settlement record is not written yet.</summary>
+    SettlementPending,
+    /// <summary>The settlement for this invocation's own delivery is recorded.</summary>
+    Applied,
+    /// <summary>The native boundary faulted, was cancelled or was superseded, so the accepted history was not applied here.</summary>
+    NotApplied
+}
 
 /// <summary>One reserved physical model request. A reservation without response evidence may or may not have reached the provider.</summary>
 public sealed record SpecialistModelRequestEvidence(string Id, DateTimeOffset ReservedAt, int MaximumOutputTokens, string ProviderKey, string ConfiguredModelId);

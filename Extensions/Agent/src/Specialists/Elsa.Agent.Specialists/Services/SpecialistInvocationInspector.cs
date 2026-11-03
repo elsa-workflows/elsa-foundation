@@ -11,7 +11,8 @@ namespace Elsa.Agent.Specialists.Services;
 /// with is the one the turn was staged under. Any binding mismatch reads as "no specialist evidence", never as a guess.
 /// </summary>
 internal sealed class SpecialistInvocationInspector(IWorkflowExecutionStateStore workflows, IActivityExecutionStateStore activities,
-    IWorkflowExecutableStore executables, ISpecialistTurnStore turns, IPersistenceAccessContextAccessor access) : ISpecialistInvocationInspector
+    IWorkflowExecutableStore executables, ISpecialistTurnStore turns, IPersistenceAccessContextAccessor access,
+    IRuntimePayloadCapturePolicy capture, TimeProvider time) : ISpecialistInvocationInspector
 {
     public async ValueTask<SpecialistInvocationEvidence?> InspectAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
@@ -39,7 +40,7 @@ internal sealed class SpecialistInvocationInspector(IWorkflowExecutionStateStore
         return new(workflow.WorkflowExecutionId, state.InvocationId,
             new(descriptor.DefinitionId!, descriptor.DefinitionVersionId!, descriptor.Version!, descriptor.TemplateHash!,
                 identity.ArtifactId, identity.ArtifactHash, descriptor.AllowContinuity),
-            descriptor.Model, descriptor.Limits, state.Status.ToString(), Fault(state), Output(state),
+            descriptor.Model, descriptor.Limits, state.Status.ToString(), Fault(state), Output(workflow, state, node),
             await TurnAsync(state, node, identity, cancellationToken));
     }
 
@@ -59,7 +60,7 @@ internal sealed class SpecialistInvocationInspector(IWorkflowExecutionStateStore
         var usage = turn.ResponseObservation is { } observed
             ? new SpecialistUsageEvidence(observed.ObservedAt, observed.UsageAvailable, observed.InputTokens, observed.OutputTokens, observed.TotalTokens, observed.ObservedModelId)
             : null;
-        return new(turn.Status, turn.FailureCode, turn.Applications is { Count: > 0 }, turn.Deadline, turn.MaximumModelCalls, requests, usage, conversation, turn.ContentPurgedAt);
+        return new(turn.Status, turn.FailureCode, Application(turn, state, identity), turn.Deadline, turn.MaximumModelCalls, requests, usage, conversation, turn.ContentPurgedAt);
     }
 
     // A running boundary holds its staged handle as private state; completion releases it, and the model-turn child keeps
@@ -89,8 +90,33 @@ internal sealed class SpecialistInvocationInspector(IWorkflowExecutionStateStore
         ? new(fault.Code, fault.Code.StartsWith("specialist.", StringComparison.Ordinal) ? fault.Message : null)
         : null;
 
-    private static SpecialistInvocationOutputEvidence? Output(ActivityExecutionState state) =>
-        state.Completion?.Result is { Presence: ValuePresence.Present, InlineValue: { } value } result && !result.Policy.RequiresEncryption
-            ? new(value.Clone())
-            : null;
+    // One turn serves every native delivery of its logical operation, so only an application bound to this invocation's
+    // own identity counts. A natively completed boundary has consumed the accepted result before its settlement is recorded.
+    private static SpecialistTurnApplicationStatus Application(SpecialistTurnDocument turn, ActivityExecutionState state, SpecialistInvocationIdentity identity)
+    {
+        if (turn.Status != SpecialistTurnStatus.Accepted) return SpecialistTurnApplicationStatus.NotAccepted;
+        if (turn.Applications?.Any(x => x.Identity == identity) == true) return SpecialistTurnApplicationStatus.Applied;
+        return state.Status switch
+        {
+            ActivityExecutionStatus.Completed => SpecialistTurnApplicationStatus.SettlementPending,
+            ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Superseded => SpecialistTurnApplicationStatus.NotApplied,
+            _ => SpecialistTurnApplicationStatus.Pending
+        };
+    }
+
+    // The same rule generic runtime inspection applies: a value hidden by the envelope, the contract result or any projected
+    // member withholds the whole result, and the host's payload capture policy decides the rest. Only a full payload capture
+    // returns the value here; a diagnostic snapshot stays with the runtime's own inspection.
+    private SpecialistInvocationOutputEvidence? Output(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
+    {
+        if (state.Completion?.Result is not { Presence: ValuePresence.Present } result) return null;
+        var contract = node.ActivityContract!.Result;
+        var sensitive = result.Policy.HidesValue() || contract.Policy.HidesValue() || contract.Projections.Values.Any(x => x.Policy.HidesValue());
+        var decision = capture.Decide(new(RuntimePayloadCaptureSubject.ActivityOutput, workflow.WorkflowExecutionId, time.GetUtcNow(),
+            activityExecutionId: state.InvocationId, valueName: OutputName, type: new RuntimeValueTypeDescriptor("alias", result.Type.Alias, result.Type.Schema),
+            isSensitive: sensitive));
+        return new(decision.Mode.ToString(), !sensitive && decision.CapturesPayload && result.InlineValue is { } value ? value.Clone() : null);
+    }
+
+    private const string OutputName = "Result";
 }
