@@ -72,6 +72,17 @@ transaction, because no partition exists to complete it; an identical replay ret
 outputs as file routes ([spec 1191](../../../../specs/1191-etl-csv-delivery/spec.md)): `RecordConnectorFilePublicationAsync`
 matches a CSV publication against `EtlRuntimeIdentity.ConnectorFileOutputKey(effectId, kind)` (a `.csv` key, refusing the
 `.jsonl` one), and a CSV route counts as a file publication for delivery, acceptance and inspection state.
+A provider likewise accepts `EtlConnectorKind.Sql` route outputs ([spec 1197](../../../../specs/1197-etl-sql-destination/spec.md)):
+the runtime records an applied SQL route through `RecordConnectorFilePublicationAsync` under
+`EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`, and it counts as a recorded publication (effect mechanism 2).
+
+**`IEtlSqlEngine`** (contributor, Core). One driver-specific adapter per provider name: connections, the parsed target for
+the pinned handle, dialect text for the ledger, unique-key check and single-row upsert, and exception classification
+(transient, duplicate key, already exists, missing object or constraint, rejected). Registration:
+`services.AddSingleton<IEtlSqlEngine, …>()`; the runtime's SQL bindings resolve one engine per binding provider and refuse
+two engines with the same name. Known implementations: `PostgreSqlEtlSqlEngine` (`Elsa.Etl.Sql.PostgreSql`) and
+`SqlServerEtlSqlEngine` (`Elsa.Etl.Sql.SqlServer`), cross-domain. The runtime owns the delivery protocol; an engine never
+commits or retries.
 
 `EtlPipelineV2.Continuous` is an optional, init-only run policy; a null policy is never serialized, so finite artifacts
 keep their bytes and identities. `EtlContinuousRunPolicy.FindViolation` is the one rule every reader applies (HTTP

@@ -26,7 +26,7 @@ The plan adds a main-route `sql` destination:
 - **Wrapping** (§2.19): infrastructure exceptions are wrapped at the writer boundary.
 - **Compatibility:**
   - existing artifacts and identities are byte-identical (`Sql` is appended);
-  - the persisted `EffectMechanism` gets a new value;
+  - SQL shares the persisted recorded-publication `EffectMechanism` value (research R7);
   - no migration, because the batch publication flags are reused.
 - **Extension points.**
   - The Core `EXTENSION_POINTS.md` gains `IEtlSqlEngine`, a contributor keyed by provider name, of which the runtime resolves one per binding.

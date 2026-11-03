@@ -41,7 +41,9 @@ An author points a pipeline's main route at a host-approved PostgreSQL or SQL Se
 
 A worker dies after committing a batch to the database but before the runtime records the delivery. A replacement delivers the batch again, but the database changes only once.
 
-**Independent Test**: in real worker processes on each engine, kill the worker between the database commit and the delivery record. The ledger must hold one row per batch, and the table must equal the fed records.
+**Independent Test**: in real worker processes, kill the worker between the database commit and the delivery record. The ledger must hold one row per batch, and the table must equal the fed records.
+- The worker fixture writes through the SQLite test engine.
+- On real PostgreSQL and SQL Server, the container suite proves the same replay at the writer: an applied effect redelivered writes nothing.
 
 **Acceptance Scenarios**:
 
@@ -125,7 +127,7 @@ An author picks a SQL binding for the main route in Studio, names the table and 
   Infrastructure exceptions are wrapped at the boundary, as transient (the worker yields) or deterministic (an `EtlEffectException` with a code).
 - **FR-007** After `Applied` or `Replay`, the output processor records the route through the route-publication transition. The expected reference is the route body keyed `EtlRuntimeIdentity.ConnectorSqlEffectKey(effectId)`. Every kind switch that today admits only file kinds for publication admits `Sql`:
   - the acceptance store's publication and delivered checks;
-  - the output store's effect mechanism, a persisted value assigned deliberately;
+  - the output store's effect mechanism, where SQL shares the recorded-publication value (2);
   - the record codec;
   - the runtime inspector;
   - the runtime API's effect states;
@@ -148,7 +150,7 @@ An author picks a SQL binding for the main route in Studio, names the table and 
 ## Success Criteria *(mandatory)*
 
 - **SC-001** Against real PostgreSQL 16 and SQL Server 2022 containers, pipelines upsert by key as US1 states. That includes a repeated key in one batch, and a missing unique key failing closed.
-- **SC-002** In real worker processes on each engine:
+- **SC-002** In real worker processes, using the SQLite test engine, and with the writer-level replay proven on each real engine:
   - a worker killed between the commit and the delivery record leaves exactly one ledger row per batch;
   - the table equals the fed records;
   - the run succeeds.
@@ -156,7 +158,7 @@ An author picks a SQL binding for the main route in Studio, names the table and 
   - a replayed batch writes nothing;
   - a hash conflict is refused;
   - a rejected value fails the run without writing;
-  - a transient failure yields and later succeeds.
+  - a transient failure yields and later succeeds, on the SQLite test engine. On PostgreSQL the transient classification of its error codes is proven, and on SQL Server it is not tested.
 - **SC-004** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof, except the guards the evidence README names.
 - **SC-005** An actual Workbench journey delivers to a PostgreSQL container from a native Flowchart.
 - **SC-006** Existing pipelines keep their bytes and identities. The ETL suite passes, and the new container suite passes in CI's container shard, which runs in the full tier.

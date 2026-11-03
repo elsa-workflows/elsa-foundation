@@ -59,7 +59,7 @@ The publication paths special-case the file kinds at these sites:
 - the record codec's destination kinds;
 - the output processor's first-row bound, route format, kind maps and dispatch.
 
-Every one admits `Sql`. `EffectMechanism` gets its own new value; reusing the file value was rejected because that value is persisted and indexed. Missing any site throws `InvalidDataException`.
+Every one admits `Sql`. `EffectMechanism` records how delivery is tracked, not the format: 1 is an HTTP journal, 2 a recorded publication. A SQL write is recorded through the same publication transition, so it shares 2. A new value would also need a table rebuild, because the batches table's CHECK admits only 1 and 2. Missing any site throws `InvalidDataException`.
 
 ## R8 — Ledger operations
 
