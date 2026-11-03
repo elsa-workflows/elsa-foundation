@@ -43,18 +43,22 @@ function evidence(status: string, turn: Partial<NonNullable<NonNullable<Playgrou
   };
 }
 
-function fakeContext(responses: { draft?: PlaygroundDraft | Error; evidence?: PlaygroundEvidence[]; start?: Array<unknown> } = {}) {
+function fakeContext(responses: { draft?: PlaygroundDraft | Error; drafts?: PlaygroundDraft[]; evidence?: Array<PlaygroundEvidence | Error>; start?: Array<unknown>;
+  cancel?: { status: string; reason?: string | null } } = {}) {
   const evidences = [...(responses.evidence ?? [evidence("Completed", {})])];
+  const drafts = [...(responses.drafts ?? [])];
   const starts = [...(responses.start ?? [])];
   const getJson = vi.fn(async (path: string) => {
     if (path.startsWith("/design/activities/drafts/")) {
       if (responses.draft instanceof Error) throw responses.draft;
-      return responses.draft ?? draft();
+      return (drafts.length > 1 ? drafts.shift() : drafts[0]) ?? responses.draft ?? draft();
     }
-    return evidences.length > 1 ? evidences.shift() : evidences[0];
+    const next = evidences.length > 1 ? evidences.shift() : evidences[0];
+    if (next instanceof Error) throw next;
+    return next;
   });
   const postJson = vi.fn(async (path: string, _body: unknown) => {
-    if (path.endsWith("/cancel")) return { status: "Running", cancellation: { status: "Requested" } };
+    if (path.endsWith("/cancel")) return { status: "Running", cancellation: responses.cancel ?? { status: "Requested" } };
     const next = starts.shift();
     if (next instanceof Error) throw next;
     return next ?? { testRunId: "run-1", status: "DispatchAccepted" };
@@ -197,6 +201,76 @@ describe("agent playground", () => {
     expect(container.querySelector("[data-testid='playground-missing']")).not.toBeNull();
   });
 
+  it("continues a chained conversation at its latest accepted revision", async () => {
+    const conversation = (revision: number) => ({ conversationId: "c".repeat(64), baseRevision: revision - 1, currentRevision: revision, outcomeUnknown: false, turnActive: false });
+    const { context, postJson } = fakeContext({ evidence: [evidence("Completed", { conversation: conversation(1) }), evidence("Completed", { conversation: conversation(2) })] });
+    const container = await render(context);
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+    button(container, "Continue this conversation")!.click();
+    await settle();
+    await submit(container);
+    await submit(container);
+
+    const sent = postJson.mock.calls.map(call => (call[1] as { inputs: Record<string, { value: unknown }> }).inputs["$specialist.options"].value);
+    expect(sent).toEqual([{}, { conversationId: "c".repeat(64), revision: 1 }, { conversationId: "c".repeat(64), revision: 2 }]);
+  });
+
+  it("backs off failed status reads and stops refreshing until asked", async () => {
+    const failure = Object.assign(new Error("Unavailable"), { status: 503 });
+    const { context, getJson } = fakeContext({ evidence: [failure] });
+    const container = await render(context);
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+    await settle();
+
+    const reads = () => getJson.mock.calls.filter(call => String(call[0]).includes("/evidence")).length;
+    expect(reads()).toBe(5);
+    expect(container.querySelector("[data-testid='playground-poll-stopped']")).not.toBeNull();
+    button(container, "Retry")!.click();
+    await settle();
+    expect(reads()).toBe(10);
+  });
+
+  it("keeps Stop available when the stop was not applied", async () => {
+    const running = evidence("Running", { status: "Dispatching", application: "NotAccepted" }, { output: null });
+    const { context } = fakeContext({ evidence: [running, running], cancel: { status: "Unavailable", reason: "Runtime Evidence is not available yet." } });
+    const container = await render(context);
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+    button(container, "Stop")!.click();
+    await settle();
+
+    expect(container.textContent).toContain("Stop was not applied: Runtime Evidence is not available yet.");
+    expect(button(container, "Stop")!.disabled).toBe(false);
+  });
+
+  it("shows why the generic Test Run refused the start", async () => {
+    const { context, getJson } = fakeContext({ start: [{ testRunId: "run-1", status: "ValidationRejected", reason: null,
+      failure: { code: "activity.draft.stale-revision", message: "The draft revision is stale." } }] });
+    const container = await render(context);
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+
+    expect(container.querySelector("[data-testid='playground-refusal']")!.textContent).toBe("The draft revision is stale.");
+    expect(container.textContent).toContain("activity.draft.stale-revision");
+    expect(getJson.mock.calls.some(call => String(call[0]).includes("/evidence"))).toBe(false);
+    expect(button(container, "Run")!.disabled).toBe(false);
+  });
+
+  it("does not offer to continue an earlier revision's conversation after a reload", async () => {
+    const { context } = fakeContext({ drafts: [draft(), draft({ revision: 4 })] });
+    const container = await render(context);
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+    expect(button(container, "Continue this conversation")).not.toBeNull();
+
+    button(container, "Reload draft")!.click();
+    await settle();
+    expect(container.textContent).toContain("Draft revision 4");
+    expect(button(container, "Continue this conversation")).toBeNull();
+  });
+
   it("parses typed inputs as JSON and empty optional ones as null", () => {
     const inputs = [
       { referenceKey: "count", name: "Count", type: { alias: "Int32" }, isRequired: false, isNullable: true },
@@ -204,5 +278,7 @@ describe("agent playground", () => {
     ];
     expect(parseInputs(inputs, { tags: "[\"moss\"]" })).toEqual({ values: { count: null, tags: ["moss"] }, errors: {} });
     expect(parseInputs(inputs, { tags: "{" }).errors).toEqual({ tags: "Enter valid JSON." });
+    const names = [{ referenceKey: "names", name: "Names", type: { alias: "String", collectionKind: "Array" }, isRequired: true, isNullable: false }];
+    expect(parseInputs(names, { names: "[\"moss\",\"fern\"]" }).values).toEqual({ names: ["moss", "fern"] });
   });
 });

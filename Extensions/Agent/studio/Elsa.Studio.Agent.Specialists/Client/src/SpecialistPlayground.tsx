@@ -9,10 +9,13 @@ import {
 } from "./playgroundApi";
 
 type Load = { kind: "loading" } | { kind: "missing" } | { kind: "denied" } | { kind: "error"; message: string } | { kind: "ready"; draft: PlaygroundDraft };
-type Run = { testRunId: string; evidence: PlaygroundEvidence | null; stopping: boolean; stopNote: string | null; pollFailed: boolean };
+type Refusal = { code?: string | null; message: string };
+type Run = { testRunId: string; evidence: PlaygroundEvidence | null; refusal: Refusal | null; stopping: boolean; stopNote: string | null; failures: number };
 type Attempt = { key: string; signature: string };
 
 const pollIntervalMs = 1000;
+// Consecutive failed status reads back off and then stop; the author retries explicitly.
+const maximumPollFailures = 5;
 
 /** The draft ID a playground URL names: /agents/drafts/{draftId}/playground. */
 export function readPlaygroundDraftId(pathname: string) {
@@ -38,7 +41,8 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [continuation, setContinuation] = useState<ConversationReference | null>(null);
+  // The selection names a conversation; its expected revision is always the latest one accepted on this page.
+  const [selected, setSelected] = useState<string | null>(null);
   // Conversations accepted on this page belong to the saved revision they ran against; another revision cannot continue them.
   const [conversations, setConversations] = useState<{ revision: number; items: ConversationReference[] }>({ revision: 0, items: [] });
   const [run, setRun] = useState<Run | null>(null);
@@ -69,26 +73,26 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
   useEffect(() => {
     if (loadedRevision === null || loadedRevision === conversations.revision) return;
     setConversations({ revision: loadedRevision, items: [] });
-    setContinuation(null);
+    setSelected(null);
   }, [loadedRevision, conversations.revision]);
 
   // Polls the run's evidence until the generic Test Run settles; a failed read keeps the last evidence on screen.
   useEffect(() => {
-    if (!run || (run.evidence && isTerminal(run.evidence.status))) return;
+    if (!run || run.refusal || (run.evidence && isTerminal(run.evidence.status)) || run.failures >= maximumPollFailures) return;
     const abort = new AbortController();
     const timer = setTimeout(async () => {
       try {
         const evidence = await getEvidence(context, run.testRunId, abort.signal);
         if (abort.signal.aborted) return;
-        setRun(current => current && current.testRunId === run.testRunId ? { ...current, evidence, pollFailed: false } : current);
+        setRun(current => current && current.testRunId === run.testRunId ? { ...current, evidence, failures: 0 } : current);
         const accepted = acceptedConversation(evidence);
         if (accepted && isTerminal(evidence.status))
           setConversations(current => current.revision !== evidence.draftRevision ? current
             : { revision: current.revision, items: [accepted, ...current.items.filter(item => item.conversationId !== accepted.conversationId)] });
       } catch {
-        if (!abort.signal.aborted) setRun(current => current && current.testRunId === run.testRunId ? { ...current, pollFailed: true } : current);
+        if (!abort.signal.aborted) setRun(current => current && current.testRunId === run.testRunId ? { ...current, failures: current.failures + 1 } : current);
       }
-    }, run.evidence ? pollInterval : 0);
+    }, run.failures > 0 ? pollInterval * 2 ** run.failures : run.evidence ? pollInterval : 0);
     return () => { abort.abort(); clearTimeout(timer); };
   }, [context, run, pollInterval]);
 
@@ -104,7 +108,8 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
   const draft = load.draft;
   const inputs = businessInputs(draft);
   const continuity = allowsContinuity(draft);
-  const active = run !== null && !(run.evidence && isTerminal(run.evidence.status));
+  const active = run !== null && !(run.evidence && isTerminal(run.evidence.status)) && run.refusal === null;
+  const continuation = conversations.revision === draft.revision ? conversations.items.find(item => item.conversationId === selected) ?? null : null;
 
   const start = async () => {
     const parsed = parseInputs(inputs, values);
@@ -120,14 +125,16 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
       const started = await startPlaygroundRun(context, draft, parsed.values, continuation, current.key);
       if (!alive.current) return;
       attempt.current = null;
-      setRun({ testRunId: started.testRunId, evidence: null, stopping: false, stopNote: null, pollFailed: false });
+      // A refused start is still a 202 receipt: its reason is only on this response, not in the agent evidence.
+      const refused = ["validationrejected", "dispatchrejected"].includes(started.status.toLowerCase());
+      setRun({ testRunId: started.testRunId, evidence: null, stopping: false, stopNote: null, failures: 0,
+        refusal: refused ? { code: started.failure?.code, message: started.failure?.message ?? started.reason ?? "The run was refused before the agent started." } : null });
     } catch (error) {
       if (!alive.current) return;
       const status = error instanceof StudioHttpError ? error.status : (error as { status?: number }).status;
       // Only an answer that may still succeed keeps the key; a refusal of this exact submission frees it.
       if (status !== undefined && status < 500 && status !== 408 && status !== 429) attempt.current = null;
-      setStartError(status === 409 ? "The draft changed since it was loaded. Reload it to test the saved revision."
-        : error instanceof Error ? error.message : "The run could not be started.");
+      setStartError(error instanceof Error ? error.message : "The run could not be started.");
     } finally {
       if (alive.current) setStarting(false);
     }
@@ -139,8 +146,12 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
     try {
       const cancelled = await cancelRun(context, run.testRunId);
       if (!alive.current) return;
+      const status = cancelled.cancellation?.status;
       const reason = cancelled.cancellation?.reason;
-      setRun(current => current && { ...current, stopNote: reason ? `Stop was not applied: ${reason}` : "Stop requested. A request already sent to the model is not recalled." });
+      // Only a requested or cancelling stop was taken; anything else leaves Stop available to try again.
+      setRun(current => current && (status === "Requested" || status === "Cancelling"
+        ? { ...current, stopNote: "Stop requested. A request already sent to the model is not recalled." }
+        : { ...current, stopping: false, stopNote: status === "Terminal" ? "The run had already ended." : `Stop was not applied${reason ? `: ${reason}` : "."}` }));
     } catch (error) {
       if (!alive.current) return;
       setRun(current => current && { ...current, stopping: false, stopNote: error instanceof Error ? error.message : "Stop could not be requested." });
@@ -167,11 +178,11 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         {continuity ? (
           <fieldset className="agent-playground__conversation" disabled={active || starting}>
             <legend>Conversation</legend>
-            <label><input type="radio" name="conversation" checked={continuation === null} onChange={() => setContinuation(null)} /> Fresh conversation</label>
+            <label><input type="radio" name="conversation" checked={continuation === null} onChange={() => setSelected(null)} /> Fresh conversation</label>
             {conversations.items.map(item => (
               <label key={item.conversationId}>
                 <input type="radio" name="conversation" checked={continuation?.conversationId === item.conversationId}
-                  onChange={() => setContinuation(item)} /> Continue conversation at revision {item.revision}
+                  onChange={() => setSelected(item.conversationId)} /> Continue conversation at revision {item.revision}
               </label>
             ))}
             {conversations.items.length === 0 ? <p className="agent-playground__hint">Conversations accepted by runs of this revision can be continued here.</p> : null}
@@ -184,14 +195,15 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         {startError ? <StudioAlert tone="danger">{startError}</StudioAlert> : null}
       </form>
 
-      {run ? <RunEvidence run={run} onContinue={reference => setContinuation(reference)} /> : null}
+      {run ? <RunEvidence run={run} revision={draft.revision} onContinue={reference => setSelected(reference.conversationId)}
+        onRetry={() => setRun(current => current && { ...current, failures: 0 })} /> : null}
     </StudioPage>
   );
 }
 
 function InputField({ input, value, error, disabled, onChange }: { input: PlaygroundInput; value: string; error?: string; disabled: boolean; onChange(value: string): void }) {
   const id = useId();
-  const text = input.type.alias === "String";
+  const text = isText(input);
   return (
     <div className="agent-playground__input">
       <label htmlFor={id}>{input.displayName?.trim() || input.name}{input.isRequired ? " (required)" : ""}</label>
@@ -203,7 +215,15 @@ function InputField({ input, value, error, disabled, onChange }: { input: Playgr
   );
 }
 
-/** Text inputs travel as strings; every other type is entered as JSON. An empty optional input is sent as null. */
+// A single string travels as typed text; every other type, collections of strings included, is entered as JSON.
+function isText(input: PlaygroundInput) {
+  return input.type.alias === "String" && (input.type.collectionKind ?? "Single") === "Single";
+}
+
+/**
+ * An empty optional input is sent as null when it can be null. Draft Test Runs cannot leave an input out yet (#3768), so
+ * an empty optional input that cannot be null still needs a value.
+ */
 export function parseInputs(inputs: PlaygroundInput[], raw: Record<string, string>) {
   const values: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
@@ -212,27 +232,35 @@ export function parseInputs(inputs: PlaygroundInput[], raw: Record<string, strin
     if (!text.trim()) {
       if (input.isRequired) errors[input.referenceKey] = "Enter a value.";
       else if (input.isNullable) values[input.referenceKey] = null;
-      else errors[input.referenceKey] = "Enter a value; this input has no empty form.";
+      else errors[input.referenceKey] = "Enter a value; a test run cannot leave this input out yet.";
       continue;
     }
-    if (input.type.alias === "String") { values[input.referenceKey] = text; continue; }
+    if (isText(input)) { values[input.referenceKey] = text; continue; }
     try { values[input.referenceKey] = JSON.parse(text); }
     catch { errors[input.referenceKey] = "Enter valid JSON."; }
   }
   return { values, errors };
 }
 
-function RunEvidence({ run, onContinue }: { run: Run; onContinue(reference: ConversationReference): void }) {
+function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revision: number; onContinue(reference: ConversationReference): void; onRetry(): void }) {
   const evidence = run.evidence;
   const invocation = evidence?.invocation;
   const turn = invocation?.turn;
   const terminal = evidence ? isTerminal(evidence.status) : false;
-  const accepted = evidence ? acceptedConversation(evidence) : null;
+  // Only a run of the revision on screen can be continued; an earlier revision's conversation belongs to another candidate.
+  const accepted = evidence && evidence.draftRevision === revision ? acceptedConversation(evidence) : null;
   return (
     <section className="agent-playground__run" aria-label="Run result" data-status={evidence?.status ?? "Starting"}>
-      <h2>Run <StatusChip tone={statusTone(evidence?.status)}>{evidence?.status ?? "Starting"}</StatusChip></h2>
-      <p data-testid="playground-stage">{stageText(evidence)}</p>
-      {run.pollFailed ? <p className="agent-playground__hint">The latest status could not be read; showing the last known state.</p> : null}
+      <div role="status">
+        <h2>Run <StatusChip tone={statusTone(evidence?.status)}>{evidence?.status ?? (run.refusal ? "Refused" : "Starting")}</StatusChip></h2>
+        <p data-testid="playground-stage">{run.refusal ? "The run was refused before the agent started." : stageText(evidence)}</p>
+      </div>
+      {run.refusal ? <StudioAlert tone="danger"><span data-testid="playground-refusal">{run.refusal.message}</span>{run.refusal.code ? <> <code>{run.refusal.code}</code></> : null}</StudioAlert> : null}
+      {run.failures > 0 && run.failures < maximumPollFailures ? <p className="agent-playground__hint">The latest status could not be read; showing the last known state.</p> : null}
+      {run.failures >= maximumPollFailures ? (
+        <p className="agent-playground__hint" data-testid="playground-poll-stopped">The status could not be read, so it is no longer refreshed.{" "}
+          <StudioButton size="sm" onClick={onRetry}>Retry</StudioButton></p>
+      ) : null}
       {run.stopNote ? <p role="status">{run.stopNote}</p> : null}
       {turn?.status === "OutcomeUnknown" ? (
         <StudioAlert tone="warning">
