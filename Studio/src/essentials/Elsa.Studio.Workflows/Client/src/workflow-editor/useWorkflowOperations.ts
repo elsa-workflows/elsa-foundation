@@ -145,18 +145,21 @@ export function useWorkflowOperations({
     }
   }, [busy, context, publishedExecutable, setError, setOperation, setStatus]);
 
-  const save = useCallback(async () => {
+  /** Saves this render's draft; a caller that captured the history line when the author acted passes it. */
+  const save = useCallback(async (options?: { lineage?: Iterable<string> }) => {
     if (!draft || busy) return;
+    // The line of the draft being saved, captured now with it, before any await.
+    const line = options?.lineage ? [...options.lineage] : lineage ? [...lineage()] : undefined;
     setOperation("saving");
     setStatus("Saving...");
     try {
-      await saveDraft(draft, "Saved");
+      await saveDraft(draft, "Saved", { lineage: line });
     } catch {
       // saveDraft surfaces the error in the editor alert.
     } finally {
       setOperation("idle");
     }
-  }, [draft, busy, saveDraft, setOperation, setStatus]);
+  }, [draft, busy, lineage, saveDraft, setOperation, setStatus]);
 
   const reviewPublication = useCallback(async (
     review: PublicationReviewState,

@@ -29,16 +29,18 @@ function fixture() {
   const setPaused = vi.fn(), setBusy = vi.fn(), setError = vi.fn(), setStatus = vi.fn(), openProcesses = vi.fn();
   const container = document.createElement("div"); document.body.appendChild(container); const root = createRoot(container);
   let currentSession = session, currentDraft = draft;
+  // The live history line the editor reports; a test may change it while the publication awaits.
+  const line = { current: ["batch-1"] };
   const render = (options: { busy?: boolean; readOnly?: boolean; session?: StudioBackendSession; draft?: WorkflowDraft } = {}) => {
     currentSession = options.session ?? currentSession; currentDraft = options.draft ?? currentDraft;
     flushSync(() => root.render(<DirectBpmnPublishAction key={currentSession.key} session={currentSession} definitionId="definition" draft={currentDraft}
-      busy={options.busy ?? false} readOnly={options.readOnly ?? false} saveDraft={saveDraft} lineage={() => new Set(["batch-1"])} flushMetadata={flushMetadata}
+      busy={options.busy ?? false} readOnly={options.readOnly ?? false} saveDraft={saveDraft} lineage={() => line.current} flushMetadata={flushMetadata}
       onOpenProcesses={openProcesses} setPaused={setPaused} setBusy={setBusy} setError={setError} setStatus={setStatus} reload={reload} />));
   };
   const click = () => flushSync(() => container.querySelector<HTMLButtonElement>("button")!.click());
   const dispose = () => { flushSync(() => root.unmount()); container.remove(); };
   render();
-  return { session, draft, postJson, saveDraft, flushMetadata, reload, setPaused, setBusy, setError, setStatus, openProcesses, container, render, click, dispose };
+  return { session, draft, postJson, saveDraft, flushMetadata, reload, setPaused, setBusy, setError, setStatus, openProcesses, container, render, click, dispose, line };
 }
 
 describe("Studio direct BPMN publication", () => {
@@ -54,6 +56,21 @@ describe("Studio direct BPMN publication", () => {
       expect(sessionStorage.length).toBe(0); expect(view.reload).toHaveBeenCalledTimes(1);
       const open = [...view.container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "BPMN processes")!;
       expect(open).toBeTruthy(); flushSync(() => open.click()); expect(view.openProcesses).toHaveBeenCalledTimes(1);
+    } finally { view.dispose(); }
+  });
+
+  it("captures the history line with the snapshot, before the metadata flush is awaited", async () => {
+    const view = fixture();
+    let release!: (value: boolean) => void;
+    view.flushMetadata.mockReturnValueOnce(new Promise<boolean>(done => { release = done; }));
+    try {
+      view.click();
+      await vi.waitFor(() => expect(view.flushMetadata).toHaveBeenCalledTimes(1));
+      // The author undoes or redoes while the flush is awaited: the snapshot's line was fixed at the click.
+      view.line.current = ["batch-2"];
+      release(true);
+      await vi.waitFor(() => expect(view.saveDraft).toHaveBeenCalledTimes(1));
+      expect(view.saveDraft).toHaveBeenCalledWith(view.draft, "BPMN publication snapshot saved", { lineage: ["batch-1"] });
     } finally { view.dispose(); }
   });
 

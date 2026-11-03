@@ -160,17 +160,29 @@ describe("workflow publication operations", () => {
     expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication cancelled; no changes were saved, promoted, or published.");
   });
 
-  it("saves the review snapshot with the history line captured together with it, not the line at publish time", async () => {
+  it("saves the review snapshot with the history line captured with it, before the pending save is awaited", async () => {
     let line = ["batch-1"];
-    const fixture = renderOperations({ lineage: () => line });
+    // The author undoes or redoes while the pending save settles: the snapshot is the draft of the click.
+    const fixture = renderOperations({ lineage: () => line, flushPendingSave: async () => { line = ["batch-2"]; } });
     await prepare(fixture);
-    // The author undoes the batch while the review is open; the snapshot under review still carries it.
+    // And again while the review is open.
     line = [];
 
     await publish(fixture);
 
     expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
     expect(fixture.saveDraft.mock.calls[0][2]).toEqual({ lineage: ["batch-1"] });
+  });
+
+  it("Save writes this render's draft with the live line, or with the line its caller captured at the click", async () => {
+    const line = ["batch-1"];
+    const fixture = renderOperations({ lineage: () => line });
+
+    await fixture.current().save();
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["batch-1"] });
+
+    await fixture.current().save({ lineage: ["captured-at-click"] });
+    expect(fixture.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ id: "draft-1" }), "Saved", { lineage: ["captured-at-click"] });
   });
 
   it("publishes the immutable authoritative review through save, promote, and token-bound publish", async () => {
