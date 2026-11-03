@@ -23,6 +23,10 @@ internal sealed class ConnectorWorkerGate(string root, string role, EtlConnector
         string batchId, CancellationToken cancellationToken) =>
         PauseAsync(gate, lease, batchId, CurrentPage(lease), cancellationToken);
 
+    public Task BeforePublicationRecordAsync(EtlConnectorPartitionLease lease, string batchId,
+        CancellationToken cancellationToken) =>
+        PauseAsync(EtlConnectorWorkerGate.BeforePublicationRecord, lease, batchId, CurrentPage(lease), cancellationToken);
+
     public Task BeforeAcceptanceAsync(EtlConnectorPartitionLease lease, string batchId,
         CancellationToken cancellationToken) =>
         PauseAsync(EtlConnectorWorkerGate.BeforeAcceptance, lease, batchId, CurrentPage(lease), cancellationToken);
@@ -102,6 +106,13 @@ internal sealed class ConnectorWorkerGateStore(IEtlRuntimeStore baseStore, IEtlC
         if (result.Status == EtlStoreStatus.Applied && result.Delivery?.Phase == EtlHttpDeliveryPhase.Acknowledged)
             await _gate.AfterAcknowledgementAsync(gate, lease, batchId, cancellationToken);
         return result;
+    }
+
+    public override async ValueTask<EtlStoreStatus> RecordConnectorFilePublicationAsync(EtlConnectorPartitionLease lease,
+        string batchId, EtlOutputRoute route, EtlObjectReference publication, CancellationToken cancellationToken = default)
+    {
+        await _gate.BeforePublicationRecordAsync(lease, batchId, cancellationToken);
+        return await Connector.RecordConnectorFilePublicationAsync(lease, batchId, route, publication, cancellationToken);
     }
 
     public override async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchAsync(EtlConnectorPartitionLease lease,

@@ -3,7 +3,7 @@ import axe, { type AxeResults, type RunOptions } from "axe-core";
 import { createDefaultEtlConnectorPipeline } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/connectorAuthoringHelpers";
 
 // Browser-level product components against a deterministic API fixture. Actual Workbench HTTP acceptance is T019.
-async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean } = {}) {
+async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvErrors?: boolean; continuous?: boolean; sqlMain?: boolean } = {}) {
   let pipeline = createDefaultEtlConnectorPipeline();
   let revision = 1;
   let created = false;
@@ -25,7 +25,7 @@ async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvError
     else if (path === "etl/v2/bindings") json = { items: [
       { alias: "source", role: "Source", kind: "http" }, { alias: "csv-only", role: "Source", kind: "csv" },
       { alias: "output", role: "MainOutput", kind: "http" }, { alias: "errors", role: "ErrorOutput", kind: "http" },
-      { alias: "error-file", role: "ErrorOutput", kind: "jsonl" }
+      { alias: "error-file", role: "ErrorOutput", kind: "jsonl" }, { alias: "warehouse", role: "MainOutput", kind: "sql" }
     ], nextCursor: null };
     else if (path === "etl/v2/definitions") {
       if (request.method() === "POST") {
@@ -41,7 +41,9 @@ async function arrangeApi(page: Page, options: { jsonlSource?: boolean; csvError
       if (request.method() === "PUT") {
         const body = request.postDataJSON();
         expect(body.expectedRevision).toBe(revision);
-        if (options.continuous) {
+        if (options.sqlMain) {
+          expect(body.pipeline.routes.main).toEqual({ kind: "sql", binding: "warehouse", table: "dbo.people", key: ["name"] });
+        } else if (options.continuous) {
           expect(body.pipeline.continuous).toEqual({ pollIntervalSeconds: 30 });
         } else if (options.csvErrors) {
           expect(body.pipeline.routes.errors).toEqual({ kind: "csv", binding: "error-file" });
@@ -184,6 +186,40 @@ for (const width of [320, 1024]) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByLabel("Rejected records destination kind", { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `/tmp/1191-studio-csv-route-${width}.png` });
+    await page.addScriptTag({ content: axe.source });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }
+    }).axe.run(document.querySelector("main")!, {
+      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] }
+    })).violations.map(item => ({ id: item.id, nodes: item.nodes.map(node => node.target) })));
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+// Spec 1197: the accepted route can be a keyed SQL table selected from the host's SQL approvals.
+for (const width of [320, 1024]) {
+  test(`SQL destination authoring saves the table and key and fits ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await arrangeApi(page, { sqlMain: true });
+    await page.goto("/etl-connectors.html");
+    await page.getByRole("button", { name: "New definition", exact: true }).click();
+    const createDialog = page.getByRole("dialog", { name: "New ETL definition" });
+    await createDialog.getByRole("textbox").fill("orders");
+    await createDialog.getByRole("button", { name: "Create draft", exact: true }).press("Enter");
+    await expect(page.getByRole("heading", { name: "Draft: orders", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Rejected records destination kind", { exact: true }).locator("option", { hasText: "SQL table" })).toHaveCount(0);
+    await page.getByLabel("Accepted records destination kind", { exact: true }).selectOption("sql");
+    await page.getByLabel("Accepted records binding", { exact: true }).selectOption("warehouse");
+    await page.getByLabel("Accepted records table", { exact: true }).fill("dbo.people");
+    await page.getByRole("checkbox", { name: "name", exact: true }).check();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.getByLabel("Accepted records table", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/1197-studio-sql-route-${width}.png` });
     await page.addScriptTag({ content: axe.source });
     const violations = await page.evaluate(async () => (await (window as unknown as {
       axe: { run(element: Element, options: RunOptions): Promise<AxeResults> }

@@ -55,6 +55,33 @@ exporters, additional instrumentation and redaction configuration. Do not place 
 or assume that arbitrary host telemetry is covered by ETL's diagnostic boundary. The workflow activity fault
 mask is a separate adapter concern, not a global telemetry scrubber.
 
+## Keyed SQL delivery
+
+[Spec 1197](../../specs/1197-etl-sql-destination/spec.md) adds a `sql` destination for the main route: a host-approved
+PostgreSQL or SQL Server table that each batch upserts by key. Install `Elsa.Etl.Sql.PostgreSql` or
+`Elsa.Etl.Sql.SqlServer` and add an `EtlRuntimeFeature.SqlBindings` entry: alias, `Provider` (`postgresql` or `sqlserver`),
+a `ConnectionString` from host configuration, `AllowedTables`, and optionally `LedgerTable` (default
+`elsa_etl_effect_ledger`) and `CreateLedger` (default true). The pinned binding handle hashes the provider and the parsed
+host, port, database and user, never the password.
+
+- **Exactly once per effect.** Each batch is one transaction: a ledger row holding the batch's effect identity and content
+  hash, then one upsert statement per record in order. A redelivery finds its ledger row and writes nothing, so a worker
+  killed after its commit is replayed without a second write. Different content under the same effect fails with
+  `etl.effect-conflict`.
+- **Keys and columns.** The key is one to eight output fields mapped from required source fields, and the table needs a
+  unique constraint or index on exactly those columns (`etl.sql-key-constraint-missing` otherwise). Columns are the output
+  field names, which must be identifiers distinct ignoring case. Identifiers are quoted exactly as authored
+  (case-sensitive on PostgreSQL), and `AllowedTables` compares them exactly. The target must be a base table: a missing
+  table, a view or another non-table target is a rejection on both engines. A key repeated
+  in a batch resolves under the database's collation, the later record winning. Across concurrently processed partitions
+  or shards, the winner for a shared key is unspecified.
+- **Failures.** A deterministic refusal (a type the column rejects, a NOT NULL or permission error, a missing table)
+  fails the run with `etl.sql-write-rejected`; a connection loss, timeout, deadlock or serialization failure retries
+  after two seconds, so an outage pauses the run. Without the binding's engine package, admission refuses the run with
+  `etl.sql-unavailable`. The error route cannot be SQL.
+- **Ledger retention.** The runtime never deletes ledger rows. Delete only the rows of terminal runs: deleting a running
+  run's row can allow a second write.
+
 ## Continuous HTTP runs
 
 [Spec 1192](../../specs/1192-etl-continuous-http/spec.md) lets an HTTP pipeline run continuously: set
