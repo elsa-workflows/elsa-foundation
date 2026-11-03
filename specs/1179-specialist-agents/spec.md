@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-31
 
-**Status**: Draft — proposed ownership and terminology amendment under ADR 0094; existing approved baseline retained
+**Status**: Draft — proposed shared revision, ownership and pre-GA reset amendment under ADR 0094
 
 **Input**: Program [#3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519):
 deliver user-defined specialist agents through native Elsa workflows and BPMN, with real models,
@@ -13,9 +13,9 @@ and [design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues
 The owner authorized end-to-end delivery and recommended defaults. This specification describes
 the product to implement, not behavior established by M0 research or by merging the design packet.
 
-**Design-only amendment (4 November 2026)**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) and the [Agent ownership contract](contracts/agent-ownership.md) propose Agent-owned source with read-only activity publication. The baseline at `8d4919a37` remains the prior approved/partly delivered design until this amendment is agreed. Historical receipts and checked tasks do not prove the new model. No implementation, migration, runtime change or compatibility-identifier rename is authorized by this revision.
+**Design-only amendment (4 November 2026)**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](contracts/revision-management.md) and [Agent ownership](contracts/agent-ownership.md) propose Agent-owned typed source backed by reusable working-copy/snapshot mechanics shared with Workflow. A publication candidate is an exact snapshot referenced by a shared publication operation, not another Agent-specific versioned entity. The owner subsequently waived backward compatibility for pre-GA breaking changes; clean database recreation supersedes the initial legacy-adoption requirement. The baseline at `8d4919a37` remains historical evidence until agreement; checked receipts do not prove this model. This PR implements no code, rename, reset or runtime change.
 
-**Terminology**: Agent is the canonical product/domain noun; specialist is a role description and legacy alias. Weaver remains the Studio assistant experience. Existing `Specialist*`, `elsa.specialist`, schemas, package/feature names, routes and persistence identities retain their meaning; the spec directory is not renamed. See the [glossary](../../docs/glossary/elsa.md).
+**Terminology**: Agent is the canonical product/domain noun; specialist describes a role and historical naming. Clean implementation may rename Specialist identifiers without compatibility shims. Keep the pinned `Elsa.Agent` root and this spec directory; exact API/package changes belong to delivery review. See the [glossary](../../docs/glossary/elsa.md).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -182,30 +182,30 @@ without changing already published specialist semantics.
 **Why this priority**: Runtime-only and independently packaged deployments are required product shapes.
 
 **Independent Test**: Qualify the named store/provider/host matrix, including an independent package
-consumer, process restart, migration/rollback and disabling new admission while retaining in-flight support.
+consumer, process restart, declared pre-GA clean initialization and disabling new admission while retaining in-flight support within an admitted deployment.
 
 **Acceptance Scenarios**:
 
 1. **Given** a published artifact and its required runtime capabilities, **when** loaded in a runtime-only
    consumer, **then** it executes without Design/Publishing assemblies or mutable authoring reads, including BPMN.
-2. **Given** a supported upgrade/disable operation, **when** new admission is disabled, **then** existing
+2. **Given** a supported within-deployment disable operation, **when** new admission is disabled, **then** existing
    artifacts/readers and in-flight executions retain their declared interpretation and recovery support.
 3. **Given** authorized real-model access, **when** both editorial examples run, **then** live model results
    are recorded separately from deterministic/protocol fixtures and satisfy the finite acceptance checks.
 
-### User Story 9 — Adopt first-class Agent ownership safely (Priority: P1)
+### User Story 9 — Share revision mechanics and publish first-class Agents (Priority: P1)
 
-An author manages an Agent as a first-class source. A provider exposes a published version as a read-only activity; existing workflow bindings and earlier Agent versions remain unchanged.
+An author manages typed Agent source independently of its generated activity. Workflow and Agent editors reuse working-copy CAS, exact snapshots and history while retaining their own domain commands. Publication freezes reviewed behavior; a pre-GA breaking deployment may start with recreated stores.
 
-**Independent Test**: qualify W1–W8 in the [ownership contract](contracts/agent-ownership.md), using retained baseline packages/artifacts and private store copies.
+**Independent Test**: qualify W1–W8 in the [ownership contract](contracts/agent-ownership.md), including both adapters and the [failed-publication example](contracts/revision-management.md#publication-and-failed-publication-recovery), using owned fresh stores.
 
 **Acceptance Scenarios**:
 
-1. **Given** an Agent draft with no publication, **when** the author lists Agents, **then** it is visible under Agent source permissions without a fabricated published activity.
-2. **Given** a reviewed exact candidate, **when** publication loses its reply after commit, **then** replay returns the original receipt/version and repairs the Agent index without another publication.
-3. **Given** a generated activity, **when** a generic activity-authoring caller attempts to edit its behavior, **then** the request is refused and the Agent source remains sole authority.
-4. **Given** retained old Agent/workflow versions and conversations, **when** ownership transfers or a declared rollback occurs, **then** exact old IDs/hashes/readers and journal decisions are preserved; no model call is caused by migration.
-5. **Given** a stale legacy editor or changed-content/same-version mapping, **when** adoption or save is attempted, **then** it fails explicitly rather than guessing ownership or restoring a second writer.
+1. **Given** an unpublished Agent, **when** listed, **then** authorized source discovery finds its working copy without a fabricated published activity; generated behavior cannot be edited through generic activity APIs.
+2. **Given** Workflow and Agent working copies, **when** saved/captured concurrently, **then** the same storage primitives reject stale CAS/capture and retain exact snapshots while typed validation/editing remain domain-owned.
+3. **Given** a rejected snapshot, **when** the author fixes the working copy, **then** a new snapshot/review is required; neither saving nor activation makes the old snapshot a published executable.
+4. **Given** a publish committed before reply/index loss, **when** either domain reconciles, **then** the original receipt repairs its association without a second publication; unknown outcomes remain pending.
+5. **Given** an agreed pre-GA schema break, **when** the declared reset procedure is qualified, **then** fresh initialization/recreation/republish restore readiness and incompatible profiles fail; no old-data preservation is required. Ordinary publication retries never reset stores.
 
 ### Edge Cases
 
@@ -257,18 +257,18 @@ An author manages an Agent as a first-class source. A provider exposes a publish
   - is validated before contribution, and again at compile and preflight. An invalid definition, changed content without a version bump, or a definition that fails compile or preflight is left out with an actionable per-definition diagnostic, and every other activity still reconciles;
   - composes identically in native and BPMN workflows.
 
-- **FR-028**: Agent definitions, drafts and version source MUST have Agent-domain content authority; generic activity APIs MUST refuse independent writes to generated Agent content. Unpublished Agent discovery MUST not depend on an already-published activity projection.
-- **FR-029**: One Agent contract MUST generate both activity ports and model schemas without a second editable contract. The workflow/BPMN picker MUST continue to query the existing activity catalog.
-- **FR-030**: Exact candidate persistence, source reservation, reviewed shared publication and Agent index repair MUST survive retries and crash boundaries with one scoped operation and receipt authority; unknown outcomes MUST block unsafe reuse of version/operation claims.
-- **FR-031**: Adoption MUST preserve existing Agent/activity version IDs, SemVer, references, templates/hashes, executable bindings and legacy descriptor/codec interpretation. No old publication may be regenerated, renamed or implicitly upgraded during adoption.
-- **FR-032**: Draft/source transfer MUST be scoped, revision-fenced, resumable and single-writer across mixed deployments. Ambiguous mapping, stale legacy writes and incompatible rollback MUST fail explicitly without destroying retained artifact interpretation.
-- **FR-033**: Interactive and configuration-owned Agent candidates MUST share provider compilation and publication preflight. Native/BPMN and candidate execution MUST use exact admitted execution material without Agent authoring-database reads.
-- **FR-034**: Product/domain terminology MUST use Agent. Existing `Specialist*` and `elsa.specialist` persisted/public identifiers MUST remain compatible; terminology changes alone MUST NOT rewrite stored state or rename contracts.
-- **FR-035**: Existing active operations, accepted results and conversation scope/version/revision identities MUST survive adoption, retries and declared rollback without an extra model request, history reset or loss of accepted-versus-applied distinction.
+- **FR-028**: Agent source MUST have Agent-domain content/permission authority over shared revision storage. Generic activity APIs MUST refuse independent writes to generated content; unpublished discovery MUST read authorized Agent source.
+- **FR-029**: One Agent contract MUST generate activity ports and model schemas without a second editor. The native/BPMN picker MUST read the existing activity catalog.
+- **FR-030**: Shared publication operations MUST reference exact retained snapshots, reserve authority/heads and recover from the authoritative receipt across independent store failures. Unknown outcomes MUST block unsafe operation/release reuse; no Agent-specific candidate content store or publisher may duplicate this machinery.
+- **FR-031**: Workflow and Agent authoring MUST compose one reusable working-copy CAS, immutable snapshot, provenance/history and pin/retention implementation through typed adapters. Existing Workflow semantic diff commands, layout separation and domain validation/permissions MUST remain explicit. Assess reusable-activity authoring before shared contract freeze.
+- **FR-032**: Working-copy concurrency revisions, immutable source snapshots, public release SemVer, schema profiles and compiled hashes MUST retain distinct meanings. Saving or activating source MUST NOT create executable publication; reviewed snapshot identity cannot change during an operation. Failed-publication/recovery witnesses MUST cover both adapters.
+- **FR-033**: Interactive and configuration-defined Agents MUST share provider compilation/preflight. Native/BPMN and candidate execution MUST use exact admitted material without authoring-store reads. Within a supported deployment, source edits/unavailability MUST NOT retarget retained artifacts.
+- **FR-034**: Product/domain terminology MUST use Agent. Pre-GA delivery MAY cleanly rename Specialist API/package/schema identities and recreate affected stores; no legacy alias, import/backfill, mixed-schema upgrade or cross-break preservation is required. The declared reset procedure MUST qualify coordinated readiness, recreation and republish; this design performs none.
+- **FR-035**: Within a supported deployment, active operations and accepted results MUST retain exact scope/revision/idempotency and accepted-versus-applied guarantees across retry/restart, without duplicate inference or history reset. Planned breaking-store recreation MUST NOT become an ordinary recovery path.
 
 ### Key Entities *(include if feature involves data)*
 
-The [glossary](../../docs/glossary/elsa.md) owns meanings. The proposed model adds AgentDefinition, AgentDraft, immutable publication candidates/version source and derived activity associations. It retains existing activity publication/template, workflow executable, connection, execution and journal identities. Conversations/turns and evaluations remain Agent-owned state; teams compose exact Agent versions. The [data model](data-model.md) will own their proposed state/transaction shapes.
+The [glossary](../../docs/glossary/elsa.md) owns meanings. Agent and Workflow typed adapters share source identity, working copies and immutable revision snapshots. Shared publication operations reference snapshots and confirmed release associations; Agent draft/candidate/version labels do not imply separate stores or engines. Derived activities/templates, workflow artifacts and Agent conversations/turns keep their distinct owners. [Revision mapping](contracts/revision-management.md) and [data model](data-model.md) define the proposed boundaries.
 
 ## Success Criteria *(mandatory)*
 
@@ -283,8 +283,8 @@ The [glossary](../../docs/glossary/elsa.md) owns meanings. The proposed model ad
 - **SC-007**: Evaluation reports retain exact candidate identities and distinct passed/failed/skipped/cancelled/unknown statuses; unsupported settings and malformed outputs never appear as accepted success.
 
 - **SC-008**: W1–W3 prove Agent source authority, one generated contract and crash-safe receipt-authoritative publication, including causal refusal cases.
-- **SC-009**: W4–W7 prove old native/BPMN artifacts and active/accepted journal state retain their exact identities and behavior through adoption, interruption, mixed writers and declared rollback.
-- **SC-010**: W8 proves the Agent-facing create/test/publish/use/inspect and configuration journeys with independent permissions and preserved legacy compatibility keys.
+- **SC-009**: W4–W7 prove frozen native/BPMN runtime behavior, revision/release separation, within-deployment conversation recovery, reference-aware retention and clean-store initialization/readiness after a declared pre-GA break.
+- **SC-010**: W8 proves Agent-facing create/test/publish/use/inspect and configuration journeys with independent permissions and canonical Agent terminology.
 
 ## Assumptions
 

@@ -3,25 +3,26 @@
 **Status**: Draft ownership amendment under [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md); existing journal behavior remains the regression baseline. These are logical shapes, not frozen C# signatures or an implemented schema.
 Meanings belong to the [glossary](../../docs/glossary/elsa.md); architecture choices are in [plan.md](plan.md).
 
-## Existing authorities retained
+## Shared source and distinct execution authorities
 
-The [Agent ownership contract](contracts/agent-ownership.md) owns the proposed source/candidate/projection shapes and crash/cutover invariants; this table connects them to retained runtime state.
+The [revision contract](contracts/revision-management.md) owns common state/transaction invariants and Workflow/Agent mapping. [Agent ownership](contracts/agent-ownership.md) adds Agent permissions and projection rules.
 
-| Record/authority | Proposed Agent use |
+| State/authority | Agent / Workflow use |
 |---|---|
-| AgentDefinition / AgentDraft | Canonical scoped source, typed public contract and revision-CAS authoring |
-| AgentPublicationCandidate / AgentVersion | Frozen exact source and operation reservation; version published only through confirmed shared receipt or explicit adopted legacy association |
-| Derived activity definition/version | Source-owned read-only workflow representation; explicit Agent identity mapping |
-| ActivityDefinitionVersionPublication / ExecutableActivityTemplate / receipt | Retained immutable executable publication, hashes, runtime requirements and successful-publication authority |
-| WorkflowExecutable / activity invocation | Exact placed contract/artifact, committed input, OperationKey and process completion |
-| ConnectionDocument / ConnectionState.Version | Existing operational settings/auth/secret-reference authority under CAS |
-| Native background work/receipt/checkpoint/outbox | Existing worker fence, process acceptance/cancellation and settlement responsibility |
+| Shared source identity / working copy | Scoped identity and CAS revision; typed domain adapter owns content, permissions and editing semantics |
+| Shared immutable source revision | Captured content/profile/fingerprint/provenance; retained once and referenced by tests/publication |
+| Shared publication operation | References exact revision plus release/profile/expected heads and reservation; no independent Agent candidate payload |
+| Release association / domain draft/version views | Source-to-receipt association and read views; no extra source store or publication-success authority |
+| Derived activity version / executable template / receipt | Compiled workflow representation and successful executable-publication authority |
+| Workflow executable / activity invocation | Exact placed artifact, committed input, operation identity and process completion |
+| Connection document / version | Operational model settings/auth/secret-reference authority under CAS |
+| Native background work / journal / outbox | Runtime fence, accepted results, process application/cancellation and settlement |
 
-Agent source records and activity projections are distinct logical responsibilities; they need not use different physical databases. Repairable Agent list/publication indexes are not another commit authority. Legacy Agent/activity IDs, version names, source references, templates/hashes and journal identity fields retain their existing interpretation during adoption.
+Working-copy CAS/snapshot capture and reference pins use shared provider-backed primitives. Publication reservation/receipt repair belongs to shared publishing. Typed source adapters remain independent of executable representations and one another. Physical co-location is optional; no distributed transaction is asserted. Pre-GA clean initialization replaces legacy source import, mixed-schema transfer and old-data rollback.
 
 ## Published behavior
 
-The immutable Agent candidate/version source contains instructions, model connection reference/type, model ID, supported
+The shared immutable source revision selected for an Agent release contains instructions, model connection reference/type, model ID, supported
 settings and capability snapshot identity, optional field-level JSON constraints, continuity/resource/
 tool/budget policy and schema version. The provider derives its activity contract, exact input/result JSON schemas and result
 projections from the one Agent-owned public contract, validates constraints and includes all behavior in the artifact hash.
@@ -31,7 +32,7 @@ The runtime descriptor retains exact definition/version/hash, compiled schemas, 
 identity and policy. Connection authority is resolved at point of use; an artifact never requires a draft
 lookup. An operational authorization denial is a domain outcome, not permission to lose an artifact reader.
 
-The generated provider manifest is derived publication input, not another editor. Existing descriptor fields retain their legacy identity meaning. If later descriptor schemas add Agent provenance, old readers/formats remain supported and old hashes are not recomputed. Migration links retained publication identity explicitly; a fresh Agent identity cannot replace the version identity that scopes an existing conversation.
+The generated provider manifest is derived publication input, not another editor. Within a supported deployment its exact source/release and descriptor meaning remain fixed. A pre-GA schema break may recreate affected stores and rename descriptors without old-format readers; clean reinitialization and republish are explicit. This is never a journal retry or ordinary publication recovery mechanism. Historical implementation increments below describe the previous schema and are not new compatibility obligations.
 
 ## New logical records
 

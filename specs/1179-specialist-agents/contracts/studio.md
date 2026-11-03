@@ -8,7 +8,7 @@ A1–A5/A10/A12 own the production journeys.
 
 The Agent module owns `/agents` discovery, typed source/public-contract editing, draft revision/conflict/history and publication-intent APIs and permissions. It queries Agent source records, including unpublished drafts, with server-side authorization/filter/count/paging. It can reuse generic controls and shared publication preflight/receipt mechanics without keeping a second editable activity source. Weaver remains the assistant experience.
 
-The native/BPMN picker remains the one activity catalog. Generated Agent activity pages show read-only content and the exact Agent owner/version link. Generic compatibility APIs cannot independently save transferred content. Agent content authority controls edit, history, fork and configuration-source presentation; activity visibility alone grants no source rights.
+The native/BPMN picker remains the one activity catalog. Generated Agent activity pages show read-only content and the exact Agent owner/version link. Generic activity APIs cannot independently save Agent-owned content. Agent content authority controls edit, history, fork and configuration-source presentation; activity visibility alone grants no source rights.
 
 Playground/evaluation/inspection identify exact Agent candidates/versions plus derived publication/native identities. Use the existing admitted candidate execution and journal path, with explicit pending/unknown publication recovery. The user-facing inspector leads with public inputs/results and meaningful state; internal model-turn handles remain technical drill-down. Reuse delivered inspection contributions where they fit; no new scheduler, speculative universal tab framework or direct UI-to-model call.
 
@@ -98,8 +98,8 @@ and the human decision remain separate visible steps.
 
 ## Save, history and undo/redo
 
-The Agent draft editor and source API own revision/save authority. Reused field controls report through its
-exact revision callbacks and respect readOnly/historyResetKey. Legacy generic editor receipts remain regression evidence. Local undo affects working state at that
+The Agent editor/API own domain edit permission and commands while composing shared working-copy revision/save and snapshot history. Reused field controls report through its
+exact revision callbacks and respect readOnly/historyResetKey. Historical editor receipts remain evidence of their original implementation. Local undo affects working state at that
 resource/revision only; it cannot replay across a conflict, selected version or backend connection.
 Accepted server writes/publication are not silently undone. The module's input editor and evaluation
 case editor declare the same local/save boundary. Native and BPMN workflow edits keep their existing

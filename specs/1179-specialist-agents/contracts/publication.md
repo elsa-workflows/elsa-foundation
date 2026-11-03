@@ -5,9 +5,9 @@ Owning requirements: FR-001–FR-009, FR-021, FR-023, FR-027 and Program A1–A5
 
 ## Resource and provider identity
 
-Agent-owned definitions, drafts, candidates and immutable version source are canonical. The [ownership contract](agent-ownership.md) defines publication reservation, receipt authority, migration and compatibility. The provider derives source-owned, read-only activity publications using the existing catalog/template system. Agent-facing CRUD/permissions own source; generic activity writes cannot bypass that owner. No second activity catalog or publication engine is introduced.
+Agent owns typed content over the shared source/working-copy/snapshot capability. A candidate is an exact revision referenced by a shared publication operation. The [revision contract](revision-management.md) defines common mechanics, Workflow/Agent mapping and recovery; [Agent ownership](agent-ownership.md) defines permissions and projections. The provider derives source-owned, read-only activity publications using the existing catalog/template system. Agent-facing CRUD/permissions own source; generic activity writes cannot bypass that owner. No second activity catalog or publication engine is introduced.
 
-Retain provider/consumer key `elsa.specialist`, existing schema versions and exact historical IDs/templates/references as compatibility identities. Display-name changes never change identity or bindings. A new Agent version has one primary activity projection with the same user-facing version, while each representation retains its own content/provenance hash. Teams receive their own provider/schema only through their reviewed composition contract.
+Pre-GA implementation may cleanly rename `elsa.specialist` and related provider/consumer/schema identities with coordinated store recreation; old-format aliases/readers are not required. Display-name changes never change identity or bindings. A new Agent version has one primary activity projection with the same user-facing version, while each representation retains its own content/provenance hash. Teams receive their own provider/schema only through their reviewed composition contract.
 
 ## One public interface, derived JSON
 
@@ -37,13 +37,13 @@ means fresh; a supplied conversation when continuity is disallowed is an actiona
 
 ## Mutable authoring
 
-Agent-facing source APIs create/edit/fork exact revisions under Agent authority and permissions. Save conflicts preserve local work. Source-owned configuration/historical content is read-only; permitted copy/fork creates a new Agent source with explicit provenance. Generic activity compatibility routes must reject, redirect or translate through the same authority after ownership transfer.
+Agent-facing source APIs create/edit/fork exact revisions under Agent authority and permissions. Save conflicts preserve local work. Source-owned configuration/historical content is read-only; permitted copy/fork creates a new Agent source with explicit provenance. Agent commands compose the shared CAS/snapshot/history primitives; generic activity editing cannot create another writer. No legacy route translation or ownership migration is required.
 
 Model selection references the operational connection/model and capability snapshot; unknown settings or changed support require diagnostics/revalidation, never silent stripping. Secrets stay in Connections/Secrets. Durable publication still requires durable connection metadata and secret persistence. Candidate tests and publication operate on a frozen exact source revision; no execution path reads a changing draft.
 
 ## Provider-filtered collection
 
-The Agent collection queries Agent source/draft state under one authorized temporal snapshot, before counting/paging. Include unpublished source drafts. Source-owned configuration and adopted legacy versions carry explicit authority/version mapping; unrelated activity provider metadata cannot impersonate Agent ownership. Exact recommendation/head/draft choices, cursor expiry and tenant/global same-ID separation remain explicit. The workflow/BPMN picker continues to read the existing activity catalog and only admitted published projections. Historical generic provider-filter receipts remain regression evidence for legacy reads, not proof of the new source read model.
+The Agent collection queries Agent source/draft state under one authorized temporal snapshot, before counting/paging. Include unpublished source drafts. Source-owned configuration and release associations carry explicit authority/version identity; unrelated activity provider metadata cannot impersonate Agent ownership. Exact recommendation/head/draft choices, cursor expiry and tenant/global same-ID separation remain explicit. The workflow/BPMN picker continues to read the existing activity catalog and only admitted published projections. Historical generic provider-filter receipts retain their original scope and do not prove the new source read model.
 
 ## Test and publication
 
@@ -59,7 +59,7 @@ The provider/compiler returns material and diagnostics; it never persists drafts
 Missing consumer/storage/model capability cannot create partial publication. Prompt/settings/schema
 changes affect behavioral hash; a prompt-only hash control holds identity/model/version fixed.
 
-The candidate reservation and shared receipt/index protocol in [agent-ownership.md](agent-ownership.md) applies to both authoring sources. Existing reviewed ordered publication commits retain their guarantees. Do not claim that all module
+The snapshot/reservation/receipt protocol in [revision-management.md](revision-management.md#publication-and-failed-publication-recovery) applies to both authoring sources and the Workflow adapter. No Agent-specific candidate store or coordinator is introduced. Existing reviewed ordered publication commits retain their guarantees. Do not claim that all module
 databases form one transaction. Replaying an accepted publish returns the same receipt. Changing
 draft/head/reviewed content before the final source reservation invalidates an old review. After that reservation, later edits create another candidate and cannot change the admitted immutable operation. Explicit upgrade/copy/retirement cannot mutate
 an existing workflow artifact. JSON constraint changes strengthen the generic compatibility floor;

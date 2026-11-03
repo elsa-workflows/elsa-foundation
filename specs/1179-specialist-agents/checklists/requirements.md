@@ -33,13 +33,15 @@ targets or unresolved placeholders. Seven prototype views were checked at320px; 
 design readiness only. Product implementation, real hosts/providers, durability and live qualification
 remain the unchecked obligations in tasks.md and Program A1–A15.
 
-## Ownership amendment review (design-only, 4 November 2026)
+## Shared revision amendment review (design-only, 4 November 2026)
 
-- [x] Proposed ADR and spec separate Agent content authority from derived activity publication and shared receipt authority.
-- [x] One Agent contract derives both activity ports and model schemas; no independently editable generated contract.
-- [x] Candidate/reservation/commit/index crash boundaries, unknown outcomes and source/lifecycle races have explicit planned witnesses.
-- [x] Legacy IDs, hashes, templates/readers, workflows and active/accepted conversation state are preserved by additive fenced adoption.
-- [x] Agent is the proposed canonical term; existing Specialist compatibility identifiers are retained.
-- [x] Historical delivery evidence is labelled separately from W1–W8; future tasks remain unchecked.
-- [ ] Required humans agree the final ADR/spec text.
-- [ ] A separately authorized implementation leaf qualifies W1–W8; no check above claims implementation.
+
+- [x] Agent authority and generated activity representation remain distinct; one contract derives activity/model schemas.
+- [x] Workflow and Agent map onto shared working-copy CAS, immutable snapshots/history/pins; domain editing/validation remain explicit.
+- [x] Publication candidates reference snapshots in shared operations; validation failure, reservation, unknown outcome and lost-reply repair are specified for both adapters.
+- [x] Source revision/release/schema/hash and activation/executable-publication meanings remain distinct.
+- [x] Focused extraction is selected with Orchard Core/Aster evidence and no unearned framework/package admission.
+- [x] Owner's pre-GA reset instruction supersedes additive legacy adoption; normal artifact/scope/recovery guarantees remain within a supported deployment.
+- [x] Historical evidence remains historical; future tasks and W1–W8 remain unexecuted.
+- [ ] Required humans agree the revised final text.
+- [ ] A separately authorized delivery qualifies W1–W8; no check above claims implementation or database deletion.
