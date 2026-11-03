@@ -332,6 +332,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         // implementing the optional organization port or its Runtime contribution.
         var delegated = services.Where(original.Owns).Where(descriptor =>
             descriptor.ServiceType != typeof(IWorkflowLibraryStore) &&
+            descriptor.ServiceType != typeof(IWorkflowFolderDeletionStore) &&
             descriptor.ServiceType != typeof(Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfWorkflowLibraryStore) &&
             descriptor.ServiceType != typeof(IWorkflowTriggerIndexObserver)).ToArray();
         original.RemoveOwnedDescriptors(services);

@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db,
     IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic,
-    IDistributedLockProvider? locks = null) : IWorkflowLibraryStore
+    IDistributedLockProvider? locks = null) : IWorkflowLibraryStore, IWorkflowFolderDeletionStore
 {
     private const int MaximumFolders = 10000;
     private const int MaximumTags = 10000;
