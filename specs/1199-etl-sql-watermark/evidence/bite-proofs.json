@@ -101,6 +101,48 @@
    "original": "            key.SourceHandle,\n",
    "mutated_text": "",
    "sourceRevision": "6f57b43f15915d2dd100fb95f09d47f6cd98766e"
+  },
+  {
+   "mutation": "postgresql-where-inclusive",
+   "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "$\"WHERE {Quote(watermarkColumn)} > @watermark \"",
+   "mutated_text": "$\"WHERE {Quote(watermarkColumn)} >= @watermark \"",
+   "sourceRevision": "fe4aca2e8380f0f8efa8666fcaff985b1e545948"
+  },
+  {
+   "mutation": "sqlserver-where-inclusive",
+   "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "$\"WHERE {Quote(watermarkColumn)} > @watermark \"",
+   "mutated_text": "$\"WHERE {Quote(watermarkColumn)} >= @watermark \"",
+   "sourceRevision": "fe4aca2e8380f0f8efa8666fcaff985b1e545948"
+  },
+  {
+   "mutation": "high-watermark-parse-unwrapped",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_snapshot_that_no_longer_parses_reports_an_integrity_failure",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "catch (JsonException exception)\n",
+   "mutated_text": "catch (JsonException exception) when (exception is null)\n",
+   "sourceRevision": "fe4aca2e8380f0f8efa8666fcaff985b1e545948"
   }
  ]
 }
