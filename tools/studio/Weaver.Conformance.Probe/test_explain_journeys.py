@@ -210,11 +210,45 @@ class DisclosureControlTests(unittest.TestCase):
             with self.assertRaises(RuntimeError): require_disclosure_refused(Response(status, value), self.MARKER)
 
 
+# As the native capture retains them (witness 04cd44f7c): non-SSE responses beside the agent's event streams.
+STREAMS = [{"captureMethod": "not-sse", "captureError": None, "captureValidationError": None, "rawBody": ""},
+           {"captureMethod": "streamResourceContent", "captureError": None, "captureValidationError": None, "rawBody": "data: {\"kind\":\"started\"}\n\n"}]
+
+
 class ExplainBrowserTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.streams = self.capture(STREAMS)
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def capture(self, rows, name="agent-streams.json"):
+        path = Path(self.directory.name) / str(len(list(Path(self.directory.name).iterdir()))) / name
+        path.parent.mkdir()
+        path.write_text(json.dumps(rows))
+        return {"path": str(path), "sha256": sha(path)}
+
     def observed(self, **changes):
         return {"journey": BROWSER_JOURNEY, "status": "passed", "provider": "copilot", "observations": copy.deepcopy(BROWSER_OBSERVATIONS),
-                "ownerBefore": {"path": "/x", "sha256": "0"}, "ownerAfter": {"path": "/y", "sha256": "0"}, "evidence": [{"path": "/z"}],
+                "ownerBefore": {"path": "/x", "sha256": "0"}, "ownerAfter": {"path": "/y", "sha256": "0"}, "evidence": [{"path": "/z"}, self.streams],
                 "commands": {"before": "c-1", "after": "c-2", "masked": "c-3"}, **changes}
+
+    def test_an_empty_or_failed_stream_capture_never_counts_as_searched(self):
+        streaming = STREAMS[1]
+        for rows in ([STREAMS[0]],                                                  # only non-SSE responses
+                     [STREAMS[0], {**streaming, "rawBody": ""}],                     # an event stream whose bytes were not read
+                     [STREAMS[0], streaming, {**streaming, "captureError": "Native SSE capture exceeded its bounded evidence size."}],
+                     [streaming, {**streaming, "captureValidationError": "CDP UTF-8 text may contain a lossy replacement."}],
+                     []):
+            with self.subTest(rows=rows), self.assertRaises(RuntimeError):
+                require_explain_browser(self.observed(evidence=[{"path": "/z"}, self.capture(rows)]), self.commands(), self.rows(), provider="copilot")
+        with self.assertRaises(RuntimeError):
+            require_explain_browser(self.observed(evidence=[{"path": "/z"}]), self.commands(), self.rows(), provider="copilot")
+        changed = self.capture(STREAMS)
+        Path(changed["path"]).write_text("[]")
+        with self.assertRaises(RuntimeError):
+            require_explain_browser(self.observed(evidence=[{"path": "/z"}, changed]), self.commands(), self.rows(), provider="copilot")
 
     def commands(self):
         return [{"commandId": command, "toolName": READ_TOOL, "arguments": {}} for command in ("c-1", "c-2", "c-3")]

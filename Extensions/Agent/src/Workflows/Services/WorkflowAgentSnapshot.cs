@@ -62,19 +62,6 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
 
     internal static bool TryRead(AgentContextAttachment attachment, [NotNullWhen(true)] out WorkflowAgentSnapshot? snapshot, out string error)
     {
-        // Malformed UTF-16 (a lone surrogate escape) throws wherever a name or string is read (JsonProperty.Name,
-        // GetString); such a snapshot is refused like any other malformed one, never a failed collection.
-        try { return TryReadCore(attachment, out snapshot, out error); }
-        catch (InvalidOperationException)
-        {
-            snapshot = null;
-            error = "The workflow snapshot holds malformed text.";
-            return false;
-        }
-    }
-
-    private static bool TryReadCore(AgentContextAttachment attachment, [NotNullWhen(true)] out WorkflowAgentSnapshot? snapshot, out string error)
-    {
         snapshot = null;
         error = "The workflow snapshot requires an exact definition, draft, revision and client generation.";
         // A template editor discloses the same working-state shape under its own kind, resource type and identity field.
@@ -89,8 +76,10 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         JsonElement body;
         try { body = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
-        if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 ||
-            Text(body, idField) != target.ResourceId || Text(body, "revision") != target.Revision ||
+        // Malformed UTF-16 (a lone surrogate escape) throws wherever a name or string is read (JsonProperty.Name,
+        // GetString), so it is refused once, up front, like any other malformed snapshot; every later read is then safe.
+        if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 || !WellFormedText(body)) return false;
+        if (Text(body, idField) != target.ResourceId || Text(body, "revision") != target.Revision ||
             (template ? !ValidString(Text(body, "templateRevision")) || body.TryGetProperty("draftId", out _) : !ValidString(Text(body, "draftId"))))
             return false;
         if (!body.TryGetProperty("activities", out var nodes) || nodes.ValueKind != JsonValueKind.Array || nodes.GetArrayLength() > 256 ||
@@ -161,6 +150,39 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
             SelectedNodeId = selectedNodeId, Diagnostics = diagnostics, SelectedActivity = selectedActivity, GraphActivities = graphActivities
         };
         error = string.Empty;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether every property name and string value in the (already size-bounded) body is well-formed UTF-16. Reading one
+    /// that holds a lone surrogate escape throws <see cref="InvalidOperationException"/>; only that read is guarded here.
+    /// </summary>
+    private static bool WellFormedText(JsonElement body)
+    {
+        var pending = new Stack<JsonElement>();
+        pending.Push(body);
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            switch (current.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in current.EnumerateObject())
+                    {
+                        try { _ = property.Name; }
+                        catch (InvalidOperationException) { return false; }
+                        pending.Push(property.Value);
+                    }
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in current.EnumerateArray()) pending.Push(item);
+                    break;
+                case JsonValueKind.String:
+                    try { _ = current.GetString(); }
+                    catch (InvalidOperationException) { return false; }
+                    break;
+            }
+        }
         return true;
     }
 
