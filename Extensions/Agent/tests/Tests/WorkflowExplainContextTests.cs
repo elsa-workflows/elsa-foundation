@@ -215,6 +215,8 @@ public sealed partial class WorkflowExplainContextTests
         Assert.Equal("crm-signing-key", properties["signingKey"].GetProperty("secretReference").GetProperty("name").GetString());
         Assert.Equal("unavailable", properties["script"].GetProperty("interpretation").GetString());
         Assert.DoesNotContain(fixture["canary"]!.GetValue<string>(), JsonSerializer.Serialize(contribution));
+        // Studio's size guard estimates the host's measure of this admitted projection (AgentContextServices); it is exact.
+        Assert.Equal(fixture["admittedLength"]!.GetValue<int>(), JsonSerializer.Serialize(JsonSerializer.SerializeToElement(admitted)).Length);
     }
 
     private static JsonObject StudioSnapshot([CallerFilePath] string source = "")

@@ -7,7 +7,7 @@ import { getChildSlots } from "../workflowAdapter";
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
 import { indexActivityPresentation } from "../activityPresentation";
-import { collectGraphActivityReferences, hostSerializedLength, collectSelectedActivityContext, collectWorkflowContextDiagnostics } from "./workflowExplainContext";
+import { admittedSnapshotLength, collectGraphActivityReferences, collectSelectedActivityContext, collectWorkflowContextDiagnostics } from "./workflowExplainContext";
 
 interface WorkflowContextBridgeParams {
   controller?: WorkflowAgentController;
@@ -147,11 +147,11 @@ export interface WorkflowSnapshotOptions {
  * Beyond the draft-derived parts it carries (spec 1193 slice D) the designer's diagnostics, graph activities by
  * definition and version (never their bodies), and the selected activity's declared properties with withheld credentials.
  *
- * The size guard: the host admits at most 32 KiB of one attachment's serialized content (`AgentContextServices`), so the
- * explanation additions never push a snapshot over it: the property context is left out first, then the diagnostics
- * (their count stays in `diagnosticsOmitted`). The server admits at most 64 KiB of snapshot content, so the structure is
- * left out rather than letting a draft that fits without it be refused: explanation keeps working, and an Operation Batch
- * then says the structure is required.
+ * The size guard keeps the content inside the effective admission bound: the host's 32 KiB per-attachment budget on the
+ * server's admitted projection (`AgentContextServices`), which is tighter than the module's own 64 KiB bound on what the
+ * editor sends (`WorkflowAgentSnapshot`). Parts are left out in this order, each only while the content is still over:
+ * the selected activity's property context, then the diagnostics (their count stays in `diagnosticsOmitted`), then the
+ * structure (explanation keeps working; an Operation Batch then says the structure is required).
  */
 export function buildWorkflowSnapshotContent(draft: WorkflowDraft, catalogByVersion: Map<string, ActivityCatalogItem>, options: WorkflowSnapshotOptions = {}) {
   const parts = options.parts ?? collectWorkflowSnapshotParts(draft, catalogByVersion);
@@ -166,21 +166,30 @@ export function buildWorkflowSnapshotContent(draft: WorkflowDraft, catalogByVers
     ...drafted,
     ...(graphActivities.length ? { graphActivities } : {}), ...(selected ? { selectedActivity: selected } : {})
   };
-  const over = () => hostSerializedLength(content) > workflowContextCandidateBudget - workflowSnapshotMargin;
+  const over = () => admittedSnapshotLength(content) > workflowContextCandidateBudget - workflowCandidateMargin
+    || JSON.stringify(content).length > workflowSnapshotContentLimit - workflowSnapshotMargin;
   if (over()) delete content.selectedActivity;
   if (over() && diagnostics.diagnostics.length) {
     content.diagnostics = [];
     content.diagnosticsOmitted = diagnostics.omitted + diagnostics.diagnostics.length;
   }
-  if (JSON.stringify(content).length > workflowSnapshotContentLimit - workflowSnapshotMargin) delete content.structure;
+  if (over()) delete content.structure;
   return content;
 }
 
 /** The server's bound on `workflow.definition` content (`WorkflowAgentSnapshot`), in UTF-16 code units of its JSON text. */
 export const workflowSnapshotContentLimit = 65536;
-/** The host's bound on one context attachment's serialized content (`AgentContextServices`), in characters. */
+/**
+ * The host's bound on one context attachment's content (`AgentContextServices`: `JsonSerializer.Serialize(content).Length`
+ * over the admitted projection, at most 32,768), which every admitted workflow snapshot must also fit.
+ */
 export const workflowContextCandidateBudget = 32768;
-/** Headroom for differences between this serialization and the one the server measures. */
+/**
+ * Headroom below the host budget. The estimate (`admittedSnapshotLength`) equals the host's measure on the shared fixture
+ * (`workflowExplainSnapshot.json`, held equal by Elsa.Agent.Tests); this covers number formatting the two may differ on.
+ */
+const workflowCandidateMargin = 256;
+/** Headroom for differences between this serialization and the raw text the server bounds at 64 KiB. */
 const workflowSnapshotMargin = 2048;
 
 /**

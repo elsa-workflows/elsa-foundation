@@ -117,9 +117,10 @@ revision and the client binding. No persisted revision is read in its place.
   - **Size.** The compact form keeps the 64 KiB content bound: measured on a chained flowchart with GUID catalog
     version ids, structure adds 946 bytes at 100 activities (24,716 to 25,662), 1,346 at 150 and 1,746 at 200
     (49,116 to 50,862). A per-activity encoding added about 150 bytes each and pushed 200 activities to 78,743. Studio
-    leaves the structure out when the content would come within 2 KiB of the bound, so a draft that fits without
-    structure always still fits; explanation keeps working and a batch is then refused with
-    `agent.workflow.batch.structure_required` (`workflowContextSize.test.tsx`).
+    leaves the structure out when the content would not fit the effective bound (the host's 32 KiB per attachment, see
+    [slice D's size rule](#explain-and-troubleshoot-spec-1193-slice-d)), so a draft that fits without structure always
+    still fits; explanation keeps working and a batch is then refused with `agent.workflow.batch.structure_required`
+    (`workflowContextSize.test.tsx`).
   - **Visible Secret References** are, in this slice, the Secret References the draft already binds, which the user
     sees in the designer. No Secrets contract is consulted; a broader picker-backed list is later work.
 - `workflow.permissions` adds `workflow_apply_operation_batch` to `tools` when manage is allowed, the host authorizes the
@@ -179,10 +180,16 @@ says so.
   `scopePath` (the container ids from the root to the container that holds it, as an Operation Batch names a scope) and
   its `slot`; the root's path is empty. The addresses are bounded to 24 KiB, and `addressesTruncated` says when some were
   left out.
-- **Size.** The host admits at most 32 KiB of one attachment's serialized content (`AgentContextServices`). Studio
-  measures the host's escaped serialization and leaves the property context out first, then the diagnostics (reporting
-  their count in `diagnosticsOmitted`), so the additions never push a snapshot that fitted over that budget; the
-  structure keeps slice C's rule (`workflowExplainContext.test.tsx`).
+- **Size.** Two bounds apply: this module's 64 KiB on the content the editor sends, and the host's 32 KiB on each
+  attachment's serialized admitted projection (`AgentContextServices`: `JsonSerializer.Serialize(content).Length`), which
+  is the effective one. Studio's single snapshot builder (`buildWorkflowSnapshotContent`) estimates the host's measure of
+  the admitted projection (`admittedSnapshotLength`: admitted fields only, the default encoder's escapes, the stamped
+  interpretation) and, while it exceeds 32 KiB less 256 characters, leaves out the property context, then the diagnostics
+  (their count stays in `diagnosticsOmitted`), then the structure. The estimate equals the host's measure on the shared
+  fixture (`workflowExplainSnapshot.json` records it; `WorkflowExplainContextTests` holds the server to it). On a chained
+  flowchart with GUID catalog versions the structure is kept up to 120 activities (32,496 characters admitted), left out
+  from 121 (31,695 without it), and from 126 activities (32,995 even without structure) the snapshot does not fit the
+  host budget at all and is refused (`agent.context.budget_exceeded`); `workflowContextSize.test.tsx` pins these.
 - **Expression edits** stay refused at preparation (`agent.workflow.batch.expression_unsupported`), consistent with the
   unavailable interpretation.
 - **Guidance** names the revision rule (an explanation names the revision it read and never attributes an answer to

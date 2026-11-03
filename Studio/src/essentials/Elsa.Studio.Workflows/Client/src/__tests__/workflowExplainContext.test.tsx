@@ -6,7 +6,7 @@ import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
 import { useWorkflowContextBridge, workflowContextCandidateBudget } from "../workflow-editor/useWorkflowContextBridge";
-import { collectWorkflowContextDiagnostics, hostSerializedLength, workflowPropertyContentBudget, workflowPropertyContentLimit } from "../workflow-editor/workflowExplainContext";
+import { admittedSnapshotLength, collectWorkflowContextDiagnostics, hostSerializedLength, workflowPropertyContentBudget, workflowPropertyContentLimit } from "../workflow-editor/workflowExplainContext";
 import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { flowchartActivity, writeLine } from "./fixtures";
 import shared from "./workflowExplainSnapshot.json";
@@ -161,9 +161,10 @@ describe("workflow explain context", () => {
     const children = Array.from({ length: 60 }, (_, index) => ({ nodeId: "w-" + index, activityVersionId: writeLine.activityVersionId, inputs: [], outputs: [] }) as ActivityNode);
     const node = apiNode({ script: wrapped("JavaScript", "y".repeat(workflowPropertyContentLimit)), url: wrapped("Literal", "z".repeat(workflowPropertyContentLimit)) });
     const draft = { ...draftWith([...children, node]), activityPresentation: children.map(child => ({ nodeId: child.nodeId, description: "d".repeat(300) })) };
-    const errors = Array.from({ length: 64 }, (_, index) => ({ path: "w-" + index, message: "m".repeat(200) }));
+    const errors = Array.from({ length: 64 }, (_, index) => ({ path: "w-" + index, message: "m".repeat(400) }));
     const content = snapshot(draft, { selected: node, validationErrors: errors });
-    expect(hostSerializedLength(content)).toBeLessThanOrEqual(workflowContextCandidateBudget);
+    // The host bounds the server's admitted projection (descriptions and editor-only fields are not admitted).
+    expect(admittedSnapshotLength(content)).toBeLessThanOrEqual(workflowContextCandidateBudget);
     expect(content).not.toHaveProperty("selectedActivity");
     expect(content.diagnostics).toEqual([]);
     expect(content.diagnosticsOmitted).toBe(64);
@@ -180,6 +181,8 @@ describe("workflow explain context", () => {
     ];
     const content = snapshot(draftWith([node]), { selected: node, validationErrors: errors });
     expect(content).toEqual(shared.content);
+    // The size guard's estimate of the host's measure; the server test holds the real measure to the same number.
+    expect(admittedSnapshotLength(content)).toBe(shared.admittedLength);
     expect(JSON.stringify(content)).not.toContain(canary);
     // The catalog the server checks against declares the same inputs the designer's descriptor does.
     expect(shared.catalog[0].inputs.map(input => [input.referenceKey, input.isCredential]))

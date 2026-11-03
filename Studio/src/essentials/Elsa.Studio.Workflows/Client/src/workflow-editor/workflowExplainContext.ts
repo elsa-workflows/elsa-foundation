@@ -156,15 +156,47 @@ export function collectGraphActivityReferences(activities: Array<{ id: string }>
   return [...references.values()];
 }
 
-/** The serialized length the server's default JSON writer gives this value: it escapes non-ASCII and `&'+<>\`` as six characters. */
+/**
+ * The serialized length the server's default JSON writer gives this value: it escapes non-ASCII and `&'+<>\`` as six
+ * characters, and a quote inside a string as `\u0022` rather than `\"`.
+ */
 export function hostSerializedLength(value: unknown) {
   const text = JSON.stringify(value) ?? "";
   let length = text.length;
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index);
-    if (code > 0x7e || code === 0x26 || code === 0x27 || code === 0x2b || code === 0x3c || code === 0x3e || code === 0x60) length += 5;
+    if (code === 0x5c) {
+      if (text.charCodeAt(index + 1) === 0x22) length += 4;
+      index += 1;
+    } else if (code > 0x7e || code === 0x26 || code === 0x27 || code === 0x2b || code === 0x3c || code === 0x3e || code === 0x60) length += 5;
   }
   return length;
+}
+
+/**
+ * The host-measured length of the server's admitted projection of this snapshot content (`WorkflowAgentSnapshot.TryRead`):
+ * only the admitted fields, activities as id, type and display name, every connection with both ports, and the server's
+ * interpretation status on each non-literal expression. The host bounds that projection, not what the editor sends, so the
+ * size guard measures this.
+ */
+export function admittedSnapshotLength(content: Record<string, unknown>) {
+  const text = (value: unknown) => typeof value === "string" ? value.slice(0, 256) : "";
+  const admitted: Record<string, unknown> = {
+    workflowDefinitionId: content.workflowDefinitionId, draftId: content.draftId, revision: content.revision, selectedNodeId: content.selectedNodeId ?? null
+  };
+  if (content.workingState !== undefined) admitted.workingState = content.workingState;
+  admitted.activities = ((content.activities as Array<Record<string, unknown>> | undefined) ?? [])
+    .map(activity => ({ id: activity.id, type: activity.type, displayName: text(activity.displayName) }));
+  if (content.structure !== undefined) admitted.structure = content.structure;
+  admitted.connections = ((content.connections as Array<Record<string, unknown>> | undefined) ?? [])
+    .map(edge => ({ source: edge.source, target: edge.target, sourcePort: text(edge.sourcePort), targetPort: text(edge.targetPort) }));
+  admitted.positions = content.positions ?? [];
+  for (const key of ["secretReferences", "diagnostics", "diagnosticsOmitted", "graphActivities"])
+    if (content[key] !== undefined) admitted[key] = content[key];
+  const selected = content.selectedActivity as WorkflowSelectedActivityContext | undefined;
+  if (selected) admitted.selectedActivity = { ...selected, properties: selected.properties.map(property => property.value.kind === "expression"
+    && property.value.expressionType !== "Literal" ? { ...property, value: { ...property.value, interpretation: "unavailable" } } : property) };
+  return hostSerializedLength(admitted);
 }
 
 function readTypeName(input: StudioActivityInputDescriptor) {
