@@ -5,7 +5,8 @@
   "type": "module",
   "types": "./src/module.tsx",
   "exports": {
-    ".": "./src/module.tsx"
+    ".": "./src/module.tsx",
+    "./style.css": "./src/styles.css"
   },
   "publishConfig": {
     "types": "./dist/index.d.ts",
@@ -13,7 +14,8 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
-      }
+      },
+      "./style.css": "./dist/style.css"
     }
   },
   "scripts": {

@@ -15,13 +15,14 @@ public sealed class BpmnGraphValidationTests
     [Fact]
     public void CyclicGraph_IsAccepted_AndClassifiesTheLoopBackFlow()
     {
-        // A loop-back sequence flow is executable. The graph builds, and only the loop-closing
+        // A loop-back containing bound work can wait. The graph builds, and only the loop-closing
         // edge (task-b → task-a) is classified backward — the cycle's forward edge (task-a → task-b) is not.
         var node = NewExecutableNode(
+            children: [WorkflowChild("node-task-a")],
             elements:
             [
                 BpmnRuntimeFixture.StartEvent(),
-                BpmnRuntimeFixture.Task("task-a"),
+                BpmnRuntimeFixture.Task("task-a", childNodeId: "node-task-a"),
                 BpmnRuntimeFixture.Task("task-b"),
                 BpmnRuntimeFixture.EndEvent()
             ],
@@ -33,7 +34,7 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-4", "task-b", "end")
             ]);
 
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
 
         Assert.True(graph.IsBackwardFlow("flow-3"));
         Assert.False(graph.IsBackwardFlow("flow-1"));
@@ -43,14 +44,43 @@ public sealed class BpmnGraphValidationTests
     }
 
     [Fact]
+    public void Immediate_cycle_is_refused_before_runtime_dispatch()
+    {
+        var node = NewExecutableNode(
+            elements: [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.Task("a"), BpmnRuntimeFixture.Task("b"), BpmnRuntimeFixture.EndEvent()],
+            flows: [BpmnRuntimeFixture.Flow("start-a", "start", "a"), BpmnRuntimeFixture.Flow("a-b", "a", "b"),
+                BpmnRuntimeFixture.Flow("back", "b", "a"), BpmnRuntimeFixture.Flow("exit", "b", "end")]);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("cycle that can never wait", StringComparison.Ordinal), exception.ToString());
+        Assert.IsType<global::Bpmn.Semantics.BpmnExecutionException>(exception.InnerException);
+    }
+
+    [Fact]
+    public void Distinct_coded_error_boundaries_share_one_host_without_losing_code_selection()
+    {
+        var node = NewExecutableNode(children: [WorkflowChild("node-host")],
+            elements: [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.Task("host", "node-host"), BpmnRuntimeFixture.EndEvent(),
+                new BpmnElement("err-order", BpmnElementTypes.BoundaryEvent, attachedToRef: "host",
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = "ORDER" })]),
+                new BpmnElement("err-other", BpmnElementTypes.BoundaryEvent, attachedToRef: "host",
+                    eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Error, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = "OTHER" })])],
+            flows: [BpmnRuntimeFixture.Flow("begin", "start", "host"), BpmnRuntimeFixture.Flow("normal", "host", "end"),
+                BpmnRuntimeFixture.Flow("order", "err-order", "end"), BpmnRuntimeFixture.Flow("other", "err-other", "end")]);
+        var graph = BpmnGraphAdapter.Build(node);
+        Assert.Equal("err-order", graph.AttachedErrorBoundary("host", "ORDER")!.ElementId);
+        Assert.Equal("err-other", graph.AttachedErrorBoundary("host", "OTHER")!.ElementId);
+        Assert.Null(graph.AttachedErrorBoundary("host", "UNMATCHED"));
+    }
+
+    [Fact]
     public void MissingStartEvent_IsRejected()
     {
         var node = NewExecutableNode(
             elements: [BpmnRuntimeFixture.Task("task-a"), BpmnRuntimeFixture.EndEvent()],
             flows: [BpmnRuntimeFixture.Flow("flow-1", "task-a", "end")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("start event", exception.Message, StringComparison.OrdinalIgnoreCase);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("start event", StringComparison.OrdinalIgnoreCase), exception.ToString());
     }
 
     [Fact]
@@ -60,7 +90,7 @@ public sealed class BpmnGraphValidationTests
             elements: [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.EndEvent()],
             flows: [BpmnRuntimeFixture.Flow("flow-1", "start", "missing")]);
 
-        Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
+        Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
     }
 
     [Fact]
@@ -79,8 +109,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-2", "sub-1", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("requires a bound child", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("requires bound work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -105,11 +135,11 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-3", "b-error", "end-error")
             ]);
 
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
 
         Assert.Equal(BpmnElementFamilies.Task, BpmnElementFamilies.Resolve(graph.GetRequiredElement("call")));
         Assert.True(BpmnElementFamilies.IsCallActivity(graph.GetRequiredElement("call")));
-        Assert.NotNull(graph.AttachedErrorBoundary("call"));
+        Assert.NotNull(graph.AttachedErrorBoundary("call", null));
     }
 
     [Fact]
@@ -130,8 +160,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-2", "call", "end")
             ]);
 
-        var graph = BpmnGraph.From(node);
-        Assert.Null(graph.GetRequiredElement("call").ChildNodeId);
+        var graph = BpmnGraphAdapter.Build(node);
+        Assert.Null(graph.GetRequiredElement("call").BindingRef);
     }
 
     [Fact]
@@ -151,8 +181,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-2", "fork", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("cannot bind a child activity", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("cannot bind work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -163,8 +193,8 @@ public sealed class BpmnGraphValidationTests
             elements: [BpmnRuntimeFixture.StartEvent(), BpmnRuntimeFixture.EndEvent()],
             flows: [BpmnRuntimeFixture.Flow("flow-1", "start", "end")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("not bound to any element", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("not bound to any element", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -183,8 +213,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-2", "gw", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("does not support", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("does not support", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -192,8 +222,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewCatchEventNode(BpmnRuntimeFixture.IntermediateCatchEvent("catch-1", BpmnEventDefinitionTypes.Message));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("requires a bound suspending child", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("requires bound suspending work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -201,8 +231,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewCatchEventNode(new BpmnElement("catch-1", BpmnElementTypes.IntermediateCatchEvent, childNodeId: "node-a"));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("exactly one event definition", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("exactly one event definition", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -218,8 +248,8 @@ public sealed class BpmnGraphValidationTests
                 new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal)
             ]));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("exactly one event definition", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("exactly one event definition", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -227,8 +257,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewCatchEventNode(BpmnRuntimeFixture.IntermediateCatchEvent("catch-1", BpmnEventDefinitionTypes.Error, childNodeId: "node-a"));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("only timer, message, and signal catch events", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("only timer, message, signal, and link catch events", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -250,8 +280,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-3", "catch-a", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("at least two outbound", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("at least two outbound", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -276,8 +306,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-5", "task-b", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("must target an intermediate catch event", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("must target an intermediate catch event", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -303,8 +333,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-5", "catch-a", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("exactly one inbound flow", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("exactly one inbound flow", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -329,8 +359,8 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-5", "catch-b", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("cannot carry a condition", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("cannot carry a condition", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -355,87 +385,87 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-5", "catch-b", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("cannot bind a child activity", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("cannot bind work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void BoundaryEvent_AttachedToMissingHost_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "ghost", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
             hostChildNodeId: "node-host")));
-        Assert.Contains("does not exist", exception.Message);
+        Assert.True(exception.Message.Contains("does not exist", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void BoundaryEvent_AttachedToNonHostFamily_IsRejected()
     {
         // Attach to the start event, which is not a task-family/subprocess host.
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "start", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
             hostChildNodeId: "node-host")));
-        Assert.Contains("not a task-family or subprocess host", exception.Message);
+        Assert.True(exception.Message.Contains("not a task-family or subprocess host", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void BoundaryEvent_AttachedToChildlessHost_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
             hostChildNodeId: null)));
-        Assert.Contains("no bound child activity", exception.Message);
+        Assert.True(exception.Message.Contains("binds no work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void BoundaryEvent_WithInboundFlow_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
             hostChildNodeId: "node-host",
             extraFlows: [BpmnRuntimeFixture.Flow("flow-bad", "host", "boundary")])));
-        Assert.Contains("cannot have inbound sequence flows", exception.Message);
+        Assert.True(exception.Message.Contains("cannot have inbound sequence flows", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void BoundaryEvent_WithoutOutboundFlow_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
             hostChildNodeId: "node-host",
             boundaryOutbound: false)));
-        Assert.Contains("at least one outbound sequence flow", exception.Message);
+        Assert.True(exception.Message.Contains("at least one outbound sequence flow", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void CatchBoundaryEvent_WithoutChild_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Message),
             hostChildNodeId: "node-host")));
-        Assert.Contains("requires a bound suspending listener child", exception.Message);
+        Assert.True(exception.Message.Contains("requires bound suspending listener work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void ErrorBoundaryEvent_WithChild_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Error, childNodeId: "node-listener"),
             hostChildNodeId: "node-host")));
-        Assert.Contains("cannot bind a child activity", exception.Message);
+        Assert.True(exception.Message.Contains("cannot bind work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void NonInterruptingErrorBoundaryEvent_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Error, cancelActivity: false),
             hostChildNodeId: "node-host")));
-        Assert.Contains("must be interrupting", exception.Message);
+        Assert.True(exception.Message.Contains("must be interrupting", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
-    public void MultipleErrorBoundaryEvents_OnOneHost_AreRejected()
+    public void MultipleCatchAllErrorBoundaryEvents_OnOneHost_AreRejected()
     {
         var node = NewExecutableNode(
             children: [WorkflowChild("node-host")],
@@ -455,28 +485,28 @@ public sealed class BpmnGraphValidationTests
                 BpmnRuntimeFixture.Flow("flow-4", "err-2", "end")
             ]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("more than one error boundary", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("more than one code-less catch-all error boundary", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void BoundaryEvent_WithDefaultFlow_IsRejected()
     {
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(NewBoundaryNode(
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(NewBoundaryNode(
             new BpmnElement("boundary", BpmnElementTypes.BoundaryEvent, childNodeId: "node-listener", defaultFlowId: "flow-boundary",
                 eventDefinitions: [new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer)], attachedToRef: "host"),
             hostChildNodeId: "node-host")));
-        Assert.Contains("cannot declare a default sequence flow", exception.Message);
+        Assert.True(exception.Message.Contains("cannot declare a default sequence flow", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
     public void ValidTimerBoundaryEvent_IsAccepted()
     {
-        var graph = BpmnGraph.From(NewBoundaryNode(
+        var graph = BpmnGraphAdapter.Build(NewBoundaryNode(
             BpmnRuntimeFixture.BoundaryEvent("boundary", "host", BpmnEventDefinitionTypes.Timer, childNodeId: "node-listener"),
             hostChildNodeId: "node-host"));
         Assert.Single(graph.AttachedCatchBoundaries("host"));
-        Assert.Null(graph.AttachedErrorBoundary("host"));
+        Assert.Null(graph.AttachedErrorBoundary("host", null));
     }
 
     /// <summary>Builds a start → host(task) → end graph with one attached boundary and its outbound flow, for boundary validation tests.</summary>
@@ -534,8 +564,8 @@ public sealed class BpmnGraphValidationTests
             ],
             flows: [BpmnRuntimeFixture.Flow("flow-1", "start", "mi"), BpmnRuntimeFixture.Flow("flow-2", "mi", "end")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("not a task-family or subprocess host with a bound child", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("not a task-family or subprocess host with bound work", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -552,8 +582,8 @@ public sealed class BpmnGraphValidationTests
             ],
             flows: [BpmnRuntimeFixture.Flow("flow-1", "start", "fork"), BpmnRuntimeFixture.Flow("flow-2", "fork", "t"), BpmnRuntimeFixture.Flow("flow-3", "t", "end")]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("not a task-family or subprocess host", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("not a task-family or subprocess host", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -561,8 +591,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(cardinality: 3, collectionVariable: "items"));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("exactly one of a positive cardinality or a collection variable", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("exactly one of a positive cardinality or a collection variable", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -570,8 +600,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(isSequential: true));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("exactly one of a positive cardinality or a collection variable", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("exactly one of a positive cardinality or a collection variable", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -579,8 +609,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(cardinality: 0));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("must be a positive integer", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("must be a positive integer", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -588,8 +618,8 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(collectionVariable: "missing"));
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("not a declared container-scoped variable", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("not a declared container-scoped variable", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -601,7 +631,7 @@ public sealed class BpmnGraphValidationTests
             new BpmnLoopCharacteristics(collectionVariable: "items"),
             variables: [new VariableDefinition("items", "items", new TypeReference("String", CollectionKind.List), null, null)]);
 
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
         var loop = graph.GetRequiredElement("mi").LoopCharacteristics;
         Assert.NotNull(loop);
         Assert.Equal("items", loop!.CollectionVariable);
@@ -616,8 +646,8 @@ public sealed class BpmnGraphValidationTests
             new BpmnLoopCharacteristics(collectionVariable: "items", itemVariable: BpmnLoopCharacteristics.LoopIndexVariable),
             variables: [new VariableDefinition("items", "items", new TypeReference("String", CollectionKind.List), null, null)]);
 
-        var exception = Assert.Throws<BpmnExecutionException>(() => BpmnGraph.From(node));
-        Assert.Contains("reserved for the zero-based iteration index", exception.Message);
+        var exception = Assert.Throws<BpmnHostException>(() => BpmnGraphAdapter.Build(node));
+        Assert.True(exception.Message.Contains("reserved for the zero-based iteration index", StringComparison.Ordinal), exception.ToString());
     }
 
     [Fact]
@@ -625,7 +655,7 @@ public sealed class BpmnGraphValidationTests
     {
         var node = NewMultiInstanceNode(new BpmnLoopCharacteristics(isSequential: false, cardinality: 3));
 
-        var graph = BpmnGraph.From(node);
+        var graph = BpmnGraphAdapter.Build(node);
         Assert.NotNull(graph.GetRequiredElement("mi").LoopCharacteristics);
     }
 

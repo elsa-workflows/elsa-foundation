@@ -13,12 +13,12 @@ import {
 import {
   getThemeNavMode,
   navModeAttribute,
-  resolveNavMode,
   type NavMode,
   type NavModePreference
 } from "../themes/navMode";
 import {
   readAppearancePreferences,
+  hasStoredAppearancePreference,
   resetAppearancePreferences,
   resolveModePreference,
   watchSystemThemeMode,
@@ -26,9 +26,21 @@ import {
   type ThemeModePreference
 } from "../themes/appearance";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
+import { applyWorkspaceStyle, getWorkspaceStyle, isWorkspaceStyle, type WorkspaceStyle } from "../themes/workspaceStyles";
+import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
+import {
+  resolveNavigationColors,
+  resolveSidebarColor,
+  sidebarColorAttribute,
+  type SidebarColorPreference
+} from "../themes/sidebarColor";
 
 interface ThemeContextType {
   currentTheme: Theme;
+  currentColorScheme: Theme;
+  workspaceStyle: WorkspaceStyle | null;
+  setWorkspaceStyle: (style: WorkspaceStyle | null) => void;
+  setColorScheme: (themeId: string | null) => void;
   /** The mode the current theme is rendered in. */
   mode: ThemeMode;
   /** The mode the user asked for; differs from `mode` when the current theme lacks it. */
@@ -36,6 +48,8 @@ interface ThemeContextType {
   /** The stored mode choice, including `system` (follow the OS). */
   modePreference: ThemeModePreference;
   setTheme: (themeId: string) => void;
+  /** Explicitly applies a complete reference combination; one-axis setters keep their semantics. */
+  applyPreset: (themeId: MinimalStudioPresetId) => void;
   /** Accepts a concrete mode or `system`. Same implementation as `setModePreference`. */
   setMode: (mode: ThemeModePreference) => void;
   setModePreference: (preference: ThemeModePreference) => void;
@@ -49,6 +63,9 @@ interface ThemeContextType {
   /** The mode the current theme asks for, i.e. what `theme` resolves to. */
   themeNavMode: NavMode;
   setNavModePreference: (preference: NavModePreference) => void;
+  /** The navigation surface's tone: `theme` follows the workspace, `light`/`dark` pin it. */
+  sidebarColorPreference: SidebarColorPreference;
+  setSidebarColorPreference: (preference: SidebarColorPreference) => void;
   previewTheme: (theme: StudioThemeDefinition) => void;
   availableThemes: Theme[];
   store: ThemeStoreResponse;
@@ -70,7 +87,16 @@ export function ThemeProvider({
   const [loadedStore, setLoadedStore] = useState<ThemeStoreResponse>();
   const store = loadedStore ?? builtInStore;
   const storeLoaded = loadedStore !== undefined;
-  const [currentTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
+  const [baseTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
+  const [preview, setPreview] = useState<Theme>();
+  const [workspaceStyle, setWorkspaceStyleState] = useState<WorkspaceStyle | null>("linen");
+  const [colorSchemeId, setColorSchemeId] = useState<string | null>(null);
+  const currentTheme = preview ?? baseTheme;
+  const inheritedStyle = isWorkspaceStyle(currentTheme.workspaceStyle) ? currentTheme.workspaceStyle : currentTheme.id === "linen" ? "linen" : null;
+  const activeStyle = preview ? inheritedStyle : workspaceStyle ?? inheritedStyle;
+  const currentColorScheme = preview ?? (colorSchemeId === null ? baseTheme : findSelectableTheme(store, colorSchemeId));
+  // Theme defaults retain editable layout/type/shape; only an explicit workspace override replaces them.
+  const styledTheme = React.useMemo(() => applyWorkspaceStyle(currentTheme, preview ? null : workspaceStyle), [currentTheme, preview, workspaceStyle]);
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
   // theme, and coming back restores High contrast rather than whatever that theme fell back to.
   const [modePreference, setModePreferenceState] = useState<ThemeModePreference>("system");
@@ -78,10 +104,12 @@ export function ThemeProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-resolve `system` when the OS preference changes
   const preferredMode = React.useMemo(() => resolveModePreference(modePreference), [modePreference, systemModeVersion]);
   const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
+  const [sidebarColorPreference, setSidebarColorPreferenceState] = useState<SidebarColorPreference>("dark");
   const [mounted, setMounted] = useState(false);
-  const supportedModes = getSupportedThemeModes(currentTheme);
-  const activeMode = resolveThemeMode(currentTheme, preferredMode);
-  const navMode = resolveNavMode(currentTheme.layout, navModePreference);
+  const supportedModes = getSupportedThemeModes(currentColorScheme);
+  const activeMode = resolveThemeMode(currentColorScheme, preferredMode);
+  const themeNavMode = !preview && workspaceStyle ? getWorkspaceStyle(workspaceStyle).navigation : getThemeNavMode(styledTheme.layout);
+  const navMode = navModePreference === "theme" ? themeNavMode : navModePreference;
 
   // Initialize from localStorage on mount and again whenever the store changes, falling back to the
   // OS contrast and colour-scheme preferences while the user has never chosen a mode. Once chosen,
@@ -92,9 +120,19 @@ export function ThemeProvider({
 
     setModePreferenceState(saved.mode);
     setNavModePreferenceState(saved.navigation);
+    setSidebarColorPreferenceState(saved.sidebarColor);
     setCurrentTheme(nextTheme);
+    setWorkspaceStyleState(saved.workspaceStyle);
+    // A definitive store response can remove a palette. Clear that override so the base
+    // theme supplies colors again; an unresolved/offline store must retain the saved id.
+    const nextColorSchemeId = storeLoaded && saved.colorSchemeId !== null &&
+      !getSelectableThemes(store).some(theme => theme.id === saved.colorSchemeId) ? null : saved.colorSchemeId;
+    setColorSchemeId(nextColorSchemeId);
     if (storeLoaded && saved.themeId !== null) {
       writeAppearancePreferences({ themeId: nextTheme.id });
+    }
+    if (storeLoaded && saved.colorSchemeId !== null && hasStoredAppearancePreference("colorSchemeId")) {
+      writeAppearancePreferences({ colorSchemeId: nextColorSchemeId });
     }
     setMounted(true);
   }, [store, storeLoaded]);
@@ -126,19 +164,23 @@ export function ThemeProvider({
   useEffect(() => {
     if (!mounted) return;
 
-    const colors = getThemeModeDefinition(currentTheme, activeMode) ?? currentTheme.dark;
+    const colors = getThemeModeDefinition(currentColorScheme, activeMode) ?? currentColorScheme.dark;
     const root = document.documentElement;
 
     clearMaterialVariables(root);
-    applyMaterialVariables(root, currentTheme.material);
-    applyThemeStyleVariables(root, currentTheme);
+    if (activeStyle === null) {
+      applyMaterialVariables(root, currentTheme.material);
+      applyMaterialVariables(root, getThemeModeDefinition(currentTheme, activeMode)?.material);
+    }
+    applyThemeStyleVariables(root, styledTheme);
     Object.entries(colors).forEach(([key, value]) => {
       if (key === "chartColors") {
         (value as string[]).forEach((color, index) => {
           root.style.setProperty(`--chart-${index + 1}`, color);
         });
       } else if (key === "material") {
-        applyMaterialVariables(root, value as ThemeMaterialMode);
+        // Material is presentation owned by the base preset/style, never by a color override.
+        return;
       } else {
         // Convert camelCase to kebab-case
         const cssVarName = `--${key.replace(/([A-Z])/g, "-$1").toLowerCase()}`;
@@ -146,25 +188,67 @@ export function ThemeProvider({
       }
     });
 
+    // Navigation is a separate surface: the user may pin it light or dark, else it follows the workspace.
+    const navigationColors = resolveNavigationColors(currentColorScheme, activeMode, activeStyle, sidebarColorPreference);
+    for (const [role, value] of Object.entries({
+      bg: navigationColors.bg, text: navigationColors.text,
+      active: navigationColors.active, "active-text": navigationColors.activeText,
+      muted: navigationColors.text
+    })) root.style.setProperty(`--studio-nav-${role}`, value);
+    const sidebarColor = resolveSidebarColor(sidebarColorPreference, activeMode);
+    if (sidebarColor) root.setAttribute(sidebarColorAttribute, sidebarColor);
+    else root.removeAttribute(sidebarColorAttribute);
+
     // `data-theme-mode` stays the light/dark colour scheme — the contract module CSS keys on — and
     // `data-theme-appearance` carries the exact mode (light, dark, dim, high-contrast).
     root.setAttribute("data-theme", currentTheme.id);
+    root.setAttribute("data-color-scheme", currentColorScheme.id);
+    if (activeStyle) root.setAttribute("data-workspace-style", activeStyle);
+    else root.removeAttribute("data-workspace-style");
     root.setAttribute("data-theme-mode", getThemeColorScheme(activeMode));
     root.setAttribute("data-theme-appearance", activeMode);
-    root.setAttribute(studioThemeLayoutAttribute, currentTheme.layout ?? "classic");
+    root.setAttribute(studioThemeLayoutAttribute, styledTheme.layout ?? "classic");
     root.setAttribute(navModeAttribute, navMode);
-    if (isMaterialTheme(currentTheme.id)) {
+    if (activeStyle === null && isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {
       root.removeAttribute("data-theme-material");
     }
 
-  }, [currentTheme, activeMode, navMode, mounted]);
+  }, [currentTheme, currentColorScheme, styledTheme, activeStyle, activeMode, navMode, sidebarColorPreference, mounted]);
 
   const handleSetTheme = (themeId: string) => {
     const nextTheme = findSelectableTheme(store, themeId);
-    writeAppearancePreferences({ themeId: nextTheme.id });
+    writeAppearancePreferences({ themeId: nextTheme.id, workspaceStyle: null, colorSchemeId: null });
+    setPreview(undefined);
+    setWorkspaceStyleState(null);
+    setColorSchemeId(null);
     setCurrentTheme(nextTheme);
+  };
+
+  const handleApplyPreset = (themeId: MinimalStudioPresetId) => {
+    const preset = minimalStudioPresets.find(candidate => candidate.id === themeId);
+    const nextTheme = getSelectableThemes(store).find(candidate => candidate.id === themeId);
+    if (!preset || !nextTheme) return;
+    writeAppearancePreferences({ themeId, workspaceStyle: "minimal", colorSchemeId: null, mode: preset.mode });
+    setPreview(undefined);
+    setWorkspaceStyleState("minimal");
+    setColorSchemeId(null);
+    setCurrentTheme(nextTheme);
+    setModePreferenceState(preset.mode);
+  };
+
+  const handleSetWorkspaceStyle = (style: WorkspaceStyle | null) => {
+    setPreview(undefined);
+    setWorkspaceStyleState(style);
+    writeAppearancePreferences({ workspaceStyle: style });
+  };
+
+  const handleSetColorScheme = (themeId: string | null) => {
+    const id = themeId === null ? null : findSelectableTheme(store, themeId).id;
+    setPreview(undefined);
+    setColorSchemeId(id);
+    writeAppearancePreferences({ colorSchemeId: id });
   };
 
   const handleSetModePreference = (preference: ThemeModePreference) => {
@@ -177,16 +261,25 @@ export function ThemeProvider({
     writeAppearancePreferences({ navigation: preference });
   };
 
+  const handleSetSidebarColorPreference = (preference: SidebarColorPreference) => {
+    setSidebarColorPreferenceState(preference);
+    writeAppearancePreferences({ sidebarColor: preference });
+  };
+
   const handleResetAppearance = () => {
     const defaults = resetAppearancePreferences();
     setModePreferenceState(defaults.mode);
     setNavModePreferenceState(defaults.navigation);
+    setSidebarColorPreferenceState(defaults.sidebarColor);
+    setPreview(undefined);
+    setWorkspaceStyleState(defaults.workspaceStyle);
+    setColorSchemeId(defaults.colorSchemeId);
     // Not persisted: the configured default theme applies until the user picks one again.
     setCurrentTheme(findSelectableTheme(store, defaults.themeId));
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
-    setCurrentTheme(toTheme(theme));
+    setPreview(toTheme(theme));
   };
 
   const refreshThemes = async () => {
@@ -198,9 +291,14 @@ export function ThemeProvider({
     <ThemeContext.Provider
       value={{
         currentTheme,
+        currentColorScheme,
+        workspaceStyle: activeStyle,
+        setWorkspaceStyle: handleSetWorkspaceStyle,
+        setColorScheme: handleSetColorScheme,
         mode: activeMode,
         preferredMode,
         setTheme: handleSetTheme,
+        applyPreset: handleApplyPreset,
         modePreference,
         setMode: handleSetModePreference,
         setModePreference: handleSetModePreference,
@@ -208,8 +306,10 @@ export function ThemeProvider({
         supportedModes,
         navMode,
         navModePreference,
-        themeNavMode: getThemeNavMode(currentTheme.layout),
+        themeNavMode,
         setNavModePreference: handleSetNavModePreference,
+        sidebarColorPreference,
+        setSidebarColorPreference: handleSetSidebarColorPreference,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
         store,
@@ -301,6 +401,11 @@ function clearMaterialVariables(root: HTMLElement) {
 /** The resolved navigation mode; `left` outside a ThemeProvider, where nothing publishes a preference. */
 export function useNavMode(): NavMode {
   return useContext(ThemeContext)?.navMode ?? "left";
+}
+
+/** Optional shell integration; standalone hosts retain their existing arrangement. */
+export function useWorkspaceStyle(): WorkspaceStyle | null {
+  return useContext(ThemeContext)?.workspaceStyle ?? null;
 }
 
 export function useTheme(): ThemeContextType {

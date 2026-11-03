@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "controls": [
+    {
+      "name": "actual-closed-catalog",
+      "exitCode": 0,
+      "snapshotUnchanged": true
+    },
+    {
+      "name": "different-contract",
+      "exitCode": 1,
+      "snapshotUnchanged": true
+    },
+    {
+      "name": "live-sidecar-refused",
+      "exitCode": 1,
+      "snapshotUnchanged": true
+    }
+  ],
+  "originalSnapshotUnchanged": true
+}

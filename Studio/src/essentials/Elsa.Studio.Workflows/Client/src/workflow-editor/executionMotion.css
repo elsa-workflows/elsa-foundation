@@ -1,0 +1,59 @@
+.wf-execution-node-pulse {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  border: 2px solid var(--wf-execution-pulse-color, var(--studio-accent));
+  border-radius: inherit;
+  animation: wf-recorded-activity 900ms ease-out both;
+  pointer-events: none;
+}
+
+.wf-execution-node-pulse[data-execution-status="Completed"] { --wf-execution-pulse-color: var(--studio-success); }
+.wf-execution-node-pulse[data-execution-status="Faulted"] { --wf-execution-pulse-color: var(--studio-danger); }
+.wf-execution-node-pulse[data-execution-status="Suspended"] { --wf-execution-pulse-color: var(--studio-warning); }
+
+.wf-execution-edge-pulse {
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: .18 .82;
+  animation: wf-recorded-connection 900ms ease-out both;
+  pointer-events: none;
+}
+
+.wf-sequence-connector { position: relative; }
+
+.wf-execution-sequence-pulse {
+  position: absolute;
+  width: 3px;
+  height: .8rem;
+  border-radius: 999px;
+  background: var(--studio-accent);
+  animation: wf-recorded-sequence 900ms ease-out both;
+  pointer-events: none;
+}
+
+@keyframes wf-recorded-activity {
+  0% { opacity: .9; box-shadow: 0 0 0 0 color-mix(in srgb, var(--wf-execution-pulse-color, var(--studio-accent)) 45%, transparent); }
+  100% { opacity: 0; box-shadow: 0 0 0 8px transparent; }
+}
+
+@keyframes wf-recorded-connection {
+  0% { opacity: 0; stroke-dashoffset: 1; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; stroke-dashoffset: 0; }
+}
+
+@keyframes wf-recorded-sequence {
+  0% { opacity: 0; transform: translateY(-.5rem); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(.5rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wf-execution-node-pulse,
+  .wf-execution-edge-pulse,
+  .wf-execution-sequence-pulse { display: none; animation: none; }
+}

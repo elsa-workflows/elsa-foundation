@@ -21,3 +21,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   the promotion gate blocks publishing a Draft that carries the error. The compile-time guard in
   `SwitchStructureHandler.CompileExecutableStructure` and the runtime guard in `SwitchNavigator` are
   backstops; all three share the ordinal duplicate rule in `SwitchCaseRules`.
+
+## Case conditions (4.1 / schema 2.0.0)
+
+The v2 handler projects each present `condition` container as a normal Boolean input at `Case:{caseId}:Condition`, including unbound containers. `caseId` is stable and unique; `match` remains the human label and outcome. Value is consumed from ordinary inputs and projected only if a legacy case remains. Child replacement retains arguments, identities and unknown payload fields. The v1 handler remains registered for existing definitions/artifacts.
+
+`SwitchStructureInputPolicy` contributes `IRuntimeStructureInputMaterializationPolicy` for this kind/schema. It reads conditions in case order through the constrained normal materializer, stopping at the first true condition or legacy match. Switch implements `IRuntimeStructureInputConsumer` to receive pinned activation values. These contracts are cataloged in [Workflows.Runtime](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputmaterializationpolicy-core--elsaworkflowsruntimecore) and [Workflows.Design](../../../Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandlerprojectinputs-core--elsaworkflowsdesigncore).

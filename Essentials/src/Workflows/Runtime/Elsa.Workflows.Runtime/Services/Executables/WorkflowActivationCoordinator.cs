@@ -181,7 +181,7 @@ public sealed partial class WorkflowActivationCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            await NotifyTriggerObserversAsync(definitionId, activationId, command.Executable.Identity.ArtifactId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -296,7 +296,7 @@ public sealed partial class WorkflowActivationCoordinator(
         {
             artifactId ??= (await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId), CancellationToken.None))?.ArtifactId
                            ?? throw new InvalidOperationException($"Activation '{activationId}' has no source reference to name its artifact.");
-            await NotifyTriggerObserversAsync(activationId, artifactId, CancellationToken.None);
+            await NotifyTriggerObserversAsync(slot.WorkflowDefinitionId, activationId, artifactId, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -471,7 +471,7 @@ public sealed partial class WorkflowActivationCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await NotifyTriggerObserversAsync(command.ActivationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            await NotifyTriggerObserversAsync(command.Executable.Identity.DefinitionId, command.ActivationId, command.Executable.Identity.ArtifactId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -551,6 +551,7 @@ public sealed partial class WorkflowActivationCoordinator(
         await triggerIndexer!.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
 
     private async ValueTask NotifyTriggerObserversAsync(
+        string definitionId,
         string activationId,
         string fallbackArtifactId,
         CancellationToken cancellationToken)
@@ -561,7 +562,11 @@ public sealed partial class WorkflowActivationCoordinator(
 
         var bindings = await triggerBindingStore!.ListAllByActivationAsync(activationId, cancellationToken);
         var artifactId = bindings.FirstOrDefault()?.ArtifactId ?? fallbackArtifactId;
-        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings) { RequiresProjectionRefresh = true };
+        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings)
+        {
+            RequiresProjectionRefresh = true,
+            DefinitionId = definitionId
+        };
         foreach (var observer in _triggerObservers)
         {
             await observer.OnTriggersIndexedAsync(snapshot, cancellationToken);
@@ -602,7 +607,7 @@ public sealed partial class WorkflowActivationCoordinator(
             await CaptureAsync(
                 failures,
                 "Observer compensation",
-                () => NotifyTriggerObserversAsync(transition.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+                () => NotifyTriggerObserversAsync(command.Executable.Identity.DefinitionId, transition.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(
@@ -648,7 +653,7 @@ public sealed partial class WorkflowActivationCoordinator(
                     activationId,
                     $"The deactivation slot transition could not be restored: {restored.Diagnostic}");
         });
-        await CaptureAsync(failures, "Observer compensation", () => NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+        await CaptureAsync(failures, "Observer compensation", () => NotifyTriggerObserversAsync(definitionId, activationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(

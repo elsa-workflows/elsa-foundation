@@ -115,6 +115,13 @@ public sealed class StimulusDispatchRequest
     public StimulusRoutingMode Mode { get; }
 
     /// <summary>
+    /// Broadcast to every exact matching wait in the pre-start snapshot, including several waits in
+    /// one execution. Named-event publishers opt in; ordinary instance-scoped routing retains its
+    /// existing ambiguity checks. Each selected bookmark gets its own durable delivery key.
+    /// </summary>
+    public bool ResumeAllMatchingBookmarks { get; init; }
+
+    /// <summary>
     /// When present, the router deduplicates the START path: a duplicate delivery carrying the same key does not
     /// start a second instance. When absent, the start path is at-least-once and a duplicate delivery MAY
     /// double-start (see <c>docs/serialization.md</c> / the routing doc for the stated limits).

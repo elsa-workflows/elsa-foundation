@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityExecutionInspection,
+  ActivityExecutionAttempt,
   ActivityStateView,
   ActivityExecutionHierarchyPage,
   ActivityExecutionLayout,
@@ -315,13 +316,13 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
   } satisfies WorkflowInstanceListPage;
 }
 
-export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
+export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-instance",
     { workflowExecutionId });
-  return mapWorkflowInstanceDetails(await context.http.getJson<WorkflowInstanceDetails>(path));
+  return mapWorkflowInstanceDetails(await (signal ? context.http.getJson<WorkflowInstanceDetails>(path, { signal }) : context.http.getJson<WorkflowInstanceDetails>(path)));
 }
 
 export async function getActivityExecutionInspection(
@@ -371,7 +372,7 @@ export function supportsActivityExecutionInspection(context: StudioEndpointConte
 
 export interface ActivityExecutionBrowseEntry {
   iterationPosition?: number | null;
-  attempt?: { attemptNumber: number } | null;
+  attempt?: Pick<ActivityExecutionAttempt, "attemptNumber"> & Partial<ActivityExecutionAttempt> | null;
   execution: import("../workflowTypes").ActivityExecutionStateSummary & { executionSequence: number };
   position: number;
   previousActivityExecutionId: string | null;

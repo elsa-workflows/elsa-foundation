@@ -160,6 +160,38 @@
 .weaver-status[data-tone="success"] { color: var(--studio-success); }
 .weaver-status[data-tone="warning"] { color: var(--studio-warning); }
 
+.weaver-mode-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--studio-border);
+  font-size: 0.75rem;
+  color: var(--studio-text-muted);
+}
+
+.weaver-mode-status[data-autonomy-state="unresolved"] { color: var(--studio-warning); }
+
+.weaver-mode-retry {
+  margin-left: auto;
+  background: var(--studio-surface-raised);
+  color: var(--studio-text);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.weaver-mode-option:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.weaver-message-policy {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--studio-text-muted);
+}
+
 .weaver-alert {
   margin: 0.5rem 1rem 0;
   padding: 0.5rem 0.75rem;
@@ -394,8 +426,7 @@ html[data-theme-material] .weaver-mode-option:focus-visible {
 }
 
 html[data-theme-material] .weaver-message-body,
-html[data-theme-material] .agent-proposal,
-html[data-theme-material] .agent-workflow-batch {
+html[data-theme-material] .agent-proposal {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);
@@ -420,3 +451,85 @@ html[data-theme-material] .weaver-scroll {
   background-size: var(--studio-material-content-bg-size);
 }
 
+
+/* Recovery (#3441): recent sessions, reopen notices and recorded message outcomes. */
+.weaver-recovery {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--studio-border);
+  font-size: 0.75rem;
+  color: var(--studio-text-muted);
+}
+
+.weaver-recovery p { margin: 0; }
+
+.weaver-recovery-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--studio-text);
+}
+
+.weaver-recovery-notice[data-kind="owned-elsewhere"],
+.weaver-recovery-notice[data-kind="unavailable"],
+.weaver-recovery-notice[data-kind="lost"] { color: var(--studio-warning); }
+
+.weaver-recent-sessions strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--studio-text);
+}
+
+.weaver-recent-sessions ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weaver-recovery button,
+.weaver-message-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  background: var(--studio-surface-raised);
+  color: var(--studio-text);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.weaver-recovery button:disabled,
+.weaver-message-actions button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.weaver-new-conversation { justify-self: start; }
+
+.weaver-message-outcome {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--studio-text-muted);
+}
+
+.weaver-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Preview (#3441): what a server restart does to this backend's conversations, when they are not recovered. */
+.weaver-recovery-scope {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--studio-text-muted);
+}

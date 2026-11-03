@@ -185,10 +185,11 @@ public sealed class GraphActivityProvider(
             .OrderBy(x => x.NodeId, StringComparer.Ordinal)
             .Select(node => new ActivityTemplateOccurrenceCompilation(
                 node.NodeId,
-                ReadCanonicalArray(node.Element, "inputs"),
+                EffectiveInputArray(node),
                 activityStructureService.CompileExecutableStructure(node.Activity),
                 // A body node's captures into graph variables; absent when it captures nothing.
-                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null))
+                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
+            { StructureInputs = OptionalInputProjection(node.Activity) })
             .ToArray();
 
         return ValueTask.FromResult(new ActivityTemplateCompilation(
@@ -233,7 +234,25 @@ public sealed class GraphActivityProvider(
         return ValueTask.FromResult(new ActivityTemplateDependencyDiscovery(dependencies, ActivityDiagnosticOrderer.Order(diagnostics)));
     }
 
-    private static IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(JsonElement element)
+    private ActivityStructureInputProjection? OptionalInputProjection(ActivityNode node)
+    {
+        var projection = activityStructureService.ProjectInputs(node);
+        return projection.Inputs.Count == 0 && projection.ConsumedInputKeys.Count == 0 ? null : projection;
+    }
+
+    private JsonElement EffectiveInputArray(GraphNode node) => OptionalInputProjection(node.Activity) is { } projection
+        ? JsonSerializer.SerializeToElement(projection.ApplyToInputs(node.Activity.Inputs), NodeSerializerOptions)
+        : ReadCanonicalArray(node.Element, "inputs");
+
+    private JsonElement EffectiveReferenceElement(GraphNode node)
+    {
+        if (OptionalInputProjection(node.Activity) is null) return node.Element;
+        var element = JsonNode.Parse(node.Element.GetRawText())!.AsObject();
+        element["inputs"] = JsonNode.Parse(EffectiveInputArray(node).GetRawText());
+        return JsonSerializer.SerializeToElement(element, NodeSerializerOptions);
+    }
+
+    private IReadOnlyList<ActivityContractMemberUsage> PublicMemberUsage(JsonElement element)
     {
         ActivityNode? node;
         try
@@ -248,7 +267,9 @@ public sealed class GraphActivityProvider(
         if (node is null)
             return [];
 
-        return node.Inputs
+        var projection = activityStructureService.ProjectInputs(node);
+        var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        return node.Inputs.Where(input => !consumedUnused.Contains(input.ReferenceKey))
             .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
             .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
             .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
@@ -1159,7 +1180,7 @@ public sealed class GraphActivityProvider(
         return canonical.RootElement.Clone();
     }
 
-    private static JsonElement BuildBoundaryPayload(
+    private JsonElement BuildBoundaryPayload(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
         IReadOnlyList<GraphNode> nodes,
@@ -1198,7 +1219,7 @@ public sealed class GraphActivityProvider(
                     childSlotName = dependency.ChildSlotName,
                     childIndex = dependency.ChildIndex,
                     authoredDepth = node.Depth,
-                    inputBindings = ReadCanonicalArray(node.Element, "inputs"),
+                    inputBindings = EffectiveInputArray(node),
                     outputBindings = ReadCanonicalArray(node.Element, "outputs")
                 };
             }).ToArray(),
@@ -1338,7 +1359,7 @@ public sealed class GraphActivityProvider(
     private static ActivityDiagnosticSubject ProposalSubject() => new("ActivityDefinition", Key);
 
     // A closed-scope body refers only to what the activity declares or contains.
-    private static void ValidateBodyReferences(
+    private void ValidateBodyReferences(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
         IReadOnlyList<GraphNode> nodes,
@@ -1347,7 +1368,7 @@ public sealed class GraphActivityProvider(
         List<ActivityDiagnostic> diagnostics)
     {
         var bodyNodes = nodes
-            .Select(node => new GraphBodyReferenceValidator.BodyNode(node.NodeId, node.JsonPointer, node.ParentOccurrenceId, node.Element))
+            .Select(node => new GraphBodyReferenceValidator.BodyNode(node.NodeId, node.JsonPointer, node.ParentOccurrenceId, EffectiveReferenceElement(node)))
             .ToArray();
         foreach (var finding in GraphBodyReferenceValidator.Validate(graph, contract, bodyNodes, dependencyContracts))
             diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));

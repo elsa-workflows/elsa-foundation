@@ -10,6 +10,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Elsa.Testing;
+using Elsa.Agent.Services;
 
 namespace Elsa.Agent.Tests;
 
@@ -204,11 +205,8 @@ public sealed class AgentProviderLogRedactionTests
         RecordingLogger<GitHubCopilotAgentProvider> logger,
         ScriptableCopilotClient client)
     {
-        var audit = new InMemoryAgentAuditStore();
-        var invoker = new DefaultAgentToolInvoker(
-            new DefaultAgentToolRegistry([]),
-            new InMemoryAgentProposalService(new NoopAgentActionProposalExecutor(), audit),
-            audit);
+        // This suite exercises the SDK logging boundary without executing tools/effects.
+        var invoker = new AgentTestToolInvoker();
         return new GitHubCopilotAgentProvider(new ScriptableCopilotClientFactory(client), Options.Create(options), invoker, logger);
     }
 

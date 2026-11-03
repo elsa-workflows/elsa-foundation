@@ -1,3 +1,6 @@
+using Elsa.Api.Capabilities;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Models;
 using CShells.Features;
 using CShells.AspNetCore.Features;
 using Elsa.Api.AspNetCore;
@@ -14,12 +17,18 @@ namespace Elsa.Attention.Api;
 [ShellFeature(
     name: "AttentionApi",
     DisplayName = "Attention API",
-    Description = "Aggregates permission-scoped attention contributors through a shared query endpoint.")]
+    Description = "Aggregates permission-scoped attention contributors through a shared query endpoint.",
+    DependsOn = new object[] { typeof(ApiCapabilitiesFeature) }
+)]
 public sealed class AttentionApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.api.attention", 1,
+            [new("attention-items", "_elsa/attention/items")],
+            "AttentionApi"));
         services.AddAttentionCore();
         services.AddPermissionContributor<AttentionPermissionContributor>();
     }

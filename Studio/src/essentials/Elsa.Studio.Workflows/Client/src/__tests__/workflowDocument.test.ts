@@ -170,6 +170,24 @@ describe("workflowDocumentReducer", () => {
     });
   });
 
+  it("ignores a late view update belonging to an earlier Test Run", () => {
+    const start = { ...dirtyState(), testRun };
+    const next = workflowDocumentReducer(start, {
+      type: "testRunViewUpdated", view: { ...testRun.view, testRunId: "an-older-run", status: "Stopped" }
+    });
+    expect(next).toBe(start);
+  });
+
+  it("retains the dispatched snapshot on driver result updates and ignores another run's result", () => {
+    const snapshot = makeDraft("dispatched");
+    const start = { ...dirtyState(), testRun: { ...testRun, snapshot } };
+    const update = { ...testRun, view: { ...testRun.view, status: "Dispatched" }, startLabel: "Driver action" };
+    const next = workflowDocumentReducer(start, { type: "testRunResultUpdated", testRun: update });
+    expect(next.testRun?.snapshot).toBe(snapshot);
+    expect(next.testRun?.startLabel).toBe("Driver action");
+    expect(workflowDocumentReducer(next, { type: "testRunResultUpdated", testRun: { ...update, view: { ...update.view, testRunId: "old" } } })).toBe(next);
+  });
+
   it("retains wait data and retry identity in the owner-held Test Run state", () => {
     const start = { ...dirtyState(), testRun };
     const waitDraft = {

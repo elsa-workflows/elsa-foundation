@@ -16,6 +16,7 @@ export function register(api: ElsaStudioModuleApi) {
     defaultEnabled: true,
     order: 46,
     nav: {
+      requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
       title: "Connections",
       path: "/security/connections",
       iconColor: "#64748b",
@@ -24,7 +25,7 @@ export function register(api: ElsaStudioModuleApi) {
     },
     routes: [
       {
-        id: "connections",
+        id: "connections", requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
         path: "/security/connections",
         label: "Connections",
         component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} />
@@ -33,7 +34,7 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.expressionEditors.add({
-    id: "elsa.connection-reference-editor",
+    id: "elsa.connection-reference-editor", requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
     order: 100,
     supports: context => context.syntax === "Connection" || context.descriptor.uiHint === "connection-picker",
     surfaces: {

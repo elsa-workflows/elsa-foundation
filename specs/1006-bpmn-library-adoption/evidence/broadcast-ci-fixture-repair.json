@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "task": "CI fixture and solution-discovery repair for publisher activation and recovery observer; not additional T051 host or delivery qualification",
+  "sourceParentCommit": "c5a1e4718fce09168f7e90a860388805c4fe3f32",
+  "filesSha256": {
+    "Elsa.Server.slnx": "1aad7b95f60a499484fb997c9ebf853869513ce76c09b188d710c23a571437d1",
+    "Essentials/tests/Activities/Behavioral/Tests/Drives/PrimitiveDrives.cs": "e688d051dd9cb5c02a05b9980b0b887ab656ece73f167fe6417cdcaef8a5a132",
+    "Essentials/tests/Activities/Behavioral/Tests/packages.lock.json": "c52df08b221c4e907af67b0c6aef1ce5e46d34677f28972463b3d87ccbc4fa19",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnMessageTests.cs": "6171a56db4370049819066b3256deaacd7addb04b774abfb42f39d121dba7869",
+    "Essentials/tests/Activities/Bpmn/Tests/packages.lock.json": "d0c066102d7f7ff85c737b6b2cc7818d09293f1f54033bb45a9c5da334f513f3",
+    "Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": "72a0dd27b1a12e0cde4d738f9440836e03f58b1db9a83db73fd5889d0fed740b",
+    "Essentials/tests/Activities/Compensation/Tests/packages.lock.json": "d187871f1249e953447f6dfb2b4f0190a2c1400d777710925f0da522cc0722eb",
+    "Essentials/tests/Activities/ControlFlow/Tests/packages.lock.json": "1d71c2a32c72622dd84883a884d122a984431cb9a6da4b7d0b6e4933634b9d86",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/packages.lock.json": "348122c6d93209adee85d9a59da940b8d1dfb37e44f32be603f636dae0f3f06f",
+    "Essentials/tests/Activities/Flowchart/Tests/packages.lock.json": "373516f023fd2cc248c041b017219d155784a4ef91e8239c53673e80cf7e10c4",
+    "Essentials/tests/Activities/Http/CommandCost/Tests/packages.lock.json": "4c848e979d7eb60730050d21c9f52ebc48c38814e54adf93fe6ab133920c0e5c",
+    "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/packages.lock.json": "671a4d9019f29caaffcff5817a0d54bc2c0fab15daf297417de18a55c0476084",
+    "Essentials/tests/Activities/Http/IntegrationTests/packages.lock.json": "7129071ab12b0faf53fbf2a94bb69d2e63b9efa0303d9826d1526a4ed70e6c4c",
+    "Essentials/tests/Activities/Http/Tests/packages.lock.json": "d091ed1d9d0d7a9e95105ac44fee3f81c7b1fc52a1c006d0ff9a1c8620ca6dbf",
+    "Essentials/tests/Activities/Runtime/Tests/PublishEventResumeRoutingTests.cs": "2947ab94720376a19f65ffc1744d0e4f9b018badd80f58c58d53711c256d523c",
+    "Essentials/tests/Activities/Runtime/Tests/packages.lock.json": "f616d26afe31911de65ba697e03e3b1e5ec5db4bb6061489103afee6f1057d10",
+    "Essentials/tests/Activities/Scheduling/Tests/packages.lock.json": "91edd32c5cdbd21d48fae23addadf8a6215585a17461de558fdf3ee50a9d04f7",
+    "Essentials/tests/Activities/Scripting/Tests/packages.lock.json": "274bcdc6a4ef047c19aacc3d8ec430f6069ca082a932f96712ff0f8f965af71a",
+    "Essentials/tests/Activities/Sequence/Tests/packages.lock.json": "0373bbdc39414800d1dff608b4553a0e36349004c796cf5212cfefd9cebf16d9",
+    "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj": "9f49ac31f7c5500cbd5a56e0ad07ec922bd83686b7329b4473e26ccd941f624b",
+    "Essentials/tests/Activities/Testing/packages.lock.json": "7d4620b3e50470da3dbbf704204304ee5004930ad04ecdc9d461f34f6d1f5419",
+    "Essentials/tests/Secrets/Workflows/Tests/packages.lock.json": "acaed159170cf04cbf591a52e9804dae33006fd3a73cfc99b3e7d71ff12f18ef",
+    "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": "1fb1b2ae5821bec6faed7a05d50321549bc4e600ad7ce1d1165de88ee0affe73",
+    "Essentials/tests/Workflows/Publishing/Tests/packages.lock.json": "aa61090f33d600a4641e175c40531f7130c5e85266b5a3afb20b5b27b5eafc7f",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/packages.lock.json": "af82313289d13a608f55460743fe3fe508f35cc00d15ef79af4dda0bd48c4635",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": "b25e4f195590a253106411f9bc95153f7d7ab4e193fd634df75e8a271d968bf1",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/packages.lock.json": "cbad779e1f11e6227faebf82dca21bcd203c974d0f694d71bfc557eed1e9e1c4",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/packages.lock.json": "2a97bec9a66f098f0dd7611b78abdd545643defecdb0703e35ad3f8e1a9be14e",
+    "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/packages.lock.json": "f0beaf48b5e431e0791d3f9a89ee63815c3ce4a397ddb32a273b8c1fe10d8b1d",
+    "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Elsa3.Activities.Design.Import.Integration.Tests.csproj": "f8ce75dd7a88f4d19e29265a0f380c5a5d6049925bd034bbcc0c1bdbf474e961",
+    "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/PublishEventResumeTests.cs": "6f4baa145e4dd33f619af75db4176d5e978cede15bf75d472183b3d64f8aba29",
+    "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Support/Elsa3ImportHost.cs": "538a4968c5d42f3482cd3295a705dc7581627aa9ecbd03fdd21157272e5346b8",
+    "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/packages.lock.json": "db74641fe5f1e867b29fb598fc4c1c8e9745933311b98534904cc9256922427e",
+    "Extensions/Etl/tests/Tests/packages.lock.json": "ccb7df23ba96504ec9671131ed669c481ac287d5c238cb8ae18a31c24f5bdf79",
+    "Extensions/Rules/tests/Tests/packages.lock.json": "f1beb145f3b66a3ea1eaa12949399e1f625b5ad0cb7bbf57e449f8198aef6c1e",
+    "Essentials/tests/Activities/Testing/NativeStimulusDeliveryTestServices.cs": "87209cebf14e8da0009f5ce0c762b5709df9524945cedbc02c7639bfd86e3ecf"
+  },
+  "failuresReproduced": {
+    "architecture": "new checked-reader lock file had no project in Server solution; exact local guard failed",
+    "BPMN": "four native message tests refused publication because no shared schema dormancy check; local five-case run had four failures/one pass",
+    "Behavioral": "PublishEvent drive hit same schema refusal, breaking drive health and outcome reachability",
+    "Elsa3Import": "actual TestServer lacked the shared schema check; new availability regression failed Assert.NotNull before repair"
+  },
+  "ciEvidence": [
+    {
+      "name": "Architecture guards",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40457797447/job/122035152218"
+    },
+    {
+      "name": "PR shard 2",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40457797447/job/122035152264"
+    },
+    {
+      "name": "PR shard 3",
+      "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40457797447/job/122035152104"
+    }
+  ],
+  "repairs": [
+    "include existing DeliveryRecoveryRead project in Server solution",
+    "explicit native component schema/access/router opt-in at three existing fixtures; actual shared check over constructed native facts",
+    "TryAdd preserves caller-owned check/access; ordinary harness and shared BPMN/EF fixture defaults unchanged",
+    "actual Elsa3 TestServer composes host-wide AddEfSchemaReadability and public availability regression over the real shell observation",
+    "normal NuGet graph supplies required test-support/readability additions; preserve every old external record"
+  ],
+  "targeted": {
+    "architecture": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "total": 1,
+      "trxSha256": "61951cd9022fb3b8ef819504d0c3fd4f561260882c9a19bb1bf3f65bd85e2d41"
+    },
+    "bpmn": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "total": 5,
+      "trxSha256": "2b7d97b29399fc8f241942026a6661605c18f4eb410e8acc1bbca27e33bf3e5b"
+    },
+    "runtime": {
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0,
+      "total": 35,
+      "trxSha256": "b45d2e5624d005dba19027ecf1aa50f4861b47ff767e1dfa7eaa3c6578edc30e"
+    },
+    "behavioral": {
+      "passed": 142,
+      "failed": 0,
+      "skipped": 0,
+      "total": 142,
+      "trxSha256": "dedd4b1d67e0813353c17f845dfb9812f610b6fd65448e79d28e2f5f54f02564"
+    },
+    "import": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "total": 12,
+      "trxSha256": "a01b126eaa584ef70d6fb540ad396db6c947c1ad95b20746dc440943d6f935c3"
+    }
+  },
+  "wholeProjects": {
+    "BPMN": {
+      "passed": 297,
+      "failed": 0,
+      "skipped": 0,
+      "total": 297,
+      "trxSha256": "d92f29923bf7ae032df1055001476ed1ed4aa35cf480aac946bd4642dc69e602"
+    },
+    "Behavioral": {
+      "passed": 215,
+      "failed": 0,
+      "skipped": 0,
+      "total": 215,
+      "trxSha256": "4ee00c1ef4a8047c089b7f472660350bbf4f3f48fc4174f88e954c6c95063920"
+    },
+    "ActivitiesRuntime": {
+      "passed": 720,
+      "failed": 0,
+      "skipped": 0,
+      "total": 720,
+      "trxSha256": "c7a068a8aa9962620d0631d453602423dd7ca5e4a4c1608fe10984a8af435332"
+    },
+    "Elsa3Import": {
+      "passed": 51,
+      "failed": 0,
+      "skipped": 0,
+      "total": 51,
+      "trxSha256": "e06c70840cf0d293e53a824e9bd4b5c71a57ead7c79033cb87738863e6ce09ca"
+    },
+    "Architecture": {
+      "passed": 590,
+      "failed": 0,
+      "skipped": 0,
+      "total": 590,
+      "trxSha256": "44893e0ea414c660fc36d8e58140177870fea6acd14258b97efe95116120acb9"
+    }
+  },
+  "wholePassed": 1873,
+  "newTests": 1,
+  "lockedServerProjectCount": 340,
+  "normalizedLockedRestorePassed": true,
+  "prescribedDebugReleaseRestorePassed": true,
+  "mapsCheckPassed": true,
+  "lockfilesChanged": 27,
+  "unchangedExternalRecords": 1720,
+  "unchangedExternalRecordsPerLock": {
+    "Essentials/tests/Activities/Behavioral/Tests/packages.lock.json": 67,
+    "Essentials/tests/Activities/Bpmn/Tests/packages.lock.json": 39,
+    "Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": 107,
+    "Essentials/tests/Activities/Compensation/Tests/packages.lock.json": 69,
+    "Essentials/tests/Activities/ControlFlow/Tests/packages.lock.json": 50,
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/packages.lock.json": 49,
+    "Essentials/tests/Activities/Flowchart/Tests/packages.lock.json": 47,
+    "Essentials/tests/Activities/Http/CommandCost/Tests/packages.lock.json": 86,
+    "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/packages.lock.json": 68,
+    "Essentials/tests/Activities/Http/IntegrationTests/packages.lock.json": 70,
+    "Essentials/tests/Activities/Http/Tests/packages.lock.json": 51,
+    "Essentials/tests/Activities/Runtime/Tests/packages.lock.json": 53,
+    "Essentials/tests/Activities/Scheduling/Tests/packages.lock.json": 68,
+    "Essentials/tests/Activities/Scripting/Tests/packages.lock.json": 49,
+    "Essentials/tests/Activities/Sequence/Tests/packages.lock.json": 47,
+    "Essentials/tests/Activities/Testing/packages.lock.json": 38,
+    "Essentials/tests/Secrets/Workflows/Tests/packages.lock.json": 73,
+    "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": 116,
+    "Essentials/tests/Workflows/Publishing/Tests/packages.lock.json": 47,
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/packages.lock.json": 71,
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json": 116,
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/packages.lock.json": 43,
+    "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/packages.lock.json": 38,
+    "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/packages.lock.json": 48,
+    "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/packages.lock.json": 68,
+    "Extensions/Etl/tests/Tests/packages.lock.json": 74,
+    "Extensions/Rules/tests/Tests/packages.lock.json": 68
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "reviews": {
+    "type": "three independent component source and receipt reviews; not full PR",
+    "remainingActionable": []
+  },
+  "verificationIterations": [
+    "local root-cause repros failed as expected before repair",
+    "one missing test using fixed before successful targeted execution",
+    "first whole architecture run had 569 passes/21 missing isolated Debug restore-asset failures; prescribed dual-config setup then full590 passed"
+  ],
+  "limits": [
+    "new pushed head still needs its own required CI checks",
+    "native constructed observations are component fixtures, not fleet/schema migration proof",
+    "Elsa3 TestServer is not upgraded-host or Studio acceptance",
+    "T051 remaining cases, T045, historical upgrade, Studio, deletion guards, full-PR review, protected merge/resulting-main and ADR acceptance remain open",
+    "GitGuardian public-digest incidents still require legitimate resolution; no bypass"
+  ],
+  "fullPrRounds": 0
+}

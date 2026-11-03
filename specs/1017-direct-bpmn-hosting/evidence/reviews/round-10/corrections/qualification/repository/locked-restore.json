@@ -1,0 +1,13 @@
+{
+  "source": "6bd8ac3e86d1701603b1c975534514d3fe62933b",
+  "arguments": [
+    "dotnet",
+    "restore",
+    "Elsa.Server.slnx",
+    "--locked-mode"
+  ],
+  "exitCode": 0,
+  "elapsedSeconds": 3.906956541002728,
+  "log": "locked-restore.log",
+  "warningLines": 94
+}

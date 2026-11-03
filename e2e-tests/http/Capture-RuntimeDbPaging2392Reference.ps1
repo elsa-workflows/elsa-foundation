@@ -52,7 +52,8 @@ $path = $RoutePath
 $payload = '{"firstName":"Alice","lastName":"Smith"}'
 
 Write-Host "== #2392 $ExpectedPersistenceMode HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
-Write-Host ("[scriptHead] {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
+$scriptHead = git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD 2>$null
+Write-Host ("[scriptHead] {0}" -f $(if ($LASTEXITCODE -eq 0 -and $scriptHead) { $scriptHead.Trim() } else { '<archive; verify retained script hashes>' }))
 Write-Host ("[hostCandidateInput] {0} (operator supplied; verify against the independent host build record)" -f $HostCandidateSha.ToLowerInvariant())
 Write-Host ("[traceparent] {0}" -f $TraceParent)
 $authoredModeText = if (-not $authoredModeWasBound) { "<host default>" } else { $AuthoredPersistenceMode }

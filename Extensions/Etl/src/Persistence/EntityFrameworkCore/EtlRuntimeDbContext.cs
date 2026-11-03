@@ -53,6 +53,9 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_runs_SourceInputReservedBytes",
                 "SourceInputReservedBytes >= 0");
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_runs_CompletionRequestedAtUtcTicks",
+                "CompletionRequestedAtUtcTicks IS NULL OR CompletionRequestedAtUtcTicks > 0");
         });
         connectorRuns.HasKey(row => new { row.ScopeKey, row.RunKey });
         connectorRuns.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -152,6 +155,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_AcceptanceMetadataBytes",
                 "AcceptanceMetadataBytes >= 0");
+            // The effect columns record the delivery mechanism (1 HTTP delivery, 2 file publication), not the route format.
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_MainEffectKind",
                 "MainEffectKind IS NULL OR MainEffectKind IN (1, 2)");

@@ -38,5 +38,8 @@ describe("workflow Test Run control API", () => {
       data: { payload: { id: 7 } }
     });
     expect(requestJson).toHaveBeenCalledWith("/elsa/api/publishing/workflow-test-runs/test%2Frun/stop", { method: "POST" });
+    const controller = new AbortController();
+    await getWorkflowTestRunWaits(context, "test/run", controller.signal);
+    expect(getJson).toHaveBeenLastCalledWith("/elsa/api/publishing/workflow-test-runs/test%2Frun/waits", { signal: controller.signal });
   });
 });

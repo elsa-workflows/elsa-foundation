@@ -3,11 +3,12 @@ import {
   type ElsaStudioModuleApi,
   type StudioBackendManagementRegistryEnvelope,
   type StudioBackendManagementStatusKind,
-  type StudioEndpointContext
+  type StudioEndpointContext,
+  type StudioHostId
 } from "../../sdk";
 import { isPermissionDenied } from "../hostControlPermissions";
 
-export type HostId = "studio" | "server";
+export type HostId = StudioHostId;
 export type RegistryState = "loading" | "ready" | "failed";
 
 export interface HostModel {

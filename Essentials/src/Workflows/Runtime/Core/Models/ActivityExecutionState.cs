@@ -53,6 +53,20 @@ public sealed record ActivityExecutionState(
 {
     public string InvocationId => Execution.ActivityExecutionId;
 
+    /// <summary>The assigned logical effect key, then first-attempt identity, then this invocation identity.</summary>
+    [JsonIgnore]
+    public string OperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.OperationKey)
+        ?? NonBlank((Attempt ?? Provenance.Attempt)?.FirstAttemptActivityExecutionId) ?? InvocationId;
+
+    /// <summary>The forward operation this occurrence acts on, when its structural parent assigned one.</summary>
+    [JsonIgnore]
+    public string? TargetOperationKey => AssignedOperationKey(Constants.RuntimeMetadataKeys.TargetOperationKey);
+
+    private string? AssignedOperationKey(string key) =>
+        NonBlank(Provenance.Metadata.GetValueOrDefault(key)) ?? NonBlank(Metadata.GetValueOrDefault(key));
+
+    private static string? NonBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
     /// <summary>
     /// The enclosing hierarchy scope that contains this activity when the activity opens its own scope.
     /// </summary>
@@ -72,6 +86,22 @@ public sealed record ActivityExecutionState(
 
     /// <summary>Typed scheduler-carried values used to activate <see cref="IterationVariableFrame"/>.</summary>
     public LoopIterationScopeRequest? IterationFrameRequest { get; init; }
+
+    /// <summary>Last root control emission committed with this invocation's structural continuation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlBatch? ProducedControl { get; init; }
+
+    /// <summary>Source commit of the current nonterminal batch; committed atomically with its one outbox responsibility.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProducedControlSourceCommitId { get; init; }
+
+    /// <summary>Optional exact-source control transported with an ordinary waited dispatch completion.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlTransport? ChildControl { get; init; }
+
+    /// <summary>Exact-call ordered acceptance; absent on ordinary and legacy invocations.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeChildControlInbox? ChildControlInbox { get; init; }
 
     public void EnsureValueFlowCompatible()
     {

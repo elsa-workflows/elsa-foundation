@@ -1,0 +1,10 @@
+{
+  "databaseSha256": "1720cc78c20c7bf03a98c291475f8fd0a5845be514c80344942734b427509640",
+  "databaseBytes": 4075520,
+  "compressedSha256": "0f2f733c9e482a218544918b352fb65b32a37f6a3dff4492b73949a417f3927b",
+  "compressedBytes": 529369,
+  "wholeDatabase": true,
+  "integrityCheck": "ok",
+  "identityDatabaseIncluded": false,
+  "containsOnlyModuleTablesAndModuleInfrastructure": true
+}

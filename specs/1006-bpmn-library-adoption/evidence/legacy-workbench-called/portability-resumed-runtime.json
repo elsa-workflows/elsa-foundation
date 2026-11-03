@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "role": "upgraded-control-with-original-legacy-build-unavailable",
+  "databaseSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354",
+  "compressedSha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+  "rawBytes": 2129920,
+  "actualWriterSourceCommit": "2a42af1bbbc112d34711db980e7ea4769689f0ad",
+  "originalWriterExitedBeforeBackup": true,
+  "databaseWasNotSynthesizedOrPatched": true,
+  "identityAndTokenDatabasesNeverIncluded": true,
+  "originalBundleHashes": {
+    "runtime": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4",
+    "design": "32bab40972d5a8f686db0f099d1a2c5f625f9dfa419af479cf5a38776a33fe7a"
+  }
+}

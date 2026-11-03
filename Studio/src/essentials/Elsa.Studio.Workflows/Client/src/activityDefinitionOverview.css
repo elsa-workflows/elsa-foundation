@@ -14,3 +14,53 @@
 }
 .ad-designed-overview button, .ad-technical-disclosure > button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.4rem; padding: .45rem .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }
 .ad-workbench .ad-header-actions > .ad-primary-action { border-color: var(--studio-accent); color: var(--studio-accent-text); background: var(--studio-accent); }
+
+.ad-workbench .ad-definition-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "navigation navigation" "identity actions";
+  align-items: start;
+  column-gap: 1.5rem;
+  row-gap: .5rem;
+  margin-bottom: 0;
+  border-bottom: 0;
+  padding-bottom: .875rem;
+}
+
+.ad-definition-navigation { grid-area: navigation; }
+.ad-definition-navigation .ad-back {
+  min-height: 1.75rem;
+  margin: 0;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  font-size: .8125rem;
+  padding: 0;
+}
+.ad-definition-navigation .ad-back:hover { color: var(--studio-accent); }
+.ad-definition-identity { grid-area: identity; min-width: 0; }
+.ad-definition-header .ad-definition-identity h1 { margin: 0; line-height: 1.3; overflow-wrap: anywhere; }
+.ad-definition-header .ad-definition-identity p { max-width: 75ch; margin-top: .25rem; font-size: .875rem; }
+.ad-definition-header .ad-header-actions { grid-area: actions; flex-wrap: wrap; align-self: start; }
+.ad-definition-header .ad-header-actions > button {
+  min-height: 2rem;
+  max-width: 100%;
+  border-radius: var(--studio-radius-sm);
+  font-size: .8125rem;
+  padding: .375rem .625rem;
+}
+.ad-definition-header .ad-header-actions > button:not(:disabled):hover { background: var(--studio-surface-muted); }
+.ad-workbench .ad-definition-header .ad-primary-action:not(:disabled):hover {
+  background: color-mix(in srgb, var(--studio-accent) 90%, var(--studio-text));
+}
+
+@media (max-width: 760px) {
+  .ad-workbench .ad-definition-header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "navigation" "identity" "actions";
+    row-gap: .625rem;
+  }
+  .ad-definition-header .ad-header-actions { display: flex; width: auto; }
+  .ad-definition-header .ad-header-actions > button { width: auto; }
+}

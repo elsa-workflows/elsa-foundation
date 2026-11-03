@@ -62,6 +62,9 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     [ManifestSetting(DisplayName = "Max backoff interval (minutes)", Description = "Upper bound the sweep interval widens to under sustained failure.", Category = "Runtime", DefaultValue = "5")]
     public double MaxBackoffIntervalMinutes { get; set; } = 5;
 
+    [ManifestSetting(DisplayName = "Inline dispatch wait (seconds)", Description = "How long a sweep waits for one dispatched command before leaving it to finish on its own, capped by a third of the lease per sweep.", Category = "Runtime", DefaultValue = "1")]
+    public double InlineDispatchWaitSeconds { get; set; } = 1;
+
     [ManifestSetting(DisplayName = "Max executions per sweep", Description = "Hard cap on executions claimed and re-driven per sweep, bounding dispatch bursts.", Category = "Runtime", DefaultValue = "100")]
     public int MaxExecutionsPerSweep
     {
@@ -105,6 +108,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         {
             options.SweepInterval = TimeSpan.FromSeconds(SweepIntervalSeconds);
             options.MaxBackoffInterval = TimeSpan.FromMinutes(MaxBackoffIntervalMinutes);
+            options.InlineDispatchWait = TimeSpan.FromSeconds(InlineDispatchWaitSeconds);
             options.MaxExecutionsPerSweep = MaxExecutionsPerSweep;
             options.TransportLeaseBatchSize = TransportLeaseBatchSize;
         });
@@ -156,9 +160,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         // the distributed provider still bounds the local mailbox registry, and the distributed PassivateAsync releases
         // the placement lease when the resumption reaper collects a lingering terminal execution.
         services.TryAddSingleton<RuntimeActorEvictionOptions>();
-        services.TryAddSingleton(sp => new InProcessWorkflowExecutionActorProvider(
-            sp.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
-            sp.GetRequiredService<RuntimeActorEvictionOptions>()));
+        services.TryAddSingleton(InProcessWorkflowExecutionActorProvider.Create);
         // Placement as a membership query: the gate both claim paths ask, what the pump reclaims and reports,
         // and the contracts through which the runtime's core and Attention consume them without referencing this leaf.
         services.TryAddSingleton(JoinSweepLedger.Process);

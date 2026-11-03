@@ -1,0 +1,60 @@
+{
+  "sourceRevision": "5618ed377594d6cd8428fdd3ff37cca357004722",
+  "actualJourneys": [
+    {
+      "parent": "Root",
+      "nativeCancelled": false,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": true
+    },
+    {
+      "parent": "Root",
+      "nativeCancelled": true,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": false
+    },
+    {
+      "parent": "Sequence",
+      "nativeCancelled": false,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": true
+    },
+    {
+      "parent": "Sequence",
+      "nativeCancelled": true,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": false
+    },
+    {
+      "parent": "Flowchart",
+      "nativeCancelled": false,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": true
+    },
+    {
+      "parent": "Flowchart",
+      "nativeCancelled": true,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": false
+    },
+    {
+      "parent": "CompensationScope",
+      "nativeCancelled": false,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": true
+    },
+    {
+      "parent": "CompensationScope",
+      "nativeCancelled": true,
+      "nativeAndModelSettled": true,
+      "directTraceCompared": false
+    }
+  ],
+  "wholeStoresVerified": 32,
+  "nativeProcesses": 24,
+  "humanModelEmbeddingProved": true,
+  "etlEmbeddingProved": false,
+  "pendingParentResultCrashProved": false,
+  "cancellationBeforeAdmissionProved": false,
+  "upgradedHostOrStudioProved": false
+}

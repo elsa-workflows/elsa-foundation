@@ -1,0 +1,11 @@
+{
+  "passed": false,
+  "expectedStage": "NoticeAccepted",
+  "schemaVersion": 1,
+  "sourceRevision": "bf83b23b4b3987d6ac3b7c31df98ee9133156763",
+  "failures": [
+    "Connection refused (127.0.0.1:54451)"
+  ],
+  "cases": [],
+  "phase": "Emit"
+}

@@ -7,6 +7,7 @@ Elsa.Studio.Hosting.StudioBuilder.Environment.get -> Microsoft.AspNetCore.Hostin
 Elsa.Studio.Hosting.StudioBuilder.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Elsa.Studio.Hosting.StudioConfigurationMutationGate
 Elsa.Studio.Hosting.StudioConfigurationMutationGate.AcquireAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.IAsyncDisposable!>
+Elsa.Studio.Hosting.StudioFeatureAssemblyExtensions
 Elsa.Studio.Hosting.StudioHostingException
 Elsa.Studio.Hosting.StudioHostingException.StudioHostingException(string! message, System.Exception? innerException = null) -> void
 Elsa.Studio.Hosting.StudioHostingExtensions
@@ -20,6 +21,7 @@ Elsa.Studio.Hosting.StudioHostingOptions.ShellName.set -> void
 Elsa.Studio.Hosting.StudioHostingOptions.ShellsFile.get -> string?
 Elsa.Studio.Hosting.StudioHostingOptions.ShellsFile.set -> void
 Elsa.Studio.Hosting.StudioHostingOptions.StudioHostingOptions() -> void
+static Elsa.Studio.Hosting.StudioFeatureAssemblyExtensions.WithStudioStartupAssemblies(this CShells.DependencyInjection.CShellsBuilder! shells, params System.Reflection.Assembly![]! assemblies) -> CShells.DependencyInjection.CShellsBuilder!
 static Elsa.Studio.Hosting.StudioHostingExtensions.AddElsaStudio(this Microsoft.AspNetCore.Builder.WebApplicationBuilder! builder, System.Action<Elsa.Studio.Hosting.StudioHostingOptions!>? configure = null) -> Elsa.Studio.Hosting.StudioBuilder!
 static Elsa.Studio.Hosting.StudioHostingExtensions.MapElsaStudio(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> Microsoft.AspNetCore.Routing.IEndpointRouteBuilder!
 static Elsa.Studio.Hosting.StudioHostingExtensions.UseElsaStudio(this Microsoft.AspNetCore.Builder.WebApplication! app) -> Microsoft.AspNetCore.Builder.WebApplication!

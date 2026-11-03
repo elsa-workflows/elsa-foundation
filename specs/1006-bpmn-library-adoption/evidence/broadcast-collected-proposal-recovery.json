@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual collection wins before cohort acceptance; overall qualification remains open",
+  "sourceParentCommit": "98ca3a865d98f29fd2db31b080eb17828a37a24c",
+  "filesSha256": {
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "e63e1aa2af0296ccb478d6d7aeafab08587453879159950d7a6f2ef07b11947b",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "c129dabda5ec5262fe92286f1ffa424688d18c7d4744183b44236ef0a6242487",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "f890c92026a2cf5cac828f3c0e1d775349cc7a83b150c1a615893350402a2b2a",
+    "e2e-tests/bpmn/Test-BpmnCollectedProposalControls.ps1": "dba2fe0d2d9799f67c2f3223508138e60e22ef8a3d01647703dd063299d3bdcc"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-collected-proposal-host.json": "a69047f3193529fe21ec1516c3dff7b87f62baad856affaaaf231f5bf3693a9a",
+    "broadcast-collected-republished-cohort-host.json": "23663a96a441890d6ab92576a0fee90282ee9e26c7a9be56e32d21fd8ad8708c",
+    "broadcast-collected-local-scope-host.json": "8b2ea554bd080727b16db21b8155c7e528bc8e804b694c7b8b85198a500b765e"
+  },
+  "sourceBindingsCheckedPerCase": 1385,
+  "binaryBindingsCheckedPerCase": 631,
+  "checks": [
+    {
+      "name": "actual collection-before-acceptance and new-owner first selection",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual accepted-cohort retention and local-scope regressions",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "extracted actual prepared proposal/collection/refusal guards, one positive and 34 invalid variants",
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "extracted actual local/TestRun isolation guards",
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "extracted actual accepted-cohort retention guards",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "checked source/publisher/material/reference controls",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "owned process/broker controls",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual cleanup-failure controls",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "fresh locked probe build",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "buildReuse": {
+    "receipt": "broadcast-scope-recovery.json",
+    "standardAndReaderClosuresExactlyUnchanged": true,
+    "standardCurrentCompileInputsChecked": 1303,
+    "readerCurrentInputsUnchanged": true,
+    "standardAndReaderNotFreshlyRebuilt": true
+  },
+  "collectionOrder": {
+    "preparedProposalStarts": 1,
+    "preparedProposalResumes": 2,
+    "acceptedSnapshotBeforeCollection": false,
+    "publicUnpublishRetiresExactProposedSource": true,
+    "actualSelectedCollectorZeroGrace": true,
+    "actualDeletedMaterial": 1,
+    "actualDeletedReference": 1,
+    "oldTargetNeverStarted": true,
+    "originalClaimUnexpiredAtRefusal": true,
+    "actualProviderInstallAttempted": true,
+    "actualRefusal": "StimulusDeliveryBoundaryException/WorkflowExecutableDependencyGraphException/MissingArtifact",
+    "exactCollectedArtifactAndHashInSoleRootPath": true,
+    "IsUnavailable": false,
+    "processorPreservesSourceBoundaryResponsibilityBeforeAnyResultRegardlessOfFlag": true,
+    "entireCheckedSourceAndWorkflowsUnchangedBeforeCrash": true,
+    "normalNewOwnerFence": 2,
+    "firstAcceptedStarts": 1,
+    "firstAcceptedResumes": 4,
+    "collectedOldTargetExcluded": true,
+    "lateBindingAndAllExactPreSelectionWaitsEligible": true,
+    "noFabricatedProviderVerdictOrClaimEdit": true
+  },
+  "reviewFindingsFixed": [
+    "Omitted material/reference/root/workflow inventories must refuse instead of counting as absent; explicit presence and five omission controls added.",
+    "Initial expected lease-unavailable exception was corrected to the actual graph-first MissingArtifact refusal. Typed kind and exact artifact/hash sole-root diagnostic distinguish unrelated failure; no production classifier change."
+  ],
+  "supportingQualification": {
+    "architecturePassed": 590,
+    "ServerLockedRestoreAndMapCheckPassed": true,
+    "inheritedNotRerun": true,
+    "sourceReceipt": "broadcast-competing-proposal-recovery.json",
+    "reason": "Only test-only scheduling/observation, runner and evidence guards changed; production source/project graph unchanged."
+  },
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChanged": false,
+  "reviews": {
+    "type": "three independent component source/actual/portable audits; not full PR",
+    "remainingActionable": []
+  },
+  "remainingGates": [
+    "supported redrive applicability, affected whole projects/mutations and overall T049/T050/T051 reconciliation",
+    "remaining T045/native-composite, actual historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards; full PR/required exact-head checks/protected merge/resulting-main",
+    "separate ADR0063 and independent production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

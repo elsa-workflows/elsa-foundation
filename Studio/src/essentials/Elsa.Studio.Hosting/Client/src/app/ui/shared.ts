@@ -23,6 +23,8 @@ export * from "./inspector/Inspector";
 export * from "./identity/CopyableIdentifier";
 export * from "./layout/Tabs";
 export * from "./layout/Toolbar";
+export * from "./layout/Page";
+export * from "./layout/DialogFooter";
 export * from "./list/ListRow";
 export * from "./overlay/AnchoredPopover";
 export * from "./stat/StatTile";

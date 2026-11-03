@@ -56,6 +56,7 @@ internal sealed class EtlHttpPageCache
     private readonly EtlConnectorLimits _limits;
     private readonly EtlHttpPolicy _policy;
     private readonly EtlHttpRequestBuilder? _requestBuilder;
+    private readonly bool _continuous;
     private readonly FileChunkStore _bodyStore = new(".json");
     private readonly FileChunkStore _manifestStore = new(".page");
 
@@ -95,7 +96,8 @@ internal sealed class EtlHttpPageCache
         if (shardIds.Length == 0 || shardIds.Any(string.IsNullOrWhiteSpace) ||
             shardIds.Distinct(StringComparer.Ordinal).Count() != shardIds.Length || partitionOrdinal >= shardIds.Length)
             throw Refused("etl.http.page-admission-invalid");
-        if (http.Pagination is EtlNextLinkPagination && requestBuilder is null ||
+        // A continuous run's final page normalizes its unmoved cursor away, which needs the exact request URIs.
+        if ((http.Pagination is EtlNextLinkPagination || pipeline.Continuous is not null) && requestBuilder is null ||
             requestBuilder is not null && !requestBuilder.Matches(http, pipeline.Http, sourceBinding, shardIds))
             throw Refused("etl.http.page-admission-invalid");
 
@@ -122,6 +124,7 @@ internal sealed class EtlHttpPageCache
         _limits = pipeline.Limits;
         _policy = policy;
         _requestBuilder = requestBuilder;
+        _continuous = pipeline.Continuous is not null;
         // Do not retain the caller-owned shard list. It is part of the admission pin used by callers
         // that may share mutable collection implementations across physical attempts.
         _admission = admission with
@@ -306,6 +309,9 @@ internal sealed class EtlHttpPageCache
 
         try
         {
+            // Only a continuous run retains a caught-up page (as its final page); its unmoved cursor ends the shard.
+            if (_continuous && _requestBuilder.IsCaughtUp(request, decoded.Records.Count, decoded.Continuation))
+                return decoded with { Continuation = null };
             return decoded with { Continuation = _requestBuilder.NextContinuation(request, decoded.Continuation) };
         }
         catch (EtlHttpRequestBuilderException exception)

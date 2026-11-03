@@ -4,8 +4,8 @@ import axe from "axe-core";
 async function mockInputEvidence(page: Page, longText = "", outputEvidence: "none" | "uniform" | "mixed" = "none") {
   await page.route("**/capabilities", route => route.fulfill({ json: { capabilities: [{
     id: "elsa.api.runtime", contractVersion: "1", links: [
-      { rel: "activity-execution", href: "/evidence-inspection/{workflowExecutionId}/{activityExecutionId}" },
-      { rel: "activity-execution-value-payload", href: "/evidence-payload/{evidenceId}" }
+      { rel: "activity-execution", href: "evidence-inspection/{workflowExecutionId}/{activityExecutionId}", templated: true },
+      { rel: "activity-execution-value-payload", href: "evidence-payload/{evidenceId}", templated: true }
     ]
   }] } }));
   const snapshot = (inputKey: string, name: string, extra: Record<string, unknown>) => ({
