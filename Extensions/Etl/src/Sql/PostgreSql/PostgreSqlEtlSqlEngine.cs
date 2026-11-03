@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Elsa.Etl.Core.Runtime;
@@ -5,7 +6,7 @@ using Npgsql;
 
 namespace Elsa.Etl.Sql.PostgreSql;
 
-/// <summary>The PostgreSQL engine for keyed ETL SQL delivery (spec 1197), over Npgsql.</summary>
+/// <summary>The PostgreSQL engine for keyed ETL SQL delivery and snapshot reads (specs 1197 and 1198), over Npgsql.</summary>
 /// <remarks>Identifiers are quoted exactly as authored, so they are case-sensitive here.</remarks>
 internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
 {
@@ -15,6 +16,14 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
     public int MaxParameters => 30_000;
 
     public string? SessionSetup => null;
+
+    // REPEATABLE READ is snapshot isolation in PostgreSQL: every statement of the transaction sees one snapshot.
+    public IsolationLevel SnapshotIsolation => IsolationLevel.RepeatableRead;
+
+    public string? SnapshotSetup => "SET TRANSACTION READ ONLY";
+
+    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
+        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new NpgsqlConnection(connectionString);
 

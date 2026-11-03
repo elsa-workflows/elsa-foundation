@@ -74,6 +74,11 @@ internal static class EtlConnectorRecordCodec
                 Binding(bindings.Source, EtlConnectorKind.Jsonl, jsonl.Binding, isInput: true);
                 if (bindings.HttpShardIds.Count != 0) throw new ArgumentException("A JSON Lines source cannot have HTTP shards.");
                 break;
+            case EtlSqlSource sql:
+                // Its content is unknown until preparation reads it, so the pin carries no digest (spec 1198).
+                Binding(bindings.Source, EtlConnectorKind.Sql, sql.Binding, isInput: false);
+                if (bindings.HttpShardIds.Count != 0) throw new ArgumentException("A SQL source cannot have HTTP shards.");
+                break;
             case EtlHttpJsonSource http:
                 Binding(bindings.Source, EtlConnectorKind.Http, http.Binding, isInput: false);
                 if (bindings.HttpShardIds.Count == 0 || bindings.HttpShardIds.Count > limits.MaxPartitions ||
@@ -94,18 +99,20 @@ internal static class EtlConnectorRecordCodec
     {
         ArgumentNullException.ThrowIfNull(prepared);
         long retained = 0;
-        if (pipeline.Source is EtlCsvSource or EtlJsonlSource)
+        if (pipeline.Source is EtlCsvSource or EtlJsonlSource or EtlSqlSource)
         {
             var file = prepared.File ?? throw new ArgumentException("The file snapshot is missing.");
             EtlRuntimeRecordCodec.ValidateObject(file.Source, "source");
             EtlRuntimeRecordCodec.ValidateObject(file.Index, "index");
             // A CSV index entry 0 is its header; a JSON Lines entry 0 is a sentinel, so an empty file still has one entry.
-            var indexBoundBytes = pipeline.Source is EtlJsonlSource ? checked(file.Source.ByteLength + 1) : file.Source.ByteLength;
+            // A SQL snapshot is JSON Lines.
+            var indexBoundBytes = pipeline.Source is EtlCsvSource ? file.Source.ByteLength : checked(file.Source.ByteLength + 1);
             if (file.RecordCount < 0 || file.RecordCount == long.MaxValue ||
                 file.Source.ByteLength > pipeline.Limits.MaxSnapshotBytes ||
                 file.Index.ByteLength != checked((file.RecordCount + 1) * 24) ||
                 file.Index.ByteLength > checked(indexBoundBytes * 24) ||
-                file.Source.ContentHash != bindings.Source.Revision.ExpectedSha256)
+                // A SQL snapshot is anchored on its own recorded hash, which the batch builder verifies.
+                pipeline.Source is not EtlSqlSource && file.Source.ContentHash != bindings.Source.Revision.ExpectedSha256)
                 throw new ArgumentException("The file preparation does not match its pinned input and limits.");
             retained = checked(file.Source.ByteLength + file.Index.ByteLength);
         }
@@ -184,7 +191,7 @@ internal static class EtlConnectorRecordCodec
         }
     }
 
-    /// <remarks>File inputs are digest-pinned whatever their format; outputs and HTTP sources carry no digest.</remarks>
+    /// <remarks>File inputs are digest-pinned whatever their format; outputs, HTTP and SQL sources carry no digest.</remarks>
     private static void Binding(EtlConnectorBindingRevision? binding, EtlConnectorKind kind, string alias, bool isInput)
     {
         ArgumentNullException.ThrowIfNull(binding);

@@ -42,6 +42,8 @@ internal sealed class EtlConnectorExecution(
             var pipeline = reader.Read(view.Run.Invocation.Artifact);
             permit = await budget.AcquireAsync(Charge(pipeline), token);
             var prepared = await preparer.PrepareAsync(new(view.Run.Invocation, view.Bindings), token);
+            // A transiently unavailable source records nothing; the lapsed lease runs preparation again.
+            if (prepared.Transient) return;
             if (prepared.Diagnostic is { } diagnostic)
             {
                 await SettleAsync(lease, diagnostic, token);

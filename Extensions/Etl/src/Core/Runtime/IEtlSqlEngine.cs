@@ -1,10 +1,11 @@
+using System.Data;
 using System.Data.Common;
 
 namespace Elsa.Etl.Core.Runtime;
 
 /// <summary>
-/// The per-provider adapter that isolates one SQL driver from the ETL runtime (spec 1197). The runtime's writer owns the
-/// delivery protocol; an engine supplies only connections, dialect text and error classification.
+/// The per-provider adapter that isolates one SQL driver from the ETL runtime (specs 1197 and 1198). The runtime's writer and
+/// snapshot reader own the protocols; an engine supplies only connections, dialect text, isolation and error classification.
 /// </summary>
 /// <remarks>
 /// An adapter keyed by <see cref="Provider"/>, not a fan-in contributor: several engines may be registered, and each SQL
@@ -51,6 +52,15 @@ public interface IEtlSqlEngine
 
     /// <summary>The parameter name of a column's value in an upsert row.</summary>
     string Parameter(string column, int row);
+
+    /// <summary>The isolation level at which one transaction reads a whole table as of one point in time.</summary>
+    IsolationLevel SnapshotIsolation { get; }
+
+    /// <summary>A statement run first inside the snapshot transaction, such as making it read-only, or null.</summary>
+    string? SnapshotSetup { get; }
+
+    /// <summary>Selects the columns of every row of the table, ordered by the key columns ascending.</summary>
+    string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 
     /// <summary>Classifies an exception the driver raised.</summary>
     EtlSqlErrorKind Classify(Exception exception);

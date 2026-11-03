@@ -29,6 +29,11 @@ internal interface IFileChunkPublisher
         long maxBytes,
         Func<Stream, CancellationToken, ValueTask> write,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Describes the chunk already published under an identity, or returns null when there is none.</summary>
+    /// <remarks>Publication is atomic, so a found chunk is complete. Its bytes are re-hashed, never trusted from a sidecar.</remarks>
+    ValueTask<EtlChunk?> FindAsync(string outputRoot, string effectIdentity, long maxBytes,
+        CancellationToken cancellationToken = default) => ValueTask.FromResult<EtlChunk?>(null);
 }
 
 /// <summary>Selects a file publisher for one fixed ETL-owned chunk format.</summary>

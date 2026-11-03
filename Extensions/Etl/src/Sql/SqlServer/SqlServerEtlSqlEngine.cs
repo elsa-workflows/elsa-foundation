@@ -1,10 +1,11 @@
+using System.Data;
 using System.Data.Common;
 using Elsa.Etl.Core.Runtime;
 using Microsoft.Data.SqlClient;
 
 namespace Elsa.Etl.Sql.SqlServer;
 
-/// <summary>The SQL Server engine for keyed ETL SQL delivery (spec 1197), over Microsoft.Data.SqlClient.</summary>
+/// <summary>The SQL Server engine for keyed ETL SQL delivery and snapshot reads (specs 1197 and 1198), over Microsoft.Data.SqlClient.</summary>
 /// <remarks>
 /// Every connection runs under <c>SET XACT_ABORT ON</c>, so a failing statement aborts the whole transaction. The upsert is
 /// <c>MERGE … WITH (HOLDLOCK)</c>, which needs a unique index on the key to stay single-row; the writer checks for one.
@@ -22,6 +23,15 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
     public int MaxParameters => 2_000;
 
     public string? SessionSetup => "SET XACT_ABORT ON";
+
+    // SNAPSHOT reads one point in time without blocking writers. It needs ALLOW_SNAPSHOT_ISOLATION ON; without it SQL
+    // Server raises 3952, which is a rejection.
+    public IsolationLevel SnapshotIsolation => IsolationLevel.Snapshot;
+
+    public string? SnapshotSetup => null;
+
+    public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
+        $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 
     public DbConnection CreateConnection(string connectionString) => new SqlConnection(connectionString);
 

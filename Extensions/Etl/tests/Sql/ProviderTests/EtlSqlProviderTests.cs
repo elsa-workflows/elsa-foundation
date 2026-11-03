@@ -154,6 +154,10 @@ public abstract class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
         public string Upsert(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns, int row) => inner.Upsert(table, columns, keyColumns, row);
         public string Parameter(string column, int row) => inner.Parameter(column, row);
         public EtlSqlErrorKind Classify(Exception exception) => inner.Classify(exception);
+        public System.Data.IsolationLevel SnapshotIsolation => inner.SnapshotIsolation;
+        public string? SnapshotSetup => inner.SnapshotSetup;
+        public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
+            inner.SelectSnapshot(table, columns, keyColumns);
     }
 }
 
