@@ -159,12 +159,13 @@ a visible policy, never through where it came from.
   - A script activity whose result is unused may complete without returning a value; no result is written.
 - **Both policies are recorded on the workflow and pinned in the executable,** so they take part in its artifact hash
   ([ADR 0038](0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md)).
-  - Both policies are off by default for native workflows unless explicitly selected. A host or importer chooses the initial
-    settings; the workflow carries the result. A destination host must execute the pinned policies rather than
-    silently replace them with its own defaults.
+  - Both policies are off by default for native workflows unless explicitly selected. A host or importer chooses
+    the initial settings; the workflow carries the result. A destination host must execute the pinned policies
+    rather than silently replace them with its own defaults.
   - The Elsa 3 converter feature has one option that selects the policies Elsa 3 parity needs, and it records them on
     every workflow it converts. The option is on by default and enables both policies only for workflows the
-    converter produces. With the option off, both policies are off and the conversion report identifies the stricter rules.
+    converter produces. With the option off, both policies are off and the conversion report identifies the
+    stricter rules.
   - A converted workflow that is later edited, exported or run on a host without the converter keeps behaving the
     same.
   - This replaces the converted-definition marker considered for issues #3170 and #3172.

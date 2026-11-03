@@ -135,8 +135,9 @@ For each expression input the runtime MUST:
 1. validate the definition and capability profile;
 2. resolve every parameter binding from one structural/causal runtime view;
 3. type-check, policy-check, and snapshot parameter values;
-4. evaluate exactly once for the new logical invocation, using the expression value or the statement body's return
-   or Script completion value under [ADR 0083](../../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md);
+4. evaluate exactly once for the new logical invocation; for JavaScript, use the expression value or the statement
+   body's return or Script completion value under
+   [ADR 0083](../../../docs/adr/0083-javascript-binding-grammar-is-pinned-at-publish.md);
 5. apply the workflow's pinned undefined policy at the JavaScript-to-workflow boundary (ADR 0045 §2
    amendment, D-11), then coerce and validate the declared result type;
 6. validate result persistability/protection policy; and
