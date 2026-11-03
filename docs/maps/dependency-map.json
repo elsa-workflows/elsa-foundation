@@ -710,6 +710,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.Specialists",
+          "path": "Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/Elsa.Agent.Specialists.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Specialists.Review.Api",
           "path": "Extensions/Agent/src/Specialists/Review/Api/Elsa.Agent.Specialists.Review.Api.csproj"
         },
@@ -14441,6 +14451,11 @@
           "type": "internal",
           "id": "Acme.Widgets",
           "path": "Essentials/tests/Cli/Fixtures/Widgets/Acme.Widgets.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Specialists.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/Elsa.Agent.Specialists.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
