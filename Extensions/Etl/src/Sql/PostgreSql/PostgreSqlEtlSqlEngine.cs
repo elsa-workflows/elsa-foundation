@@ -61,10 +61,7 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
         PostgresException { SqlState: PostgresErrorCodes.DuplicateTable or PostgresErrorCodes.DuplicateObject } => EtlSqlErrorKind.AlreadyExists,
         PostgresException { SqlState: PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn } => EtlSqlErrorKind.MissingObject,
         PostgresException { SqlState: PostgresErrorCodes.InvalidColumnReference } => EtlSqlErrorKind.MissingConstraint,
-        PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected or
-            PostgresErrorCodes.AdminShutdown or PostgresErrorCodes.CrashShutdown or PostgresErrorCodes.CannotConnectNow or
-            PostgresErrorCodes.TooManyConnections } => EtlSqlErrorKind.Transient,
-        PostgresException postgres when postgres.SqlState.StartsWith("08", StringComparison.Ordinal) => EtlSqlErrorKind.Transient,
+        // Npgsql marks serialization failures, deadlocks, shutdowns, resource limits and connection errors transient.
         NpgsqlException { IsTransient: true } => EtlSqlErrorKind.Transient,
         TimeoutException => EtlSqlErrorKind.Transient,
         _ => EtlSqlErrorKind.Rejected
