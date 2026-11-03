@@ -3,7 +3,8 @@
 This driver owns the expected causes. Expected negative children remain failed;
 only the complete evidence set can establish the independent package witness.
 The complete set is evidence.witness_manifest(): the original 38 cases, the four
-current-authority cases, the #3440 inventory (13 cases on each actual adapter) and the
+current-authority cases, one workflow-authorization-unavailable case on each actual adapter
+(spec 1193), the #3440 inventory (13 cases on each actual adapter) and the
 #3441 restart inventory (ten restart cases on each actual adapter plus its in-memory control),
 all in one fresh run. The Studio host runs throughout; the backend host is restarted by the
 driver itself only inside the restart inventory. No total stage count is required.
@@ -26,6 +27,7 @@ from consumers import (configure_runtime, freeze_consumer_baseline, capture_cons
 from autonomy_journeys import qualify_witness_autonomy
 from restart_journeys import qualify_witness_restarts
 from disclosure_journeys import qualify_context_disclosure
+from authorization_journeys import SECTION as AUTHORIZATION_SECTION, qualify_workflow_authorization
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -653,9 +655,12 @@ def qualify_distributions(run):
         _restore(runtime, records, deltas)
         _positives(runtime, records, restored=True)
         qualify_context_disclosure(runtime)
+        # Spec 1193 T006: the owner-could-not-decide outcome on both adapters, through a test-only seam the
+        # driver selects for this inventory alone and deselects before anything later runs.
+        qualify_workflow_authorization(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification")})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)
