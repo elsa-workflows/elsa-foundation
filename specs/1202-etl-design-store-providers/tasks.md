@@ -1,0 +1,31 @@
+# Tasks: The ETL design store on all four EF engines
+
+**Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
+
+## Model and registration
+
+- [ ] T001 Provider contexts for SQL Server, PostgreSQL and MySQL with text types and `EfOrdinalCollation`; SQLite applies the comparers only; `[EfModule]` names all four.
+- [ ] T002 `Binding.Select` in `EtlDesignEntityFrameworkCoreRegistration`; the runtime keeps its guard.
+- [ ] T003 The SQLite model snapshot is unchanged (pending-changes check passes).
+
+## Store behaviour
+
+- [ ] T004 Drop `EF.Functions.Collate(..., "BINARY")` from `EfEtlDefinitionCatalog`.
+- [ ] T005 Run `PublishAsync` as a whole unit through `EfWriteRetry` (`Transient`); clear the tracker per attempt; exhaustion rethrows.
+
+## Tooling and migrations
+
+- [ ] T006 `Elsa.Etl.Tooling` with internal factories; `InternalsVisibleTo` for it and the provider suite; slnx and architecture-test build reference.
+- [ ] T007 `tools/etl/generate-etl-design-migrations.sh`; generate internal `Initial` for the three new contexts.
+- [ ] T008 Exclude `Extensions/Etl` and `Extensions/Rules` from the shared generator's deletion loop.
+
+## Contract tests
+
+- [ ] T009 Design-store tests become abstract contract classes; SQLite subclasses in `Elsa.Etl.Tests`; SQLite-only cases stay SQLite-only.
+- [ ] T010 Add the case-only catalog case and the concurrent publish and update races to the contract.
+- [ ] T011 `Elsa.Etl.Persistence.ProviderTests` with PostgreSQL, SQL Server and MySQL fixtures; migrate–validate–no-pending-changes and collation checks; register in `test-tiers.json`, slnx and lock files.
+
+## Evidence and docs
+
+- [ ] T012 Bite-prove provider selection, the collation, the publish retry and its whole-unit scope; list what is not bite-proven.
+- [ ] T013 ETL README, persistence README, manifest description, evidence README.
