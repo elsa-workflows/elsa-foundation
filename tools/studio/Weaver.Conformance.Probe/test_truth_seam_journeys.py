@@ -7,25 +7,37 @@ import unittest
 
 from artifacts import sha
 from journey_runtime import BASE_GRANTS
-from truth_seam_journeys import (ACTORS, EXPECTED_CASES, LAYOUT_TOOL, MANAGER, READ_TOOL, READER, SECTION, TENANT_MANAGER,
-                                 TENANT_ONLY_VERSION, require_catalog, require_permissions, require_truth_turn,
-                                 require_workflow_truth_seams, synthetic_actors, truth_principals, truth_seam_manifest_gaps)
+from truth_seam_journeys import (ACTORS, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
+                                 SECTION, TENANT_MANAGER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
+                                 require_permissions, require_truth_turn, require_workflow_truth_seams, synthetic_actors,
+                                 synthetic_registrations, truth_principals, truth_seam_manifest_gaps)
 
 TARGET = {"moduleId": "Elsa.Studio.Workflows", "resourceType": "workflow-definition", "resourceId": "wf-1", "revision": "unsaved-1"}
 COMMAND = "command-1"
 
 
+def entry(version_id, available=True, version="1.0.0", inputs=()):
+    return {"activityVersionId": version_id, "available": available, "version": version,
+            "availabilityReason": None if available else "Excluded by the effective activity availability policy.",
+            "inputs": [{"referenceKey": name, "name": name, "type": "String", "isRequired": False, "isSensitive": credential,
+                        "isCredential": credential} for name, credential in inputs]}
+
+
 def owner_entries(tenant_only=True):
-    rows = [{"activityVersionId": "flowchart-v1", "available": True, "version": "1.0.0"},
-            {"activityVersionId": "write-line-v1", "available": True, "version": "1.0.0"},
-            {"activityVersionId": "excluded-v2", "available": False, "version": "2.0.0"}]
-    return ([{"activityVersionId": TENANT_ONLY_VERSION, "available": True, "version": "1.0.0"}] if tenant_only else []) + rows
+    rows = [entry("flowchart-v1"), entry("write-line-v1", inputs=(("text", False), ("apiKey", True))), entry("excluded-v2", False, "2.0.0")]
+    return ([entry(TENANT_ONLY_VERSION)] if tenant_only else []) + rows
 
 
 def catalog_content(entries, included=None):
     included = len(entries) if included is None else included
-    return {"status": "available", "reason": None, "totalCount": len(entries), "includedCount": included,
-            "truncated": included < len(entries), "entries": copy.deepcopy(entries[:included])}
+    truncated = included < len(entries)
+    return {"status": "available", "reason": None, "totalCount": len(entries), "includedCount": included, "truncated": truncated,
+            "budgetBytes": 1000, "includedBytes": 900 if truncated else 400, "nextEntryBytes": 200 if truncated else None,
+            "entries": copy.deepcopy(entries[:included])}
+
+
+DENIED = {"status": "denied", "reason": "The actor may not read the activity authoring catalog.", "totalCount": 0, "includedCount": 0,
+          "truncated": False, "budgetBytes": 1000, "includedBytes": 0, "nextEntryBytes": None, "entries": []}
 
 
 def permissions_content(manage):
@@ -99,12 +111,13 @@ class TurnTests(unittest.TestCase):
 
 class CatalogTests(unittest.TestCase):
     def test_the_catalog_is_the_designers_answer_or_its_marked_prefix_with_the_tenant_activity_in_its_own_tenant(self):
-        self.assertEqual({"totalCount": 4, "includedCount": 4, "truncated": False, "tenantOnly": True},
-                         require_catalog(catalog_content(owner_entries()), owner_entries(), tenant_only=True))
-        self.assertEqual({"totalCount": 4, "includedCount": 2, "truncated": True, "tenantOnly": True},
-                         require_catalog(catalog_content(owner_entries(), 2), owner_entries(), tenant_only=True))
+        self.assertEqual({"status": "available", "totalCount": 4, "includedCount": 4, "truncated": False, "tenantOnly": True},
+                         require_catalog(catalog_content(owner_entries()), 200, owner_entries(), tenant_only=True))
+        self.assertEqual({"status": "available", "totalCount": 4, "includedCount": 2, "truncated": True, "tenantOnly": True},
+                         require_catalog(catalog_content(owner_entries(), 2), 200, owner_entries(), tenant_only=True))
         other = owner_entries(tenant_only=False)
-        self.assertFalse(require_catalog(catalog_content(other), other, tenant_only=False)["tenantOnly"])
+        self.assertFalse(require_catalog(catalog_content(other), 200, other, tenant_only=False)["tenantOnly"])
+        self.assertEqual("denied", require_catalog(DENIED, 403, None, tenant_only=None)["status"])
 
     def test_a_narrowed_reordered_invented_unmarked_or_cross_tenant_catalog_never_qualifies(self):
         owner = owner_entries()
@@ -122,11 +135,22 @@ class CatalogTests(unittest.TestCase):
             "wrong-total": (content(lambda v: v.update(totalCount=3)), owner, True),
             "tenant-activity-missing": (catalog_content(owner_entries(False)), owner_entries(False), True),
             "tenant-activity-leaked": (catalog_content(owner), owner, False),
+            "credential-dropped": (content(lambda v: v["entries"][2]["inputs"][1].update(isCredential=False)), owner, True),
+            "input-missing": (content(lambda v: v["entries"][2]["inputs"].pop()), owner, True),
+            "reason-changed": (content(lambda v: v["entries"][3].update(availabilityReason=None)), owner, True),
+            "prefix-not-maximal": (catalog_content(owner, 2) | {"includedBytes": 500}, owner, True),
+            "over-budget": (catalog_content(owner) | {"includedBytes": 1001}, owner, True),
+            "no-budget": ({k: v for k, v in catalog_content(owner).items() if k != "budgetBytes"}, owner, True),
+            "untruncated-left-out": (catalog_content(owner) | {"nextEntryBytes": 10}, owner, True),
         }
         for name, (value, entries, tenant_only) in cases.items():
             with self.subTest(change=name):
-                with self.assertRaises(RuntimeError): require_catalog(value, entries, tenant_only=tenant_only)
-        with self.assertRaises(RuntimeError): require_catalog(catalog_content(owner), [], tenant_only=True)
+                with self.assertRaises(RuntimeError): require_catalog(value, 200, entries, tenant_only=tenant_only)
+        with self.assertRaises(RuntimeError): require_catalog(catalog_content(owner), 200, [], tenant_only=True)
+        with self.assertRaises(RuntimeError): require_catalog(catalog_content(owner), 403, owner, tenant_only=True)
+        for status, value in ((200, DENIED), (403, catalog_content(owner)), (403, DENIED | {"entries": [entry("x")], "totalCount": 1})):
+            with self.subTest(denied=status):
+                with self.assertRaises(RuntimeError): require_catalog(value, status, None, tenant_only=None)
 
 
 class PermissionTests(unittest.TestCase):
@@ -158,13 +182,98 @@ class PrincipalTests(unittest.TestCase):
     def test_the_three_actors_extend_the_original_five_with_their_own_grants_and_tenants(self):
         original = [{"tenant": "default"}, {"tenant": "default"}, {"tenant": "other"}, {"tenant": "default"}, {"tenant": "default"}]
         made = truth_principals(original, lambda prefix, tenant, grants: {"prefix": prefix, "tenant": tenant, "grants": grants})
-        self.assertEqual([("witness-reader", "default"), ("witness-manager", "default"), ("witness-tenant-manager", "other")],
-                         [(item["prefix"], item["tenant"]) for item in made])
-        self.assertEqual((5, 6, 7), (READER, MANAGER, TENANT_MANAGER))
+        self.assertEqual([("witness-reader", "default"), ("witness-manager", "default"), ("witness-tenant-manager", "other"),
+                          ("witness-catalog-denied", "default")], [(item["prefix"], item["tenant"]) for item in made])
+        self.assertEqual((5, 6, 7, 8), (READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED))
         self.assertTrue(set(BASE_GRANTS) <= set(made[0]["grants"]) and "workflows/design:manage" not in made[0]["grants"])
-        self.assertTrue(all({"workflows/design:manage", "activities/design:read"} <= set(item["grants"]) for item in made[1:]))
+        self.assertTrue(all({"workflows/design:manage", "activities/design:read"} <= set(item["grants"]) for item in made[1:3]))
+        self.assertEqual(["workflows/design:read"], [key for key in made[3]["grants"] if key not in BASE_GRANTS])
         with self.assertRaises(RuntimeError): truth_principals(original[:4], lambda *args: {})
         with self.assertRaises(RuntimeError): truth_principals([{"tenant": "default"}] * 5, lambda *args: {})
+
+
+class BrowserTests(unittest.TestCase):
+    READ, LAYOUT = "command-read", "command-layout"
+
+    def observed(self, provider="copilot"):
+        return {"journey": BROWSER_JOURNEY, "provider": provider, "status": "passed", "pageErrors": [],
+                "observations": copy.deepcopy(BROWSER_OBSERVATIONS), "ownerBefore": {"path": "/owned/before.json", "sha256": "a" * 64},
+                "ownerAfter": {"path": "/owned/after.json", "sha256": "b" * 64}, "evidence": [{"path": "/owned/x.json", "sha256": "c" * 64}]}
+
+    def commands(self):
+        return [{"commandId": self.READ, "toolName": READ_TOOL, "arguments": {}},
+                {"commandId": self.LAYOUT, "toolName": LAYOUT_TOOL, "arguments": {"activityId": "a", "x": 480, "y": 320}}]
+
+    def rows(self, provider="copilot", offered=(READ_TOOL,)):
+        tools = [{"name": name} for name in offered] + [{"name": "acme_other"}]
+        return [{"kind": provider + ".request", "data": {"commandId": self.READ, "tools": tools}},
+                {"kind": provider + ".call", "data": {"commandId": self.READ, "toolName": READ_TOOL}},
+                {"kind": provider + ".request", "data": {"commandId": self.LAYOUT, "tools": tools}}]
+
+    def test_the_reader_explains_and_is_never_offered_the_layout_change_on_either_adapter(self):
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                value = require_read_only_browser(self.observed(provider), self.commands(), self.rows(provider), provider=provider)
+                self.assertEqual({READ_TOOL: self.READ, LAYOUT_TOOL: self.LAYOUT}, value["commands"])
+                self.assertEqual({READ_TOOL: [READ_TOOL], LAYOUT_TOOL: [READ_TOOL]}, value["advertised"])
+                self.assertFalse(value["observations"]["layoutOffered"])
+
+    def test_an_offered_called_unretained_or_otherwise_observed_layout_never_qualifies(self):
+        def observation(change):
+            value = self.observed(); change(value); return value
+        observed_changes = {
+            "failed": lambda v: v.update(status="failed"), "failure": lambda v: v.update(failure={"type": "Error"}),
+            "page-error": lambda v: v.update(pageErrors=["boom"]), "other-journey": lambda v: v.update(journey="workflow"),
+            "other-adapter": lambda v: v.update(provider="anthropic"), "no-owner": lambda v: v.pop("ownerAfter"),
+            "no-evidence": lambda v: v.update(evidence=[]),
+            "proposal": lambda v: v["observations"].update(proposalCount=1), "moved": lambda v: v["observations"].update(nodeMoved=True),
+            "draft-changed": lambda v: v["observations"].update(draftUnchanged=False), "write": lambda v: v["observations"].update(owningWrites=1),
+            "offered": lambda v: v["observations"].update(layoutOffered=True),
+            "manage-reported": lambda v: v["observations"]["permissionsDisclosed"].update(manage="allowed"),
+            "no-explain": lambda v: v["observations"].update(explainCompleted=False),
+        }
+        for name, change in observed_changes.items():
+            with self.subTest(observed=name):
+                with self.assertRaises(RuntimeError): require_read_only_browser(observation(change), self.commands(), self.rows(), provider="copilot")
+        layout_called = self.rows() + [{"kind": "copilot.call", "data": {"commandId": self.LAYOUT, "toolName": LAYOUT_TOOL}}]
+        traces = {
+            "layout-offered": self.rows(offered=(READ_TOOL, LAYOUT_TOOL)),
+            "layout-called": layout_called,
+            "read-not-called": [row for row in self.rows() if row["kind"] != "copilot.call"],
+            "layout-not-requested": self.rows()[:2],
+            "foreign-command": [{**row, "data": {**row["data"], "commandId": "other"}} for row in self.rows()],
+        }
+        for name, rows in traces.items():
+            with self.subTest(trace=name):
+                with self.assertRaises(RuntimeError): require_read_only_browser(self.observed(), self.commands(), rows, provider="copilot")
+        for name, commands in (("one-command", self.commands()[:1]), ("duplicate", self.commands() + self.commands()[:1]),
+                               ("foreign-tool", self.commands() + [{"commandId": "x", "toolName": "acme_other"}])):
+            with self.subTest(commands=name):
+                with self.assertRaises(RuntimeError): require_read_only_browser(self.observed(), commands, self.rows(), provider="copilot")
+
+
+class PlaceholderTests(unittest.TestCase):
+    def generation(self, **changes):
+        value = {"generation": "g-1", "workflowAgent": {"assembly": "Elsa.Agent.Workflows", "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"],
+                 "types": ["DefaultWorkflowAgentContextProvider", "FoundationWorkflowsAgentFeature", "WorkflowActivityCatalog", "WorkflowAgentGraph"]}}
+        value["workflowAgent"].update(changes)
+        return value
+
+    def test_the_packaged_consumer_ships_and_composes_no_placeholder(self):
+        self.assertEqual([], require_no_placeholders(self.generation())["placeholders"])
+
+    def test_a_shipped_placeholder_a_foreign_report_or_another_catalog_never_qualifies(self):
+        for name in sorted(LEGACY_PLACEHOLDERS):
+            with self.subTest(placeholder=name):
+                with self.assertRaises(RuntimeError):
+                    require_no_placeholders(self.generation(types=["DefaultWorkflowAgentContextProvider", "WorkflowActivityCatalog", name]))
+        for name, value in (("absent", {"generation": "g-1"}), ("empty", self.generation(types=[])),
+                            ("foreign", self.generation(types=["SomethingElse"])),
+                            ("no-catalog", self.generation(activityAuthoringCatalogs=[])),
+                            ("two-catalogs", self.generation(activityAuthoringCatalogs=["HttpActivityAuthoringCatalog", "Other"])),
+                            ("unresolvable", self.generation(activityAuthoringCatalogs=["unresolvable:InvalidOperationException"]))):
+            with self.subTest(change=name):
+                with self.assertRaises(RuntimeError): require_no_placeholders(value)
 
 
 class GateTests(unittest.TestCase):
@@ -173,11 +282,12 @@ class GateTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 
-    def section(self, actors=None):
+    def section(self, actors=None, browser=None):
         records = []
         for name in sorted(EXPECTED_CASES):
             path = self.root / (name + ".json")
-            path.write_text(json.dumps({"id": name, "status": "passed", "adapter": name.split("-", 1)[0], "actors": actors or synthetic_actors()}))
+            path.write_text(json.dumps({"id": name, "status": "passed", "adapter": name.split("-", 1)[0], "actors": actors or synthetic_actors(),
+                                        "registrations": synthetic_registrations(), "browser": synthetic_browser() if browser is None else browser}))
             records.append({"id": name, "status": "passed", "record": {"path": str(path), "sha256": sha(path)}})
         return {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False, "source": "a" * 40,
                 "caseIDs": sorted(EXPECTED_CASES), "records": records, "stages": []}
@@ -198,9 +308,13 @@ class GateTests(unittest.TestCase):
                 self.assertTrue(truth_seam_manifest_gaps(section, "a" * 40))
                 with self.assertRaises(RuntimeError): require_workflow_truth_seams(section, self.root, source="a" * 40)
         changed = self.section(); changed["records"][0]["record"]["sha256"] = "0" * 64
+        offered = synthetic_browser(); offered["observations"]["layoutOffered"] = True
+        with self.assertRaises(RuntimeError): require_workflow_truth_seams(self.section(browser=offered), self.root, source="a" * 40)
+        with self.assertRaises(RuntimeError): require_workflow_truth_seams(self.section(browser={}), self.root, source="a" * 40)
         with self.assertRaises(RuntimeError): require_workflow_truth_seams(changed, self.root, source="a" * 40)
-        for role, value in (("reader", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True}}),
-                            ("tenant-manager", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True}})):
+        for role, value in (("reader", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}),
+                            ("tenant-manager", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}),
+                            ("catalog-denied", {"permissions": {"manage": "denied"}, "catalog": {"tenantOnly": None, "status": "available"}})):
             with self.subTest(actor=role):
                 with self.assertRaises(RuntimeError):
                     require_workflow_truth_seams(self.section({**synthetic_actors(), role: value}), self.root, source="a" * 40)

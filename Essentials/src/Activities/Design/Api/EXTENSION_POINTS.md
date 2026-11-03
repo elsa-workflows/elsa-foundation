@@ -30,23 +30,45 @@ These are single-owner seams. Replace them through DI; do not register competing
 |---|---|---|
 | `IActivityAuthoringCatalog` | `HttpActivityAuthoringCatalog` (`internal sealed`) | The actor-gated authoring catalog for consumers that may couple only to `.Core` contracts, such as Weaver's workflow context (spec 1193, FR-003). |
 
+- **Signature:** [`IActivityAuthoringCatalog`](../Core/Contracts/IActivityAuthoringCatalog.cs):
+  `CanReadAsync(): ValueTask<bool>` and `ListAsync(): ValueTask<ActivityAuthoringCatalogResult>`, with the
+  [Core models](../Core/Models/ActivityAuthoringCatalogEntry.cs) `ActivityAuthoringCatalogResult`,
+  `ActivityAuthoringCatalogEntry` and `ActivityAuthoringCatalogInput`, and `ActivityAuthoringCatalogUnavailableException`.
+- **When to override:** a host whose activity authority is not the request principal's `activities/design:read` grant, or
+  whose designer catalog is not `IActivityAuthoringCatalogReader`, replaces it so `.Core` consumers see the same catalog
+  and gate the designer applies. Replacing only the catalog reader is usually enough, because the default reads through it.
+
 `ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
 gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
-`IPermissionAuthorizationService`. A missing request, an unnormalized principal or a refused permission is a denied result
-with no entries, and no catalog read. An allowed read is the designer's own `IActivityAuthoringCatalogReader` read with
-`Availability = All`, projected into Core models: every entry, addable or not, with `Available`, `AvailabilityReason`,
-activity type and exact version identity, display data and declared inputs with `IsRequired`, `IsSensitive` and
-`IsCredential`. No default value or authored binding is carried. The catalog is not narrowed per actor, because the
-designer offers no per-actor narrowing; tenant scoping is the stores'. `CanReadAsync` is the gate alone and reads no entries.
+`IPermissionAuthorizationService` with the request (`HttpContext`) as the resource, the resource the catalog route's
+policy handler sees, so a host `IPermissionResourceHandler` decides both identically. A missing request, an unnormalized
+principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
+designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
+addable or not, with `Available`, `AvailabilityReason`, activity type and exact version identity, display data and
+declared inputs with `IsRequired`, `IsSensitive` and `IsCredential`. No default value or authored binding is carried. The
+catalog is not narrowed per actor, because the designer offers no per-actor narrowing; tenant scoping is the stores'.
+`CanReadAsync` is the gate alone and reads no entries.
 
-Infrastructure failures become `ActivityAuthoringCatalogUnavailableException` (Core), with a fixed message, the stable code
-`activities.catalog.unavailable` and the original cause as `InnerException`; cancellation propagates.
+Infrastructure failures, including a cancellation the caller did not request, become
+`ActivityAuthoringCatalogUnavailableException` (Core), with a fixed message, the stable code
+`activities.catalog.unavailable` and the original cause as `InnerException`. Only the caller's own cancellation propagates.
 
-It is a replacement contract with one implementation per shell. The feature registers the default with `TryAdd`, so a host
-registration made first is kept. `ActivityAuthoringCatalogStartupTask` fails startup when the configuring collection holds
-more than one registration; it owns only that collection, so a copied child shell checks its own registrations, and
-repeated configuration keeps one validator. Consumers must still fail closed on zero or several implementations. Adding
-the contract is **Minor**, additive.
+It is a replacement contract with one implementation per shell, declared in the contract's documentation, as
+`IWorkflowDefinitionAuthorizer` is. `EnsureReplacementContract` is not used because its marker attribute lives in
+Foundation Identity Core, which this `.Core` does not reference. Duplicates are detected in two places:
+
+- `ActivitiesDesignApiFeature.ConfigureServices` throws when the collection already holds more than one registration,
+  so this holds with or without the Tasks feature;
+- `ActivityAuthoringCatalogStartupTask` fails startup when a registration added after the feature makes a second one. It
+  runs only where the Tasks feature is composed (the feature does not depend on Tasks, because several composed hosts
+  omit it). It owns only the configuring collection, so a copied child shell checks its own registrations, and repeated
+  configuration keeps one validator. `IWorkflowDefinitionAuthorizer`'s startup validator has the same Tasks condition.
+
+Consumers that resolve `IEnumerable<IActivityAuthoringCatalog>` must fail closed on zero or several implementations, as
+the Agent workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
+is the accepted exception that `IWorkflowDefinitionAuthorizer` also uses, so a duplicate added after the Tasks-less
+configuration still cannot select an implementation; the Agent-wide gap for existing contracts is #3633. Adding the
+contract is **Minor**, additive.
 
 ## Provider contributors
 

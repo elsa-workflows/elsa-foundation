@@ -93,13 +93,46 @@ public sealed class ActivityAuthoringCatalogContractTests
     }
 
     [Fact]
-    public async Task Cancellation_propagates_instead_of_becoming_unavailable()
+    public async Task The_callers_cancellation_propagates_instead_of_becoming_unavailable()
     {
-        using var provider = Build(new FixtureReader { Failure = new OperationCanceledException() });
+        using var cancellation = new CancellationTokenSource();
+        var reader = new FixtureReader { Before = cancellation.Cancel };
+        using var provider = Build(reader);
         using var scope = Scope(provider, Principal("tenant-a", ActivityDesignPermissions.Read));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            scope.ServiceProvider.GetRequiredService<IActivityAuthoringCatalog>().ListAsync(cancellation.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task An_owner_cancellation_the_caller_did_not_ask_for_is_unavailable()
+    {
+        var cause = new OperationCanceledException("owner store timed out");
+        using var provider = Build(new FixtureReader { Failure = cause });
+        using var scope = Scope(provider, Principal("tenant-a", ActivityDesignPermissions.Read));
+
+        var error = await Assert.ThrowsAsync<ActivityAuthoringCatalogUnavailableException>(() =>
             scope.ServiceProvider.GetRequiredService<IActivityAuthoringCatalog>().ListAsync().AsTask());
+        Assert.Same(cause, error.InnerException);
+    }
+
+    [Fact]
+    public async Task The_gate_asks_for_the_principals_tenant_with_the_request_as_its_resource_like_the_designer_route()
+    {
+        var handler = new RecordingResourceHandler();
+        using var provider = Build(new FixtureReader(), handler);
+        using var scope = Scope(provider, Principal("tenant-a", ActivityDesignPermissions.Read));
+        var catalog = scope.ServiceProvider.GetRequiredService<IActivityAuthoringCatalog>();
+
+        Assert.True(await catalog.CanReadAsync());
+        var asked = Assert.Single(handler.Contexts);
+        Assert.Equal("tenant-a", asked.TenantId);
+        Assert.Same(provider.GetRequiredService<IHttpContextAccessor>().HttpContext, asked.Resource);
+
+        // A host resource handler that refuses the request refuses this read exactly as it refuses the route.
+        handler.Deny = true;
+        Assert.False(await catalog.CanReadAsync());
+        Assert.False((await catalog.ListAsync()).Allowed);
     }
 
     [Fact]
@@ -129,6 +162,36 @@ public sealed class ActivityAuthoringCatalogContractTests
     }
 
     [Fact]
+    public void A_second_registration_made_before_the_feature_fails_its_configuration_without_the_tasks_feature()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityAuthoringCatalog, ReplacementCatalog>();
+        services.AddScoped<IActivityAuthoringCatalog, ReplacementCatalog>();
+
+        var error = Assert.Throws<InvalidOperationException>(() => new ActivitiesDesignApiFeature().ConfigureServices(services));
+
+        Assert.Contains(nameof(IActivityAuthoringCatalog), error.Message);
+    }
+
+    [Fact]
+    public async Task A_copied_child_shell_rebinds_the_validator_to_its_own_registrations()
+    {
+        var parent = Services(new FixtureReader());
+        IServiceCollection child = new ServiceCollection();
+        foreach (var item in parent) child.Add(item);
+        new ActivitiesDesignApiFeature().ConfigureServices(child);
+        child.AddScoped<IActivityAuthoringCatalog, ReplacementCatalog>();
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await Assert.Single(parentProvider.GetServices<IStartupTask>(), IsValidator).ExecuteAsync(CancellationToken.None);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            Assert.Single(childProvider.GetServices<IStartupTask>(), IsValidator).ExecuteAsync(CancellationToken.None));
+        Assert.Contains(nameof(IActivityAuthoringCatalog), error.Message);
+        Assert.Single(parent, item => item.ServiceType == typeof(IActivityAuthoringCatalog));
+    }
+
+    [Fact]
     public async Task A_host_replacement_registered_first_is_the_one_catalog()
     {
         var services = Services(new FixtureReader(), host => host.AddScoped<IActivityAuthoringCatalog, ReplacementCatalog>());
@@ -141,7 +204,8 @@ public sealed class ActivityAuthoringCatalogContractTests
 
     private static bool IsValidator(IStartupTask task) => task.GetType().Name == "ActivityAuthoringCatalogStartupTask";
 
-    private static ServiceProvider Build(FixtureReader reader) => Services(reader).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    private static ServiceProvider Build(FixtureReader reader, IPermissionResourceHandler? handler = null)
+        => Services(reader, handler is null ? null : host => host.AddSingleton(handler)).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
     private static ServiceCollection Services(FixtureReader reader, Action<IServiceCollection>? host = null)
     {
@@ -177,10 +241,13 @@ public sealed class ActivityAuthoringCatalogContractTests
     {
         public List<ListActivityAuthoringCatalog> Requests { get; } = [];
         public Exception? Failure { get; init; }
+        public Action? Before { get; init; }
 
         public Task<ActivityAuthoringCatalogView> ListAsync(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
+            Before?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
             if (Failure is not null) throw Failure;
             return Task.FromResult(new ActivityAuthoringCatalogView([
                 Entry("version-available", "Acme.Available", "1.0.0", true, null,
@@ -203,6 +270,19 @@ public sealed class ActivityAuthoringCatalogContractTests
         public ValueTask<bool> CanReadAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
         public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(ActivityAuthoringCatalogResult.Denied);
+    }
+
+    private sealed class RecordingResourceHandler : IPermissionResourceHandler
+    {
+        public List<PermissionEvaluationContext> Contexts { get; } = [];
+        public bool Deny { get; set; }
+
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.Permission != ActivityDesignPermissions.Read) return ValueTask.FromResult<PermissionEvaluationResult?>(null);
+            Contexts.Add(context);
+            return ValueTask.FromResult<PermissionEvaluationResult?>(Deny ? PermissionEvaluationResult.Denied() : null);
+        }
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher

@@ -5,6 +5,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Workflows.Tools;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Workflows.Services;
 
@@ -27,10 +28,13 @@ internal sealed class WorkflowAgentCapabilityProvider : IAgentCapabilityProvider
 internal sealed class DefaultWorkflowAgentContextProvider(
     IAgentSessionService sessions,
     IAgentToolAuthorizer authorizer,
+    IAgentPolicyEvaluator policies,
     IEnumerable<IWorkflowDefinitionAuthorizer>? resourceAuthorizers = null,
-    IEnumerable<IActivityAuthoringCatalog>? catalogs = null) : IAgentContextProvider
+    IEnumerable<IActivityAuthoringCatalog>? catalogs = null,
+    ILogger<DefaultWorkflowAgentContextProvider>? logger = null) : IAgentContextProvider
 {
     internal const string PermissionsContentType = "workflow.permissions";
+    internal const string WithheldDiagnostic = "agent.workflow.server_read_withheld";
     private static readonly AgentToolDescriptor ReadDescriptor = new WorkflowReadGraphTool().Descriptor;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public AgentContextProviderDescriptor Descriptor { get; } = new(
@@ -99,8 +103,10 @@ internal sealed class DefaultWorkflowAgentContextProvider(
         if (request.CallerAttachments.Count == 0 && await RefuseDisclosureAsync(session, null, cancellationToken) is { } withheld)
             diagnostics.Add(withheld);
         // The server's own reads accompany admitted workflow context only: the catalog once, permissions per exact target.
-        if (workflowContext) attachments.Add(await CatalogAsync(diagnostics, cancellationToken));
-        foreach (var (target, sensitivity) in targets) attachments.Add(await PermissionsAsync(session, target, sensitivity, cancellationToken));
+        // A host policy that does not admit their kinds simply gets no server read, as before they existed.
+        if (workflowContext && await CatalogAsync(session, diagnostics, cancellationToken) is { } catalog) attachments.Add(catalog);
+        foreach (var (target, sensitivity) in targets)
+            if (await PermissionsAsync(session, target, sensitivity, diagnostics, cancellationToken) is { } permissions) attachments.Add(permissions);
         attachments.Add(InstalledGuidance());
         return new(attachments, diagnostics);
     }
@@ -109,19 +115,27 @@ internal sealed class DefaultWorkflowAgentContextProvider(
     {
         var session = await FindSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return SessionDenied();
-        var retained = new List<AgentContextAttachment>();
+        // Each retained item keeps its position: an unchanged answer is then the identical projection (one disclosure
+        // snapshot, never a reordered second one). Server reads and guidance are slots that are filled again below.
+        var slots = new List<AgentContextAttachment>();
         var targets = new List<AgentResourceTarget?>();
         var catalog = new List<AgentContextAttachment>();
         var permissions = new List<AgentContextAttachment>();
+        var guidance = false;
         foreach (var item in request.Context)
         {
             if (item.ModuleId != Descriptor.ModuleId || item.SchemaVersion != "1"
                 || !Descriptor.ContextKinds.Contains(item.ContentType, StringComparer.Ordinal)) return ContextDenied();
-            if (item.ContentType == "workflow.guidance" && item.Origin == AgentContextOrigin.InstalledGuidance) continue;
+            if (item.ContentType == "workflow.guidance" && item.Origin == AgentContextOrigin.InstalledGuidance)
+            {
+                if (!guidance) slots.Add(item);
+                guidance = true;
+                continue;
+            }
             if (item.Sensitivity == AgentContextSensitivity.SecretRedacted)
             {
                 targets.Add(null);
-                retained.Add(item);
+                slots.Add(item);
                 continue;
             }
             // Server reads are retained only as this module produced them, never as caller material.
@@ -129,6 +143,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             {
                 if (item.Origin != AgentContextOrigin.AuthoritativeRead || item.Target is not null) return ContextDenied();
                 catalog.Add(item);
+                slots.Add(item);
                 continue;
             }
             if (item.ContentType == PermissionsContentType)
@@ -138,6 +153,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
                     return ContextDenied();
                 targets.Add(item.Target);
                 permissions.Add(item);
+                slots.Add(item);
                 continue;
             }
             if (item.ContentType == "workflow.definition" && WorkflowAgentSnapshot.TryRead(item, out var snapshot, out _))
@@ -145,7 +161,7 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             else if (item.ContentType == "workflow.request" && TryAdmitRequest(item, out _))
                 targets.Add(null);
             else return ContextDenied();
-            retained.Add(item);
+            slots.Add(item);
         }
         foreach (var result in request.Results)
         {
@@ -167,39 +183,74 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             return new([InstalledGuidance()], [new(Descriptor.Id, "agent.workflow.context.receipt_only",
                 "The prior working-state snapshot is withheld; the accepted outcome is historical evidence, not a fresh editor read.", false)]);
         var diagnostics = new List<AgentContributionDiagnostic>();
+        var replacements = new Dictionary<AgentContextAttachment, AgentContextAttachment?>(ReferenceEqualityComparer.Instance);
         if (request.IsHistorical)
         {
             // A disclosed catalog stays disclosable only while the actor may still read the catalog. The historical
             // projection is what was disclosed then; it is never presented as a fresh read.
             if (catalog.Any(WorkflowActivityCatalog.DisclosedEntries) && await RefuseCatalogAsync(cancellationToken) is { } catalogRefusal)
                 return new([], [catalogRefusal]);
-            retained.AddRange(catalog);
-            retained.AddRange(permissions);
         }
         else
         {
-            // The current turn never trusts a retained server read: each one is read again now, so a changed catalog or
-            // permission set is a new projection (and a new disclosure snapshot), and an unchanged one is identical.
-            if (catalog.Count > 0) retained.Add(await CatalogAsync(diagnostics, cancellationToken));
-            foreach (var item in permissions.DistinctBy(item => item.Target))
-                retained.Add(await PermissionsAsync(session, item.Target!, item.Sensitivity, cancellationToken));
+            // The current turn never trusts a retained server read: each one is read again now, in its own position, so a
+            // changed catalog or permission set is a new projection (and a new disclosure snapshot) and an unchanged one
+            // is identical. A kind the host policy no longer admits is left out rather than failing the turn.
+            var fresh = catalog.Count > 0 ? await CatalogAsync(session, diagnostics, cancellationToken) : null;
+            foreach (var item in catalog) replacements[item] = ReferenceEquals(item, catalog[0]) ? fresh : null;
+            foreach (var group in permissions.GroupBy(item => item.Target))
+            {
+                var first = group.First();
+                var current = await PermissionsAsync(session, first.Target!, first.Sensitivity, diagnostics, cancellationToken);
+                foreach (var item in group) replacements[item] = ReferenceEquals(item, first) ? current : null;
+            }
         }
-        retained.Add(InstalledGuidance());
-        return new(retained, diagnostics);
+        var projection = new List<AgentContextAttachment>();
+        foreach (var slot in slots)
+        {
+            if (slot.ContentType == "workflow.guidance") projection.Add(InstalledGuidance());
+            else if (!replacements.TryGetValue(slot, out var replacement)) projection.Add(slot);
+            else if (replacement is not null) projection.Add(replacement);
+        }
+        if (!guidance) projection.Add(InstalledGuidance());
+        return new(projection, diagnostics);
     }
 
-    /// <summary>The owner's current catalog as an attachment; a missing, ambiguous or failing owner adds an optional diagnostic.</summary>
-    private async Task<AgentContextAttachment> CatalogAsync(ICollection<AgentContributionDiagnostic> diagnostics, CancellationToken cancellationToken)
+    /// <summary>
+    /// The owner's current catalog as an attachment, or null when the session's host policy does not admit the kind (no
+    /// read is made then). A missing, ambiguous or failing owner adds an optional diagnostic.
+    /// </summary>
+    private async Task<AgentContextAttachment?> CatalogAsync(AgentSession session, ICollection<AgentContributionDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
     {
-        var read = await WorkflowActivityCatalog.ReadAsync(catalogs, cancellationToken);
+        // The envelope alone decides admission (kind, source, classification), so the policy is asked before any read.
+        if (!await AdmittedAsync(session, WorkflowActivityCatalog.Attachment(new(WorkflowActivityCatalog.Status.Denied, [], null)), diagnostics, cancellationToken))
+            return null;
+        var read = await WorkflowActivityCatalog.ReadAsync(catalogs, cancellationToken, logger);
         if (read.Status == WorkflowActivityCatalog.Status.Unavailable)
             diagnostics.Add(new(Descriptor.Id, WorkflowActivityCatalog.UnavailableDiagnostic, read.Reason!, false));
         return WorkflowActivityCatalog.Attachment(read);
     }
 
+    /// <summary>
+    /// Whether the session's host policy admits a server read of this envelope. Withholding one is not a failure: the
+    /// context stays exactly what it was before the module produced server reads, and an optional diagnostic says so.
+    /// </summary>
+    private async Task<bool> AdmittedAsync(AgentSession session, AgentContextAttachment envelope, ICollection<AgentContributionDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        // Asked as the engine will ask it: after its sanitizer has redacted secret context.
+        var sanitized = envelope.Sensitivity == AgentContextSensitivity.Secret ? envelope with { Sensitivity = AgentContextSensitivity.SecretRedacted } : envelope;
+        if ((await policies.EvaluateContextAsync(session.Policy, [sanitized], cancellationToken)).Allowed) return true;
+        if (!diagnostics.Any(item => item.Code == WithheldDiagnostic && item.Message.Contains(envelope.ContentType, StringComparison.Ordinal)))
+            diagnostics.Add(new(Descriptor.Id, WithheldDiagnostic,
+                $"The host policy does not admit the {envelope.ContentType} context, so it was not contributed.", false));
+        return false;
+    }
+
     /// <summary>Null when the actor may still read the catalog; otherwise the required refusal, unavailable distinct from denied.</summary>
     private async Task<AgentContributionDiagnostic?> RefuseCatalogAsync(CancellationToken cancellationToken) =>
-        (await WorkflowActivityCatalog.CanReadAsync(catalogs, cancellationToken)) switch
+        (await WorkflowActivityCatalog.CanReadAsync(catalogs, cancellationToken, logger)) switch
         {
             true => null,
             false => new(Descriptor.Id, "agent.workflow.permission_denied", "Current read permission for the activity design catalog is required.", true),
@@ -212,16 +263,25 @@ internal sealed class DefaultWorkflowAgentContextProvider(
     /// module's tools: host authority for each tool and the owning workflow definition authorizer. Read was already
     /// established by the disclosure check; manage is reported as allowed, denied or unavailable (the owner could not decide).
     /// </summary>
-    private async Task<AgentContextAttachment> PermissionsAsync(AgentSession session, AgentResourceTarget target,
-        AgentContextSensitivity sensitivity, CancellationToken cancellationToken)
+    private async Task<AgentContextAttachment?> PermissionsAsync(AgentSession session, AgentResourceTarget target,
+        AgentContextSensitivity sensitivity, ICollection<AgentContributionDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
+        if (!await AdmittedAsync(session, Permissions(target, sensitivity, "permissions", null), diagnostics, cancellationToken)) return null;
         var host = await authorizer.AuthorizeAsync(WorkflowSetDesignerPositionTool.Contract, session.ActorId, session.TenantId, target, cancellationToken);
         var owner = host.Allowed
             ? await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, session.ActorId, session.TenantId, target, true, cancellationToken)
             : null;
         var manage = owner is { Allowed: true } ? "allowed" : owner is not null && WorkflowResourceAuthority.IsUnavailable(owner) ? "unavailable" : "denied";
-        string[] capabilities = manage == "allowed" ? ["workflow.explain", "workflow.propose-change"] : ["workflow.explain"];
-        string[] tools = manage == "allowed" ? [WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName] : [WorkflowReadGraphTool.ToolName];
+        // The engine advertises a tool only when the session's host capability policy allows it too, so the reported tools
+        // and capabilities are filtered the same way.
+        var capabilities = new List<string>();
+        foreach (var capability in manage == "allowed" ? new[] { "workflow.explain", "workflow.propose-change" } : new[] { "workflow.explain" })
+            if ((await policies.EvaluateCapabilityAsync(session.Policy, capability, cancellationToken)).Allowed) capabilities.Add(capability);
+        var tools = new List<string>();
+        foreach (var tool in manage == "allowed" ? new[] { WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName } : new[] { WorkflowReadGraphTool.ToolName })
+            if ((await policies.EvaluateCapabilityAsync(session.Policy, tool, cancellationToken)).Allowed) tools.Add(tool);
+        if (!tools.Contains(WorkflowSetDesignerPositionTool.ToolName)) capabilities.Remove("workflow.propose-change");
+        if (!tools.Contains(WorkflowReadGraphTool.ToolName)) capabilities.Remove("workflow.explain");
         var content = JsonSerializer.SerializeToElement(new
         {
             workflowDefinitionId = target.ResourceId, revision = target.Revision, read = "allowed", manage, capabilities, tools
@@ -232,14 +292,17 @@ internal sealed class DefaultWorkflowAgentContextProvider(
             "unavailable" => "The actor may read this workflow. Whether it may change it could not be decided, so changes cannot be proposed now.",
             _ => "The actor may read this workflow but not change it: explanation only."
         };
-        return new($"workflow:permissions:{target.ResourceId}:{target.Revision}", "workflows.permissions", target.ResourceId, "Workflow permissions",
-            // The permissions name the target, so they are classified like the snapshot that named it.
+        return Permissions(target, sensitivity, summary, content);
+    }
+
+    // The permissions name the target, so they are classified like the snapshot that named it.
+    private static AgentContextAttachment Permissions(AgentResourceTarget target, AgentContextSensitivity sensitivity, string summary, JsonElement? content) =>
+        new($"workflow:permissions:{target.ResourceId}:{target.Revision}", "workflows.permissions", target.ResourceId, "Workflow permissions",
             PermissionsContentType, sensitivity, "permissions", summary, content,
             new Dictionary<string, string> { ["workflowDefinitionId"] = target.ResourceId!, ["revision"] = target.Revision ?? string.Empty })
         {
             ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Target = target, Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = []
         };
-    }
 
     private async Task<AgentSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
     {

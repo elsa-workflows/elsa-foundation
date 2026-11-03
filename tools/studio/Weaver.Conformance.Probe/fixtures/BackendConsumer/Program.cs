@@ -175,7 +175,9 @@ app.MapGet("/__qualification/generation", async (IShellRegistry registry, Cancel
             reloader = new { type = shellReloader.GetType().FullName, assembly = shellReloader.GetType().Assembly.FullName },
             rootGuardUses = RootFeatureStoreGuard.UseCount + RootShellReloadGuard.UseCount
         },
-        sharedContracts = contracts.Select(assembly => new { name = assembly.GetName().Name, identity = assembly.FullName, location = assembly.Location })
+        sharedContracts = contracts.Select(assembly => new { name = assembly.GetName().Name, identity = assembly.FullName, location = assembly.Location }),
+        // Spec 1193 SC-003: the loaded Agent Workflows package's own types and the catalog the shell composes.
+        workflowAgent = WorkflowAgentObservation(scope.ServiceProvider)
     };
 }).RequirePermission(ModuleManagementPermissionKeys.Read);
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), shellName, builder.Configuration);
@@ -194,6 +196,16 @@ await QualificationPrincipals.InitializeAsync(app.Services.GetRequiredService<IS
     builder.Configuration, app.Lifetime.ApplicationStopping);
 Console.WriteLine("WEAVER_BACKEND_CONSUMER_READY");
 await app.WaitForShutdownAsync();
+
+static object WorkflowAgentObservation(IServiceProvider services)
+{
+    var assembly = typeof(Elsa.Agent.Workflows.FoundationWorkflowsAgentFeature).Assembly;
+    string[] catalogs;
+    try { catalogs = services.GetServices<Elsa.Activities.Design.Core.Contracts.IActivityAuthoringCatalog>().Select(item => item.GetType().Name).ToArray(); }
+    catch (Exception failure) { catalogs = ["unresolvable:" + failure.GetType().Name]; }
+    return new { assembly = assembly.GetName().Name, types = assembly.GetTypes().Select(type => type.Name).Distinct().Order(StringComparer.Ordinal).ToArray(),
+        activityAuthoringCatalogs = catalogs };
+}
 
 sealed record GenerationIdentity(string Id);
 

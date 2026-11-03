@@ -224,8 +224,9 @@ class JourneyBoundariesTests(unittest.TestCase):
             self.assertNotEqual(principals[0]["tenant"], principals[2]["tenant"])
             self.assertNotEqual(principals[0]["subject"], principals[1]["subject"])
             # Spec 1193 T012: the three workflow actors are appended; the original indexes keep their meaning.
-            self.assertEqual(8, len(principals))
-            reader, manager, tenant_manager = principals[5:]
+            self.assertEqual(9, len(principals))
+            reader, manager, tenant_manager, catalog_denied = principals[5:]
+            self.assertNotIn("activities/design:read", catalog_denied["exactDirectPermissions"])
             self.assertEqual((principals[0]["tenant"], principals[0]["tenant"], principals[2]["tenant"]),
                              (reader["tenant"], manager["tenant"], tenant_manager["tenant"]))
             self.assertIn("workflows/design:read", reader["exactDirectPermissions"])

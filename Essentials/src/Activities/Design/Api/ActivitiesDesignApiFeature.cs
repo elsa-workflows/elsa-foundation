@@ -123,6 +123,8 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityAuthoringCatalogReader>(sp => sp.GetRequiredService<ActivityAuthoringCatalogReader>());
         // The actor-gated catalog other domains read through Activities Design Core. One implementation per shell:
         // a duplicate fails startup rather than resolving last-write-wins.
+        // Rejected at configuration as well as at startup: the startup task runs only where the Tasks feature is composed.
+        ActivityAuthoringCatalogStartupTask.Validate(services);
         services.TryAddScoped<IActivityAuthoringCatalog, HttpActivityAuthoringCatalog>();
         AddCatalogValidator(services);
         services.TryAddScoped<IRecommendedActivityDefinitionReader>(sp => sp.GetRequiredService<RecommendedActivityDefinitionReader>());

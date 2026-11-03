@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Agent.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Workflows.Services;
 
@@ -28,7 +29,9 @@ internal static class WorkflowActivityCatalog
     internal sealed record Read(Status Status, IReadOnlyList<ActivityAuthoringCatalogEntry> Entries, string? Reason);
 
     /// <summary>The owner's current catalog for the request actor and tenant, or why it is denied or unavailable.</summary>
-    internal static async Task<Read> ReadAsync(IEnumerable<IActivityAuthoringCatalog>? catalogs, CancellationToken cancellationToken)
+    /// <remarks>An owner failure is logged with its cause for operators; the model only ever sees the fixed unavailable text.</remarks>
+    internal static async Task<Read> ReadAsync(IEnumerable<IActivityAuthoringCatalog>? catalogs, CancellationToken cancellationToken,
+        ILogger? logger = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var current = catalogs?.ToArray() ?? [];
@@ -38,17 +41,26 @@ internal static class WorkflowActivityCatalog
             var result = await current[0].ListAsync(cancellationToken);
             return result.Allowed ? new(Status.Available, result.Entries, null) : new(Status.Denied, [], "The actor may not read the activity authoring catalog.");
         }
-        catch (ActivityAuthoringCatalogUnavailableException) { return new(Status.Unavailable, [], Failed); }
+        catch (ActivityAuthoringCatalogUnavailableException error)
+        {
+            logger?.LogWarning(error.InnerException ?? error, "The activity authoring catalog could not be read for the workflow context.");
+            return new(Status.Unavailable, [], Failed);
+        }
     }
 
     /// <summary>The owner's current read gate only; reads no entries. Null when the gate is unavailable.</summary>
-    internal static async Task<bool?> CanReadAsync(IEnumerable<IActivityAuthoringCatalog>? catalogs, CancellationToken cancellationToken)
+    internal static async Task<bool?> CanReadAsync(IEnumerable<IActivityAuthoringCatalog>? catalogs, CancellationToken cancellationToken,
+        ILogger? logger = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var current = catalogs?.ToArray() ?? [];
         if (current.Length != 1) return null;
         try { return await current[0].CanReadAsync(cancellationToken); }
-        catch (ActivityAuthoringCatalogUnavailableException) { return null; }
+        catch (ActivityAuthoringCatalogUnavailableException error)
+        {
+            logger?.LogWarning(error.InnerException ?? error, "The activity authoring catalog read gate could not be decided for the workflow context.");
+            return null;
+        }
     }
 
     /// <summary>Whether a retained catalog attachment disclosed catalog entries; an unreadable one counts as disclosed (fail closed).</summary>
@@ -64,11 +76,17 @@ internal static class WorkflowActivityCatalog
     {
         var entries = new List<object>();
         var size = 0;
+        int? next = null;
         foreach (var entry in read.Entries)
         {
             var projected = Project(entry);
             var length = JsonSerializer.SerializeToUtf8Bytes(projected, JsonOptions).Length + 1;
-            if (size + length > EntryBudget) break;
+            if (size + length > EntryBudget)
+            {
+                // The first entry left out is what did not fit; its size lets a reader check the prefix is maximal.
+                next = length;
+                break;
+            }
             size += length;
             entries.Add(projected);
         }
@@ -76,7 +94,8 @@ internal static class WorkflowActivityCatalog
         var status = read.Status switch { Status.Available => "available", Status.Denied => "denied", _ => "unavailable" };
         var content = JsonSerializer.SerializeToElement(new
         {
-            status, reason = read.Reason, totalCount = read.Entries.Count, includedCount = entries.Count, truncated, entries
+            status, reason = read.Reason, totalCount = read.Entries.Count, includedCount = entries.Count, truncated,
+            budgetBytes = EntryBudget, includedBytes = size, nextEntryBytes = next, entries
         }, JsonOptions);
         var summary = read.Status switch
         {

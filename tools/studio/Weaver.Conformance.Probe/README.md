@@ -144,7 +144,18 @@ actor, every admitted context must carry one server-read `workflow.catalog` and 
 versions, or its marked prefix. The tenant-restricted activity must appear in exactly the first tenant's two answers.
 The permissions must equal the owning design API's answers: the definition GET for read, and the manage-gated promotion
 preflight (200 or 403) for manage. The tools the actual adapter is offered must follow them: the layout tool only for a
-manager. `require_workflow_truth_seams` refuses a missing, failed, duplicated or changed record.
+manager. A fourth actor without `activities/design:read` must get a 403 from the designer catalog and a denied
+catalog with no entries from Weaver. The host's generation observation must report no placeholder type in the loaded
+Agent Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
+journey `workflow-read-only` in `browser.mjs`, with a fresh normal-login state of its own: the accepted message's
+context must carry `manage: denied` and only `workflow_read_graph`, explanation must complete, and a layout request
+must end without a proposal, node move, review or effect request, or owning write, with the stored draft unchanged.
+The driver checks the adapter trace for each command the browser retained: the layout tool was never offered and never
+called. `require_workflow_truth_seams` refuses a missing, failed, duplicated or changed record.
+
+The tenant-restricted activity is synthesized by the seam's reader wrapper. It proves that the designer and Weaver share
+one tenant-aware catalog read path for the request principal, not that the activity stores scope rows by tenant; store
+tenant scoping is the Activities Design persistence tests' evidence.
 
 ### Restart inventory over the packaged durable store (#3441 T031)
 

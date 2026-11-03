@@ -5,8 +5,13 @@ tenant: the activity catalog (workflow.catalog) equals the designer's own catalo
 (workflow.permissions) equal the owning design API's read and manage decisions. Tool availability follows them: the
 actual adapter is offered the reviewed layout tool only when the actor may manage the workflow.
 
-Three dedicated principals run one read-graph turn each: a manager and a read-only reader in the admin's tenant, both
-against the admin's seeded workflow, and a manager in a second tenant against a workflow it seeds itself. The host's
+Four dedicated principals run one read-graph turn each: a manager, a read-only reader and a reader without activity
+design read in the admin's tenant, against the admin's seeded workflow, and a manager in a second tenant against a
+workflow it seeds itself. The host's generation observation also reports its loaded Agent Workflows package types and
+composed catalog, so the packaged consumer is shown to ship and compose no placeholder. Finally the reader runs the
+actual packaged Studio journey (browser.mjs, workflow-read-only) with a fresh normal-login state: explanation completes
+through the owning catalog and permissions, and a layout request is never offered to the actual adapter, so no proposal,
+node move or owning write follows and the stored draft is unchanged. The host's
 catalog is CLR-reconciled and tenant-agnostic, so a tenant-restricted activity comes from the host's test-only
 QualificationTenantActivity feature, selected through the ordinary native feature apply for this inventory only and
 deselected afterwards. It adds one activity to the designer's own catalog read for the first tenant; the designer's
@@ -18,6 +23,8 @@ from contextlib import contextmanager
 import copy
 import json
 from pathlib import Path
+import os
+import shutil
 import signal
 import threading
 import time
@@ -25,8 +32,9 @@ import uuid
 
 from artifacts import TOOL, check, sha
 from authorization_journeys import select_command, snapshot_attachment
-from journey_runtime import BASE_GRANTS, same
+from journey_runtime import BASE_GRANTS, browser_inputs, same
 from owner_resources import capability_links, owner_path, seed_workflow
+from runtime import RUNTIME_ENVIRONMENT, private_json
 
 
 SECTION = "workflowTruthSeamQualification"
@@ -42,22 +50,26 @@ WORKFLOW_TOOLS = frozenset({READ_TOOL, LAYOUT_TOOL})
 CATALOG_KIND = "workflow.catalog"
 PERMISSIONS_KIND = "workflow.permissions"
 
-# The three dedicated principals, appended after the original five so every earlier index keeps its meaning.
-READER, MANAGER, TENANT_MANAGER = 5, 6, 7
+# The four dedicated principals, appended after the original five so every earlier index keeps its meaning.
+READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED = 5, 6, 7, 8
 READER_GRANTS = [*BASE_GRANTS, "workflows/design:read", "activities/design:read"]
+# A reader without activity design read: the owner withholds its catalog, and Weaver must disclose none.
+CATALOG_DENIED_GRANTS = [*BASE_GRANTS, "workflows/design:read"]
 MANAGER_GRANTS = [*BASE_GRANTS, "workflows/design:manage", "activities/design:read"]
-# role -> (principal index, seeded workflow, may manage, sees the tenant-restricted activity)
+# role -> (principal index, seeded workflow, may manage, sees the tenant-restricted activity; None: no catalog read)
 ACTORS = (("manager", MANAGER, "home", True, True), ("reader", READER, "home", False, True),
-          ("tenant-manager", TENANT_MANAGER, "other", True, False))
+          ("tenant-manager", TENANT_MANAGER, "other", True, False), ("catalog-denied", CATALOG_DENIED, "home", False, None))
 
 
 def truth_principals(principals, new_identity):
-    """The three dedicated principals: reader and manager in the first principal's tenant, a manager in the third's."""
+    """The dedicated principals: a reader, a manager and a catalog-denied reader in the first principal's tenant, and a
+    manager in the third's."""
     check(len(principals) == READER and principals[0]["tenant"] != principals[2]["tenant"],
           "The truth-seam principals extend exactly the original five, which span two tenants")
     return [new_identity("witness-reader", principals[0]["tenant"], READER_GRANTS),
             new_identity("witness-manager", principals[0]["tenant"], MANAGER_GRANTS),
-            new_identity("witness-tenant-manager", principals[2]["tenant"], MANAGER_GRANTS)]
+            new_identity("witness-tenant-manager", principals[2]["tenant"], MANAGER_GRANTS),
+            new_identity("witness-catalog-denied", principals[0]["tenant"], CATALOG_DENIED_GRANTS)]
 
 
 def _attachments(frame, kind):
@@ -102,23 +114,50 @@ def require_truth_turn(frames, rows, *, provider, command_id, target):
     return {"catalog": catalog["content"], "permissions": permissions["content"], "advertised": advertised}
 
 
-def require_catalog(content, owner_entries, *, tenant_only):
-    """The catalog equals the designer's own read for the same actor: entries, order, availability and versions."""
-    check(isinstance(content, dict) and content.get("status") == "available", "The actor's catalog is not available")
+def _inputs(entry):
+    inputs = entry.get("inputs") if isinstance(entry, dict) else None
+    check(isinstance(inputs, list), "A catalog entry has no declared inputs list")
+    return [tuple(item.get(key) for key in ("referenceKey", "name", "type", "isRequired", "isSensitive", "isCredential")) for item in inputs]
+
+
+def _row(entry):
+    return (entry.get("activityVersionId"), entry.get("available"), entry.get("version"), entry.get("availabilityReason"), _inputs(entry))
+
+
+def require_catalog(content, owner_status, owner_entries, *, tenant_only):
+    """The catalog equals the designer's own read for the same actor: entries, order, availability, versions and declared
+    inputs (with isCredential), or the maximal prefix that fits the declared budget. tenant_only None: the owner withholds
+    the catalog from this actor, and Weaver discloses no entry."""
+    check(isinstance(content, dict), "The actor's catalog is not a projection")
+    if tenant_only is None:
+        check(owner_status == 403, "The designer's catalog read did not refuse an actor without activity design read")
+        check(content.get("status") == "denied" and content.get("entries") == [] and content.get("totalCount") == 0,
+              "A catalog the owner withholds was disclosed")
+        return {"status": "denied", "totalCount": 0, "includedCount": 0, "truncated": False, "tenantOnly": None}
+    check(owner_status == 200 and content.get("status") == "available", "The actor's catalog is not available")
     check(isinstance(owner_entries, list) and owner_entries, "The designer's catalog read is empty")
-    owner = [(item["activityVersionId"], item["available"], item["version"]) for item in owner_entries]
+    owner = [_row(item) for item in owner_entries]
     entries = content.get("entries")
     check(isinstance(entries, list) and entries, "The disclosed catalog has no entries")
-    disclosed = [(item.get("activityVersionId"), item.get("available"), item.get("version")) for item in entries]
+    disclosed = [_row(item) for item in entries]
     # A bounded projection is the owner's prefix and says so; it never reorders, narrows or invents.
     check(content.get("totalCount") == len(owner) and content.get("includedCount") == len(disclosed)
           and content.get("truncated") is (len(disclosed) < len(owner)) and disclosed == owner[:len(disclosed)],
           "The disclosed catalog differs from the designer's catalog for the same actor and tenant")
-    owned = [item for item in owner_entries if item["activityVersionId"] == TENANT_ONLY_VERSION]
-    shown = [item for item in disclosed if item[0] == TENANT_ONLY_VERSION]
+    budget, used, following = content.get("budgetBytes"), content.get("includedBytes"), content.get("nextEntryBytes")
+    check(all(type(value) is int and value >= 0 for value in (budget, used)) and used <= budget,
+          "The disclosed catalog does not declare a budget it kept")
+    if content["truncated"]:
+        # Maximal: the prefix stopped only because the next entry would not fit the declared budget.
+        check(type(following) is int and following > 0 and used + following > budget, "A truncated catalog is not the maximal prefix")
+    else:
+        check(following is None, "An untruncated catalog reports an entry left out")
+    owned = [row for row in owner if row[0] == TENANT_ONLY_VERSION]
+    shown = [row for row in disclosed if row[0] == TENANT_ONLY_VERSION]
     check(len(owned) == len(shown) == (1 if tenant_only else 0),
           "The tenant-restricted activity must appear in exactly its own tenant's designer and Weaver catalogs")
-    return {"totalCount": len(owner), "includedCount": len(disclosed), "truncated": content["truncated"], "tenantOnly": bool(owned)}
+    return {"status": "available", "totalCount": len(owner), "includedCount": len(disclosed), "truncated": content["truncated"],
+            "tenantOnly": bool(owned)}
 
 
 def require_permissions(content, *, manage, read_status, manage_status, advertised, target):
@@ -134,6 +173,95 @@ def require_permissions(content, *, manage, read_status, manage_status, advertis
           "The disclosed permissions differ from the owning design API's answers")
     check(advertised == sorted(tools), "The actual adapter was offered tools that do not follow the disclosed permissions")
     return {"read": "allowed", "manage": expected, "tools": tools}
+
+
+BROWSER_JOURNEY = "workflow-read-only"
+BROWSER_OBSERVATIONS = {"catalogAvailable": True, "explainCompleted": True, "layoutOffered": False, "proposalCount": 0,
+                        "nodeMoved": False, "draftUnchanged": True, "owningWrites": 0,
+                        "permissionsDisclosed": {"manage": "denied", "tools": [READ_TOOL]}}
+
+
+def require_read_only_browser(observed, commands, rows, *, provider):
+    """The reader's actual Studio journey: explanation through the owning reads, and a layout request that the actual
+    adapter was never offered, so no proposal, node move or owning write followed. The browser's own observation is
+    checked against the adapter trace for each retained command, never against its own claims alone."""
+    check(provider in PROVIDERS, "Unknown adapter")
+    check(isinstance(observed, dict) and observed.get("journey") == BROWSER_JOURNEY and observed.get("status") == "passed"
+          and not observed.get("failure") and not observed.get("pageErrors") and observed.get("provider") == provider,
+          "The read-only Studio journey did not pass on this adapter")
+    check(same(observed.get("observations"), BROWSER_OBSERVATIONS), "The read-only Studio journey observed another outcome")
+    check(isinstance(observed.get("ownerBefore"), dict) and isinstance(observed.get("ownerAfter"), dict)
+          and isinstance(observed.get("evidence"), list) and observed["evidence"], "The read-only Studio journey retained no owner evidence")
+    by_tool = {}
+    for item in commands:
+        check(isinstance(item, dict) and isinstance(item.get("commandId"), str) and item.get("toolName") in WORKFLOW_TOOLS
+              and item["toolName"] not in by_tool, "The read-only journey must retain exactly one command per workflow tool")
+        by_tool[item["toolName"]] = item["commandId"]
+    check(set(by_tool) == WORKFLOW_TOOLS, "The read-only journey must ask for both the explanation and the layout change")
+    advertised = {}
+    for tool, command_id in by_tool.items():
+        owned = [row for row in rows if isinstance(row, dict) and (row.get("data") or {}).get("commandId") == command_id]
+        offered = [row["data"] for row in owned if row.get("kind") == provider + ".request" and row["data"].get("tools")]
+        check(bool(offered), "The actual adapter recorded no tool advertisement for the " + tool + " request")
+        names = [sorted({entry.get("name") for entry in item["tools"] if isinstance(entry, dict)} & WORKFLOW_TOOLS) for item in offered]
+        check(all(value == [READ_TOOL] for value in names), "The actual adapter was offered the layout tool for a read-only actor")
+        calls = [row["data"] for row in owned if row.get("kind") == provider + ".call"]
+        expected = 1 if tool == READ_TOOL else 0
+        check(len(calls) == expected and all(call.get("toolName") == READ_TOOL for call in calls),
+              "The actual adapter's calls do not follow the read-only actor's tools")
+        advertised[tool] = names[0]
+    return {"journey": BROWSER_JOURNEY, "observations": observed["observations"], "commands": by_tool, "advertised": advertised,
+            "ownerBefore": observed["ownerBefore"], "ownerAfter": observed["ownerAfter"]}
+
+
+def _read_only_browser(runtime, name, seed):
+    """Runs the actual browser journey as the reader with a fresh normal-login state of its own."""
+    _, identity = runtime.sign_in(READER)
+    root = runtime.output(name)
+    output = root / "observation"
+    workflow = {key: seed[key] for key in ("definitionId", "activityId", "draftId", "definitionPath", "draftPath", "validationPath")}
+    config = {"journey": BROWSER_JOURNEY, "provider": runtime.provider, "studioOrigin": runtime.studio_origin,
+              "backendOrigin": runtime.backend_origin, "storageState": identity["storageState"],
+              "commandFile": str(runtime.command_file), "output": str(output), "workflow": workflow}
+    private_json(root / "config-private.json", config)
+    transport = runtime.transport(name + "-protocol")
+    offset = transport.trace_file.stat().st_size if transport.trace_file.exists() else 0
+    node = shutil.which("node")
+    check(node, "The actual browser driver needs Node")
+    runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
+                    env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    observed = json.loads((output / "observation.json").read_text())
+    trace = transport.protocol_trace(offset)
+    check(trace["incompleteTailBytes"] == 0, "An incomplete adapter trace cannot establish the read-only journey")
+    # The browser retains a frozen copy of each command it selected; the shared command file is never evidence.
+    commands = [json.loads(path.read_text()) for path in sorted(output.glob("command-*.json"))]
+    value = require_read_only_browser(observed, commands, trace["records"], provider=runtime.provider)
+    observation = output / "observation.json"
+    evidence = [*observed["evidence"], observed["ownerBefore"], observed["ownerAfter"], {"path": str(observation), "sha256": sha(observation)},
+                runtime.save(root, "browser-inputs", browser_inputs(config)), trace["receipt"]]
+    return value, evidence
+
+
+LEGACY_PLACEHOLDERS = frozenset({
+    "IWorkflowAgentContextProvider", "IWorkflowActivityCatalogProvider", "DefaultWorkflowActivityCatalogProvider",
+    "IWorkflowRevisionProvider", "DefaultWorkflowRevisionProvider", "IWorkflowChangePermissionEvaluator",
+    "DenyAllWorkflowChangePermissionEvaluator", "IWorkflowChangeProposalService", "DefaultWorkflowChangeProposalService",
+    "IWorkflowGraphOperationBatchRiskClassifier", "DefaultWorkflowGraphOperationBatchRiskClassifier",
+    "IWorkflowAuthoringAuditService", "DefaultWorkflowAuthoringAuditService", "WorkflowAgentContext", "WorkflowAgentPermissionSummary"})
+
+
+def require_no_placeholders(generation):
+    """SC-003 for the packaged consumer: its loaded Agent Workflows package ships no placeholder type, and the shell
+    composes exactly the owning activity catalog, as the host's generation observation reports them."""
+    agent = generation.get("workflowAgent") if isinstance(generation, dict) else None
+    check(isinstance(agent, dict) and isinstance(agent.get("types"), list) and agent["types"], "The host does not report its workflow agent package")
+    types = set(agent["types"])
+    check("DefaultWorkflowAgentContextProvider" in types and "WorkflowActivityCatalog" in types,
+          "The reported types are not the loaded Agent Workflows package")
+    check(not types & LEGACY_PLACEHOLDERS, "The packaged consumer still ships a legacy workflow placeholder")
+    check(agent.get("activityAuthoringCatalogs") == ["HttpActivityAuthoringCatalog"],
+          "The packaged consumer does not compose exactly the owning activity authoring catalog")
+    return {"package": agent.get("assembly"), "placeholders": [], "activityAuthoringCatalogs": agent["activityAuthoringCatalogs"]}
 
 
 @contextmanager
@@ -167,7 +295,8 @@ def _actor(runtime, name, http, seed, *, manage, tenant_only):
     """The owning services' answers for one actor, then one actual read-graph turn as that actor."""
     links, capability = capability_links(http, "elsa.api.activity-design", runtime.output(name + "-capabilities"))
     path = owner_path(http, links["activity-catalog"])
-    owner, catalog_record = runtime.native.json(http, name + "-owner-catalog", path + ("&" if "?" in path else "?") + "availability=all")
+    catalog_record, catalog_data = runtime.native.request(http, name + "-owner-catalog", path + ("&" if "?" in path else "?") + "availability=all")
+    owner = json.loads(catalog_data) if catalog_record["status"] == 200 else {}
     read, _ = runtime.native.request(http, name + "-owner-read", seed["definitionPath"])
     preflight, _ = runtime.native.request(http, name + "-owner-manage", seed["draftPath"].rstrip("/") + "/promotion-preflight", {}, method="POST")
     revision = "qualification-unsaved-" + uuid.uuid4().hex[:8]
@@ -186,7 +315,7 @@ def _actor(runtime, name, http, seed, *, manage, tenant_only):
     check(trace["incompleteTailBytes"] == 0, "An incomplete adapter trace cannot establish the advertised tools")
     turn = require_truth_turn([frame.value for frame in stream.frames], trace["records"], provider=runtime.provider,
                               command_id=command_id, target=attachment["target"])
-    catalog = require_catalog(turn["catalog"], owner.get("activities"), tenant_only=tenant_only)
+    catalog = require_catalog(turn["catalog"], catalog_record["status"], owner.get("activities"), tenant_only=tenant_only)
     permissions = require_permissions(turn["permissions"], manage=manage, read_status=read["status"], manage_status=preflight["status"],
                                       advertised=turn["advertised"], target=attachment["target"])
     return {"commandId": command_id, "sessionId": session, "catalog": catalog, "permissions": permissions, "advertised": turn["advertised"],
@@ -199,6 +328,9 @@ def _case(runtime, provider):
     name = provider + "-workflow-truth-seams"
     evidence = list(runtime.select_provider(provider))
     _, admin = runtime.sign_in()
+    generation, generation_record = runtime.native.generation(runtime.backend, name + "-registrations")
+    registrations = require_no_placeholders(generation)
+    evidence.append(generation_record["receipt"])
     seeds = {"home": seed_workflow(runtime.backend, runtime.output(name + "-home-workflow") / "workflow-seed")}
     clients = {}
     for _role, index, _seed, _manage, _tenant_only in ACTORS:
@@ -216,10 +348,14 @@ def _case(runtime, provider):
             observed = _actor(runtime, name + "-" + role, clients[index], seeds[seed], manage=manage, tenant_only=tenant_only)
             evidence.extend(observed.pop("evidence"))
             actors[role] = observed
+        # The reader's actual Studio journey over the same seeded workflow (FR-036 normal-host evidence).
+        browser, browser_evidence = _read_only_browser(runtime, name + "-read-only-browser", seeds["home"])
+        evidence.extend(browser_evidence)
     finally:
         evidence.extend(runtime.apply_features(name + "-deselect-seam", {SEAM_FEATURE: (False, {"Tenant": home})}))
     check(actors["reader"]["catalog"] == actors["manager"]["catalog"], "Same-tenant actors with catalog read saw different catalogs")
-    return {"id": name, "status": "passed", "adapter": provider, "evidenceCategory": EVIDENCE_CATEGORY, "actors": actors, "evidence": evidence}
+    return {"id": name, "status": "passed", "adapter": provider, "evidenceCategory": EVIDENCE_CATEGORY, "actors": actors,
+            "registrations": registrations, "browser": browser, "evidence": evidence}
 
 
 def qualify_workflow_truth_seams(runtime):
@@ -294,12 +430,26 @@ def require_workflow_truth_seams(section, owned_root=None, *, source=None):
                   and sorted(actors) == sorted(role for role, *_ in ACTORS)
                   and all(actors[role].get("permissions", {}).get("manage") == ("allowed" if manage else "denied")
                           and actors[role].get("catalog", {}).get("tenantOnly") is tenant_only
-                          for role, _index, _seed, manage, tenant_only in ACTORS),
+                          and actors[role].get("catalog", {}).get("status") == ("denied" if tenant_only is None else "available")
+                          for role, _index, _seed, manage, tenant_only in ACTORS)
+                  and observed.get("registrations", {}).get("placeholders") == []
+                  and same((observed.get("browser") or {}).get("observations"), BROWSER_OBSERVATIONS),
                   "Workflow truth-seam record differs: " + row["id"])
     return section["records"]
 
 
 def synthetic_actors():
     """The minimal record shape the final gate checks per actor; for synthetic self-tests only, never native evidence."""
-    return {role: {"permissions": {"manage": "allowed" if manage else "denied"}, "catalog": {"tenantOnly": tenant_only}}
+    return {role: {"permissions": {"manage": "allowed" if manage else "denied"},
+                   "catalog": {"tenantOnly": tenant_only, "status": "denied" if tenant_only is None else "available"}}
             for role, _index, _seed, manage, tenant_only in ACTORS}
+
+
+def synthetic_browser():
+    """The minimal browser shape the final gate checks; for synthetic self-tests only."""
+    return {"journey": BROWSER_JOURNEY, "observations": copy.deepcopy(BROWSER_OBSERVATIONS)}
+
+
+def synthetic_registrations():
+    """The minimal registrations shape the final gate checks; for synthetic self-tests only."""
+    return {"package": "Elsa.Agent.Workflows", "placeholders": [], "activityAuthoringCatalogs": ["HttpActivityAuthoringCatalog"]}

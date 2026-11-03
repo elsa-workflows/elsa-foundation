@@ -6,6 +6,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Services;
 using Elsa.Agent.Workflows;
 using Elsa.Agent.Workflows.Services;
+using Elsa.Agent.Workflows.Tools;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
@@ -225,6 +226,119 @@ public sealed class WorkflowTruthSeamTests
         Assert.Equal("version-0000", content.GetProperty("entries")[0].GetProperty("activityVersionId").GetString());
         Assert.True(JsonSerializer.Serialize(catalog.Content).Length <= 32768);
         Assert.Contains("did not fit", catalog.Summary);
+        // The prefix is maximal: it stopped only because the next entry would not fit the declared budget.
+        var budget = content.GetProperty("budgetBytes").GetInt32();
+        var used = content.GetProperty("includedBytes").GetInt32();
+        Assert.True(used <= budget && used + content.GetProperty("nextEntryBytes").GetInt32() > budget);
+    }
+
+    [Fact]
+    public async Task Reported_tools_and_capabilities_follow_the_sessions_capability_policy_as_the_engine_advertises()
+    {
+        using var host = Host.Create(policy: AgentPolicy.Default with { DeniedCapabilityIds = [WorkflowSetDesignerPositionTool.ToolName] });
+        var contribution = await host.CollectAsync();
+
+        var reported = Content(Single(contribution, DefaultWorkflowAgentContextProvider.PermissionsContentType));
+        // The owner still allows managing the workflow; only the host policy withholds the tool, and the capability with it.
+        Assert.Equal("allowed", reported.GetProperty("manage").GetString());
+        Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
+        Assert.Equal(["workflow.explain"], Strings(reported, "capabilities"));
+        var policies = host.Services.GetRequiredService<IAgentPolicyEvaluator>();
+        var policy = AgentPolicy.Default with { DeniedCapabilityIds = [WorkflowSetDesignerPositionTool.ToolName] };
+        var advertised = new List<string>();
+        foreach (var tool in (await host.Services.GetRequiredService<IAgentToolRegistry>().ListAsync())
+                     .Where(tool => tool.Descriptor.ModuleId == WorkflowAgentSnapshot.ModuleId))
+            if ((await policies.EvaluateCapabilityAsync(policy, tool.Descriptor.Name)).Allowed
+                && (await AgentToolAccess.AuthorizeAsync(tool, host.Services.GetRequiredService<IAgentToolAuthorizer>(), "actor-1", "tenant-1",
+                    WorkflowAgentTests.Snapshot().Target, CancellationToken.None)).Allowed)
+                advertised.Add(tool.Descriptor.Name);
+        Assert.Equal(Strings(reported, "tools"), advertised);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task A_policy_that_lists_only_the_older_workflow_kinds_keeps_explanation_and_older_disclosures_working(bool allowCatalog, bool allowPermissions)
+    {
+        string[] kinds = ["workflow.definition", "workflow.request", "workflow.guidance",
+            .. allowCatalog ? new[] { WorkflowActivityCatalog.ContentType } : [], .. allowPermissions ? new[] { DefaultWorkflowAgentContextProvider.PermissionsContentType } : []];
+        using var host = Host.Create(policy: AgentPolicy.Default with { AllowedContextKinds = kinds });
+
+        var collected = await host.CollectThroughEngineAsync();
+
+        Assert.True(collected.Succeeded, collected.Error?.Message);
+        var attachments = collected.Value!.Attachments;
+        Assert.Contains(attachments, item => item.ContentType == "workflow.definition");
+        Assert.Equal(allowCatalog, attachments.Any(item => item.ContentType == WorkflowActivityCatalog.ContentType));
+        Assert.Equal(allowPermissions, attachments.Any(item => item.ContentType == DefaultWorkflowAgentContextProvider.PermissionsContentType));
+        // A withheld kind is never read and never fails the turn; an optional diagnostic says it was not contributed.
+        Assert.Equal(allowCatalog ? 1 : 0, host.Catalog.ListCalls);
+        Assert.DoesNotContain(collected.Value.Diagnostics, item => item.Required);
+        Assert.Equal((allowCatalog ? 0 : 1) + (allowPermissions ? 0 : 1),
+            collected.Value.Diagnostics.Count(item => item.Code == DefaultWorkflowAgentContextProvider.WithheldDiagnostic));
+
+        // A disclosure recorded before the module produced server reads is admitted again unchanged, with none added.
+        var older = attachments.Where(item => item.ContentType is "workflow.definition" or "workflow.guidance").ToArray();
+        var readmitted = await host.ReadmitThroughEngineAsync(older);
+        Assert.True(readmitted.Succeeded, readmitted.Error?.Message);
+        Assert.Equal(["workflow.definition", "workflow.guidance"], readmitted.Value!.Attachments.Select(item => item.ContentType));
+        var historical = await host.ReadmitThroughEngineAsync(older, historical: true);
+        Assert.True(historical.Succeeded, historical.Error?.Message);
+        // And the current turn's own projection, server reads included, is admitted again under the same policy.
+        var current = await host.ReadmitThroughEngineAsync(attachments);
+        Assert.True(current.Succeeded, current.Error?.Message);
+        Assert.Equal(attachments.Select(item => item.ContentType), current.Value!.Attachments.Select(item => item.ContentType));
+    }
+
+    [Fact]
+    public async Task An_older_disclosure_under_the_default_policy_gains_no_server_read_on_re_admission()
+    {
+        using var host = Host.Create();
+        var collected = await host.CollectThroughEngineAsync();
+        var older = collected.Value!.Attachments.Where(item => item.ContentType is "workflow.definition" or "workflow.guidance").ToArray();
+
+        var readmitted = await host.ReadmitThroughEngineAsync(older);
+
+        Assert.True(readmitted.Succeeded, readmitted.Error?.Message);
+        Assert.Equal(["workflow.definition", "workflow.guidance"], readmitted.Value!.Attachments.Select(item => item.ContentType));
+    }
+
+    [Theory]
+    [InlineData(AgentContextSensitivity.Internal, AgentContextSensitivity.Internal)]
+    [InlineData(AgentContextSensitivity.Sensitive, AgentContextSensitivity.Sensitive)]
+    [InlineData(AgentContextSensitivity.Secret, AgentContextSensitivity.SecretRedacted)]
+    public async Task Permissions_take_the_snapshots_classification_and_re_admission_keeps_one_disclosure_snapshot(
+        AgentContextSensitivity caller, AgentContextSensitivity expected)
+    {
+        using var host = Host.Create();
+        var collected = await host.CollectThroughEngineAsync(WorkflowAgentTests.Snapshot() with { Sensitivity = caller });
+        Assert.True(collected.Succeeded, collected.Error?.Message);
+        var attachments = collected.Value!.Attachments;
+        Assert.Equal(expected, Single(collected.Value, DefaultWorkflowAgentContextProvider.PermissionsContentType).Sensitivity);
+        if (expected == AgentContextSensitivity.SecretRedacted)
+            Assert.DoesNotContain("wf-1", JsonSerializer.Serialize(Single(collected.Value, DefaultWorkflowAgentContextProvider.PermissionsContentType)));
+
+        var readmitted = await host.ReadmitThroughEngineAsync(attachments);
+
+        Assert.True(readmitted.Succeeded, readmitted.Error?.Message);
+        // Same items in the same order: an unchanged answer is the identical projection, so it is one disclosure snapshot.
+        Assert.Equal(attachments.Select(item => (item.ContentType, item.Id)), readmitted.Value!.Attachments.Select(item => (item.ContentType, item.Id)));
+        Assert.Equal(AgentDisclosureHistory.TryIdentity(attachments, []), AgentDisclosureHistory.TryIdentity(readmitted.Value.Attachments, []));
+    }
+
+    [Fact]
+    public async Task Several_catalog_owners_are_ambiguous_and_none_is_asked()
+    {
+        using var host = Host.Create(ambiguous: true);
+        var contribution = await host.CollectAsync();
+
+        var diagnostic = Assert.Single(contribution.Diagnostics);
+        Assert.Equal(WorkflowActivityCatalog.UnavailableDiagnostic, diagnostic.Code);
+        Assert.Contains("ambiguous", diagnostic.Message);
+        Assert.False(diagnostic.Required);
+        Assert.Equal((0, 0), (host.Catalog.ListCalls, host.SecondCatalog.ListCalls));
+        Assert.Equal("unavailable", Content(Single(contribution, WorkflowActivityCatalog.ContentType)).GetProperty("status").GetString());
     }
 
     private static AgentContextAttachment Single(AgentContextContribution contribution, string kind)
@@ -245,30 +359,44 @@ public sealed class WorkflowTruthSeamTests
         internal IServiceProvider Services => scope.ServiceProvider;
         private AgentSession? session;
 
-        private Host(bool installCatalog)
+        private readonly AgentPolicy policy;
+        internal FixtureActivityCatalog SecondCatalog { get; } = new();
+
+        private Host(bool installCatalog, AgentPolicy? policy, bool ambiguous)
         {
+            this.policy = policy ?? AgentPolicy.Default;
             root = AgentTestServices.Create(services =>
             {
                 new FoundationWorkflowsAgentFeature().ConfigureServices(services);
                 services.AddSingleton<IWorkflowDefinitionAuthorizer>(Owner);
                 if (installCatalog) services.AddSingleton<IActivityAuthoringCatalog>(Catalog);
+                if (ambiguous) services.AddSingleton<IActivityAuthoringCatalog>(SecondCatalog);
             });
             scope = root.CreateScope();
         }
 
-        internal static Host Create(bool installCatalog = true) => new(installCatalog);
+        internal static Host Create(bool installCatalog = true, AgentPolicy? policy = null, bool ambiguous = false) => new(installCatalog, policy, ambiguous);
 
         private DefaultWorkflowAgentContextProvider Source => Services.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
 
         private async Task<AgentSession> SessionAsync() => session ??= await Services.GetRequiredService<IAgentSessionService>().CreateAsync(new("tenant-1",
-            "actor-1", "conversation-1", "test-provider", "build", null, AgentPolicy.Default, new Dictionary<string, string>()));
+            "actor-1", "conversation-1", "test-provider", "build", null, policy, new Dictionary<string, string>()));
 
         internal async Task<AgentContextContribution> CollectAsync(AgentContextAttachment? caller = null)
             => await Source.CollectAsync(WorkflowAgentTests.Request(caller ?? WorkflowAgentTests.Snapshot()) with { SessionId = (await SessionAsync()).Id });
 
-        internal async Task<AgentResult<AgentContextContribution>> CollectThroughEngineAsync()
-            => await Services.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default,
-                WorkflowAgentTests.Request(WorkflowAgentTests.Snapshot()) with { SessionId = (await SessionAsync()).Id });
+        internal async Task<AgentResult<AgentContextContribution>> CollectThroughEngineAsync(AgentContextAttachment? caller = null)
+            => await Services.GetRequiredService<IAgentContextCollector>().CollectAsync((await SessionAsync()).Policy,
+                WorkflowAgentTests.Request(caller ?? WorkflowAgentTests.Snapshot()) with { SessionId = (await SessionAsync()).Id });
+
+        // The engine's own retained-disclosure admission, as a turn asks it before each provider step.
+        internal async Task<AgentResult<AgentContextContribution>> ReadmitThroughEngineAsync(IReadOnlyCollection<AgentContextAttachment> context,
+            bool historical = false)
+        {
+            var session = await SessionAsync();
+            return await Services.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy, new(session.Id, string.Empty,
+                new Dictionary<string, string>()) { Disclosure = new(session.Id, context, [], false) { IsHistorical = historical } });
+        }
 
         internal async Task<AgentContextContribution> AdmitAsync(IReadOnlyCollection<AgentContextAttachment> context, bool historical = false)
             => await Source.AdmitDisclosureAsync(new((await SessionAsync()).Id, context, [], false) { IsHistorical = historical });

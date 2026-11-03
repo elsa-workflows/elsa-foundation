@@ -26,21 +26,31 @@ The module reads two owning domains through their `.Core` contracts only, and re
   answer for the request actor and tenant: every entry the designer lists, addable or not, with its `available` flag and
   reason, activity type and exact version identity, and declared inputs with `isRequired`, `isSensitive` and
   `isCredential`. It is bounded to 28 KiB of entries in the owner's order; when entries do not fit it says so with
-  `truncated`, `totalCount` and `includedCount`. `status` is `available`, `denied` (the actor lacks
+  `truncated`, `totalCount` and `includedCount`, and reports `budgetBytes`, `includedBytes` and `nextEntryBytes`, so a
+  reader can check that the prefix stopped only because the next entry would not fit. `status` is `available`, `denied` (the actor lacks
   `activities/design:read`; no entries) or `unavailable`. A missing, ambiguous or failing catalog owner is
   `unavailable` with the optional diagnostic `agent.workflow.catalog_unavailable`, whose message names the missing
-  capability; explanation still works.
+  capability; explanation still works. An owner failure is logged at warning with its cause; the model sees only the fixed
+  text.
 - **Permissions.** `workflow.permissions` schema `1` (origin `AuthoritativeRead`) is contributed for each admitted exact
   `workflow-definition` target, with the snapshot's classification. `read` is `allowed` (the context was admitted on the
   owner's read decision); `manage` is `allowed`, `denied` or `unavailable` (the owner threw
   `WorkflowDefinitionAuthorizationException`), from the host `IAgentToolAuthorizer` for the layout tool and the owning
   `IWorkflowDefinitionAuthorizer.CanManageAsync`, the same decisions the engine uses to advertise tools. `tools` and
   `capabilities` follow: manage allowed adds `workflow_set_designer_position` and `workflow.propose-change`; otherwise
-  the actor gets explanation only.
+  the actor gets explanation only. Both lists are also filtered by the session's host capability policy
+  (`IAgentPolicyEvaluator.EvaluateCapabilityAsync`, which applies `DeniedCapabilityIds`), as the engine filters tool
+  advertisement, so they name exactly what the engine will offer; `manage` stays the owner's answer.
+
+Both server reads respect the session's host context policy. When `IAgentPolicyEvaluator.EvaluateContextAsync` does not
+admit a kind (for example a policy whose `AllowedContextKinds` lists only the older workflow kinds), the module does not
+contribute it: no read is made, no required failure follows, and the optional diagnostic
+`agent.workflow.server_read_withheld` says which kind was left out. Explanation and the reviewed layout change keep
+working exactly as before the server reads existed, and re-admission of a disclosure recorded before them adds none.
 
 Both kinds are in the descriptor's `ContextKinds`. `AdmitDisclosureAsync` accepts a retained one only with the module's
 own origin. For the current turn it never trusts a retained read: it reads the catalog and each target's permissions
-again, under the same attachment identities, so an unchanged answer is the identical projection (no new disclosure
+again, under the same attachment identities and in the same positions (redacted items stay where they were), so an unchanged answer is the identical projection (no new disclosure
 snapshot) and a changed one is a new snapshot under the session's disclosure limits. Historical admission keeps what was
 disclosed and re-checks only the catalog's read gate (`IActivityAuthoringCatalog.CanReadAsync`) when entries were
 disclosed: a lost read is the required `agent.workflow.permission_denied`, an owner outage the required
@@ -62,6 +72,12 @@ and catalog-item records, the operation-batch, risk, clarification, audit and pr
 production consumer. Their replacements: the catalog and permissions above; Agent's own tool-invocation review for
 proposals; Agent's tool-invocation audit for every workflow tool invocation and outcome; and, from slice C, an internal
 classifier that never grants direct apply. `WorkflowAgentGraph` and its activity and connection summaries stay.
+
+Placeholder absence (SC-003) is asserted in two places: `WorkflowAgentNativeAuthorityTests` checks the source-composed
+host (no legacy type in this assembly or its registrations, the real `HttpActivityAuthoringCatalog` and
+`HttpWorkflowDefinitionAuthorizer`, and catalog entries equal to the designer's catalog route), and the conformance
+probe's `workflow-truth-seams` case checks the packaged consumer through its generation observation (the loaded package's
+type names and the one composed catalog).
 
 **SemVer: Major**, classed as pre-GA cleanup (constitution §4.2, ADR 0080 D4). `DefaultWorkflowAgentContextProvider`
 and `WorkflowAgentCapabilityProvider` are now `internal sealed` (ADR 0080 D3), also Major for any Preview consumer that

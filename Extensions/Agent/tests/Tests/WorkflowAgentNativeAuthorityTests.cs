@@ -323,11 +323,18 @@ public sealed class WorkflowAgentNativeAuthorityTests
         var context = await fixture.CollectAsync();
 
         Assert.True(context.Succeeded, context.Error?.Message);
-        var owned = await fixture.Services.GetRequiredService<IActivityAuthoringCatalog>().ListAsync();
+        // The designer's own answer for the same actor: the catalog route's wire projection, not the contract Weaver reads.
+        var (status, designer) = await fixture.DesignerCatalogAsync();
+        Assert.Equal(StatusCodes.Status200OK, status);
         var catalog = Assert.IsType<JsonElement>(Assert.Single(context.Value!.Attachments, item => item.ContentType == "workflow.catalog").Content);
-        Assert.Equal(owned.Entries.Select(entry => (entry.ActivityVersionId, entry.Available, entry.Version)),
-            catalog.GetProperty("entries").EnumerateArray().Select(entry => (entry.GetProperty("activityVersionId").GetString()!,
-                entry.GetProperty("available").GetBoolean(), entry.GetProperty("version").GetString()!)));
+        static object Inputs(JsonElement entry) => string.Join("|", entry.GetProperty("inputs").EnumerateArray().Select(input =>
+            $"{input.GetProperty("referenceKey").GetString()}:{input.GetProperty("name").GetString()}:{input.GetProperty("type").GetString()}:" +
+            $"{input.GetProperty("isRequired").GetBoolean()}:{input.GetProperty("isSensitive").GetBoolean()}:{input.GetProperty("isCredential").GetBoolean()}"));
+        static (string, bool, string, string?, object) Row(JsonElement entry) => (entry.GetProperty("activityVersionId").GetString()!,
+            entry.GetProperty("available").GetBoolean(), entry.GetProperty("version").GetString()!,
+            entry.GetProperty("availabilityReason").ValueKind == JsonValueKind.Null ? null : entry.GetProperty("availabilityReason").GetString(), Inputs(entry));
+        Assert.Equal(designer.GetProperty("activities").EnumerateArray().Select(Row), catalog.GetProperty("entries").EnumerateArray().Select(Row));
+        Assert.Contains(catalog.GetProperty("entries").EnumerateArray(), entry => Inputs(entry).ToString()!.Contains(":True:True"));
         var authorizer = fixture.Services.GetRequiredService<IWorkflowDefinitionAuthorizer>();
         Assert.True(await authorizer.CanManageAsync("wf-1"));
         var permissions = Assert.IsType<JsonElement>(Assert.Single(context.Value.Attachments, item => item.ContentType == "workflow.permissions").Content);
@@ -462,6 +469,26 @@ public sealed class WorkflowAgentNativeAuthorityTests
             return context.Response.StatusCode;
         }
 
+        internal async Task<(int Status, JsonElement Body)> DesignerCatalogAsync()
+        {
+            var routes = new TestEndpointRouteBuilder(Services);
+            ActivitiesDesignApi.MapActivitiesDesignApi(routes);
+            var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().Single(item =>
+                item.RoutePattern.RawText?.TrimStart('/').Equals("design/activities/catalog", StringComparison.Ordinal) == true
+                && item.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("GET") == true);
+            var context = new DefaultHttpContext();
+            SetContext(context);
+            context.SetEndpoint(endpoint);
+            context.Request.Method = "GET";
+            context.Request.Path = "/design/activities/catalog";
+            context.Request.QueryString = new QueryString("?availability=all");
+            context.Response.Body = new MemoryStream();
+            await endpoint.RequestDelegate!(context);
+            context.Response.Body.Position = 0;
+            using var document = await JsonDocument.ParseAsync(context.Response.Body);
+            return (context.Response.StatusCode, document.RootElement.Clone());
+        }
+
         internal Task<AgentResult<AgentContextContribution>> CollectAsync() => Services.GetRequiredService<IAgentContextCollector>()
             .CollectAsync(Session.Policy, WorkflowAgentTests.Request(Snapshot()) with { SessionId = Session.Id });
 
@@ -517,11 +544,16 @@ public sealed class WorkflowAgentNativeAuthorityTests
         {
             Reads++;
             Assert.Equal(ActivityCatalogAvailability.All, request.Availability);
-            return Task.FromResult(new ActivityAuthoringCatalogView([Entry("write-line-v1", true), Entry("restricted-v2", false)]));
+            return Task.FromResult(new ActivityAuthoringCatalogView([Entry("write-line-v1", true, [Input("Text", false), Input("ApiKey", true)]),
+                Entry("restricted-v2", false, [])]));
         }
 
-        private static ActivityAuthoringDescriptorView Entry(string versionId, bool available) => new(versionId, "Acme." + versionId, "1.0.0",
-            versionId, "Acme", null, "Activity", available, available ? null : "Excluded by the effective activity availability policy.", [], [], [], null,
+        private static ActivityInputDescriptorView Input(string name, bool credential) => new(name, name, "String",
+            Elsa.Primitives.Models.CollectionKind.Single, name, null, 0, null, true, credential, true, null, null, null, null,
+            IsSensitive: credential, IsCredential: credential);
+
+        private static ActivityAuthoringDescriptorView Entry(string versionId, bool available, IReadOnlyCollection<ActivityInputDescriptorView> inputs) => new(versionId, "Acme." + versionId, "1.0.0",
+            versionId, "Acme", null, "Activity", available, available ? null : "Excluded by the effective activity availability policy.", inputs, [], [], null,
             new("activity", versionId, new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(),
                 new Dictionary<string, Elsa.Activities.Design.Core.Models.ActivityArgumentValue>(), null));
     }

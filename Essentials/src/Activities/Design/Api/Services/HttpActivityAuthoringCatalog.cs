@@ -23,14 +23,14 @@ internal sealed class HttpActivityAuthoringCatalog(
     IPermissionAuthorizationService permissions,
     IActivityAuthoringCatalogReader reader) : IActivityAuthoringCatalog
 {
-    public ValueTask<bool> CanReadAsync(CancellationToken cancellationToken = default) => GuardAsync(() => AuthorizeAsync(cancellationToken));
+    public ValueTask<bool> CanReadAsync(CancellationToken cancellationToken = default) => GuardAsync(() => AuthorizeAsync(cancellationToken), cancellationToken);
 
     public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken cancellationToken = default) => GuardAsync(async () =>
     {
         if (!await AuthorizeAsync(cancellationToken)) return ActivityAuthoringCatalogResult.Denied;
         var view = await reader.ListAsync(new ListActivityAuthoringCatalog(ActivityCatalogAvailability.All), cancellationToken);
         return new ActivityAuthoringCatalogResult(true, view.Activities.Select(ToEntry).ToArray());
-    });
+    }, cancellationToken);
 
     private async ValueTask<bool> AuthorizeAsync(CancellationToken cancellationToken)
     {
@@ -38,13 +38,16 @@ internal sealed class HttpActivityAuthoringCatalog(
         var context = accessor.HttpContext;
         if (context is null || !principals.TryGetNormalizedPrincipal(context.User, out var principal)) return false;
         var tenant = principal.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? principal.FindFirst("tenant_id")?.Value;
-        return (await permissions.AuthorizeAsync(new(principal, ActivityDesignPermissions.Read, tenant), cancellationToken)).Succeeded;
+        // The route gate's resource is the request itself, so a host permission resource handler decides this read exactly
+        // as it decides GET /design/activities/catalog.
+        return (await permissions.AuthorizeAsync(new(principal, ActivityDesignPermissions.Read, tenant, context), cancellationToken)).Succeeded;
     }
 
-    private static async ValueTask<T> GuardAsync<T>(Func<ValueTask<T>> operation)
+    private static async ValueTask<T> GuardAsync<T>(Func<ValueTask<T>> operation, CancellationToken cancellationToken)
     {
         try { return await operation(); }
-        catch (OperationCanceledException) { throw; }
+        // Only the caller's own cancellation propagates; any other cancellation is an owner failure like the rest.
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (ActivityAuthoringCatalogUnavailableException) { throw; }
         catch (Exception error) { throw new ActivityAuthoringCatalogUnavailableException(error); }
     }
@@ -65,8 +68,14 @@ internal sealed class ActivityAuthoringCatalogStartupTask(IServiceCollection reg
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        Validate(registrations);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Throws when the collection holds more than one catalog registration.</summary>
+    internal static void Validate(IServiceCollection registrations)
+    {
         if (registrations.Count(item => item.ServiceType == typeof(IActivityAuthoringCatalog)) > 1)
             throw new InvalidOperationException("IActivityAuthoringCatalog has multiple registrations; select one explicit activity authoring catalog.");
-        return Task.CompletedTask;
     }
 }

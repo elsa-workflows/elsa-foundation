@@ -15,7 +15,7 @@ from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASE
 from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceError, validate_complete_witness, validate_report,
                       witness_gaps, witness_manifest)
 from restart_journeys import RESTART_QUALIFICATION
-from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES, SECTION as TRUTH_SEAM_SECTION, synthetic_actors
+from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES, SECTION as TRUTH_SEAM_SECTION, synthetic_actors, synthetic_browser, synthetic_registrations
 from test_autonomy_journeys import complete_autonomy_section
 from test_restart_journeys import complete_restart_section
 
@@ -179,7 +179,8 @@ def complete_witness_report(base):
     report[TRUTH_SEAM_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
         "source": base.source, "caseIDs": truth, "stages": [],
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
-                                                                           "actors": synthetic_actors()})} for name in truth]}
+                                                                           "actors": synthetic_actors(),
+                                                                           "registrations": synthetic_registrations(), "browser": synthetic_browser()})} for name in truth]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
     report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
@@ -302,10 +303,12 @@ class CompleteWitnessTests(unittest.TestCase):
             "truth-seams-record-changed": lambda r: r[TRUTH_SEAM_SECTION]["records"][0]["record"].update(sha256="0" * 64),
             "truth-seams-reader-could-manage": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
-                 "actors": {**synthetic_actors(), "reader": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True}}}})),
+                 "actors": {**synthetic_actors(), "reader": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}},
+                 "registrations": synthetic_registrations(), "browser": synthetic_browser()})),
             "truth-seams-tenant-activity-leaked": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
-                 "actors": {**synthetic_actors(), "tenant-manager": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True}}}})),
+                 "actors": {**synthetic_actors(), "tenant-manager": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}},
+                 "registrations": synthetic_registrations(), "browser": synthetic_browser()})),
             "matrix-stage-missing": lambda r: r["stages"].pop(),
             "matrix-stage-repeated": lambda r: r["stages"].append(copy.deepcopy(r["stages"][-1])),
             "failed-stage": lambda r: r["stages"][0].update(exitCode=1),
