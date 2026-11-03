@@ -1,4 +1,4 @@
-# Tasks: Specialist agents
+# Tasks: User-defined Agents
 
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
 [contracts](contracts/) and [qualification guide](quickstart.md).
@@ -9,6 +9,8 @@ qualification; they do not assert product acceptance. M2 is complete through
 resulting-main qualification on `0d6db68a3`. M3 is complete; M4 remains open under
 [#3524](https://github.com/elsa-workflows/elsa-foundation/issues/3524), and M5 implementation is active under
 [#3525](https://github.com/elsa-workflows/elsa-foundation/issues/3525). The product spec remains nonterminal.
+
+**Design amendment hold (4 November 2026)**: [ADR 0094](../../docs/adr/0094-agent-definitions-own-authored-content-and-providers-publish-activities.md), [shared revisions](contracts/revision-management.md) and [Agent ownership](contracts/agent-ownership.md) remain proposed. T001–T063 and checked receipts retain their historical meaning, not proof of shared revision management. Re-plan pending source/editor/configuration tasks against T064–T071 after agreement. The owner now permits pre-GA database recreation: additive adoption, compatibility shims and mixed-schema rollback are no longer requirements. T064–T071 remain unstarted; no production change or reset occurs here.
 
 **Cadence**: ADR 0080 D1 risk-based behavior tests; no invented TDD rule or coverage quota. Tests
 accompany their owning implementation slice and complete before its review/merge. Use meaningful
@@ -85,7 +87,7 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
 
 - [ ] T024 [US2] Extract neutral BPMN semantic models/identities into `Essentials/src/Activities/Bpmn/Core/`, preserving JSON/aliases/schema and justified neutral type forwarders.
 - [ ] T025 [US2] Move authored structure/handler to `Essentials/src/Activities/Bpmn/Design/`, remove Design references from runtime, specialize Interchange and update `Essentials/apps/Elsa.Workbench/` shell manifests without losing authoring registration.
-- [ ] T026 [US2] Preserve compiled-state readers, runtime/interchange/authoring tests and explicit pre-GA authored-type API migration in `Essentials/tests/Activities/Bpmn/` and `Essentials/src/Activities/Bpmn/` catalogs/docs.
+- [ ] T026 [US2] Qualify current compiled-state interpretation and runtime/interchange/authoring tests, and document the coordinated pre-GA authored-type API/package/schema clean break in `Essentials/tests/Activities/Bpmn/` and `Essentials/src/Activities/Bpmn/` catalogs/docs.
 - [ ] T027 [US2] Deliver the generic exact authorized native `HumanReview` wait/decision endpoint (agents are user-defined; the editorial process is a sample, not product code) and pre-claim `ActivityResumeValidating` guard with claimed-replay validation in `Extensions/Agent/src/Specialists/` per `contracts/human-review.md` (sample: `contracts/editorial.md`); prove Sequence/Flowchart ports, rejected-review article/comments feedback, three-round exhaustion, approve/deny, restart and duplicate/foreign/changed/late-decision refusal in `Extensions/Agent/tests/Specialists/Composition/` using real publication/bookmark APIs.
 - [ ] T028 [US2] Deliver the generic exact review page under `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/` and prove the same revision loop/human approve/deny/restart/duplicate scenarios through BPMN bound children, save/reload/export/import and explicit unsupported refusal in `Studio/tests/browser/` and `Extensions/Agent/tests/Specialists/Composition/`. Delivered in M4: the page, its browser cases, native BPMN bound-children journeys, and an export → import journey in which bound agent and review work never travels in shared XML, import refuses execution with every bound task reported as requiring an explicit binding, and the author's exact rebinding compiles and remaps through the BPMN structure handler and runs the loop (`EditorialBpmnTests`, `EditorialInterchangeTests`), per `contracts/human-review.md`. M4 runs from composed executables over really published specialists; saving, reloading and publishing the process as a workflow definition and the browser import refusal move to T036, and binding-preserving interchange to T063. Deferred to M5: Studio-driven authoring (T030), the occurrence link to the page (T034).
 - [ ] T029 [US2] Replace the research BPMN gap only after a fresh normal package consumer proves zero Design/Publishing assemblies and no mutable lookup in `tools/agents/conformance/`; retain authoring-only/combined profiles.
@@ -168,11 +170,24 @@ four authorized live journeys, retaining exact artifacts/readiness/original fail
 
 - [ ] T051 [US8] Produce immutable packages/Studio distribution and independent module/consumer projects with isolated locks/caches/archive and loaded-byte checks in `tools/agents/conformance/`.
 - [ ] T052 [US8] Execute four-store × three-host × two-provider protocol matrix and independently retained authoring-only/runtime-only/combined/Studio shapes through `tools/agents/conformance/`; use normal public readiness/shell lifecycle and private state.
-- [ ] T053 [US8] Qualify disabled admission, retained in-flight work/readers, key/codec/schema upgrades, interrupted migration and explicitly supported rollback across actual providers in `Extensions/Agent/tests/Specialists/Tests/Recovery/` and `tools/agents/conformance/`.
+- [ ] T053 [US8] Qualify disabled admission, within-deployment in-flight work/readers and key rotation/replay, incompatible-profile refusal, plus declared pre-GA clean initialization/recreation/republish across actual providers in `Extensions/Agent/tests/Specialists/Tests/Recovery/` and `tools/agents/conformance/`.
 - [ ] T054 [US8] Run bounded authorized live Anthropic/Azure OpenAI Copywriter/Proofreader examples through native and BPMN workflows, recording exact access/deployment/model identity and observed evidence in `specs/1179-specialist-agents/evidence/`; do not publish secrets/raw private state.
-- [ ] T055 [US8] Ship user guide `website/docs/extensions/specialist-agents.md` with `website/docs/SUMMARY.md` navigation, operator guide `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/README.md`, and module-author `Extensions/Agent/src/Specialists/Core/README.md`, covering examples/configuration, actual support, migration/rollback and uncertainty/cancellation.
+- [ ] T055 [US8] Ship user guide `website/docs/extensions/specialist-agents.md` with `website/docs/SUMMARY.md` navigation, operator guide `Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/README.md`, and module-author `Extensions/Agent/src/Specialists/Core/README.md`, covering examples/configuration, actual support, declared pre-GA reset/recreation/republish and uncertainty/cancellation.
 - [ ] T056 [US8] Reconcile real host startup asset budgets, missing/incompatible/restored module controls, native resource isolation and owned-process cleanup in `tools/agents/conformance/`; do not substitute static closure or source-tree hosts.
 - [ ] T057 [US8] Close every A1–A15 row only with reviewed product receipts in `specs/1179-specialist-agents/evidence/acceptance.md`, preserving all failed/skipped/cancelled/quarantined/unknown statuses and exact source/fixture/host/provider identities.
+
+## Proposed ownership amendment — review-gated future work
+
+The following dependency-ordered tasks apply FR-028–FR-035 and W1–W8. They are a planning amendment, not permission to start production implementation. Existing runtime tests remain applicable within the new supported deployment; legacy-format fixture acceptance is not a cross-break requirement.
+
+- [ ] T064 Record final human agreement on ADR 0094 and the amended packet. Authorize a separate delivery leaf; reconcile owning Workflow/activity specs, dependencies and pending tasks. Confirm shared-capability placement, reset scope and W1–W8 before implementing.
+- [ ] T065 After T064, extract shared source identity/working-copy CAS/immutable snapshot/history/provenance/pin mechanics from existing Workflow and reusable-activity stores. Deliver real typed Workflow and Agent adapters, preserving graph-aware mutation/layout separation and Agent content permissions/I/O authority. Assess reusable-activity fit before API/package freeze. Prove W1/W2/W5 with one implementation, not wrappers over duplicate engines.
+- [ ] T066 After T065, adapt shared publishing/provider compilation for exact revision references, review, durable operation/reservation and receipt-authoritative release/index repair. Use Workflow and Agent adapters with explicit domain compiler/commit differences. Extend the source-owned bridge to registered provider compilation/preflight. Prove W2/W3/W5 and the failed-publication example; do not add an Agent candidate store or publisher.
+- [ ] T067 After T065/T066, define and qualify the pre-GA clean break: affected stores/configuration/packages, coordinated host stop/drain and incompatible-profile refusal, fresh schema initialization, source recreation and explicit republish. Clean Specialist-to-Agent naming changes may be included in reviewed delivery. No legacy import/backfill, aliases, mixed-schema migration or old-data rollback is required. Qualify W7 on owned disposable stores; do not reset a live demo from this design task.
+- [ ] T068 After T065/T066 and the declared T067 deployment contract, adapt Agent Studio/API discovery/editor/test/history to shared revision callbacks through typed Agent authority. Keep generated activity views read-only, show source revision/release and truthful pending/unknown results. Preserve domain permissions and local conflict/undo semantics; use canonical Agent terminology.
+- [ ] T069 With T065–T068, implement meaningful tests in actual revision, Workflow, Agent and publishing/persistence suites. Prove W1–W7: shared CAS/capture/pin races, rejected snapshots, release/activation distinction, stale review/authority, changed-operation refusal, independent-store failure and receipt recovery for both adapters. Retain within-deployment native/BPMN artifact and accepted-turn replay guarantees. Qualify four-provider scope/concurrency, test counts and causal red/green controls.
+- [ ] T070 After T068/T069, qualify W4/W6–W8 in real Studio and normal source/package authoring-only/runtime-only/combined hosts, configuration-defined Agents and native/BPMN journeys. Include clean-store initialization/recreation/republish; document reset boundaries without promising cross-break compatibility. Update support/guide/wireframes and owning docs with fresh receipts, distinct from historical evidence.
+- [ ] T071 After separately authorized delivery and required review/CI/resulting-main checks, reconcile W1–W8 and actual shared-engine evidence, prune obsolete domain-specific versioning code/tests and compatibility scaffolding rather than retain parallel implementations. Complete only with proven behavior and declared clean-break support; this draft checks none of these tasks.
 
 ## Final cross-cutting gate
 
@@ -181,6 +196,9 @@ four authorized live journeys, retaining exact artifacts/readiness/original fail
 - [ ] T060 Set this product specification to Implemented only in the final completing PR and remove terminal checklist residue per `docs/reference/spec-lifecycle.md`; ship the final acceptance/support/docs links with Program closure.
 
 ## Dependencies and execution strategy
+
+**Ownership amendment**: T064 → T065 → T066 → T067, with T068 following the source/publication and clean-deployment contracts; T069 accompanies each behavior change, T070 qualifies it and T071 closes delivery. No proposed ownership task runs while this design PR awaits human review. Configuration source T061 and shared publishing T062 consume T066 rather than introducing another source/publisher. Historical completed tasks are not reopened or erased by this amendment.
+
 
 T001–T004 enable the first US1 slice; T005–T008 can land as complete authoring/query work while real
 runtime capability admission still refuses publication without its interpreter. T009–T013 finish the
@@ -237,5 +255,14 @@ A cookie request from an externally signed-in user decides as its canonical Elsa
 a first-party bearer minted from that session names the provider subject and carries no user ID claim, so such a
 caller is refused (`Forbidden`) rather than misattributed. No production external sign-in path is wired today. M7
 #3527 must make the issued token, the session service and every subject-scoped store agree on one subject for
-external sign-ins (with migration for anything saved under the provider subject) before external deciders are
-supported.
+external sign-ins before external deciders are supported. Under the revised pre-GA policy, delivery may recreate affected scoped records instead of migrating old provider-subject records; it must never silently reattribute a retained record.
+
+### Shared revision amendment traceability
+
+| Requirement | Planned tasks | Witness / Program acceptance |
+|---|---|---|
+| FR-028–FR-029 | T064–T066,T068–T070 | W1,W2,W8; A1,A3,A12 |
+| FR-030 | T066,T069–T071 | W3; A3,A13 |
+| FR-031–FR-032 | T065,T066,T069–T071 | W2,W3,W5,W7; A1,A3,A13 |
+| FR-033–FR-035 | T066–T071 | W4,W6,W7,W8; A4,A5,A6,A8,A9,A12,A13 |
+| SC-008–SC-010 | T064–T071 | W1–W8; amendment acceptance remains unproven |
