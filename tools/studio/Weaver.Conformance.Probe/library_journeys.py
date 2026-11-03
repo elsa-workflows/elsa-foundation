@@ -100,6 +100,11 @@ TEMPLATE_BROWSER = "workflow-templates"
 LIBRARY_OBSERVATIONS = {"listNarrowed": True, "listReverted": True, "dialogPrefilled": True, "createNotPressed": True, "noLibraryWrite": True}
 TEMPLATE_OBSERVATIONS = {"applied": True, "templateTarget": True, "oneHistoryStep": True, "autosaveHeld": True, "savedWithExpectedRevision": True,
                          "definitionUntouched": True}
+# An approved server write's continuation, pinned per adapter. Copilot's was observed on the c58c9f149 witness (tags-dropped,
+# view-dropped and favorite): the same order as a denied proposal's continuation. Anthropic's is pinned to its own observed
+# continuation order (the engine continues the turn the same way after any decided proposal) until its witness confirms it.
+EXECUTED_CONTINUATION_FRAMES = {"copilot": ["started", "contextAdmitted", "messageDelta", "completed"],
+                                "anthropic": DENIED_CONTINUATION_FRAMES["anthropic"]}
 # An approved server write's adapter rows, as lifecycle_journeys pins them: advertise, call, then continue once with the result
 # (Copilot's SDK also returns the pending call before the review).
 EXECUTED_SEQUENCES = {"copilot": (["request", "call", "request", "continuation"], ["request", "call", "return", "request", "continuation"]),
@@ -285,9 +290,12 @@ def require_executed(response, proposal, *, tool, status="applied"):
     return payload["data"]
 
 
-def require_continuation(values):
-    """As lifecycle_journeys: the originating turn continues once with the outcome and completes, with no new call or review."""
+def require_continuation(values, provider=None):
+    """The originating turn continues once with the outcome and completes, with no new call or review (as lifecycle_journeys
+    checks it), in the adapter's own pinned order when one is given."""
     values = _frames(values)
+    if provider is not None:
+        _kinds(values, EXECUTED_CONTINUATION_FRAMES[provider], "The executed write's continuation")
     check(values[0].get("kind") == "started" and values[-1].get("kind") == "completed" and sum(frame.get("kind") == "started" for frame in values) == 1
           and not any(frame.get("kind") in ("proposalCreated", "toolCallRequested", "toolCallStarted", "toolApprovalRequested", "error", "turnCancelled")
                       for frame in values), "The outcome did not continue and complete the originating native turn")
@@ -377,7 +385,7 @@ def _approve_execute(runtime, turn, proposal, tool, *, status="applied"):
     executed = transport.execute(proposal["id"], revision=proposal["baseRevision"]).require_status(200)
     data = require_executed(executed.json(), proposal, tool=tool, status=status)
     continuation = transport.collect_turn(turn["session"])
-    require_continuation([frame.value for frame in continuation.frames])
+    require_continuation([frame.value for frame in continuation.frames], runtime.provider)
     trace = transport.protocol_trace(turn["offset"])
     check(trace["incompleteTailBytes"] == 0, "An incomplete adapter trace cannot establish the executed " + tool)
     require_executed_rows(trace["records"], provider=runtime.provider, command_id=turn["commandId"], tool=tool)

@@ -261,8 +261,11 @@ turn is its own full-auto session with the page context Studio sends (`workflows
 The packaged Studio journeys: `workflow-library` applies a reviewed list narrowing on the list page, reverts it, and fills
 the open create dialog, whose Create is never pressed (no design API write, the page's total unchanged);
 `workflow-templates` applies a reviewed batch in the template editor as one history step (Undo and Redo), with autosave
-held past its interval, and the user's own Save carries the template's expected revision. Executed continuations are not
-yet pinned per adapter: the first native witness records them. `require_workflow_library` refuses a missing, failed,
+held past its interval, and the user's own Save carries the template's expected revision. An executed write's continuation is pinned per
+adapter (Copilot's as the c58c9f149 witness observed it, the same order as a denied proposal's continuation) and also
+checked structurally. Every control in these two journeys, on the page and in the dock, is activated through the keyboard:
+the nonmodal dock overlaps page controls (the c58c9f149 witness saw it intercept the list's Create workflow click) and an
+open page dialog overlaps the dock. `require_workflow_library` refuses a missing, failed,
 duplicated or changed record; `witness_manifest()` counts the four cases.
 
 ### Restart inventory over the packaged durable store (#3441 T031)

@@ -45,9 +45,13 @@ public sealed record WorkflowLibraryTagValueSnapshot(string Id, string Name, boo
 public sealed record WorkflowLibraryTagSnapshot(string Id, string Name, string? Description, string Mode, string Cardinality,
     bool Deprecated, string Revision, IReadOnlyList<WorkflowLibraryTagValueSnapshot> Values);
 
-/// <summary>The input of an explicit tag creation. Controlled values are named; their identities are generated.</summary>
+/// <summary>The input of an explicit tag creation, complete as the library's own tag create accepts it. Controlled values are
+/// named, optionally retired; their identities are generated.</summary>
 public sealed record WorkflowLibraryTagCreate(string Name, string? Description = null, string Mode = "marker", string Cardinality = "single",
-    IReadOnlyList<string>? ValueNames = null);
+    IReadOnlyList<WorkflowLibraryTagValueCreate>? Values = null, bool Deprecated = false);
+
+/// <summary>A controlled value of a tag being created; its identity is generated.</summary>
+public sealed record WorkflowLibraryTagValueCreate(string Name, bool Deprecated = false);
 
 /// <summary>A definition's current organization: its folder, tags and the revision a tag edit binds to.</summary>
 public sealed record WorkflowLibraryOrganizationSnapshot(string DefinitionId, string? FolderId, IReadOnlyList<WorkflowLibraryTagReference> Tags, string Revision);
@@ -73,4 +77,8 @@ public sealed record WorkflowLibraryViewSave(string Name, WorkflowLibraryViewQue
 
 /// <summary>A workflow library view as the owning library service reports it, with the actor's own edit right.</summary>
 public sealed record WorkflowLibraryViewSnapshot(string Id, string Name, bool Shared, string OwnerId, WorkflowLibraryViewQuery Query,
-    IReadOnlyList<string> Columns, string Revision, bool CanEdit);
+    IReadOnlyList<string> Columns, string Revision, bool CanEdit)
+{
+    /// <summary>The stored view's schema version, as the library reports it.</summary>
+    public int SchemaVersion { get; init; } = 1;
+}

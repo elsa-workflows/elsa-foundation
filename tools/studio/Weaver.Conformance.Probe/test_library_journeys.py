@@ -162,6 +162,10 @@ class TurnTests(unittest.TestCase):
         unbound = copy.deepcopy(response); unbound["data"]["toolResult"]["receipt"]["before"]["revision"] = "other"
         with self.assertRaises(RuntimeError): require_executed(unbound, prepared, tool=ASSIGN_TOOL)
         require_continuation([{"kind": "started"}, {"kind": "contextAdmitted"}, {"kind": "messageDelta"}, {"kind": "completed"}])
+        # Pinned per adapter: Copilot's as the c58c9f149 witness observed it.
+        require_continuation([{"kind": "started"}, {"kind": "contextAdmitted"}, {"kind": "messageDelta"}, {"kind": "completed"}], "copilot")
+        with self.assertRaises(RuntimeError):
+            require_continuation([{"kind": "started"}, {"kind": "contextAdmitted"}, {"kind": "messageDelta"}, {"kind": "completed"}], "anthropic")
         with self.assertRaises(RuntimeError): require_continuation([{"kind": "started"}, {"kind": "toolCallStarted"}, {"kind": "completed"}])
         base = [{"kind": "copilot.request", "data": {"commandId": COMMAND, "tools": [{"name": ASSIGN_TOOL}]}},
                 {"kind": "copilot.call", "data": {"commandId": COMMAND, "toolName": ASSIGN_TOOL}},

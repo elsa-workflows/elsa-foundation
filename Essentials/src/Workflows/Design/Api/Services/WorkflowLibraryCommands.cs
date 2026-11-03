@@ -22,7 +22,7 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
 {
     private const string NotPermitted = "The requested workflow library operation is not permitted.";
     private const int TagPageSize = 100;
-    private const string KeyRequired = "A new tag or workflow view is created under a client operation key.";
+    private const string BlankKey = "An operation key must not be blank.";
 
     /// <summary>The request's built-in command service, which the library endpoints without a Core counterpart call.</summary>
     internal static WorkflowLibraryCommands For(HttpContext http) => http.RequestServices.GetRequiredService<WorkflowLibraryCommands>();
@@ -168,14 +168,14 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
             cancellationToken);
 
     public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input,
-        string operationKey, CancellationToken cancellationToken = default)
+        string? operationKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        // A Core create is always keyed, so a lost response is resolved by rereading the key, never by a second create.
-        if (string.IsNullOrWhiteSpace(operationKey))
-            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Invalid, KeyRequired));
-        var tag = new WorkflowTagInput(input.Name, input.Description, input.Mode, input.Cardinality, false,
-            input.ValueNames?.Select(name => new WorkflowTagValue("", name)).ToArray());
+        // A blank key is a defect, never a silent unkeyed create; no key at all is the library's ordinary create.
+        if (operationKey is not null && string.IsNullOrWhiteSpace(operationKey))
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Invalid, BlankKey));
+        var tag = new WorkflowTagInput(input.Name, input.Description, input.Mode, input.Cardinality, input.Deprecated,
+            input.Values?.Select(value => new WorkflowTagValue("", value.Name, value.Deprecated)).ToArray());
         return RunAsync(actor, WorkflowDesignPermissions.ManageTags, async http => ToSnapshot(await CreateTagAsync(http, tag, operationKey, cancellationToken)),
             cancellationToken);
     }
@@ -219,12 +219,12 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
     }
 
     public async ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor,
-        IReadOnlyList<string> definitionIds, string? folderId, string operationKey, CancellationToken cancellationToken = default)
+        IReadOnlyList<string> definitionIds, string? folderId, string? operationKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definitionIds);
-        if (string.IsNullOrWhiteSpace(operationKey))
-            return new(WorkflowLibraryCommandStatus.Invalid, "A folder move is applied under an operation key.",
-                definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Invalid)).ToArray());
+        if (operationKey is not null && string.IsNullOrWhiteSpace(operationKey))
+            return new(WorkflowLibraryCommandStatus.Invalid, BlankKey,
+                definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Invalid, Message: BlankKey)).ToArray());
         // The store moves the set atomically: every target shares the one outcome, never a partial result.
         var result = await RunAsync(actor, WorkflowDesignPermissions.Manage, async http =>
         {
@@ -244,10 +244,10 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         WorkflowLibraryViewSave input, string? operationKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        // A Core view create is always keyed (as a tag create is); an update is bound by its revision and takes no key.
-        if (viewId is null && string.IsNullOrWhiteSpace(operationKey) || viewId is not null && operationKey is not null)
+        // A create takes an optional key (a blank one is a defect); an update is bound by its revision and takes no key.
+        if (operationKey is not null && (viewId is not null || string.IsNullOrWhiteSpace(operationKey)))
             return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>(WorkflowLibraryCommandStatus.Invalid,
-                viewId is null ? KeyRequired : "An update of a workflow view is bound by its revision and takes no operation key."));
+                viewId is null ? BlankKey : "An update of a workflow view is bound by its revision and takes no operation key."));
         var view = new WorkflowLibraryViewInput(input.Name, ToQuery(input.Query), input.Shared, input.Columns, input.Revision);
         return RunAsync(actor, WorkflowDesignPermissions.Read, async http => ToSnapshot(await SaveViewAsync(http, viewId, view, operationKey, cancellationToken)),
             cancellationToken);
@@ -299,7 +299,8 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         catch (UnauthorizedAccessException) { return new(WorkflowLibraryCommandStatus.Denied, NotPermitted); }
         catch (WorkflowLibraryOperationKeyUnsupportedException) { return new(WorkflowLibraryCommandStatus.Unsupported, WorkflowLibraryOperationKeyUnsupportedException.FixedMessage); }
         catch (WorkflowLibraryConflictException exception) { return new(WorkflowLibraryCommandStatus.Conflict, exception.Message); }
-        catch (EntityNotFoundException) { return new(WorkflowLibraryCommandStatus.NotFound, "The workflow library item is unavailable."); }
+        // The library's own not-found text names the missing item and kind, as its routes answer; it carries no cause.
+        catch (EntityNotFoundException exception) { return new(WorkflowLibraryCommandStatus.NotFound, exception.Message); }
         catch (ArgumentException exception) { return new(WorkflowLibraryCommandStatus.Invalid, exception.Message); }
     }
 
@@ -321,7 +322,7 @@ internal sealed class WorkflowLibraryCommands(IHttpContextAccessor accessor, IWo
         new(view.Query.SearchTerm, view.Query.State, view.Query.FolderId, view.Query.Unfiled, view.Query.IncludeDescendants,
             view.Query.TagFilters?.Select(filter => new WorkflowLibraryTagFilterSnapshot(filter.TagId, filter.Operator, filter.ValueIds)).ToArray(),
             view.Query.FavoritesOnly, view.Query.Sort, view.Query.PageSize, view.Query.PublicationState),
-        view.Columns, view.Revision, view.CanEdit);
+        view.Columns, view.Revision, view.CanEdit) { SchemaVersion = view.SchemaVersion };
 
     private static WorkflowLibraryQuery ToQuery(WorkflowLibraryViewQuery query)
     {

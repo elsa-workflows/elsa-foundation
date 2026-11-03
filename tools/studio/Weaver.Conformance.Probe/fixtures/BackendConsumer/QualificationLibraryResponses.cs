@@ -48,10 +48,10 @@ sealed class QualificationLibraryCommands(QualificationLibraryDropState state, I
         inner.ListTagsAsync(actor, search, cancellationToken);
 
     public async ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input,
-        string operationKey, CancellationToken cancellationToken = default)
+        string? operationKey, CancellationToken cancellationToken = default)
     {
         var result = await inner.CreateTagAsync(actor, input, operationKey, cancellationToken);
-        if (result.Succeeded && result.Value is { } tag) state.MaybeDrop("create-tag", operationKey, tag.Id);
+        if (operationKey is not null && result.Succeeded && result.Value is { } tag) state.MaybeDrop("create-tag", operationKey, tag.Id);
         return result;
     }
 
@@ -61,7 +61,7 @@ sealed class QualificationLibraryCommands(QualificationLibraryDropState state, I
         inner.EditTagsAsync(actor, edit, cancellationToken);
     public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> SetFavoritesAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, bool favorite, CancellationToken cancellationToken = default) =>
         inner.SetFavoritesAsync(actor, definitionIds, favorite, cancellationToken);
-    public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string operationKey, CancellationToken cancellationToken = default) =>
+    public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string? operationKey, CancellationToken cancellationToken = default) =>
         inner.MoveDefinitionsAsync(actor, definitionIds, folderId, operationKey, cancellationToken);
     public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryViewSnapshot>>> ListViewsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) =>
         inner.ListViewsAsync(actor, cancellationToken);

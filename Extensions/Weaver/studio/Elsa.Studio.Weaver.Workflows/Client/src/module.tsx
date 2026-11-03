@@ -116,7 +116,7 @@ interface LibraryTargetOutcome { definitionId?: string; status?: string; message
 
 const libraryStatusLabel: Record<string, string> = {
   applied: "Changed", denied: "Not permitted", conflict: "Changed elsewhere; reload", "not-found": "Unavailable", invalid: "Refused",
-  unavailable: "Organization unavailable", unsupported: "Not supported", proposed: "Proposed"
+  unavailable: "Organization unavailable", unsupported: "Not supported", "not-applied": "Not changed", proposed: "Proposed"
 };
 
 /**

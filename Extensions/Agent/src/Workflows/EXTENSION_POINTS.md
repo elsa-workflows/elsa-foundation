@@ -256,8 +256,8 @@ only as a marker tag, only with the library's tag-management flag, and the revie
 key frozen at preparation; when the create's response is lost, the outcome is an authoritative reread by that key, so a
 retry resolves to exactly one tag or view (SC-008). A shared view needs the view-sharing flag; an update is the applied view
 bound by its revision. Results carry one outcome per target and one overall `status`: `applied` only when every target applied
-and every named tag was created, `partial` when something persisted but not everything (for instance a tag created whose
-assignment then failed), and a change that altered nothing is a refusal with no receipt. A partial result keeps its
+and every named tag was created, `partial` when something persisted but not everything (for instance a tag created
+whose next creation then failed, when every target reports `not-applied`), and a change that altered nothing is a refusal with no receipt. A partial result keeps its
 `ServerPersisted` receipt (something did persist, so the engine must not call it uncertain or refused), and its payload
 and summary say partial and which targets were not changed; it is never presented as applied. Delete and permanent delete are not offered.
 

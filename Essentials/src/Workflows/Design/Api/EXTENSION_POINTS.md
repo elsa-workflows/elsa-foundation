@@ -93,7 +93,13 @@ replacement installed, the endpoints that have a Core counterpart (tag create, b
 move, view list, create and update) call the replacement for the request's own actor and tenant and render its outcomes
 with the module's errors (denied 403, unavailable and unsupported 501, conflict 409, not found 404, invalid 400); the
 others (folder hierarchy, tag pages and updates, organization reads and full tag replacement, view deletion) keep the
-built-in logic. A Core create is always keyed (`invalid` without a key), and a view update takes no key. For an explicit actor it serves only the
+built-in logic. Through any installed implementation these routes answer exactly as the built-in ones for every input: the
+Core create shapes carry everything the routes accept (a tag's and its values' deprecation, a view's schema version), the
+key is passed exactly as sent (no key is the library's ordinary non-idempotent create, which a keyless store still
+serves; Weaver always passes one), a bulk tag edit is validated as the route validates it and must report exactly one
+outcome per requested target (answered in request order; anything else is the implementation's defect, 500), and a
+folder move or favorite whose target is not applied is the route's refusal for that target's status. A blank key, or a
+key on a view update, is `invalid`. For an explicit actor it serves only the
 current request's own authenticated subject and tenant (any other is `denied`), applies the permission the matching
 endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for tag edits, `Manage` for folder moves,
 `Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's

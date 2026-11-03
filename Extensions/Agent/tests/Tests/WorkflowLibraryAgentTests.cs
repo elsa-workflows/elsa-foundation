@@ -201,8 +201,13 @@ public sealed class WorkflowLibraryAgentTests
         Assert.True(executed.Succeeded, executed.Error?.Message);
         var data = executed.Value!.Payload!.Data;
         Assert.Equal("partial", data.GetProperty("status").GetString());
-        Assert.Contains("No workflow tags were changed", executed.Value.Content);
+        Assert.Contains("No workflow tags were changed on one", executed.Value.Content);
         Assert.Empty(commands.Edits);
+        // Every frozen target reports that it was not changed, and the receipt's after-revision covers those real outcomes.
+        Assert.Equal(new[] { ("one", "not-applied") }, data.GetProperty("targets").EnumerateArray()
+            .Select(item => (item.GetProperty("definitionId").GetString(), item.GetProperty("status").GetString())));
+        Assert.NotEqual(prepared.Target!.Revision, executed.Value.Receipt!.After.Revision);
+        Assert.StartsWith("sha256:", executed.Value.Receipt.After.Revision);
         // A first creation that fails changes nothing: a refusal, with no receipt.
         var none = new FakeCommands(); none.FailCreates.Add("Only new");
         var refused = await AssignTool(none).ExecuteAsync(await PreparedAsync(AssignTool(none),
@@ -505,13 +510,13 @@ public sealed class WorkflowLibraryAgentTests
                 .OrderBy(tag => tag.Name.ToUpperInvariant(), StringComparer.Ordinal).Take(100).ToArray();
             return ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>(WorkflowLibraryCommandStatus.Applied, null, page));
         }
-        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input, string operationKey, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input, string? operationKey, CancellationToken cancellationToken = default)
         {
             if (FailCreates.Contains(input.Name))
                 return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Conflict, "A tag with this name already exists."));
-            if (!CreatedTags.ContainsKey(operationKey)) CreatedTags[operationKey] = new("tag-" + CreatedTags.Count, input.Name, null, "marker", "single", false, "t1", []);
+            if (!CreatedTags.ContainsKey(operationKey!)) CreatedTags[operationKey!] = new("tag-" + CreatedTags.Count, input.Name, null, "marker", "single", false, "t1", []);
             if (DropCreateResponse) throw new TimeoutException("The response was lost after the tag was committed.");
-            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Applied, null, CreatedTags[operationKey]));
+            return ValueTask.FromResult(new WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>(WorkflowLibraryCommandStatus.Applied, null, CreatedTags[operationKey!]));
         }
         public ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> FindTagByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey, CancellationToken cancellationToken = default)
         {
@@ -527,7 +532,7 @@ public sealed class WorkflowLibraryAgentTests
         public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> SetFavoritesAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, bool favorite, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>(WorkflowLibraryCommandStatus.Applied, null,
                 definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Applied)).ToArray()));
-        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string operationKey, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor, IReadOnlyList<string> definitionIds, string? folderId, string? operationKey, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>(WorkflowLibraryCommandStatus.Applied, null,
                 definitionIds.Select(id => new WorkflowLibraryTargetOutcome(id, WorkflowLibraryCommandStatus.Applied)).ToArray()));
         public ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryViewSnapshot>>> ListViewsAsync(WorkflowLibraryActor actor, CancellationToken cancellationToken = default) =>

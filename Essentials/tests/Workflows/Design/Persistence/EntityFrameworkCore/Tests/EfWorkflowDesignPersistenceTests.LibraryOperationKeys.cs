@@ -1,3 +1,4 @@
+using Elsa.Locking.Core;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -150,5 +151,57 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         Assert.Single(results.Select(view => view.Id).Distinct());
         using var read = host.CreateScope();
         Assert.Equal(1, await read.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().LibraryViews.CountAsync());
+    }
+
+    [Theory]
+    [InlineData("tag")]
+    [InlineData("view")]
+    public async Task Library_a_key_committed_between_the_reread_and_the_write_rolls_the_loser_back_without_fence_ledger_or_audit(string kind)
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-key-raced-" + kind);
+        // The hierarchy lease is taken after the keyed create's own reread and before its write, so a hook there commits the
+        // racing create exactly in the window the in-writer key check guards.
+        var hook = new HookLockProvider();
+        await using var host = LibraryHost(database.ConnectionString, locking: hook);
+        using (var setup = host.CreateScope()) await setup.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().Database.MigrateAsync();
+        Task<string> CreateAsync(IServiceProvider services) => kind == "tag"
+            ? services.GetRequiredService<IWorkflowLibraryStore>().CreateTagAsync(new("Raced"), "alice", "raced-key").ContinueWith(task => task.Result.Id)
+            : services.GetRequiredService<IWorkflowLibraryStore>().SaveViewAsync(null, new("Raced", new()), "alice", false, "raced-key").ContinueWith(task => task.Result.Id);
+        string? winner = null; (string Fence, int Ledger, int Audit) committed = default;
+        async Task<(string, int, int)> CountsAsync()
+        {
+            using var read = host.CreateScope(); var db = read.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+            return ((await db.LibraryFences.AsNoTracking().SingleAsync()).Revision, await db.Operations.CountAsync(), await db.LibraryAudit.CountAsync());
+        }
+        hook.Once = async () =>
+        {
+            using var racer = host.CreateScope();
+            winner = await CreateAsync(racer.ServiceProvider);
+            committed = await CountsAsync();
+        };
+        using var scope = host.CreateScope();
+        var loser = await CreateAsync(scope.ServiceProvider);
+        Assert.True(hook.Fired);
+        Assert.Equal(winner, loser);
+        // The loser wrote nothing: the same fence revision, ledger rows and audit rows the winner left.
+        Assert.Equal(committed, await CountsAsync());
+        using var final = host.CreateScope(); var rows = final.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        Assert.Equal(1, kind == "tag" ? await rows.Tags.CountAsync() : await rows.LibraryViews.CountAsync());
+    }
+
+    private sealed class HookLockProvider : IDistributedLockProvider
+    {
+        public Func<Task>? Once { get; set; }
+        public bool Fired { get; private set; }
+        public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            if (Once is { } hook) { Once = null; Fired = true; await hook(); }
+            return new Handle();
+        }
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        private sealed class Handle : IDistributedSynchronizationHandle { public CancellationToken HandleLostToken => CancellationToken.None; public void Dispose() { } public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
     }
 }

@@ -20,6 +20,8 @@ internal abstract class WorkflowLibraryServerTool(IEnumerable<IWorkflowLibraryCo
 {
     internal const string ResultType = "workflows.library-result";
     internal const string RendererId = "weaver.workflows.library-result";
+    /// <summary>A target the change never reached because an earlier step of it (a tag creation) failed.</summary>
+    internal const string NotApplied = "not-applied";
     protected static readonly JsonSerializerOptions JsonOptions = WorkflowLibraryContext.JsonOptions;
 
     public abstract AgentToolDescriptor Descriptor { get; }
@@ -250,10 +252,16 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
             creations.Add(new { name, status = result.Status, tagId = result.Value?.Id, result.Message });
             if (!result.Succeeded || result.Value is null)
             {
-                // An earlier creation in this change is persisted, so the change is partial; otherwise nothing changed.
+                // An earlier creation in this change is persisted, so the change is partial; otherwise nothing changed. Every
+                // frozen target says it was not changed, so the outcome (and the receipt's after-revision) names them all.
                 var stopped = created.Count == 0 ? "refused" : "partial";
-                var none = JsonSerializer.SerializeToElement(new { kind = "tags", status = stopped, creations, targets = Array.Empty<object>() }, JsonOptions);
-                return (stopped, $"Creating the tag '{name}' was {result.Status}: {result.Message} No workflow tags were changed.", none, []);
+                var untouched = arguments.GetProperty("targets").EnumerateArray().Select(target => new WorkflowLibraryTargetOutcome(
+                    target.GetProperty("definitionId").GetString()!, NotApplied, target.GetProperty("revision").GetString(),
+                    $"Not changed: creating the tag '{name}' was {result.Status}.")).ToArray();
+                var (_, targetData) = Summarize(untouched);
+                var none = JsonSerializer.SerializeToElement(new { kind = "tags", status = stopped, creations, targets = targetData }, JsonOptions);
+                return (stopped, $"Creating the tag '{name}' was {result.Status}: {result.Message} No workflow tags were changed on "
+                    + string.Join(", ", untouched.Select(outcome => outcome.DefinitionId)) + ".", none, untouched);
             }
             created[key] = result.Value.Id;
         }

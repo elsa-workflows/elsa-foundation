@@ -32,9 +32,13 @@ public interface IWorkflowLibraryCommands
     ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTagSnapshot>>> ListTagsAsync(WorkflowLibraryActor actor, string? search,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Creates a tag under tag-management authority and a client operation key; a repeat with the same key and input returns that tag.</summary>
+    /// <summary>
+    /// Creates a tag under tag-management authority. With a client operation key a repeat with the same key and input
+    /// returns that tag (a store without key support answers <see cref="WorkflowLibraryCommandStatus.Unsupported"/>); without
+    /// one it is the library's ordinary, non-idempotent create, as its HTTP route offers it. Weaver always passes a key.
+    /// </summary>
     ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> CreateTagAsync(WorkflowLibraryActor actor, WorkflowLibraryTagCreate input,
-        string operationKey, CancellationToken cancellationToken = default);
+        string? operationKey, CancellationToken cancellationToken = default);
 
     /// <summary>Rereads the tag a keyed create made; applied with a null value when the key created none.</summary>
     ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryTagSnapshot>> FindTagByOperationKeyAsync(WorkflowLibraryActor actor, string operationKey,
@@ -48,17 +52,19 @@ public interface IWorkflowLibraryCommands
     ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> SetFavoritesAsync(WorkflowLibraryActor actor,
         IReadOnlyList<string> definitionIds, bool favorite, CancellationToken cancellationToken = default);
 
-    /// <summary>Moves the targets into a folder (null: unfiled) as one atomic, idempotent set: every target reports the same outcome.</summary>
+    /// <summary>Moves the targets into a folder (null: unfiled) as one atomic, idempotent set: every target reports the same
+    /// outcome. Without an operation key the library generates its own.</summary>
     ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryTargetOutcome>>> MoveDefinitionsAsync(WorkflowLibraryActor actor,
-        IReadOnlyList<string> definitionIds, string? folderId, string operationKey, CancellationToken cancellationToken = default);
+        IReadOnlyList<string> definitionIds, string? folderId, string? operationKey, CancellationToken cancellationToken = default);
 
     /// <summary>The views the actor can see: its own private views and every shared view.</summary>
     ValueTask<WorkflowLibraryCommandResult<IReadOnlyList<WorkflowLibraryViewSnapshot>>> ListViewsAsync(WorkflowLibraryActor actor,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Saves a view: a new one (<paramref name="viewId"/> null) under a client operation key, or an existing one bound by its
-    /// revision (<paramref name="operationKey"/> null). Sharing requires view-sharing authority.
+    /// Saves a view: a new one (<paramref name="viewId"/> null), under a client operation key when one is given (as Weaver always
+    /// does) or as the library's ordinary non-idempotent create otherwise; or an existing one bound by its revision, which
+    /// takes no key (<see cref="WorkflowLibraryCommandStatus.Invalid"/> with one). Sharing requires view-sharing authority.
     /// </summary>
     ValueTask<WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot>> SaveViewAsync(WorkflowLibraryActor actor, string? viewId,
         WorkflowLibraryViewSave input, string? operationKey, CancellationToken cancellationToken = default);

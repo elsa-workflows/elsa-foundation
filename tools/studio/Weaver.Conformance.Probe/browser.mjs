@@ -1890,7 +1890,7 @@ async function reviewedTool(toolName, args, name, commands) {
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
   await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
   const message = responseFor("/messages");
-  await dock().getByRole("button", { name: "Send message", exact: true }).click();
+  await nativeEnter(name + "-send", dock().getByRole("button", { name: "Send message", exact: true }), "Send message");
   const sent = await accepted(message, name + "-message");
   await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
   if (await cards.count() <= before) {
@@ -1903,10 +1903,16 @@ async function reviewedTool(toolName, args, name, commands) {
   result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
   return { proposal, sent };
 }
+// In these journeys the nonmodal dock overlaps page controls and an open page dialog overlaps the dock, so every control,
+// on the page and in the dock, is activated through the keyboard: the same native control, never a pointer that another
+// surface intercepts (as the witness on c58c9f149 observed for the list's Create workflow button).
 async function approveAndApply(proposal, name) {
-  await approve(proposal, name);
+  const response = responseFor("/approve");
+  await nativeEnter(name + "-approve", proposal.getByRole("button", { name: "Approve", exact: true }), "Approve");
+  await accepted(response, name + "-approve");
+  await expect(proposal).toHaveAttribute("data-status", "approved");
   const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
-  await proposal.getByRole("button", { name: "Apply", exact: true }).click();
+  await nativeEnter(name + "-apply", proposal.getByRole("button", { name: "Apply", exact: true }), "Apply");
   const delivery = await accepted(execute, name + "-execute");
   need(delivery.response.status() === 202, name + ": the change was not delivered to the originating page.");
   const ack = await accepted(acknowledged, name + "-ack");
@@ -1927,7 +1933,7 @@ async function workflowLibrary() {
   await expect(searchBox).toHaveValue("");
   const before = await owner("owner-before", library.pagePath + "?pageSize=100");
   result.ownerBefore = before.receipt;
-  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   const writesBefore = designWrites.length;
   // Narrowing: the list page applies exactly the approved change and the user can revert it.
   const narrow = await reviewedTool("workflow_library_set_list_state", { search: library.search }, "narrow", commands);
@@ -1938,11 +1944,11 @@ async function workflowLibrary() {
   expect(narrowed.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.list-state", schemaVersion: "1",
     data: { observed: true, change: { search: library.search }, baseRevision: listContext.target.revision } } });
   await expect(searchBox).toHaveValue(library.search);
-  await narrow.proposal.getByRole("button", { name: "Revert", exact: true }).click();
+  await nativeEnter("narrow-revert", narrow.proposal.getByRole("button", { name: "Revert", exact: true }), "Revert");
   await expect(searchBox).toHaveValue("");
   result.evidence.push(retain("narrow-reverted", { search: await searchBox.inputValue() }));
   // The create dialog: the prefill fills the open dialog only.
-  await page.getByRole("button", { name: "Create workflow", exact: true }).first().click();
+  await nativeEnter("open-create-dialog", page.getByRole("button", { name: "Create workflow", exact: true }).first(), "Create workflow");
   const nameField = page.locator('input[aria-label="Display name"]');
   await expect(nameField).toBeVisible();
   const prefill = await reviewedTool("workflow_create_dialog_prefill", { name: library.prefill.name }, "prefill", commands);
@@ -1974,7 +1980,7 @@ async function workflowTemplates() {
   result.ownerBefore = before.receipt;
   need(before.value.revision === template.revision, "The template changed before the journey.");
   const definitionBefore = await owner("definition-before", definitionPath);
-  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
   const writesBefore = designWrites.length;
   const batch = await reviewedTool("workflow_apply_operation_batch", { operations: template.operations }, "applied", commands);
   const editor = (batch.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.template-editor");
@@ -1989,13 +1995,14 @@ async function workflowTemplates() {
   need((await owner("owner-after-autosave-window", template.path)).value.revision === template.revision, "Autosave persisted the batch.");
   need(designWrites.length === writesBefore, "The applied batch wrote to the design API before the user's Save.");
   // One history step: the card's Undo removes the whole batch, Redo restores it.
-  await batch.proposal.getByRole("button", { name: "Undo whole change", exact: true }).click();
+  await nativeEnter("batch-undo", batch.proposal.getByRole("button", { name: "Undo whole change", exact: true }), "Undo whole change");
   await expect(node(nodes.a)).not.toContainText(template.displayName);
   await nativeEnter("designer-redo", page.getByRole("button", { name: "Redo", exact: true }), "Redo");
   await expect(node(nodes.a)).toContainText(template.displayName);
   // The user's own Save, with the template's expected revision.
   const saved = page.waitForResponse(response => new URL(response.url()).origin === backend && new URL(response.url()).pathname === template.path && response.request().method() === "PUT");
-  await page.getByRole("button", { name: "Save workflow", exact: true }).click();
+  // The toolbar's Save (accessible name "Save", title "Save workflow"), the designer's own explicit save.
+  await nativeEnter("template-save", page.locator("button.wf-save-button"), "Save workflow");
   const response = await saved;
   need(response.ok(), "The user's template Save failed: " + response.status());
   const body = response.request().postDataJSON();
