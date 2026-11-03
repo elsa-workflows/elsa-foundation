@@ -1,6 +1,6 @@
 # Feature Specification: Bounded state for continuous ETL runs
 
-**Feature Branch**: `agent/claude/2908-etl-compaction` (stacked on `agent/claude/2908-continuous-http`)
+**Feature Branch**: `agent/claude/2908-etl-compaction` (from `main` after spec 1192 merged as #3670)
 
 **Created**: 2026-11-03
 
@@ -136,7 +136,7 @@ In both cases, the accepted records equal the fed records exactly.
 
 ### Functional Requirements
 
-- **FR-001** The partition gains a `PollGeneration` column. It is non-negative and above 0 only in a continuous run, with a database check and an audit rule. The lease gains an init-only `PollGeneration`, which a claim copies from the partition.
+- **FR-001** The partition gains a `PollGeneration` column. The database checks that it is non-negative, and the audit that it is above 0 only in a continuous run. The lease gains an init-only `PollGeneration`, which a claim copies from the partition.
 - **FR-002** `RecordConnectorHttpCaughtUpAsync` increments the generation in the same transaction that clears the journal. The final path does not.
 - **FR-003** The page cache derives its manifest key from the page sequence, the request and, when it is above 0, the lease's generation.
   - A continuous run stores each page body under an identity derived from that key and the content hash.
@@ -192,11 +192,11 @@ In both cases, the accepted records equal the fed records exactly.
 - **SC-001** A two-shard continuous run with `MaxPagesPerPartition` 3 accepts at least 40 non-empty pages per shard, each record exactly once, and keeps running.
   - Each shard never retains more than 2 pages and 3 requests.
   - Each shard's retained byte counters equal its retained rows' sums.
-- **SC-002** The claim audit reads at most a constant number of page, request and batch rows per shard, independent of the pages accepted. A test shows this by counting the rows the audit reads.
+- **SC-002** The claim audit reads only a shard's retained rows, which SC-001 bounds independently of the pages accepted.
 - **SC-003** The superseded-late-page interleaving completes without a run failure.
 - **SC-004** A migration test with rows written by the spec 1192 schema preserves every row, leaves `PRAGMA foreign_key_check` empty, and then compacts and audits that run correctly.
 - **SC-005** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof, except the guards the evidence README names as tested without a bite-proof or not tested.
-- **SC-006** An actual Workbench journey shows a long continuous run whose retained rows and cached files stay bounded while delivery continues. Real worker processes killed during it lose and duplicate nothing.
+- **SC-006** An actual Workbench journey shows a long continuous run whose retained rows and cached files stay bounded while delivery continues. In real worker processes killed repeatedly before acceptance, no record is lost or duplicated.
 - **SC-007** Finite pipelines keep their bytes, identities, rows and limits. The whole ETL suite passes, changed only by intended additions.
 
 ## Assumptions and boundaries

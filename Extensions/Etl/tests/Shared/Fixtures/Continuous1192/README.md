@@ -8,6 +8,6 @@ It holds one continuous HTTP run, `compaction-1192`, in scope `tenant-fixture/co
 
 **How it was captured.** `EtlContinuousFixtureCaptureTests` ran with `ETL_1192_FIXTURE_CAPTURE_PATH` set, against a loopback feed on port 29196, because the pinned HTTP binding handles hash the endpoint. The shards hold no attached page, so no page-cache files are needed.
 
-**Who reads it.** Spec 1196's migration test migrates a copy, checks the prior rows and foreign keys, resumes the run on the same port, and checks that each shard compacts its whole history at its first advance.
+**Who reads it.** Spec 1196's migration test migrates a copy, checks the prior rows and foreign keys, resumes the run on the same port, and checks that the shards' history below their windows is compacted.
 
 SHA-256 of `runtime.db`: `7cb52ed573db7fffb21ffa803c57d27a13a2974c4bddb2e002275cce461b4f14`.

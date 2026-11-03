@@ -13,7 +13,7 @@ namespace Elsa.Etl.Tests;
 public sealed partial class EtlRuntimeJourneyTests
 {
     [Fact]
-    public async Task A_spec_1192_continuous_run_migrates_keeps_its_rows_and_compacts_its_history_at_its_first_advance()
+    public async Task A_spec_1192_continuous_run_migrates_keeps_its_rows_and_compacts_its_history()
     {
         var fixture = Path.Combine(EtlV1CompatibilityFixture.FindRepositoryRoot(),
             "Extensions", "Etl", "tests", "Shared", "Fixtures", "Continuous1192", "runtime.db");

@@ -18,7 +18,7 @@ Facts are from the source at `6226b78af`. Paths are relative to `Extensions/Etl/
   - the predecessor foreign key (request *k* + 1 to page *k*) and the page-to-request foreign key are both `Restrict`.
 - **Files are never removed either.** Cached page manifests and bodies live in the snapshot root, and so do the retained main and error route bodies of every batch (`EtlConnectorOutputProcessor.RetainRouteBodyAsync`).
 
-**Decision:** compact on the advance, keep a window of one page behind the current request, and audit from the window's base. The alternatives were:
+**Decision:** keep a window of one page behind the current request, compact at each claim (R8), and audit from the window's base. The alternatives were:
 - **Tombstones** (null the heavy columns, keep the key rows). Storage and audit cost would still grow with the page count.
 - **Compacting finite runs too.** Finite runs are bounded by `MaxPagesPerPartition` already, and their full-history cycle refusal is a guarantee worth keeping.
 

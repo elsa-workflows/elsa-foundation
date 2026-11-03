@@ -39,6 +39,6 @@ public sealed partial class EtlRuntimeJourneyTests
         await WaitForIdleAsync(host.Services, files.Scope, invocation.RunId, accepted: 6);
         // Idle shards hold no lease and no attached page, so the fixture needs no page-cache files.
         await files.StopHostAsync(host);
-        File.Copy(Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "runtime.db"), target, overwrite: true);
+        File.Copy(Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "runtime.db"), target, overwrite: false);
     }
 }

@@ -27,7 +27,7 @@ Finite runs are unchanged.
 - **Compatibility.**
   - A migration test seeds rows with the spec 1192 schema, migrates, checks every row and the foreign keys, then compacts and audits that run.
   - Positions and cache keys at generation 0 are asserted byte-identical.
-- **Extension points.** Store providers gain obligations: compaction on the advance, base-relative audits and the generation on the caught-up record. The Core `EXTENSION_POINTS.md` states them.
+- **Extension points.** Store providers gain obligations: compaction at each claim, base-relative audits and the generation on the caught-up record. The Core `EXTENSION_POINTS.md` states them.
 - **Tests.**
   - No test asserts on source or markdown text.
   - Every changed existing test states its reason.
@@ -56,20 +56,18 @@ Finite runs are unchanged.
   - generation-aware read and publish;
   - the per-page body identity for continuous runs, with legacy-tolerant validation;
   - `DeleteAsync` for one page.
-- **`EtlHttpSourceAcquirer`:** passes the position's generation to the cache.
+- **`EtlHttpSourceAcquirer`:** passes the lease's generation to the cache.
 - **`EtlConnectorExecution`:** after an acceptance or empty-page advance commits in a continuous run, deletes the route bodies and the left page's files.
 - **`EtlConnectorOutputProcessor`:** `DeleteRetainedRouteBodiesAsync`.
 
 ### Tests (`Extensions/Etl/tests`)
-- **`EtlContinuousCompactionTests`:**
+- **`EtlContinuousCompactionJourneyTests.cs` and `EtlContinuousPollGenerationTests.cs`:**
   - window, accounting and lifetime counts;
-  - the constant audit row count;
-  - the replay after compaction;
   - finite runs untouched.
-- **`EtlContinuousPollGenerationTests`:**
+- **Poll generation (in `EtlContinuousPollGenerationTests.cs`):**
   - the superseded-late-page interleaving;
   - byte identity at generation 0.
-- **`EtlConnectorCompactionMigrationTests`:** spec 1192 writer rows, then migrate, check, compact and audit.
+- **`EtlContinuousCompactionMigrationTests.cs`:** the captured spec 1192 fixture, then migrate, check, resume, compact and complete.
 - **The journey and processes tests:** long continuous runs with kills, asserting bounded rows and files.
 
 ### Docs
