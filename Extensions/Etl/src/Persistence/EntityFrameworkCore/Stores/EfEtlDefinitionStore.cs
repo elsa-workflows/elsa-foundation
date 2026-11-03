@@ -87,6 +87,12 @@ internal sealed class EfEtlDefinitionStore(
             _ = EtlDefinitionRecordCodec.ReadDraftContent(existing, scope, definitionId);
             return new(EtlDefinitionWriteStatus.Conflict, existing);
         }
+        catch
+        {
+            // A create that failed otherwise, cancelled for one, must not leave its row for a later save on this context.
+            dbContext.Entry(row).State = EntityState.Detached;
+            throw;
+        }
     }
 
     private async ValueTask<DraftWrite> UpdateDraftCoreAsync(

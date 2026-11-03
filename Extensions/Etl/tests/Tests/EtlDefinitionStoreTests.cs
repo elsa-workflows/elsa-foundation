@@ -113,6 +113,52 @@ public sealed class EtlDefinitionStoreTests : EtlDefinitionStoreContract
             (await store.PublishAsync(scope, "orders", created.Draft!.Revision, Compile("orders", 1, pipeline))).Status);
     }
 
+    [Fact]
+    public async Task A_cancelled_draft_create_leaves_nothing_for_a_later_save_and_can_be_retried()
+    {
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var pipeline = EtlTestPipelines.Create();
+        using var cancellation = new CancellationTokenSource();
+        await using var context = database.CreateContext(new CancelOnDraftInsert(cancellation));
+        var store = Store(context);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.CreateDraftAsync(scope, "orders", pipeline, cancellation.Token));
+        Assert.Equal(EtlDefinitionWriteStatus.Created, (await store.CreateDraftAsync(scope, "unrelated", pipeline)).Status);
+
+        Assert.Null(await store.FindDraftAsync(scope, "orders"));
+        Assert.Equal(EtlDefinitionWriteStatus.Created, (await store.CreateDraftAsync(scope, "orders", pipeline)).Status);
+    }
+
+    /// <summary>Cancels a token as the first draft insert executes, as a caller giving up mid-write.</summary>
+    private sealed class CancelOnDraftInsert(CancellationTokenSource cancellation) : DbCommandInterceptor
+    {
+        private bool _fired;
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            CancelOnce(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            CancelOnce(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void CancelOnce(DbCommand command)
+        {
+            if (_fired || !command.CommandText.Contains("INSERT INTO \"elsa_etl_definition_drafts\"", StringComparison.Ordinal))
+                return;
+            _fired = true;
+            cancellation.Cancel();
+        }
+    }
+
     /// <summary>Cancels a token when a command fails, as a caller giving up while the store handles the failure.</summary>
     private sealed class CancelOnCommandFailure(CancellationTokenSource cancellation) : DbCommandInterceptor
     {
