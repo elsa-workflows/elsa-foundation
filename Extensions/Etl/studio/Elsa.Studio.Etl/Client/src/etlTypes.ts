@@ -140,7 +140,7 @@ export interface EtlRoutes {
   errors: EtlDestination;
 }
 
-export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination;
+export type EtlDestination = EtlJsonlDestination | EtlHttpDestination | EtlCsvDestination | EtlSqlDestination;
 
 export interface EtlJsonlDestination {
   kind: "jsonl";
@@ -156,6 +156,19 @@ export interface EtlHttpDestination {
 export interface EtlCsvDestination {
   kind: "csv";
   binding: string;
+}
+
+/**
+ * A host-approved PostgreSQL or SQL Server table upserted by key, one transaction per batch with an effect ledger that
+ * applies each batch once (main route only). Its columns are the output field names.
+ */
+export interface EtlSqlDestination {
+  kind: "sql";
+  binding: string;
+  /** `name` or `schema.name`. */
+  table: string;
+  /** One to eight output fields mapped from required source fields. */
+  key: string[];
 }
 
 export interface EtlConnectorLimits {
@@ -230,7 +243,7 @@ export interface EtlBindingSummary {
 
 /** A current v2 connector alias without endpoint, storage, or credential details. */
 export interface EtlConnectorBindingSummary extends EtlBindingSummary {
-  kind: "csv" | "http" | "jsonl";
+  kind: "csv" | "http" | "jsonl" | "sql";
 }
 
 export interface EtlDefinitionSummaryView {

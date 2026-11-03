@@ -14,14 +14,17 @@ internal enum EtlConnectorWorkerGate
     AfterReservation,
     AfterMainAcknowledgement,
     AfterErrorAcknowledgement,
-    BeforeAcceptance
+    BeforeAcceptance,
+    /// <summary>After a route's effect is applied and before the runtime records it (spec 1197).</summary>
+    BeforePublicationRecord
 }
 
 internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings,
     EtlWorkerWritePause WritePause = EtlWorkerWritePause.None,
     EtlWorkerStoreGate StoreGate = EtlWorkerStoreGate.BeforeAcceptance,
     List<EtlHostHttpBindingOptions>? HttpBindings = null,
-    EtlConnectorWorkerGate ConnectorGate = EtlConnectorWorkerGate.None);
+    EtlConnectorWorkerGate ConnectorGate = EtlConnectorWorkerGate.None,
+    List<EtlHostSqlBindingOptions>? SqlBindings = null);
 
 internal sealed record EtlWorkerAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance, int ProcessId);
 internal sealed record EtlWorkerCommittedAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance,

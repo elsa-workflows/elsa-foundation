@@ -25,7 +25,8 @@ internal sealed class EtlConnectorExecution(
     EtlAttemptBudget budget,
     IServiceScopeFactory scopes,
     TimeProvider clock,
-    ILogger<EtlConnectorExecution> logger)
+    ILogger<EtlConnectorExecution> logger,
+    HostSqlBindings? sql = null)
 {
     public async ValueTask PrepareAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default)
     {
@@ -150,7 +151,7 @@ internal sealed class EtlConnectorExecution(
             }
             Volatile.Write(ref lease, lease with { OwedBatch = reservation });
             if (await store.RenewConnectorPartitionAsync(lease, token) is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay)) return;
-            var output = new EtlConnectorOutputProcessor(store, files, http, publishers, transport, options.SnapshotRoot);
+            var output = new EtlConnectorOutputProcessor(store, files, http, publishers, transport, options.SnapshotRoot, sql, clock);
             var retained = await output.TransformAndRetainAsync(lease, admission, pipeline, input, token);
             if (retained.FailureCode is { } outputFailure)
             {
