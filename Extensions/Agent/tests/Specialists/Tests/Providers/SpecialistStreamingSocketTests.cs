@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Anthropic;
 using Elsa.Agent.Specialists.AzureOpenAI;
+using Elsa.Agent.Specialists.OpenAI;
 using Elsa.Agent.Specialists.Connections;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
@@ -23,7 +24,7 @@ namespace Elsa.Agent.Specialists.Tests.Providers;
 public sealed partial class SpecialistProviderSocketTests
 {
     public static IEnumerable<object[]> StreamingCases() =>
-        from vendor in new[] { "anthropic", "azure-openai" }
+        from vendor in new[] { "anthropic", "azure-openai", "openai" }
         from mode in new[] { "success", "thinking", "missing-terminal", "missing-stop", "missing-reason", "pause", "refusal", "truncated", "invalid", "oversized", "overrun", "loss", "cancel-after", "cancel-before", "retry" }
         where vendor == "anthropic" || mode is not ("thinking" or "missing-stop" or "missing-reason" or "pause")
         from sqlite in new[] { false, true }
@@ -57,8 +58,7 @@ public sealed partial class SpecialistProviderSocketTests
         var connection = new Resolved(vendor);
         connection.Values["endpoint"] = server.Address;
         connection.Hosts = Elsa.Connections.Core.Models.AllowedHostsPolicy.Fixed("127.0.0.1");
-        SpecialistConnectionModelProvider provider = vendor == "anthropic"
-            ? new AnthropicSpecialistModelProvider(new Resolver(connection), new Access()) : new AzureOpenAISpecialistModelProvider(new Resolver(connection), new Access());
+        SpecialistConnectionModelProvider provider = Provider(vendor, new Resolver(connection));
         provider.ConfigureTransport = handler => Trust(handler, certificate);
         var descriptor = Request(Model(vendor), await provider.GetCapabilitiesAsync(Model(vendor))).Descriptor with { AllowContinuity = true };
         var contract = new ActivityContract("specialist", "1.0.0", SpecialistRuntimeIds.ConsumerKey, JsonSerializer.SerializeToElement(descriptor), [],
@@ -133,15 +133,16 @@ public sealed partial class SpecialistProviderSocketTests
                 var sent = Assert.Single(server.Requests);
                 Assert.True(sent.Body.GetProperty("stream").GetBoolean());
                 Assert.Equal("HTTP/1.1", sent.Protocol);
-                Assert.Equal("fixture-not-a-real-credential", sent.ApiKey);
-                Assert.Null(sent.Authorization);
+                Assert.Equal(vendor == "openai" ? null : "fixture-not-a-real-credential", sent.ApiKey);
+                Assert.Equal(vendor == "openai" ? "Bearer fixture-not-a-real-credential" : null, sent.Authorization);
                 Assert.Equal(64, sent.Body.GetProperty(vendor == "anthropic" ? "max_tokens" : "max_completion_tokens").GetInt32());
                 var actualSchema = vendor == "anthropic"
                     ? sent.Body.GetProperty("output_config").GetProperty("format").GetProperty("schema")
                     : sent.Body.GetProperty("response_format").GetProperty("json_schema").GetProperty("schema");
                 Assert.True(JsonElement.DeepEquals(request.Descriptor.ResultSchema, actualSchema));
-                if (vendor == "anthropic") Assert.Equal("fixture-model", sent.Body.GetProperty("model").GetString());
-                else Assert.Contains("fixture-model", sent.Path, StringComparison.Ordinal);
+                if (vendor is "anthropic" or "openai") Assert.Equal("fixture-model", sent.Body.GetProperty("model").GetString());
+                if (vendor == "openai") Assert.Equal("/v1/chat/completions", sent.Path);
+                if (vendor == "azure-openai") Assert.Contains("fixture-model", sent.Path, StringComparison.Ordinal);
             }
         }
         finally { Directory.Delete(directory, true); }
