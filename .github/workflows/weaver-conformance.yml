@@ -58,6 +58,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          fetch-depth: 0 # Temporary diagnosis pins the already-failed product source separately.
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
