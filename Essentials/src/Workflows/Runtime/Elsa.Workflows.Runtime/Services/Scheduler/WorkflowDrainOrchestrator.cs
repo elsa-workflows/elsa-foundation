@@ -333,6 +333,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 }
 
                 ContinuationSettlement settlement;
+                var segmentWasActive = coalescingScope.Session.IsActive;
                 var handoffDeliveredContinuation = false;
                 while (true)
                 {
@@ -359,7 +360,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                         ? ContinuationSettlement.Undelivered
                         : durableClaimBoundary
                             ? ContinuationSettlement.DrainAgain
-                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledDeliveryIds, cancellationToken);
+                            : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, settledDeliveryIds, coalescingScope, cancellationToken);
                     if (restartCoalescing && settlement == ContinuationSettlement.ConcurrentDeliverySettled)
                     {
                         handoffDeliveredContinuation = true;
@@ -378,7 +379,18 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
                 if (settlement is ContinuationSettlement.DrainAgain or ContinuationSettlement.ConcurrentDeliverySettled)
                 {
-                    if (restartCoalescing)
+                    // Another deliverer queued its continuation in the durable queue, after this segment filled its
+                    // overlay from it. The overlay never shows that work, so the next pass would run dry and report
+                    // quiescence, leaving the step to the sweep (#3659). Close this segment, unless taking back a lapsed
+                    // claim already did, and start one from durable state. A segment a boundary had already ended reads
+                    // the durable store directly, so it carries on as before: restarting it would resume coalescing that
+                    // a terminal or external boundary, or an abandoned reconciliation, ended on purpose.
+                    var refreshSegment = !restartCoalescing && segmentWasActive &&
+                        settlement == ContinuationSettlement.ConcurrentDeliverySettled;
+                    if (refreshSegment)
+                        await coalescingScope.FlushAtQuiescenceAsync(cancellationToken);
+
+                    if (restartCoalescing || refreshSegment)
                     {
                         // Start with durable state and a fresh read memo; never reactivate the previous overlay.
                         var nextMode = new ResolvedPersistenceMode(
@@ -456,6 +468,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         List<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
         ContinuationWaitDeadline continuationWait,
         ICollection<string>? settledDeliveryIds,
+        IRuntimeCoalescingDrainScope segment,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId;
@@ -477,6 +490,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             var now = _timeProvider.GetUtcNow();
             if (held.Any(item => RuntimePostCommitOutboxClaimTransitions.ClaimableAt(item) <= now))
             {
+                // An active segment claims this run's continuations from its overlay only, so it would never find the
+                // durable item. Close the segment first; the caller starts a fresh one once delivery settles (#3659).
+                await segment.FlushAtQuiescenceAsync(cancellationToken);
                 var delivery = await DeliverLapsedContinuationsAsync(workflowExecutionId, cancellationToken);
                 outboxDeliveryResults.Add(delivery);
                 if (delivery.FailedCount > 0)

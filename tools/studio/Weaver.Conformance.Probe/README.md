@@ -112,6 +112,23 @@ python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
   --output /absolute/new-owned-complete-witness --version 4.0.0-weaver3440.local3
 ```
 
+### Workflow authorization unavailable (spec 1193 T006)
+
+Right after the four current-authority cases, the complete witness runs
+`authorization_journeys.py` once on each actual adapter (`{copilot,anthropic}-workflow-authorization-unavailable`).
+It selects the backend's test-only `QualificationWorkflowAuthority` feature through the native feature apply, which
+wraps the actual workflow definition authorizer behind a private mode file. On a freshly seeded workflow, a denying
+replacement must keep the existing design 403 body structurally identical (compared as parsed JSON), with no `errorCode`; `DefinitionReadAuthorizationTests` pins its exact bytes. A replacement that cannot decide
+must answer 503 with `errorCode` `workflow.authorization.unavailable` and the fixed message. A pre-call gate then holds a
+`workflow_read_graph` turn after its context was admitted by the actual owner, and the mode changes. The released call's
+pre-dispatch admission refresh asks the same owner before the tool can, so the turn must stop there, before any
+dispatch or adapter return. For the unavailable owner the stop is `workflow.authorization.unavailable` with 503 and the
+engine's fixed owner-unavailable text. For the denying owner it stays `agent.context.incomplete` (400) with the
+existing read-permission text. The
+tool's own 503 outcome is component evidence, because no native turn reaches it. A random private cause canary must appear on no HTTP body, SSE frame or adapter
+trace. Deselecting the seam must restore the unchanged native definition read. `evidence.witness_manifest()` lists
+the two cases, and `require_workflow_authorization` refuses a missing, failed, duplicated or changed record.
+
 ### Restart inventory over the packaged durable store (#3441 T031)
 
 After the autonomy matrix, the same complete witness appends the

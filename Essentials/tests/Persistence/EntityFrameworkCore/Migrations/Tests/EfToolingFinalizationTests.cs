@@ -137,7 +137,10 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
         Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
         var families = status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray().ToArray();
-        Assert.Equal(16, families.Length);
+        Assert.Equal(17, families.Length);
+        var tasks = families.Single(family => family.GetProperty("family").GetString() == "UserTasks");
+        Assert.Equal(["1.0.0"], tasks.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(JsonValueKind.Null, tasks.GetProperty("finalizedVersion").ValueKind);
         var model = families.Single(family => family.GetProperty("family").GetString() == "RuntimeModelState");
         Assert.Equal(JsonValueKind.Null, model.GetProperty("finalizedVersion").ValueKind);
         Assert.Equal(["1.0.0"], model.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));

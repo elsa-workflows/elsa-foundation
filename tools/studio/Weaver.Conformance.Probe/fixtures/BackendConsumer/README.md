@@ -36,3 +36,11 @@ does not select them. For the #3441 restart inventory, `consumers.enable_durable
 the runtime `shells.json` while the driver's own backend is stopped: SQLite over a new database file under the run's output
 root, a private Secrets key that is never returned or retained in a receipt, and the store's 15-second lease. The driver then
 starts a new generation of the same published application through `runtime.RestartableServer`.
+
+`QualificationWorkflowAuthority.cs` is a test-only host feature for the spec 1193 workflow-authorization-unavailable
+inventory. No baseline shell selects it. `authorization_journeys.py` selects it through the ordinary native feature
+apply with a private absolute `ModeFile`, and deselects it before anything later runs. It replaces the single
+`IWorkflowDefinitionAuthorizer` registration with a wrapper that reads that file on every decision: `native` delegates to
+the host's actual authorizer, `deny` refuses, and `throw` raises `WorkflowDefinitionAuthorizationException` with the
+file's private `cause` canary as its inner cause. A missing, malformed or unknown mode is a fixture error, never a
+decision. The seam supplies no other service and changes no product code.

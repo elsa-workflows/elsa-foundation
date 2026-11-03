@@ -1181,3 +1181,24 @@ a durable retry delay that exists only in memory.
 - **Kind:** Activity opt-in, not a service registration.
 - **Signature:** `void BindStructureInputs(IReadOnlyDictionary<string, ValueEnvelope> inputs)`.
 - **Obligations:** consume only the committed, activation-resolved input values. `ActivityInputContract.IsStructureInput` marks these fields; the hydrator skips CLR property assignment and requires an explicit consumer. Ordinary inputs retain their existing hydration. The optional flag is omitted from serialization/fingerprinting when false, retaining old artifact identities. Switch accepts this binding once per fresh activation and never reevaluates predicates on child completion.
+
+## User Tasks
+
+The human-work model and public contracts live in `Runtime.Core/UserTasks`. The [User Tasks guide](../../../../../docs/user-tasks.md) owns usage and integration instructions; [spec 1190](../../../../../specs/1196-user-tasks/plan.md) records the delivery design.
+
+| Contract/contribution | Kind and default | Ownership and lifetime |
+|---|---|---|
+| `IUserTaskStore` | Replacement; `MemoryUserTaskStore` default, `EfUserTaskStore` from the aggregate EF family | Scoped partition facade. Conditional writes atomically commit aggregate/history/decision/delivery responsibility and advance one revision. Reads preserve opaque data/casing; bounded queries apply assignment before paging. The volatile default is development-only and requires explicit opt-in. |
+| `IUserTaskPersistenceBoundary` | Provider qualification; EF aggregate supplies `EfUserTaskPersistenceBoundary` | At most one owner. Qualifies the actual journal/raw execution-store pair and its completion-retention fence. A durable custom journal must implement an equivalent boundary; the durability flag alone never enables tasks. |
+| `IUserTaskAccess` | Replacement; unavailable default, Foundation Identity adapter in Runtime API | Scoped current actor, per-task read/action/manage policy and tenant-local assignment validation. Never trust body/token role membership. The API preserves an explicitly supplied adapter. |
+| `IUserTaskOperations` | Replacement; `UserTaskOperations` | Scoped lifecycle/forms operations. Reloads trusted current authority per operation, validates revisions/eligibility and preserves accepted completion IDs on replay. |
+| `IUserTaskRuntime` | Replacement; `UserTaskRuntime` | Scoped activity staging/result/reconciliation seam. Opens fresh operation scopes; committed-result proof bypasses ambient coalescing views. Requires exact bookmark resume and qualified evidence retention. |
+| `IUserTaskFormProvider` | Additive, one owner per `Provider`; `BasicUserTaskForms` default | Scoped server-side immutable definition/reference and asynchronous response validation. Missing/duplicate identities refuse. Custom providers preserve pinned-version semantics. |
+| `UserTaskResumeGuard` / `ActivityResumeValidating` | Additive inline validation subscriber | Checks accepted journal response, invocation and captured physical recipient before consuming the wait. Temporary nested provider errors become scheduler-unavailable work, retaining the source; invalid stimuli cannot consume a valid wait. |
+| `UserTaskRecoveryTask` | Additive `IRecurringTask` | Singleton scheduling shell, fresh partition/page/task scopes. Two-second sweep, at most 50 rows per partition/page, fair continuation; failure backoff capped at 30 seconds. Queue receipts are not completion proof. |
+| `ValidateUserTaskComposition` | Additive `IStartupTask` | Scoped validation of descriptor ownership and unique form provider IDs; does not activate HTTP identity dependencies in library-only hosts. |
+
+`CreateUserTask` and its typed wait live in Activities.Primitives and consume the Core runtime seam. It creates one invocation-local task and resumes with the accepted action/data. Generic authored value-outcome metadata supplies action ports. BPMN uses the existing native service-worker bridge rather than introducing another human-task lifecycle. Studio's `user-task.form-renderers` slot is an additive renderer contribution; authoritative validation remains with the matching server provider.
+
+
+User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.

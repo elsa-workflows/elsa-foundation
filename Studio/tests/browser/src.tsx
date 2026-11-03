@@ -1791,6 +1791,11 @@ async function renderRequestedFixture() {
     root.render(<ConnectionsFixture />);
     return;
   }
+  if (searchParams.get("mode") === "workflow-authorization-unavailable") {
+    const { WorkflowAuthorizationUnavailableFixture } = await import("./workflowAuthorizationUnavailableFixture");
+    root.render(<WorkflowAuthorizationUnavailableFixture />);
+    return;
+  }
   if (workflowPublishChoiceFixture) {
     const { WorkflowPublishChoiceFixture } = await import("./workflowPublishChoiceFixture");
     root.render(<WorkflowPublishChoiceFixture />);

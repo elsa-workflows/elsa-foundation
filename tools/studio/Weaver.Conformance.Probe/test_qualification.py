@@ -11,6 +11,7 @@ import zipfile
 
 from autonomy_journeys import MATRIX_QUALIFICATION, MODE_QUALIFICATION, autonomy_stages
 from disclosure_journeys import EXPECTED_CASES as AUTHORITY_CASES
+from authorization_journeys import EXPECTED_CASES as WORKFLOW_AUTHORIZATION_CASES, SECTION as WORKFLOW_AUTHORIZATION_SECTION
 from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceError, validate_complete_witness, validate_report,
                       witness_gaps, witness_manifest)
 from restart_journeys import RESTART_QUALIFICATION
@@ -161,13 +162,18 @@ class QualificationTests(unittest.TestCase):
 
 
 def complete_witness_report(base):
-    """Extend the synthetic original38 report with the four current-authority, 26 autonomy and 20 + 1 restart records."""
+    """Extend the synthetic original38 report with the four current-authority, two workflow-authorization, 26 autonomy and 20 + 1 restart records."""
     report = copy.deepcopy(base.report)
     report["witnessManifest"] = witness_manifest()
     names = sorted(AUTHORITY_CASES)
     report["contextDisclosureQualification"] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
         "source": base.source, "caseIDs": names, "stages": [],
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed"})} for name in names]}
+    workflow = sorted(WORKFLOW_AUTHORIZATION_CASES)
+    report[WORKFLOW_AUTHORIZATION_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": workflow, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "causeDisclosed": False})} for name in workflow]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
     report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
@@ -190,9 +196,12 @@ class CompleteWitnessTests(unittest.TestCase):
 
     def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 26, 20, 1, 89), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
-                                                  len(manifest["autonomyCases"]), len(manifest["restartCases"]),
-                                                  len(manifest["restartControls"]), manifest["expectedCaseCount"]))
+        self.assertEqual((38, 4, 2, 26, 20, 1, 91), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+                                                     len(manifest["workflowAuthorizationCases"]),
+                                                     len(manifest["autonomyCases"]), len(manifest["restartCases"]),
+                                                     len(manifest["restartControls"]), manifest["expectedCaseCount"]))
+        self.assertEqual(["anthropic-workflow-authorization-unavailable", "copilot-workflow-authorization-unavailable"],
+                         manifest["workflowAuthorizationCases"])
         self.assertEqual(10, len({name.split("-", 1)[1] for name in manifest["restartCases"]}))
         self.assertTrue(all(name.split("-", 1)[0] in ("copilot", "anthropic") for name in manifest["autonomyCases"]))
         self.assertEqual(13, len({name.split("-", 1)[1] for name in manifest["autonomyCases"]}))
@@ -264,6 +273,20 @@ class CompleteWitnessTests(unittest.TestCase):
             "manifest-absent": lambda r: r.pop("witnessManifest"),
             "manifest-shrunk": lambda r: r["witnessManifest"].update(autonomyCases=r["witnessManifest"]["autonomyCases"][:8]),
             "manifest-without-restarts": lambda r: r["witnessManifest"].pop("restartCases"),
+            "manifest-without-workflow-authorization": lambda r: r["witnessManifest"].pop("workflowAuthorizationCases"),
+            "workflow-authorization-absent": lambda r: r.pop(WORKFLOW_AUTHORIZATION_SECTION),
+            "workflow-authorization-failed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION].update(status="failed"),
+            "workflow-authorization-live-claim": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION].update(liveProvider=True),
+            "workflow-authorization-foreign-source": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION].update(source="b" * 40),
+            "workflow-authorization-missing": lambda r: (r[WORKFLOW_AUTHORIZATION_SECTION]["caseIDs"].pop(), r[WORKFLOW_AUTHORIZATION_SECTION]["records"].pop()),
+            "workflow-authorization-duplicate": lambda r: (r[WORKFLOW_AUTHORIZATION_SECTION]["caseIDs"].append(r[WORKFLOW_AUTHORIZATION_SECTION]["caseIDs"][0]),
+                                                           r[WORKFLOW_AUTHORIZATION_SECTION]["records"].append(r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0])),
+            "workflow-authorization-record-failed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"], "status": "failed"})),
+            "workflow-authorization-record-disclosed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0].update(record=self.base.write(
+                {"id": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"], "status": "passed",
+                 "adapter": r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["id"].split("-", 1)[0], "causeDisclosed": True})),
+            "workflow-authorization-record-changed": lambda r: r[WORKFLOW_AUTHORIZATION_SECTION]["records"][0]["record"].update(sha256="0" * 64),
             "matrix-stage-missing": lambda r: r["stages"].pop(),
             "matrix-stage-repeated": lambda r: r["stages"].append(copy.deepcopy(r["stages"][-1])),
             "failed-stage": lambda r: r["stages"][0].update(exitCode=1),
