@@ -314,17 +314,17 @@ internal sealed class EfEtlDefinitionStore(
         dbContext.Drafts.AsNoTracking().Where(row => row.ScopeKey == identity.Scope.Key && row.DefinitionKey == identity.Definition.Key);
 
     private async Task<EtlDefinitionDraftRecord?> FindDraftRowAsync(IdentitySet identity, CancellationToken cancellationToken) =>
-        await DraftQuery(identity).SingleOrDefaultAsync(cancellationToken);
+        await EtlDesignReadRetry.RunAsync(dbContext, () => DraftQuery(identity).SingleOrDefaultAsync(cancellationToken), cancellationToken);
 
     private async Task<EtlPublishedArtifactRecord?> FindPublishedRowAsync(
         IdentitySet identity,
         int definitionVersion,
         CancellationToken cancellationToken) =>
-        await dbContext.PublishedArtifacts.AsNoTracking().SingleOrDefaultAsync(
+        await EtlDesignReadRetry.RunAsync(dbContext, () => dbContext.PublishedArtifacts.AsNoTracking().SingleOrDefaultAsync(
             row => row.ScopeKey == identity.Scope.Key &&
                    row.DefinitionKey == identity.Definition.Key &&
                    row.DefinitionVersion == definitionVersion,
-            cancellationToken);
+            cancellationToken), cancellationToken);
 
     private async Task<EtlPublicationResult> ResolvePublishRaceAsync(
         IdentitySet identity,

@@ -12,6 +12,7 @@
 
 - [x] T004 Drop `EF.Functions.Collate(..., "BINARY")` from `EfEtlDefinitionCatalog`.
 - [x] T005 Run `PublishAsync` as a whole unit through `EfWriteRetry` (`Transient`); clear the tracker per attempt; exhaustion rethrows.
+- [x] T005b (review) Store and catalog reads retry a transient conflict.
 - [x] T005a (review) An update reports what it wrote and retries a transient conflict; a failed create or publication attempt leaves nothing tracked.
 
 ## Tooling and migrations
