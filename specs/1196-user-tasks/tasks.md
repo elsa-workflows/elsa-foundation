@@ -6,7 +6,7 @@ Input: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](d
 
 - [x] T001 Establish Program #3688, claim #3577 and record owner authority/registry in `docs/program-goals/user-tasks.md` and ADR 0080.
 - [x] T002 Research current native/BPMN/runtime/identity/Studio and primary comparative sources in `research.md`.
-- [x] T003 Write/review user scenarios and quality checklist in `spec.md` and `checklists/requirements.md`.
+- [x] T003 Write/review user scenarios and quality checklist in `spec.md`; remove the completed checklist at implementation per the spec lifecycle rule.
 - [x] T004 Review architecture/data/contracts and finite qualification matrix in this directory; resolve concrete findings before implementation.
 
 ## Durable task foundation and decision journey — US1/US2 (M2)

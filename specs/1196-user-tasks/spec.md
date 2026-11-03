@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3577-user-tasks`
 **Created**: 2026-11-02
-**Status**: Draft
+**Status**: Implemented
 **Input**: Feature #3577, Program #3688; owner-authorized design, planning and end-to-end delivery.
 
 ## User Scenarios & Testing

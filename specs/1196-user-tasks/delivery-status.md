@@ -2,7 +2,7 @@
 
 Program [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688), acceptance [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), PR [#3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
 
-Design and implementation are present. M0–M4 are complete. Owned-host and package qualification have passed; required CI and resulting-main acceptance remain active. Five independent review rounds have completed, with round 5 clean on ec404a7f0d5a8bc50d3d0337c44784e9f219edb2. CI subsequently identified the Docker copy omission and schema-readability expectation repaired below; the next reviewed head must include those fixes. Neither the Program nor the feature is accepted, merged or closed. Keep the specification Draft until the remaining delivery gates pass.
+Design and implementation are present. M0–M4 are complete. Owned-host and package qualification have passed; required CI and resulting-main acceptance remain active. Five independent review rounds have completed, with round 5 clean on ec404a7f0d5a8bc50d3d0337c44784e9f219edb2. CI subsequently identified the Docker copy omission and schema-readability expectation repaired below; the next reviewed head must include those fixes. Neither the Program nor the feature is accepted, merged or closed. Per the spec lifecycle transition rule, this implementation PR sets the spec's Implemented status before merge; it becomes true when the PR merges. Program closure still requires resulting-main qualification.
 
 ## Resumption and ownership
 
@@ -26,6 +26,8 @@ The following are observed intermediate runs. Final gate comments identify the r
 | Architecture/composition | Architecture 614, locked server solution restore, generated filter check and 129-project tier manifest check passed after canonical Events composition. Existing external package pins remain unchanged. |
 
 CI on ec404a7f passed the architecture, core, frontend and Windows/Linux backend gates. The PR shard found a stale independent schema-family expectation; adding the new UserTasks 1.0.0 family passes the whole Cluster Readability suite (122). The Studio image omitted the new extension directory; adding its COPY passes the production Docker build. The independent Weaver witness stopped during consumed-intent-remount after nine earlier native cases; its exported evidence omits that private failure log. An API retry was refused by the integration's Actions permission. A fresh head will rerun the witness through the normal PR trigger; no failure is waived.
+
+Current main 8a92746d4 was integrated cleanly before the final review, including scheduler RetryAfter handling and the consolidated CI workflow. The whole Runtime suite then passed 3,255 tests. The corrected production image also served the actual UserTasks module JavaScript (HTTP 200, 20,227 bytes).
 
 Provider-suite local limitation: the whole native provider project had247 passes and one PostgreSQL covering-index plan assertion failure. That assertion also failed on the unmodified original base329ec72b. No unrelated planner assertion was changed. Exact-head Linux required-provider CI is still required.
 
