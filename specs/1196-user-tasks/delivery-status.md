@@ -1,14 +1,14 @@
 # Delivery qualification record
 
-Program [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688), acceptance [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), draft PR [#3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
+Program [#3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688), acceptance [#3577](https://github.com/elsa-workflows/elsa-foundation/issues/3577), PR [#3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
 
-Design and implementation are present. M2 is complete; integrated qualification and independent review remain active. Neither the Program nor the feature is accepted, merged or closed. Keep the specification Draft until the remaining delivery gates pass.
+Design and implementation are present. M0–M4 are complete. Owned-host and package qualification have passed; required CI and resulting-main acceptance remain active. Five independent review rounds have completed, with round 5 clean on ec404a7f0d5a8bc50d3d0337c44784e9f219edb2. CI subsequently identified the Docker copy omission and schema-readability expectation repaired below; the next reviewed head must include those fixes. Neither the Program nor the feature is accepted, merged or closed. Keep the specification Draft until the remaining delivery gates pass.
 
 ## Resumption and ownership
 
 The initial checkpoint stopped after three successive failures of the new HTTP fixture, under the organization protocol. The owner instructed “Continue 20 more times maximum” on 3 November. Fresh app claims were established and blocking labels removed. Additional attempt 1 of the formerly blocked check passed all four tests: management authority permits inspection after group revocation, while completion remains forbidden. No further retry of that HTTP check was needed. See the PR history for the initial checkpoint and claim receipts.
 
-The packet was renumbered from1190, then1194, to1196 after current main and open PRs occupied1190–1195. Historical links pinned to the initial commit remain valid.
+The packet was renumbered from 1190, then 1194, to 1196 after current main and open PRs occupied 1190–1195. Historical links pinned to the initial commit remain valid.
 
 ## Executed evidence
 
@@ -16,14 +16,16 @@ The following are observed intermediate runs. Final gate comments identify the r
 
 | Boundary | Evidence |
 |---|---|
-| Lifecycle/concurrency/recovery | Whole Runtime3,221; whole EF1,874 before the latest integration witnesses; latest task-specific EF20 passed. Real overlapping independent SQL contexts, competing claim/complete/cancel, three-generation Durable/Balanced recovery, forged and replaced waits, transient reads before/after bookmark claim, missing-state uncertainty and deletion retention are covered. |
-| Supported databases | PostgreSQL, SQL Server and MySQL task contract tests3/3, required providers with no skips; SQLite in the full EF suite. |
-| Trusted identity/API | Whole Identity559, Runtime API222, real two-user Workbench claim race/release/revocation/reassignment/trusted completion actor journey passed. Canonical user ID survives first-party bearer issuance/refresh; non-user subjects do not gain task authority. |
-| Activity integration | Activities Runtime732 executed/730 listed, DispatchWorkflow380/380, Publishing API914 before the final default-wire regression; native BPMN User Task worker passed. Listed counts can expand at execution for dynamic theories. |
-| Studio | Workflows3,183, Hosting1,054, UserTasks17 mounted tests; module/Workflows/live type checks, builds, CSS/layout guards passed. Normal signed-in1440/390 inbox journeys passed keyboard/axe, required/readonly validation, explicit false, exact data, duplicate receipt and one branch. Actual designer form/activity authoring, all three visual action connections, save/reload, publication and selected-branch execution passed. |
-| Custom forms/client | Real PowerShell authoring/publication/completion client passed all3 configured action paths with exact response outputs. Async external provider now passes the real durable native-wait journey; matching nested custom renderer passes the mounted UI. A separately compiled consumer outside the workspace uses public contracts and the actual packed Studio feature without project references. |
+| Lifecycle/concurrency/recovery | Whole Runtime 3,225 and EF 1,878 passed. Real overlapping independent SQL contexts, competing claim/complete/cancel, three-generation Durable/Balanced recovery, forged and replaced waits, transient reads before/after bookmark claim, missing-state uncertainty and deletion retention are covered. |
+| Supported databases | PostgreSQL, SQL Server and MySQL task contract tests 3/3, required providers with no skips; SQLite in the full EF suite. |
+| Trusted identity/API | Whole Identity 566 and Runtime API 226 passed, as did the real two-user Workbench claim race/release/revocation/reassignment/trusted completion actor journey. Canonical user ID survives first-party bearer issuance/refresh; non-user subjects do not gain task authority. |
+| Activity integration | Activities Runtime 733 executed/731 listed, DispatchWorkflow 380/380, Publishing API 918 executed/898 listed, Activity Designs 697 and Catalog API 40 passed; native BPMN User Task worker passed. Listed counts expand at execution for dynamic theories; listed/executed set comparison found no missing cases. Canonical Events suite 13 passed. |
+| Studio | Workflows 3,184, Hosting 1,054 and UserTasks 17 mounted tests passed; module/Workflows/live type checks, builds and CSS/layout guards passed. Normal signed-in 1440/390 inbox journeys passed keyboard/axe, required/read-only validation, explicit false, exact data, duplicate receipt and one branch. Actual designer form/activity authoring, all three visual action connections, save/reload, publication and selected-branch execution passed. All three live journeys passed on reviewed head ec404a7f. |
+| Custom forms/client | Real PowerShell authoring/publication/completion client passed all 3 configured action paths with exact response outputs on ec404a7f. Async external provider passes the real durable native-wait journey; matching nested custom renderer passes the mounted UI. A separately compiled consumer outside the workspace uses public contracts and the actual packed Studio feature without project references. |
 | Packaging | Actual UserTasks archive verifies dependency metadata and byte-exact compiled JS/CSS/style-entry assets; public-contract consumer loads the packed feature. This is a scoped module/contract proof, not a whole distribution release. |
-| Architecture/composition | Architecture614; locked server solution restore; generated filter check and129-project tier manifest check passed before the final catalog/default additions. |
+| Architecture/composition | Architecture 614, locked server solution restore, generated filter check and 129-project tier manifest check passed after canonical Events composition. Existing external package pins remain unchanged. |
+
+CI on ec404a7f passed the architecture, core, frontend and Windows/Linux backend gates. The PR shard found a stale independent schema-family expectation; adding the new UserTasks 1.0.0 family passes the whole Cluster Readability suite (122). The Studio image omitted the new extension directory; adding its COPY passes the production Docker build. The independent Weaver witness stopped during consumed-intent-remount after nine earlier native cases; its exported evidence omits that private failure log. An API retry was refused by the integration's Actions permission. A fresh head will rerun the witness through the normal PR trigger; no failure is waived.
 
 Provider-suite local limitation: the whole native provider project had247 passes and one PostgreSQL covering-index plan assertion failure. That assertion also failed on the unmodified original base329ec72b. No unrelated planner assertion was changed. Exact-head Linux required-provider CI is still required.
 

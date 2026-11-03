@@ -23,4 +23,4 @@ Do not mark complete until every #3577 success criterion and Program exit row ha
 
 ## Delivery checkpoint
 
-M2 durable lifecycle is complete. Workflow/Studio integration and final qualification are active in draft PR #3691; see the [executed evidence and remaining exits](../../specs/1196-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.
+M0–M4 are complete. Owned-host integration and package qualification have passed. Required CI, review of CI repairs and resulting-main qualification remain active in PR #3691; see the [executed evidence and remaining exits](../../specs/1196-user-tasks/delivery-status.md). The owner authorized continuation past the prior protocol stop; neither this Program nor #3577 is complete.
