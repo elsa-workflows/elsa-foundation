@@ -376,7 +376,7 @@ A user viewing one Run asks Weaver why it faulted, where it is waiting, or what 
   - the authorization-unavailable outcome is Minor;
   - the optional operation key on view create and tag create is Minor and additive. It is added as default interface member overloads on `IWorkflowLibraryStore.CreateTagAsync` and `SaveViewAsync`, so existing implementations keep compiling. The default reports that the operation key is unsupported. For a replacement store that ignores the key, a keyed create is therefore unavailable, never silently non-idempotent (SC-008).
 - **FR-034**: The extension-point catalogs MUST be updated in the same change as the code they describe (constitution §2.22.1). These are:
-  - the "Legacy domain seams" section of `Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`;
+  - the "Legacy domain seams" section of `Extensions/Agent/src/Workflows/Elsa.Agent.Workflows/EXTENSION_POINTS.md`;
   - in `Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, the authorizer and details-reader failure semantics, and the operation-key behavior of view create and tag create;
   - in `Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`, which catalogues `IWorkflowLibraryStore`: its operation-key members and their unsupported default;
   - in `Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`: the unique operation-key index on the EF library store;

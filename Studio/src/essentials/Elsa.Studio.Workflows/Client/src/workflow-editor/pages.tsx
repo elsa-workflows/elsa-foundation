@@ -130,7 +130,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrows
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
+export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; weaver?: WorkflowAgentController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
 
   useEffect(() => {
@@ -160,6 +160,7 @@ export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }
         <WorkflowExecutableInspectorWorkbench
           context={context}
           ai={ai}
+          weaver={weaver}
           runInputEditors={runInputEditors}
           artifactId={location.artifactId}
           sourceReferenceId={location.sourceReferenceId}

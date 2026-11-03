@@ -27,6 +27,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 | `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
 | `IWorkflowLibraryCommands` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowLibraryCommands` (internal, this package); duplicates fail configuration and shell startup | A host replaces the library organization commands other domains (such as Weaver) call through Workflows Design Core; the library endpoints with a Core counterpart then call the replacement too, so both paths share one decision. |
+| `IWorkflowVersionReader` | Contract — `Elsa.Workflows.Design.Core` | `WorkflowVersionReader` (internal, this package); duplicates fail configuration and shell startup | A host replaces the exact version reads other domains (such as Weaver) make through Workflows Design Core. |
 | `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied optional replacement; at most one implementation, duplicates fail shell startup | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
 
 ### `IWorkflowDefinitionAuthorizer` *(Contract — `Elsa.Workflows.Design.Core`)*
@@ -105,6 +106,20 @@ endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for t
 `Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's
 reason before any actor or permission decision. Infrastructure failures and cancellation propagate. One registration per
 shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
+
+### `IWorkflowVersionReader` *(Contract — `Elsa.Workflows.Design.Core`, spec 1193 D4)*
+
+Exact, read-only reads of persisted workflow definition versions: `ReadAsync(versionId)` returns
+`WorkflowVersionDetails(VersionId, DefinitionId, Version, DefinitionName, State)` or `null` for an unknown version (a
+synthetic `draft:` identifier is never looked up), and `ListAsync(definitionId)` returns the definition's
+`WorkflowDefinitionVersionSummary` rows in the store's order. The default, `WorkflowVersionReader`, reads through the same
+`IWorkflowVersionDetailsReader` composition as `GET versions/{versionId}` (without the layout and presentation records) and
+the same store list as `GET definitions/{definitionId}/versions`. It decides no authority: a consumer requires the host's
+`workflows/design:read` and the owning `IWorkflowDefinitionAuthorizer.CanReadAsync` decision for the version's definition
+before it discloses anything it read (Weaver's version context and `workflow_read_version` do both, owner first, so an
+unknown version, another definition's version and a withheld definition are the same unavailable outcome). Infrastructure
+failures and cancellation propagate. One registration per shell: a second one fails configuration and shell startup
+(`WorkflowVersionReaderStartupTask`).
 
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 

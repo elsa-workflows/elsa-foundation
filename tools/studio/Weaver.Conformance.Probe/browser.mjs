@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -151,6 +151,15 @@ if (["workflow-library", "workflow-templates"].includes(config.journey)) page.on
   if (url.origin === backend && url.pathname.includes("/design/workflows/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
     designWrites.push({ path: url.pathname, method: request.method(), body: request.postDataJSON() });
 });
+// Spec 1193 T041: the read-only inspection journeys may write nothing to the design, publishing or runtime APIs.
+const INSPECTION_JOURNEYS = ["workflow-version-history", "workflow-executable-inspector"];
+if (INSPECTION_JOURNEYS.includes(config.journey)) page.on("request", request => {
+  const url = new URL(request.url());
+  if (url.origin === backend && /\/(design\/workflows|publishing|runtime\/workflows)\//.test(url.pathname) && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
+    designWrites.push({ path: url.pathname, method: request.method() });
+});
+// Reads the pages make by POST (preflights, options) are not effects; a change, promotion, publication, run or deletion is.
+const inspectionEffects = () => designWrites.filter(item => item.method !== "POST" || /\/(promote|publish|ingest|execute|test-runs|stop|cancel)$/.test(item.path));
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
   let pressed = null, sequence = 0;
@@ -2018,6 +2027,91 @@ async function workflowTemplates() {
   result.commands = commands;
   result.observations = { applied: true, templateTarget: true, oneHistoryStep: true, autosaveHeld: true, savedWithExpectedRevision: true, definitionUntouched: true };
 }
+// Spec 1193 T041: a read-only inspection page's own Explain action. The page contributes the exact resource it shows as
+// context; the Weaver Workflows prompt names the read tool; the selected command makes the actual adapter call it. The dock
+// overlaps page controls, so every control is activated through the keyboard, and each wait is on state, never on time.
+async function inspectionExplain(name, explainButton, toolName, args, kind, target, commands) {
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const selected = command(toolName, args);
+  commands[name] = selected.commandId;
+  const answers = dock().locator('.weaver-message[data-role="assistant"]'), earlier = await answers.count();
+  const message = responseFor("/messages");
+  await nativeEnter(name + "-explain", explainButton, "Explain");
+  const sent = await accepted(message, name + "-message");
+  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  const admitted = (sent.value.data?.message?.context ?? []).filter(item => item.contentType === kind);
+  need(admitted.length === 1 && ["authoritativeRead", "AuthoritativeRead"].includes(admitted[0].origin)
+    && admitted[0].target?.resourceType === target.resourceType && admitted[0].target?.resourceId === target.resourceId
+    && admitted[0].target?.revision === target.revision, name + ": the message did not admit the server's read of exactly the shown resource.");
+  await expect.poll(() => answers.count(), { timeout: 120000 }).toBeGreaterThan(earlier);
+  const answer = answers.nth(earlier);
+  await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 120000 });
+  await expect(answer).toContainText("Tool outcome received");
+  result.evidence.push(retain(name + "-outcome", { status: await answer.getAttribute("data-status"), target: admitted[0].target }));
+  return admitted[0];
+}
+
+// The editor's version history: selecting a version discloses it, and its Explain action reads it with a comparison.
+async function workflowVersionHistory() {
+  const wf = config.workflow ?? {};
+  const version = wf.version ?? {};
+  need(wf.definitionId && wf.definitionPath && version.id && version.version && version.path && version.compareToVersionId,
+    "The version history journey needs the seeded definition and the exact versions.");
+  owningDraftPath = wf.draftPath;
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(wf.definitionId));
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", version.path);
+  result.ownerBefore = before.receipt;
+  const definitionBefore = await owner("definition-before", wf.definitionPath);
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  await nativeEnter("properties-tab", page.getByRole("tab", { name: "Properties", exact: true }), "Properties");
+  const select = page.getByRole("button", { name: "Select version " + version.version, exact: true });
+  await expect(select).toBeVisible();
+  await nativeEnter("select-version", select, "Select version");
+  await expect(select).toHaveAttribute("aria-pressed", "true");
+  const explain = page.getByRole("button", { name: "Explain version v" + version.version, exact: true });
+  await expect(explain).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_version", { compareToVersionId: version.compareToVersionId }, "workflows.version",
+    { resourceType: "workflow-version", resourceId: version.id, revision: version.id }, commands);
+  need(admitted.content?.versionId === version.id && admitted.content?.definitionId === wf.definitionId, "The admitted version is not the selected version.");
+  const after = await owner("owner-after", version.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value).toEqual(before.value);
+  const definitionAfter = await owner("definition-after", wf.definitionPath);
+  expect(definitionAfter.value.draft).toEqual(definitionBefore.value.draft);
+  need(inspectionEffects().length === 0 && owningWrites.length === 0, "The version history journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-version-history-explained");
+  result.commands = commands;
+  result.observations = { versionSelected: true, versionContext: true, explainCompleted: true, readOnly: true };
+}
+
+// The Executable Inspector: the shown Executable, bound to its Artifact Hash, is disclosed and its Explain action reads it.
+async function workflowExecutableInspector() {
+  const executable = (config.workflow ?? {}).executable ?? {};
+  need(executable.artifactId && executable.artifactHash && executable.path, "The Executable Inspector journey needs the seeded Executable.");
+  const commands = {};
+  await page.goto(studio + "/workflows/executables/" + encodeURIComponent(executable.artifactId));
+  const explain = page.locator(".wf-toolbar").getByRole("button", { name: "Explain", exact: true });
+  await expect(explain).toBeVisible({ timeout: 30000 });
+  const before = await owner("owner-before", executable.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.artifactHash === executable.artifactHash, "The seeded Executable changed before the journey.");
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  await expect(dock()).toBeVisible();
+  const admitted = await inspectionExplain("explain", explain, "workflow_read_executable", {}, "workflows.executable",
+    { resourceType: "workflow-executable", resourceId: executable.artifactId, revision: executable.artifactHash }, commands);
+  need(admitted.content?.artifactHash === executable.artifactHash, "The admitted Executable is not bound to its Artifact Hash.");
+  const after = await owner("owner-after", executable.path);
+  result.ownerAfter = after.receipt;
+  expect(after.value.artifactHash).toEqual(before.value.artifactHash);
+  expect(after.value.references).toEqual(before.value.references);
+  need(inspectionEffects().length === 0, "The Executable Inspector journey changed an owner: " + JSON.stringify(inspectionEffects()));
+  await screenshot("workflow-executable-inspector-explained");
+  result.commands = commands;
+  result.observations = { executableContext: true, hashBound: true, explainCompleted: true, readOnly: true };
+}
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -2031,6 +2125,8 @@ try {
   else if (config.journey === "workflow-explain") await workflowExplain();
   else if (config.journey === "workflow-library") await workflowLibrary();
   else if (config.journey === "workflow-templates") await workflowTemplates();
+  else if (config.journey === "workflow-version-history") await workflowVersionHistory();
+  else if (config.journey === "workflow-executable-inspector") await workflowExecutableInspector();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -2069,7 +2165,8 @@ try {
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
   if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
-  if (["workflow-library", "workflow-templates"].includes(config.journey)) result.evidence.push(retain("design-write-attempts", designWrites));
+  if (["workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector"].includes(config.journey))
+    result.evidence.push(retain("design-write-attempts", designWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);
   retain("observation", result);

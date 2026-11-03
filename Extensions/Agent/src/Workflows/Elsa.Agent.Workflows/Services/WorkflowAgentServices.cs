@@ -20,7 +20,9 @@ internal sealed class WorkflowAgentCapabilityProvider : IAgentCapabilityProvider
             new("workflow.library-explain", WorkflowAgentSnapshot.ModuleId, "Explain workflow library", "Explains the visible workflow library list, the open new-workflow dialog and the visible template list at their revisions.",
                 AgentCapabilityKind.Answer, AgentRisk.ReadOnly, ["/workflows"], ["workflows/design:read"], [WorkflowLibraryContext.LibraryKind, WorkflowLibraryContext.TemplateListKind]) { Modes = ["explain"] },
             new("workflow.library-organize", WorkflowAgentSnapshot.ModuleId, "Organize workflow library", "Reviews a change to the visible list, a tag, favorite, folder or view change through the library, or values for the open new-workflow dialog. Deleting and creating workflows remain the user's actions.",
-                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, ["/workflows"], ["workflows/design:read"], [WorkflowLibraryContext.LibraryKind, WorkflowLibraryContext.CreateDialogKind]) { Modes = ["build"] }
+                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, ["/workflows"], ["workflows/design:read"], [WorkflowLibraryContext.LibraryKind, WorkflowLibraryContext.CreateDialogKind]) { Modes = ["build"] },
+            new("workflow.version-explain", WorkflowAgentSnapshot.ModuleId, "Explain workflow version", "Explains one exact, immutable workflow version and compares it with another version of the same workflow. Versions are never changed.",
+                AgentCapabilityKind.Answer, AgentRisk.ReadOnly, ["/workflows"], ["workflows/design:read"], [WorkflowVersionContext.VersionKind]) { Modes = ["explain"] }
         ]);
 }
 

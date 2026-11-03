@@ -74,7 +74,8 @@
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-		<ProjectReference Include="..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Workflows\Runtime\Elsa.Agent.Workflows.Runtime.csproj" />
 		<!-- Opt-in durable Weaver sessions (#3441): the reference alone adds nothing; a shell enables FoundationAgentEntityFrameworkCore with its provider. -->
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Persistence\EntityFrameworkCore\Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
 		<!-- Optional (#2294): the reference alone adds nothing; Program.cs composes it behind Elsa:ExtensionBuilder:Enabled. -->

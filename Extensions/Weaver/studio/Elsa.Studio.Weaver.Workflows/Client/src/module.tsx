@@ -4,10 +4,12 @@ import type {
   StudioAgentContextAttachment,
   StudioAgentResultRendererProps
 } from "@elsa-workflows/studio-sdk";
+import { workflowExecutableAttachment, workflowVersionAttachment } from "@elsa-workflows/studio-workflows";
 
 // Every prompt and renderer below is registered under this package's own module identity, and names only tools and
-// result kinds the Workflows packages register (spec 1193 FR-019, SC-007). The explain-executable prompt returns with the
-// Executable read tool it needs (slice F), and the explain-instance prompt with the Run context and tool (slice G).
+// result kinds the Workflows packages register (spec 1193 FR-019, SC-007). The explain-executable prompt reads through the
+// Runtime-side workflow_read_executable (Elsa.Agent.Workflows.Runtime) and the explain-version prompt through
+// workflow_read_version (slice F); the explain-instance prompt returns with the Run context and tool (slice G).
 const moduleId = "Elsa.Studio.Weaver.Workflows";
 
 export function register(api: ElsaStudioModuleApi) {
@@ -55,6 +57,54 @@ export function register(api: ElsaStudioModuleApi) {
       attachments: [createAttachment("workflow-definition", readReferenceId(context), context)],
       source: { moduleId, actionId: "weaver.workflows.explain-definition", label: "Explain workflow" }
     })
+  });
+
+  // An Executable is read-only (spec 1193 story 8, FR-028). The page that contributes its own workflows.executable context
+  // (the Executable Inspector) dispatches with attached: true, so this prompt never duplicates it; elsewhere (the executables
+  // list) the prompt attaches the exact identity itself, bound to its Artifact Hash.
+  api.agent.promptActions.add({
+    id: "weaver.workflows.explain-executable",
+    label: "Explain executable",
+    description: "Ask Weaver to explain a workflow Executable read-only: its identity, Artifact Hash, graph and Source References.",
+    moduleId,
+    placement: "selection",
+    contextKind: "workflow-executable",
+    createPrompt: context => {
+      const attachment = isRecord(context) && context.attached === true ? null : workflowExecutableAttachment(context);
+      return {
+        message: [
+          "Explain this workflow Executable read-only: its identity and Artifact Hash, its root activity, its graph and the Source References that point at it.",
+          "Read it with workflow_read_executable and name the Artifact Hash you read. An Executable is immutable: refuse any request to change it, change nothing, and offer to work on the workflow's current draft instead."
+        ].join("\n"),
+        mode: "enqueue",
+        attachments: attachment ? [attachment] : [],
+        source: { moduleId, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
+      };
+    }
+  });
+
+  // A persisted workflow definition version is read-only (spec 1193 story 8, FR-026).
+  api.agent.promptActions.add({
+    id: "weaver.workflows.explain-version",
+    label: "Explain version",
+    description: "Ask Weaver to explain one exact workflow version read-only, or compare it with another version of the same workflow.",
+    moduleId,
+    placement: "selection",
+    contextKind: "workflow-version",
+    createPrompt: context => {
+      const attachment = isRecord(context) && context.attached === true ? null : workflowVersionAttachment(context);
+      const version = isRecord(context) && typeof context.version === "string" ? ` v${context.version.slice(0, 64)}` : "";
+      return {
+        message: [
+          `Explain what this workflow version${version} does, read-only, and name the exact version you describe.`,
+          "Read it with workflow_read_version; to say what changed, call it with compareToVersionId set to the other version of the same workflow, and present the comparison as the tool's own.",
+          "A version is immutable: refuse any request to change it, change nothing, and offer to work on the workflow's current draft instead."
+        ].join("\n"),
+        mode: "enqueue",
+        attachments: attachment ? [attachment] : [],
+        source: { moduleId, actionId: "weaver.workflows.explain-version", label: "Explain version" }
+      };
+    }
   });
 
   api.agent.promptActions.add({

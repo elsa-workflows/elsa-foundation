@@ -58,10 +58,10 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 
 ## Slice F: Versions and Executables (story 8)
 
-- [ ] T037 Add `IWorkflowVersionReader` to `Elsa.Workflows.Design.Core`, implemented in the Api. Add the `workflows.version` context and the version tool with a two-version comparison, refusing edits (FR-015, FR-026, D4, R6).
-- [ ] T038 Add `IWorkflowExecutableInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Create the new package `Elsa.Agent.Workflows.Runtime` with its feature, the `workflows.executable` context and `workflow_read_executable`, and its own test project `Elsa.Agent.Workflows.Runtime.Tests` (FR-027, FR-028, D2, D4).
-- [ ] T039 Restore the explain-executable prompt against the registered tool (FR-019).
-- [ ] T040 Composition tests for the Design-only, Runtime-only and combined shapes (SC-009). Add the package to the conformance consumers.
+- [x] T037 Add `IWorkflowVersionReader` to `Elsa.Workflows.Design.Core`, implemented in the Api. Add the `workflows.version` context and the version tool with a two-version comparison, refusing edits (FR-015, FR-026, D4, R6).
+- [x] T038 Add `IWorkflowExecutableInspection` to `Elsa.Workflows.Runtime.Core`, implemented in the Api. Create the new package `Elsa.Agent.Workflows.Runtime` with its feature, the `workflows.executable` context and `workflow_read_executable`, and its own test project `Elsa.Agent.Workflows.Runtime.Tests` (FR-027, FR-028, D2, D4).
+- [x] T039 Restore the explain-executable prompt against the registered tool (FR-019).
+- [x] T040 Composition tests for the Design-only, Runtime-only and combined shapes (SC-009). Add the package to the conformance consumers.
 - [ ] T041 Probe cases `workflow-versions` and `workflow-executables`, and normal-host journeys for the version history and the Executable Inspector (FR-036).
 
 ## Slice G: One exact Run (story 9)

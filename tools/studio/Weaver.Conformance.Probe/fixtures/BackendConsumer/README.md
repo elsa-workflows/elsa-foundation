@@ -74,3 +74,8 @@ rereading the key, and the driver proves exactly one tag (or view) exists with t
 delegates every call unchanged. While it is selected, the library endpoints that have a Core counterpart also reach the
 actual commands through this wrapper (spec 1193 D4: one decision for both paths); the driver keeps the mode `none` for its
 own owner writes and reads. The seam changes no product code.
+
+Spec 1193 slice F adds `Elsa.Agent.Workflows.Runtime` to the packaged references and selects its shell feature
+`FoundationWorkflowsRuntimeAgent` in the baseline shell, beside `FoundationWorkflowsAgent`; its assembly is listed with the
+other agent assemblies. `inspection_journeys.py` adds no seam: it deselects each agent feature once, through the ordinary
+native feature apply, for its deployment-shape control and selects it again.

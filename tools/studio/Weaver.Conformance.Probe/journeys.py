@@ -32,6 +32,7 @@ from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, qualify_workflow_
 from batch_journeys import SECTION as BATCH_SECTION, qualify_workflow_batch
 from explain_journeys import SECTION as EXPLAIN_SECTION, qualify_workflow_explain
 from library_journeys import SECTION as LIBRARY_SECTION, library_principal, qualify_workflow_library
+from inspection_journeys import SECTION as INSPECTION_SECTION, qualify_workflow_inspection
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -683,9 +684,12 @@ def qualify_distributions(run):
         # actor, organization disabled) and Reusable Workflow Templates, through a test-only lost-response seam the driver
         # selects for the library inventory alone.
         qualify_workflow_library(runtime)
+        # Spec 1193 T041: read-only versions (explain, compare, refused edits) and Executables (explain, stale hash, refused
+        # edits), with each agent feature deselected once for its deployment-shape control and selected again.
+        qualify_workflow_inspection(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION, LIBRARY_SECTION)})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION, BATCH_SECTION, EXPLAIN_SECTION, LIBRARY_SECTION, INSPECTION_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)
