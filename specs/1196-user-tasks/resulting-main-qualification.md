@@ -67,11 +67,33 @@ The repository package verifier checked actual dependency metadata and byte-exac
 
 This is scoped module/public-contract qualification, not publication of a distribution release.
 
+## Feature acceptance map
+
+| #3577 success criterion | Executed witness |
+|---|---|
+| Configure assignment/group, actions and optional form; connect each action path | Actual designer journey creates a reusable form, configures the activity, connects all three visual ports, saves/reloads, publishes and executes |
+| Durable open wait across restart | Whole EF suite's Durable/Balanced three-generation journey; published native worker with a real host restart |
+| Discover and complete in Studio; claim/release group work | Desktop/narrow normal Studio completion; mounted queue/claim/release UI; real independent signed-in users race claims and release/reclaim against Workbench |
+| Equivalent API/custom form application | All three HTTP action paths, durable external-form journey, matching mounted custom renderer and outside-workspace public-contract consumer |
+| Exact submitted data, matching path and one completion | Client/browser/BPMN journeys and whole EF concurrency, receipt, forged/replaced-wait, post-claim outage and canonical acknowledgement tests |
+| Understandable authorized reassignment, cancellation and history | Real current membership/permission revocation and reassignment; EF cancellation/terminal/history tests; API tenant/resource/actor negatives and mounted management/history UI |
+
+The broader reviewed-head suites cover API, publishing, catalog, activity design/behavior, identity,
+all supported database providers and Studio module integration; the resulting-main journeys above
+repeat the decisive combined-runtime and real-host boundaries. No unexecuted row is inferred solely
+from a source inspection.
+
 ## Main checks and closeout
 
 [Push CI on the merge commit](https://github.com/elsa-workflows/elsa-foundation/actions/runs/41591385434)
-is running. Its generated-maps check and publication passed. The Program remains open until
-the remaining main checks finish, and the final record reconciles
-the task checklist, program registry and linked parity/BPMN dependency.
+is a required closeout gate. [Closeout PR #3706](https://github.com/elsa-workflows/elsa-foundation/pull/3706)
+records its checked conclusion in a gate-evidence comment before merge. The closeout must not merge
+or close the Program while this run has a pending or failed substantive job. The source, archive and
+executed acceptance evidence above remain pinned to the implementation merge commit.
+
+The closeout reconciles the task checklist, completed program registry and the User Tasks portion
+of the parity/BPMN dependency. Its own independent review and required documentation checks are
+also required before merge. These source bookkeeping transitions take effect when that PR merges;
+the Program issue remains the live state during review. Other parity/BPMN objectives remain open.
 
 Both owned normal hosts were stopped with SIGTERM after verifying each PID, DLL and owned content root. Their stores remain available for reproduction. Test fixtures disposed their own child hosts.

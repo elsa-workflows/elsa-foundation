@@ -44,7 +44,9 @@ Input: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](d
 - [x] T023 Qualify provider/custom-host/package composition and complete required e2e suites; add user/integrator guides and extension-point/feature/cadence docs.
 - [x] T024 Check claims/open PRs; review diff, complete whole affected suite/list counts, architecture/maps/tier/reference guards and post evidence on draft PR.
 - [x] T025 Complete independent draft review axes, fix findings in new commits, mark ready and run required reviewed-head CI/review/permitted merge.
-- [ ] T026 Rebuild resulting main, repeat decisive integrated rows, reconcile spec status/#3577/Program/linked parity records, and close only when all exits are evidenced.
+- [x] T026 Rebuild resulting main, repeat decisive integrated rows, reconcile spec status/#3577/Program/linked parity records, and close only when all exits are evidenced.
+
+T026 closeout is applied by PR #3706 only after the implementation main run and the closeout PR's own required checks pass; see [resulting-main qualification](resulting-main-qualification.md). The Program issue retains the live state until merge.
 
 ## Dependencies and implementation strategy
 
