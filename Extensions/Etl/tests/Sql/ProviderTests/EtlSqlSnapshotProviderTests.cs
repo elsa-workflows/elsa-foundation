@@ -90,12 +90,35 @@ public abstract partial class EtlSqlProviderTests
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
 
         // Nothing listens on port 1, so the connection is refused: an outage that pauses preparation, not a failure.
-        await Assert.ThrowsAsync<EtlSqlTransientReadException>(() => ReadSnapshotAsync(
+        await Assert.ThrowsAsync<EtlSqlTransientException>(() => ReadSnapshotAsync(
             new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true)], ["id"]), UnreachableConnectionString));
     }
 
     /// <summary>The fixture's connection string pointed at a port nothing listens on.</summary>
     protected abstract string UnreachableConnectionString { get; }
+
+    /// <summary>
+    /// The read stops at the limit while the server is still streaming a large result: cancelling and closing the reader
+    /// must not replace the limit's failure with a cancellation error.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_large_table_beyond_the_snapshot_limit_fails_with_the_limit_not_a_cancellation()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL PRIMARY KEY, name varchar(200) NOT NULL)");
+        var filler = new string('x', 150);
+        // SQL Server allows at most 1,000 rows per INSERT.
+        for (var start = 1; start <= 200_000; start += 1_000)
+            await fixture.ExecuteAsync($"INSERT INTO {_table} (id, name) VALUES " + string.Join(", ",
+                Enumerable.Range(start, 1_000).Select(id => $"({id}, '{filler}')")));
+        var source = new EtlSqlSource("db", _table, [new("id", EtlColumnType.Int64, true), new("name", EtlColumnType.String, true)], ["id"]);
+
+        using var destination = new MemoryStream();
+        var failure = await Assert.ThrowsAsync<EtlConnectorPreparationFailure>(() =>
+            EtlSqlSnapshotReader.WriteAsync(Binding(fixture.ConnectionString), source, 65_536, destination, default).AsTask());
+
+        Assert.Equal("etl.snapshot-too-large", failure.Diagnostic.Code);
+    }
 
     [SkippableFact]
     public async Task A_missing_table_is_a_read_rejection()

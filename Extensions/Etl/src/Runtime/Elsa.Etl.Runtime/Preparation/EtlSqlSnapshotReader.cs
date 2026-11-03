@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Etl.Core;
@@ -9,7 +10,7 @@ using Elsa.Etl.Runtime.Bindings;
 namespace Elsa.Etl.Runtime.Preparation;
 
 /// <summary>Thrown when a SQL snapshot read failed transiently; preparation is retried once its lease lapses.</summary>
-internal sealed class EtlSqlTransientReadException(Exception cause) : Exception("A SQL snapshot read failed transiently.", cause);
+internal sealed class EtlSqlTransientException(Exception cause) : Exception("A SQL snapshot read failed transiently.", cause);
 
 /// <summary>
 /// Reads a SQL source's table as of one point in time and writes each row as one JSON Lines object (spec 1198). After
@@ -32,7 +33,7 @@ internal static class EtlSqlSnapshotReader
 
     /// <summary>
     /// Streams the ordered rows in one transaction at the engine's snapshot isolation. A deterministic refusal is a
-    /// preparation failure; a transient one is an <see cref="EtlSqlTransientReadException"/>.
+    /// preparation failure; a transient one is an <see cref="EtlSqlTransientException"/>.
     /// </summary>
     internal static async ValueTask WriteAsync(HostSqlResolvedBinding binding, EtlSqlSource source, long maxBytes,
         Stream destination, CancellationToken cancellationToken)
@@ -56,18 +57,27 @@ internal static class EtlSqlSnapshotReader
                 // A large ordered read may run longer than the driver's default timeout; the lease token bounds it instead.
                 command.CommandTimeout = 0;
                 // The reader is closed before the commit: PostgreSQL and SQL Server allow one open reader per connection.
-                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                var reader = await command.ExecuteReaderAsync(cancellationToken);
+                ExceptionDispatchInfo? failure = null;
                 try
                 {
                     await CopyRowsAsync(reader, source, columns, maxBytes, destination, cancellationToken);
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Closing a reader drains every remaining row; cancel first so a doomed read stops at once, and so a
-                    // drain failure cannot replace the original failure.
-                    try { command.Cancel(); } catch (Exception exception) when (exception is DbException or InvalidOperationException) { }
-                    throw;
+                    // Closing a reader drains every remaining row; cancel first so a doomed read stops at once.
+                    failure = ExceptionDispatchInfo.Capture(exception);
+                    try { command.Cancel(); } catch (Exception cancel) when (cancel is DbException or InvalidOperationException) { }
                 }
+                try
+                {
+                    await reader.DisposeAsync();
+                }
+                catch (Exception exception) when (failure is not null && exception is DbException or InvalidOperationException)
+                {
+                    // The cancellation surfaces while closing; the failure that stopped the read is the one to report.
+                }
+                failure?.Throw();
             }
             await transaction.CommitAsync(cancellationToken);
         }
@@ -82,10 +92,10 @@ internal static class EtlSqlSnapshotReader
         catch (Exception exception) when (exception is DbException or InvalidOperationException or TimeoutException)
         {
             if (engine.Classify(exception) == EtlSqlErrorKind.Transient)
-                throw new EtlSqlTransientReadException(exception);
+                throw new EtlSqlTransientException(exception);
             throw new EtlConnectorPreparationFailure(EtlPreparationDiagnostic.Fault("etl.sql-read-rejected", exception));
         }
-        catch (Exception exception) when (exception is not (IOException or OutOfMemoryException or OperationCanceledException or EtlSqlTransientReadException))
+        catch (Exception exception) when (exception is not (IOException or OutOfMemoryException or OperationCanceledException or EtlSqlTransientException))
         {
             // Any other provider failure is deterministic: retrying the same read would fail the same way. Snapshot-root I/O
             // failures propagate unwrapped, so the preparer reports them as write failures.
@@ -119,7 +129,7 @@ internal static class EtlSqlSnapshotReader
             catch (Exception exception) when (exception is IOException or ArgumentException && exception is not ArgumentNullException)
             {
                 // A row too large for one in-memory line (the line buffer or a JSON token limit) cannot fit the snapshot.
-                throw Failure("etl.snapshot-too-large");
+                throw Failure("etl.snapshot-too-large", cause: exception);
             }
             line.Write(LineFeed);
             if (line.Length > maxBytes - written)
@@ -141,10 +151,11 @@ internal static class EtlSqlSnapshotReader
         {
             value = reader.GetValue(index);
         }
-        catch (Exception exception) when (exception is InvalidCastException or OverflowException or NotSupportedException)
+        catch (Exception exception) when (exception is InvalidCastException or OverflowException or NotSupportedException or IOException)
         {
-            // A value the provider cannot materialise, such as a numeric beyond decimal range or an unmapped type.
-            throw Failure("etl.sql-column-type-unsupported", column.Name);
+            // A value the provider cannot materialise: a numeric beyond decimal range, an unmapped type, or a type whose
+            // assembly is not installed (SqlClient's spatial and hierarchy types).
+            throw Failure("etl.sql-column-type-unsupported", column.Name, exception);
         }
         switch (column.Type)
         {
@@ -214,6 +225,6 @@ internal static class EtlSqlSnapshotReader
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static EtlConnectorPreparationFailure Failure(string code, string? field = null) =>
-        new(new EtlPreparationDiagnostic(code, Field: field));
+    private static EtlConnectorPreparationFailure Failure(string code, string? field = null, Exception? cause = null) =>
+        new(new EtlPreparationDiagnostic(code, Field: field) { Cause = cause });
 }

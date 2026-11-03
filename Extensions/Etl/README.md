@@ -109,7 +109,7 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   an unpaired surrogate in `nvarchar` text with U+FFFD before the run sees it. A driver materialises each value before
   the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
   run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
-  names it.
+  names the exception type, not the error number.
   Watermark (incremental) reads, authored queries and log CDC are not supported.
 
 ## Continuous HTTP runs

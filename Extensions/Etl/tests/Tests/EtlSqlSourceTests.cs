@@ -49,6 +49,7 @@ public sealed class EtlSqlSourceTests : IDisposable
     [InlineData("people;drop", "source.sql-identifier-invalid")]
     [InlineData("a.b.c", "source.sql-identifier-invalid")]
     [InlineData("1people", "source.sql-identifier-invalid")]
+    [InlineData("p234567890123456789012345678901234567890123456789012345678901234", "source.sql-identifier-invalid")]
     public void A_table_that_is_not_an_identifier_is_refused(string table, string code) =>
         AssertRejected(Pipeline(Source(table: table)), code);
 
@@ -63,6 +64,9 @@ public sealed class EtlSqlSourceTests : IDisposable
         AssertRejected(Pipeline(Source(key: ["id", "id"])), "source.sql-key-invalid");
         AssertRejected(Pipeline(Source(key: ["missing"])), "source.sql-key-invalid");
         AssertRejected(Pipeline(Source(key: ["score"])), "source.sql-key-invalid");
+        var nine = Enumerable.Range(0, 9).Select(index => new EtlColumn($"k{index}", EtlColumnType.Int64, true)).ToArray();
+        AssertRejected(Pipeline(Source(columns: nine, key: nine.Select(column => column.Name).ToArray())), "source.sql-key-invalid");
+        Assert.NotNull(Compile(Pipeline(Source(columns: nine, key: nine.Take(8).Select(column => column.Name).ToArray()))).Artifact);
         Assert.NotNull(Compile(Pipeline(Source(key: ["id", "name"]))).Artifact);
     }
 

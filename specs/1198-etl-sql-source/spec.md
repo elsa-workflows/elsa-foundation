@@ -24,7 +24,7 @@ Every partition therefore reads the same point in time, however long the run tak
 
 An author points a pipeline's source at a host-approved PostgreSQL or SQL Server binding, a table, its columns and an order key. Every row becomes one record.
 
-**Independent Test**: run pipelines from a real PostgreSQL container and a real SQL Server container. The delivered records must equal the table's rows in key order.
+**Independent Test**: run a pipeline from a real PostgreSQL container and from a real SQL Server container, each through an actual Workbench. The delivered records must equal the table's rows. On each engine, the reader's snapshot must hold every accepted kind of value in key order.
 
 **Acceptance Scenarios**:
 
@@ -37,7 +37,9 @@ An author points a pipeline's source at a host-approved PostgreSQL or SQL Server
 
 Writers keep changing the table while the run reads it. The run sees the table as it was at one instant.
 
-**Independent Test**: on each real engine, change the table after preparation and before the partitions run. The delivered records must equal the table before the change.
+**Independent Test**:
+- On each real engine, commit a change while the read is paused part-way; the snapshot must not hold it.
+- Through the worker, change the table after preparation and before the partitions run; the delivered records must equal the table before the change. This holds whatever the engine, because the run reads the retained snapshot, so it is proven on the SQLite test engine.
 
 **Acceptance Scenarios**:
 
@@ -51,7 +53,7 @@ Writers keep changing the table while the run reads it. The run sees the table a
 **Acceptance Scenarios**:
 
 1. **Given** a published snapshot whose preparation was not recorded, **When** preparation runs again, **Then** it verifies and reuses that snapshot and does not query the database.
-2. **Given** a transient failure while reading, such as a connection failure or a timeout, **Then** the run is not failed. The preparation is left unrecorded and is claimed again once its lease expires. The worker logs a warning naming the failure type. The read itself has no command timeout; the lease bounds it.
+2. **Given** a transient failure while reading, such as a connection failure or a timeout as the engine classifies it (spec 1197), **Then** the run is not failed. The preparation is left unrecorded and is claimed again once its lease expires. The worker logs a warning naming the failure type. The read itself has no command timeout; the lease bounds it.
 3. **Given** a predecessor whose lease lapsed while it was still reading, **When** it publishes its snapshot after the replacement has started reading, **Then** the replacement adopts the published snapshot rather than failing the run.
 4. **Given** a deterministic refusal while reading, such as a missing table or column, or a permission error, **Then** the run fails with `etl.sql-read-rejected`.
 
@@ -118,7 +120,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
 ## Success Criteria *(mandatory)*
 
 - **SC-001** Against real PostgreSQL 16 and SQL Server 2022 containers, preparation reads a table into a snapshot whose records equal the rows in key order, including NULLs, an empty table, and each accepted kind of value (16-, 32- and 64-bit integers on PostgreSQL, which has no 8-bit type, and 8-, 32- and 64-bit on SQL Server; an exact decimal and a decimal read from an integer column, a boolean, a GUID, text including non-ASCII, a timestamp, a zoned timestamp and a date), and refuses a floating-point column and a decimal beyond .NET range.
-- **SC-002** On each real engine, a change committed after preparation does not reach the run, and a missing table is refused with `etl.sql-read-rejected`. On SQL Server, a database without snapshot isolation is refused.
+- **SC-002** On each real engine, a change committed while the read is paused does not reach the snapshot, and a missing table is refused with `etl.sql-read-rejected`. On SQL Server, a database without snapshot isolation is refused. Through the worker, a change committed after preparation does not reach the run.
 - **SC-003** In real worker processes, a worker killed between the snapshot publication and the preparation record is replaced, and the replacement reuses the snapshot after the table changed. The run delivers the original rows across two or more partitions.
 - **SC-004** A transient read failure records nothing and a later preparation attempt succeeds, at the preparer, on the SQLite test engine. On each real engine, an unreachable database is classified as transient.
 - **SC-005** Every behavioural requirement has a test that fails when its guard is mutated, recorded as a bite-proof, except the guards the evidence README names.

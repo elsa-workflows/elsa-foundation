@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Spec 1198 actual-host journey: a PostgreSQL table snapshot read into a PostgreSQL table on an owned Workbench.
+"""Spec 1198 actual-host journey: a SQL table snapshot read into a SQL table on an owned Workbench.
 
-Starts its own PostgreSQL 16 container and its own Workbench on an ephemeral loopback port, publishes one SQL → SQL pipeline
+With --engine postgresql (the default) or sqlserver, starts its own PostgreSQL 16 or SQL Server 2022 container and its own Workbench on an ephemeral loopback port, publishes one SQL → SQL pipeline
 through the design API and runs it twice from a native Flowchart's RunEtl activity. The first run copies the four source
 rows; between runs the source changes, and the second run copies the new snapshot. It checks the native outcome port, the
 target table, the runtime inspection (a SQL source with no admission digest and a prepared snapshot) and that no host path
@@ -80,6 +80,33 @@ def psql(container: str, sql: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
+SQLSERVER_PASSWORD = "Etl_Journey_1198"
+
+
+def sqlcmd(container: str, sql: str, database: str = "warehouse") -> list[str]:
+    result = subprocess.run(["docker", "exec", container, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa",
+                             "-P", SQLSERVER_PASSWORD, "-d", database, "-b", "-h", "-1", "-W", "-s", "|", "-Q", "SET NOCOUNT ON; " + sql],
+                            capture_output=True, text=True, check=True)
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def start_sqlserver() -> tuple[str, int]:
+    """Starts an owned SQL Server 2022 container on an ephemeral loopback port, with a snapshot-isolation database."""
+    name = "elsa-etl-sql-journey-" + uuid.uuid4().hex[:8]
+    subprocess.run(["docker", "run", "-d", "--rm", "--name", name, "-e", "ACCEPT_EULA=Y", "-e", f"MSSQL_SA_PASSWORD={SQLSERVER_PASSWORD}",
+                    "-p", "127.0.0.1::1433", "mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04"], capture_output=True, text=True, check=True)
+    port = int(subprocess.check_output(["docker", "port", name, "1433/tcp"], text=True).strip().rsplit(":", 1)[1])
+    def ready():
+        try:
+            sqlcmd(name, "SELECT 1", "master")
+            return True
+        except subprocess.CalledProcessError:
+            return False
+    wait_for(ready, bool, "SQL Server did not accept queries.", 240)
+    sqlcmd(name, "CREATE DATABASE warehouse; ALTER DATABASE warehouse SET ALLOW_SNAPSHOT_ISOLATION ON", "master")
+    return name, port
+
+
 def start_postgres() -> tuple[str, int]:
     """Starts an owned PostgreSQL 16 container on an ephemeral loopback port; never touches another instance."""
     name = "elsa-etl-sql-journey-" + uuid.uuid4().hex[:8]
@@ -120,6 +147,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=0, help="A free loopback port; 0 lets the host choose. Never pass one you do not own.")
     parser.add_argument("--studio-origin", help="An owned Studio origin allowed to call and sign in to this Workbench.")
     parser.add_argument("--keep-host", action="store_true", help="Leave the owned Workbench running for a browser observation.")
+    parser.add_argument("--engine", choices=("postgresql", "sqlserver"), default="postgresql")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -127,11 +155,20 @@ def main() -> int:
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=REPO, text=True).strip())
 
-    database, database_port = start_postgres()
-    psql(database, "CREATE TABLE people (id bigint NOT NULL PRIMARY KEY, name text NOT NULL)")
-    psql(database, "INSERT INTO people VALUES (1, 'Ada'), (2, 'Bram'), (3, 'Cleo'), (4, 'Dee')")
-    psql(database, "CREATE TABLE people_copy (id bigint NOT NULL, name text NOT NULL, CONSTRAINT people_copy_key UNIQUE (id))")
-    connection_string = f"Host=127.0.0.1;Port={database_port};Database=warehouse;Username=postgres;Password=postgres;Pooling=false"
+    if args.engine == "sqlserver":
+        database, database_port = start_sqlserver()
+        query = lambda sql: sqlcmd(database, sql)
+        text_type, feature = "nvarchar(100)", "EtlSqlServer"
+        connection_string = (f"Server=127.0.0.1,{database_port};Database=warehouse;User Id=sa;Password={SQLSERVER_PASSWORD};"
+                             "TrustServerCertificate=true;Pooling=false")
+    else:
+        database, database_port = start_postgres()
+        query = lambda sql: psql(database, sql)
+        text_type, feature = "text", "EtlSqlPostgreSql"
+        connection_string = f"Host=127.0.0.1;Port={database_port};Database=warehouse;Username=postgres;Password=postgres;Pooling=false"
+    query(f"CREATE TABLE people (id bigint NOT NULL PRIMARY KEY, name {text_type} NOT NULL)")
+    query("INSERT INTO people VALUES (1, 'Ada'), (2, 'Bram'), (3, 'Cleo'), (4, 'Dee')")
+    query(f"CREATE TABLE people_copy (id bigint NOT NULL, name {text_type} NOT NULL, CONSTRAINT people_copy_key UNIQUE (id))")
 
     root = Path(tempfile.mkdtemp(prefix="elsa-etl-sql-journey-"))
     for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
@@ -143,15 +180,15 @@ def main() -> int:
                  "Revision": "v1", "Path": str(root / "errors"), "IsCurrent": True, "ImmutableInput": False, "AtomicPublication": True}]
     sql_bindings = [
         {"TenantId": "default", "PersistencePartition": "default", "Alias": "warehouse-source", "Role": "Source", "Revision": "v1",
-         "Provider": "postgresql", "ConnectionString": connection_string, "AllowedTables": ["people"]},
+         "Provider": args.engine, "ConnectionString": connection_string, "AllowedTables": ["people"]},
         {"TenantId": "default", "PersistencePartition": "default", "Alias": "warehouse", "Role": "MainOutput", "Revision": "v1",
-         "Provider": "postgresql", "ConnectionString": connection_string, "AllowedTables": ["people_copy"]}]
+         "Provider": args.engine, "ConnectionString": connection_string, "AllowedTables": ["people_copy"]}]
     shells = json.loads((root / "shells.json").read_text())
     shells["CShells"]["Shells"]["default"]["Features"].update({
         "EtlDesign": {}, "EtlDesignEntityFrameworkCore": {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-design.db;Pooling=False"},
         "EtlDesignApi": {"CursorSigningKey": "owned-etl-sql-design-cursor-signing-key"},
         "EtlRuntime": {"SnapshotRoot": str(root / "etl-snapshots"), "FileBindings": bindings, "SqlBindings": sql_bindings},
-        "EtlSqlPostgreSql": {},
+        feature: {},
         "EtlRuntimeEntityFrameworkCore": {"Provider": "Sqlite", "ConnectionString": "Data Source=etl-runtime.db;Pooling=False"},
         "EtlRuntimeApi": {"CursorSigningKey": "owned-etl-sql-runtime-cursor-signing-key"},
         "EtlWorkflowsDesign": {}, "EtlWorkflowsRuntime": {}})
@@ -167,7 +204,7 @@ def main() -> int:
         environment["Cors__AllowedOrigins__5"] = args.studio_origin
     host = subprocess.Popen(["dotnet", str(assembly), "--contentRoot", str(root), "--urls", f"http://127.0.0.1:{args.port}"],
                             cwd=root, env=environment, stdout=log, stderr=subprocess.STDOUT)
-    summary = {"schemaVersion": 1, "spec": "1198-etl-sql-source", "sourceRevision": source, "workingTreeDirty": dirty,
+    summary = {"schemaVersion": 1, "spec": "1198-etl-sql-source", "engine": args.engine, "sourceRevision": source, "workingTreeDirty": dirty,
                "workbenchAssemblySha256": sha256(assembly.read_bytes()), "hostProcessId": host.pid, "cases": {}}
     try:
         def address():
@@ -200,7 +237,7 @@ def main() -> int:
         for case in cases:
             if case == "second":
                 # The source changes between runs; each run reads its own snapshot.
-                psql(database, "UPDATE people SET name = 'Bram II' WHERE id = 2; DELETE FROM people WHERE id = 4; INSERT INTO people VALUES (5, 'Eve')")
+                query("UPDATE people SET name = 'Bram II' WHERE id = 2; DELETE FROM people WHERE id = 4; INSERT INTO people VALUES (5, 'Eve')")
                 definition = f"sql-source-{uuid.uuid4().hex[:8]}"
             draft = api.request("/etl/v2/definitions", {"id": definition, "pipeline": pipeline()})
             validation = api.request(f"/etl/v2/definitions/{definition}/validate", {"expectedRevision": draft["revision"]})
@@ -242,7 +279,7 @@ def main() -> int:
                                                           "outstandingRecords", "outstandingBytes")},
                 "connector": detail.get("connector"),
                 "sourceInput": detail.get("sourceInput"),
-                "table": psql(database, "SELECT id, name FROM people_copy ORDER BY id"),
+                "table": query("SELECT id, name FROM people_copy ORDER BY id"),
                 "hostPathOrSecretInInspection": str(root) in json.dumps(detail) or "Password" in json.dumps(detail)}
 
         first, second = summary["cases"]["first"], summary["cases"]["second"]

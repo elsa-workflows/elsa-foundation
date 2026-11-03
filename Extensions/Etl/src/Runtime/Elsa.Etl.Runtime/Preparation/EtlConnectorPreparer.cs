@@ -126,7 +126,7 @@ internal sealed class EtlConnectorPreparer
         {
             return new(null, failure.Diagnostic);
         }
-        catch (EtlSqlTransientReadException exception)
+        catch (EtlSqlTransientException exception)
         {
             return new(null, null) { TransientCause = exception.InnerException };
         }
