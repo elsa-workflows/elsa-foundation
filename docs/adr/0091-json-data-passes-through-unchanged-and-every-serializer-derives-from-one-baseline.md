@@ -171,8 +171,8 @@ a re-parse per value.
   JavaScript values up front, and Jint holds every number as a double, so an integer beyond ±2^53 or a long decimal
   loses digits (`IsolatedJintEngine.cs:168-169`, found by A-1). That loss is the JavaScript adapter's, not the
   serializer's. The ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)) fixes
-  it there: the script reads a JSON-backed view, and parts it does not read are written back as their original text.
-  Values the script reads or computes are new values and come back in the default format.
+  it there with copy, compare, patch (V9): only the paths the script changed are written, so everything else keeps
+  its original text. Values the script changes or computes are new values and come back in the default format.
 - Because stored text keeps whatever notation arrived, two equal values can have different text. Nothing that decides
   whether a value changed compares stored text: equality of values uses the canonical form of decision 7. That is
   the no-op test of the ADR 0090 amendment ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425), C4) and the value digest of ADR 0092.
