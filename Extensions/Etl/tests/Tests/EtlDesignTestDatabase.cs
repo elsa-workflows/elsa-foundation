@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Etl.Tests;
 
-internal sealed class EtlDesignTestDatabase(string directory) : IAsyncDisposable
+internal sealed class EtlDesignTestDatabase(string directory) : IEtlDesignTestDatabase
 {
     private readonly string _connectionString = $"Data Source={Path.Combine(directory, "etl.db")};Pooling=False";
 
@@ -29,6 +29,8 @@ internal sealed class EtlDesignTestDatabase(string directory) : IAsyncDisposable
             .Options;
         return new EtlDesignSqliteDbContext(options);
     }
+
+    EtlDesignDbContext IEtlDesignTestDatabase.CreateContext() => CreateContext();
 
     public ValueTask DisposeAsync()
     {

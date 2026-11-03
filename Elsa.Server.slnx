@@ -70,6 +70,9 @@
     <Project Path="Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
     <Project Path="Extensions/Etl/tests/WorkerHost/Elsa.Etl.WorkerHost.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Etl/tests/Persistence/">
+    <Project Path="Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Etl/tests/RabbitMq/">
     <Project Path="Extensions/Etl/tests/RabbitMq/ProviderTests/Elsa.Etl.RabbitMq.ProviderTests.csproj" />
   </Folder>
