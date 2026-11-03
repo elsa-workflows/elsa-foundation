@@ -14,11 +14,11 @@
 
 ## Suites
 
-At `14eb2aca3` (review round 5): the ETL suite passed 1314 of 1314, the `etl-ef` provider suite 105 of 105 (35 per engine) and the architecture suite 614 of 614 (after `tools/architecture/restore-ci-project-graph.sh`). The solution-filter and test-tier checks pass.
+At `404298d11` (review round 6): the ETL suite passed 1315 of 1315, the `etl-ef` provider suite 105 of 105 (35 per engine) and the architecture suite 614 of 614 (after `tools/architecture/restore-ci-project-graph.sh`). The solution-filter and test-tier checks pass. Round 6's correctness review also ran a 30-second mixed create/update/publish/read stress of 12 workers on each server engine with no exception and exact accounting.
 
 ## Bite-proofs
 
-[`bite-proofs.json`](bite-proofs.json) has ten entries, and all bite. One, recorded at `bdb89368c` (review round 4), covers a draft update retrying the deadlock it loses to a publication on SQL Server. One, recorded at `45c609432` (review round 3), covers a failed draft create leaving nothing tracked. One, recorded at `ae9f03105` (review round 2), covers a failed publication clearing the change tracker before a rollback that may throw. Two, recorded at `6337c6bef` (review round 1), cover a draft update reporting its own revision and a failed publication clearing the change tracker. Five, recorded at `84b61a306`, cover (the `design-publish-retry` entry names the full `PublishRetry` declaration, since `UpdateRetry` later shared its initializer; two of them name `Key_and_hash_columns_use_the_engines_binary_collation`, which round 1 renamed to `Key_columns_use_the_engines_binary_collation`):
+[`bite-proofs.json`](bite-proofs.json) has twelve entries, and all bite. Two, recorded at `404298d11` (review round 6), cover a store read retrying a busy database and the read retry's budget (which the catalog's reads share). One, recorded at `bdb89368c` (review round 4), covers a draft update retrying the deadlock it loses to a publication on SQL Server. One, recorded at `45c609432` (review round 3), covers a failed draft create leaving nothing tracked. One, recorded at `ae9f03105` (review round 2), covers a failed publication clearing the change tracker before a rollback that may throw. Two, recorded at `6337c6bef` (review round 1), cover a draft update reporting its own revision and a failed publication clearing the change tracker. Five, recorded at `84b61a306`, cover (the `design-publish-retry` entry names the full `PublishRetry` declaration, since `UpdateRetry` later shared its initializer; two of them name `Key_and_hash_columns_use_the_engines_binary_collation`, which round 1 renamed to `Key_columns_use_the_engines_binary_collation`):
 - the registration selecting the PostgreSQL context;
 - the binary collation in the SQL Server, PostgreSQL and MySQL models: without it the model disagrees with the committed migrations, so the model-agreement test fails (and on SQL Server and PostgreSQL the migrate step in each test's setup refuses the database). The recorded column collation comes from the migrations, so `Key_columns_use_the_engines_binary_collation` guards the migrations, not the model;
 - the publication retry: with a single attempt, the concurrent-publication contract fails on all three server engines, so the races are real there.
@@ -29,6 +29,7 @@ At `14eb2aca3` (review round 5): the ETL suite passed 1314 of 1314, the `etl-ef`
 - **Provider selection for SQL Server, MySQL and SQLite**: only the PostgreSQL entry is mutated; the other three are tested by the same registration test per engine (and SQLite by the host tests).
 - **The SQLite context's ordinal comparers**: untested; they declare no collation, so they are not in the model snapshot.
 - **The MySQL `utf8mb4` character-set annotation**: tested through model agreement, not bite-proven.
+- **The catalog's own read-retry wrappers**: covered by the shared helper's budget bite-proof and the catalog read in the busy-database test, not mutated one by one.
 - **The draft update retry's exhaustion** (rethrowing the last conflict after 16 attempts): untested; only the SQL Server deadlock it retries is bite-proven.
 - **The per-attempt `ChangeTracker.Clear()` at the start of each publication attempt**: untested; the races use one context per writer, and a failed attempt is already cleared by the catch-all.
 - **The update result's format version, schema version and timestamp**: only its revision is bite-proven; its pipeline and hash are checked through the returned pipeline and the codec's hash check, but the interleave test uses one format and schema version for both writers.
@@ -39,7 +40,7 @@ At `14eb2aca3` (review round 5): the ETL suite passed 1314 of 1314, the `etl-ef`
 
 [`design_store_workbench_journey.py`](design_store_workbench_journey.py) starts, for each server engine, its own database container and its own Workbench on ephemeral loopback ports, with the ETL design store on that engine and the runtime on SQLite. It creates two definitions whose ids differ only by case, validates and publishes one, runs the published version from a native Flowchart over a JSON Lines file, stops the host, starts a new one on the same database and reads the draft, the publication and the catalog back.
 
-All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.json`](workbench-journey-summary.json), recorded at `14eb2aca3` with a clean tree, after rounds 1–5's store fixes. Earlier runs at `9432455c1`, `ae9f03105`, `45c609432` and `bdb89368c` passed the same checks. Container secrets are generated per run.
+All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.json`](workbench-journey-summary.json), recorded at `404298d11` with a clean tree, after rounds 1–6's store fixes. Earlier runs at `9432455c1`, `ae9f03105`, `45c609432`, `bdb89368c` and `14eb2aca3` passed the same checks. Container secrets are generated per run.
 
 ## Limits
 
