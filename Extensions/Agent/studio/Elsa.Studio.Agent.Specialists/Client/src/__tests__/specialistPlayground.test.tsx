@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { SpecialistPlayground, parseInputs, readPlaygroundDraftId } from "../SpecialistPlayground";
+import { SpecialistPlayground, parseInputs, pollDelay, readPlaygroundDraftId } from "../SpecialistPlayground";
 import type { PlaygroundDraft, PlaygroundEvidence } from "../playgroundApi";
 
 const cleanup = new Set<() => void>();
@@ -68,6 +68,12 @@ function fakeContext(responses: { draft?: PlaygroundDraft | Error; drafts?: Play
 
 async function settle() {
   for (let index = 0; index < 10; index++) await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// Waits for a condition across render, effect and timer turns instead of assuming how many turns they take.
+async function until(condition: () => boolean) {
+  for (let index = 0; index < 200 && !condition(); index++) await new Promise(resolve => setTimeout(resolve, 0));
+  await settle();
 }
 
 async function render(context: StudioEndpointContext) {
@@ -221,15 +227,32 @@ describe("agent playground", () => {
     const { context, getJson } = fakeContext({ evidence: [failure] });
     const container = await render(context);
     type(container, "Brief", "moss gardens");
-    await submit(container);
-    await settle();
-
     const reads = () => getJson.mock.calls.filter(call => String(call[0]).includes("/evidence")).length;
+    await submit(container);
+    await until(() => container.querySelector("[data-testid='playground-poll-stopped']") !== null);
+
     expect(reads()).toBe(5);
-    expect(container.querySelector("[data-testid='playground-poll-stopped']")).not.toBeNull();
+    // A run that is no longer refreshed does not lock the page.
+    expect(button(container, "Run")!.disabled).toBe(false);
     button(container, "Retry")!.click();
-    await settle();
+    await until(() => reads() === 10 && container.querySelector("[data-testid='playground-poll-stopped']") !== null);
     expect(reads()).toBe(10);
+  });
+
+  it("reads immediately, then waits an interval, doubling it after each failure", () => {
+    expect([pollDelay(1000, 0, false), pollDelay(1000, 0, true), pollDelay(1000, 1, true), pollDelay(1000, 3, false)]).toEqual([0, 1000, 2000, 8000]);
+  });
+
+  it("announces the first status of a run through a live region mounted before it", async () => {
+    const container = await render(fakeContext().context);
+    const live = container.querySelector("[data-testid='playground-announce']")!;
+    expect(live.getAttribute("role")).toBe("status");
+    expect(live.textContent).toBe("");
+
+    type(container, "Brief", "moss gardens");
+    await submit(container);
+    expect(container.querySelector("[data-testid='playground-announce']")).toBe(live);
+    expect(live.textContent).toContain("Completed. The model's result was accepted.");
   });
 
   it("keeps Stop available when the stop was not applied", async () => {

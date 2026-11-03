@@ -17,6 +17,12 @@ const pollIntervalMs = 1000;
 // Consecutive failed status reads back off and then stop; the author retries explicitly.
 const maximumPollFailures = 5;
 
+/** The first read is immediate; later reads wait one interval, and each consecutive failure doubles the wait. */
+export function pollDelay(interval: number, failures: number, hasEvidence: boolean) {
+  if (failures > 0) return interval * 2 ** failures;
+  return hasEvidence ? interval : 0;
+}
+
 /** The draft ID a playground URL names: /agents/drafts/{draftId}/playground. */
 export function readPlaygroundDraftId(pathname: string) {
   const match = /^\/agents\/drafts\/([^/]+)\/playground\/?$/.exec(pathname);
@@ -92,7 +98,7 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
       } catch {
         if (!abort.signal.aborted) setRun(current => current && current.testRunId === run.testRunId ? { ...current, failures: current.failures + 1 } : current);
       }
-    }, run.failures > 0 ? pollInterval * 2 ** run.failures : run.evidence ? pollInterval : 0);
+    }, pollDelay(pollInterval, run.failures, run.evidence !== null));
     return () => { abort.abort(); clearTimeout(timer); };
   }, [context, run, pollInterval]);
 
@@ -108,7 +114,8 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
   const draft = load.draft;
   const inputs = businessInputs(draft);
   const continuity = allowsContinuity(draft);
-  const active = run !== null && !(run.evidence && isTerminal(run.evidence.status)) && run.refusal === null;
+  // A run whose status is no longer refreshed does not hold the page: the author can reload or start another run.
+  const active = run !== null && !(run.evidence && isTerminal(run.evidence.status)) && run.refusal === null && run.failures < maximumPollFailures;
   const continuation = conversations.revision === draft.revision ? conversations.items.find(item => item.conversationId === selected) ?? null : null;
 
   const start = async () => {
@@ -195,6 +202,8 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         {startError ? <StudioAlert tone="danger">{startError}</StudioAlert> : null}
       </form>
 
+      {/* Mounted before any run, so the first status a run reports is announced too. */}
+      <p role="status" className="agent-playground__announce" data-testid="playground-announce">{run ? announcement(run) : ""}</p>
       {run ? <RunEvidence run={run} revision={draft.revision} onContinue={reference => setSelected(reference.conversationId)}
         onRetry={() => setRun(current => current && { ...current, failures: 0 })} /> : null}
     </StudioPage>
@@ -251,7 +260,7 @@ function RunEvidence({ run, revision, onContinue, onRetry }: { run: Run; revisio
   const accepted = evidence && evidence.draftRevision === revision ? acceptedConversation(evidence) : null;
   return (
     <section className="agent-playground__run" aria-label="Run result" data-status={evidence?.status ?? "Starting"}>
-      <div role="status">
+      <div>
         <h2>Run <StatusChip tone={statusTone(evidence?.status)}>{evidence?.status ?? (run.refusal ? "Refused" : "Starting")}</StatusChip></h2>
         <p data-testid="playground-stage">{run.refusal ? "The run was refused before the agent started." : stageText(evidence)}</p>
       </div>
@@ -296,6 +305,11 @@ function Output({ output }: { output: NonNullable<NonNullable<PlaygroundEvidence
   return typeof output.value === "string"
     ? <div className="agent-playground__text" data-testid="playground-output">{output.value}</div>
     : <pre className="agent-playground__json" data-testid="playground-output">{JSON.stringify(output.value, null, 2)}</pre>;
+}
+
+function announcement(run: Run) {
+  if (run.refusal) return "The run was refused before the agent started.";
+  return `${run.evidence?.status ?? "Starting"}. ${stageText(run.evidence)}`;
 }
 
 function stageText(evidence: PlaygroundEvidence | null) {
