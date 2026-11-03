@@ -313,6 +313,20 @@
       "original": "IS NULL THEN -1 ELSE (",
       "mutated_text": "IS NULL THEN 0 ELSE (",
       "sourceRevision": "727316b97b5a62cc49e932a6ac66a57dc422ade0"
+    },
+    {
+      "mutation": "pg-view-accepted-as-table",
+      "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlPostgreSqlProviderTests.A_view_as_target",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_view_as_target_is_a_rejection_on_every_engine"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "IS DISTINCT FROM 'p' THEN -1 ELSE (",
+      "mutated_text": "IS DISTINCT FROM 'p' AND false THEN -1 ELSE (",
+      "sourceRevision": "ada38b3f166cdba46ca09ad05e9ee1ea96afd9bf"
     }
   ]
 }
