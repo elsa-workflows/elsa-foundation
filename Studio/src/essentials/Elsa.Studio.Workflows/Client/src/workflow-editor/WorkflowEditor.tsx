@@ -598,7 +598,8 @@ export function WorkflowEditor({
   }, [addActivity, catalogByVersion, frames, navigateToScope, scope, scopeOwner]);
 
   // Module-owned reviewed edits use the native document comparison/transaction seam.
-  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory });
+  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError, history: batchHistory,
+    resourceType: documentAdapter?.agentResource?.resourceType });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -624,7 +625,8 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors });
+  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion, historical: editorDoc.pinned, validationErrors: combinedValidationErrors,
+    agentResource: documentAdapter?.agentResource });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.

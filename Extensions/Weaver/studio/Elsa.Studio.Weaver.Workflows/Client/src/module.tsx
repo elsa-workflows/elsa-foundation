@@ -94,6 +94,65 @@ export function register(api: ElsaStudioModuleApi) {
     displayName: "Workflow change", resultTypes: ["workflows.batch-result"], schemaVersions: ["1"],
     component: (props: StudioAgentResultRendererProps) => <WorkflowBatchResult {...props} />
   });
+  // Spec 1193 slice E: the library's reviewed writes (per-target outcomes), and the library pages' own working-state changes.
+  api.agent.resultRenderers.add({
+    id: "weaver.workflows.library-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "Workflow library change", resultTypes: ["workflows.library-result"], schemaVersions: ["1"],
+    component: (props: StudioAgentResultRendererProps) => <WorkflowLibraryResult {...props} />
+  });
+  api.agent.resultRenderers.add({
+    id: "weaver.workflows.list-state-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "Workflow list change", resultTypes: ["workflows.list-state"], schemaVersions: ["1"],
+    component: (props: StudioAgentResultRendererProps) => <WorkflowPageChangeResult {...props} label="Workflow list change" />
+  });
+  api.agent.resultRenderers.add({
+    id: "weaver.workflows.create-dialog-result", moduleId, resourceModuleIds: ["Elsa.Studio.Workflows"],
+    displayName: "New workflow values", resultTypes: ["workflows.create-dialog-prefill"], schemaVersions: ["1"],
+    component: (props: StudioAgentResultRendererProps) => <WorkflowPageChangeResult {...props} label="New workflow values" />
+  });
+}
+
+interface LibraryTargetOutcome { definitionId?: string; status?: string; message?: string | null }
+
+const libraryStatusLabel: Record<string, string> = {
+  applied: "Changed", denied: "Not permitted", conflict: "Changed elsewhere; reload", "not-found": "Unavailable", invalid: "Refused",
+  unavailable: "Organization unavailable", unsupported: "Not supported", "not-applied": "Not changed", proposed: "Proposed"
+};
+
+/**
+ * A reviewed library write (spec 1193 FR-021, SC-008): one line per workflow with its own outcome, the tag creations it
+ * makes first, and an overall outcome that says "partial" whenever some workflows were not changed; never "done" for those.
+ */
+export function WorkflowLibraryResult({ proposal, preparedInvocation, toolResult }: StudioAgentResultRendererProps) {
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  const targets = Array.isArray(data.targets) ? data.targets.filter(isRecord) as LibraryTargetOutcome[] : [];
+  const status = typeof data.status === "string" ? data.status : "proposed";
+  const changes = Array.isArray(data.changes) ? data.changes.filter(isRecord) : [];
+  const overall = toolResult ? status === "applied" ? "Changed in the workflow library." : status === "partial" ? "Partly changed: some workflows were not changed." : "Nothing was changed."
+    : proposal?.status === "denied" ? "Declined: nothing was changed." : "Review this library change.";
+  return (
+    <section aria-label="Workflow library change" className="weaver-workflow-library" data-outcome={toolResult ? status : "proposed"}>
+      <p><strong>{overall}</strong></p>
+      {changes.some(change => change.change === "create-and-add") ? <p data-creates-tags="true">Creates the new tag(s) first; this needs tag-management permission.</p> : null}
+      {changes.length ? <ul aria-label="Tag changes">{changes.map((change, position) => <li key={position}>{String(change.change)}: {String(change.tag)}{change.value ? ` = ${String(change.value)}` : ""}</li>)}</ul> : null}
+      {targets.length ? <ul aria-label="Workflows">{targets.map((target, position) => (
+        <li key={target.definitionId ?? position} data-status={target.status}>{target.definitionId}: {libraryStatusLabel[target.status ?? "proposed"] ?? target.status}{target.message ? ` — ${target.message}` : ""}</li>
+      ))}</ul> : null}
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
+    </section>
+  );
+}
+
+/** A reviewed change to a library page's own working state: applied there only, revertible, and never saved. */
+export function WorkflowPageChangeResult({ toolResult, preparedInvocation, label }: StudioAgentResultRendererProps & { label: string }) {
+  const data = recordOf(toolResult?.payload?.data) ?? recordOf(preparedInvocation?.preview.data) ?? {};
+  return (
+    <section aria-label={label} className="weaver-workflow-page-change">
+      <p><strong>{toolResult ? "Applied on the page only; nothing was saved." : "Review this change to the page."}</strong></p>
+      <pre>{JSON.stringify(data.change ?? {}, null, 2)}</pre>
+      {toolResult?.content ? <p>{toolResult.content}</p> : null}
+    </section>
+  );
 }
 
 interface BatchOperationLabel { index?: number; kind?: string; summary?: string; risk?: string; reasons?: string[] }

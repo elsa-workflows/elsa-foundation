@@ -17,6 +17,7 @@ from evidence import (CONTROL_IDS, REQUIRED_CASES, UNCHANGED_CONTROLS, EvidenceE
 from restart_journeys import RESTART_QUALIFICATION
 from truth_seam_journeys import EXPECTED_CASES as TRUTH_SEAM_CASES, SECTION as TRUTH_SEAM_SECTION, synthetic_actors, synthetic_browser, synthetic_registrations
 from batch_journeys import EXPECTED_CASES as BATCH_CASES, SECTION as BATCH_SECTION, synthetic_browser as synthetic_batch_browser, synthetic_native
+from library_journeys import EXPECTED_CASES as LIBRARY_CASES, SECTION as LIBRARY_SECTION, synthetic_browser as synthetic_library_browser, synthetic_native as synthetic_library_native
 from explain_journeys import (EXPECTED_CASES as EXPLAIN_CASES, SECTION as EXPLAIN_SECTION, synthetic_browser as synthetic_explain_browser,
                               synthetic_native as synthetic_explain_native, synthetic_search)
 from test_autonomy_journeys import complete_autonomy_section
@@ -195,6 +196,11 @@ def complete_witness_report(base):
         "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
                                                                            "native": synthetic_explain_native(), "browser": synthetic_explain_browser(),
                                                                            "canarySearch": synthetic_search()})} for name in explain]}
+    library = sorted(LIBRARY_CASES)
+    report[LIBRARY_SECTION] = {"status": "passed", "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
+        "source": base.source, "caseIDs": library, "stages": [],
+        "records": [{"id": name, "status": "passed", "record": base.write({"id": name, "status": "passed", "adapter": name.split("-", 1)[0],
+                                                                           "native": synthetic_library_native(name), "browser": synthetic_library_browser(name)})} for name in library]}
     report[MATRIX_QUALIFICATION] = complete_autonomy_section(base.write({"syntheticSelfTestObservation": "owner"}), base.source)
     report[RESTART_QUALIFICATION] = complete_restart_section(base.write({"syntheticSelfTestObservation": "restart"}), base.source)
     report["stages"] = [{"name": "archive", "exitCode": 0}] + [{"name": name, "exitCode": 0} for name in sorted(autonomy_stages())]
@@ -217,9 +223,9 @@ class CompleteWitnessTests(unittest.TestCase):
 
     def test_manifest_is_original38_plus_four_plus_thirteen_and_ten_restarts_per_actual_adapter(self):
         manifest = witness_manifest()
-        self.assertEqual((38, 4, 2, 2, 2, 2, 26, 20, 1, 97), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
+        self.assertEqual((38, 4, 2, 2, 2, 2, 4, 26, 20, 1, 101), (len(manifest["originalCases"]), len(manifest["currentAuthorityCases"]),
                                                      len(manifest["workflowAuthorizationCases"]), len(manifest["workflowTruthSeamCases"]),
-                                                     len(manifest["workflowBatchCases"]), len(manifest["workflowExplainCases"]),
+                                                     len(manifest["workflowBatchCases"]), len(manifest["workflowExplainCases"]), len(manifest["workflowLibraryCases"]),
                                                      len(manifest["autonomyCases"]), len(manifest["restartCases"]),
                                                      len(manifest["restartControls"]), manifest["expectedCaseCount"]))
         self.assertEqual(["anthropic-workflow-authorization-unavailable", "copilot-workflow-authorization-unavailable"],

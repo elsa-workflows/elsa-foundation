@@ -92,7 +92,7 @@ export function WorkflowManagementPage({
     : (
       <WorkflowsPageFrame definitions>
         <WorkflowLazyBoundary label="workflow definitions">
-          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} />
+          <WorkflowDefinitions context={context} ai={ai} weaver={weaver} onOpen={openDefinition} session={browseSession} homeCreateRequestId={homeCreateRequestId} onHomeCreateRequestHandled={acknowledgeHomeCreate} />
         </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );

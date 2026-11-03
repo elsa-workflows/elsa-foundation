@@ -39,13 +39,18 @@ internal sealed class WorkflowApplyOperationBatchTool(IAgentToolAuthorizer autho
 
     public AgentToolDescriptor Descriptor => Contract;
 
+    // A Reusable Workflow Template is its own resource (FR-024): its authority is the host's design manage decision, never a
+    // workflow definition's owner. A definition draft keeps the owning definition authorizer.
     public ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target,
         CancellationToken cancellationToken = default)
-        => WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, actorId, tenantId, target, true, cancellationToken);
+        => target is { ModuleId: WorkflowAgentSnapshot.ModuleId, ResourceType: WorkflowAgentSnapshot.TemplateResourceType, ResourceId.Length: > 0 }
+            ? ValueTask.FromResult(new AgentPolicyDecision(true, []))
+            : WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, actorId, tenantId, target, true, cancellationToken);
 
     public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {
-        var attachments = invocation.Context.Where(item => item.ContentType == "workflow.definition" && item.Origin == AgentContextOrigin.ClientSnapshot).ToArray();
+        var attachments = invocation.Context.Where(item => item.ContentType is "workflow.definition" or WorkflowAgentSnapshot.TemplateContentType
+            && item.Origin == AgentContextOrigin.ClientSnapshot).ToArray();
         if (attachments.Length != 1 || !WorkflowAgentSnapshot.TryRead(attachments[0], out var snapshot, out _))
             return Failure("agent.workflow.snapshot_required", "One admitted workflow working-state snapshot is required; nothing was changed.", 409);
         if (invocation.Client is not null && invocation.Client != snapshot!.Client)
@@ -54,9 +59,8 @@ internal sealed class WorkflowApplyOperationBatchTool(IAgentToolAuthorizer autho
         // Authority first, so an actor without manage permission learns nothing from validation. The shared denied outcome
         // keeps explanation available; an owner that cannot decide is unavailable, never a denial.
         var host = await authorizer.AuthorizeAsync(Descriptor, invocation.ActorId, invocation.TenantId, snapshot.Target, cancellationToken);
-        var owner = host.Allowed
-            ? await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, invocation.ActorId, invocation.TenantId, snapshot.Target, true, cancellationToken)
-            : null;
+        var owner = !host.Allowed ? null : snapshot.IsTemplate ? host
+            : await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers, invocation.ActorId, invocation.TenantId, snapshot.Target, true, cancellationToken);
         if (owner is not null && WorkflowResourceAuthority.IsUnavailable(owner))
             return Failure(WorkflowDefinitionAuthorizationException.UnavailableCode, WorkflowResourceAuthority.UnavailableMessage, 503);
         if (owner is not { Allowed: true })
@@ -96,7 +100,7 @@ internal sealed class WorkflowApplyOperationBatchTool(IAgentToolAuthorizer autho
         var addedNodeIds = frozen.Where(operation => WorkflowAgentSnapshot.Text(operation, "kind") == "add")
             .Select(operation => WorkflowAgentSnapshot.Text(operation, "nodeId")).ToArray();
         if (acknowledgement.Outcome != AgentClientOutcome.Applied || before is null || after is null || frozen.Length == 0 ||
-            before.ModuleId != WorkflowAgentSnapshot.ModuleId || before.ResourceType != WorkflowAgentSnapshot.ResourceType ||
+            !WorkflowAgentSnapshot.IsEditorTarget(before) ||
             before.ModuleId != after.ModuleId || before.ResourceType != after.ResourceType || before.ResourceId != after.ResourceId ||
             string.IsNullOrWhiteSpace(after.Revision) || after.Revision == before.Revision || after.Revision.Length > 256 ||
             invocation.Client != acknowledgement.Client || invocation.ApprovalDigest != acknowledgement.ApprovalDigest ||

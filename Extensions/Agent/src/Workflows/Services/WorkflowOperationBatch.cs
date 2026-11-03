@@ -377,10 +377,12 @@ internal static partial class WorkflowOperationBatch
             ["risk"] = RiskName(risk),
             ["operations"] = new JsonArray(frozen.Select(item => (JsonNode)item.Json.DeepClone()).ToArray())
         };
-        var preview = new JsonObject
+        // A template batch names its template and the persisted template revision it is based on, never a definition.
+        var preview = snapshot.IsTemplate
+            ? new JsonObject { ["templateId"] = snapshot.Target.ResourceId, ["templateRevision"] = snapshot.TemplateRevision }
+            : new JsonObject { ["workflowDefinitionId"] = snapshot.Target.ResourceId, ["draftId"] = snapshot.DraftId };
+        foreach (var (name, value) in new JsonObject
         {
-            ["workflowDefinitionId"] = snapshot.Target.ResourceId,
-            ["draftId"] = snapshot.DraftId,
             ["revision"] = snapshot.Target.Revision,
             ["risk"] = RiskName(risk),
             ["highComplexity"] = highComplexity,
@@ -394,7 +396,7 @@ internal static partial class WorkflowOperationBatch
             ["clears"] = new JsonArray("testRunResult", "publishedArtifactAssociation"),
             ["summary"] = (highComplexity ? $"A high-complexity batch of {frozen.Count} operations (above the declared limit of {ComplexityLimit}); it is applied whole or not at all. " : "")
                 + "Applies these operations together to the unsaved working draft as one designer-history step. The last test-run result and published-artifact association are cleared and Undo does not restore them. Saving and publishing remain explicit."
-        };
+        }) preview[name] = value?.DeepClone();
         return (new(JsonSerializer.SerializeToElement(arguments, JsonOptions), JsonSerializer.SerializeToElement(preview, JsonOptions), risk, frozen), null);
 
         // -- Operation handlers (closures over the batch state) --

@@ -8,6 +8,8 @@ The accepted M1 subset reads a bounded snapshot of an open workflow and prepares
 
 The owning Studio workflow module applies the approved change through its native atomic edit path, observes the committed working state and returns a guarded undo token. The backend admits only the expected typed observed result and reports a `ClientWorkingState` receipt. It never claims that local state was saved or published. Unsupported context kinds return diagnostics. The activity catalog (`workflow.catalog`) and the actor's permissions on the exact target (`workflow.permissions`) are the owning services' current answers, read again for every turn through `IActivityAuthoringCatalog` and `IWorkflowDefinitionAuthorizer`; no fixed catalog or permission set is presented, and a missing owner is reported as unavailable. See [Truth seams](EXTENSION_POINTS.md#truth-seams-spec-1193).
 
+The workflow library, the new-workflow create dialog and Reusable Workflow Templates have their own context source and tools: reviewed tag, favorite, folder and view changes through the library's own commands with per-target outcomes and operation-key recovery, reviewed changes to the visible list and the open create dialog, and template batches against the template editor. See [Library, create dialog and templates](EXTENSION_POINTS.md#library-create-dialog-and-templates-spec-1193-slice-e).
+
 ## Cross-domain contributions
 
 See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IAgentContextProvider`, `IAgentCapabilityProvider`, `IAgentTool` and `IAgentClientTool` contributions, and [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) for their generic lifecycle.

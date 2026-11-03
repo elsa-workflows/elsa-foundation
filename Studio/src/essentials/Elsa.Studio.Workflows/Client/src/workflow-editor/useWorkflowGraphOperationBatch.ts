@@ -33,20 +33,22 @@ type Pending = {
   batch?: { id: string; applied: WorkflowDraft };
 };
 
-export function useWorkflowGraphOperationBatch({ draft, details, catalog, document, controller, holdForReview, reviewHeld, canEdit, setStatus, setError, history }: {
+export function useWorkflowGraphOperationBatch({ draft, details, catalog, document, controller, holdForReview, reviewHeld, canEdit, setStatus, setError, history, resourceType }: {
   draft: WorkflowDraft | null; details: WorkflowDefinitionDetails | null; catalog: ActivityCatalogItem[];
   document: WorkflowDocumentApi; controller?: WorkflowAgentController; holdForReview(held: boolean): boolean; reviewHeld: boolean;
   canEdit?(): boolean; setStatus(value: string): void; setError(value: WorkflowErrorInput): void;
   /** The designer history an Operation Batch is recorded in and undone through; without it a batch is refused. */
   history?: WorkflowBatchHistory;
+  /** The working state's own resource type: a template editor's batch targets `workflow-template`, never a definition (FR-024). */
+  resourceType?: string;
 }) {
   const undoPoints = useRef(new Map<string, UndoPoint>());
   const pending = useRef<Pending | null>(null);
   // Every dispatched batch until the reducer reports it, independent of its observation: a batch the reducer applies is
   // always one history entry with its autosave hold, even if its observation already timed out as uncertain.
   const dispatchedBatches = useRef(new Map<string, { id: string; applied: WorkflowDraft }>());
-  const latest = useRef({ draft, details, catalog, document, canEdit, reviewHeld, history });
-  latest.current = { draft, details, catalog, document, canEdit, reviewHeld, history };
+  const latest = useRef({ draft, details, catalog, document, canEdit, reviewHeld, history, resourceType });
+  latest.current = { draft, details, catalog, document, canEdit, reviewHeld, history, resourceType };
 
   useEffect(() => {
     const transaction = document.state.batchTransaction;
@@ -97,7 +99,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       if (!invocation.client || snapshot.client?.clientId !== invocation.client.clientId || snapshot.client?.generationId !== invocation.client.generationId)
         return "The originating workflow editor was reloaded, remounted, opened in another tab or its selection changed, so this change is stale.";
       const target = invocation.target;
-      if (!target || target.moduleId !== "Elsa.Studio.Workflows" || target.resourceType !== "workflow-definition" || target.resourceId !== current.details.definition.id
+      if (!target || target.moduleId !== "Elsa.Studio.Workflows" || target.resourceType !== (current.resourceType ?? "workflow-definition") || target.resourceId !== current.details.definition.id
         || target.resourceId !== current.draft.definitionId || target.revision !== getDraftContentRevision(current.draft))
         return "The workflow identity or its working-state revision changed after review, so this change is stale.";
       return null;

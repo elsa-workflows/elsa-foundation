@@ -235,6 +235,41 @@ withholding fails the case. `require_workflow_explain` refuses a missing, failed
 record, a missing turn or control, or a canary search that found anything; `witness_manifest()` counts the two cases
 (97 in all).
 
+### Workflow library and templates (spec 1193 T036)
+
+Then `library_journeys.py` runs four cases, `{copilot,anthropic}-workflow-{library,templates}`, against two seeded
+definitions and a template the template service creates from the batch seed. The library cases select the backend's
+test-only `QualificationLibraryResponses` seam (see the backend consumer README) and deselect it afterwards. Each native
+turn is its own full-auto session with the page context Studio sends (`workflows.library`, `workflows.create-dialog`,
+`workflows.template-list` or `workflows.template-editor`), compared by target identity in every admission:
+
+- `workflow_library_assign_tags` with an existing tag and a new one pauses at one review (server execution,
+  `requiresApproval`, the tag creation shown); once approved, the seam loses the committed creation's response, the tool
+  rereads by the frozen key, the change reports every target applied, and the owner holds exactly one such tag with the
+  identity the seam logged; `workflow_library_save_view` likewise resolves a lost response to exactly one view of the
+  visible query; `workflow_library_set_favorite` applies per target; each executed continuation completes the
+  originating turn once with no new call (checked structurally, as the lifecycle inventory checks it);
+- `workflow_library_set_list_state` is a reviewed client working-state proposal (denied); a commanded delete tool is never
+  advertised;
+- the library actor (tag assignment, neither tag management nor view sharing; its native page flags say so) is refused at
+  preparation for a new tag and for a shared view, and nothing is created;
+- with `WorkflowsDesignApi`'s `WorkflowOrganizationEnabled` false through the ordinary feature apply, the server's
+  `workflows.library-organization` read is unavailable with the backend's reason, a tag change is refused with it, and
+  list narrowing is still proposed; the original configuration is restored;
+- the template cases propose one batch for the template editor's working state (target `workflow-template`, the preview
+  naming the template and its persisted revision, never a definition) and a create-dialog prefill choosing the listed
+  template, both denied; the seed definition's draft and the template's revision are unchanged.
+
+The packaged Studio journeys: `workflow-library` applies a reviewed list narrowing on the list page, reverts it, and fills
+the open create dialog, whose Create is never pressed (no design API write, the page's total unchanged);
+`workflow-templates` applies a reviewed batch in the template editor as one history step (Undo and Redo), with autosave
+held past its interval, and the user's own Save carries the template's expected revision. An executed write's continuation is pinned per
+adapter (Copilot's as the c58c9f149 witness observed it, the same order as a denied proposal's continuation) and also
+checked structurally. Every control in these two journeys, on the page and in the dock, is activated through the keyboard:
+the nonmodal dock overlaps page controls (the c58c9f149 witness saw it intercept the list's Create workflow click) and an
+open page dialog overlaps the dock. `require_workflow_library` refuses a missing, failed,
+duplicated or changed record; `witness_manifest()` counts the four cases.
+
 ### Restart inventory over the packaged durable store (#3441 T031)
 
 After the autonomy matrix, the same complete witness appends the

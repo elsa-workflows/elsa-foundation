@@ -28,6 +28,8 @@ interface WorkflowContextBridgeParams {
    * these (spec 1193 FR-018); without it the draft's own reconciled errors are disclosed.
    */
   validationErrors?: ValidationError[] | null;
+  /** A template editor's own resource (FR-024); absent for a workflow definition draft. */
+  agentResource?: { resourceType: "workflow-template"; contentType: "workflows.template-editor"; revision(): string | null };
 }
 
 function resolveActivityType(node: ActivityNode | null, descriptor: StudioActivityDescriptor | null, catalogByVersion: Map<string, ActivityCatalogItem>) {
@@ -47,7 +49,8 @@ export function useWorkflowContextBridge({
   inspectedIsScopeOwner,
   catalogByVersion,
   historical = false,
-  validationErrors
+  validationErrors,
+  agentResource
 }: WorkflowContextBridgeParams) {
   // The full-tree walks depend only on the draft + catalog; memoized so selection/inspection changes
   // (which re-fire the effect) only rewrite the scalar snapshot fields.
@@ -81,14 +84,18 @@ export function useWorkflowContextBridge({
     void selectionKey;
     const generation = activeGeneration.current;
     if (!controller || !details?.definition || !draft || !authorized.current || !generation) return;
-    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-definition", resourceId: details.definition.id, revision: getDraftContentRevision(draft), displayName: details.definition.name };
+    // A template is its own resource: its identity and persisted revision replace the definition and draft (FR-005, FR-024).
+    const templateRevision = agentResource?.revision() ?? null;
+    if (agentResource && !templateRevision) return;
+    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: agentResource?.resourceType ?? "workflow-definition", resourceId: details.definition.id, revision: getDraftContentRevision(draft), displayName: details.definition.name };
+    const identity: Record<string, string> = agentResource ? { templateId: details.definition.id, templateRevision: templateRevision! } : { workflowDefinitionId: details.definition.id, draftId: draft.id };
     const attachment = {
-      id: `workflow:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
-      source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: "workflow.definition", sensitivity: "internal" as const,
+      id: `${agentResource ? "workflow-template" : "workflow"}:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
+      source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: agentResource?.contentType ?? "workflow.definition", sensitivity: "internal" as const,
       scope: selectedNodeId ? "selection" : "screen", origin: "clientSnapshot" as const, client: { clientId, generationId: generation }, agentScopes: ["workflow-author"],
-      summary: details.definition.name, references: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision },
+      summary: details.definition.name, references: { ...identity, revision: target.revision },
       content: buildWorkflowSnapshotContent(draft, catalogByVersion, {
-        header: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision, selectedNodeId,
+        header: { ...identity, revision: target.revision, selectedNodeId,
           selectedActivityType: resolveActivityType(selectedNode, selectedDescriptor, catalogByVersion),
           inspectedNodeId: inspectedNode?.nodeId ?? null, inspectedActivityType: resolveActivityType(inspectedNode, inspectedDescriptor, catalogByVersion), inspectedIsScopeOwner,
           workingState: historical ? "historical" : "draft" },
@@ -97,7 +104,7 @@ export function useWorkflowContextBridge({
     };
     controller.snapshot = attachment;
     return () => { if (controller.snapshot === attachment) controller.snapshot = null; };
-  }, [catalogByVersion, clientId, controller, details, draft, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, parts, selectedDescriptor, selectedNode, selectedNodeId, selectionKey, validationErrors]);
+  }, [agentResource, catalogByVersion, clientId, controller, details, draft, historical, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, parts, selectedDescriptor, selectedNode, selectedNodeId, selectionKey, validationErrors]);
 }
 
 /** The draft-derived walks of the snapshot, which depend only on the draft and the catalog (so the bridge memoizes them). */
