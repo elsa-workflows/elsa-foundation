@@ -107,12 +107,24 @@ it("makes an unanswered boolean explicit and submits a selected No as false", as
 });
 
 it("replaces detail selection when the same task page receives another route ID", async () => {
-  const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("?") ? { items: [] } : { ...task(), id: path.split("/").at(-1), title: path.endsWith("one") ? "First purchase" : "Second purchase" });
+  let finishFirst!: (value: TaskItem) => void; let finishSecond!: (value: TaskItem) => void;
+  const first = new Promise<TaskItem>(resolve => { finishFirst = resolve; });
+  const second = new Promise<TaskItem>(resolve => { finishSecond = resolve; });
+  const get = vi.fn(async (path: string) => {
+    if (path.includes("identity")) return identity;
+    if (path.includes("?")) return { items: [] };
+    return path.endsWith("one") ? first : second;
+  });
   const context = api(get);
   await act(async () => root.render(<TasksPage api={context} initialId="one" />));
-  await act(async () => {}); expect(container.textContent).toContain("First purchase");
+  await vi.waitFor(() => expect(get.mock.calls.some(([path]) => path.endsWith("one"))).toBe(true));
+  await act(async () => finishFirst({ ...task(), id: "one", title: "First purchase" }));
+  await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("First purchase"); });
   await act(async () => root.render(<TasksPage api={context} initialId="two" />));
-  await act(async () => {}); expect(container.textContent).toContain("Second purchase"); expect(container.textContent).not.toContain("First purchase");
+  await vi.waitFor(() => expect(get.mock.calls.some(([path]) => path.endsWith("two"))).toBe(true));
+  await act(async () => finishSecond({ ...task(), id: "two", title: "Second purchase" }));
+  await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("Second purchase"); });
+  expect(container.textContent).not.toContain("First purchase");
 });
 
 it("claims and releases group work using returned revisions", async () => {
