@@ -25,7 +25,8 @@ $form = @{ id = "purchase-$unique"; version = '1'; name = 'Purchase response'; p
 Invoke-RestMethod "$BaseUrl/runtime/user-task-forms" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body ($form | ConvertTo-Json -Depth 15) | Out-Null
 $actions = @('Approve', 'Reject', 'Request More Info')
 $inputs = @(
-    (New-LiteralInput -ReferenceKey Title -Value "Purchase approval $unique"),
+    # Keep an unbroken reference long enough to expose clipping in the narrow Studio journey.
+    (New-LiteralInput -ReferenceKey Title -Value "Purchase approval $unique$unique"),
     (New-LiteralInput -ReferenceKey AssigneeId -Value $actor.userId),
     (New-LiteralInput -ReferenceKey Actions -Value $actions),
     (New-LiteralInput -ReferenceKey OptionalFormActions -Value @('Reject')),

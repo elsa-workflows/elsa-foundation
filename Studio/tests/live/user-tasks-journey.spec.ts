@@ -26,6 +26,8 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   const row = page.locator(`a[href*="/user-tasks/${taskId}"]`); await expect(row).toBeVisible();
   await row.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: receipt.title, exact: true })).toBeVisible();
+  await expect.poll(() => page.getByRole("heading", { name: receipt.title, exact: true })
+    .evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   const account = page.getByRole("textbox", { name: /^Account/ }); await expect(account).toHaveValue("A-107"); await expect(account).toBeDisabled();
   await page.getByRole("button", { name: "Approve", exact: true }).press("Enter");
   await expect(page.getByText("This field is required.", { exact: true }).first()).toBeVisible();
@@ -44,7 +46,9 @@ for (const width of [1440, 390]) test(`real Studio inbox validates and completes
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Refresh task", exact: true }).press("Enter");
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
-  await testInfo.attach(`user-task-${width}`, { body: await page.screenshot(), contentType: "image/png" });
+  const screenshot = testInfo.outputPath(`user-task-${width}.png`);
+  await page.screenshot({ path: screenshot });
+  await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });
 });
 
 test("authors reusable forms, assignment and connected action paths in the normal Studio designer", async ({ page }, testInfo) => {
@@ -101,5 +105,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await expect.poll(async () => (await (await page.request.get(`${base}/runtime/user-tasks/${id}`)).json()).status, { timeout: 30_000 }).toBe("Completed");
   const run = await (await page.request.get(`${base}/runtime/workflows/instances/${executionId}`)).json(); expect(run.instance.status).toBe("Completed");
   expect(run.activities.filter((item: { executableNodeId: string; status: string }) => branchIds.includes(item.executableNodeId) && item.status === "Completed").map((item: { executableNodeId: string }) => item.executableNodeId)).toEqual([branchIds[0]]);
-  await testInfo.attach("studio-authored-user-task", { body: await page.screenshot(), contentType: "image/png" });
+  const screenshot = testInfo.outputPath("studio-authored-user-task.png");
+  await page.screenshot({ path: screenshot });
+  await testInfo.attach("studio-authored-user-task", { path: screenshot, contentType: "image/png" });
 });
