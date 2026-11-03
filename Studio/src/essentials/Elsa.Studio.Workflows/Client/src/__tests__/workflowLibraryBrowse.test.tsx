@@ -34,7 +34,10 @@ describe("workflow library query boundaries", () => {
     expect(requests.at(-1)?.searchParams.get("folderId")).toBe("finance");
     for (const key of ["includeDescendants", "sort", "publicationState"]) expect(requests.at(-1)?.searchParams.has(key)).toBe(false);
     await waitForCondition(() => expect(button(container, "Columns"), [...container.querySelectorAll("button")].map(button => button.textContent).join(" | ")).not.toBeNull());
-    await click(button(container, "Columns"));
+    const columnsButton = button(container, "Columns");
+    // Recovering the unsupported filter can leave its disclosure open.
+    if (columnsButton?.getAttribute("aria-expanded") !== "true") await click(columnsButton);
+    expect(columnsButton?.getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector('[aria-label="Publication filter"]')).toBeNull();
     expect(container.textContent).toContain("Optional columns");
   });

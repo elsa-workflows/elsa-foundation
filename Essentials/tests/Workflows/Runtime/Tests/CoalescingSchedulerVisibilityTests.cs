@@ -117,6 +117,30 @@ public sealed class CoalescingSchedulerVisibilityTests
     }
 
     [Fact]
+    public async Task Inactive_release_whose_durable_head_moved_is_refused_while_the_claim_still_owns_the_item()
+    {
+        await _queue.EnqueueAsync(Work("resume"));
+        var session = Session();
+        var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+        session.Deactivate();
+        Assert.True(await _queue.DeleteAsync(ExecutionId, "resume"));
+        await _queue.EnqueueAsync(Work("replacement-head"));
+        await _queue.EnqueueAsync(Work("resume"));
+
+        var release = await session.ReleaseOverlayClaimAsync(claim, _now.AddDays(2), default);
+
+        // Refused, not thrown after dropping the claim: the caller can still complete it, which removes only its own
+        // durable identity, and neither durable item received the delay.
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, release.Status);
+        Assert.True(session.OwnsOverlayClaim(claim));
+        Assert.All((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items,
+            entry => Assert.NotEqual(_now.AddDays(2), entry.VisibleAfter));
+        Assert.True((await session.CompleteOverlayClaimAsync(claim, default)).Succeeded);
+        Assert.Equal("replacement-head", Assert.Single((await _queue.ListAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items).WorkItemId);
+    }
+
+    [Fact]
     public async Task Completed_retained_notice_after_deactivation_removes_only_its_accepted_durable_identity()
     {
         await _queue.EnqueueAsync(Work("notice", WorkflowExecutionCommandKind.NotifyParentActivity));
