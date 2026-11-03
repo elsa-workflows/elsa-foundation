@@ -17,3 +17,11 @@ as the other provider adapters. Model access, billing and real inference need se
 [OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
 
 Follow the [Studio example](../../../../../specs/1179-specialist-agents/openai-provider/quickstart.md) to create, test and publish a typed copywriter.
+
+## Cross-domain contributions
+
+- `IConnectionTypeProvider` (Connections Core): registers the stateless `specialist-openai`
+  connection-type contribution without capturing a scoped model factory or resolver.
+- `ISpecialistModelCapabilitiesSource` and `ISpecialistModelClientFactory` are intra-domain Agent
+  contributions for the exact `openai` key, registered scoped; their canonical ports are in
+  [Specialists Core](../Core/EXTENSION_POINTS.md).
