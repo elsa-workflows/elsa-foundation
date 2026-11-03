@@ -151,25 +151,35 @@
    and the sticky availability headers live in their own inner scroll container. */
 
 .wf-page--run-workbench {
-  display: grid;
+  display: flex;
   height: 100%;
   min-height: 0;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
-  /* Header, toolbar, and optional run status/error stay auto. The workbench is
-     pinned to the last track so a status line cannot steal minmax(0, 1fr). */
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  flex-direction: column;
+  gap: 0;
   border: 0;
   border-radius: 0;
 }
 
+.wf-page--run-workbench > .studio-page-header {
+  flex: 0 0 auto;
+  padding: 16px 20px 0;
+}
+
+.wf-page--run-workbench > .wf-toolbar {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+}
+
 .wf-page--run-workbench > .wf-instance-detail-workbench {
-  grid-row: -2 / -1;
+  height: auto;
+  flex: 1 1 0;
 }
 
 .wf-page--run-workbench > .wf-lazy-state {
   min-height: 0;
-  grid-row: 2 / -1;
+  flex: 1 1 0;
   border: 0;
   border-radius: 0;
 }
@@ -7490,6 +7500,14 @@ html[data-theme-material] .availability-search .wf-search {
   align-items: center;
   font-size: 12px;
   gap: 4px;
+}
+
+.wf-bpmn-claim-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-block: 4px;
+  font-size: 13px;
 }
 
 /* --- Binding conversion controls (issue #449) ------------------------------------------------- */

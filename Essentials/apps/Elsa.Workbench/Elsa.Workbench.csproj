@@ -97,6 +97,11 @@
 		<!-- The generic human review wait and its decision API, enabled by an explicit shell composition. -->
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Review\Elsa.Agent.Specialists.Review\Elsa.Agent.Specialists.Review.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Review\Api\Elsa.Agent.Specialists.Review.Api.csproj" />
+		<!-- User-defined agents: specialist authoring, its editor API and the model connection types, enabled by an explicit shell composition. -->
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Design\Elsa.Agent.Specialists.Design.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Api\Elsa.Agent.Specialists.Api.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\Anthropic\Elsa.Agent.Specialists.Anthropic.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Specialists\AzureOpenAI\Elsa.Agent.Specialists.AzureOpenAI.csproj" />
 		<!-- ETL is discoverable here and enabled only by an explicit shell composition. -->
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Design\Api\Elsa.Etl.Design.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Etl\src\Runtime\Api\Elsa.Etl.Runtime.Api.csproj" />
@@ -118,7 +123,7 @@
 		<ProjectReference Include="..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-		<ProjectReference Include="..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+		<ProjectReference Include="..\..\src\Api\Capabilities\Elsa.Api.Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />

@@ -18,6 +18,10 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlConnectorAdmissionResult> AdmitConnectorAsync(EtlConnectorRunAdmission admission, CancellationToken cancellationToken = default);
     ValueTask<EtlConnectorRunView?> FindConnectorRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default);
     ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
+    /// <summary>Commits verified preparation and makes the run's partitions claimable.</summary>
+    /// <remarks>A file input with zero records has no partition that could complete the run, so the same transaction
+    /// settles it as success with its terminal result and owed native delivery. An identical replay returns Replay
+    /// without settling again.</remarks>
     ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default);
     ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
     /// <summary>Reserves source capacity and records a bounded permit before issuing a GET.</summary>
@@ -78,7 +82,8 @@ public sealed record EtlConnectorRunBindings(EtlConnectorBindingRevision Source,
 public sealed record EtlConnectorRunAdmission(EtlInvocation Invocation, EtlConnectorRunBindings Bindings);
 public sealed record EtlConnectorAdmissionResult(EtlStoreStatus Status, EtlConnectorRunView? Run);
 
-/// <summary>Verified source/index snapshot metadata for a connector pipeline with a CSV source.</summary>
+/// <summary>Verified source/index snapshot metadata for a connector pipeline with a CSV or JSON Lines file source.</summary>
+/// <remarks>The name predates JSON Lines input; the shape is format-neutral. For JSON Lines, index entry 0 is a sentinel covering only a byte order mark.</remarks>
 public sealed record EtlPreparedCsvInput(EtlObjectReference Source, EtlObjectReference Index, long RecordCount);
 /// <summary>Optional inputs prepared before partitions become runnable; absence is explicit.</summary>
 public sealed record EtlConnectorPreparedRun(EtlPreparedCsvInput? File, EtlObjectReference? Lookup);

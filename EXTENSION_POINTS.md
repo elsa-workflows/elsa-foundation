@@ -82,7 +82,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md) |
+| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md) |
 | API endpoint layer (failure pipeline, endpoint composition contracts, unload-safety enforcement) | [`Essentials/src/Api/EXTENSION_POINTS.md`](Essentials/src/Api/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
@@ -100,6 +100,7 @@ not automatic constitution violations.
 | Specialist native execution | [`Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md) |
 | Specialist human review of agent output | [`Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Elsa.Agent.Specialists.Review/EXTENSION_POINTS.md) |
 | Specialist human review API | [`Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Review/Api/EXTENSION_POINTS.md) |
+| Specialist authoring API | [`Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Specialists/Api/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
@@ -232,4 +233,4 @@ not automatic constitution violations.
 ## Studio
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
-- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

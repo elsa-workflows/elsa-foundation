@@ -84,11 +84,20 @@ public static class EtlRuntimeIdentity
             ConnectorBinding(destination), contentHash, Number(byteLength), Number(recordCount));
     }
 
-    /// <summary>The immutable JSONL filename produced when the file publisher receives the connector effect identity.</summary>
-    public static string ConnectorFileOutputKey(string effectId)
+    /// <summary>The immutable JSONL filename for a connector effect identity; see the kind-aware overload for CSV.</summary>
+    public static string ConnectorFileOutputKey(string effectId) => ConnectorFileOutputKey(effectId, EtlConnectorKind.Jsonl);
+
+    /// <summary>The immutable filename for a connector file effect: the effect identity's hash with its route kind's extension.</summary>
+    public static string ConnectorFileOutputKey(string effectId, EtlConnectorKind kind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + ".jsonl";
+        var extension = kind switch
+        {
+            EtlConnectorKind.Jsonl => ".jsonl",
+            EtlConnectorKind.Csv => ".csv",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only file route kinds have output keys.")
+        };
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(effectId))) + extension;
     }
 
     private static string? ObjectReference(EtlObjectReference? reference) => reference is null

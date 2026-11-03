@@ -27,6 +27,7 @@ public sealed record EtlPipelineV2(
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]
 [JsonDerivedType(typeof(EtlCsvSource), "csv")]
 [JsonDerivedType(typeof(EtlHttpJsonSource), "httpJson")]
+[JsonDerivedType(typeof(EtlJsonlSource), "jsonl")]
 public abstract record EtlSource;
 
 /// <summary>A host-bound CSV input source with a declared CSV schema.</summary>
@@ -47,6 +48,14 @@ public sealed record EtlHttpJsonSource(
     [property: JsonRequired] string RecordsPointer,
     [property: JsonRequired] IReadOnlyList<EtlJsonField> Fields,
     [property: JsonRequired] EtlHttpPagination Pagination) : EtlSource;
+
+/// <summary>A host-bound JSON Lines input file holding one JSON object per line, with declared fields.</summary>
+/// <remarks>The binding is a host-approved file alias; paths are never authored here. Blank lines are not records.</remarks>
+/// <param name="Binding">The host-approved source alias.</param>
+/// <param name="Fields">The declared fields extracted from each line's object.</param>
+public sealed record EtlJsonlSource(
+    [property: JsonRequired] string Binding,
+    [property: JsonRequired] IReadOnlyList<EtlJsonField> Fields) : EtlSource;
 
 /// <summary>Selects one named scalar value by JSON Pointer within a source record.</summary>
 /// <param name="Name">The field name used by mappings and filters.</param>
@@ -81,11 +90,16 @@ public sealed record EtlRoutes(
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]
 [JsonDerivedType(typeof(EtlJsonlDestination), "jsonl")]
 [JsonDerivedType(typeof(EtlHttpDestination), "http")]
+[JsonDerivedType(typeof(EtlCsvDestination), "csv")]
 public abstract record EtlDestination;
 
 /// <summary>A host-bound JSON Lines file destination.</summary>
 /// <param name="Binding">The host-approved destination alias.</param>
 public sealed record EtlJsonlDestination([property: JsonRequired] string Binding) : EtlDestination;
+
+/// <summary>A host-bound CSV file destination: one RFC 4180 file with a header row per published batch.</summary>
+/// <param name="Binding">The host-approved destination alias.</param>
+public sealed record EtlCsvDestination([property: JsonRequired] string Binding) : EtlDestination;
 
 /// <summary>A host-bound HTTP JSON destination.</summary>
 /// <remarks>The binding is a host-approved alias; the destination URL and credentials are never authored here.</remarks>

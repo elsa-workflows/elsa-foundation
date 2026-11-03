@@ -37,7 +37,7 @@ public sealed record EtlConnectorRetryInspection(string Phase, int AttemptCount,
     DateTimeOffset? NotBefore, int? LastStatusCode);
 
 /// <summary>A positive record/input-byte reservation. Route record counts cannot exceed its record count.</summary>
-/// <remarks>Unretained output has no effects. JSONL effects have no HTTP retry journal.</remarks>
+/// <remarks>Unretained output has no effects. File (JSONL or CSV) effects have no HTTP retry journal.</remarks>
 public sealed record EtlConnectorOwedInspection(long RecordCount, long InputBytes, bool OutputRetained,
     EtlConnectorEffectInspection? Main, EtlConnectorEffectInspection? Errors);
 

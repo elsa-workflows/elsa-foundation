@@ -27,7 +27,9 @@ internal sealed class EtlConnectorOutputProcessor
     private readonly HostFileBindings _fileBindings;
     private readonly HostHttpBindings _httpBindings;
     private readonly IFileChunkPublisher _jsonlPublisher;
+    private readonly IFileChunkPublisher _csvPublisher;
     private readonly FileChunkStore _jsonlStore = new(".jsonl");
+    private readonly FileChunkStore _csvStore = new(".csv");
     private readonly FileChunkStore _jsonStore = new(".json");
     private readonly EtlHttpTransport _transport;
     private readonly string _snapshotRoot;
@@ -41,6 +43,7 @@ internal sealed class EtlConnectorOutputProcessor
         _httpBindings = httpBindings ?? throw new ArgumentNullException(nameof(httpBindings));
         ArgumentNullException.ThrowIfNull(publishers);
         _jsonlPublisher = publishers.Create(EtlFileChunkFormat.Jsonl);
+        _csvPublisher = publishers.Create(EtlFileChunkFormat.CsvOutput);
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         if (string.IsNullOrWhiteSpace(snapshotRoot) || !Path.IsPathFullyQualified(snapshotRoot))
             throw new ArgumentException("The ETL retained-output root must be an absolute host-approved path.", nameof(snapshotRoot));
@@ -110,7 +113,7 @@ internal sealed class EtlConnectorOutputProcessor
                 if (routeOutput is null)
                     continue;
 
-                if (routeOutput.Kind == EtlConnectorKind.Jsonl)
+                if (routeOutput.Kind is EtlConnectorKind.Jsonl or EtlConnectorKind.Csv)
                 {
                     var fileResult = await PublishFileRouteAsync(lease, admission, pipeline, routeId, routeOutput, cancellationToken);
                     if (fileResult.FailureCode is not null || fileResult.Status is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay))
@@ -147,8 +150,16 @@ internal sealed class EtlConnectorOutputProcessor
         EtlPipelineV2 pipeline, EtlConnectorBatchDescriptor descriptor, EtlConnectorInputBatch input,
         CancellationToken cancellationToken)
     {
-        using var main = new RouteBodyBuilder(pipeline.Routes.Main is EtlHttpDestination, pipeline.Limits.MaxOutputBatchBytes);
-        using var errors = new RouteBodyBuilder(pipeline.Routes.Errors is EtlHttpDestination, pipeline.Limits.MaxOutputBatchBytes);
+        var maxBytes = pipeline.Limits.MaxOutputBatchBytes;
+        var mainIsCsv = pipeline.Routes.Main is EtlCsvDestination;
+        var mainIsArray = pipeline.Routes.Main is EtlHttpDestination;
+        using var main = new RouteBodyBuilder(RouteFormatFor(pipeline.Routes.Main), maxBytes,
+            mainIsCsv ? EtlCsvRouteWriter.Header(pipeline.Mapping.Select(field => field.Name).ToArray()) : null);
+        using var errors = new RouteBodyBuilder(RouteFormatFor(pipeline.Routes.Errors), maxBytes,
+            pipeline.Routes.Errors is EtlCsvDestination ? EtlCsvRouteWriter.ErrorHeader() : null);
+        // A CSV row is never larger than the transformer's JSON object for it, so the CSV bytes are bounded below and the
+        // transformer only gets a memory bound: 8x covers JSON escaping and names already paid for by the header.
+        var csvTransformBound = maxBytes > long.MaxValue / 8 ? long.MaxValue : maxBytes * 8;
         var transformer = new EtlRowTransformer(pipeline, input.LookupRows);
         var accepted = 0L;
         var rejected = 0L;
@@ -168,9 +179,26 @@ internal sealed class EtlConnectorOutputProcessor
                 continue;
             }
 
-            var transformed = transformer.Transform(record.Row!, remainingBytes);
+            // A JSON array's first element also carries its reserved closing bracket; bounding the row by one byte less
+            // rejects an over-limit first row instead of failing the batch when it is appended.
+            var transformed = transformer.Transform(record.Row!, mainIsCsv ? csvTransformBound
+                : mainIsArray && main.IsEmpty ? remainingBytes - 1 : remainingBytes);
             switch (transformed.Disposition)
             {
+                case EtlRowDisposition.Accepted when mainIsCsv:
+                    var csvRow = EtlCsvRouteWriter.RecordRow(transformed.JsonlBytes, pipeline.Mapping.Count);
+                    if (main.TryAppendCsvRow(csvRow, remainingBytes, out var csvBytes))
+                    {
+                        remainingBytes -= csvBytes;
+                        accepted++;
+                        break;
+                    }
+
+                    // Like an over-limit JSON Lines row, the record is rejected; a size rejection names no field.
+                    remainingBytes -= errors.AppendError(new EtlRowError(transformed.RecordOrdinal, null, "etl.output-too-large"),
+                        remainingBytes, cancellationToken);
+                    rejected++;
+                    break;
                 case EtlRowDisposition.Accepted:
                     remainingBytes -= main.AppendRecord(transformed.JsonlBytes, remainingBytes);
                     accepted++;
@@ -190,9 +218,9 @@ internal sealed class EtlConnectorOutputProcessor
         if (checked(accepted + rejected + filtered) != input.Records.Count)
             throw new InvalidDataException("The connector output does not account for its input records.");
 
-        var (mainBytes, mainFinishBytes) = main.Finish(remainingBytes);
+        var (mainBytes, mainFinishBytes) = main.Finish();
         remainingBytes -= mainFinishBytes;
-        var (errorBytes, errorFinishBytes) = errors.Finish(remainingBytes);
+        var (errorBytes, errorFinishBytes) = errors.Finish();
         remainingBytes -= errorFinishBytes;
         var totalBytes = checked((long)(mainBytes?.Length ?? 0) + (errorBytes?.Length ?? 0));
         if (totalBytes != pipeline.Limits.MaxOutputBatchBytes - remainingBytes)
@@ -235,10 +263,11 @@ internal sealed class EtlConnectorOutputProcessor
         var revision = DestinationRevision(admission, routeId);
         var role = FileRole(routeId);
         var outputRoot = _fileBindings.GetOutputRoot(EtlRuntimeMetadata.PinnedBinding(lease.Scope, revision.Revision, role));
+        var (publisher, publishedStore) = route.Kind == EtlConnectorKind.Csv ? (_csvPublisher, _csvStore) : (_jsonlPublisher, _jsonlStore);
         EtlChunk publication;
         try
         {
-            publication = await _jsonlPublisher.PublishAsync(outputRoot, route.EffectId,
+            publication = await publisher.PublishAsync(outputRoot, route.EffectId,
                 pipeline.Limits.MaxOutputBatchBytes,
                 (destination, token) => destination.WriteAsync(bytes, token), cancellationToken);
         }
@@ -251,11 +280,11 @@ internal sealed class EtlConnectorOutputProcessor
             return DispatchFailed(exception.Code);
         }
 
-        if (publication.Key != EtlRuntimeIdentity.ConnectorFileOutputKey(route.EffectId) ||
+        if (publication.Key != EtlRuntimeIdentity.ConnectorFileOutputKey(route.EffectId, route.Kind) ||
             publication.ContentHash != route.Body.ContentHash || publication.ByteLength != route.Body.ByteLength)
             return DispatchFailed("etl.output-identity-invalid");
 
-        var verified = await _jsonlStore.ReadAsync(outputRoot, route.EffectId, pipeline.Limits.MaxOutputBatchBytes,
+        var verified = await publishedStore.ReadAsync(outputRoot, route.EffectId, pipeline.Limits.MaxOutputBatchBytes,
             route.Body.ByteLength, cancellationToken);
         if (verified is null || !verified.AsSpan().SequenceEqual(bytes) || Hash(verified) != route.Body.ContentHash)
             return DispatchFailed("etl.effect-conflict");
@@ -388,6 +417,15 @@ internal sealed class EtlConnectorOutputProcessor
     {
         EtlHttpDestination => EtlConnectorKind.Http,
         EtlJsonlDestination => EtlConnectorKind.Jsonl,
+        EtlCsvDestination => EtlConnectorKind.Csv,
+        _ => throw new InvalidDataException("The connector output destination is unsupported.")
+    };
+
+    private static RouteFormat RouteFormatFor(EtlDestination destination) => destination switch
+    {
+        EtlHttpDestination => RouteFormat.JsonArray,
+        EtlJsonlDestination => RouteFormat.JsonLines,
+        EtlCsvDestination => RouteFormat.Csv,
         _ => throw new InvalidDataException("The connector output destination is unsupported.")
     };
 
@@ -395,6 +433,7 @@ internal sealed class EtlConnectorOutputProcessor
     {
         EtlConnectorKind.Http => _jsonStore,
         EtlConnectorKind.Jsonl => _jsonlStore,
+        EtlConnectorKind.Csv => _csvStore,
         _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector route body kind is unsupported.")
     };
 
@@ -402,6 +441,7 @@ internal sealed class EtlConnectorOutputProcessor
     {
         EtlConnectorKind.Http => "etl-connector-http-route-body-v1:" + effectId,
         EtlConnectorKind.Jsonl => "etl-connector-jsonl-route-body-v1:" + effectId,
+        EtlConnectorKind.Csv => "etl-connector-csv-route-body-v1:" + effectId,
         _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector route body kind is unsupported.")
     };
 
@@ -432,35 +472,77 @@ internal sealed class EtlConnectorOutputProcessor
         _ => "etl.http.delivery-failed"
     };
 
-    private sealed class RouteBodyBuilder(bool jsonArray, long maxBytes) : IDisposable
+    private enum RouteFormat
+    {
+        JsonLines,
+        JsonArray,
+        Csv
+    }
+
+    /// <summary>Accumulates one route body. A CSV route's header is written with its first row; a JSON array's closing bracket is reserved with its first element.</summary>
+    private sealed class RouteBodyBuilder(RouteFormat format, long maxBytes, byte[]? csvHeader) : IDisposable
     {
         private readonly MemoryStream _stream = new();
         private long _count;
         private bool _finished;
 
+        public bool IsEmpty => _count == 0;
+
         public long AppendRecord(ReadOnlyMemory<byte> jsonlLine, long remainingOutputBytes)
         {
-            if (_finished || jsonlLine.IsEmpty || jsonlLine.Span[^1] != (byte)'\n')
+            if (_finished || format == RouteFormat.Csv || jsonlLine.IsEmpty || jsonlLine.Span[^1] != (byte)'\n')
                 throw new InvalidDataException("The transformed connector row is not one complete JSONL record.");
             var before = _stream.Length;
             var allowance = Math.Min(maxBytes, remainingOutputBytes);
-            if (jsonArray)
+            if (format == RouteFormat.JsonArray)
             {
-                if (_count == 0)
-                    Write([(byte)'['], before, allowance);
-                else
-                    Write([(byte)','], before, allowance);
-                Write(jsonlLine.Span[..^1], before, allowance);
+                // Reserve the closing bracket with the first element so a later route cannot consume the byte Finish needs.
+                var reserved = _count == 0 ? 1 : 0;
+                Write([_count == 0 ? (byte)'[' : (byte)','], before, allowance - reserved);
+                Write(jsonlLine.Span[..^1], before, allowance - reserved);
+                _count++;
+                return _stream.Length - before + reserved;
             }
-            else
-                Write(jsonlLine.Span, before, allowance);
+
+            Write(jsonlLine.Span, before, allowance);
             _count++;
             return _stream.Length - before;
+        }
+
+        /// <summary>Appends one CSV row, with the header if it is the route's first, only if all of it fits.</summary>
+        public bool TryAppendCsvRow(byte[] row, long remainingOutputBytes, out long addedBytes)
+        {
+            if (_finished || format != RouteFormat.Csv || csvHeader is null)
+                throw new InvalidOperationException("The connector route is not an open CSV body.");
+            var total = row.LongLength + (_count == 0 ? csvHeader.LongLength : 0);
+            if (total > Math.Min(maxBytes - _stream.Length, remainingOutputBytes))
+            {
+                addedBytes = 0;
+                return false;
+            }
+
+            if (_count == 0)
+                _stream.Write(csvHeader);
+            _stream.Write(row);
+            _count++;
+            addedBytes = total;
+            return true;
         }
 
         public long AppendError(EtlRowError error, long remainingOutputBytes, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (format == RouteFormat.Csv)
+            {
+                var before = _stream.Length;
+                var allowance = Math.Min(maxBytes, remainingOutputBytes);
+                if (_count == 0)
+                    Write(csvHeader!, before, allowance);
+                Write(EtlCsvRouteWriter.ErrorRow(error), before, allowance);
+                _count++;
+                return _stream.Length - before;
+            }
+
             using var encoded = new MemoryStream();
             using (var bounded = new BoundedWriteStream(encoded, Math.Min(maxBytes, remainingOutputBytes)))
             using (var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false }))
@@ -477,17 +559,21 @@ internal sealed class EtlConnectorOutputProcessor
             return AppendRecord(encoded.ToArray(), remainingOutputBytes);
         }
 
-        public (byte[]? Bytes, long AddedBytes) Finish(long remainingOutputBytes)
+        /// <summary>Completes the body. Its only possible trailing byte, a JSON array's bracket, was reserved and is not counted again.</summary>
+        public (byte[]? Bytes, long AddedBytes) Finish()
         {
             if (_finished)
                 throw new InvalidOperationException("The connector route body was already finalized.");
             _finished = true;
             if (_count == 0)
                 return (null, 0);
-            var before = _stream.Length;
-            if (jsonArray)
-                Write([(byte)']'], before, Math.Min(maxBytes, remainingOutputBytes));
-            return (_stream.ToArray(), _stream.Length - before);
+            if (format == RouteFormat.JsonArray)
+            {
+                if (_stream.Length >= maxBytes)
+                    throw new EtlEffectException("etl.output-too-large", "ETL output exceeds the configured byte limit.");
+                _stream.WriteByte((byte)']');
+            }
+            return (_stream.ToArray(), 0);
         }
 
         private void Write(ReadOnlySpan<byte> bytes, long appendStart, long appendLimit)

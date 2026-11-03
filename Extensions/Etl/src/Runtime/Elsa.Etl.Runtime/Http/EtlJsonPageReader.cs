@@ -60,7 +60,11 @@ internal static class EtlJsonPageReader
         {
             try
             {
-                ValidateDocument(document.RootElement);
+                EtlJsonRecordReader.ValidateDocument(document.RootElement);
+            }
+            catch (EtlDuplicatePropertyException)
+            {
+                throw Refused("etl.http.duplicate-property");
             }
             catch (InvalidOperationException)
             {
@@ -142,184 +146,12 @@ internal static class EtlJsonPageReader
         IReadOnlyList<EtlJsonPointer> fieldPointers)
     {
         if (rawBytes > limits.MaxRecordBytes)
-            return Error("etl.record-too-large", null);
-        var values = new Dictionary<string, EtlTypedValue>(source.Fields.Count, StringComparer.Ordinal);
-        for (var index = 0; index < source.Fields.Count; index++)
-        {
-            var field = source.Fields[index];
-            if (!fieldPointers[index].TryResolve(record, out var value) || value.ValueKind == JsonValueKind.Null)
-            {
-                if (field.Required)
-                    return Error("etl.required-value-missing", field.Name);
-
-                values.Add(field.Name, new EtlTypedValue(field.Type, null));
-                continue;
-            }
-
-            if (!TryReadScalar(value, field.Type, out var typedValue))
-                return Error("etl.invalid-value", field.Name);
-
-            values.Add(field.Name, new EtlTypedValue(field.Type, typedValue));
-        }
+            return new(absoluteIndex, rawBytes, null, new EtlRowError(localOrdinal, null, "etl.record-too-large"));
 
         // The durable page index is absolute; the transformer's legacy diagnostic ordinal stays page-local.
-        return new EtlJsonPageRecord(absoluteIndex, rawBytes, new EtlTypedRow(localOrdinal, values), null);
-
-        EtlJsonPageRecord Error(string code, string? field) =>
-            new(absoluteIndex, rawBytes, null, new EtlRowError(localOrdinal, field, code));
+        var (row, error) = EtlJsonRecordReader.ReadFields(record, source.Fields, fieldPointers, localOrdinal);
+        return new EtlJsonPageRecord(absoluteIndex, rawBytes, row, error);
     }
-
-    private static bool TryReadScalar(JsonElement value, EtlColumnType type, out object? result)
-    {
-        result = null;
-        switch (type)
-        {
-            case EtlColumnType.String when value.ValueKind == JsonValueKind.String:
-                result = value.GetString();
-                return result is not null;
-            case EtlColumnType.Int64 when value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var integer):
-                result = integer;
-                return true;
-            case EtlColumnType.Decimal when value.ValueKind == JsonValueKind.Number && TryReadExactDecimal(value, out var decimalValue):
-                result = decimalValue;
-                return true;
-            case EtlColumnType.Boolean when value.ValueKind is JsonValueKind.True or JsonValueKind.False:
-                result = value.GetBoolean();
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    private static bool TryReadExactDecimal(JsonElement value, out decimal result)
-    {
-        result = default;
-        var raw = JsonMarshal.GetRawUtf8Value(value);
-        if (raw.IsEmpty)
-            return false;
-
-        var position = 0;
-        var negative = raw[position] == (byte)'-';
-        if (negative)
-            position++;
-
-        var integerStart = position;
-        while (position < raw.Length && IsDigit(raw[position]))
-            position++;
-        var integerEnd = position;
-        var fractionStart = position;
-        var fractionEnd = position;
-        if (position < raw.Length && raw[position] == (byte)'.')
-        {
-            fractionStart = ++position;
-            while (position < raw.Length && IsDigit(raw[position]))
-                position++;
-            fractionEnd = position;
-        }
-
-        long exponent = 0;
-        if (position < raw.Length && raw[position] is (byte)'e' or (byte)'E')
-        {
-            position++;
-            var exponentNegative = position < raw.Length && raw[position] == (byte)'-';
-            if (exponentNegative || position < raw.Length && raw[position] == (byte)'+')
-                position++;
-            if (position == raw.Length)
-                return false;
-
-            // Saturate at a bound larger than any shift a token of this length can cancel.
-            // This classifies extreme exponents without integer overflow or exponent-sized allocation.
-            var exponentLimit = raw.Length + 64L;
-            long magnitude = 0;
-            while (position < raw.Length)
-            {
-                var current = raw[position++];
-                if (!IsDigit(current))
-                    return false;
-
-                var digit = current - (byte)'0';
-                if (magnitude < exponentLimit)
-                    magnitude = magnitude > (exponentLimit - digit) / 10
-                        ? exponentLimit
-                        : magnitude * 10 + digit;
-            }
-            exponent = exponentNegative ? -magnitude : magnitude;
-        }
-
-        if (position != raw.Length)
-            return false;
-
-        var fractionDigits = fractionEnd - fractionStart;
-        var totalDigits = integerEnd - integerStart + fractionDigits;
-        var firstSignificant = -1;
-        var lastSignificant = -1;
-        var digitOrdinal = 0;
-        for (var index = integerStart; index < integerEnd; index++, digitOrdinal++)
-            MarkSignificantDigit(raw[index], digitOrdinal, ref firstSignificant, ref lastSignificant);
-        for (var index = fractionStart; index < fractionEnd; index++, digitOrdinal++)
-            MarkSignificantDigit(raw[index], digitOrdinal, ref firstSignificant, ref lastSignificant);
-
-        // Every signed zero is exactly representable, whatever valid exponent spelling it carries.
-        if (firstSignificant < 0)
-        {
-            result = new decimal(0, 0, 0, negative, 0);
-            return true;
-        }
-
-        var significantDigits = lastSignificant - firstSignificant + 1;
-        if (significantDigits > 29)
-            return false;
-        var trailingZeroDigits = totalDigits - lastSignificant - 1;
-        var shift = exponent - fractionDigits + trailingZeroDigits;
-        int scale;
-        int appendedZeros;
-        if (shift >= 0)
-        {
-            if (shift > 29 - significantDigits)
-                return false;
-            scale = 0;
-            appendedZeros = (int)shift;
-        }
-        else
-        {
-            if (shift < -28)
-                return false;
-            scale = (int)-shift;
-            appendedZeros = 0;
-        }
-
-        UInt128 coefficient = 0;
-        digitOrdinal = 0;
-        for (var index = integerStart; index < integerEnd; index++, digitOrdinal++)
-            if (digitOrdinal >= firstSignificant && digitOrdinal <= lastSignificant)
-                coefficient = coefficient * 10 + (uint)(raw[index] - (byte)'0');
-        for (var index = fractionStart; index < fractionEnd; index++, digitOrdinal++)
-            if (digitOrdinal >= firstSignificant && digitOrdinal <= lastSignificant)
-                coefficient = coefficient * 10 + (uint)(raw[index] - (byte)'0');
-        for (var index = 0; index < appendedZeros; index++)
-            coefficient *= 10;
-
-        var maximumCoefficient = ((UInt128)1 << 96) - 1;
-        if (coefficient > maximumCoefficient)
-            return false;
-
-        var low = (uint)coefficient;
-        var middle = (uint)(coefficient >> 32);
-        var high = (uint)(coefficient >> 64);
-        result = new decimal((int)low, (int)middle, (int)high, negative, (byte)scale);
-        return true;
-    }
-
-    private static void MarkSignificantDigit(byte digit, int ordinal, ref int first, ref int last)
-    {
-        if (digit == (byte)'0')
-            return;
-        if (first < 0)
-            first = ordinal;
-        last = ordinal;
-    }
-
-    private static bool IsDigit(byte value) => value is >= (byte)'0' and <= (byte)'9';
 
     private static string? ReadContinuation(
         JsonElement document,
@@ -359,30 +191,6 @@ internal static class EtlJsonPageReader
         if (continuationBytes > maximumBytes)
             throw Refused("etl.http.continuation-too-large");
         return continuation;
-    }
-
-    private static void ValidateDocument(JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                var names = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var property in element.EnumerateObject())
-                {
-                    if (!names.Add(property.Name))
-                        throw Refused("etl.http.duplicate-property");
-                    ValidateDocument(property.Value);
-                }
-                break;
-            case JsonValueKind.Array:
-                foreach (var item in element.EnumerateArray())
-                    ValidateDocument(item);
-                break;
-            case JsonValueKind.String:
-                // Force validation even for metadata which no selector reads.
-                _ = element.GetString();
-                break;
-        }
     }
 
     private static EtlJsonPageReadException Refused(string code) => new(code);

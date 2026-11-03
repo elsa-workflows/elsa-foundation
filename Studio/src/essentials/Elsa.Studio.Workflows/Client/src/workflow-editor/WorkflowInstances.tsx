@@ -10,7 +10,7 @@ import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCurs
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
@@ -837,10 +837,12 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
 const maxIncidentActivityLookups = 50;
 const incidentActivityLookupBatchSize = 8;
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
   context: StudioEndpointContext;
   ai: StudioAgentRegistry;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   workflowExecutionId: string;
   initialActivityExecutionId?: string | null;
   initialInspectorTab?: InstanceInspectorTab;
@@ -1512,6 +1514,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     labelFor={labelForExecution} onSelect={selectBrowserExecution} onEnter={enterChildExecution}
     onIncident={openExecutionIssues}
     renderDetails={(execution, navigation, children) => <WorkflowActivityExecutionDetails context={context} activity={execution}
+      backendSession={backendSession} runRelatedLinks={runRelatedLinks}
       refreshKey={evidenceRevision}
       activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
       expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
@@ -1660,6 +1663,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             executableGraph={data.executableGraph}
             definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
+            backendSession={backendSession} runRelatedLinks={runRelatedLinks}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={inspectorCollapsed}
@@ -2281,6 +2285,8 @@ function WorkflowInstanceInspector({
   executableGraph,
   definitionName,
   expressionEditors = [],
+  backendSession,
+  runRelatedLinks = [],
   collapsed = false,
   expanded = true,
   maximized = false,
@@ -2321,6 +2327,8 @@ function WorkflowInstanceInspector({
   executableGraph?: ExecutableActivityGraph | null;
   definitionName?: string | null;
   expressionEditors?: StudioExpressionEditorContribution[];
+  backendSession?: StudioBackendSession;
+  runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
   collapsed?: boolean;
   expanded?: boolean;
   maximized?: boolean;
@@ -2436,6 +2444,7 @@ function WorkflowInstanceInspector({
                   activityCatalog={activityCatalog}
                   executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
                   expressionEditors={expressionEditors}
+                  backendSession={backendSession} runRelatedLinks={runRelatedLinks}
                   focusInputKey={focusInputKey}
                   onSelectEvidence={openActivityEvidence}
                 />

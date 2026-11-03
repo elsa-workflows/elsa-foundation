@@ -28,7 +28,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile \
   --urls http://127.0.0.1:7286 \
   --Identity:Login:ProductName='Northstar Studio' \
   --Identity:Login:Tagline='Make room for possibility.' \
-  --Identity:Login:Layout=split --Identity:Login:Artwork=ember
+  --Identity:Login:Layout=split --Identity:Login:Artwork=unfolding-map
 ```
 
 Visit `http://127.0.0.1:7286/_elsa/identity/login`. This does not configure accounts, identity-provider

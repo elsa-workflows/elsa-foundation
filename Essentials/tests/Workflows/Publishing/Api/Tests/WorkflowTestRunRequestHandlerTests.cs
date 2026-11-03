@@ -534,6 +534,30 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task DraftTestRunFreezesCanvasLayoutOntoItsExpiringReference()
+    {
+        var coordinates = new[]
+        {
+            new WorkflowExecutableLayoutRecord("start-event", 80, 160),
+            new WorkflowExecutableLayoutRecord("write-one", 320, 120, 240, 100,
+                JsonSerializer.SerializeToElement(new { LabelOffset = 12 })),
+            new WorkflowExecutableLayoutRecord("end-event", 720, 160)
+        };
+        var request = new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-layout",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null))
+        {
+            Layout = coordinates
+        };
+        var view = await DraftSnapshotHandler().Handle(request, CancellationToken.None);
+        var reference = Assert.Single(await _sourceReferenceStore.ListAllByArtifactAsync(view.ArtifactId!));
+        Assert.Equal(coordinates, reference.Layout);
+        coordinates[0] = coordinates[0] with { X = 999 };
+        Assert.Equal(80, reference.Layout[0].X);
+    }
+
+    [Fact]
     public async Task DraftTestRunFreezesActivityPresentationOntoItsExpiringReference()
     {
         var view = await DraftSnapshotHandler().Handle(new StartWorkflowDraftTestRun(

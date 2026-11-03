@@ -15,6 +15,7 @@
   <Folder Name="/Extensions/Agent/src/Specialists/">
     <Project Path="Extensions/Agent/src/Specialists/Connections/Elsa.Agent.Specialists.Connections.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Anthropic/Elsa.Agent.Specialists.Anthropic.csproj" />
+    <Project Path="Extensions/Agent/src/Specialists/Api/Elsa.Agent.Specialists.Api.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/AzureOpenAI/Elsa.Agent.Specialists.AzureOpenAI.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Core/Elsa.Agent.Specialists.Core.csproj" />
     <Project Path="Extensions/Agent/src/Specialists/Design/Elsa.Agent.Specialists.Design.csproj" />
@@ -237,7 +238,10 @@
   </Folder>
   <Folder Name="/Essentials/src/Api/">
     <Project Path="Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <Project Path="Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Api/Capabilities/">
+    <Project Path="Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
+    <Project Path="Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Caching/">
     <Project Path="Essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />
