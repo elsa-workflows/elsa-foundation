@@ -735,8 +735,8 @@ i68 topology, the database host had a public IP, open only to SSH from the opera
 - Both duplicate Cancel envelopes were forwarded as `Deferred` in every case, so each Cancel crossed the durable
   transport to the owner.
 - The sender's receipt reported the execution Cancelled with an empty queue, no incidents and no undelivered outbox
-  within 2.0 s of the request for the parked case and 4.1 s for each progressing case. These are controller-side
-  upper bounds that include one-second SSH polling, not latencies; the hook marks its output `timingEligible: false`.
+  within 2.0 s of the request for the parked case and 4.1 s for each progressing case. These are approximate
+  controller-side measurements that include one-second SSH polling, not latencies; the hook marks its output `timingEligible: false`.
 - In each progressing case, activity rows grew by 146–196 in the five seconds before the Cancel, kept growing until
   it took effect, and did not change in the ten seconds after the settled receipt.
 - Every case ended with the owner's API reporting `Cancelled`, an empty transport and no incidents.

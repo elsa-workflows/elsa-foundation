@@ -28,5 +28,5 @@
   },
   "controller": "specs/1183-runtime-efficiency-program/evidence/two-host-qualification/cluster-controller.py and api.py, unchanged; series x1 (delay,loop), x2 (loop), x3 (loop)",
   "note": "The controller names node logs node-<host>-<n>.log per series, so each series overwrote the previous one: the archive keeps node A's and the sender's x3 logs and the x1 second sender's log (node-b-1.log). Every case ledger and every sender receipt directory is kept.",
-  "timing": "secondsToSettledReceipt is measured by the controller from writing cancel.json over SSH to reading finished.json with one-second SSH polling; it is an upper bound, not a latency. The hook marks its output timingEligible: false."
+  "timing": "secondsToSettledReceipt is measured by the controller from writing cancel.json over SSH to reading finished.json with one-second SSH polling; it is an approximate measurement (the clock starts just after the request is written and stops after the polled read), not a latency. The hook marks its output timingEligible: false."
 }
