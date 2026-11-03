@@ -38,8 +38,9 @@ internal sealed class HttpActivityAuthoringCatalog(
         var context = accessor.HttpContext;
         if (context is null || !principals.TryGetNormalizedPrincipal(context.User, out var principal)) return false;
         var tenant = principal.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? principal.FindFirst("tenant_id")?.Value;
-        // The route gate's resource is the request itself, so a host permission resource handler decides this read exactly
-        // as it decides GET /design/activities/catalog.
+        // The resource is the current request, as it is for the catalog route's gate: the same principal and tenant. During a
+        // Weaver turn that request is the agent's own (for example its messages request), so a handler keyed on route or
+        // path sees that request, not GET /design/activities/catalog.
         return (await permissions.AuthorizeAsync(new(principal, ActivityDesignPermissions.Read, tenant, context), cancellationToken)).Succeeded;
     }
 

@@ -10,6 +10,7 @@ using Elsa.Agent.Workflows.Tools;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Agent.Tests;
 
@@ -239,10 +240,11 @@ public sealed class WorkflowTruthSeamTests
         var contribution = await host.CollectAsync();
 
         var reported = Content(Single(contribution, DefaultWorkflowAgentContextProvider.PermissionsContentType));
-        // The owner still allows managing the workflow; only the host policy withholds the tool, and the capability with it.
+        // The owner still allows managing the workflow; only the host policy withholds the tool. The capability is admitted
+        // by its own id, as the Agent API admits it, so it stays.
         Assert.Equal("allowed", reported.GetProperty("manage").GetString());
         Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
-        Assert.Equal(["workflow.explain"], Strings(reported, "capabilities"));
+        Assert.Equal(["workflow.explain", "workflow.propose-change"], Strings(reported, "capabilities"));
         var policies = host.Services.GetRequiredService<IAgentPolicyEvaluator>();
         var policy = AgentPolicy.Default with { DeniedCapabilityIds = [WorkflowSetDesignerPositionTool.ToolName] };
         var advertised = new List<string>();
@@ -253,6 +255,64 @@ public sealed class WorkflowTruthSeamTests
                     WorkflowAgentTests.Snapshot().Target, CancellationToken.None)).Allowed)
                 advertised.Add(tool.Descriptor.Name);
         Assert.Equal(Strings(reported, "tools"), advertised);
+    }
+
+    [Theory]
+    [InlineData("workflow_read_graph")]
+    [InlineData("workflow.explain")]
+    [InlineData("workflow.propose-change")]
+    public async Task Capabilities_follow_their_own_ids_as_the_api_admits_them_and_tools_follow_their_names(string denied)
+    {
+        var policy = AgentPolicy.Default with { DeniedCapabilityIds = [denied] };
+        using var host = Host.Create(policy: policy);
+        var reported = Content(Single(await host.CollectAsync(), DefaultWorkflowAgentContextProvider.PermissionsContentType));
+
+        var policies = host.Services.GetRequiredService<IAgentPolicyEvaluator>();
+        // The API's rule for a requested capability: installed, and its own id allowed by the session's policy.
+        var installed = (await host.Services.GetRequiredService<IAgentCapabilityCatalog>().ListAsync())
+            .Where(item => item.ModuleId == WorkflowAgentSnapshot.ModuleId).Select(item => item.Id).ToArray();
+        var admitted = new List<string>();
+        foreach (var id in installed)
+            if ((await policies.EvaluateCapabilityAsync(policy, id)).Allowed) admitted.Add(id);
+        Assert.Equal(admitted.Order(), Strings(reported, "capabilities").Order());
+        var tools = new List<string>();
+        foreach (var name in new[] { WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName })
+            if ((await policies.EvaluateCapabilityAsync(policy, name)).Allowed) tools.Add(name);
+        Assert.Equal(tools, Strings(reported, "tools"));
+    }
+
+    [Fact]
+    public async Task A_host_authorizer_that_withholds_the_read_tool_never_leaves_it_reported()
+    {
+        using var host = Host.Create(hostAuthorizer: new DenyTool(WorkflowReadGraphTool.ToolName));
+        var contribution = await host.CollectAsync();
+
+        // The read tool's own host decision is the read this context is disclosed on, so the context is withheld and no
+        // permissions are reported; the engine would not offer the tool either.
+        Assert.DoesNotContain(contribution.Attachments, item => item.ContentType == DefaultWorkflowAgentContextProvider.PermissionsContentType);
+        Assert.Equal("agent.workflow.permission_denied", Assert.Single(contribution.Diagnostics).Code);
+        var read = Assert.Single(await host.Services.GetRequiredService<IAgentToolRegistry>().ListAsync(), tool => tool.Descriptor.Name == WorkflowReadGraphTool.ToolName);
+        Assert.False((await AgentToolAccess.AuthorizeAsync(read, host.Services.GetRequiredService<IAgentToolAuthorizer>(), "actor-1", "tenant-1",
+            WorkflowAgentTests.Snapshot().Target, CancellationToken.None)).Allowed);
+    }
+
+    [Fact]
+    public async Task A_host_authorizer_that_withholds_the_layout_tool_reports_explanation_only_tools()
+    {
+        using var host = Host.Create(hostAuthorizer: new DenyTool(WorkflowSetDesignerPositionTool.ToolName));
+        var reported = Content(Single(await host.CollectAsync(), DefaultWorkflowAgentContextProvider.PermissionsContentType));
+
+        Assert.Equal("denied", reported.GetProperty("manage").GetString());
+        Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
+        Assert.Equal(["workflow.explain"], Strings(reported, "capabilities"));
+    }
+
+    private sealed class DenyTool(string name) : IAgentToolAuthorizer
+    {
+        public Task<AgentPolicyDecision> AuthorizeAsync(AgentToolDescriptor tool, string actorId, string tenantId, AgentResourceTarget? target,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(tool.Name == name ? new AgentPolicyDecision(false, [new("unit.tool_denied", "The host withholds this tool.")])
+                : new AgentPolicyDecision(true, []));
     }
 
     [Theory]
@@ -362,7 +422,7 @@ public sealed class WorkflowTruthSeamTests
         private readonly AgentPolicy policy;
         internal FixtureActivityCatalog SecondCatalog { get; } = new();
 
-        private Host(bool installCatalog, AgentPolicy? policy, bool ambiguous)
+        private Host(bool installCatalog, AgentPolicy? policy, bool ambiguous, IAgentToolAuthorizer? hostAuthorizer)
         {
             this.policy = policy ?? AgentPolicy.Default;
             root = AgentTestServices.Create(services =>
@@ -371,11 +431,13 @@ public sealed class WorkflowTruthSeamTests
                 services.AddSingleton<IWorkflowDefinitionAuthorizer>(Owner);
                 if (installCatalog) services.AddSingleton<IActivityAuthoringCatalog>(Catalog);
                 if (ambiguous) services.AddSingleton<IActivityAuthoringCatalog>(SecondCatalog);
+                if (hostAuthorizer is not null) services.Replace(ServiceDescriptor.Scoped(_ => hostAuthorizer));
             });
             scope = root.CreateScope();
         }
 
-        internal static Host Create(bool installCatalog = true, AgentPolicy? policy = null, bool ambiguous = false) => new(installCatalog, policy, ambiguous);
+        internal static Host Create(bool installCatalog = true, AgentPolicy? policy = null, bool ambiguous = false,
+            IAgentToolAuthorizer? hostAuthorizer = null) => new(installCatalog, policy, ambiguous, hostAuthorizer);
 
         private DefaultWorkflowAgentContextProvider Source => Services.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>().Single();
 

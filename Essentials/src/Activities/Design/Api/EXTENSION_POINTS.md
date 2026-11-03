@@ -40,8 +40,10 @@ These are single-owner seams. Replace them through DI; do not register competing
 
 `ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
 gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
-`IPermissionAuthorizationService` with the request (`HttpContext`) as the resource, the resource the catalog route's
-policy handler sees, so a host `IPermissionResourceHandler` decides both identically. A missing request, an unnormalized
+`IPermissionAuthorizationService` with the current request (`HttpContext`) as the resource, as the catalog route's
+policy handler has: the same principal and tenant. During a Weaver turn the current request is the agent's own (for
+example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the agent request,
+not the catalog route. A missing request, an unnormalized
 principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
 designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
 addable or not, with `Available`, `AvailabilityReason`, activity type and exact version identity, display data and

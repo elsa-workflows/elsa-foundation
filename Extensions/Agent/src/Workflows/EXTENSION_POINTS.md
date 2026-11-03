@@ -38,9 +38,11 @@ The module reads two owning domains through their `.Core` contracts only, and re
   `WorkflowDefinitionAuthorizationException`), from the host `IAgentToolAuthorizer` for the layout tool and the owning
   `IWorkflowDefinitionAuthorizer.CanManageAsync`, the same decisions the engine uses to advertise tools. `tools` and
   `capabilities` follow: manage allowed adds `workflow_set_designer_position` and `workflow.propose-change`; otherwise
-  the actor gets explanation only. Both lists are also filtered by the session's host capability policy
-  (`IAgentPolicyEvaluator.EvaluateCapabilityAsync`, which applies `DeniedCapabilityIds`), as the engine filters tool
-  advertisement, so they name exactly what the engine will offer; `manage` stays the owner's answer.
+  the actor gets explanation only. `tools` follows the engine's advertisement rule for each tool: its own descriptor
+  through the host `IAgentToolAuthorizer`, its owner decision, and the session's capability policy for its name
+  (`IAgentPolicyEvaluator.EvaluateCapabilityAsync`, which applies `DeniedCapabilityIds`), so it names exactly what the
+  engine will offer. `capabilities` follows the rule the Agent API admits a requested capability with: its own id under
+  that policy, independent of the tools (proposing a change also needs manage). `manage` stays the owner's answer.
 
 Both server reads respect the session's host context policy. When `IAgentPolicyEvaluator.EvaluateContextAsync` does not
 admit a kind (for example a policy whose `AllowedContextKinds` lists only the older workflow kinds), the module does not
