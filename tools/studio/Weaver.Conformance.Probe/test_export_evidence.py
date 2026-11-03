@@ -110,7 +110,7 @@ class WitnessExportTests(unittest.TestCase):
     def test_complete_promoted_witness_exports_every_autonomy_reference(self):
         report = dict(self.complete, status="passed", independentPackageWitness=True)
         index = self.export(report)
-        self.assertEqual({"complete": True, "expectedCaseCount": 91, "gaps": []}, index["witnessCompleteness"])
+        self.assertEqual({"complete": True, "expectedCaseCount": 93, "gaps": []}, index["witnessCompleteness"])
         self.assertEqual("passed", index["qualificationStatus"]); self.assertFalse(index["qualificationStatusChanged"])
         root = self.base.root.resolve()
         for row in report[MATRIX_QUALIFICATION]["cases"]:
@@ -119,6 +119,8 @@ class WitnessExportTests(unittest.TestCase):
         for row in report["contextDisclosureQualification"]["records"]:
             self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
         for row in report["workflowAuthorizationQualification"]["records"]:
+            self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
+        for row in report["workflowTruthSeamQualification"]["records"]:
             self.assertIn(Path(row["record"]["path"]).resolve().relative_to(root).as_posix(), index["files"])
         for row in report[RESTART_QUALIFICATION]["cases"]:
             for ref in [row["ownerBefore"], row["ownerAfter"], row["correlation"]["restartReceipt"], *row["evidence"]]:

@@ -28,6 +28,7 @@ from autonomy_journeys import qualify_witness_autonomy
 from restart_journeys import qualify_witness_restarts
 from disclosure_journeys import qualify_context_disclosure
 from authorization_journeys import SECTION as AUTHORIZATION_SECTION, qualify_workflow_authorization
+from truth_seam_journeys import SECTION as TRUTH_SEAM_SECTION, qualify_workflow_truth_seams, truth_principals
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_complete_witness, witness_manifest
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -104,6 +105,10 @@ def _seed_principals(run):
                                   ("witness-missing-" + secrets.token_hex(8), "default", "witness-missing-" + secrets.token_hex(8)),
                                   ("witness-default-" + secrets.token_hex(8), "default", "witness-default-" + secrets.token_hex(8))):
         principals.append({"subject": subject, "tenant": tenant, "username": user, "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(BASE_GRANTS)})
+    # Spec 1193 T012: three dedicated workflow actors, appended so the original indexes keep their meaning.
+    principals.extend(truth_principals(principals, lambda prefix, tenant, grants: {
+        "subject": prefix + "-" + secrets.token_hex(8), "tenant": tenant, "username": prefix + "-" + secrets.token_hex(8),
+        "password": secrets.token_urlsafe(36) + "!aA1", "exactDirectPermissions": list(grants)}))
     path = run.profiles["backend"]["published"] / "appsettings.json"
     settings = json.loads(path.read_text())
     settings["Qualification"].update(Principals=principals, GrantProfiles={
@@ -658,9 +663,12 @@ def qualify_distributions(run):
         # Spec 1193 T006: the owner-could-not-decide outcome on both adapters, through a test-only seam the
         # driver selects for this inventory alone and deselects before anything later runs.
         qualify_workflow_authorization(runtime)
+        # Spec 1193 T012: the catalog and permissions are the owning services' answers per actor and tenant, through
+        # a test-only tenant-activity seam the driver selects for this inventory alone.
+        qualify_workflow_truth_seams(runtime)
         # The #3440 inventory is appended after the unchanged original sequence, in the same
         # host pair, so the original38+4 keep their proven preconditions and order.
-        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION)})
+        original = copy.deepcopy({key: run.report[key] for key in ("cases", "contextDisclosureQualification", AUTHORIZATION_SECTION, TRUTH_SEAM_SECTION)})
         run.report["autonomyPreflight"] = _autonomy_preflight(runtime)
         run.save()
         qualify_witness_autonomy(runtime)
