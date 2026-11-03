@@ -7,8 +7,8 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Api.Services;
 
@@ -41,7 +41,7 @@ internal sealed class WorkflowRunInspection(
 {
     /// <summary>At most this many values of the selected activity execution are resolved in one read; the rest stay resolvable.</summary>
     internal const int ResolveLimit = 32;
-    internal const string SensitiveIncidentMessage = "Incident details are withheld because the activity has a sensitive input.";
+    internal const string SensitiveIncidentMessage = "Incident details are withheld because their text could echo a sensitive input or data this read cannot inspect.";
 
     public async ValueTask<WorkflowRunInspectionDetails?> GetAsync(WorkflowRunInspectionRequest request, CancellationToken cancellationToken = default)
     {
@@ -125,8 +125,8 @@ internal sealed class WorkflowRunInspection(
     /// Executable's input bindings and the activity execution's own value evidence, for the activity the incident names and,
     /// when it propagated from a child's fault, for that causal activity execution too (the fault recorder's causal execution,
     /// a structural parent's completed child, or the child whose parent notification the parent was handling). Only one causal
-    /// level is checked: this assumes, as the runtime's fault recorders do, that a propagated fault message names its child
-    /// but never carries the child's own exception text. An incident without an activity execution, whose causal execution
+    /// level is checked: this assumes, as the runtime's fault recorders do, that a propagated fault message carries at most
+    /// the text of the one causal child it names. An incident without an activity execution, whose causal execution
     /// is blank or named only partly, raised by a child-control consumer, or recorded for poisoned scheduler work, counts as
     /// sensitive.
     /// </summary>

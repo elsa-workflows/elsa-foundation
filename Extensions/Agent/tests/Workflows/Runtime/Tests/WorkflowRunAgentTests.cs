@@ -498,7 +498,7 @@ public sealed class WorkflowRunAgentTests
         using var host = new WorkflowRuntimeAgentTestHost();
         host.Runs.Read = request => Run(request) with
         {
-            Incidents = [new("incident-1", "act-fault", "fault", "Error", "Active", "workflow.fault", "Incident details are withheld because the activity has a sensitive input.",
+            Incidents = [new("incident-1", "act-fault", "fault", "Error", "Active", "workflow.fault", "Incident details are withheld because their text could echo a sensitive input or data this read cannot inspect.",
                 true, true, true, DateTimeOffset.UnixEpoch, null)]
         };
         var session = await host.SessionAsync();
@@ -507,7 +507,7 @@ public sealed class WorkflowRunAgentTests
         Assert.True(incident.GetProperty("sensitiveInputs").GetBoolean());
         Assert.True(incident.GetProperty("messageRedacted").GetBoolean());
         Assert.Contains(data.GetProperty("unavailable").EnumerateArray(), item => item.GetProperty("reason").GetString() == "withheld"
-            && item.GetProperty("data").GetString() == "incident messages of activities with sensitive inputs");
+            && item.GetProperty("data").GetString() == "incident messages that could echo sensitive or uninspectable data");
     }
 
     private static AgentPreparedToolInvocation Prepared(AgentSession session, AgentToolPreparation preparation) =>

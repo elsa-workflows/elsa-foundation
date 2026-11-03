@@ -176,8 +176,8 @@ internal sealed class WorkflowReadRunTool(
         if (!run.CanInspectValues && run.Incidents.Count > 0)
             unavailable.Add(new { data = "incident messages", reason = "notPermitted", explanation = WorkflowRunContext.Explain(WorkflowRunUnavailableReason.NotPermitted) });
         if (run.CanInspectValues && run.Incidents.Any(incident => incident.SensitiveInputs))
-            unavailable.Add(new { data = "incident messages of activities with sensitive inputs", reason = "withheld",
-                explanation = "withheld because the activity has a sensitive input that its text could echo" });
+            unavailable.Add(new { data = "incident messages that could echo sensitive or uninspectable data", reason = "withheld",
+                explanation = "withheld because the text could echo a sensitive input, another Run's data or an arbitrary handler's exception text" });
         if (run.InspectionGranularity != "activity-level")
             unavailable.Add(new { data = "exact per-activity evidence", reason = "notCaptured",
                 explanation = $"This Run executed under the {run.PersistenceMode} persistence mode, so its activity evidence is folded to commit boundaries ({run.InspectionGranularity})." });

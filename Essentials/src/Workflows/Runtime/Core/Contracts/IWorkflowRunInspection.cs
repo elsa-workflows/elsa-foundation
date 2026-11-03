@@ -23,10 +23,11 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// recorder's causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the
 /// child whose parent notification the parent was handling), are established non-sensitive. An incident a child-control
 /// consumer raised, or one recorded for poisoned scheduler work, is always withheld: its message may echo another Run's
-/// batches or an arbitrary handler's exception text. This assumes that a propagated
-/// fault message names its child but never carries the child's own exception text: only one causal level is checked. A
-/// runtime that copies a child's text into its parent's incident breaks that assumption and must not be inspected through
-/// this contract.
+/// batches or an arbitrary handler's exception text. A child-control consumer's returned fault or failed disposal recorded
+/// before the runtime named the calling child carries neither marker and is not recognized; such Runs exist only in
+/// development stores from before that change. Only one causal level is checked: this assumes that a propagated fault
+/// message carries at most the text of the one causal child it names. A runtime that copies a deeper descendant's text into
+/// its parent's incident breaks that assumption and must not be inspected through this contract.
 /// </para>
 /// </remarks>
 public interface IWorkflowRunInspection

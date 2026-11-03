@@ -46,13 +46,15 @@ public sealed class ShellReloaderTests
         Assert.Equal(1, registry.Reloads);
     }
 
-    [Fact]
-    public async Task LogsAndPropagatesACancellationWhileRetrying()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task LogsAndPropagatesACancellationAfterTheSave(int cancelledAttempt)
     {
         var registry = new QueuedReloadRegistry(ConfigurationChanged, null);
         var logger = new RecordingLogger();
         using var cancellation = new CancellationTokenSource();
-        registry.BeforeReload = attempt => { if (attempt == 2) cancellation.Cancel(); };
+        registry.BeforeReload = attempt => { if (attempt == cancelledAttempt) cancellation.Cancel(); };
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new ShellReloader(registry, new NuplaneHostTestComposition.StubShell("Authoring"), logger).ReloadAsync(cancellation.Token));

@@ -464,10 +464,10 @@ Evidence categories:
 
 The slices landed as #3671 (A), #3704 (B), #3715 (C), #3722 (D), #3727 (E), #3732 (F) and this specification's closing PR (G). Each PR records its witness runs, including the failed attempts and their causes, and its Code Review fallback evidence. The local native proofs ran on `8e5657d39`, slice G's integrated head with slices E and F and `main`. Three things came after it:
 - child-control incidents now name their calling child, and run inspection withholds them, and poisoned-work incidents, outright;
-- a cancelled reload retry is logged;
+- any reload cancellation after the save is logged;
 - `main` was merged, adding #3730's Studio tag UX in 5 files.
 
-The unit tests named above are the evidence for those changes. The witness does not exercise a child-control fault. The closing PR merges only once CI's independent package witness and the Studio browser shards pass on its exact head, and that run is recorded on the PR at merge.
+The evidence for those changes is unit tests: `WorkflowRunInspectionTests`, `WorkflowControlInboxTests` and `ShellReloaderTests`. The witness does not exercise a child-control fault. The closing PR merges only once CI's independent package witness and the Studio browser shards pass on its exact head, and that run is recorded on the PR at merge.
 
 | #3442 item | Evidence |
 | --- | --- |

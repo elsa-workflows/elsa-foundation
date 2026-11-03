@@ -248,7 +248,7 @@ public sealed class WorkflowRunInspectionTests
         {
             var run = (await Create(details).GetAsync(new(RunId, selected)))!;
             var incident = Assert.Single(run.Incidents);
-            Assert.Equal((true, true, "Incident details are withheld because the activity has a sensitive input."), (incident.SensitiveInputs, incident.MessageRedacted, incident.Message));
+            Assert.Equal((true, true, "Incident details are withheld because their text could echo a sensitive input or data this read cannot inspect."), (incident.SensitiveInputs, incident.MessageRedacted, incident.Message));
             if (selected is not null) Assert.True(run.Selection!.Execution!.StateView.Withheld);
         }
     }
@@ -293,7 +293,7 @@ public sealed class WorkflowRunInspectionTests
     [InlineData("control-thrown-before-key", true)]
     [InlineData("poisoned-work", true)]
     [InlineData("control-blank", true)]
-    public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
+    public async Task An_incident_message_is_withheld_unless_its_causal_sources_are_established_non_sensitive(string child, bool withheld)
     {
         const string ChildId = "actexec-child";
         var details = await SeedAsync(WorkflowExecutionStatus.Faulted);

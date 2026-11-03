@@ -115,9 +115,9 @@ public sealed record WorkflowRunInspectionInstance(
 /// <see cref="MessageRedacted"/> is true. When the incident's activity has a sensitive input, or its non-sensitivity cannot be
 /// established from both the Executable's input bindings and the activity execution's own value evidence, for the activity
 /// it names and for the causal child it propagated from (an incident without an activity execution, a causal child named only
-/// partly, an unreadable Executable or execution), <see cref="SensitiveInputs"/> is true and
-/// its message is withheld even with value inspection, because exception text can echo an input; the run page's own
-/// incident view still shows it.
+/// partly, an unreadable Executable or execution), or when a child-control consumer raised it or it records poisoned
+/// scheduler work (its text may echo another Run's batches or an arbitrary handler's exception text), <see cref="SensitiveInputs"/>
+/// is true and its message is withheld even with value inspection; the run page's own incident view still shows it.
 /// </summary>
 public sealed record WorkflowRunInspectionIncident(
     string IncidentId,
