@@ -895,6 +895,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByText(/backend rejected validation/)).toBeVisible();
   await expect(page.getByText(/server draft advanced to revision 2/i)).toBeVisible();
+  await page.getByText("About validation and Test Run", { exact: true }).click();
   await expect(page.getByText(/Runtime rejection is reported by the Test Run experience/)).toBeVisible();
 });
 
