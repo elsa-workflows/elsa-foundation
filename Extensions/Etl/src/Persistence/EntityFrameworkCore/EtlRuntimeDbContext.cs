@@ -53,6 +53,9 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_runs_SourceInputReservedBytes",
                 "SourceInputReservedBytes >= 0");
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_runs_CompletionRequestedAtUtcTicks",
+                "CompletionRequestedAtUtcTicks IS NULL OR CompletionRequestedAtUtcTicks > 0");
         });
         connectorRuns.HasKey(row => new { row.ScopeKey, row.RunKey });
         connectorRuns.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();

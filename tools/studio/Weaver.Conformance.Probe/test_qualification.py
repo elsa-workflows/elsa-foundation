@@ -315,7 +315,7 @@ class CompleteWitnessTests(unittest.TestCase):
                  "registrations": synthetic_registrations(), "browser": synthetic_browser()})),
             "truth-seams-tenant-activity-leaked": lambda r: r[TRUTH_SEAM_SECTION]["records"][0].update(record=self.base.write(
                 {"id": r[TRUTH_SEAM_SECTION]["records"][0]["id"], "status": "passed", "adapter": r[TRUTH_SEAM_SECTION]["records"][0]["id"].split("-", 1)[0],
-                 "actors": {**synthetic_actors(), "tenant-manager": {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}},
+                 "actors": {**synthetic_actors(), "tenant-reader": {"permissions": None, "catalog": {"tenantOnly": True, "status": "available"}}},
                  "registrations": synthetic_registrations(), "browser": synthetic_browser()})),
             "batch-absent": lambda r: r.pop(BATCH_SECTION),
             "batch-failed": lambda r: r[BATCH_SECTION].update(status="failed"),

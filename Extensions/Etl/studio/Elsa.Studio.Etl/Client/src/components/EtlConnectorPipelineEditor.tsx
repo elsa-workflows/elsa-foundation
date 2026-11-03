@@ -33,7 +33,7 @@ export function EtlConnectorPipelineEditor({
     <div className="etl-pipeline-editor" aria-labelledby={titleId}>
       <header className="etl-editor-header">
         <div>
-          <p className="etl-editor-eyebrow">Finite connector pipeline</p>
+          <p className="etl-editor-eyebrow">{pipeline.continuous ? "Continuous connector pipeline" : "Finite connector pipeline"}</p>
           <h2 id={titleId}>Pipeline stages</h2>
           <p>Configure approved inputs, typed transformation, and independent output routes.</p>
         </div>
@@ -63,8 +63,9 @@ export function EtlConnectorPipelineEditor({
         bindingsLoading={bindingsLoading}
         bindingsUnavailable={bindingsUnavailable}
         disabled={readOnly}
-        onChange={source => update("source", source)}
+        onChange={source => onChange(withoutUnsupportedContinuous({ ...pipeline, source }))}
       />
+      <RunModeEditor pipeline={pipeline} disabled={readOnly} onChange={onChange} />
       <EtlConnectorLookupEditor
         lookup={pipeline.lookup}
         sourceSchema={sourceSchema}
@@ -129,6 +130,52 @@ function DestinationEditor({ label, role, destination, bindings, bindingsLoading
         onChange={binding => onChange({ ...destination, binding })}
       />
     </div>
+  );
+}
+
+/** Continuous runs need an HTTP cursor feed: token or next-link pagination. */
+function supportsContinuous(pipeline: EtlPipelineV2) {
+  return pipeline.source.kind === "httpJson" && pipeline.source.pagination.kind !== "singlePage";
+}
+
+function withoutUnsupportedContinuous(pipeline: EtlPipelineV2): EtlPipelineV2 {
+  if (!pipeline.continuous || supportsContinuous(pipeline)) return pipeline;
+  const { continuous: _, ...finite } = pipeline;
+  return finite;
+}
+
+function RunModeEditor({ pipeline, disabled, onChange }: {
+  pipeline: EtlPipelineV2;
+  disabled: boolean;
+  onChange(pipeline: EtlPipelineV2): void;
+}) {
+  const id = useId();
+  if (!supportsContinuous(pipeline)) return null;
+  const continuous = pipeline.continuous;
+  return (
+    <section className="etl-editor-section" aria-labelledby={`${id}-heading`}>
+      <div className="etl-editor-section-heading"><div>
+        <h3 id={`${id}-heading`}>Run mode</h3>
+        <p>A continuous run keeps polling each shard's cursor until it is completed or cancelled. The feed must return a continuation on every page that has records.</p>
+      </div></div>
+      <label className="etl-editor-checkbox" htmlFor={`${id}-continuous`}>
+        <input id={`${id}-continuous`} type="checkbox" checked={continuous !== undefined} disabled={disabled} onChange={event => {
+          if (event.currentTarget.checked) onChange({ ...pipeline, continuous: { pollIntervalSeconds: 60 } });
+          else {
+            const { continuous: _, ...finite } = pipeline;
+            onChange(finite);
+          }
+        }} />
+        <span>Run continuously</span>
+      </label>
+      {continuous ? <div className="etl-editor-field">
+        <label htmlFor={`${id}-interval`}>Poll interval (seconds)</label>
+        <input id={`${id}-interval`} type="number" inputMode="numeric" min={1} max={86400} step={1} value={continuous.pollIntervalSeconds}
+          disabled={disabled} aria-describedby={`${id}-interval-help`}
+          onChange={event => onChange({ ...pipeline, continuous: { pollIntervalSeconds: Math.trunc(Number(event.currentTarget.value)) || 0 } })} />
+        <small id={`${id}-interval-help`}>How long a caught-up shard waits before polling again, from 1 to 86,400 seconds.</small>
+      </div> : null}
+    </section>
   );
 }
 

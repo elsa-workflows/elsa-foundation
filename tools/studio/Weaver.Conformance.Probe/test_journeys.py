@@ -223,18 +223,20 @@ class JourneyBoundariesTests(unittest.TestCase):
             self.assertEqual(principals[0]["subject"], principals[2]["subject"])
             self.assertNotEqual(principals[0]["tenant"], principals[2]["tenant"])
             self.assertNotEqual(principals[0]["subject"], principals[1]["subject"])
-            # Spec 1193 T012: the three workflow actors are appended; the original indexes keep their meaning.
+            # Spec 1193 T012: the four workflow actors are appended; the original indexes keep their meaning.
             self.assertEqual(9, len(principals))
-            reader, manager, tenant_manager, catalog_denied = principals[5:]
+            reader, manager, tenant_reader, catalog_denied = principals[5:]
             self.assertNotIn("activities/design:read", catalog_denied["exactDirectPermissions"])
             # Every dedicated actor discovers its owner links through GET /capabilities.
             self.assertTrue(all("api-capabilities:read" in item["exactDirectPermissions"] for item in principals[5:]))
             self.assertEqual((principals[0]["tenant"], principals[0]["tenant"], principals[2]["tenant"]),
-                             (reader["tenant"], manager["tenant"], tenant_manager["tenant"]))
+                             (reader["tenant"], manager["tenant"], tenant_reader["tenant"]))
             self.assertIn("workflows/design:read", reader["exactDirectPermissions"])
             self.assertNotIn("workflows/design:manage", reader["exactDirectPermissions"])
-            self.assertTrue(all("workflows/design:manage" in item["exactDirectPermissions"] and "activities/design:read" in item["exactDirectPermissions"]
-                                for item in (manager, tenant_manager)))
+            self.assertTrue({"workflows/design:manage", "activities/design:read"} <= set(manager["exactDirectPermissions"]))
+            # The second tenant's actor only reads the catalog: the host's one persistence scope would refuse its workflows.
+            self.assertEqual({"workflows/design:read", "activities/design:read"},
+                             {key for key in tenant_reader["exactDirectPermissions"] if key.startswith(("workflows/", "activities/"))})
             self.assertEqual(len(principals), len({(item["tenant"], item["subject"]) for item in principals}))
             self.assertEqual(principals, settings["Qualification"]["Principals"])
             self.assertEqual(set(BASE_GRANTS), set(settings["Qualification"]["GrantProfiles"]["full"]))

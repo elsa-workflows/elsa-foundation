@@ -8,8 +8,8 @@ import unittest
 from artifacts import sha
 from journey_runtime import BASE_GRANTS
 from truth_seam_journeys import (ACTORS, BATCH_TOOL, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CATALOG_DENIED, require_read_only_browser, synthetic_browser, EXPECTED_CASES, LAYOUT_TOOL, LEGACY_PLACEHOLDERS, MANAGER, READ_TOOL, READER,
-                                 SECTION, TENANT_MANAGER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
-                                 require_permissions, require_truth_turn, require_workflow_truth_seams, synthetic_actors,
+                                 SECTION, TENANT_READER, TENANT_ONLY_VERSION, require_catalog, require_no_placeholders,
+                                 require_permissions, require_truth_turn, same_target, admitted_context, require_workflow_truth_seams, synthetic_actors,
                                  synthetic_registrations, truth_principals, truth_seam_manifest_gaps)
 
 TARGET = {"moduleId": "Elsa.Studio.Workflows", "resourceType": "workflow-definition", "resourceId": "wf-1", "revision": "unsaved-1"}
@@ -67,6 +67,19 @@ def rows(provider="copilot", tools=(READ_TOOL, LAYOUT_TOOL, BATCH_TOOL)):
             {"kind": provider + ".return", "data": {"commandId": COMMAND}}]
 
 
+# The exact envelope target both adapters' native streams carried in the 499853897 witness: the engine serializes the
+# optional presentation members of AgentResourceTarget as null.
+WIRE_TARGET = {**TARGET, "displayName": None, "route": None}
+
+
+def wire_frames(manage=True):
+    value = frames(manage)
+    for frame in value:
+        for item in (frame.get("payload") or {}).get("attachments", []) if frame["kind"] == "contextAdmitted" else []:
+            if item.get("target") is not None: item["target"] = dict(WIRE_TARGET)
+    return value
+
+
 class TurnTests(unittest.TestCase):
     def check(self, value=None, trace=None, provider="copilot"):
         return require_truth_turn(frames() if value is None else value, rows(provider) if trace is None else trace,
@@ -79,6 +92,21 @@ class TurnTests(unittest.TestCase):
                 self.assertEqual(sorted([READ_TOOL, LAYOUT_TOOL, BATCH_TOOL]), observed["advertised"])
                 self.assertEqual("allowed", observed["permissions"]["manage"])
                 self.assertEqual(len(owner_entries()), observed["catalog"]["totalCount"])
+
+    def test_the_native_wire_target_with_null_presentation_members_is_the_same_target(self):
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                observed = require_truth_turn(wire_frames(), rows(provider), provider=provider, command_id=COMMAND, target=TARGET)
+                self.assertEqual("allowed", observed["permissions"]["manage"])
+        self.assertTrue(same_target({**TARGET, "displayName": "Workflow", "route": "/workflows"}, TARGET))
+        for name, target in (("other-revision", {**WIRE_TARGET, "revision": "persisted"}), ("other-id", {**WIRE_TARGET, "resourceId": "wf-2"}),
+                             ("other-module", {**WIRE_TARGET, "moduleId": "Acme"}), ("unknown-member", {**WIRE_TARGET, "tenantId": "t"}),
+                             ("missing-revision", {key: value for key, value in WIRE_TARGET.items() if key != "revision"}), ("none", None)):
+            with self.subTest(target=name):
+                self.assertFalse(same_target(target, TARGET))
+                value = wire_frames()
+                value[1]["payload"]["attachments"][0]["target"] = target
+                with self.assertRaises(RuntimeError): require_truth_turn(value, rows(), provider="copilot", command_id=COMMAND, target=TARGET)
 
     def test_a_missing_drifting_forged_or_incomplete_turn_never_qualifies(self):
         def attachment(value, kind, index=1):
@@ -182,18 +210,19 @@ class PrincipalTests(unittest.TestCase):
     def test_the_three_actors_extend_the_original_five_with_their_own_grants_and_tenants(self):
         original = [{"tenant": "default"}, {"tenant": "default"}, {"tenant": "other"}, {"tenant": "default"}, {"tenant": "default"}]
         made = truth_principals(original, lambda prefix, tenant, grants: {"prefix": prefix, "tenant": tenant, "grants": grants})
-        self.assertEqual([("witness-reader", "default"), ("witness-manager", "default"), ("witness-tenant-manager", "other"),
+        self.assertEqual([("witness-reader", "default"), ("witness-manager", "default"), ("witness-tenant-reader", "other"),
                           ("witness-catalog-denied", "default")], [(item["prefix"], item["tenant"]) for item in made])
-        self.assertEqual((5, 6, 7, 8), (READER, MANAGER, TENANT_MANAGER, CATALOG_DENIED))
+        self.assertEqual((5, 6, 7, 8), (READER, MANAGER, TENANT_READER, CATALOG_DENIED))
         self.assertTrue(set(BASE_GRANTS) <= set(made[0]["grants"]) and "workflows/design:manage" not in made[0]["grants"])
-        self.assertTrue(all({"workflows/design:manage", "activities/design:read"} <= set(item["grants"]) for item in made[1:3]))
+        self.assertTrue({"workflows/design:manage", "activities/design:read"} <= set(made[1]["grants"]))
         # Exactly what each journey reaches beyond BASE_GRANTS, nothing broader: every actor discovers owner links through
-        # GET /capabilities; managers create, preflight and lay out; only the reader's Studio editor reads expressions;
-        # the catalog-denied actor never holds activities/design:read.
+        # GET /capabilities; only the manager preflights and lays out; the second tenant's reader only reads the catalog
+        # over a target-free request; only the reader's Studio editor reads expressions; the catalog-denied actor never
+        # holds activities/design:read.
         extra = [sorted(key for key in item["grants"] if key not in BASE_GRANTS) for item in made]
         self.assertEqual([["activities/design:read", "api-capabilities:read", "expressions:read", "workflows/design:read"],
                           ["activities/design:read", "api-capabilities:read", "workflows/design:manage"],
-                          ["activities/design:read", "api-capabilities:read", "workflows/design:manage"],
+                          ["activities/design:read", "api-capabilities:read", "workflows/design:read"],
                           ["api-capabilities:read", "workflows/design:read"]], extra)
         self.assertTrue(all(len(item["grants"]) == len(set(item["grants"])) and all("*" not in key for key in item["grants"]) for item in made))
         with self.assertRaises(RuntimeError): truth_principals(original[:4], lambda *args: {})
@@ -321,12 +350,61 @@ class GateTests(unittest.TestCase):
         with self.assertRaises(RuntimeError): require_workflow_truth_seams(self.section(browser={}), self.root, source="a" * 40)
         with self.assertRaises(RuntimeError): require_workflow_truth_seams(changed, self.root, source="a" * 40)
         for role, value in (("reader", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}),
-                            ("tenant-manager", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": True, "status": "available"}}),
+                            ("tenant-reader", {"permissions": None, "catalog": {"tenantOnly": True, "status": "available"}}),
+                            ("tenant-reader", {"permissions": {"manage": "allowed"}, "catalog": {"tenantOnly": False, "status": "available"}}),
                             ("catalog-denied", {"permissions": {"manage": "denied"}, "catalog": {"tenantOnly": None, "status": "available"}})):
             with self.subTest(actor=role):
                 with self.assertRaises(RuntimeError):
                     require_workflow_truth_seams(self.section({**synthetic_actors(), role: value}), self.root, source="a" * 40)
         self.assertEqual("workflowTruthSeamQualification", SECTION)
+
+
+class AdmittedContextTests(unittest.TestCase):
+    # The accepted-message wire the native API returned in the f32dd0a8f witness for the second tenant's request: the
+    # admitted context lives at data.message.context, beside data.warnings, as Studio's agent client reads it.
+    ACCEPTED = {"data": {"message": {"id": "m-1", "role": "user", "status": "pending", "context": [
+        {"contentType": "workflow.request", "origin": "clientSnapshot", "target": None},
+        {"contentType": "workflow.catalog", "origin": "authoritativeRead", "target": None, "content": {"status": "available"}},
+        {"contentType": "workflow.guidance", "origin": "installedGuidance", "target": None}]}, "warnings": []}}
+
+    def test_the_admitted_context_is_read_where_the_api_puts_it(self):
+        self.assertEqual(["workflow.request", "workflow.catalog", "workflow.guidance"],
+                         [item["contentType"] for item in admitted_context(copy.deepcopy(self.ACCEPTED))])
+
+    def test_another_shape_is_refused_rather_than_read_as_empty(self):
+        for value in ({"data": {"contextAttachments": []}}, {"data": {"message": {}}}, {"data": None}, {}, None,
+                      {"data": {"message": {"context": "not-a-list"}}}):
+            with self.subTest(value=value):
+                with self.assertRaises(RuntimeError): admitted_context(value)
+
+
+class FailureExcerptTests(unittest.TestCase):
+    def test_an_unexpected_error_body_names_its_cause_without_secrets(self):
+        from runtime import failure_excerpt
+        body = json.dumps({"errors": {"generalErrors": ["The requested workflow definition is not readable."]},
+                           "detail": "Retry with Bearer private-bearer or access_token=private-token-value",
+                           "accessToken": "private-token-value"}).encode()
+        excerpt = failure_excerpt(403, body)
+        self.assertIn("not readable", excerpt)
+        self.assertNotIn("private-token-value", excerpt)
+        self.assertNotIn("private-bearer", excerpt)
+        self.assertEqual("", failure_excerpt(200, b"{}"))
+        self.assertEqual("", failure_excerpt(403, b""))
+
+    def test_server_errors_and_non_json_bodies_contribute_nothing(self):
+        from runtime import failure_excerpt
+        page = b"System.InvalidOperationException: private store connection string Host=db;Password=x\n   at Private.Frame()"
+        self.assertEqual("", failure_excerpt(500, page))
+        self.assertEqual("", failure_excerpt(503, json.dumps({"detail": "private cause"}).encode()))
+        self.assertEqual("", failure_excerpt(403, page))
+        self.assertEqual("", failure_excerpt(403, b"[\"not an object\"]"))
+
+    def test_a_secret_crossing_the_bound_is_redacted_before_truncation(self):
+        from runtime import failure_excerpt
+        detail = "x" * 390 + " Bearer " + "s" * 200
+        excerpt = failure_excerpt(400, json.dumps({"detail": detail}).encode())
+        self.assertNotIn("sss", excerpt)
+        self.assertLessEqual(len(excerpt), len("; body: ") + 400)
 
 
 if __name__ == "__main__":

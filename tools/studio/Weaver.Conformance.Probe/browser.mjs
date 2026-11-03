@@ -40,6 +40,27 @@ function redact(value) {
     .replace(/("(?:authorization|proxy-authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|clientSecret|cookie|set-cookie)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     .replace(/\b((?:access[_-]?token|refresh[_-]?token|client[_-]?secret|password|api[_-]?key)=)[^\s&#"']+/gi, "$1[redacted]") : value;
 }
+function safeFailureFrames(error) {
+  const frames = [], seen = new Set();
+  for (const line of typeof error?.stack === "string" ? error.stack.split("\n") : []) {
+    if (!/^\s+at /.test(line)) continue;
+    const match = line.trim().match(/[\\/]browser\.mjs:(\d+):(\d+)\)?$/);
+    if (!match) continue;
+    const row = Number(match[1]), column = Number(match[2]), key = row + ":" + column;
+    if (![row, column].every(value => Number.isSafeInteger(value) && value > 0 && value <= 1000000) || seen.has(key)) continue;
+    seen.add(key);
+    frames.push({ file: "browser.mjs", line: row, column });
+    if (frames.length === 8) break;
+  }
+  return frames;
+}
+function retainFailureDiagnostic(error) {
+  const diagnostic = { kind: ["Error", "TimeoutError", "AssertionError"].includes(error?.name) ? error.name : "Error", frames: safeFailureFrames(error) };
+  try {
+    fs.writeFileSync(path.join(config.output, "failure-diagnostic.json"), JSON.stringify(diagnostic) + "\n", { mode: 0o600 });
+  } catch { /* Preserve the original failure even when its diagnostic cannot be written. */ }
+  return diagnostic;
+}
 function diagnosticUrl(value) {
   try { const url = new URL(value); return url.origin + url.pathname; }
   catch { return "[unavailable URL]"; }
@@ -51,6 +72,7 @@ function retain(name, value) {
 }
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
+process.on("uncaughtExceptionMonitor", retainFailureDiagnostic);
 const browser = await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
@@ -1349,6 +1371,9 @@ async function consumedIntentRemount() {
     catalogRevisionBefore: catalog.revision, catalogRevisionAfter: catalogAfter.revision,
     configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
+  // Connection startup renders a temporary searchable shell. Its query is discarded
+  // when the connected AppContent mounts; the launcher exists only in that ready shell.
+  await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
@@ -1406,6 +1431,14 @@ async function consumedIntentRemount() {
   await screenshot("native-remount-without-replay");
 }
 
+// The reads the read-only journey depends on: owner-link discovery, the definition and its draft validations, the
+// activity catalog and the expression descriptors the editor loads. Any other refused read (for example runtime
+// executables or publishing profiles the reader is not granted) is retained as evidence and does not fail the journey.
+function requireJourneyReads() {
+  const essential = refusedReads.filter(item => item.path === "/capabilities" || item.path === config.workflow.definitionPath
+    || item.path.startsWith("/design/activities/") || item.path.startsWith("/design/workflows/") || item.path.includes("expression"));
+  need(essential.length === 0, "The read-only actor was refused backend reads it needs: " + essential.map(item => item.status + " " + item.path).join(", "));
+}
 // Spec 1193 T012: a read-only actor (workflows/design:read and activities/design:read, never manage) explains the
 // workflow through the owning catalog and permissions, and is never offered the layout change: no proposal, no node
 // move, no owning write. The protocol commands are retained per command; the driver checks the adapter trace.
@@ -1420,7 +1453,7 @@ async function workflowReadOnly() {
   const before = await owner("owner-before", definitionPath);
   result.ownerBefore = before.receipt;
   const position = await activity.getAttribute("style");
-  need(refusedReads.length === 0, "The read-only actor was refused backend reads: " + refusedReads.map(item => item.status + " " + item.path).join(", "));
+  requireJourneyReads();
   await page.getByRole("button", { name: /^Weaver/ }).click();
   const ask = async (toolName, args, name) => {
     command(toolName, args);
@@ -1431,7 +1464,9 @@ async function workflowReadOnly() {
     return accepted(message, name + "-message");
   };
   const explained = await ask("workflow_read_graph", {}, "explain");
-  const admitted = explained.value.data?.contextAttachments ?? [];
+  // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+  const admitted = explained.value.data?.message?.context;
+  need(Array.isArray(admitted), "The accepted message carries no admitted context.");
   const permissions = admitted.find(item => item.contentType === "workflow.permissions");
   const catalog = admitted.find(item => item.contentType === "workflow.catalog");
   expect(permissions?.content).toMatchObject({ workflowDefinitionId: definitionId, read: "allowed", manage: "denied",
@@ -1449,7 +1484,7 @@ async function workflowReadOnly() {
   const refused = await ask("workflow_set_designer_position", { activityId, x: 480, y: 320 }, "layout");
   const ended = page.locator('.weaver-alert, .weaver-message[data-role="assistant"][data-status="failed"]').first();
   await expect(ended).toBeVisible();
-  result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), refusedRequest: refused.value.data?.messageId ?? null }));
+  result.evidence.push(retain("layout-outcome", { text: await ended.innerText(), acceptedMessageId: refused.value.data?.message?.id ?? null }));
   await expect(dock().locator(".agent-proposal")).toHaveCount(0);
   await expect(activity).toHaveAttribute("style", position);
   const after = await owner("owner-after", definitionPath);
@@ -1457,8 +1492,9 @@ async function workflowReadOnly() {
   expect(after.value.draft).toEqual(before.value.draft);
   expect(owningWrites).toEqual([]);
   need(!requests.some(item => /\/(approve|execute|acknowledgements)$/.test(new URL(item.url).pathname)), "A read-only actor reached a review or effect boundary.");
+  // Every refused read is retained; only a read this journey depends on fails it. Studio may degrade an optional one.
   result.evidence.push(retain("refused-reads", refusedReads));
-  need(refusedReads.length === 0, "The read-only actor was refused backend reads: " + refusedReads.map(item => item.status + " " + item.path).join(", "));
+  requireJourneyReads();
   await screenshot("read-only-layout-not-offered");
   result.observations = { permissionsDisclosed: { manage: "denied", tools: permissions.content.tools }, catalogAvailable: true,
     explainCompleted: true, layoutOffered: false, proposalCount: 0, nodeMoved: false, draftUnchanged: true, owningWrites: 0 };
@@ -1676,7 +1712,9 @@ try {
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
-  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}) });
+  result.failureDiagnostic = retainFailureDiagnostic(error);
+  result.failure = redact({ type: error.name, message: error.message, ...(error.autonomyCause ? { cause: error.autonomyCause } : {}),
+    ...(config.journey === "workflow-read-only" && refusedReads.length ? { refusedReads: refusedReads.map(item => item.status + " " + item.path) } : {}) });
   // A precise autonomy cause is a real failure, never an expected one.
   if (error.autonomyCause) result.actual = { stage: "session-mode", diagnostic: error.autonomyCause };
   try { await failureDom(); } catch (diagnosticError) {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Channels;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -8,6 +9,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
@@ -227,6 +230,118 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
     }
 
+    /// <summary>
+    /// Another deliverer holds a durable continuation when the drain begins, and delivers it only after the drain's first
+    /// pass has filled the overlay from the durable queue. The overlay never shows that work, so the drain must start a
+    /// fresh segment from durable state rather than report quiescence and leave the step to the sweep (#3659).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Ordinary_segment_drains_work_a_competing_delivery_queued_after_the_overlay_was_filled(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromMinutes(10), mode);
+
+        await race.DeliverHeldAtFirstPollAsync();
+
+        await race.AssertDrainedBothStepsAsync();
+    }
+
+    /// <summary>
+    /// The #3647 re-drive delivers the execution's flushed continuations before its first segment. It queues schedule-1 that
+    /// way, but another deliverer holds the continuation for schedule-2, and queues that step only after the first segment
+    /// filled its overlay. The re-drive must run it too before it reports quiescence (#3659).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Yield_redrive_drains_work_a_competing_delivery_queued_after_the_overlay_was_filled(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartYieldRedriveAsync(TimeSpan.FromMinutes(10), mode);
+
+        await race.DeliverHeldAtFirstPollAsync();
+
+        await race.AssertDrainedBothStepsAsync();
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await race.Commits.FindAsync(HeldContinuationRace.FlushedOutboxId))?.Status);
+    }
+
+    /// <summary>
+    /// The same race through recovery. The resumption sweep finds the continuation held, so it delivers nothing itself and
+    /// re-drives the queued backlog through the execution's mailbox with a <c>RunSchedulerWork</c> command. That drain must
+    /// run the step the other deliverer queued after its overlay was filled before the sweep's dispatch returns (#3659).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Resumption_sweep_redrive_drains_work_a_competing_delivery_queued_after_the_overlay_was_filled(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartSweepAsync(TimeSpan.FromMinutes(10), mode);
+
+        await race.DeliverHeldAtFirstPollAsync();
+
+        var sweep = await race.Sweeping.WaitAsync(race.Timeout);
+        Assert.Equal(0, sweep.OutboxDeliveredCount);
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, Assert.Single(sweep.Dispatches).Outcome);
+        await race.AssertRanBothStepsAsync();
+    }
+
+    /// <summary>
+    /// The same race across a durable claim boundary. The resume after schedule-1 ends the first segment and runs durably,
+    /// and the drain waits for the held continuation before it starts the post-boundary segment. That segment fills its
+    /// overlay from durable state, so it runs schedule-2, coalesced, before the drain reports quiescence. This boundary
+    /// restart predates #3659, which leaves it unchanged.
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Post_boundary_segment_drains_work_a_competing_delivery_queued_while_the_resume_settled(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromMinutes(10), mode, resumeAfterFirstStep: true);
+
+        await race.DeliverHeldAtFirstPollAsync();
+
+        var result = await race.Draining.WaitAsync(race.Timeout);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(["schedule-1", "resume-1", "schedule-2"], result.Items.Select(item => item.WorkItemId));
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        AssertDurableResumeSnapshot(Assert.Single(race.Probe.ResumeSnapshots), schedulerVersion: 1, durableCommitCount: 1);
+        // Only the boundary flush is durable when schedule-2 commits: it ran in a fresh segment, not the closed one.
+        Assert.Equal([0, 1], race.Probe.ScheduleDurableCommitCounts);
+        await race.AssertRanBothStepsAsync();
+    }
+
+    /// <summary>
+    /// The other deliverer died holding the continuation. Once its claim lapses the drain takes the item back through the
+    /// durable claim path, which an active segment would route to its overlay and never find (#3659).
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task Ordinary_segment_takes_back_a_continuation_whose_deliverer_died(PersistenceMode mode)
+    {
+        await using var race = await HeldContinuationRace.StartAsync(TimeSpan.FromSeconds(1), mode);
+
+        // Fire each poll until the claim lapses.
+        while (true)
+        {
+            var poll = race.Clock.NextTimerAsync(due => due <= TimeSpan.FromSeconds(1), race.Timeout);
+            if (await Task.WhenAny(race.Draining, poll) == race.Draining)
+                break;
+            race.Clock.Advance(await poll);
+        }
+
+        await race.AssertDrainedBothStepsAsync();
+        Assert.Equal(Now + TimeSpan.FromSeconds(1), race.Clock.GetUtcNow());
+        var continuation = await race.Commits.FindAsync(race.OtherClaim.OutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, continuation?.Status);
+        Assert.Equal(2, continuation?.DeliveryFencingToken);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(1)]
@@ -394,6 +509,314 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retry_after_is_released_only_while_the_active_segment_holds_no_effect_of_the_faulted_item(bool? retainingCommit)
+    {
+        // #3275 inside an ACTIVE segment. Outside a session the first non-retaining commit consumes the claimed item, so
+        // a RetryAfter after it is acknowledged and poisoned. Inside one that commit is buffered and consumes nothing,
+        // so the release used to succeed through the overlay: the quiescence flush then committed the buffered effect
+        // and kept the released copy with its delay, and the sweep would re-drive an item whose effect is durable.
+        // A fault before any commit, or after one that retains the item for re-drive, is still released.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: retainingCommit);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay);
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+        await using var scope = provider.CreateAsyncScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+        Assert.True(Assert.Single(probe.InvokeSessionActive));
+        var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+        var queued = (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+        var commits = InnerCommitStore(scope.ServiceProvider).ListCommits();
+        if (retainingCommit is not null)
+        {
+            var flush = Assert.Single(commits, item => item.Commit.Checkpoint.Name == RuntimeCoalescingMetadataKeys.FlushCheckpointName);
+            Assert.Equal(1L, flush.Commit.StateChanges.Scheduler?.State.Version);
+        }
+        else
+        {
+            Assert.Empty(commits);
+        }
+
+        if (retainingCommit == false)
+        {
+            // The buffered effect is durable, and nothing is left to run it again.
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+            Assert.Null(record.NextRetryAt);
+            Assert.Empty(queued);
+        }
+        else
+        {
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, record.Disposition);
+            Assert.Equal(Now + RetryDelay, record.NextRetryAt);
+            var retained = Assert.Single(queued);
+            Assert.Equal(("invoke-1", Now + RetryDelay), (retained.Item.WorkItemId, retained.VisibleAfter));
+        }
+    }
+
+    [Fact]
+    public async Task Retry_after_is_released_for_an_item_whose_segment_holds_only_an_earlier_items_effect()
+    {
+        // #3275: what an active segment took is tracked per dispatch. schedule-1's buffered checkpoint is its own
+        // effect; invoke-1, dispatched next in the same drain, faults before committing anything, so it is released.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay);
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 2));
+        await using var scope = provider.CreateAsyncScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+            .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+        Assert.Equal(["schedule-1", "invoke-1"], result.Items.Select(item => item.WorkItemId));
+        Assert.True(Assert.Single(probe.InvokeSessionActive));
+        var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+        Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.RetryScheduled), (record.WorkItemId, record.Disposition));
+        Assert.Equal(Now + RetryDelay, record.NextRetryAt);
+        var retained = Assert.Single((await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items);
+        Assert.Equal(("invoke-1", Now + RetryDelay), (retained.Item.WorkItemId, retained.VisibleAfter));
+        Assert.Equal(1L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+    }
+
+    [Theory]
+    [InlineData(PersistenceMode.Durable, "CoalescingProbe", "CoalescingProbe")]
+    [InlineData(PersistenceMode.Balanced, RuntimeCheckpointNames.ActivitySuspended, RuntimeCheckpointNames.ActivitySuspended)]
+    [InlineData(PersistenceMode.Balanced, "CoalescingProbe", RuntimeCoalescingMetadataKeys.FlushCheckpointName)]
+    // A non-retaining attempt claim that is the work's effect, as background admission commits one.
+    [InlineData(PersistenceMode.Balanced, RuntimeCheckpointNames.ActivityAttemptClaimed, RuntimeCheckpointNames.ActivityAttemptClaimed)]
+    public async Task Retry_after_is_not_released_for_a_continuation_whose_effect_the_active_segment_committed(
+        PersistenceMode mode, string invokeCheckpointName, string committedBy)
+    {
+        // #3275 for a continuation that exists only in the overlay. The schedule's buffered commit enqueues invoke-1,
+        // which the drain claims and whose checkpoint then lands at once while the session stays active: the cap folds
+        // it (Durable folds every activity), or a boundary the segment continues past commits it. Neither consumes an
+        // item the durable queue never held, so the release used to succeed, the quiescence flush persisted the copy
+        // with its delay, and the sweep would run invoke-1 again over its committed effect. Buffering it is the same.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            scheduleEnqueuesInvoke: true, invokeCheckpointName: invokeCheckpointName);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay, mode: mode);
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(["schedule-1", "invoke-1"], result.Items.Select(item => item.WorkItemId));
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(Assert.Single(probe.InvokeSessionActive));
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+            Assert.Null(record.NextRetryAt);
+            // invoke-1's effect (scheduler version 2) is committed once: by the cap fold or the boundary, which carry
+            // invoke-1's own checkpoint, or by the quiescence flush.
+            var effect = Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+                item => item.Commit.StateChanges.Scheduler?.State.Version == 2);
+            Assert.Equal(committedBy, effect.Commit.Checkpoint.Name);
+        }
+
+        // Nothing is left to run invoke-1 again, before or after its delay would have passed.
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Empty(retried.Items);
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+        Assert.Equal(2L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+    }
+
+    [Fact]
+    public async Task Retry_after_is_not_released_when_advancing_the_queue_after_a_landed_boundary_fails()
+    {
+        // #3275 when the boundary's durable commit lands but removing invoke-1 from the durable queue then fails. The
+        // store abandons the segment and rethrows, so the committer never records the effect, and the now inactive
+        // overlay used to persist the release onto invoke-1, still the durable head: the sweep ran it again after the
+        // delay over its committed effect. It is acknowledged and poisoned instead, leaving no copy to run.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var queue = new FirstDeleteTimesOutQueue(shared.Queue);
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            invokeCheckpointName: RuntimeCheckpointNames.ActivitySuspended);
+        await using var provider = BuildProvider(shared, probe, retryAfter: RetryDelay, queue: queue);
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(queue.DeleteTimedOut);
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+            Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+            Assert.Null(record.NextRetryAt);
+            var effect = Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+                item => item.Commit.StateChanges.Scheduler is not null);
+            Assert.Equal(RuntimeCheckpointNames.ActivitySuspended, effect.Commit.Checkpoint.Name);
+        }
+
+        // The acknowledgement removed the durable copy the failed advance left behind.
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Empty(retried.Items);
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+    }
+
+    [Fact]
+    public async Task Retry_after_is_not_released_when_a_continuing_attempt_claim_boundary_lands_but_its_reconciliation_fails()
+    {
+        // #3275 for a non-retaining attempt claim the segment continues past, as background admission commits one. The
+        // boundary lands durably with its continuation, then the reconciliation after it fails reading the durable
+        // queue, so the store abandons the segment and rethrows. The attempt claim is the work's effect, but this
+        // boundary consumes no in-flight claim, so nothing recorded it, and invoke-1 is still the durable head: the
+        // inactive segment would release it with its delay, and the sweep would run it again over its committed effect.
+        // It went to the store, so it is acknowledged and poisoned instead, and no copy is left to run.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var queue = new ArmedListFailureQueue(shared.Queue);
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            invokeCheckpointName: RuntimeCheckpointNames.ActivityAttemptClaimed, invokeEnqueuesCompletion: true,
+            beforeInvokeCommit: () => queue.Armed = true);
+        await using var provider = BuildProvider(shared, probe, retryAfter: RetryDelay, queue: queue);
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal("invoke-1", Assert.Single(result.Items).WorkItemId);
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(queue.ListTimedOut);
+            Assert.True(Assert.Single(probe.InvokeSessionActive));
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+            Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+            Assert.Null(record.NextRetryAt);
+            Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+                item => item.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed);
+        }
+
+        Assert.DoesNotContain(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)),
+            item => item.WorkItemId == "invoke-1");
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.DoesNotContain(retried.Items, item => item.WorkItemId == "invoke-1");
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+    }
+
+    [Fact]
+    public async Task Retry_after_is_not_released_when_the_inner_commit_lands_and_then_throws_in_an_active_segment()
+    {
+        // #3275 for an ambiguous store call: the boundary's inner commit lands durably and then throws, as an
+        // acknowledgement that times out after the transaction committed does. The throw comes before the coalescing
+        // store's own recovery and before the committer learns of the commit, so nothing after the fact can tell the
+        // effect landed; it used to be released, and the sweep ran invoke-1 again over its committed effect. The attempt
+        // is recorded before the store call, so the item is acknowledged and poisoned.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, commitBeforeInvokeFault: false,
+            invokeCheckpointName: RuntimeCheckpointNames.ActivitySuspended);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay,
+            decorateInnerCommitStore: inner => new ThrowAfterCommitStore(inner, RuntimeCheckpointNames.ActivitySuspended));
+        await shared.Queue.EnqueueAsync(Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(Assert.Single(probe.InvokeSessionActive));
+            Assert.True(Assert.IsType<ThrowAfterCommitStore>(scope.ServiceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value).Threw);
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.Poisoned), (record.WorkItemId, record.Disposition));
+            Assert.Equal(typeof(TimeoutException).FullName, record.Fault.ExceptionType);
+            Assert.Null(record.NextRetryAt);
+            Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits(),
+                item => item.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivitySuspended);
+        }
+
+        Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Empty(retried.Items);
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retry_after_sees_a_checkpoint_a_resume_commits_through_a_scope_of_its_own(bool retainingCommit)
+    {
+        // #3275: WorkflowResumeBookmarkSchedulerWorkHandler commits through a committer it resolves from a fresh DI scope,
+        // whose scoped claim accessor holds no pending claim, so nothing scoped to the drain sees that commit. The
+        // dispatch frame flows with the call instead, so a resume that commits a non-retaining checkpoint and then
+        // faults is acknowledged and poisoned, while a retaining one is still released.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, resumeCommitsInOwnScopeThenFaults: retainingCommit);
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: RetryDelay);
+        await shared.Queue.EnqueueAsync(ResumeWork("resume-1", 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            var record = Assert.Single(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId));
+            var queued = (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items;
+            if (retainingCommit)
+            {
+                Assert.Equal((RuntimeSchedulerPoisonDisposition.RetryScheduled, Now + RetryDelay), (record.Disposition, record.NextRetryAt));
+                var retained = Assert.Single(queued);
+                Assert.Equal(("resume-1", Now + RetryDelay), (retained.Item.WorkItemId, retained.VisibleAfter));
+                return;
+            }
+
+            Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+            Assert.Null(record.NextRetryAt);
+            Assert.Empty(queued);
+        }
+
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Empty(retried.Items);
+        }
+
+        Assert.Equal(1, probe.OwnScopeResumeRuns);
+        Assert.Equal(1L, (await shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+    }
+
+    [Theory]
     [InlineData(WorkflowExecutionCommandKind.InvokeActivity, false)]
     [InlineData(WorkflowExecutionCommandKind.CompleteActivity, false)]
     [InlineData(WorkflowExecutionCommandKind.NotifyParentActivity, false)]
@@ -451,23 +874,52 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         ProbeRecorder probe,
         WorkflowDrainOrchestratorOptions? drainOptions = null,
         ExternalOutboxDeliveryProbe? externalOutboxDelivery = null,
-        bool visibilitySnapshots = false)
+        bool visibilitySnapshots = false,
+        TimeSpan? retryAfter = null,
+        PersistenceMode mode = PersistenceMode.Balanced,
+        IWorkflowSchedulerWorkQueue? queue = null,
+        Func<IRuntimeCheckpointCommitStore, IRuntimeCheckpointCommitStore>? decorateInnerCommitStore = null,
+        bool resumptionSweep = false)
     {
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(shared.TimeProvider);
         services.AddSingleton(new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = RetryDelay });
         services.AddSingleton(drainOptions ?? new WorkflowDrainOrchestratorOptions(outboxDeliveryBatchSize: 1));
-        services.AddSingleton<IWorkflowSchedulerWorkQueue>(visibilitySnapshots
+        services.AddSingleton<IWorkflowSchedulerWorkQueue>(queue ?? (visibilitySnapshots
             ? shared.Queue
-            : new QueueWithoutVisibility(shared.Queue));
+            : new QueueWithoutVisibility(shared.Queue)));
         services.AddSingleton<ISchedulerStateStore>(shared.SchedulerStateStore);
         services.AddSingleton(shared.CommitState);
-        services.AddSingleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(PersistenceMode.Balanced));
+        services.AddSingleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(mode));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         services.RemoveAll<IWorkflowSchedulerWorkHandler>();
         services.AddSingleton(probe);
         services.AddScoped<IWorkflowSchedulerWorkHandler, CoalescingProbeHandler>();
+        if (resumptionSweep)
+        {
+            // The sweep re-drives through the mailbox, which queues a RunSchedulerWork item that the runtime's no-op
+            // handler completes.
+            services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+            services.AddScoped<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>();
+        }
         services.AddPersistenceModes();
+        if (retryAfter is { } delay)
+        {
+            services.RemoveAll<IRuntimeDomainRetryPolicy>();
+            services.AddSingleton<IRuntimeDomainRetryPolicy>(new RetryAfterPolicy(delay));
+            services.AddSingleton<IWorkflowDispatchDurabilityEvidence>(new WorkflowDispatchDurabilityEvidence(
+                WorkflowDispatchDurabilityComponents.Resumption, WorkflowDispatchDurabilityLevel.Durable));
+        }
+        if (decorateInnerCommitStore is not null)
+        {
+            var inner = services.Single(descriptor => descriptor.ServiceType == typeof(CoalescingInner<IRuntimeCheckpointCommitStore>));
+            services.Remove(inner);
+            services.Add(new ServiceDescriptor(
+                typeof(CoalescingInner<IRuntimeCheckpointCommitStore>),
+                serviceProvider => new CoalescingInner<IRuntimeCheckpointCommitStore>(decorateInnerCommitStore(
+                    ((CoalescingInner<IRuntimeCheckpointCommitStore>)inner.ImplementationFactory!(serviceProvider)).Value)),
+                inner.Lifetime));
+        }
         if (externalOutboxDelivery is not null)
             ReplaceOutboxProcessorWithExternalDeliveryProbe(services, externalOutboxDelivery);
         return services.BuildServiceProvider();
@@ -504,7 +956,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     private static InMemoryRuntimeCheckpointCommitStore InnerCommitStore(IServiceProvider serviceProvider) =>
-        serviceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value as InMemoryRuntimeCheckpointCommitStore ??
+        InMemoryCommits(serviceProvider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
+
+    private static InMemoryRuntimeCheckpointCommitStore InMemoryCommits(IRuntimeCheckpointCommitStore store) =>
+        (store is ThrowAfterCommitStore decorated ? decorated.Inner : store) as InMemoryRuntimeCheckpointCommitStore ??
         throw new InvalidOperationException("The coalescing probe requires the in-memory checkpoint store.");
 
     private static RuntimeSchedulerWorkItem ScheduleWork(string workItemId, long sequence) => Work(
@@ -530,7 +985,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             sequence,
             commandMetadata: new Dictionary<string, string>());
 
-    private static WorkflowExecutionCommandEnvelope Envelope()
+    private static WorkflowExecutionCommandEnvelope Envelope(string? source = null)
     {
         var command = new WorkflowExecutionCommand(
             "drain-command",
@@ -538,7 +993,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             WorkflowExecutionCommandKind.RunSchedulerWork,
             Now,
             Payload: null,
-            Metadata: new Dictionary<string, string>());
+            Metadata: source is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["source"] = source });
         return new WorkflowExecutionCommandEnvelope(
             "drain-envelope",
             WorkflowExecutionId,
@@ -557,11 +1012,178 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public InMemoryRuntimeCheckpointStoreState CommitState { get; } = new();
     }
 
+    /// <summary>
+    /// A coalesced drain of schedule-1 while another deliverer holds the durable continuation that queues schedule-2. The
+    /// drain runs from a command, a yield re-drive that finds schedule-1 as a flushed continuation, or the resumption sweep.
+    /// </summary>
+    private sealed class HeldContinuationRace : IAsyncDisposable
+    {
+        private readonly ServiceProvider _provider;
+        private readonly AsyncServiceScope _scope;
+        private readonly CancellationTokenSource _timeout = new(TimeSpan.FromSeconds(10));
+
+        private HeldContinuationRace(ServiceProvider provider, SharedPersistence shared, TimerClock clock, ProbeRecorder probe)
+        {
+            _provider = provider;
+            _scope = provider.CreateAsyncScope();
+            Shared = shared;
+            Clock = clock;
+            Probe = probe;
+            Commits = InnerCommitStore(_scope.ServiceProvider);
+        }
+
+        public SharedPersistence Shared { get; }
+        public TimerClock Clock { get; }
+        public ProbeRecorder Probe { get; }
+        public InMemoryRuntimeCheckpointCommitStore Commits { get; }
+        public RuntimeSchedulerWorkItem Held { get; } = ScheduleWork("schedule-2", 2);
+        public RuntimePostCommitOutboxClaim OtherClaim { get; private set; } = null!;
+        public Task<RuntimeSchedulerDrainResult> Draining { get; private set; } = null!;
+        public Task<RuntimeResumptionSweepResult> Sweeping { get; private set; } = null!;
+        public CancellationToken Timeout => _timeout.Token;
+
+        public const string FlushedOutboxId = "outbox-flushed";
+
+        public static async Task<HeldContinuationRace> StartAsync(
+            TimeSpan claimVisibility,
+            PersistenceMode mode,
+            bool resumeAfterFirstStep = false)
+        {
+            var race = await HoldAsync(claimVisibility, mode, resumeAfterFirstStep: resumeAfterFirstStep);
+            race.Draining = race._scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId)).AsTask();
+            return race;
+        }
+
+        public static async Task<HeldContinuationRace> StartYieldRedriveAsync(TimeSpan claimVisibility, PersistenceMode mode)
+        {
+            var race = await HoldAsync(claimVisibility, mode, flushedFirstStep: true);
+            race.Draining = race._scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(InProcessWorkflowExecutionActorProvider.YieldRedriveSource), new RuntimeSchedulerDrainRequest(WorkflowExecutionId))
+                .AsTask();
+            return race;
+        }
+
+        public static async Task<HeldContinuationRace> StartSweepAsync(TimeSpan claimVisibility, PersistenceMode mode)
+        {
+            var race = await HoldAsync(claimVisibility, mode, resumptionSweep: true);
+            race.Sweeping = race._scope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>()
+                .SweepAsync(new RuntimeResumptionSweepRequest()).AsTask();
+            return race;
+        }
+
+        private static async Task<HeldContinuationRace> HoldAsync(
+            TimeSpan claimVisibility,
+            PersistenceMode mode,
+            bool flushedFirstStep = false,
+            bool resumptionSweep = false,
+            bool resumeAfterFirstStep = false)
+        {
+            var clock = new TimerClock(Now);
+            var shared = new SharedPersistence(clock);
+            var probe = new ProbeRecorder(deferFirstResume: false);
+            var race = new HeldContinuationRace(
+                BuildProvider(shared, probe, mode: mode, resumptionSweep: resumptionSweep), shared, clock, probe);
+            var firstStep = ScheduleWork("schedule-1", 1);
+            if (!flushedFirstStep)
+                await shared.Queue.EnqueueAsync(firstStep);
+            // A resume ends the first step's segment at a durable claim boundary.
+            if (resumeAfterFirstStep)
+                await shared.Queue.EnqueueAsync(ResumeWork("resume-1", 2));
+            await race.Commits.AddPendingForTestingAsync(Continuation("outbox-held", race.Held));
+            race.OtherClaim = Assert.Single(await race.Commits.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "other-continuation-worker",
+                Now,
+                claimVisibility,
+                limit: 1,
+                WorkflowExecutionId,
+                RuntimePostCommitIntentKinds.EnqueueSchedulerWork)));
+            // A yielded segment flushed this one undelivered, after the other deliverer claimed its batch.
+            if (flushedFirstStep)
+                await race.Commits.AddPendingForTestingAsync(Continuation(FlushedOutboxId, firstStep));
+            return race;
+        }
+
+        private static RuntimePostCommitOutboxItem Continuation(string outboxItemId, RuntimeSchedulerWorkItem step) =>
+            new(
+                outboxItemId,
+                SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(step, $"activity-{step.WorkItemId}", step, Now),
+                RuntimePostCommitOutboxStatus.Pending,
+                Now,
+                Now,
+                RuntimePostCommitRetryPolicy.None);
+
+        // The drain ran schedule-1 from its overlay and now polls for the held continuation. Deliver it as the other
+        // deliverer would: queue the step durably, then complete the claim.
+        public async Task DeliverHeldAtFirstPollAsync()
+        {
+            var poll = await Clock.NextTimerAsync(due => due == TimeSpan.FromMilliseconds(10), Timeout);
+            await Shared.Queue.EnqueueAsync(Held);
+            Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await Commits.CompleteClaimAsync(
+                new RuntimePostCommitOutboxClaimCompletion(
+                    OtherClaim,
+                    new RuntimePostCommitOutboxDeliveryResult(OtherClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, Now))));
+            Clock.Advance(poll);
+        }
+
+        public async Task AssertDrainedBothStepsAsync()
+        {
+            var result = await Draining.WaitAsync(Timeout);
+            Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+            Assert.Equal(["schedule-1", "schedule-2"], result.Items.Select(item => item.WorkItemId));
+            Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+            await AssertRanBothStepsAsync();
+        }
+
+        public async Task AssertRanBothStepsAsync()
+        {
+            Assert.Equal(new long?[] { null, 1 }, Probe.ScheduleObservedVersions);
+            Assert.Equal(2L, (await Shared.SchedulerStateStore.FindAsync(WorkflowExecutionId))?.Version);
+            Assert.Empty(await Shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _scope.DisposeAsync();
+            await _provider.DisposeAsync();
+            _timeout.Dispose();
+        }
+    }
+
+    /// <summary>A fake clock that reports every timer the code under test parks on, so the test can fire it.</summary>
+    private sealed class TimerClock(DateTimeOffset start) : FakeTimeProvider(start)
+    {
+        private readonly Channel<TimeSpan> _timers = Channel.CreateUnbounded<TimeSpan>();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            _timers.Writer.TryWrite(dueTime);
+            return timer;
+        }
+
+        // Other timers (claim renewals) park too; skip those the match rejects.
+        public async Task<TimeSpan> NextTimerAsync(Func<TimeSpan, bool> match, CancellationToken cancellationToken)
+        {
+            TimeSpan next;
+            do next = await _timers.Reader.ReadAsync(cancellationToken);
+            while (!match(next));
+            return next;
+        }
+    }
+
     private sealed class ProbeRecorder(
         bool deferFirstResume,
         bool enqueueScheduleSuffixAfterSuccessfulResume = false,
         int scheduleSuffixCount = 2,
-        bool retainingBoundaryBeforeDeferral = false)
+        bool retainingBoundaryBeforeDeferral = false,
+        bool faultInvoke = false,
+        bool? commitBeforeInvokeFault = null,
+        bool scheduleEnqueuesInvoke = false,
+        string invokeCheckpointName = "CoalescingProbe",
+        bool? resumeCommitsInOwnScopeThenFaults = null,
+        bool invokeEnqueuesCompletion = false,
+        Action? beforeInvokeCommit = null)
     {
         private bool _didDefer;
         private bool _didEnqueueScheduleSuffix;
@@ -571,6 +1193,20 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         public List<ResumeSnapshot> ResumeSnapshots { get; } = [];
         public int ScheduleSuffixCount => scheduleSuffixCount;
         public bool RetainingBoundaryBeforeDeferral => retainingBoundaryBeforeDeferral;
+        public bool FaultInvoke => faultInvoke;
+        // Null faults before any commit; otherwise the invoke commits once first, retaining its item when true.
+        public bool? CommitBeforeInvokeFault => commitBeforeInvokeFault;
+        public List<bool> InvokeSessionActive { get; } = [];
+        // The schedule enqueues invoke-1 as its continuation, and each records its own activity so a cap can fold them.
+        public bool ScheduleEnqueuesInvoke => scheduleEnqueuesInvoke;
+        public string InvokeCheckpointName => invokeCheckpointName;
+        // The invoke's checkpoint enqueues complete-1 as its continuation.
+        public bool InvokeEnqueuesCompletion => invokeEnqueuesCompletion;
+        public Action? BeforeInvokeCommit => beforeInvokeCommit;
+        // Null resumes normally; otherwise the resume commits through a committer from a DI scope of its own, as
+        // WorkflowResumeBookmarkSchedulerWorkHandler does, retaining its item when true, and then faults.
+        public bool? ResumeCommitsInOwnScopeThenFaults => resumeCommitsInOwnScopeThenFaults;
+        public int OwnScopeResumeRuns { get; set; }
 
         public bool ShouldDeferResume()
         {
@@ -596,6 +1232,79 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         int DurableCommitCount,
         bool SessionActive,
         IReadOnlyCollection<string> ActiveClaimWorkItemIds);
+
+    private sealed class RetryAfterPolicy(TimeSpan delay) : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            new(RuntimeDomainRetryMode.RetryAfter, delay, "retry-after");
+    }
+
+    // Fails the first targeted deletion after the boundary's durable commit, as a provider timeout would.
+    private sealed class FirstDeleteTimesOutQueue(InMemoryWorkflowSchedulerWorkQueue inner)
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+    {
+        public bool DeleteTimedOut { get; private set; }
+
+        public override ValueTask<bool> DeleteAsync(string id, string workId, CancellationToken token = default)
+        {
+            if (DeleteTimedOut)
+                return base.DeleteAsync(id, workId, token);
+            DeleteTimedOut = true;
+            throw new TimeoutException("The durable queue timed out removing the consumed work item.");
+        }
+
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
+            inner.ListWithVisibilityAsync(query, token);
+    }
+
+    // Fails the first durable listing once armed, as a provider read that times out mid-reconciliation does.
+    private sealed class ArmedListFailureQueue(InMemoryWorkflowSchedulerWorkQueue inner)
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+    {
+        public bool Armed { get; set; }
+        public bool ListTimedOut { get; private set; }
+
+        public override ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default)
+        {
+            if (!Armed)
+                return base.ListAsync(query, token);
+            Armed = false;
+            ListTimedOut = true;
+            throw new TimeoutException("The durable queue timed out listing tracked work.");
+        }
+
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
+            inner.ListWithVisibilityAsync(query, token);
+    }
+
+    // Lands the named checkpoint in the inner store once and then throws, as an acknowledgement that times out after the
+    // transaction committed does.
+    private sealed class ThrowAfterCommitStore(IRuntimeCheckpointCommitStore inner, string checkpointName) : IRuntimeCheckpointCommitStore
+    {
+        public IRuntimeCheckpointCommitStore Inner => inner;
+        public bool Threw { get; private set; }
+        public bool SupportsModelCheckpoint => inner.SupportsModelCheckpoint;
+        public bool CanCommitModelState(IRuntimeModelExecutionReader reader) => inner.CanCommitModelState(reader);
+        public bool SupportsModelParentAdmission => inner.SupportsModelParentAdmission;
+        public bool SupportsModelAdmission => inner.SupportsModelAdmission;
+        public bool CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+            IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => inner.CanCommitModelAdmission(reader, executions, activities, outbox);
+        public bool SupportsExactBookmarkResume => inner.SupportsExactBookmarkResume;
+        public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
+            IActivityExecutionStateStore activities) => inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
+
+        public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CommitAsync(commit, decision, cancellationToken);
+            if (Threw || commit.Checkpoint.Name != checkpointName)
+                return result;
+            Threw = true;
+            throw new TimeoutException("The commit acknowledgement timed out after the transaction committed.");
+        }
+    }
 
     private sealed class ExternalOutboxDeliveryProbe
     {
@@ -677,11 +1386,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         CoalescingInner<IWorkflowSchedulerWorkQueue> innerQueue,
         CoalescingInner<IRuntimeCheckpointCommitStore> innerCommitStore,
         TimeProvider timeProvider,
+        IServiceScopeFactory scopeFactory,
         ProbeRecorder probe) : IWorkflowSchedulerWorkHandler
     {
-        private readonly InMemoryRuntimeCheckpointCommitStore _commits =
-            innerCommitStore.Value as InMemoryRuntimeCheckpointCommitStore ??
-            throw new InvalidOperationException("The coalescing probe requires the in-memory checkpoint store.");
+        private readonly InMemoryRuntimeCheckpointCommitStore _commits = InMemoryCommits(innerCommitStore.Value);
 
         public string Name => nameof(CoalescingProbeHandler);
 
@@ -692,12 +1400,48 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
         public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
         {
+            if (probe.FaultInvoke && workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity)
+            {
+                // A deferrable checkpoint, which an active segment buffers rather than commits, unless it trips the cap
+                // or the probe names a boundary.
+                probe.InvokeSessionActive.Add(sessionAccessor.Current?.AppliesTo(workItem.WorkflowExecutionId) == true);
+                if (probe.CommitBeforeInvokeFault is { } retain)
+                {
+                    var invoke = probe.ScheduleEnqueuesInvoke
+                        ? Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 2), activityExecutionId: "activity-invoke-1",
+                            checkpointName: probe.InvokeCheckpointName)
+                        : Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 1), probe.InvokeEnqueuesCompletion
+                            ? [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                                workItem, "activity-invoke-1", Work("complete-1", WorkflowExecutionCommandKind.CompleteActivity, 2), Now)]
+                            : null, checkpointName: probe.InvokeCheckpointName);
+                    probe.BeforeInvokeCommit?.Invoke();
+                    await committer.CommitAsync(invoke with { RetainSchedulerWork = retain }, cancellationToken);
+                }
+                throw new InvalidOperationException($"The probe faulted after invoking {workItem.WorkItemId}.");
+            }
+
+            if (probe.ResumeCommitsInOwnScopeThenFaults is { } retainResume && workItem.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            {
+                probe.OwnScopeResumeRuns++;
+                await using (var resumeScope = scopeFactory.CreateAsyncScope())
+                {
+                    var resume = Commit(workItem, new SchedulerState(workItem.WorkflowExecutionId, 1));
+                    await resumeScope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>()
+                        .CommitAsync(resume with { RetainSchedulerWork = retainResume }, cancellationToken);
+                }
+                throw new InvalidOperationException($"The probe faulted after resuming {workItem.WorkItemId}.");
+            }
+
             if (workItem.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity)
             {
                 var current = await schedulerStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
                 probe.ScheduleObservedVersions.Add(current?.Version);
                 var nextState = new SchedulerState(workItem.WorkflowExecutionId, (current?.Version ?? 0) + 1);
-                await committer.CommitAsync(Commit(workItem, nextState), cancellationToken);
+                await committer.CommitAsync(probe.ScheduleEnqueuesInvoke
+                    ? Commit(workItem, nextState, [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
+                        workItem, "activity-schedule-1", Work("invoke-1", WorkflowExecutionCommandKind.InvokeActivity, 2), Now)],
+                        activityExecutionId: "activity-schedule-1")
+                    : Commit(workItem, nextState), cancellationToken);
                 probe.ScheduleDurableCommitCounts.Add(_commits.ListCommits().Count);
                 return;
             }
@@ -752,7 +1496,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             RuntimeSchedulerWorkItem workItem,
             SchedulerState? state,
             IReadOnlyList<RuntimePostCommitIntent>? postCommitIntents = null,
-            bool consumeBookmark = false)
+            bool consumeBookmark = false,
+            string? activityExecutionId = null,
+            string checkpointName = "CoalescingProbe")
         {
             var checkpointMetadata = consumeBookmark
                 ? new Dictionary<string, string>
@@ -762,10 +1508,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
                 : new Dictionary<string, string>();
             var checkpoint = new RuntimeCheckpoint(
                 $"checkpoint-{workItem.WorkItemId}",
-                consumeBookmark ? RuntimeCheckpointNames.BookmarkConsumed : "CoalescingProbe",
+                consumeBookmark ? RuntimeCheckpointNames.BookmarkConsumed : checkpointName,
                 workItem.WorkflowExecutionId,
                 Now,
-                [],
+                activityExecutionId is null ? [] : [activityExecutionId],
                 checkpointMetadata);
             var changes = new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,

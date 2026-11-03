@@ -18,7 +18,7 @@ python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
 
 Producer/module-author steps need .NET 10, Python 3, Node/pnpm 11.9 and Chromium automation. Ordinary consumer restore/build/publish/run uses the prebuilt distributions with frontend tools denied and audited. The driver retains locks, closure/cache/archive hashes, common published bytes, actual native membership/serving generations and owner/browser receipts. It only starts owned processes with isolated native state and normal authentication. Nothing publishes remotely or consumes existing developer credentials/hosts. [Consumer recipes](../../../specs/1174-weaver-package-witness/contracts/hosts.md) and the [validation guide](../../../specs/1174-weaver-package-witness/quickstart.md) describe the sequence.
 
-The [integration workflow](../../../.github/workflows/weaver-conformance.yml) runs the same complete qualifier with read-only repository permissions. Partial execution, missing observations, wrong-cause failures, altered artifacts and source/frontend consumer shortcuts cannot qualify. Common changes require fresh complete distributions and all cases again.
+The [integration workflow](../../../.github/workflows/ci.yml) runs the same complete qualifier with read-only repository permissions. Partial execution, missing observations, wrong-cause failures, altered artifacts and source/frontend consumer shortcuts cannot qualify. Common changes require fresh complete distributions and all cases again.
 
 ## Cross-domain contributions
 
@@ -133,10 +133,13 @@ Activities Design API, so the catalog is the real one.
 
 ### Workflow truth seams (spec 1193 T012)
 
-Next, `truth_seam_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-truth-seams`). Three
-dedicated principals, appended after the original five, run one `workflow_read_graph` turn each: a manager and a
-read-only reader in the admin's tenant against the admin's seeded workflow, and a manager in a second tenant against a
-workflow it seeds itself. The backend's test-only `QualificationTenantActivity` feature, selected through the native
+Next, `truth_seam_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-truth-seams`). Four
+dedicated principals are appended after the original five. A manager, a read-only reader and a reader without
+`activities/design:read` in the admin's tenant run one `workflow_read_graph` turn each against the admin's seeded
+workflow. A reader in a second tenant compares catalogs only: the packaged consumer's workflow persistence has one scope,
+so every definition is stored under `default` whatever tenant creates it, and the owner rightly refuses another
+tenant's principal. Its Weaver catalog is the collection admitted with a message over a target-free `workflow.request`,
+and no stream, turn or provider call follows. The backend's test-only `QualificationTenantActivity` feature, selected through the native
 feature apply for this inventory only, adds one activity to the designer's catalog read for the first tenant. For each
 actor, every admitted context must carry one server-read `workflow.catalog` and the exact target's
 `workflow.permissions`, identical across the turn's admissions. The catalog must equal the designer's own
@@ -145,9 +148,12 @@ versions, or its marked prefix. The tenant-restricted activity must appear in ex
 The permissions must equal the owning design API's answers: the definition GET for read, and the manage-gated promotion
 preflight (200 or 403) for manage. The tools the actual adapter is offered must follow them: the layout tool only for a
 manager. Each dedicated actor holds exactly the grants its journey reaches (`truth_seam_journeys.py` lists them):
-`api-capabilities:read` for owner-link discovery through `GET /capabilities`, the design read or manage it exercises,
+`api-capabilities:read` for owner-link discovery through `GET /capabilities`, the design read or manage it exercises (the evaluator lets manage satisfy read),
 `activities/design:read` except for the catalog-denied actor, and `expressions:read` for the reader's Studio editor. The
-browser journey fails with the exact paths when Studio is refused any backend read. A fourth actor without `activities/design:read` must get a 403 from the designer catalog and a denied
+browser journey fails with the exact paths when Studio is refused a read it depends on (owner-link discovery, the
+definition and its draft, the activity catalog and expression descriptors). Other refused reads, such as runtime
+executables or publishing profiles the reader is not granted, are retained as evidence only; layout absence is proven
+from the adapter trace, not from what the browser shows. The actor without `activities/design:read` must get a 403 from the designer catalog and a denied
 catalog with no entries from Weaver. The host's generation observation must report no placeholder type in the loaded
 Agent Workflows package and exactly `HttpActivityAuthoringCatalog`. Last, the reader runs the actual packaged Studio
 journey `workflow-read-only` in `browser.mjs`, with a fresh normal-login state of its own: the accepted message's

@@ -21,7 +21,39 @@ public sealed record EtlPipelineV2(
     [property: JsonRequired] IReadOnlyList<EtlOutputField> Mapping,
     [property: JsonRequired] IReadOnlyList<EtlFilter> Filters,
     [property: JsonRequired] EtlConnectorLimits Limits,
-    [property: JsonRequired] EtlHttpPolicy Http);
+    [property: JsonRequired] EtlHttpPolicy Http)
+{
+    /// <summary>The optional continuous run policy; null runs the pipeline finitely.</summary>
+    /// <remarks>A null policy is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
+    public EtlContinuousRunPolicy? Continuous { get; init; }
+}
+
+/// <summary>Runs a v2 HTTP pipeline continuously: caught-up shards poll again until completion or cancellation.</summary>
+/// <param name="PollIntervalSeconds">The wait before a caught-up shard polls its cursor again, from 1 to 86,400 seconds.</param>
+public sealed record EtlContinuousRunPolicy([property: JsonRequired] int PollIntervalSeconds)
+{
+    /// <summary>The shortest supported poll interval in seconds.</summary>
+    public const int MinimumPollIntervalSeconds = 1;
+
+    /// <summary>The longest supported poll interval in seconds.</summary>
+    public const int MaximumPollIntervalSeconds = 86_400;
+
+    /// <summary>Returns the refusal code for an unsupported continuous pipeline, or null when the pipeline is finite or supported.</summary>
+    /// <remarks>Only HTTP sources with a resumable cursor (token or next-link pagination) can run continuously.</remarks>
+    public static string? FindViolation(EtlPipelineV2 pipeline)
+    {
+        ArgumentNullException.ThrowIfNull(pipeline);
+        if (pipeline.Continuous is not { } policy)
+            return null;
+        if (pipeline.Source is not EtlHttpJsonSource source)
+            return "etl.continuous-source-unsupported";
+        if (source.Pagination is not (EtlTokenPagination or EtlNextLinkPagination))
+            return "etl.continuous-pagination-unsupported";
+        return policy.PollIntervalSeconds is < MinimumPollIntervalSeconds or > MaximumPollIntervalSeconds
+            ? "etl.continuous-poll-interval-invalid"
+            : null;
+    }
+}
 
 /// <summary>A closed set of supported ETL input connector declarations.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind", IgnoreUnrecognizedTypeDiscriminators = false)]
