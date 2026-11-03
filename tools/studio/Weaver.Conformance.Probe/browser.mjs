@@ -2147,10 +2147,13 @@ async function workflowRun() {
   need(admitted.content?.workflowExecutionId === run.workflowExecutionId && admitted.content?.activityExecutionId === run.activityExecutionId,
     "The admitted Run is not the shown Run and selection.");
   await Promise.all(agentResponseReads);
-  const streamed = (await streamCapture()).map(item => item.rawBody ?? "");
-  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")) && streamed.length > 0,
-    "The in-page search observed no agent message or stream to search.");
-  need(!JSON.stringify(agentTraffic).includes(run.canary) && !streamed.some(body => body.includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
+  // As in the explain journey: only complete, error-free captures with a real agent event stream make an absent canary count.
+  const captured = await streamCapture();
+  need(captured.every(item => item.captureError == null && item.captureValidationError == null)
+    && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
+    "The in-page search has no complete, error-free agent stream capture to search.");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
+  need(!JSON.stringify(agentTraffic).includes(run.canary) && !captured.some(item => (item.rawBody ?? "").includes(run.canary)) && !JSON.stringify(admitted).includes(run.canary),
     "The Run canary left the run page.");
   const after = await owner("owner-after", run.path);
   result.ownerAfter = after.receipt;

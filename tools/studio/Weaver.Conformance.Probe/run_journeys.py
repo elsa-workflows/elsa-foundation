@@ -582,6 +582,7 @@ def require_workflow_run(section, owned_root=None, *, source=None):
                   and (native.get("explain-activity") or {}).get("canaryCaptured") is True
                   and (native.get("in-progress") or {}).get("inProgress") is True
                   and controls.get("unchanged") is True and isinstance(controls.get("offered"), list) and not MUTATING_TOOLS & set(controls["offered"])
+                  and RUN_TOOL in controls["offered"] and not any(word in str(name) for name in controls["offered"] for word in RUN_CONTROL_WORDS)
                   and (native.get("runtime-agent-absent") or {}).get("code") == ADMISSION_REFUSAL["code"]
                   and search.get("found") == 0 and type(search.get("files")) is int and search["files"] > 0
                   and same((observed.get("browser") or {}).get("observations"), BROWSER_OBSERVATIONS),
