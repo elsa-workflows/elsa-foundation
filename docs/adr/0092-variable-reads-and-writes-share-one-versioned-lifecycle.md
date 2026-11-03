@@ -160,6 +160,10 @@ The read set records each variable the invocation read, with its stored version 
 The input read set is committed with the input snapshot and travels with background admission. Session reads are
 recorded per attempt and are not carried to a new attempt.
 
+These guarantees cover reads through Elsa's instrumented variable-access paths, including its bindings and session
+APIs. Arbitrary host access outside those paths is not automatically tracked and must not be presented as fully
+covered by the read set.
+
 *Why.* Recording only actual reads avoids false conflicts: a blind write to a variable the step never read is not a
 lost update. Observing reads at run time means computed names are covered without depending on static analysis, which
 cannot see everything. Sipke's follow-up 8 already requires tracking actual dynamic reads for protection.
@@ -169,6 +173,11 @@ cannot see everything. Sipke's follow-up 8 already requires tracking actual dyna
 When a step writes a variable that is in its read set, the write's base is the recorded version, whatever surface was
 used for the read and for the write. That includes an input read with a capture write, and a session read with a
 session write.
+
+A newer session read must not erase an older input dependency that the invocation still relies on. For example, an
+input reads `count = 0`, another branch writes 10, and a session then reads 10; a capture calculated from the original
+input still writes against the older dependency. The newer read cannot make that stale calculation pass the commit
+rule. The implementing spec defines how it represents and advances bases while preserving dependencies still in use.
 
 *Why.* In neither surface can the engine see whether the written value depends on the read. A script can read `count`
 only to log it, and then write an unrelated value. ADR 0090 §7 already treats "read, then changed" as a read-modify-write;
@@ -211,13 +220,15 @@ that is based on a stale read is a lost update, even when the other write was bl
 ### 6. Lost-update policy: fault by default, last-wins by explicit choice
 
 - **Default: `Fault`.** The step faults with a diagnostic that names the variable, the base version, the current
-  version and the writers. A faulted step saves nothing (D-3).
+  version and the writers. The faulted step's pending workflow changes do not apply (D-3); the incident and conflict
+  records are retained under decisions 7 and 13.
 - **Override: `LastWins`.** The write applies anyway. An activity type may declare it as its default (for example an
   aggregator), and the workflow author may set it per node. A `LastWins` overwrite is always recorded in the write
   history and shown in inspection. It is never silent.
-- No other policies. A "warn and continue" policy is not offered: with the write history, `LastWins` is already
-  visible, so a third option would add choice without adding information. Whether even `LastWins` should exist, or the
-  engine should allow one strict behaviour only, is open question 3.
+- No other policies in this baseline; decision 14 plans an opt-in merge policy separately. A "warn and continue"
+  policy is not offered: with the write history, `LastWins` is already visible, so a third option would add choice
+  without adding information. Whether even `LastWins` should exist, or the engine should allow one strict behaviour
+  only, is open question 3.
 
 *Why.* A lost update is almost never what the author meant, so stopping before the wrong value spreads is the safer
 default (Sipke's position, agreed by Joey). Some designs genuinely accept last-wins; they say so explicitly.
@@ -247,7 +258,7 @@ Recovery and operator actions are kept apart (@sfmskywalker's position, 29 Octob
 - **Retry** is an operator action on the same invocation. It keeps the `InvocationId`, the operation keys derived from
   it and the committed input snapshot, and starts a new attempt. It suits a transient failure, such as an HTTP 503,
   where an external service can deduplicate on the same idempotency key. After a lost-update fault a retry reads the
-  same outdated base and faults again, unless the node uses `LastWins`.
+  same base and faults again while it remains stale and changed, unless the node uses `LastWins`.
 - **Re-execute** is an operator action that creates a new invocation: a new `InvocationId`, inputs materialized again
   from current committed state, and a new input read set, as Set, Merge and Reduce successors already do. Its external
   effects repeat on purpose. A reschedule through the alterations API
@@ -303,12 +314,15 @@ refuse it.
 
 ### 10. An inline step does not leave a gap between its reads and its body
 
-The drain must not commit another branch's work between an inline step's input materialization and its body. How is
-left to the implementing spec. Fusion already proves that Schedule, Start and Invoke can run in one dispatch for
-`ReplaySafe` leaves. The obstacle for `External` leaves is ADR 0032 R2: their `ActivityAttemptClaimed` checkpoint is an
-immediate pre-activation flush (spec 095 FR-019). Several commits within one work item are allowed; the requirement is
-only that no other branch's work item runs in between. An inline step's bases are then current when its body runs, and
-inline steps meet the lost-update rule only through suspension.
+The drain must not run another branch's work between an inline step's input materialization, body execution and
+transition commit. How is left to the implementing spec. Fusion already proves that Schedule, Start and Invoke can
+run in one dispatch for `ReplaySafe` leaves. The obstacle for `External` leaves is ADR 0032 R2: their
+`ActivityAttemptClaimed` checkpoint is an immediate pre-activation flush (spec 095 FR-019). Required claim, ownership
+fencing and durability checkpoints stay in
+place. Several commits within one work item are allowed; the requirement is that no other branch's work item runs
+between reading the inputs and committing the transition. No database transaction is held open while user code runs.
+An inline step's bases are then current when its body runs, and inline steps meet the lost-update rule only through
+suspension. The implementing spec must prove this sequence for both `External` and `ReplaySafe` activities.
 
 *Why.* Today's inline lost update (Context, item 1) is a gap created by Elsa's own hop structure, not by the author's
 design, and today it depends on the side-effect profile and persistence mode. Warnings about it would teach authors to
@@ -318,32 +332,44 @@ ignore warnings. Whether this can be done without breaking the claim and flush r
 ### 11. A suspended invocation keeps its base
 
 An invocation that suspends and later resumes keeps its committed snapshot and input read set (with any bases its own
-writes advanced). The resumed step starts with no session reads. If a variable in the input read set was changed by
-someone else meanwhile, the invocation's commit is a lost update under decision 5. This is correct, but in long-running
-workflows it may be frequent. Open question 8 asks whether this needs a different answer.
+writes advanced). The resumed step starts a fresh session with no session reads. Suspension does not automatically
+refresh inputs or discard dependencies because time passed.
+
+On resume, decision 5 applies to explicit writes: a write whose base is stale and whose current value differs from
+that base is a lost update. A read alone produces no write and no lost-update fault. A value that changed and returned
+to its base still follows decision 5, and the invocation's own writes still follow decision 4. Long waits may make
+conflicts frequent; they do not introduce a different commit rule. Open question 8 asks whether this is the right
+contract for long-running workflows.
 
 ### 12. Operator alterations use per-variable versions
 
 `ModifyVariable` records the variable's version when the operator requests the change, and applies only if it is
 unchanged, replacing today's root-frame revision check. Today it can change workflow (root-frame) variables only;
-whether it should reach container variables is outside this ADR. A step whose read set includes the variable, and that commits
-after the operator's change, sees a lost update under decision 5. The operator's correction is therefore protected
-from being silently overwritten.
+whether it should reach container variables is outside this ADR. A later step that explicitly writes the same
+variable against a stale, changed base sees a lost update under decision 5. Reading the variable alone does not
+fault. The operator's correction is therefore protected from being silently overwritten.
 
 ### 13. Every write is recorded in the write history
 
-Each applied write records: the variable (scope and key), the writer (node, invocation, attempt, and whether it was a
-capture, an intrinsic, a session change, an alteration or a background result), the base version, the new version, the
-commit sequence, and the value under the existing protection and redaction rules. Lost updates are recorded with their
-resolution (`Fault` or `LastWins`).
+Durable metadata is required for every applied write and conflict: the variable (scope and key), the writer (node,
+invocation and attempt), the source (capture, intrinsic, session change, alteration or background result), the base
+and new versions where applicable, the instance commit order and the conflict resolution (`Fault` or `LastWins`).
+
+Full historical values for inspection have configurable capture and retention under the existing protection and
+redaction rules. Inspection distinguishes omitted, redacted and expired values from `null`.
+
+Operational base snapshots and rejected-completion data are retained while required for enabled merge or recovery,
+independently of optional inspection-value capture and its retention settings. Turning inspection values off must
+not remove data still needed to accept a recorded completion or perform an enabled merge.
 
 This is the data source for variable write history in inspection (#3290), the commit-ordered journal and instance
 comparison (#3291), and the runtime trace of overwrites (#3292), that is, spec S-6. It is not the persistence journal
 proposed in [ADR 0084](0084-runtime-commit-journal.md), which is about commit cost.
 
-The history may be derived from the checkpoint commits rather than written as extra rows, and recording values may be
-opt-in with a retention limit, so hot loops under ADR 0032 do not pay for it by default. The implementing spec chooses,
-with measurements (open question 12).
+The history may be derived from checkpoint commits rather than written as extra rows, provided it preserves every
+intermediate write, including 0 → 1 → 0 within one buffered segment. Deriving history from only the final folded state
+is insufficient. The implementing spec chooses the physical storage through measurements of large payloads and hot
+loops under ADR 0032 (open question 12). Optional full-value capture does not make the durable metadata optional.
 
 ### 14. A variable is the unit
 
@@ -374,8 +400,10 @@ Until then the whole variable is the unit.
   version beside the frame revision. Captures write against the invocation's read set.
 - **ADR 0090.** The session is the second surface over this mechanism (decision 1). Its base becomes version plus
   digest (decision 5), its check covers input reads too (decision 4), and its `[VariableConflictPolicy]` becomes the
-  lost-update policy of decision 6. Whether background steps get a session at all, and whether scripts may write
-  variables generally or only in a compatibility mode, stay with A-3 and ADR 0093.
+  lost-update policy of decision 6. The A-3 amendment ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425))
+  proposes transactional writes from script and C# activity bodies as a general capability for native and imported
+  workflows, rather than an Elsa 3 compatibility mode. This lifecycle holds for bindings and captures independently
+  of which direct-access capabilities are enabled. Background-session capability requirements stay with ADR 0093.
 - **Spec 266 (#3286, S-5).** Its publish-time warning covers all unordered writes, captures included, and stays as it
   is. At run time, D-8's last-commit-wins now applies to blind writes only. A follow-up may add a stronger publish-time
   diagnostic for an unordered step that reads and writes the same variable.
@@ -392,6 +420,12 @@ Until then the whole variable is the unit.
 - Two branches that read 0 and both write 1: the second is a lost update, not a no-op.
 - An invocation that writes X on suspension and captures X on completion does not conflict with itself.
 - Read sets contain actual reads only, including computed names; an unread visible variable never causes a conflict.
+- An input reads X at an older version, a session later reads a newer version, and a capture still uses the older
+  input: the older dependency is retained and the stale write is detected. Tracking guarantees cover Elsa's
+  instrumented access paths, not arbitrary host access.
+- Across suspension, committed inputs and dependencies stay fixed and the resumed step gets a fresh session. A
+  read-only step does not fault because a read variable changed; explicit writes follow decision 5, including the
+  value-return rule and the invocation's own-write handling.
 - A blind write follows D-8; an unchanged value writes nothing and keeps the version.
 - 0 → 1 → 0 applies without a fault and is recorded; a real lost update faults by default.
 - `LastWins` per activity type and per node, always recorded and visible.
@@ -399,23 +433,32 @@ Until then the whole variable is the unit.
 - A retry keeps the `InvocationId` and snapshot; a re-execution and a reschedule materialize fresh inputs with a new
   id; crash redelivery and resume keep the snapshot. A successor that now goes through Start again does not activate
   its owned frames a second time.
-- `ModifyVariable` then re-execute uses the corrected value; a step committing over an operator's change faults.
+- `ModifyVariable` then re-execute uses the corrected value; a step explicitly writing the same variable against a
+  stale, changed base follows decision 5. Reading the changed variable alone does not fault.
 - Accept recorded completion applies the whole recorded transition atomically without running the body, revalidates
   first, is duplicate-safe, refuses a faulted body, and keeps the conflict and resolution in the history.
+- The implementing spec defines and tests acceptance against the current invocation state, including cancellation,
+  supersession and prior completion; valid target scopes and pinned contracts; availability of the complete protected
+  transition; permission for the recorded override; and duplicate-safe writes and downstream scheduling. Repeated
+  acceptance requests cannot schedule downstream work twice. Acceptance does not silently refresh inputs.
 - A stale base is refreshed before background admission as a new evaluation with its own idempotency keys; the
   superseding snapshot is what the worker sees, the first stays in the history linked with the reason, and a node
   with refresh turned off faults or applies `LastWins` at commit instead.
 - A lost-update incident records the rejected result.
-- Inline steps have no gap between input materialization and the body (decision 10), with the claim and flush rules
-  of ADR 0032 kept.
-- The write history feeds #3290–#3292 under the existing protection rules.
+- Inline steps have no branch interleaving from input materialization through body execution and transition commit
+  (decision 10), for `External` and `ReplaySafe` activities, with required claim, fencing and durability checkpoints
+  kept. No database transaction is held open while user code runs.
+- The write history feeds #3290–#3292 under the existing protection rules. Durable metadata and intermediate writes
+  survive checkpoint folding; inspection distinguishes omitted, redacted and expired values from `null`; required
+  operational bases and completion data remain available with inspection-value capture disabled or expired.
 - Cost measured against a large payload.
 
 ## Alternatives considered
 
 **Background steps get no variable access (Joey's starting point for A-2).** Removes session reads from background
 steps, but leaves the input-plus-capture lost update, inline and in the background, and the retry problem. Not enough on
-its own; whether background steps get a session is still decided in A-3.
+its own. The general script/C# write capability proposed in #3425 does not by itself establish background support;
+background-session capability requirements stay with ADR 0093.
 
 **Detect stale read-modify-write by value comparison only (ADR 0090 §7 as proposed).** Covers session reads only and
 costs a serialization per checked variable. Its idea, detect and fault with an override, is kept.
@@ -445,10 +488,11 @@ you would change.
    variable-access mechanism, with one read-set and write rule (decision 1)? If you see a reason to keep two
    mechanisms, that reason is what we most need to hear.
 2. **What is a read?** Actual reads during input materialization and during execution, computed names included;
-   visible but unread variables excluded (decision 3). And: is "read and write the same variable in one step" always a
-   read-modify-write, even when the engine cannot see a dependency (decision 4)?
-3. **Strict or options?** Default `Fault`, with `LastWins` per activity type and per node, and nothing else
-   (decision 6). Or should there be one strict behaviour only, which is simpler to learn, test and support?
+   visible but unread variables excluded, with tracking guarantees limited to Elsa's instrumented access paths
+   (decision 3). A newer session read cannot erase an older input dependency still in use. And: is "read and write
+   the same variable in one step" always a read-modify-write, even when the engine cannot see a dependency (decision 4)?
+3. **Strict or options?** Default `Fault`, with `LastWins` per activity type and per node, and nothing else in this
+   baseline (decision 6). Or should there be one strict behaviour only, which is simpler to learn, test and support?
 4. **Version plus digest** instead of value comparison alone, with 0 → 1 → 0 applying without a fault (decision 5).
 5. **Retry, re-execute, accept** (decision 8, changed 30 October after Sipke's 29 October positions). Recovery and
    retry keep the snapshot; re-execution, including a reschedule, gets fresh inputs; accepting a recorded completion
@@ -456,16 +500,20 @@ you would change.
 6. **Refresh contract** (decision 9, changed 30 October). A refresh is a new evaluation with its own idempotency
    keys, so effects in input evaluation repeat deliberately, and a node can turn it off. Sipke, does this cover
    re-evaluation, identities, effects and the recorded replacement?
-7. **No gap for inline steps** (decision 10). Do you see a reason in the claim and flush rules (ADR 0032 R2) why an
-   `External` leaf's inputs cannot be materialized right before its body, as fusion already does for `ReplaySafe`
-   leaves?
-8. **Suspended steps** keep their base, so a long wait can end in a lost-update fault (decision 11). Is that the right
-   answer for long-running workflows?
+7. **No gap for inline steps** (decision 10). Agree that the implementing spec must prove no branch interleaving
+   from input materialization through body execution and transition commit for `External` and `ReplaySafe` activities,
+   preserving claim, fencing and durability checkpoints without holding a database transaction around user code?
+8. **Suspended steps** keep their inputs and dependencies, with a fresh session and no automatic refresh. Only an
+   explicit write against a stale, changed base is a lost update under decision 5 (decision 11). Is that the right
+   contract for long-running workflows?
 9. **Granularity.** The whole variable now; your conservative JSON-object merge as a planned opt-in policy, designed
    in a follow-up ADR (decision 14, changed 30 October). Agreed?
-10. **Scope with A-3.** If writing variables from scripts becomes a compatibility mode only, this ADR still holds for
-    bindings and captures. Do you agree it is independent of A-3's answer?
+10. **Scope with A-3.** The companion amendment (#3425) proposes general transactional script/C# writes for native
+    and imported workflows. This lifecycle still holds for bindings and captures independently of direct-access
+    capabilities, with background-session requirements separate under ADR 0093. Agreed?
 11. **A rejected result.** Answered by decision 8 (30 October): accepting the recorded completion is an operator
     action. Is the list of what it revalidates complete?
-12. **Write history cost.** Extra rows per write, or derived from checkpoint commits; values always, or opt-in with a
-    retention limit (decision 13)?
+12. **Write history cost.** Mandatory durable write/conflict metadata, configurable protected historical values and
+    retention, and operational data retained while required for enabled merge/recovery (decision 13). Agree that the
+    implementing spec chooses physical storage through measurements, preserving intermediate writes even when history
+    is derived from checkpoint commits?
