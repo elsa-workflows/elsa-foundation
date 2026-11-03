@@ -35,6 +35,15 @@ public sealed record CreateWorkflowFolder(string Name, string? ParentId = null);
 public sealed record RenameWorkflowFolder(string FolderId, string Name, string? Revision = null);
 public sealed record MoveWorkflowFolder(string FolderId, string? ParentId = null, string? Revision = null);
 public sealed record DeleteEmptyWorkflowFolder(string FolderId, string? Revision = null);
+public sealed record GetFolderDeletionPreview(string FolderId);
+public sealed record DeleteWorkflowFolder(string FolderId, string PreviewRevision, bool DeleteWorkflows, string OperationKey);
+public sealed record FolderDeletionView(WorkflowFolder Folder, WorkflowFolder? Parent, int WorkflowCount,
+    int DeletedWorkflowCount, int ChildFolderCount, string Revision)
+{
+    public static FolderDeletionView From(FolderDeletionPreview preview) => new(preview.Folder, preview.Parent,
+        preview.Workflows.Count(workflow => !workflow.Deleted), preview.Workflows.Count(workflow => workflow.Deleted),
+        preview.Descendants.Count(folder => folder.ParentId == preview.Folder.Id), preview.Revision);
+}
 public sealed record MoveWorkflowDefinitions(IReadOnlyList<string> DefinitionIds, string? FolderId = null, string? OperationKey = null);
 public sealed record ListWorkflowLibrary(string? SearchTerm = null, string State = "active", string? FolderId = null,
     bool Unfiled = false, bool IncludeDescendants = false, string? TagFilters = null, bool FavoritesOnly = false,

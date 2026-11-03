@@ -6,6 +6,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -34,7 +35,7 @@ public sealed class WorkflowLibraryApiContractTests
         Assert.Contains("workflow-definitions-page", relations);
         Assert.Contains("workflow-definitions-query", relations);
         foreach (var relation in new[] { "workflow-folders", "workflow-folder-rename", "workflow-folder-move",
-                     "workflow-folder-delete-empty", "workflow-definition-folder-move", "workflow-organization",
+                     "workflow-folder-delete-empty", "workflow-folder-deletion-preview", "workflow-folder-delete", "workflow-definition-folder-move", "workflow-organization",
                      "workflow-tags", "workflow-tag", "workflow-tags-bulk", "workflow-views", "workflow-view", "workflow-favorites" })
             Assert.Equal(enabled, relations.Contains(relation));
     }
@@ -46,6 +47,8 @@ public sealed class WorkflowLibraryApiContractTests
     [InlineData("POST", "/design/workflows/folders/invoices/rename", "{\"name\":\"Renamed\",\"revision\":\"f1\"}")]
     [InlineData("POST", "/design/workflows/folders/invoices/move", "{\"parentId\":null,\"revision\":\"f1\"}")]
     [InlineData("DELETE", "/design/workflows/folders/invoices?revision=f1", null)]
+    [InlineData("GET", "/design/workflows/folders/invoices/deletion-preview", null)]
+    [InlineData("POST", "/design/workflows/folders/invoices/delete", "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}")]
     [InlineData("POST", "/design/workflows/definitions/move", "{\"definitionIds\":[\"orders\"],\"folderId\":\"invoices\"}")]
     [InlineData("GET", "/design/workflows/definitions/orders/organization", null)]
     [InlineData("PUT", "/design/workflows/definitions/orders/organization", "{\"tags\":[],\"revision\":\"r1\"}")]
@@ -655,10 +658,163 @@ public sealed class WorkflowLibraryApiContractTests
         Assert.Equal("user-a", probe.Actor);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Folder_deletion_exposes_authorized_counts_and_forwards_explicit_choice(bool deleteWorkflows)
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services => AllowDeletion(services));
+        using var response = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        response.EnsureSuccessStatusCode();
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(2, json.RootElement.GetProperty("workflowCount").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("deletedWorkflowCount").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("childFolderCount").GetInt32());
+        Assert.False(json.RootElement.TryGetProperty("workflows", out _));
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+            JsonSerializer.Serialize(new { previewRevision = "preview-1", deleteWorkflows, operationKey = "confirmed-delete" }));
+        commit.EnsureSuccessStatusCode();
+        Assert.Equal(deleteWorkflows, probe.DeletedWorkflows);
+        Assert.Equal("user-a", probe.Actor); Assert.Equal("invoices", probe.FolderId);
+        Assert.Equal("preview-1", probe.Revision); Assert.Equal("confirmed-delete", probe.OperationKey);
+    }
+
+    [Theory]
+    [InlineData("invoices")]
+    [InlineData("finance")]
+    [InlineData("child")]
+    [InlineData("orders")]
+    [InlineData("second")]
+    [InlineData("deleted")]
+    public async Task Folder_deletion_denies_preview_and_commit_if_any_affected_resource_is_denied(string denied)
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services => { AllowDeletion(services); services.AddSingleton<IPermissionResourceHandler>(new DeletionPolicy(denied)); });
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.Forbidden, preview.StatusCode);
+        Assert.DoesNotContain("workflowCount", await preview.Content.ReadAsStringAsync());
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":true,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_requires_fresh_preview_and_optional_backend_support()
+    {
+        var probe = new LibraryProbe();
+        await using (var host = await StartAsync(probe, services => AllowDeletion(services)))
+        {
+            using var stale = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+                "{\"previewRevision\":\"stale\",\"deleteWorkflows\":true,\"operationKey\":\"delete\"}");
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode); Assert.Null(probe.DeletedWorkflows);
+            using var readOnly = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-read");
+            Assert.Equal(HttpStatusCode.Forbidden, readOnly.StatusCode);
+        }
+        await using var unsupported = await StartAsync(probe, services => services.RemoveAll<IWorkflowFolderDeletionStore>());
+        Assert.DoesNotContain("workflow-folder-delete", await RelationsAsync(unsupported));
+        Assert.DoesNotContain("workflow-folder-deletion-preview", await RelationsAsync(unsupported));
+        using var response = await SendAsync(unsupported, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+    }
+
+    private sealed class DeletionPolicy(string denied) : IPermissionResourceHandler
+    {
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<PermissionEvaluationResult?>(context.Resource is WorkflowLibraryResource resource &&
+                (resource.FolderId == denied || resource.DefinitionId == denied) ? PermissionEvaluationResult.Denied() : null);
+    }
+
+    private static void AllowDeletion(IServiceCollection services)
+    {
+        services.RemoveAll<IWorkflowDefinitionAuthorizer>();
+        services.AddSingleton<IWorkflowDefinitionAuthorizer>(new DeletionAuthorizer());
+    }
+
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("POST")]
+    public async Task Folder_deletion_authorizes_the_canonical_folder_when_a_provider_resolves_an_alias(string method)
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services =>
+        {
+            AllowDeletion(services);
+            services.AddSingleton<IPermissionResourceHandler>(new DeletionPolicy("invoices"));
+        });
+        using var response = await SendAsync(host, method, method == "GET" ? "/design/workflows/folders/INVOICES/deletion-preview" :
+            "/design/workflows/folders/INVOICES/delete", "library-all", method == "GET" ? null :
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":true,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_authorizes_canonical_ancestors_even_when_the_library_does_not_resolve_aliases()
+    {
+        var probe = new LibraryProbe { OrdinalFolderLookup = true, IncludeDeniedGrandparent = true, EmptyDeletionFolder = true };
+        await using var host = await StartAsync(probe, services => services.AddSingleton<IPermissionResourceHandler>(new DeletionPolicy("secret-root")));
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/INVOICES/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.Forbidden, preview.StatusCode);
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/INVOICES/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_refuses_missing_canonical_details_instead_of_skipping_ancestor_checks()
+    {
+        var probe = new LibraryProbe { MissingFolderDetail = true, EmptyDeletionFolder = true };
+        await using var host = await StartAsync(probe);
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.NotFound, preview.StatusCode);
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.NotFound, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_commits_the_previewed_canonical_identity()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services => AllowDeletion(services));
+        using var response = await SendAsync(host, "POST", "/design/workflows/folders/INVOICES/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("invoices", probe.FolderId);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_honors_a_replacement_definition_authorizers_refusal()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IWorkflowDefinitionAuthorizer>();
+            services.AddSingleton<IWorkflowDefinitionAuthorizer>(new DeletionAuthorizer(false));
+        });
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.Forbidden, preview.StatusCode);
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":true,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    private sealed class DeletionAuthorizer(bool allowed = true) : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(allowed);
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(allowed);
+    }
+
     private static Task<Host> StartAsync(LibraryProbe store, Action<IServiceCollection>? configure = null,
         bool? organizationEnabled = null) => Host.StartAsync(services =>
     {
         services.AddSingleton<IWorkflowLibraryStore>(store);
+        services.AddSingleton<IWorkflowFolderDeletionStore>(store);
         services.AddSingleton<IAuthSessionService, PrincipalSession>();
         services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new("test-tenant-action-v1")));
         configure?.Invoke(services);
@@ -744,8 +900,17 @@ public sealed class WorkflowLibraryApiContractTests
         public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
     }
 
-    private sealed class LibraryProbe : IWorkflowLibraryStore
+    private sealed class LibraryProbe : IWorkflowLibraryStore, IWorkflowFolderDeletionStore
     {
+        public bool OrdinalFolderLookup, MissingFolderDetail, IncludeDeniedGrandparent, EmptyDeletionFolder;
+        public bool? DeletedWorkflows;
+        public Task<FolderDeletionPreview> PreviewFolderDeletionAsync(string folderId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new FolderDeletionPreview(Folder, HiddenFolder,
+                [Folder with { Id = "child", ParentId = Folder.Id, Name = "Child" }],
+                EmptyDeletionFolder ? [] : [new("orders", false), new("second", false), new("deleted", true)], "preview-1"));
+        public Task DeleteFolderAsync(string folderId, string previewRevision, bool deleteWorkflows, string actorId,
+            string operationKey, CancellationToken cancellationToken = default)
+        { FolderId = folderId; Revision = previewRevision; DeletedWorkflows = deleteWorkflows; Actor = actorId; OperationKey = operationKey; return Task.CompletedTask; }
         public string? Subject, Actor, DefinitionId, FolderId, Revision, OperationKey, TagId, ViewId;
         public WorkflowTagInput? TagInput;
         public WorkflowLibraryQuery? Query;
@@ -762,7 +927,9 @@ public sealed class WorkflowLibraryApiContractTests
         private WorkflowOrganization Organization(string id) => new(id, "invoices", IncludeHiddenFolder ? [HiddenFolder, Folder] : [Folder], [new("critical")], "r2");
         private static WorkflowTag Tag => new("critical", "Critical", null, "marker", "single", false, "t1", []);
         public Task<WorkflowFolderPage> ListFoldersAsync(string? parentId, int pageSize = 50, string? continuationToken = null, CancellationToken cancellationToken = default) => Task.FromResult(new WorkflowFolderPage([Folder], null));
-        public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowFolderDetail?>(new(Folder, IncludeHiddenFolder ? [HiddenFolder] : []));
+        public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<WorkflowFolderDetail?>(MissingFolderDetail || OrdinalFolderLookup && id != Folder.Id ? null :
+                new(Folder, IncludeDeniedGrandparent ? [HiddenFolder with { Id = "secret-root" }, HiddenFolder] : IncludeHiddenFolder ? [HiddenFolder] : []));
         public Task<WorkflowFolder> CreateFolderAsync(string name, string? parentId, string actorId, CancellationToken cancellationToken = default) { Actor = actorId; FolderId = parentId; return Task.FromResult(Folder); }
         public Task RenameFolderAsync(string id, string name, string? revision, string actorId, CancellationToken cancellationToken = default) { FolderId = id; Revision = revision; Actor = actorId; return Task.CompletedTask; }
         public Task MoveFolderAsync(string id, string? parentId, string? revision, string actorId, CancellationToken cancellationToken = default) { FolderId = id; Revision = revision; Actor = actorId; return Task.CompletedTask; }
