@@ -103,34 +103,6 @@
    "sourceRevision": "6f57b43f15915d2dd100fb95f09d47f6cd98766e"
   },
   {
-   "mutation": "postgresql-where-inclusive",
-   "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
-   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
-   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
-   "mutated": "Failed!  - Failed: 1, Passed: 1",
-   "failedTests": [
-    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
-   ],
-   "restored": "Passed!  - Failed: 0, Passed: 2",
-   "original": "$\"WHERE {Quote(watermarkColumn)} > @watermark \"",
-   "mutated_text": "$\"WHERE {Quote(watermarkColumn)} >= @watermark \"",
-   "sourceRevision": "fe4aca2e8380f0f8efa8666fcaff985b1e545948"
-  },
-  {
-   "mutation": "sqlserver-where-inclusive",
-   "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
-   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
-   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
-   "mutated": "Failed!  - Failed: 1, Passed: 1",
-   "failedTests": [
-    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
-   ],
-   "restored": "Passed!  - Failed: 0, Passed: 2",
-   "original": "$\"WHERE {Quote(watermarkColumn)} > @watermark \"",
-   "mutated_text": "$\"WHERE {Quote(watermarkColumn)} >= @watermark \"",
-   "sourceRevision": "fe4aca2e8380f0f8efa8666fcaff985b1e545948"
-  },
-  {
    "mutation": "high-watermark-parse-unwrapped",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
@@ -255,6 +227,34 @@
    "original": "            key.Column\n",
    "mutated_text": "",
    "sourceRevision": "b23836ad1304bd02ce6a13be41744b3d8c950b94"
+  },
+  {
+   "mutation": "postgresql-where-inclusive",
+   "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "({Quote(watermarkColumn)} > @watermark OR",
+   "mutated_text": "({Quote(watermarkColumn)} >= @watermark OR",
+   "sourceRevision": "cf245911e6885f302b4ca9965444de49dc9e408f"
+  },
+  {
+   "mutation": "sqlserver-where-inclusive",
+   "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_watermark_floor_reads_only_rows_above_it_in_key_order",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_watermark_floor_reads_only_rows_above_it_in_key_order"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "({Quote(watermarkColumn)} > @watermark OR",
+   "mutated_text": "({Quote(watermarkColumn)} >= @watermark OR",
+   "sourceRevision": "cf245911e6885f302b4ca9965444de49dc9e408f"
   }
  ]
 }
