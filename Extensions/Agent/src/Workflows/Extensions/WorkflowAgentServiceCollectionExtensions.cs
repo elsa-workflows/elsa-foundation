@@ -26,6 +26,18 @@ public static class WorkflowAgentServiceCollectionExtensions
         // The reviewed Operation Batch for the open working draft (spec 1193 slice C). Applied only by the originating editor.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowApplyOperationBatchTool>());
 
+        // The workflow library, create dialog and template list (spec 1193 slice E). The context source reads the library's
+        // authority through Workflows Design Core (IWorkflowLibraryCommands) and registers no fallback for it.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, WorkflowLibraryContextProvider>());
+        // Reviewed library writes through the library itself, per-target outcomes, review in every mode.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowLibraryAssignTagsTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowLibrarySetFavoriteTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowLibraryMoveToFolderTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowLibrarySaveViewTool>());
+        // Reviewed, revertible changes to a page's own working state: the visible list and the open create dialog.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowLibrarySetListStateTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowCreateDialogPrefillTool>());
+
         return services;
     }
 }

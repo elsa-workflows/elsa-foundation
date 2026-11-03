@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -143,6 +143,14 @@ if (config.journey === "workflow-explain") {
   });
 }
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
+// Spec 1193 T036: every write the page sends to the workflow design API (library, templates, definitions), so a journey can
+// prove which owner writes happened: none from a page working-state change, only the user's own Save of the template.
+const designWrites = [];
+if (["workflow-library", "workflow-templates"].includes(config.journey)) page.on("request", request => {
+  const url = new URL(request.url());
+  if (url.origin === backend && url.pathname.includes("/design/workflows/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()))
+    designWrites.push({ path: url.pathname, method: request.method(), body: request.postDataJSON() });
+});
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
   let pressed = null, sequence = 0;
@@ -1877,6 +1885,149 @@ async function workflowExplain() {
     canaryAbsentInPage: true, draftUnchanged: true, owningWrites: owningWrites.length };
 }
 
+// Spec 1193 T036: a reviewed Weaver tool on a library page, in the actual packaged Studio. The command is selected, the dock
+// sends it, and the turn ends with a card awaiting review (or the dock says why it did not).
+async function reviewedTool(toolName, args, name, commands) {
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const selected = command(toolName, args);
+  commands[name] = selected.commandId;
+  const cards = dock().locator(".agent-proposal"), before = await cards.count();
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName, arguments: args }));
+  const message = responseFor("/messages");
+  await nativeEnter(name + "-send", dock().getByRole("button", { name: "Send message", exact: true }), "Send message");
+  const sent = await accepted(message, name + "-message");
+  await expect.poll(async () => await cards.count() > before || await dock().getAttribute("aria-busy") === "false", { timeout: 120000 }).toBe(true);
+  if (await cards.count() <= before) {
+    const text = (await dock().innerText()).slice(-800);
+    result.evidence.push(retain(name + "-no-proposal", { text }));
+    need(false, name + ": the turn ended without a proposal: " + text);
+  }
+  const proposal = cards.last();
+  await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+  result.evidence.push(retain(name + "-review", { text: await proposal.innerText(), status: await proposal.getAttribute("data-status") }));
+  return { proposal, sent };
+}
+// In these journeys the nonmodal dock overlaps page controls and an open page dialog overlaps the dock, so every control,
+// on the page and in the dock, is activated through the keyboard: the same native control, never a pointer that another
+// surface intercepts (as the witness on c58c9f149 observed for the list's Create workflow button).
+async function approveAndApply(proposal, name) {
+  const response = responseFor("/approve");
+  await nativeEnter(name + "-approve", proposal.getByRole("button", { name: "Approve", exact: true }), "Approve");
+  await accepted(response, name + "-approve");
+  await expect(proposal).toHaveAttribute("data-status", "approved");
+  const execute = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
+  await nativeEnter(name + "-apply", proposal.getByRole("button", { name: "Apply", exact: true }), "Apply");
+  const delivery = await accepted(execute, name + "-execute");
+  need(delivery.response.status() === 202, name + ": the change was not delivered to the originating page.");
+  const ack = await accepted(acknowledged, name + "-ack");
+  await expect(proposal).toHaveAttribute("data-status", "executed");
+  return { ack, sent: ack.response.request().postDataJSON() };
+}
+
+// The library list page: a reviewed narrowing applied and reverted by the list page, and a reviewed prefill of the open create
+// dialog, whose Create is never pressed. No owner write follows either change.
+async function workflowLibrary() {
+  const wf = config.workflow ?? {};
+  const { library } = wf;
+  need(wf.definitionId && library?.search && library?.pagePath && library?.prefill?.name, "The library journey needs a seeded definition, its search and the page link.");
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions");
+  const searchBox = page.getByPlaceholder("Search definitions", { exact: true });
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toBeVisible();
+  await expect(searchBox).toHaveValue("");
+  const before = await owner("owner-before", library.pagePath + "?pageSize=100");
+  result.ownerBefore = before.receipt;
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  const writesBefore = designWrites.length;
+  // The list is reviewed only once it is settled: its rows current and its permissions read (aria-busy="false"). A page whose
+  // permissions arrive after the review moves its revision and refuses the reviewed change as stale (the 6231b4434 witness).
+  await expect(page.getByRole("table", { name: "Workflow definitions", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
+  // Narrowing: the list page applies exactly the approved change and the user can revert it.
+  const narrow = await reviewedTool("workflow_library_set_list_state", { search: library.search }, "narrow", commands);
+  const listContext = (narrow.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.library");
+  need(listContext?.target?.resourceType === "workflow-library" && /^sha256:[0-9a-f]{64}$/.test(listContext?.target?.revision ?? ""),
+    "The admitted list context lost its identity or SHA-256 revision.");
+  const narrowed = await approveAndApply(narrow.proposal, "narrow");
+  expect(narrowed.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.list-state", schemaVersion: "1",
+    data: { observed: true, change: { search: library.search }, baseRevision: listContext.target.revision } } });
+  await expect(searchBox).toHaveValue(library.search);
+  await nativeEnter("narrow-revert", narrow.proposal.getByRole("button", { name: "Revert", exact: true }), "Revert");
+  await expect(searchBox).toHaveValue("");
+  result.evidence.push(retain("narrow-reverted", { search: await searchBox.inputValue() }));
+  // The create dialog: the prefill fills the open dialog only.
+  await nativeEnter("open-create-dialog", page.getByRole("button", { name: "Create workflow", exact: true }).first(), "Create workflow");
+  const nameField = page.locator('input[aria-label="Display name"]');
+  await expect(nameField).toBeVisible();
+  // Likewise the open dialog is reviewed only once it has read the saved templates it offers.
+  await expect(page.getByRole("combobox", { name: "Starting point", exact: true })).toHaveAttribute("aria-busy", "false", { timeout: 30000 });
+  const prefill = await reviewedTool("workflow_create_dialog_prefill", { name: library.prefill.name }, "prefill", commands);
+  const filled = await approveAndApply(prefill.proposal, "prefill");
+  expect(filled.sent).toMatchObject({ outcome: "applied", result: { typeId: "workflows.create-dialog-prefill", schemaVersion: "1",
+    data: { observed: true, change: { name: library.prefill.name } } } });
+  await expect(nameField).toHaveValue(library.prefill.name);
+  const after = await owner("owner-after", library.pagePath + "?pageSize=100");
+  result.ownerAfter = after.receipt;
+  need(after.value.totalCount === before.value.totalCount, "A workflow was created although Create was never pressed.");
+  need(designWrites.length === writesBefore, "A page working-state change wrote to the workflow design API.");
+  await screenshot("workflow-library-prefilled");
+  result.commands = commands;
+  result.observations = { listNarrowed: true, listReverted: true, dialogPrefilled: true, createNotPressed: true, noLibraryWrite: true };
+}
+
+// The template editor: an approved batch applied to the template's working state as one history step, autosave held, and
+// persisted only by the user's own Save with the template's expected revision. No workflow definition is written.
+async function workflowTemplates() {
+  const wf = config.workflow ?? {};
+  const { template, nodes, definitionPath } = wf;
+  need(template?.id && template?.revision && template?.path && template?.operations && nodes?.a && definitionPath, "The template journey needs the seeded template and nodes.");
+  const commands = {};
+  const node = id => page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  await page.goto(studio + "/workflows/templates?template=" + encodeURIComponent(template.id));
+  await expect(node(nodes.a)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", template.path);
+  result.ownerBefore = before.receipt;
+  need(before.value.revision === template.revision, "The template changed before the journey.");
+  const definitionBefore = await owner("definition-before", definitionPath);
+  await nativeEnter("open-weaver", page.getByRole("button", { name: /^Weaver/ }), "Weaver");
+  const writesBefore = designWrites.length;
+  const batch = await reviewedTool("workflow_apply_operation_batch", { operations: template.operations }, "applied", commands);
+  const editor = (batch.sent.value.data?.message?.context ?? []).find(item => item.contentType === "workflows.template-editor");
+  need(editor?.target?.resourceType === "workflow-template" && editor?.target?.resourceId === template.id && editor?.content?.templateRevision === template.revision
+    && !("workflowDefinitionId" in (editor?.content ?? {})), "The admitted template context is not the template with its persisted revision.");
+  const applied = await approveAndApply(batch.proposal, "applied");
+  expect(applied.sent).toMatchObject({ outcome: "applied", after: { resourceType: "workflow-template", resourceId: template.id },
+    result: { typeId: "workflows.batch-result", schemaVersion: "1", data: { observed: true, historyEntry: true, appliedCount: template.operations.length } } });
+  await expect(node(nodes.a)).toContainText(template.displayName);
+  // Autosave is held while the batch is unsaved: beyond the autosave interval the owner still holds the persisted revision.
+  await page.waitForTimeout(1600);
+  need((await owner("owner-after-autosave-window", template.path)).value.revision === template.revision, "Autosave persisted the batch.");
+  need(designWrites.length === writesBefore, "The applied batch wrote to the design API before the user's Save.");
+  // One history step: the card's Undo removes the whole batch, Redo restores it.
+  await nativeEnter("batch-undo", batch.proposal.getByRole("button", { name: "Undo whole change", exact: true }), "Undo whole change");
+  await expect(node(nodes.a)).not.toContainText(template.displayName);
+  await nativeEnter("designer-redo", page.getByRole("button", { name: "Redo", exact: true }), "Redo");
+  await expect(node(nodes.a)).toContainText(template.displayName);
+  // The user's own Save, with the template's expected revision.
+  const saved = page.waitForResponse(response => new URL(response.url()).origin === backend && new URL(response.url()).pathname === template.path && response.request().method() === "PUT");
+  // The toolbar's Save (accessible name "Save", title "Save workflow"), the designer's own explicit save.
+  await nativeEnter("template-save", page.locator("button.wf-save-button"), "Save workflow");
+  const response = await saved;
+  need(response.ok(), "The user's template Save failed: " + response.status());
+  const body = response.request().postDataJSON();
+  result.evidence.push(retain("template-save-request", body));
+  need(body?.expectedRevision === template.revision, "The template Save did not carry the template's expected revision.");
+  const after = await owner("owner-after", template.path);
+  result.ownerAfter = after.receipt;
+  need(after.value.revision !== template.revision && JSON.stringify(after.value.content).includes(template.displayName), "The saved template lacks the batch.");
+  const definitionAfter = await owner("definition-after", definitionPath);
+  expect(definitionAfter.value.draft).toEqual(definitionBefore.value.draft);
+  need(designWrites.every(write => write.path === template.path), "A template journey wrote another design resource: " + JSON.stringify(designWrites.map(item => item.path)));
+  await screenshot("workflow-templates-saved");
+  result.commands = commands;
+  result.observations = { applied: true, templateTarget: true, oneHistoryStep: true, autosaveHeld: true, savedWithExpectedRevision: true, definitionUntouched: true };
+}
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1888,6 +2039,8 @@ try {
   else if (config.journey === "workflow-read-only") await workflowReadOnly();
   else if (config.journey === "workflow-batch") await workflowBatch();
   else if (config.journey === "workflow-explain") await workflowExplain();
+  else if (config.journey === "workflow-library") await workflowLibrary();
+  else if (config.journey === "workflow-templates") await workflowTemplates();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
@@ -1926,6 +2079,7 @@ try {
   if (autonomyCapture) result.evidence.push(retain("autonomy-network", autonomyCapture()));
   if (lifecycle || config.journey === "workflow-batch") result.evidence.push(retain("publish-attempts", publishAttempts));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
+  if (["workflow-library", "workflow-templates"].includes(config.journey)) result.evidence.push(retain("design-write-attempts", designWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
   result.pageErrors = redact(pageErrors);
   retain("observation", result);

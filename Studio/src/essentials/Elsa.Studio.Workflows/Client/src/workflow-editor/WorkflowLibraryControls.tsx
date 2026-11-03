@@ -18,18 +18,22 @@ import "./workflowOrganization.css";
 
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, refreshKey = 0, visibleTagIds = [] }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, onViews, refreshKey = 0, visibleTagIds = [] }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
   onChange(next: WorkflowDefinitionBrowseLocation): void;
   onCatalog(tags: WorkflowTag[]): void;
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
+  /** The visible library views once read, so the page can disclose the applied view's identity, owner kind and revision. */
+  onViews?(views: WorkflowLibraryView[]): void;
   refreshKey?: number;
   visibleTagIds?: readonly string[];
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
+  // Null until the view list has been read: the page then does not disclose a view it cannot yet identify.
+  const [loadedViews, setLoadedViews] = useState<WorkflowLibraryView[] | null>(null);
   const [permissions, setPermissions] = useState<WorkflowOrganizationPermissions>({});
   const [catalogCursor, setCatalogCursor] = useState<string | null>(null);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -40,6 +44,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const generationRef = useRef(0);
+  const permissionsReported = useRef(false);
   const filtersId = useId();
 
   useEffect(() => {
@@ -51,21 +56,31 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       setTags(current => catalogTerm ? mergeTags(current, page.items) : page.items);
       setCatalogCursor(page.nextContinuationToken ?? null);
       setPermissions(current => ({ ...current, ...page.permissions }));
+      permissionsReported.current = true;
       onPermissions(page.permissions ?? {});
     }).catch(caught => {
-      if (generation === generationRef.current) setError(message(caught, "Couldn't read workflow tags."));
+      if (generation !== generationRef.current) return;
+      setError(message(caught, "Couldn't read workflow tags."));
+      // A first read that fails still settles the permissions: the page then offers none of the gated actions.
+      if (!permissionsReported.current) { permissionsReported.current = true; onPermissions({}); }
     }).finally(() => { if (generation === generationRef.current) setCatalogLoading(false); });
     if (support.views) void listWorkflowViews(context).then(response => {
       if (generation !== generationRef.current) return;
       setViews(response.items);
+      setLoadedViews(response.items);
       setPermissions(current => ({ ...current, ...response.permissions }));
     }).catch(caught => {
-      if (generation === generationRef.current) setError(message(caught, "Couldn't read saved views."));
+      if (generation !== generationRef.current) return;
+      setError(message(caught, "Couldn't read saved views."));
+      // A first read that fails still settles the view list as empty: the page then discloses no view it cannot identify,
+      // rather than never settling.
+      setLoadedViews(current => current ?? []);
     });
     return () => { generationRef.current += 1; };
   }, [catalogTerm, context, onPermissions, refresh, refreshKey, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
+  useEffect(() => { if (loadedViews) onViews?.(loadedViews); }, [onViews, loadedViews]);
   const missingTagIds = !catalogLoading ? JSON.stringify([...new Set([...(location.tagFilters ?? []).map(filter => filter.tagId), ...visibleTagIds])].filter(id => !tags.some(tag => tag.id === id))) : "[]";
   useEffect(() => {
     const ids = JSON.parse(missingTagIds) as string[];

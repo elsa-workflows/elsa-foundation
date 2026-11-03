@@ -10,8 +10,23 @@ export interface WorkflowBatchUndoAvailability {
   persisted: boolean | null;
 }
 
+/**
+ * The workflow library pages' agent state (spec 1193 slice E): the visible list, the open create dialog and the visible
+ * template list by context kind, and each page's handler for its own working-state tool. A page sets and clears its own
+ * entries; nothing here holds a live page object.
+ */
+export interface WorkflowLibraryAgentController {
+  snapshots: Map<string, StudioAgentContextAttachment>;
+  handlers: Map<string, (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => Promise<StudioAgentClientExecutionResult>>;
+  /** Each applied page change's revert, by its receipt's token: a message on success, or the reason it cannot revert now. */
+  reverts: Map<string, () => string>;
+  revert?: ((token: string) => string) | null;
+}
+
 export interface WorkflowAgentController {
   snapshot: StudioAgentContextAttachment | null;
+  /** The library pages' contexts (by kind and page generation) and working-state handlers (by tool and page generation). */
+  library?: WorkflowLibraryAgentController;
   execute: ((invocation: StudioAgentPreparedInvocation, signal?: AbortSignal) => Promise<StudioAgentClientExecutionResult>) | null;
   undo: ((token: string) => Promise<string>) | null;
   /** Designer-history Undo of a reviewed Operation Batch, owned by the open editor. */
@@ -26,11 +41,20 @@ export interface WorkflowAgentController {
 
 /** Registration closes over one native module instance; live editor objects never enter shared state. */
 export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgentController {
-  const controller: WorkflowAgentController = { snapshot: null, execute: null, undo: null, batch: null, targetAvailability: null };
+  const controller: WorkflowAgentController = { snapshot: null, execute: null, undo: null, batch: null, targetAvailability: null,
+    library: { snapshots: new Map(), handlers: new Map(), reverts: new Map(), revert: null } };
+  controller.library!.revert = token => controller.library!.reverts.get(token)?.() ?? "This change can no longer be reverted on this page.";
   agent.contextProviders.add({
     id: "workflows.active-draft", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow working draft",
     surfaces: ["/workflows"], sensitivity: "internal",
     async collect() { return { attachments: controller.snapshot ? [controller.snapshot] : [], diagnostics: [] }; }
+  });
+  // The library list, the open create dialog and the template list (spec 1193 FR-020, FR-023, FR-024), each bounded and
+  // attributed to its page's revision and client binding. The server admits them strictly (workflows.library-context).
+  agent.contextProviders.add({
+    id: "workflows.library-view", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow library page",
+    surfaces: ["/workflows"], sensitivity: "internal",
+    async collect() { return { attachments: [...(controller.library?.snapshots.values() ?? [])], diagnostics: [] }; }
   });
   for (const capability of workflowAgentCapabilities) agent.capabilities.add({ ...capability, moduleId: "Elsa.Studio.Workflows" });
   for (const starter of workflowPromptStarters) agent.promptStarters.add({ ...starter, moduleId: "Elsa.Studio.Workflows" });
@@ -61,6 +85,33 @@ export function registerWorkflowAgent(agent: StudioAgentRegistry): WorkflowAgent
       if (!controller.execute) return { outcome: "refused", summary: "The originating workflow editor is unavailable." };
       return controller.execute(invocation, signal);
     }
+  });
+  // The library pages' own working state: a reviewed, revertible change applied only by the originating page. Library writes
+  // (tags, favorites, folders, views) are server tools; they need no client contract here.
+  agent.toolSlots.add({ id: "workflows.library-state", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow library page state", surfaces: ["/workflows"], invocationModes: ["proposal"] });
+  for (const [id, displayName, description, rendererId] of [
+    ["workflow_library_set_list_state", "Adjust workflow list", "Apply one reviewed change to the visible workflow list only; revertible, nothing is saved.", "weaver.workflows.list-state-result"],
+    ["workflow_create_dialog_prefill", "Prefill new workflow", "Fill the open new-workflow dialog; creating the workflow stays the user's Create action.", "weaver.workflows.create-dialog-result"]
+  ] as const)
+    agent.toolContracts.add({
+      id, slotId: "workflows.library-state", moduleId: "Elsa.Studio.Workflows", displayName, description,
+      surfaces: ["/workflows"], contractVersion: "1", executionLocation: "clientWorkingState", risk: "review-required",
+      inputSchema: { type: "object" }, resourceTargetSchema: { type: "object" }, resultSchema: { type: "object" },
+      invocationModes: ["proposal"], resultRendererIds: [rendererId],
+      async executeClient(invocation, signal) {
+        // The originating page instance, by the reviewed invocation's own client generation.
+        const handler = controller.library?.handlers.get(`${id}:${invocation.client?.generationId ?? ""}`);
+        if (!handler) return { outcome: "refused", summary: "The originating library page is unavailable. Nothing was applied." };
+        return handler(invocation, signal);
+      }
+    });
+  // The revert of an applied list or create-dialog change belongs to the module that owns those pages.
+  agent.resultControls?.add({
+    id: "workflows.agent.page-revert", moduleId: "Elsa.Studio.Workflows", displayName: "Revert page change",
+    resultTypes: ["workflows.list-state", "workflows.create-dialog-prefill"], schemaVersions: ["1"],
+    component: lazy(() => import("./workflowAgentResult").then(module => ({
+      default: (props: StudioAgentResultRendererProps) => <module.WorkflowPageRevertControl {...props} controller={controller} />
+    })))
   });
   agent.resultRenderers.add({
     id: "workflows.agent.layout-result", moduleId: "Elsa.Studio.Workflows", displayName: "Workflow layout change",

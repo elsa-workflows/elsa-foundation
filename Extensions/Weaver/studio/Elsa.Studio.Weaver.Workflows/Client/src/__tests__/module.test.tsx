@@ -8,7 +8,20 @@ describe("weaver workflows module", () => {
   it("registers prompts and presentation on the canonical agent path", () => {
     const api = testApi(); register(api);
     expect(api.agent.promptActions.list().map(item => item.id)).toContain("weaver.workflows.propose-update");
-    expect(api.agent.resultRenderers.list().map(item => item.id)).toEqual(["weaver.workflows.batch-result"]);
+    expect(api.agent.resultRenderers.list().map(item => item.id)).toEqual(["weaver.workflows.batch-result", "weaver.workflows.library-result",
+      "weaver.workflows.list-state-result", "weaver.workflows.create-dialog-result"]);
+  });
+
+  it("reports a library write per workflow and never presents a partial result as done (spec 1193 SC-008)", async () => {
+    const { WorkflowLibraryResult } = await import("../module");
+    const partial = text(<WorkflowLibraryResult {...({ toolResult: { content: "partial", payload: { typeId: "workflows.library-result", schemaVersion: "1",
+      data: { kind: "tags", status: "partial", targets: [{ definitionId: "one", status: "applied" }, { definitionId: "two", status: "conflict", message: "Reload" }] } } } } as unknown as StudioAgentResultRendererProps)} />);
+    expect(partial).toContain("Partly changed");
+    expect(partial).not.toContain("Changed in the workflow library.");
+    expect(partial).toContain("two: Changed elsewhere; reload");
+    const review = text(<WorkflowLibraryResult {...({ preparedInvocation: { preview: { typeId: "workflows.library-result", schemaVersion: "1",
+      data: { kind: "tags", status: "proposed", changes: [{ change: "create-and-add", tag: "Brand new" }], targets: [{ definitionId: "one" }] } } } } as unknown as StudioAgentResultRendererProps)} />);
+    expect(review).toContain("Creates the new tag(s) first");
   });
 
   it("removes the unbound proposal renderer and the explain-executable prompt until its tool is registered (spec 1193 FR-019)", () => {

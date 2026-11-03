@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -127,6 +128,35 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         var next = await registry.GetOrActivateAsync("default");
         Assert.NotSame(first, next);
         Assert.Equal("fresh", next.ServiceProvider.GetRequiredService<SavedConfigurationProbe>().Value);
+    }
+
+    [Fact]
+    public async Task A_reload_that_fails_reports_no_reloaded_shell_and_logs_its_cause()
+    {
+        // The c58c9f149..e2eb5433a witness saw an apply answer reloadedShellCount 0 with no cause anywhere: CShells reports
+        // a failed reload as ReloadResult.Error, which the reloader discarded. It is now logged, and the count stays 0.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { ContentRootPath = _directory });
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddJsonFile(_shellsPath, optional: false, reloadOnChange: false);
+        builder.Services.AddSingleton<IWebHostEnvironment>(new FakeEnvironment(_directory));
+        var logs = new RecordingLoggerProvider();
+        builder.Logging.AddProvider(logs);
+        builder.Services.AddModularityApi();
+        builder.Services.AddCShells(shells => shells
+            .WithAssemblies(typeof(SavedConfigurationProbeFeature).Assembly)
+            .WithConfigurationProvider(builder.Configuration));
+        using var host = builder.Build();
+        var first = await host.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync("default");
+        await using var scope = first.BeginScope();
+        var store = scope.ServiceProvider.GetRequiredService<IShellFeatureConfigurationStore>();
+        var before = await store.LoadAsync();
+        await store.SaveAsync(before.Revision, [new FeatureConfigurationChange("FailingConfigurationProbe", true, Json("{}"))]);
+
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<IShellReloader>().ReloadAsync());
+        var entry = Assert.Single(logs.Entries, item => item.Category == typeof(ShellReloader).FullName);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains("default", entry.Message);
+        Assert.Contains(FailingConfigurationProbeFeature.Cause, entry.Exception?.ToString() ?? "");
     }
 
     [Fact]
@@ -372,6 +402,27 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
     }
 
     public sealed record SavedConfigurationProbe(string Value);
+
+    [ShellFeature("FailingConfigurationProbe")]
+    public sealed class FailingConfigurationProbeFeature : IShellFeature
+    {
+        internal const string Cause = "qualification-probe-configuration-failure";
+        public void ConfigureServices(IServiceCollection services) => throw new InvalidOperationException(Cause);
+    }
+
+    private sealed class RecordingLoggerProvider : ILoggerProvider
+    {
+        public List<(string Category, LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+        public void Dispose() { }
+        private sealed class Logger(RecordingLoggerProvider owner, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            { lock (owner.Entries) owner.Entries.Add((category, logLevel, formatter(state, exception), exception)); }
+        }
+    }
 
     private sealed class FailingReloadProvider : ConfigurationProvider
     {

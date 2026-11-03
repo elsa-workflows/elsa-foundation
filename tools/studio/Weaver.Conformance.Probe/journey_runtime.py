@@ -325,7 +325,8 @@ class JourneyRuntime:
         check(any(features[key]["enabled"] != enabled or features[key]["configuration"] != config for key, (enabled, config) in changes.items()),
               "No-op feature selection cannot establish generation change")
         applied, aref = self.native.json(client, name + "-apply", "/modularity/features/apply", request, method="POST")
-        check(applied["reloadedShellCount"] > 0, "Full-state apply did not reload a real shell")
+        # A failed reload leaves the previous generation serving; the host logs its cause (Elsa.Modularity.Api.Services.ShellReloader).
+        check(applied["reloadedShellCount"] > 0, "Full-state apply did not reload a real shell; the backend runtime log names the reload's cause")
         after, afref = self.native.generation(client, name + "-after")
         check(before["generation"] != after["generation"], "Full-state feature apply did not change native generation")
         selected = {item["id"]: item for item in applied["catalog"]["features"]}
