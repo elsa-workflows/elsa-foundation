@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Reflection;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Scripting.Activities;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Xunit;
@@ -9,6 +11,22 @@ using static Elsa.Workflows.Publishing.Api.Tests.SecretBindingCompilerFixture;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class UserTaskOutcomePublicationTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Optional_value_outcomes_preserve_existing_done_path(bool script, bool explicitNull)
+    {
+        var activityType = script ? typeof(RunJavaScript) : typeof(SendHttpRequest);
+        var key = script ? "script" : nameof(SendHttpRequest.Url);
+        var value = script ? "return 1;" : "https://example.invalid/";
+        var inputs = new List<ArgumentState> { new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null) };
+        if (explicitNull) inputs.Add(new(script ? RunJavaScript.PossibleOutcomesInputKey : nameof(SendHttpRequest.ExpectedStatusCodes), new ArgumentValue(JsonSerializer.SerializeToElement((object?)null), "Literal"), null, null, null, null));
+        var executable = await CompileAsync(Node(activityType, inputs.ToArray()), [activityType], includeDeclaredInputDefaults: true);
+        Assert.Contains("Done", executable.RootActivity.ActivityContract!.Outcomes);
+    }
+
     [Fact]
     public async Task Unedited_catalog_defaults_pin_arrays_and_an_object_instead_of_JSON_text()
     {

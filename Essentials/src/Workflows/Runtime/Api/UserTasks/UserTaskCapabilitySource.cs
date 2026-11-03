@@ -21,6 +21,13 @@ internal sealed class UserTaskCapabilitySource(IServiceProvider services) : IApi
             ? physical is not null && services.GetService<IUserTaskPersistenceBoundary>()?.CanRetainCompletionEvidence(journal, physical) == true
             : services.GetService<IOptions<UserTaskOptions>>()?.Value.AllowVolatileTasksForDevelopment == true &&
                 physical?.GetType() == typeof(InMemoryWorkflowExecutionStateStore);
+        var activities = services.GetService<IActivityExecutionStateStore>();
+        var physicalActivities = activities?.GetType() == typeof(CoalescingActivityExecutionStateStore)
+            ? services.GetService<CoalescingInner<IActivityExecutionStateStore>>()?.Value : activities;
+        var bookmarks = services.GetService<IBookmarkStateStore>();
+        var checkpoints = services.GetService<IRuntimeCheckpointCommitStore>();
+        ready = ready && physical is not null && physicalActivities is not null && bookmarks is not null &&
+            checkpoints?.SupportsExactBookmarkResume == true && checkpoints.CanCommitExactBookmarkResume(bookmarks, physical, physicalActivities);
         return ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>(ready ? [Declaration] : []);
     }
     private static readonly ApiCapabilityDeclaration Declaration = new Elsa.Api.Capabilities.Models.ApiCapabilityDeclaration("elsa.api.user-tasks", 1,

@@ -664,6 +664,8 @@ public sealed class ExecutableNodeCompiler(
         var declaration = activityType.GetCustomAttribute<ActivityValueOutcomesAttribute>(inherit: true);
         if (declaration is null || inputBindings is null ||
             !inputBindings.TryGetValue(declaration.InputKey, out var binding)) return;
+        // Optional collections preserve their existing static/default outcomes when omitted or explicitly null.
+        if (binding.Source == RuntimeInputBindingSource.Literal && binding.Literal?.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull) return;
         // Ports are part of the published executable contract; evaluated names cannot add ports after publication.
         if (binding.LiteralValue is not { ValueKind: JsonValueKind.Array } array)
             throw new ArgumentException($"Outcome input '{declaration.InputKey}' requires an authored literal collection.");
