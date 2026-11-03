@@ -20,6 +20,8 @@ public sealed partial class EtlRuntimeJourneyTests
         await using var files = new RuntimeFiles(CsvJourneySource, new("tenant-fixture", "compaction-1192"));
         var database = Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "runtime.db");
         File.Copy(fixture, database);
+        // The host that ran the run had a snapshot root; idle shards need no files in it, but the worker requires the root.
+        Directory.CreateDirectory(files.SnapshotRoot);
         var priorRows = await PriorConnectorRowsAsync(database);
 
         // Migrate alone first: every claim compacts, so the prior rows can only be compared before a host runs.

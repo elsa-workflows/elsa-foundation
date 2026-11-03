@@ -200,6 +200,8 @@ internal sealed partial class EfEtlRuntimeStore
         var row = candidate.Partition;
         var owed = await ReadConnectorOwedBatchAsync(row, new(invocation, state.Bindings),
             state.Pipeline, state.Prepared!, position, cancellationToken);
+        // Every connector step starts with a claim, so compacting here precedes any work the lease is charged for.
+        await CompactConnectorHttpHistoryAsync(row, candidate.Connector, state.Pipeline, cancellationToken);
         now = NowTicks();
         row.Owner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
         row.Fence = checked(row.Fence + 1);
@@ -208,7 +210,11 @@ internal sealed partial class EfEtlRuntimeStore
         await db.SaveChangesAsync(cancellationToken);
         if (row.ExpiresAtUtcTicks <= NowTicks()) return null;
         await tx.CommitAsync(cancellationToken);
-        return new(scope, runId, row.PartitionOrdinal, workerId, row.Fence, EtlRuntimeRecordCodec.ReadUtc(row.ExpiresAtUtcTicks.Value), position) { OwedBatch = owed };
+        return new(scope, runId, row.PartitionOrdinal, workerId, row.Fence, EtlRuntimeRecordCodec.ReadUtc(row.ExpiresAtUtcTicks.Value), position)
+        {
+            OwedBatch = owed,
+            PollGeneration = row.PollGeneration
+        };
     }
 
     public ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
