@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Runtime;
+using Elsa.Etl.Runtime.Hosting;
 using Elsa.Etl.Tests.Support;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
@@ -48,6 +49,42 @@ public sealed partial class EtlRuntimeJourneyTests
 
         Assert.Equal(EtlRunStatus.BusinessError, run.Status);
         Assert.Equal("etl.sql-unavailable", run.TerminalResult?.Diagnostic?.Code);
+    }
+
+    [Fact]
+    public async Task A_worker_killed_after_its_sql_commit_and_before_the_record_is_replayed_without_writing_twice()
+    {
+        await using var files = new RuntimeFiles(CsvJourneySource);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        var target = $"Data Source={Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "warehouse.db")};Pooling=False";
+        ExecuteSql(target, "CREATE TABLE people (id INTEGER NOT NULL, name TEXT NOT NULL, category TEXT NULL, CONSTRAINT people_key UNIQUE (id))");
+        EtlHostSqlBindingOptions[] sql = [SqlBinding(files.Scope, target)];
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate,
+            configureServices: services => services.AddSingleton<IEtlSqlEngine>(new SqliteEtlSqlEngine()),
+            configureRuntime: runtime => runtime.SqlBindings.AddRange(sql));
+        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(deadline.Token);
+        var invocation = ConnectorInvocation(files.Scope, "sql-process", SqlPipeline());
+        await files.AdmitAsync(host, invocation);
+
+        // The predecessor commits its first batch to the table and ledger, then is killed before the runtime records it.
+        var predecessor = await files.StartWorkerAsync("sql-predecessor", deadline.Token,
+            connectorGate: EtlConnectorWorkerGate.BeforePublicationRecord, sqlBindings: sql);
+        var checkpoint = await predecessor.WaitForConnectorCheckpointAsync(deadline.Token);
+        Assert.Equal(EtlConnectorWorkerGate.BeforePublicationRecord, checkpoint.Gate);
+        var committed = QuerySql(target, "SELECT effect_id FROM elsa_etl_effect_ledger");
+        Assert.Single(committed);
+        await predecessor.CrashAsync();
+        Assert.True(predecessor.HasExited);
+
+        _ = await files.StartWorkerAsync("sql-survivor", deadline.Token, sqlBindings: sql);
+        var run = await files.WaitForTerminalAsync(host.Services, invocation.RunId);
+
+        Assert.Equal((EtlRunStatus.BusinessError, 2L), (run.Status, run.AcceptedRecords));
+        Assert.Equal(["1|Ada|one", "3|Bram|three"], QuerySql(target, "SELECT id, name, category FROM people ORDER BY id"));
+        // The replacement found the predecessor's ledger row: two batches, two ledger rows, the first one unchanged.
+        var ledger = QuerySql(target, "SELECT effect_id FROM elsa_etl_effect_ledger ORDER BY applied_at");
+        Assert.Equal(2, ledger.Length);
+        Assert.Contains(committed[0], ledger);
     }
 
     private static async Task<EtlRunView> AdmitAndWaitAsync(RuntimeFiles files, Microsoft.Extensions.Hosting.IHost host,

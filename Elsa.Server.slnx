@@ -56,6 +56,10 @@
   <Folder Name="/Extensions/Etl/src/Persistence/">
     <Project Path="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Etl/src/Sql/">
+    <Project Path="Extensions/Etl/src/Sql/PostgreSql/Elsa.Etl.Sql.PostgreSql.csproj" />
+    <Project Path="Extensions/Etl/src/Sql/SqlServer/Elsa.Etl.Sql.SqlServer.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Etl/src/Workflows/">
     <Project Path="Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
     <Project Path="Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
