@@ -3,6 +3,20 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there.",
  "results": [
   {
+   "mutation": "design-update-retry",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
+   "project": "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlDefinitionStoreSqlServerTests.A_draft_update_racing_a_publication",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Persistence.ProviderTests.EtlDefinitionStoreSqlServerTests.A_draft_update_racing_a_publication_settles_without_a_provider_failure"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "private static readonly EfWriteRetry UpdateRetry = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Transient);",
+   "mutated_text": "private static readonly EfWriteRetry UpdateRetry = new(1, EfWriteConflict.Transient);",
+   "sourceRevision": "bdb89368ca7238dc9dfadda197692d16075ec5d8"
+  },
+  {
    "mutation": "design-failed-create-detaches",
    "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",

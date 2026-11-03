@@ -50,7 +50,7 @@ A host that keeps its Elsa state in SQL Server, PostgreSQL or MySQL selects that
 - **FR-001** `EtlDesign` declares SQL Server, PostgreSQL and MySQL contexts beside SQLite, each applying the binary collation (unbounded text takes each provider's default type: `TEXT`, `nvarchar(max)`, `text`, `longtext`); registration selects the context by provider.
 - **FR-002** Each new engine has a generated initial migration, made with an ETL-owned design-time tooling project and script (as Rules has), generated as internal classes; the retained SQLite chains are untouched.
 - **FR-003** The catalog pages by the column's binary collation, with no provider-specific function in the query.
-- **FR-004** Publication retries a transient write conflict (serialization failure, deadlock, lock timeout, a busy or locked SQLite database) as a whole unit within a bounded budget and otherwise keeps its contract outcomes; draft create and update keep their single conditional statements.
+- **FR-004** Publication retries a transient write conflict (serialization failure, deadlock, lock timeout, a busy or locked SQLite database) as a whole unit within a bounded budget and otherwise keeps its contract outcomes; draft create and update keep their single conditional statements; an update retries its statement on a transient write conflict.
 - **FR-005** On each engine the provider suite migrates a fresh database, validates it, and finds no pending model changes.
 - **FR-006** A design-store contract suite runs on SQLite in the ETL suite and on the three server engines in a container suite listed in `tools/ci/test-tiers.json`.
 - **FR-007** The ETL README, the persistence README and the module's manifest describe the four providers.
