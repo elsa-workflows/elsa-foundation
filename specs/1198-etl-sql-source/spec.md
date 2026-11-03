@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft
+**Status**: Implemented; [evidence](evidence/README.md)
 
 **Input**: The snapshot half of the read side of the fourth criterion of [#2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908): "Both PostgreSQL and SQL Server support snapshot/watermark reads and transactional keyed writes, with real provider-specific recovery evidence. Log CDC is deferred." Keyed writes are [spec 1197](../1197-etl-sql-destination/spec.md). Watermark (incremental) reads are a later slice. Part of [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 

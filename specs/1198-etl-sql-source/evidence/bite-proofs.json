@@ -1,0 +1,217 @@
+{
+ "spec": "1198-etl-sql-source",
+ "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself.",
+ "results": [
+  {
+   "mutation": "source-table-identifier-unchecked",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_table_that_is_not_an_identifier",
+   "mutated": "Failed!  - Failed: 3, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_table_that_is_not_an_identifier_is_refused(table: \"a.b.c\", code: \"source.sql-identifier-invalid\")",
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_table_that_is_not_an_identifier_is_refused(table: \"people;drop\", code: \"source.sql-identifier-invalid\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "        if (!IsSqlTable(sql.Table))\n            diagnostics.Add(\"source.sql-identifier-invalid\", \"source.table\",",
+   "mutated_text": "        if (false && !IsSqlTable(sql.Table))\n            diagnostics.Add(\"source.sql-identifier-invalid\", \"source.table\",",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "source-column-case-collision-allowed",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.Columns_must",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.Columns_must_be_identifiers_distinct_ignoring_case_and_the_key_required_declared_columns"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != names.Length)\n            diagnostics.Add(\"source.sql-identifier-invalid\", \"source.columns\",",
+   "mutated_text": "names.Distinct(StringComparer.Ordinal).Count() != names.Length)\n            diagnostics.Add(\"source.sql-identifier-invalid\", \"source.columns\",",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "source-key-optional-column-allowed",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.Columns_must",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.Columns_must_be_identifiers_distinct_ignoring_case_and_the_key_required_declared_columns"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "columns.TryGetValue(name, out var column) && column.Required))",
+   "mutated_text": "columns.TryGetValue(name, out var column)))",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "published-snapshot-not-reused",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_published_snapshot|FullyQualifiedName~A_worker_killed_after_publishing",
+   "mutated": "Failed!  - Failed: 2, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_worker_killed_after_publishing_its_snapshot_is_replaced_and_the_replacement_reuses_that_snapshot",
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_published_snapshot_is_reused_after_the_table_changed_so_a_replacement_reads_the_same_point_in_time"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "if (await _jsonlPublisher.FindAsync(",
+   "mutated_text": "if (false && await _jsonlPublisher.FindAsync(",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "transient-read-fails-run",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_transient_read",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_transient_read_failure_records_nothing_and_the_next_attempt_prepares"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "if (engine.Classify(exception) == EtlSqlErrorKind.Transient)",
+   "mutated_text": "if (false && engine.Classify(exception) == EtlSqlErrorKind.Transient)",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "float-accepted-as-decimal",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_column_the_declaration",
+   "mutated": "Failed!  - Failed: 1, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_column_the_declaration_cannot_hold_or_a_missing_column_fails_preparation(column: \"ratio\", type: Decimal, code: \"etl.sql-column-type-unsupported\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "                    case decimal number: writer.WriteNumberValue(number); return;",
+   "mutated_text": "                    case decimal number: writer.WriteNumberValue(number); return;\n                    case double fraction: writer.WriteNumberValue(fraction); return;",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "snapshot-size-unchecked",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_snapshot_beyond",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_snapshot_beyond_the_snapshot_limit_fails_preparation"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "if (line.Length > maxBytes - written)",
+   "mutated_text": "if (false && line.Length > maxBytes - written)",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "sql-pin-digest-accepted",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorInputBatchBuilder.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_snapshot_that_no_longer_matches",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_snapshot_that_no_longer_matches_its_recorded_hash_is_refused"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "revision.ExpectedSha256 is not null || !EtlConnectorCsvSupport.IsHash(revision.Handle) ||",
+   "mutated_text": "false || !EtlConnectorCsvSupport.IsHash(revision.Handle) ||",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "sql-source-binding-wrong-role",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostConnectorBindings.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.A_source_binding|FullyQualifiedName~A_sql_source_reads_its_table_once",
+   "mutated": "Failed!  - Failed: 2, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_sql_source_reads_its_table_once_and_runs_it_across_two_partitions",
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_source_binding_resolves_a_digest_free_pin_and_refuses_a_table_it_does_not_allow"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "sql.ResolveCurrent(scope, table.Binding, \"Source\", table.Table)",
+   "mutated_text": "sql.ResolveCurrent(scope, table.Binding, \"MainOutput\", table.Table)",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "preparer-sql-kind-unmatched",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlConnectorPreparer.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.Preparation_reads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.Preparation_reads_the_table_in_key_order_as_one_json_lines_object_per_row"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "EtlSqlSource => EtlConnectorKind.Sql,",
+   "mutated_text": "EtlSqlSource => EtlConnectorKind.Jsonl,",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "worker-sql-identifiers-unchecked",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Hosting/EtlConnectorExecutableReader.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~Reader_refuses_a_sql_source",
+   "mutated": "Failed!  - Failed: 1, Passed: 2",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_a_sql_source_whose_identifiers_or_key_the_compiler_would_refuse(table: \"people;drop\", column: \"id\", key: \"id\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 3",
+   "original": "if (sql.Table?.Split('.') is not { Length: 1 or 2 } parts || !parts.All(SqlIdentifier) ||",
+   "mutated_text": "if (sql.Table?.Split('.') is not { Length: 1 or 2 } parts || !parts.All(part => part.Length > 0) ||",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "codec-sql-source-digest-required",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlConnectorRecordCodec.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_sql_source_reads_its_table_once",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_sql_source_reads_its_table_once_and_runs_it_across_two_partitions"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "Binding(bindings.Source, EtlConnectorKind.Sql, sql.Binding, isInput: false);",
+   "mutated_text": "Binding(bindings.Source, EtlConnectorKind.Sql, sql.Binding, isInput: true);",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "codec-sql-snapshot-compared-to-pin",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlConnectorRecordCodec.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_sql_source_reads_its_table_once",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_sql_source_reads_its_table_once_and_runs_it_across_two_partitions"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "pipeline.Source is not EtlSqlSource && file.Source.ContentHash",
+   "mutated_text": "file.Source.ContentHash",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "sqlserver-read-committed",
+   "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlServerProviderTests.A_change_committed|FullyQualifiedName~EtlSqlServerProviderTests.A_database_without",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_database_without_snapshot_isolation_is_a_read_rejection"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "public IsolationLevel SnapshotIsolation => IsolationLevel.Snapshot;",
+   "mutated_text": "public IsolationLevel SnapshotIsolation => IsolationLevel.ReadCommitted;",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  },
+  {
+   "mutation": "postgres-read-committed",
+   "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlPostgreSqlProviderTests.A_change_committed",
+   "mutated": "Passed!  - Failed: 0, Passed: 1",
+   "failedTests": [],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "public IsolationLevel SnapshotIsolation => IsolationLevel.RepeatableRead;",
+   "mutated_text": "public IsolationLevel SnapshotIsolation => IsolationLevel.ReadCommitted;",
+   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+  }
+ ]
+}
