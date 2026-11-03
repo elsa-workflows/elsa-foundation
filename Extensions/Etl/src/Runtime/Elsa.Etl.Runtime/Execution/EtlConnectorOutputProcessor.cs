@@ -328,6 +328,10 @@ internal sealed class EtlConnectorOutputProcessor
     {
         if (_rabbitMqBindings is null)
             return DispatchFailed("etl.rabbitmq-unavailable");
+        // A recorded route was confirmed in full. Unlike a file or a SQL ledger, a broker cannot recognise a second copy, so a
+        // batch dispatched again (an error route retrying, or acceptance deferred) must not publish every message again.
+        if (routeId == EtlOutputRoute.Main ? lease.OwedBatch!.FilePublications.Main : lease.OwedBatch!.FilePublications.Errors)
+            return new(EtlStoreStatus.Replay, ReadyToAccept: true, Yield: false, FailureCode: null);
         var bytes = await ReadRetainedRouteBodyAsync(route, pipeline.Limits.MaxOutputBatchBytes, cancellationToken);
         var pin = DestinationRevision(admission, routeId).Revision;
         var binding = _rabbitMqBindings.ResolveExact(lease.Scope, pin.Alias, RouteRole(routeId), pin.Revision, pin.Handle,
