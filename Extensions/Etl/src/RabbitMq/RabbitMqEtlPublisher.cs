@@ -27,6 +27,7 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     // channel limit (per virtual host, user or node) with not allowed; a later attempt can pass it, so such a reply is transient.
     private static readonly HashSet<ushort> RejectedReplyCodes = [403, 404, 406, 530];
     private const ushort NotAllowed = 530;
+    private const ushort PreconditionFailed = 406;
     // The broker's own limit wording: "connection limit (N) is reached" per virtual host, user or node, "… limit of (N)" for
     // channels, and a limit it could not query. Names are quoted in the reply and removed first, so a virtual host or user
     // whose name says "limit" is not mistaken for one.
@@ -178,6 +179,13 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     };
 
     private static EtlRabbitMqErrorKind Classify(ShutdownEventArgs reason) =>
+        // A channel closed because messages were held unacknowledged past the broker's consumer_timeout (406) can be retried.
+        reason.ReplyCode == PreconditionFailed && reason.ReplyText.Contains("delivery acknowledgement", StringComparison.OrdinalIgnoreCase) &&
+        reason.ReplyText.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            ? EtlRabbitMqErrorKind.Transient
+            : ClassifyReplyCode(reason);
+
+    private static EtlRabbitMqErrorKind ClassifyReplyCode(ShutdownEventArgs reason) =>
         reason.ReplyCode == NotAllowed && LimitReached.IsMatch(QuotedName.Replace(reason.ReplyText, "''"))
             ? EtlRabbitMqErrorKind.Transient
             : RejectedReplyCodes.Contains(reason.ReplyCode) ? EtlRabbitMqErrorKind.Rejected : EtlRabbitMqErrorKind.Transient;

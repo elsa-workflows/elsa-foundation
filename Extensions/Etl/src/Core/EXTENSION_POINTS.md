@@ -173,22 +173,21 @@ public interface IEtlRabbitMqPublisher
 ```csharp
 public interface IEtlRabbitMqConsumer
 {
-    ValueTask<IEtlRabbitMqReceipt> ReceiveAsync(string connectionString, string queue, int maxMessages, long maxBytes,
-        CancellationToken cancellationToken);
+    ValueTask<IEtlRabbitMqReceipt> ReceiveAsync(string connectionString, string queue, int maxMessages,
+        Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>> accept, CancellationToken cancellationToken);
     EtlRabbitMqErrorKind Classify(Exception exception);
 }
 
 public interface IEtlRabbitMqReceipt : IAsyncDisposable
 {
-    IReadOnlyList<ReadOnlyMemory<byte>> Bodies { get; }
-    bool FirstMessageTooLarge { get; }
+    int Count { get; }
     ValueTask AcknowledgeAsync(CancellationToken cancellationToken);
 }
 ```
 
-- **What it is.** An adapter that receives a finite source's messages without acknowledging them. The runtime owns the order: it writes the bodies as the run's snapshot and calls `AcknowledgeAsync` only after the store has recorded that snapshot; any other outcome disposes the receipt unacknowledged, which must let the broker requeue the messages.
+- **What it is.** An adapter that receives a finite source's messages without acknowledging them and hands each body to the runtime's `accept` callback as it arrives; the body is valid only during that call. The runtime writes the body to the run's snapshot and refuses it when it would pass the snapshot bound; a refused body, and every later message, must stay queued. The runtime calls `AcknowledgeAsync` only after the store has recorded the snapshot; any other outcome disposes the receipt unacknowledged, which must let the broker requeue the messages.
 - **Registration:** `services.AddSingleton<IEtlRabbitMqConsumer, …>()` from `EtlRabbitMqFeature`, beside the publisher, which binding resolution also uses to describe a source binding's target. More than one registration makes connector binding resolution throw.
-- **When to implement:** to receive through another client with the same unacknowledged-until-told semantics. Stop before a message that would take the bodies, each counted with one byte for its line end, past `maxBytes`, and leave it queued.
+- **When to implement:** to receive through another client with the same unacknowledged-until-told semantics, without holding received bodies after `accept` returns.
 - **What depends on it:** `HostRabbitMqBindings`, `EtlConnectorPreparer` and `EtlConnectorExecution` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `RabbitMqEtlConsumer` (`Elsa.Etl.RabbitMq`).
 

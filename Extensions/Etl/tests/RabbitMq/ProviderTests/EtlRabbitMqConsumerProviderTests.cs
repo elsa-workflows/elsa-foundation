@@ -68,6 +68,35 @@ public sealed class EtlRabbitMqConsumerProviderTests(EtlRabbitMqBrokerFixture br
     }
 
     [SkippableFact]
+    public async Task A_run_stops_taking_messages_once_its_drain_budget_is_spent_after_at_least_one()
+    {
+        Skip.If(broker.SkipReason is not null, broker.SkipReason);
+        await FillAsync("""{"id":1}""", """{"id":2}""", """{"id":3}""");
+
+        // With no time left, a run still takes one message, so a backlog always drains; the rest stay queued.
+        var spent = new RabbitMqEtlConsumer(TimeSpan.Zero);
+        await using (var receipt = await spent.ReceiveAsync(broker.ConnectionString, _queue, 10, Accept, default))
+        {
+            Assert.Equal(1, receipt.Count);
+            await receipt.AcknowledgeAsync(default);
+        }
+
+        Assert.Equal(2u, await ReadyAsync());
+    }
+
+    [Fact]
+    public void A_channel_closed_for_an_acknowledgement_timeout_is_transient_and_other_precondition_failures_are_not()
+    {
+        var timedOut = new RabbitMQ.Client.Exceptions.AlreadyClosedException(new RabbitMQ.Client.Events.ShutdownEventArgs(ShutdownInitiator.Peer, 406,
+            "PRECONDITION_FAILED - delivery acknowledgement on channel 1 timed out. Timeout value used: 1800000 ms."));
+        var inequivalent = new RabbitMQ.Client.Exceptions.AlreadyClosedException(new RabbitMQ.Client.Events.ShutdownEventArgs(ShutdownInitiator.Peer, 406,
+            "PRECONDITION_FAILED - inequivalent arg 'durable' for queue 'people'"));
+
+        Assert.Equal(EtlRabbitMqErrorKind.Transient, _consumer.Classify(timedOut));
+        Assert.Equal(EtlRabbitMqErrorKind.Rejected, _consumer.Classify(inequivalent));
+    }
+
+    [SkippableFact]
     public async Task An_empty_queue_returns_at_once_a_missing_queue_is_rejected_and_an_unreachable_broker_is_transient()
     {
         Skip.If(broker.SkipReason is not null, broker.SkipReason);

@@ -133,6 +133,10 @@ provides the consumer. The runtime never declares queues.
 - **Requeue limits.** Every preparation that does not record its snapshot returns the messages to the queue. A quorum queue
   counts those returns: by default RabbitMQ 4 drops a message after 20 of them, so a pipeline that keeps failing (a broken
   lookup, a refused record) loses the messages. Give such queues a dead-letter exchange, or a higher `x-delivery-limit`.
+- **Acknowledgement timeout.** RabbitMQ closes a channel whose deliveries stay unacknowledged past its `consumer_timeout`
+  (30 minutes by default). A run stops taking messages after five minutes (always taking at least one) and leaves the rest
+  for the next run, so a slow or distant broker drains a backlog over several runs; a channel closed for that timeout is
+  retried. Keep `consumer_timeout` well above the time a preparation takes to record its snapshot.
 - **Snapshots of failed attempts.** Each preparation attempt writes its own snapshot, under a random key, so an attempt that
   does not record it leaves a snapshot behind that no later attempt reuses; retention must account for these.
 
