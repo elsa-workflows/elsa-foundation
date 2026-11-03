@@ -8897,6 +8897,8 @@ virtual Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBindingPageRequest.Pri
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeAdmissionCompletion.ToString() -> string
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Core.Models.RuntimeVariableValueAddress.ToString() -> string
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkDeferral
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkDeferral.DeferAsync(string! workflowExecutionId, string! workItemId, System.DateTimeOffset now, System.DateTimeOffset visibleAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkVisibilityReader
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkVisibilityReader.ListWithVisibilityAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkQuery! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility!>!>
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkVisibility

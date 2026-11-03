@@ -499,9 +499,9 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     [Fact]
     public async Task DrainAsync_WithRetryAfterPolicy_WhenAnInactiveCoalescingSegmentRefusesTheRelease_AcksAndPoisonsTheItem()
     {
-        // A handler crosses a durable boundary that deactivates the coalescing overlay, and the durable head then moves.
-        // The release must persist at once, and cannot, because the head is no longer this item. The session used to
-        // drop the overlay claim and then throw, so the fallback ack failed as claim-lost: no record, and the durable
+        // A handler crosses a durable boundary that deactivates the coalescing overlay, and another owner then claims the
+        // durable copy. The release must persist at once, and cannot, because that claim holds the item. The session used
+        // to drop the overlay claim and then throw, so the fallback ack failed as claim-lost: no record, and the durable
         // copy stayed queued to fault again. The real session now refuses while the claim still owns the item, so the
         // item ends acknowledged (its exact durable copy removed) and Poisoned.
         var inner = new InMemoryWorkflowSchedulerWorkQueue();
@@ -514,9 +514,8 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         {
             await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
             session.Deactivate();
-            Assert.True(await inner.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId));
+            await ClaimDurableCopyAsOtherOwnerAsync(inner, item);
             await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
-            await inner.EnqueueAsync(item);
         });
         var drainer = TestSchedulerDrainer.Create(
             queue,
@@ -557,9 +556,8 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             {
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
                 session.Deactivate();
-                Assert.True(await inner.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId));
+                await ClaimDurableCopyAsOtherOwnerAsync(inner, item);
                 await inner.EnqueueAsync(NewWorkItem(2, WorkflowExecutionCommandKind.InvokeActivity));
-                await inner.EnqueueAsync(item);
             });
         var drainer = TestSchedulerDrainer.Create(
             queue,
@@ -577,6 +575,15 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Equal(1, handler.InvocationCount);
         Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
         Assert.Equal(["work-1", "work-2"], (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Select(item => item.WorkItemId).Order(StringComparer.Ordinal));
+    }
+
+    // Another owner takes the durable copy under a live claim, which no delayed release may override. The session reads
+    // the system clock, so the claim is live by that clock.
+    private static async Task ClaimDurableCopyAsOtherOwnerAsync(InMemoryWorkflowSchedulerWorkQueue inner, RuntimeSchedulerWorkItem item)
+    {
+        var claim = await inner.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(
+            item.WorkflowExecutionId, "other-owner", DateTimeOffset.UtcNow, TimeSpan.FromDays(1)));
+        Assert.Equal(item.WorkItemId, claim?.Item.WorkItemId);
     }
 
     [Fact]

@@ -409,9 +409,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // non-retaining checkpoint go to the store. A checkpoint that went may be durable whether or not the call
             // returned, a coalescing segment may hold it for its flush, and a handler may commit through a scope of
             // its own, so none of that is inferred after the fact. A release the queue refuses (an inactive
-            // coalescing segment whose durable head moved, say) falls back to the acknowledgement; everything not
-            // released is poisoned. So is a delay that ends past the last representable time: no queue can persist it,
-            // and releasing it anyway would park the step for good.
+            // coalescing segment whose durable copy another owner claimed, say) falls back to the acknowledgement;
+            // everything not released is poisoned. So is a delay that ends past the last representable time: no queue
+            // can persist it, and releasing it anyway would park the step for good.
             var retry = await DecideRetryAsync(workItem, faultInfo, cancellationToken);
             DateTimeOffset? releasedUntil = null;
             if (retry.Decision is { Mode: RuntimeDomainRetryMode.RetryAfter, Delay: { } delay } && !handlerReturned &&

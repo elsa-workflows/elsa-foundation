@@ -58,8 +58,9 @@ public sealed class CoalescingSchedulerVisibilityTests
     }
 
     [Fact]
-    public async Task Changed_durable_head_is_released_without_receiving_another_items_delay()
+    public async Task Changed_durable_head_keeps_its_visibility_while_the_flush_delays_the_released_item()
     {
+        // #3690: the flush persists the delay on the released item by identity, not on whatever is now the head.
         await _queue.EnqueueAsync(Work("resume"));
         var session = Session();
         var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
@@ -68,12 +69,15 @@ public sealed class CoalescingSchedulerVisibilityTests
         await _queue.EnqueueAsync(Work("replacement-head"));
         await _queue.EnqueueAsync(Work("resume"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => session.AdvanceInnerQueueAsync(true, default).AsTask());
+        await session.AdvanceInnerQueueAsync(true, default);
 
-        var head = Assert.IsType<RuntimeSchedulerWorkClaim>(await _queue.ClaimAsync(
-            new RuntimeSchedulerWorkClaimRequest(ExecutionId, "audit", DateTimeOffset.UtcNow, TimeSpan.FromDays(1))));
+        Assert.Equal([("replacement-head", (DateTimeOffset?)null), ("resume", _now.AddDays(2))],
+            (await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items
+            .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter)));
+        var head = Assert.IsType<RuntimeSchedulerWorkClaim>(await _queue.ClaimAsync(Request("audit")));
         Assert.Equal("replacement-head", head.Item.WorkItemId);
-        Assert.Equal(2, (await _queue.ListAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items.Count);
+        Assert.True((await _queue.CompleteClaimAsync(head)).Succeeded);
+        Assert.Null(await _queue.ClaimAsync(Request("audit")));
     }
 
     [Theory]
@@ -117,7 +121,7 @@ public sealed class CoalescingSchedulerVisibilityTests
     }
 
     [Fact]
-    public async Task Inactive_release_whose_durable_head_moved_is_refused_while_the_claim_still_owns_the_item()
+    public async Task Inactive_release_whose_durable_head_moved_delays_only_its_own_item()
     {
         await _queue.EnqueueAsync(Work("resume"));
         var session = Session();
@@ -128,16 +132,33 @@ public sealed class CoalescingSchedulerVisibilityTests
         await _queue.EnqueueAsync(Work("replacement-head"));
         await _queue.EnqueueAsync(Work("resume"));
 
+        Assert.True((await session.ReleaseOverlayClaimAsync(claim, _now.AddDays(2), default)).Succeeded);
+
+        Assert.False(session.OwnsOverlayClaim(claim));
+        Assert.Equal([("replacement-head", (DateTimeOffset?)null), ("resume", _now.AddDays(2))],
+            (await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items
+            .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter)));
+    }
+
+    [Fact]
+    public async Task Inactive_release_whose_durable_copy_another_owner_claimed_is_refused_while_the_claim_still_owns_the_item()
+    {
+        await _queue.EnqueueAsync(Work("resume"));
+        var session = Session();
+        var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+        session.Deactivate();
+        var competing = Assert.IsType<RuntimeSchedulerWorkClaim>(await _queue.ClaimAsync(Request("other-owner")));
+
         var release = await session.ReleaseOverlayClaimAsync(claim, _now.AddDays(2), default);
 
-        // Refused, not thrown after dropping the claim: the caller can still complete it, which removes only its own
-        // durable identity, and neither durable item received the delay.
+        // Refused, not thrown after dropping the claim: the caller can still complete it, and the competing claim keeps
+        // its own visibility rather than receiving the delay.
         Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale, release.Status);
         Assert.True(session.OwnsOverlayClaim(claim));
-        Assert.All((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items,
-            entry => Assert.NotEqual(_now.AddDays(2), entry.VisibleAfter));
-        Assert.True((await session.CompleteOverlayClaimAsync(claim, default)).Succeeded);
-        Assert.Equal("replacement-head", Assert.Single((await _queue.ListAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items).WorkItemId);
+        Assert.Equal(competing.VisibleAfter,
+            Assert.Single((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items).VisibleAfter);
+        Assert.True((await _queue.ReleaseClaimAsync(competing, _now)).Succeeded);
     }
 
     [Fact]
@@ -169,26 +190,26 @@ public sealed class CoalescingSchedulerVisibilityTests
     }
 
     [Fact]
-    public async Task Deferred_flush_preserves_the_latest_renewal_timeout_without_adding_elapsed_lifetime()
+    public async Task Deferred_flush_delays_a_renewed_release_without_taking_a_durable_claim()
     {
         await _queue.EnqueueAsync(Work("resume"));
         var provider = new ClaimRecordingVisibilityQueue(_queue);
         var session = new RuntimeCoalescingSession(ExecutionId, provider, new PersistenceModeOptions());
         var initial = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
-        var timeout = TimeSpan.FromMinutes(3);
-        var renewal = await session.RenewOverlayClaimAsync(initial, _now.AddHours(2), timeout, default);
+        var renewal = await session.RenewOverlayClaimAsync(initial, _now.AddHours(2), TimeSpan.FromMinutes(3), default);
         var renewed = Assert.IsType<RuntimeSchedulerWorkClaim>(renewal.Claim);
         Assert.True((await session.ReleaseOverlayClaimAsync(renewed, _now.AddDays(2), default)).Succeeded);
 
         await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, default);
 
-        Assert.Equal(timeout, Assert.Single(provider.Requests).VisibilityTimeout);
+        // The delay lands by identity, so no transient durable claim exists for a lease to outlive.
+        Assert.Empty(provider.Requests);
         Assert.Equal(_now.AddDays(2), Assert.Single((await _queue.ListWithVisibilityAsync(
             new RuntimeSchedulerWorkQuery(ExecutionId))).Items).VisibleAfter);
     }
 
     private sealed class ClaimRecordingVisibilityQueue(InMemoryWorkflowSchedulerWorkQueue inner)
-        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
     {
         public List<RuntimeSchedulerWorkClaimRequest> Requests { get; } = [];
         public override ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(RuntimeSchedulerWorkClaimRequest request, CancellationToken token = default)
@@ -198,6 +219,8 @@ public sealed class CoalescingSchedulerVisibilityTests
         }
         public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
             inner.ListWithVisibilityAsync(query, token);
+        public ValueTask<bool> DeferAsync(string id, string workId, DateTimeOffset now, DateTimeOffset visibleAt, CancellationToken token = default) =>
+            inner.DeferAsync(id, workId, now, visibleAt, token);
     }
 
     private RuntimeCoalescingSession Session() => new(ExecutionId, _queue, new PersistenceModeOptions());

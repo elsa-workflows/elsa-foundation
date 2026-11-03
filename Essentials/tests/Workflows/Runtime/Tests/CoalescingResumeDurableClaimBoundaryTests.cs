@@ -470,6 +470,76 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Delayed_release_of_an_overlay_continuation_keeps_its_delay_after_an_external_enqueue_moves_the_durable_head(
+        bool unavailable)
+    {
+        // #3690. schedule-1's buffered checkpoint enqueues invoke-1, which exists only in the overlay. While invoke-1 is
+        // dispatched, another writer enqueues external-1 durably; the overlay seeded once and never sees it. invoke-1
+        // then faults before committing anything and is released with a delay (an honored RetryAfter, or temporary
+        // unavailability). The quiescence flush persists invoke-1 behind external-1, so the durable head is no longer the
+        // released item: the flush used to refuse the release and throw after its commit had landed, leaving invoke-1
+        // visible at once, with a RetryScheduled record whose NextRetryAt nothing honored.
+        var shared = new SharedPersistence(new FakeTimeProvider(Now));
+        var probe = new ProbeRecorder(deferFirstResume: false, faultInvoke: true, scheduleEnqueuesInvoke: true,
+            invokeUnavailable: unavailable,
+            beforeInvokeFault: async () =>
+                await shared.Queue.EnqueueAsync(Work("external-1", WorkflowExecutionCommandKind.NotifyParentActivity, 3)));
+        await using var provider = BuildProvider(shared, probe, visibilitySnapshots: true, retryAfter: unavailable ? null : RetryDelay);
+        await shared.Queue.EnqueueAsync(ScheduleWork("schedule-1", 1));
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+
+            Assert.Equal(["schedule-1", "invoke-1"], result.Items.Select(item => item.WorkItemId));
+            Assert.Equal(unavailable ? RuntimeSchedulerDrainStopReason.Deferred : RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+            Assert.True(Assert.Single(probe.InvokeSessionActive));
+            var records = await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(WorkflowExecutionId);
+            if (unavailable)
+            {
+                Assert.Empty(records);
+            }
+            else
+            {
+                var record = Assert.Single(records);
+                Assert.Equal(("invoke-1", RuntimeSchedulerPoisonDisposition.RetryScheduled), (record.WorkItemId, record.Disposition));
+                Assert.Equal(Now + RetryDelay, record.NextRetryAt);
+            }
+
+            // The flush landed schedule-1's effect, and invoke-1 waits behind external-1 with its own delay.
+            var flush = Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits());
+            Assert.Equal(RuntimeCoalescingMetadataKeys.FlushCheckpointName, flush.Commit.Checkpoint.Name);
+            Assert.Equal(1L, flush.Commit.StateChanges.Scheduler?.State.Version);
+            Assert.Equal([("external-1", (DateTimeOffset?)null), ("invoke-1", Now + RetryDelay)],
+                (await shared.Queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId))).Items
+                .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter)));
+        }
+
+        // FIFO still decides: external-1, ahead of it, runs now, and invoke-1, now the head, holds back until it is due.
+        await using (var earlyScope = provider.CreateAsyncScope())
+        {
+            var early = await earlyScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Equal(["external-1"], early.Items.Select(item => item.WorkItemId));
+        }
+
+        Assert.Single(probe.InvokeSessionActive);
+        Assert.Single(probe.ResumeSnapshots);
+        shared.TimeProvider.Advance(RetryDelay);
+        await using (var retryScope = provider.CreateAsyncScope())
+        {
+            var retried = await retryScope.ServiceProvider.GetRequiredService<IWorkflowDrainOrchestrator>()
+                .DrainAsync(Envelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId));
+            Assert.Equal(["invoke-1"], retried.Items.Select(item => item.WorkItemId));
+        }
+
+        Assert.Equal(2, probe.InvokeSessionActive.Count);
+    }
+
+    [Theory]
     [InlineData(PersistenceMode.Durable, "CoalescingProbe", "CoalescingProbe")]
     [InlineData(PersistenceMode.Balanced, RuntimeCheckpointNames.ActivitySuspended, RuntimeCheckpointNames.ActivitySuspended)]
     [InlineData(PersistenceMode.Balanced, "CoalescingProbe", RuntimeCoalescingMetadataKeys.FlushCheckpointName)]
@@ -900,7 +970,9 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         string invokeCheckpointName = "CoalescingProbe",
         bool? resumeCommitsInOwnScopeThenFaults = null,
         bool invokeEnqueuesCompletion = false,
-        Action? beforeInvokeCommit = null)
+        Action? beforeInvokeCommit = null,
+        bool invokeUnavailable = false,
+        Func<ValueTask>? beforeInvokeFault = null)
     {
         private bool _didDefer;
         private bool _didEnqueueScheduleSuffix;
@@ -920,6 +992,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         // The invoke's checkpoint enqueues complete-1 as its continuation.
         public bool InvokeEnqueuesCompletion => invokeEnqueuesCompletion;
         public Action? BeforeInvokeCommit => beforeInvokeCommit;
+        // The faulting invoke reports temporary unavailability instead of an ordinary failure.
+        public bool InvokeUnavailable => invokeUnavailable;
+        // Runs while the faulting invoke still holds its claim, after any commit and before it throws.
+        public Func<ValueTask>? BeforeInvokeFault => beforeInvokeFault;
         // Null resumes normally; otherwise the resume commits through a committer from a DI scope of its own, as
         // WorkflowResumeBookmarkSchedulerWorkHandler does, retaining its item when true, and then faults.
         public bool? ResumeCommitsInOwnScopeThenFaults => resumeCommitsInOwnScopeThenFaults;
@@ -958,7 +1034,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
     // Fails the first targeted deletion after the boundary's durable commit, as a provider timeout would.
     private sealed class FirstDeleteTimesOutQueue(InMemoryWorkflowSchedulerWorkQueue inner)
-        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
     {
         public bool DeleteTimedOut { get; private set; }
 
@@ -972,11 +1048,13 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
         public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
             inner.ListWithVisibilityAsync(query, token);
+        public ValueTask<bool> DeferAsync(string id, string workId, DateTimeOffset now, DateTimeOffset visibleAt, CancellationToken token = default) =>
+            inner.DeferAsync(id, workId, now, visibleAt, token);
     }
 
     // Fails the first durable listing once armed, as a provider read that times out mid-reconciliation does.
     private sealed class ArmedListFailureQueue(InMemoryWorkflowSchedulerWorkQueue inner)
-        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader
+        : QueueWithoutVisibility(inner), IWorkflowSchedulerWorkVisibilityReader, IWorkflowSchedulerWorkDeferral
     {
         public bool Armed { get; set; }
         public bool ListTimedOut { get; private set; }
@@ -992,6 +1070,8 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
 
         public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkVisibility>> ListWithVisibilityAsync(RuntimeSchedulerWorkQuery query, CancellationToken token = default) =>
             inner.ListWithVisibilityAsync(query, token);
+        public ValueTask<bool> DeferAsync(string id, string workId, DateTimeOffset now, DateTimeOffset visibleAt, CancellationToken token = default) =>
+            inner.DeferAsync(id, workId, now, visibleAt, token);
     }
 
     // Lands the named checkpoint in the inner store once and then throws, as an acknowledgement that times out after the
@@ -1134,6 +1214,10 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
                     probe.BeforeInvokeCommit?.Invoke();
                     await committer.CommitAsync(invoke with { RetainSchedulerWork = retain }, cancellationToken);
                 }
+                if (probe.BeforeInvokeFault is { } beforeFault)
+                    await beforeFault();
+                if (probe.InvokeUnavailable)
+                    throw new RuntimeSchedulerWorkUnavailableException("probe.invoke-unavailable", "The invoke dependency is temporarily unavailable.");
                 throw new InvalidOperationException($"The probe faulted after invoking {workItem.WorkItemId}.");
             }
 

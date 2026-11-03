@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.Time.Testing;
@@ -56,6 +57,39 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
             queue, [handler], new InMemoryWorkflowExecutionStateStore(), poison,
             new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(new InMemoryWorkflowHoldStateStore()), clock),
             clock, claimOptions: new RuntimeSchedulerWorkClaimOptions { UnavailableRetryDelay = delay });
+    }
+
+    [Fact]
+    public async Task Coalescing_flush_delays_its_released_continuation_behind_a_head_another_writer_queued()
+    {
+        // #3690 over EF: the overlay seeds work-1 and adds the continuation work-3; while the drain owns the run, another
+        // writer queues work-2 durably, which orders ahead of work-3. The flush used to claim work-2 as the head, refuse,
+        // and throw after its commit; it now delays work-3 by identity and leaves work-2 claimable.
+        var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var lease = TimeSpan.FromMinutes(1);
+        var visibleAt = now.AddDays(1);
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.EnqueueAsync(Work("wf-flush", "work-1", 1));
+        var session = new RuntimeCoalescingSession("wf-flush", fixture.Store, new PersistenceModeOptions());
+        await session.EnqueueOverlayAsync(Work("wf-flush", "work-3", 3, WorkflowExecutionCommandKind.InvokeActivity), default);
+        var source = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(new("wf-flush", "drain", now, lease), default));
+        Assert.True((await session.CompleteOverlayClaimAsync(source, default)).Succeeded);
+        var continuation = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(new("wf-flush", "drain", now, lease), default));
+        Assert.Equal("work-3", continuation.Item.WorkItemId);
+        Assert.True((await session.ReleaseOverlayClaimAsync(continuation, visibleAt, default)).Succeeded);
+        await fixture.Store.EnqueueAsync(Work("wf-flush", "work-2", 2));
+
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, default);
+
+        Assert.Equal([("work-2", (DateTimeOffset?)null), ("work-3", visibleAt)],
+            (await fixture.Store.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery("wf-flush"))).Items
+            .Select(entry => (entry.Item.WorkItemId, entry.VisibleAfter)));
+        var head = await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-flush", "sweep", now, lease));
+        Assert.Equal("work-2", head?.Item.WorkItemId);
+        Assert.True((await fixture.Store.CompleteClaimAsync(head!)).Succeeded);
+        Assert.Null(await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-flush", "sweep", visibleAt - TimeSpan.FromTicks(1), lease)));
+        Assert.Equal("work-3", (await fixture.Store.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-flush", "sweep", visibleAt, lease)))?.Item.WorkItemId);
     }
 
     private sealed class UnavailableOnceHandler : IWorkflowSchedulerWorkHandler

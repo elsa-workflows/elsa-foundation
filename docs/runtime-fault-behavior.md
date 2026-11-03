@@ -204,8 +204,8 @@ about this item:
 - `OperationCanceledException`, a real cancel or shutdown. The item must stay queued.
 - `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison. A temporarily
   unavailable step whose delayed release the queue refuses throws it too, even with no successor: a coalescing segment
-  that a boundary deactivated, and whose durable head has since moved, refuses that way. The step stays queued for a
-  later drain.
+  that a boundary deactivated, and whose durable copy another owner has since claimed, refuses that way. The step stays
+  queued for a later drain.
 - `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
 - `RuntimeStaleFencingTokenException`, where a commit was refused because another node now owns the run. The work
@@ -248,19 +248,22 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      - the same delayed-release rule as temporarily unavailable work: a step kind that supports it
        (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
        `DeliverChildControl`, `Checkpoint`), a live claim not yet consumed by a commit, and a queue
-       that can persist the delay;
+       that can persist the delay (inside a coalescing segment, one that can also delay a queued item by its
+       identity, `IWorkflowSchedulerWorkDeferral`);
      - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
        `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
      - the fault was not caused by a checkpoint rule;
      - the delay ends no later than the last representable time, `DateTimeOffset.MaxValue`.
 
-     The step stays the only queued copy. It is not claimable before the delay ends (except in one race,
-     #3690, where a coalescing segment's flush cannot persist the delay and the step runs at once), and the
-     resumption sweep's backlog discovery then re-drives it. While it waits, the execution's later
-     queued steps wait behind it, because the queue serves each execution in order. If the queue
-     refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,
-     which throws claim-lost and records nothing, as for any lost claim. A coalescing segment that a boundary
-     deactivated, and whose durable head has since moved, refuses this way while the drain still owns the item.
+     The step stays the only queued copy. It is not claimable before the delay ends, and the resumption
+     sweep's backlog discovery then re-drives it. While it waits, the execution's later queued steps wait
+     behind it, because the queue serves each execution in order. A coalescing segment persists the delay
+     at its flush on the step itself, by identity, not on the queue's head: work another writer queued
+     for the execution while the segment held it can sit ahead of the step and runs first, and the step
+     still waits until its delay ends (#3690). If the queue refuses the release, the item is acknowledged
+     and poisoned instead, unless the claim was lost to another owner, which throws claim-lost and records
+     nothing, as for any lost claim. A coalescing segment that a boundary deactivated refuses this way,
+     while the drain still owns the item, when its durable copy is gone or another owner has claimed it.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 
