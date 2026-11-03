@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "854667110b9ea722200384aea13f8c83f2da51cc",
+  "last_publish_commit": "027e00ba5994e826907c91e9b8395fe52a48937c",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -474,8 +474,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity",
-      "version": "4.0.24-preview",
-      "commit": "fbcb4a7f2b32b9154a1edfb3d2908f08ebf51528"
+      "version": "4.0.25-preview",
+      "commit": "027e00ba5994e826907c91e9b8395fe52a48937c"
     },
     {
       "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
