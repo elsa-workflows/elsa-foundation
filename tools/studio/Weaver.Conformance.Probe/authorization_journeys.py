@@ -87,20 +87,33 @@ def _no_cause(value, cause):
     check(cause not in text and "IOException" not in text, "An observed surface disclosed the owner's private cause")
 
 
+# Each actual adapter's own frame order up to the refused pre-dispatch refresh, observed natively on 97f75e4f9.
+# Copilot admits context once and dispatches the held call directly. Anthropic admits the prompt and its step
+# context, then requests the call within a step before dispatch. Both end in the same terminal error.
+TURN_FRAMES = {
+    "copilot": ["started", "contextAdmitted", "toolCallStarted", "error"],
+    "anthropic": ["started", "contextAdmitted", "contextAdmitted", "stepStarted", "toolCallRequested", "stepCompleted",
+                  "toolCallStarted", "error"],
+}
+
+
 def require_turn_refusal(frames, rows, *, provider, command_id, expected, cause):
     """The gated read-graph turn stops at its pre-dispatch admission refresh, before any tool dispatch or adapter return."""
     check(provider in PROVIDERS and expected in TURN_REFUSALS, "Unknown adapter or refusal")
     values = [frame for frame in frames if isinstance(frame, dict)]
     check(len(values) == len(frames), "Malformed native stream frame")
-    check([frame.get("kind") for frame in values] == ["started", "contextAdmitted", "toolCallStarted", "error"],
-          "The read-graph turn did not stop at its pre-dispatch admission refresh after admitting context once")
-    admitted = values[1].get("payload")
-    check(isinstance(admitted, dict) and admitted.get("diagnostics") == [] and isinstance(admitted.get("attachments"), list)
-          and any(isinstance(item, dict) and item.get("contentType") == "workflow.definition" for item in admitted["attachments"]),
-          "The actual owner did not admit the workflow snapshot before the replacement decided")
-    started = values[2].get("payload")
-    check(isinstance(started, dict) and started.get("toolName") == READ_TOOL, "The held call was not the read-graph tool")
-    error = values[3].get("error")
+    kinds = [frame.get("kind") for frame in values]
+    check(kinds == TURN_FRAMES[provider],
+          "The read-graph turn did not stop at its pre-dispatch admission refresh after the adapter's own admission frames")
+    for admitted in (frame.get("payload") for frame in values if frame.get("kind") == "contextAdmitted"):
+        check(isinstance(admitted, dict) and admitted.get("diagnostics") == [] and isinstance(admitted.get("attachments"), list)
+              and any(isinstance(item, dict) and item.get("contentType") == "workflow.definition" for item in admitted["attachments"]),
+              "The actual owner did not admit the workflow snapshot before the replacement decided")
+    for frame in values:
+        if frame.get("kind") in ("toolCallRequested", "toolCallStarted"):
+            payload = frame.get("payload")
+            check(isinstance(payload, dict) and payload.get("toolName") == READ_TOOL, "The held call was not the read-graph tool")
+    error = values[-1].get("error")
     check(isinstance(error, dict) and {key: error.get(key) for key in ("code", "statusCode", "message")} == TURN_REFUSALS[expected],
           "Wrong refusal at the pre-dispatch admission refresh; expected the " + expected + " owner's code, status and fixed text")
     owned = [row for row in rows if isinstance(row, dict) and (row.get("data") or {}).get("commandId") == command_id]

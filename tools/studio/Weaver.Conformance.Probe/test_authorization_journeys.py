@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from agent_transport import AgentTransport
-from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_REFUSALS, UNAVAILABLE_CODE, authorization_manifest_gaps,
+from authorization_journeys import (EXPECTED_CASES, SECTION, TURN_FRAMES, TURN_REFUSALS, UNAVAILABLE_CODE, authorization_manifest_gaps,
                                     qualify_workflow_authorization, require_denied_problem, require_turn_refusal,
                                     require_unavailable_problem, require_workflow_authorization, select_command, snapshot_attachment)
 from artifacts import sha
@@ -58,15 +58,24 @@ class DefinitionOutcomeTests(unittest.TestCase):
 
 
 class TurnRefusalTests(unittest.TestCase):
-    """The frame and trace shapes observed on 300d3c286 (copilot-workflow-authorization-unavailable-tool-unavailable)."""
+    """The frame and trace shapes observed natively: Copilot on 300d3c286, Anthropic on 97f75e4f9."""
     command = "command-1"
 
-    def frames(self, expected):
-        return [{"kind": "started", "payload": {"turnId": "turn-1"}},
-                {"kind": "contextAdmitted", "payload": {"attachments": [{"contentType": "workflow.definition"}, {"contentType": "workflow.guidance"}],
-                                                        "diagnostics": []}},
-                {"kind": "toolCallStarted", "payload": {"toolCallId": "call-1", "toolName": "workflow_read_graph"}},
-                {"kind": "error", "error": dict(TURN_REFUSALS[expected])}]
+    def frames(self, expected, provider="copilot"):
+        def frame(kind):
+            if kind == "contextAdmitted":
+                return {"kind": kind, "payload": {"attachments": [{"contentType": "workflow.definition"}, {"contentType": "workflow.guidance"}],
+                                                  "diagnostics": []}}
+            if kind in ("toolCallRequested", "toolCallStarted"):
+                return {"kind": kind, "payload": {"toolCallId": "call-1", "toolName": "workflow_read_graph"}}
+            if kind == "error":
+                return {"kind": kind, "error": dict(TURN_REFUSALS[expected])}
+            return {"kind": kind, "payload": {"turnId": "turn-1"}}
+        return [frame(kind) for kind in TURN_FRAMES[provider]]
+
+    @staticmethod
+    def first(frames, kind):
+        return next(frame for frame in frames if frame["kind"] == kind)
 
     def rows(self, provider):
         return [{"kind": provider + ".request", "data": {"commandId": self.command}},
@@ -75,7 +84,7 @@ class TurnRefusalTests(unittest.TestCase):
                 {"kind": provider + ".call", "data": {"commandId": self.command, "toolName": "workflow_read_graph"}}]
 
     def check(self, provider, expected, frames=None, rows=None):
-        return require_turn_refusal(frames if frames is not None else self.frames(expected), rows if rows is not None else self.rows(provider),
+        return require_turn_refusal(frames if frames is not None else self.frames(expected, provider), rows if rows is not None else self.rows(provider),
                                     provider=provider, command_id=self.command, expected=expected, cause=CAUSE)
 
     def test_the_observed_pre_dispatch_refusal_qualifies_on_each_adapter(self):
@@ -90,34 +99,40 @@ class TurnRefusalTests(unittest.TestCase):
 
     def test_the_pre_change_incomplete_context_shape_no_longer_qualifies_as_unavailable(self):
         # Observed on 300d3c286 before the engine reported the owner's code: code and status were collapsed.
-        frames = self.frames("unavailable")
-        frames[3]["error"] = {"code": "agent.context.incomplete", "statusCode": 400, "message": "Workflow definition authorization could not be completed."}
         for provider in ("copilot", "anthropic"):
+            frames = self.frames("unavailable", provider)
+            frames[-1]["error"] = {"code": "agent.context.incomplete", "statusCode": 400, "message": "Workflow definition authorization could not be completed."}
             with self.subTest(provider=provider):
                 with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=frames)
 
     def test_unavailable_and_denied_cannot_stand_in_for_each_other(self):
         for provider in ("copilot", "anthropic"):
             with self.subTest(provider=provider):
-                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=self.frames("denied"))
-                with self.assertRaises(RuntimeError): self.check(provider, "denied", frames=self.frames("unavailable"))
+                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=self.frames("denied", provider))
+                with self.assertRaises(RuntimeError): self.check(provider, "denied", frames=self.frames("unavailable", provider))
+                other = "anthropic" if provider == "copilot" else "copilot"
+                with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=self.frames("unavailable", other))
 
     def test_a_dispatched_returned_or_otherwise_shaped_turn_never_qualifies(self):
-        def completed(frames): frames.insert(3, {"kind": "toolCallCompleted", "payload": {"toolName": "workflow_read_graph", "succeeded": False}})
-        def finished(frames): frames[3] = {"kind": "completed", "payload": {}}
-        def message(frames): frames.insert(3, {"kind": "messageDelta", "payload": "text"})
-        def no_context(frames): frames.pop(1)
+        first = self.first
+        def completed(frames): frames.insert(len(frames) - 1, {"kind": "toolCallCompleted", "payload": {"toolName": "workflow_read_graph", "succeeded": False}})
+        def finished(frames): frames[-1] = {"kind": "completed", "payload": {}}
+        def message(frames): frames.insert(len(frames) - 1, {"kind": "messageDelta", "payload": "text"})
+        def no_context(frames): frames.remove(first(frames, "contextAdmitted"))
         def context_refused(frames): frames[1]["payload"].update(attachments=[], diagnostics=[{"code": UNAVAILABLE_CODE, "required": True}])
-        def no_snapshot(frames): frames[1]["payload"].update(attachments=[{"contentType": "workflow.guidance"}])
-        def other_tool(frames): frames[2]["payload"]["toolName"] = "workflow_set_designer_position"
-        def wrong_code(frames): frames[3]["error"]["code"] = "agent.tool.admission_unavailable"
-        def wrong_status(frames): frames[3]["error"]["statusCode"] = 500
-        def owner_text(frames): frames[3]["error"]["message"] = "Workflow definition authorization could not be completed."
-        def leaked(frames): frames[3]["error"]["message"] += " " + CAUSE
-        for change in (completed, finished, message, no_context, context_refused, no_snapshot, other_tool, wrong_code, wrong_status, owner_text, leaked):
+        def later_context_refused(frames):
+            [frame for frame in frames if frame["kind"] == "contextAdmitted"][-1]["payload"].update(diagnostics=[{"code": UNAVAILABLE_CODE, "required": True}])
+        def no_snapshot(frames): first(frames, "contextAdmitted")["payload"].update(attachments=[{"contentType": "workflow.guidance"}])
+        def other_tool(frames): first(frames, "toolCallStarted")["payload"]["toolName"] = "workflow_set_designer_position"
+        def wrong_code(frames): frames[-1]["error"]["code"] = "agent.tool.admission_unavailable"
+        def wrong_status(frames): frames[-1]["error"]["statusCode"] = 500
+        def owner_text(frames): frames[-1]["error"]["message"] = "Workflow definition authorization could not be completed."
+        def leaked(frames): frames[-1]["error"]["message"] += " " + CAUSE
+        for change in (completed, finished, message, no_context, context_refused, later_context_refused, no_snapshot, other_tool,
+                       wrong_code, wrong_status, owner_text, leaked):
             for provider in ("copilot", "anthropic"):
                 with self.subTest(change=change.__name__, provider=provider):
-                    frames = self.frames("unavailable"); change(frames)
+                    frames = self.frames("unavailable", provider); change(frames)
                     with self.assertRaises(RuntimeError): self.check(provider, "unavailable", frames=frames)
 
     def test_the_actual_adapter_called_once_and_received_no_outcome(self):
