@@ -62,8 +62,8 @@ export function PipelineBindingSelect({
 }
 
 const connectorRoleLabels: Record<EtlBindingRole, Record<EtlConnectorBindingSummary["kind"], string>> = {
-  Source: { csv: "Source CSV", http: "Source HTTP", jsonl: "Source JSONL" },
-  Lookup: { csv: "Lookup CSV", http: "Lookup HTTP", jsonl: "Lookup JSONL" },
-  MainOutput: { csv: "Accepted CSV output", http: "Accepted HTTP output", jsonl: "Accepted JSONL output" },
-  ErrorOutput: { csv: "Rejected CSV output", http: "Rejected HTTP output", jsonl: "Rejected JSONL output" }
+  Source: { csv: "Source CSV", http: "Source HTTP", jsonl: "Source JSONL", sql: "Source SQL" },
+  Lookup: { csv: "Lookup CSV", http: "Lookup HTTP", jsonl: "Lookup JSONL", sql: "Lookup SQL" },
+  MainOutput: { csv: "Accepted CSV output", http: "Accepted HTTP output", jsonl: "Accepted JSONL output", sql: "Accepted SQL table" },
+  ErrorOutput: { csv: "Rejected CSV output", http: "Rejected HTTP output", jsonl: "Rejected JSONL output", sql: "Rejected SQL table" }
 };

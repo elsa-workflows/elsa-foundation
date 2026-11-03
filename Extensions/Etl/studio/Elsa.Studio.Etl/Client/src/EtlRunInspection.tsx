@@ -96,7 +96,7 @@ function isHttpKind(kind: string) {
 
 /** An output's kind; a CSV output is a file, while a CSV source keeps the plain "CSV" label. */
 function outputKindLabel(kind: string) {
-  return kind === "csv" ? "CSV file" : kindLabel(kind);
+  return kind === "csv" ? "CSV file" : kind === "sql" ? "SQL table" : kindLabel(kind);
 }
 
 function kindLabel(kind: string) {

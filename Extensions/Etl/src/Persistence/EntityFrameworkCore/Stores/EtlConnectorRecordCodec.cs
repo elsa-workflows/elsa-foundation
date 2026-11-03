@@ -187,6 +187,7 @@ internal static class EtlConnectorRecordCodec
             case EtlJsonlDestination file: Binding(binding, EtlConnectorKind.Jsonl, file.Binding, isInput: false); break;
             case EtlHttpDestination http: Binding(binding, EtlConnectorKind.Http, http.Binding, isInput: false); break;
             case EtlCsvDestination csv: Binding(binding, EtlConnectorKind.Csv, csv.Binding, isInput: false); break;
+            case EtlSqlDestination sql: Binding(binding, EtlConnectorKind.Sql, sql.Binding, isInput: false); break;
             default: throw new ArgumentException("The connector destination is unsupported.");
         }
     }
