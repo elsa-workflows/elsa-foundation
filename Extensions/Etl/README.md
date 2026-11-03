@@ -98,7 +98,9 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   started reading before a lapsed predecessor published adopts that snapshot, so a run never reads a second, different
   point in time. A transient read failure (a connection loss or an unreachable database) records nothing and logs a
   warning, and preparation runs again once its lease lapses, so an outage pauses the run. The read has no command
-  timeout; the lease bounds it.
+  timeout and nothing else bounds it: a read blocked on a lock (for example behind `ALTER TABLE` or `TRUNCATE`) waits
+  until the lock is released or the worker stops. To detect a database host that vanishes mid-read, give a PostgreSQL
+  binding's connection string a `Keepalive` interval (Npgsql has none by default; SqlClient keeps connections alive).
 - **Types.** `String` accepts text (retained as raw UTF-8), GUIDs, and timestamps or times of day (ISO 8601 invariant
   text); a `date` column is written as `yyyy-MM-dd`, and an interval or a zoned time of day (PostgreSQL `timetz`, with or without a precision) is refused.
   On PostgreSQL, Npgsql maps `infinity` and `-infinity` to the extreme dates, so a `date`, `timestamp` or `timestamptz` at
@@ -113,9 +115,10 @@ its declared columns and a key of one to eight required columns. Add an `EtlRunt
   the size check, so one very large value is held in memory. An error the engine classifies as transient pauses the
   run even when it is a misconfiguration, such as a wrong SQL Server database name (error 4060); the worker's warning
   names the exception type, not the error number.
-- **Upgrades.** A worker without this slice fails a `sql`-source run with `etl.executable.invalid-pipeline`, so every
-  worker in a scope must run this slice before such a pipeline is admitted.
   Watermark (incremental) reads, authored queries and log CDC are not supported.
+- **Upgrades.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim fails and is
+  retried, without failing the run, and can hold up other preparations in the scope. Upgrade every worker in a scope
+  before such a pipeline is admitted.
 
 ## Continuous HTTP runs
 

@@ -53,7 +53,7 @@ Writers keep changing the table while the run reads it. The run sees the table a
 **Acceptance Scenarios**:
 
 1. **Given** a published snapshot whose preparation was not recorded, **When** preparation runs again, **Then** it verifies and reuses that snapshot and does not query the database.
-2. **Given** a transient failure while reading, such as a connection failure or a timeout as the engine classifies it (spec 1197), **Then** the run is not failed. The preparation is left unrecorded and is claimed again once its lease expires. The worker logs a warning naming the failure type. The read itself has no command timeout; the lease bounds it.
+2. **Given** a transient failure while reading, such as a connection failure or a timeout as the engine classifies it (spec 1197), **Then** the run is not failed. The preparation is left unrecorded and is claimed again once its lease expires. The worker logs a warning naming the failure type. The read itself has no command timeout and nothing else bounds it; a read blocked on a lock waits until the lock is released or the worker stops, and a PostgreSQL binding should set `Keepalive` so a vanished host is detected.
 3. **Given** a predecessor whose lease lapsed while it was still reading, **When** it publishes its snapshot after the replacement has started reading, **Then** the replacement adopts the published snapshot rather than failing the run.
 4. **Given** a deterministic refusal while reading, such as a missing table or column, or a permission error, **Then** the run fails with `etl.sql-read-rejected`.
 
@@ -84,7 +84,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
   - SQL Server reads under `SNAPSHOT` isolation, which needs the database option `ALLOW_SNAPSHOT_ISOLATION ON`.
 - **Finite only.** A continuous pipeline with a `sql` source is refused with `etl.continuous-source-unsupported`, as for file sources.
 - **Credentials.** As for destinations: the binding's connection string is never pinned or exposed, and the handle hashes the secret-free target, the role and the allowed tables.
-- **Mixed versions.** A worker without this slice that claims a `sql`-source run fails it with `etl.executable.invalid-pipeline`. All workers in a scope must run this slice before such a pipeline is admitted.
+- **Mixed versions.** A worker without this slice cannot read a `sql`-source artifact: its preparation claim throws while reading the pinned artifact and is retried, without failing the run, so it can hold up other preparations in its scope. All workers in a scope must run this slice before such a pipeline is admitted.
 
 ## Requirements *(mandatory)*
 

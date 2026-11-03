@@ -54,7 +54,8 @@ internal static class EtlSqlSnapshotReader
             {
                 command.Transaction = transaction;
                 command.CommandText = engine.SelectSnapshot(source.Table, columns, source.Key);
-                // A large ordered read may run longer than the driver's default timeout; the lease token bounds it instead.
+                // A large ordered read may run longer than the driver's default timeout, so none applies; the heartbeat keeps
+                // the lease while the worker lives, so only a lost lease or a stopping worker cancels the read.
                 command.CommandTimeout = 0;
                 // The reader is closed before the commit: PostgreSQL and SQL Server allow one open reader per connection.
                 var reader = await command.ExecuteReaderAsync(cancellationToken);

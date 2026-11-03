@@ -45,7 +45,12 @@ At `68ba92078` (review round 7), which changes no runtime or engine code after `
 **Tested without a bite-proof, or not tested:**
 - **The worker's transient warning.** It is not asserted.
 - **The execution's transient return.** Without it, recording would throw, the lease would lapse, and preparation would run again, so the observable behaviour is the same.
-- **The command timeout of 0.** It is not tested; no test reads for longer than a driver's default timeout.
+- **The command timeout of 0.** It is not tested; no test reads for longer than a driver's default timeout. Nothing bounds a read blocked on a lock; the README states it.
+- **Untested guards:**
+  - the preparer's SQL shape check (`etl.pipeline-invalid` for missing columns or key, too many columns, or an empty table name);
+  - the batch builder's other `SourceAnchor` conditions (kind, alias, handle and revision; only the digest condition is bite-proven);
+  - `FileChunkStore.FindAsync` turning an I/O failure into `etl.output-read-failed`;
+  - the reader's per-value length check against the remaining snapshot bytes.
 - **The engine's session setup before the snapshot transaction.** It is not tested. Neither first-party engine's setup affects a read.
 - **The mapping of an over-long line to `etl.snapshot-too-large`.** It is not tested.
 - **A type whose assembly is missing** (SqlClient's spatial and hierarchy types) is mapped to `etl.sql-column-type-unsupported`. It is not tested.
