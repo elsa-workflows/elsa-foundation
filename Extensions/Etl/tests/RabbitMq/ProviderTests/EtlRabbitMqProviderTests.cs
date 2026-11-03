@@ -91,6 +91,23 @@ public sealed class EtlRabbitMqProviderTests(EtlRabbitMqBrokerFixture broker)
     }
 
     [SkippableFact]
+    public async Task A_virtual_host_at_its_connection_limit_yields_and_one_the_user_may_not_open_is_rejected()
+    {
+        Skip.If(broker.SkipReason is not null, broker.SkipReason);
+        // A virtual host that admits no connection answers connection.open with 530, as one at its limit does.
+        Skip.IfNot(await broker.ControlAsync("add_vhost", _name), "The supplied broker cannot be configured.");
+        await broker.ControlAsync("set_permissions", "-p", _name, "etl", ".*", ".*", ".*");
+        await broker.ControlAsync("set_vhost_limits", "-p", _name, """{"max-connections": 0}""");
+
+        var limited = await Writer().WriteAsync(Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost(_name) }, default);
+        var forbidden = await Assert.ThrowsAsync<EtlEffectException>(() => Writer().WriteAsync(
+            Delivery("", _name, """[{"id":1}]""") with { ConnectionString = broker.WithVirtualHost("missing-" + _name) }, default).AsTask());
+
+        Assert.Equal(EtlRabbitMqWriteOutcome.Yield, limited);
+        Assert.Equal("etl.rabbitmq-publish-rejected", forbidden.Code);
+    }
+
+    [SkippableFact]
     public async Task An_unreachable_broker_yields()
     {
         Skip.If(broker.SkipReason is not null, broker.SkipReason);

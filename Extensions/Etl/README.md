@@ -100,8 +100,8 @@ exchanges, queues or bindings.
   `elsa-etl-effect-id` and `elsa-etl-record-index`, identical on every replay, so consumers deduplicate by message id. A
   replayed batch can arrive after messages of later batches.
 - **Failures.** A message no queue matches is returned and fails the run with `etl.rabbitmq-unroutable`. A negative
-  acknowledgement (for example a queue at its length limit with `reject-publish`), an unreachable broker or a closed
-  connection retries after two seconds, so an outage pauses the run. Access refused, a missing exchange or failed
+  acknowledgement (for example a queue at its length limit with `reject-publish`), an unreachable broker, a closed
+  connection or a virtual host's or user's connection limit retries after two seconds, so an outage pauses the run. Access refused, a missing exchange or failed
   authentication fails the run with `etl.rabbitmq-publish-rejected`. Without `Elsa.Etl.RabbitMq`, admission refuses the run
   with `etl.rabbitmq-unavailable`. The error route cannot be RabbitMQ.
 - **Ordering.** Messages of one batch keep their order; batches of different partitions or shards interleave.

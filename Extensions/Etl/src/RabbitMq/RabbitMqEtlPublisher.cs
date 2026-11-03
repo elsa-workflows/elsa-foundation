@@ -18,8 +18,10 @@ namespace Elsa.Etl.RabbitMq;
 internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
 {
     // AMQP reply codes that a retry cannot cure: access refused, not found and precondition failed (a channel error), and
-    // not allowed (a connection error, such as a virtual host the user may not open).
+    // not allowed (a connection error, such as a virtual host the user may not open). RabbitMQ also answers a virtual host's
+    // or user's connection limit with not allowed, which a later attempt can pass, so that reply is transient.
     private static readonly HashSet<ushort> RejectedReplyCodes = [403, 404, 406, 530];
+    private const ushort NotAllowed = 530;
 
     public EtlRabbitMqTarget DescribeTarget(string connectionString)
     {
@@ -70,7 +72,9 @@ internal sealed class RabbitMqEtlPublisher : IEtlRabbitMqPublisher
     };
 
     private static EtlRabbitMqErrorKind Classify(ShutdownEventArgs reason) =>
-        RejectedReplyCodes.Contains(reason.ReplyCode) ? EtlRabbitMqErrorKind.Rejected : EtlRabbitMqErrorKind.Transient;
+        reason.ReplyCode == NotAllowed && reason.ReplyText.Contains("connection limit", StringComparison.OrdinalIgnoreCase)
+            ? EtlRabbitMqErrorKind.Transient
+            : RejectedReplyCodes.Contains(reason.ReplyCode) ? EtlRabbitMqErrorKind.Rejected : EtlRabbitMqErrorKind.Transient;
 
     private static ConnectionFactory Factory(string connectionString) => new()
     {

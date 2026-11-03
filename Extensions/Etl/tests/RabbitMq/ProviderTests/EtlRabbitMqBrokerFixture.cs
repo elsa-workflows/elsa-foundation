@@ -51,6 +51,17 @@ public sealed class EtlRabbitMqBrokerFixture : IAsyncLifetime
     internal async Task<IConnection> ConnectAsync() =>
         await new ConnectionFactory { Uri = new Uri(ConnectionString) }.CreateConnectionAsync();
 
+    /// <summary>Runs <c>rabbitmqctl</c> in the owned container; null when the broker was supplied rather than started.</summary>
+    internal async Task<bool> ControlAsync(params string[] arguments)
+    {
+        if (_container is null) return false;
+        var result = await _container.ExecAsync(["rabbitmqctl", .. arguments]);
+        return result.ExitCode == 0 ? true : throw new InvalidOperationException("rabbitmqctl failed: " + result.Stderr);
+    }
+
+    /// <summary>The broker's URI for another virtual host.</summary>
+    internal string WithVirtualHost(string virtualHost) => new UriBuilder(ConnectionString) { Path = "/" + Uri.EscapeDataString(virtualHost) }.Uri.ToString();
+
     /// <summary>The broker's URI with another password, which the broker refuses.</summary>
     internal string WithWrongPassword()
     {
