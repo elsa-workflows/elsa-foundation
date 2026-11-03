@@ -288,6 +288,7 @@ public sealed class WorkflowRunInspectionTests
     [InlineData("notifying-sensitive", true)]
     [InlineData("notifying-plain", false)]
     [InlineData("notifying-blank", true)]
+    [InlineData("child-control", true)]
     public async Task An_incident_propagated_from_a_child_is_withheld_unless_the_causal_child_is_established_non_sensitive(string child, bool withheld)
     {
         const string ChildId = "actexec-child";
@@ -307,6 +308,8 @@ public sealed class WorkflowRunInspectionTests
             // A parent faulting while handling a child's notification records that child, whose payload reached the handler.
             "notifying-sensitive" or "notifying-plain" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = ChildId },
             "notifying-blank" => new Dictionary<string, string> { [RuntimeMetadataKeys.NotifyingChildActivityExecutionId] = "" },
+            // A consumer faulting on a child's control batches names no child.
+            "child-control" => new Dictionary<string, string> { [RuntimeMetadataKeys.FaultSubStatus] = "ChildControlFaulted" },
             _ => new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CausalIncidentId] = "incident-0", [RuntimeMetadataKeys.CausalActivityExecutionId] = ChildId,

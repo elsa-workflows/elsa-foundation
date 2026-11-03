@@ -20,11 +20,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <see cref="WorkflowRunInspectionDetails.ReadAt"/>. An infrastructure failure propagates.
 /// <para>
 /// An incident message is disclosed only when its activity, and the one causal child it propagated from (the fault
-/// recorder's causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the child whose parent notification the
-/// parent was handling), are
-/// established non-sensitive. This assumes that a propagated fault message names its child but never carries the child's
-/// own exception text: only one causal level is checked. A runtime that copies a child's text into its parent's incident
-/// breaks that assumption and must not be inspected through this contract.
+/// recorder's causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the
+/// child whose parent notification the parent was handling), are established non-sensitive. A consumer's fault while it
+/// evaluates a child's control batches names no child, so its message is always withheld. This assumes that a propagated
+/// fault message names its child but never carries the child's own exception text: only one causal level is checked. A
+/// runtime that copies a child's text into its parent's incident breaks that assumption and must not be inspected through
+/// this contract.
 /// </para>
 /// </remarks>
 public interface IWorkflowRunInspection

@@ -116,22 +116,29 @@ internal sealed class WorkflowRunInspection(
     /// </summary>
     internal const int SensitivityLookupLimit = 32;
 
+    // The runtime's child-control delivery records this sub-status on a consumer's fault (ChildControlDelivery).
+    private const string ChildControlFaulted = "ChildControlFaulted";
+
     /// <summary>
     /// Whether an incident's message may echo a sensitive input. Non-sensitivity must be established from both sources, the
     /// Executable's input bindings and the activity execution's own value evidence, for the activity the incident names and,
     /// when it propagated from a child's fault, for that causal activity execution too (the fault recorder's causal execution,
-    /// a structural parent's completed child, or the child whose parent notification the parent was handling). Only one causal level is checked: this assumes, as the runtime's fault
-    /// recorders do, that a propagated fault message names its child but never carries the child's own exception text.
-    /// An incident without an activity execution, or whose causal execution is blank or named only partly, counts as sensitive.
+    /// a structural parent's completed child, or the child whose parent notification the parent was handling). Only one
+    /// causal level is checked: this assumes, as the runtime's fault recorders do, that a propagated fault message names its
+    /// child but never carries the child's own exception text. An incident without an activity execution, whose causal
+    /// execution is blank or named only partly, or raised while a consumer evaluated a child's control batches, counts as
+    /// sensitive.
     /// </summary>
     private async Task<bool> IncidentSensitiveAsync(string workflowExecutionId, string? activityExecutionId, string? executableNodeId,
         IReadOnlyDictionary<string, string> metadata, HashSet<string>? sensitive, Dictionary<string, bool> lookups, CancellationToken cancellationToken)
     {
         if (activityExecutionId is null) return true;
+        // A consumer faulting while evaluating a child's control batches received that child's data, and the incident names no child.
+        if (metadata.TryGetValue(RuntimeMetadataKeys.FaultSubStatus, out var subStatus) && subStatus == ChildControlFaulted) return true;
         if (await ActivitySensitiveAsync(workflowExecutionId, activityExecutionId, executableNodeId, sensitive, lookups, cancellationToken)) return true;
-        // A causal child: the fault recorder's (IActivityFaultCausation), a structural parent's completed child, or the child whose
-        // notification the parent was handling, whose payload reaches the parent's handler. A key that is
-        // present but blank, or a causal node or incident without its activity execution, cannot be established non-sensitive.
+        // A causal child: the fault recorder's (IActivityFaultCausation), a structural parent's completed child, or the child
+        // whose notification the parent was handling, whose payload reaches the parent's handler. A key that is present but
+        // blank, or a causal node or incident without its activity execution, cannot be established non-sensitive.
         foreach (var key in new[] { RuntimeMetadataKeys.CausalActivityExecutionId, RuntimeMetadataKeys.CompletedChildActivityExecutionId, RuntimeMetadataKeys.NotifyingChildActivityExecutionId })
         {
             if (!metadata.TryGetValue(key, out var child)) continue;

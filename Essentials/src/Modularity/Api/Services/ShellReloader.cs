@@ -33,7 +33,13 @@ public sealed class ShellReloader(IShellRegistry shellRegistry, IShell shell, IL
             if (attempt < MaxAttempts && IsConfigurationChangedDuringComposition(result.Error))
             {
                 logger?.LogInformation("Configuration changed while shell {ShellName} was composing; reloading again (attempt {Attempt} of {MaxAttempts}).", name, attempt + 1, MaxAttempts);
-                await Task.Delay(RetryDelay, cancellationToken);
+                try { await Task.Delay(RetryDelay, cancellationToken); }
+                catch (OperationCanceledException)
+                {
+                    // The features are already saved: say why they are not in effect before the cancellation propagates.
+                    logger?.LogWarning("Reloading shell {ShellName} was cancelled between attempts; the applied features take effect only after a successful reload.", name);
+                    throw;
+                }
                 continue;
             }
 
