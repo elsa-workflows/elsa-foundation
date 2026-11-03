@@ -134,6 +134,8 @@ internal static class EtlSqlSnapshotReader
             }
             using (document)
             {
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new InvalidDataException("The SQL snapshot holds a line that is not a JSON object.");
                 if (document.RootElement.TryGetProperty(column, out var value) && value.ValueKind == JsonValueKind.Number &&
                     value.TryGetInt64(out var watermark) && (high is null || watermark > high))
                     high = watermark;

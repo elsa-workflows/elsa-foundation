@@ -12,7 +12,7 @@ Source: the branch `agent/claude/2908-sql-watermark`, stacked on `agent/claude/2
 | FR-002, FR-004, US1, US2: checkpoints through the worker and store | `A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs` (3, then 2, then 0 records; the checkpoint 3, 5, 5).<br>`A_watermarked_run_with_a_rejected_delivery_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again` (a rejected delivery leaves no checkpoint; the next run reads all three rows).<br>`A_cancelled_watermarked_run_leaves_the_checkpoint_so_the_next_run_reads_the_rows_again` (a run cancelled after preparation, through worker processes, leaves no checkpoint; the next run reads all three rows).<br>`A_watermarked_run_that_completes_with_rejected_rows_still_advances_the_checkpoint` (US1 scenario 4).<br>The incremental journey also shows that a checkpoint keyed by another source handle is not found. |
 | US2 scenario 2, SC-003: real worker processes | `A_watermarked_run_whose_worker_was_killed_after_publishing_records_the_snapshot_high_watermark`: a row with a higher watermark arrives after the snapshot, and the checkpoint is the snapshot's high watermark, 3. |
 | §2.23.5: a corrupt retained snapshot | `A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read` (`InvalidDataException`, which the preparer reports as `etl.snapshot-integrity-failed`). |
-| SC-006: the migration | The existing migration and model tests apply every migration to a new database and check for pending model changes. |
+| SC-006: the migration | `Connector_run_completion_migration_keeps_prior_finite_rows_and_leaves_their_request_null` seeds a runtime database at `20261021170000` and migrates it to the latest migration, which includes `20261103120000_ConnectorSourceWatermarks`, then checks for pending model changes. The existing migration tests also apply every migration to a new database. |
 | FR-006: Studio | Vitest `connector-pipeline-editor` (the selector offers required `int64` columns, follows a rename and drops a column that no longer qualifies) and Playwright `etl-connector-authoring` (the watermark is saved). |
 
 At `fe4aca2e8` (review round 2):
@@ -41,7 +41,7 @@ The Playwright spec passed 14 of 14 at `6f57b43f1`. Since then, Studio changed o
   - the first-checkpoint insert;
   - the `PreparedJson is null` return in the raise;
   - the high-watermark maximum in `ReadHighWatermarkAsync`;
-  - the artifact's null-omission of `watermark`;
+  - the artifact's null-omission of `watermark`, and the prepared run's null-omission of `sourceWatermark`;
   - the Studio watermark filtering and rename handling.
 - **Untested:** the compiler's text budget for the watermark.
 

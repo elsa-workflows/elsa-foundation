@@ -123,12 +123,14 @@ public sealed class EtlSqlSourceTests : IDisposable
             await File.ReadAllTextAsync(Path.Combine(SnapshotRoot, above.Prepared.File.Source.Key)));
     }
 
-    [Fact]
-    public async Task A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read()
+    [Theory]
+    [InlineData("{\"id\":2,\"vers")]
+    [InlineData("12")]
+    public async Task A_snapshot_that_no_longer_parses_reports_an_integrity_failure_when_its_high_watermark_is_read(string corruptLine)
     {
         Directory.CreateDirectory(SnapshotRoot);
         var path = Path.Combine(SnapshotRoot, "corrupt.jsonl");
-        await File.WriteAllTextAsync(path, "{\"id\":1,\"version\":4}\n{\"id\":2,\"vers");
+        await File.WriteAllTextAsync(path, "{\"id\":1,\"version\":4}\n" + corruptLine);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => EtlSqlSnapshotReader.ReadHighWatermarkAsync(path, "version", default).AsTask());
     }
