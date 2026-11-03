@@ -25,16 +25,22 @@ JOURNEYS = set(CAPTURES)
 
 
 def stop_group(process):
-    if process.poll() is None:
+    # The leader can exit before Chromium/workers, including a worker that ignores TERM.
+    # Drain the group even after its leader exited, then kill any remaining owned members.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        pass
+    finally:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        try:
-            process.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait(timeout=10)
+        process.wait(timeout=10)
 
 
 def command(args, log, *, cwd=ROOT, env=None):

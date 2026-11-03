@@ -79,21 +79,29 @@ class VerdictTests(unittest.TestCase):
         acceptance.prepare_host(project, destination)
         self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
 
+    def test_exited_leader_does_not_hide_a_term_resistant_descendant(self):
+        with patch.object(acceptance.os, 'killpg') as kill:
+            from unittest.mock import Mock
+            process = Mock(pid=44)
+            process.poll.return_value = 0
+            acceptance.stop_group(process)
+            self.assertEqual([(44, acceptance.signal.SIGTERM), (44, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
+
     def test_command_interrupt_stops_its_entire_group(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:
             process = popen.return_value
             process.pid = 43
             process.poll.return_value = None
-            process.wait.side_effect = [InterruptedError('terminate'), 0]
+            process.wait.side_effect = [InterruptedError('terminate'), 0, 0]
             with self.assertRaises(InterruptedError):
                 acceptance.command(['browser-runner'], self.root / 'command.log')
             self.assertTrue(popen.call_args.kwargs['start_new_session'])
-            kill.assert_called_once_with(43, acceptance.signal.SIGTERM)
-            self.assertEqual(2, process.wait.call_count)
+            self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
+            self.assertEqual(3, process.wait.call_count)
 
     def test_unrelated_healthy_listener_is_not_a_readiness_answer(self):
-        with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.urllib.request, 'urlopen') as request, patch.object(acceptance.time, 'sleep'):
-            popen.return_value.poll.side_effect = [None, 1, 1]
+        with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.urllib.request, 'urlopen') as request, patch.object(acceptance.time, 'sleep'), patch.object(acceptance.os, 'killpg'):
+            popen.return_value.poll.side_effect = [None, 1]
             request.return_value.__enter__.return_value.status = 200
             with self.assertRaises(RuntimeError):
                 with acceptance.host(self.root, 'missing.dll', 'http://localhost:1', '/', self.root / 'collision.log', {}):
@@ -126,8 +134,8 @@ class VerdictTests(unittest.TestCase):
                             with acceptance.host(self.root, 'host.dll', 'http://localhost:1', '/', self.root / 'host.log', {}):
                                 raise RuntimeError('journey failed')
                     if not fail_start:
-                        kill.assert_called_once_with(42, acceptance.signal.SIGTERM)
-                        process.wait.assert_called_once()
+                        self.assertEqual([(42, acceptance.signal.SIGTERM), (42, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
+                        self.assertEqual(2, process.wait.call_count)
 
 
 if __name__ == '__main__':
