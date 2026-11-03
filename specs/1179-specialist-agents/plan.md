@@ -117,7 +117,8 @@ Detailed meanings live in the [glossary](../../docs/glossary/elsa.md); state/sup
 | Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/ | Runtime facade/worker/journal orchestration and sole concrete MAF integration |
 | Extensions/Agent/src/Specialists/Anthropic/ and AzureOpenAI/ | Actual model connection/client/capability contributors, not a new assistant harness |
 | Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/ | Real conversation/turn/evaluation persistence |
-| Extensions/Agent/src/Specialists/Api/ | Actual playground/evaluation/inspection endpoints, with deliberate authoring/runtime composition |
+| Extensions/Agent/src/Specialists/Api/ | Authoring reads, kept composable without the runtime |
+| Extensions/Agent/src/Specialists/Inspection/Api/ | Playground/evaluation/inspection evidence endpoints over the runtime and generic draft Test Runs, a separate project so authoring and runtime composition stay deliberate |
 | Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/ | Module-owned Studio surfaces |
 | Extensions/Agent/tests/Specialists/ | Behavior/provider/host/recovery tests |
 | Essentials/src/Connections/Persistence/EntityFrameworkCore/ | Existing repository's durable implementation |
