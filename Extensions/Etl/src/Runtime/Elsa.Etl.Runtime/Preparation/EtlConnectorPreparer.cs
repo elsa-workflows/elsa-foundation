@@ -107,9 +107,6 @@ internal sealed class EtlConnectorPreparer
                     pipeline.Limits.MaxSnapshotBytes,
                     pipeline.Source is EtlJsonlSource ? _jsonlPublisher : _csvPublisher, cancellationToken);
             }
-            if (pipeline.Source is EtlRabbitMqSource queue)
-                sourceChunk = await PublishRabbitMqSnapshotAsync(admission, pipeline, queue, received => receipt = received,
-                    cancellationToken);
             long? sourceWatermark = null;
             if (pipeline.Source is EtlSqlSource sql)
             {
@@ -129,6 +126,10 @@ internal sealed class EtlConnectorPreparer
                     lookupPin!, lookupDeclaration, pipeline.Limits, cancellationToken);
                 lookup = EtlRuntimeMetadata.ToReference(chunk);
             }
+            // A queue is drained after the lookup is published, so the drain knows how much of the retained-input budget is left.
+            if (pipeline.Source is EtlRabbitMqSource queue)
+                sourceChunk = await PublishRabbitMqSnapshotAsync(admission, pipeline, queue, lookup?.ByteLength ?? 0,
+                    received => receipt = received, cancellationToken);
 
             // A malformed lookup must not leave a published source index that could be mistaken
             // for a runnable preparation by a later recovery attempt.
@@ -204,7 +205,7 @@ internal sealed class EtlConnectorPreparer
     /// requeued when its connection closed, so reusing it would read them twice.
     /// </summary>
     private async ValueTask<EtlChunk> PublishRabbitMqSnapshotAsync(EtlConnectorRunAdmission admission, EtlPipelineV2 pipeline,
-        EtlRabbitMqSource queue, Action<IEtlRabbitMqReceipt> received, CancellationToken cancellationToken)
+        EtlRabbitMqSource queue, long lookupBytes, Action<IEtlRabbitMqReceipt> received, CancellationToken cancellationToken)
     {
         var revision = admission.Bindings.Source.Revision;
         var identity = JsonSerializer.Serialize(new
@@ -217,6 +218,9 @@ internal sealed class EtlConnectorPreparer
             Attempt = Guid.NewGuid().ToString("N")
         });
         var maxBytes = pipeline.Limits.MaxSnapshotBytes;
+        // The store refuses a prepared run whose retained input (the snapshot, its index of one entry per record and a sentinel,
+        // and the lookup) passes the retained-input limit, so the drain stops short of that too and the rest stay queued.
+        var maxRetainedBytes = pipeline.Http.MaxRetainedInputBytes - lookupBytes;
         var bindings = RabbitMqBindings ?? throw new EtlBindingException("etl.rabbitmq-unavailable", "No ETL RabbitMQ bindings are configured.");
         var binding = bindings.ResolveExact(admission.Invocation.Scope, queue.Binding, EtlFileRole.Source.ToString(),
             revision.Revision, revision.Handle, queue.Queue);
@@ -226,6 +230,7 @@ internal sealed class EtlConnectorPreparer
         return await _jsonlPublisher.PublishAsync(_snapshotRoot, identity, maxBytes, async (destination, ct) =>
         {
             long written = 0;
+            long records = 0;
             var refusedFirst = false;
             // A failure writing the snapshot is the snapshot's, not the broker's, so it is not classified as a read failure.
             Exception? writeFailure = null;
@@ -235,7 +240,9 @@ internal sealed class EtlConnectorPreparer
                 receipt = await consumer.ReceiveAsync(binding.ConnectionString, queue.Queue, queue.MaxMessages, async (body, token) =>
                 {
                     var line = EtlRabbitMqSnapshotWriter.Line(body);
-                    if (written + line.Length + 1 > maxBytes)
+                    var snapshotBytes = written + line.Length + 1;
+                    if (snapshotBytes > maxBytes ||
+                        snapshotBytes + (records + 2) * EtlConnectorCsvSupport.IndexEntrySize > maxRetainedBytes)
                     {
                         refusedFirst = written == 0;
                         return false;
@@ -250,7 +257,8 @@ internal sealed class EtlConnectorPreparer
                         writeFailure = exception;
                         throw;
                     }
-                    written += line.Length + 1;
+                    written = snapshotBytes;
+                    records++;
                     return true;
                 }, ct);
             }

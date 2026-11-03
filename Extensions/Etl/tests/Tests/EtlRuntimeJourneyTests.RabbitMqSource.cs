@@ -52,6 +52,25 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     [Fact]
+    public async Task A_drain_stops_within_the_retained_input_budget_so_a_backlog_drains_over_several_runs()
+    {
+        await using var files = new RuntimeFiles("");
+        var consumer = new TestRabbitMqConsumer(new[] { "Ada", "Bob", "Cid", "Dee", "Eve" }
+            .Select((name, index) => $$"""{"id":{{index + 1}},"name":"{{name}}"}""").ToArray());
+        var host = await StartRabbitMqSourceHostAsync(files, consumer);
+        var pipeline = EtlRabbitMqSourceTests.Pipeline();
+        // Each 21-byte body is a 22-byte line plus a 24-byte index entry, beside the 24-byte sentinel: three fit in 200 bytes.
+        var bounded = pipeline with { Http = pipeline.Http with { MaxRetainedInputBytes = 200, MaxPageBytes = 200, MaxContinuationBytes = 200 } };
+
+        var first = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-retained", bounded));
+        var second = await AdmitAndWaitAsync(files, host, ConnectorInvocation(files.Scope, "rabbitmq-retained-rest", bounded));
+
+        Assert.Equal((EtlRunStatus.Succeeded, 3L), (first.Status, first.AcceptedRecords));
+        Assert.Equal((EtlRunStatus.Succeeded, 2L), (second.Status, second.AcceptedRecords));
+        Assert.Equal(["receive 3", "record Applied", "ack 3", "receive 2", "record Applied", "ack 2"], consumer.Log);
+    }
+
+    [Fact]
     public async Task A_prepared_run_the_store_refuses_to_record_never_acknowledges_its_messages()
     {
         await using var files = new RuntimeFiles("");
