@@ -18,6 +18,7 @@ internal sealed class SqliteEtlSqlEngine : IEtlSqlEngine
 
     private EtlSqlErrorKind? _failNextUpsert;
     private EtlSqlErrorKind? _failNextSnapshot;
+    private Exception? _failNextSnapshotWith;
 
     public string Provider => "sqlite";
     public int MaxParameters { get; init; } = 999;
@@ -28,6 +29,9 @@ internal sealed class SqliteEtlSqlEngine : IEtlSqlEngine
 
     /// <summary>Makes the next snapshot read throw a failure of the given kind once (spec 1198).</summary>
     public void FailNextSnapshot(EtlSqlErrorKind kind) => _failNextSnapshot = kind;
+
+    /// <summary>Makes the next snapshot read throw the given exception once, as a provider failure outside the DbException family.</summary>
+    public void FailNextSnapshot(Exception exception) => _failNextSnapshotWith = exception;
 
     /// <summary>The number of snapshot reads issued, so a test can prove a published snapshot was reused.</summary>
     public int SnapshotReads { get; private set; }
@@ -154,6 +158,11 @@ internal sealed class SqliteEtlSqlEngine : IEtlSqlEngine
             if (inner.CommandText.Contains("ORDER BY", StringComparison.Ordinal))
             {
                 engine.SnapshotReads++;
+                if (engine._failNextSnapshotWith is { } failure)
+                {
+                    engine._failNextSnapshotWith = null;
+                    throw failure;
+                }
                 if (engine._failNextSnapshot is { } kind)
                 {
                     engine._failNextSnapshot = null;

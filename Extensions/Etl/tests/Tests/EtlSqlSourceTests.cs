@@ -217,6 +217,27 @@ public sealed class EtlSqlSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_provider_failure_outside_the_db_exception_family_is_a_rejection_not_an_endless_retry()
+    {
+        _engine.FailNextSnapshot(new NotSupportedException("An unmapped provider type."));
+
+        var result = await Preparer().PrepareAsync(Admission(Pipeline()));
+
+        Assert.Equal("etl.sql-read-rejected", result.Diagnostic?.Code);
+    }
+
+    [Fact]
+    public void A_sql_source_with_a_null_column_or_key_entry_is_not_a_readable_artifact()
+    {
+        var document = Compile(Pipeline()).Artifact!.Pipeline.GetRawText();
+
+        Assert.Throws<System.Text.Json.JsonException>(() => EtlArtifactV2Json.Read(
+            System.Text.Json.JsonDocument.Parse(document.Replace("\"columns\":[", "\"columns\":[null,", StringComparison.Ordinal)).RootElement));
+        Assert.Throws<System.Text.Json.JsonException>(() => EtlArtifactV2Json.Read(
+            System.Text.Json.JsonDocument.Parse(document.Replace("\"key\":[", "\"key\":[null,", StringComparison.Ordinal)).RootElement));
+    }
+
+    [Fact]
     public async Task A_snapshot_beyond_the_snapshot_limit_fails_preparation()
     {
         Execute("INSERT INTO people VALUES (1, 'Ada', '1.5', 1, NULL), (2, 'Bram', '1.5', 1, NULL)");
