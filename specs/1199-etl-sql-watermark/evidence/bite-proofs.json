@@ -199,6 +199,62 @@
    "original": "value.ValueKind == JsonValueKind.Number &&",
    "mutated_text": "",
    "sourceRevision": "53afd3d5ec593bdd76a1f91dbdec52b96c51f7b0"
+  },
+  {
+   "mutation": "checkpoint-key-ignores-definition",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            key.DefinitionId,\n",
+   "mutated_text": "",
+   "sourceRevision": "b23836ad1304bd02ce6a13be41744b3d8c950b94"
+  },
+  {
+   "mutation": "checkpoint-key-ignores-alias",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            key.SourceAlias,\n",
+   "mutated_text": "",
+   "sourceRevision": "b23836ad1304bd02ce6a13be41744b3d8c950b94"
+  },
+  {
+   "mutation": "checkpoint-key-ignores-table",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            key.Table,\n",
+   "mutated_text": "",
+   "sourceRevision": "b23836ad1304bd02ce6a13be41744b3d8c950b94"
+  },
+  {
+   "mutation": "checkpoint-key-ignores-column",
+   "file": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~A_watermarked_sql_source_loads",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_watermarked_sql_source_loads_only_new_and_changed_rows_across_runs"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "            key.Column\n",
+   "mutated_text": "",
+   "sourceRevision": "b23836ad1304bd02ce6a13be41744b3d8c950b94"
   }
  ]
 }
