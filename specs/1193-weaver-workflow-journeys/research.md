@@ -48,7 +48,7 @@ This file records the seams each slice uses, and the decisions that follow from 
 
 **Decision**:
 - The list context reads the flags from the page response Studio already holds.
-- There are no separate handlers. The authority checks are inline in the endpoint `HandleAsync` methods (`WorkflowLibraryEndpoints.cs:235-245`) and use the internal, `HttpContext`-bound `WorkflowLibraryAccess`. Slice E extracts them into `IWorkflowLibraryCommands` (plan D4), which both the endpoints and the tools call.
+- There are no separate handlers. The authority checks are inline in the endpoint `HandleAsync` methods (`WorkflowLibraryEndpoints.cs:235-245`) and use the internal, `HttpContext`-bound `WorkflowLibraryAccess`. Slice E extracts them into `IWorkflowLibraryCommands` (plan D4). The Weaver tools call the installed contract. The HTTP endpoints run the same built-in logic directly, so a replacement decides only Weaver's writes.
 - The operation-key unique index is scoped like the existing tag index (`WorkflowLibraryEntityConfigurations.cs:71`): by the tenant scope key for tags, and by the tenant scope key and subject for views.
 - The operation-key overloads are `CreateTagAsync(input, actorId, operationKey)` and `SaveViewAsync(id, input, subjectId, canShare, operationKey)`.
 

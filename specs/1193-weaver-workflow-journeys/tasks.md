@@ -47,7 +47,7 @@ Each slice is one PR that says "Refs #3442", and slice G's PR closes the issue. 
 ## Slice E: Library, create dialog and templates (stories 6, 7)
 
 - [x] T029 Operation-key overloads on `IWorkflowLibraryStore`, the EF column with its unique index scoped by tenant scope key (and subject for views), migrations for four engines, and the API change (FR-021, FR-033).
-- [x] T029a Extract `IWorkflowLibraryCommands` into `Elsa.Workflows.Design.Core`, implemented in the Api from the inline endpoint authority logic, and have the endpoints call it (D4).
+- [x] T029a Extract `IWorkflowLibraryCommands` into `Elsa.Workflows.Design.Core`, implemented in the Api from the inline endpoint authority logic. The endpoints keep the built-in decisions; a replacement decides only Weaver's writes (D4).
 - [x] T030 `workflows.library` context and the list-state client tool (FR-020).
 - [x] T031 Library write tools for tags, favorites, folders and views, with per-target outcomes (FR-021, FR-025).
 - [x] T032 Unavailable when organization is disabled (FR-022). Refuse deletes.
