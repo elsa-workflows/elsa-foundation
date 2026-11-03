@@ -297,6 +297,21 @@ public sealed class RuntimeMinimalApiBehaviorTests
     }
 
     [Theory]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Input, HttpStatusCode.BadRequest)]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Policy, HttpStatusCode.InternalServerError)]
+    [InlineData(WorkflowExecutableStartRejectionCategory.Authority, HttpStatusCode.InternalServerError)]
+    public async Task Execute_maps_only_an_input_contract_start_rejection_to_bad_request(
+        WorkflowExecutableStartRejectionCategory category,
+        HttpStatusCode expectedStatus)
+    {
+        await using var host = await StartAsync(_ => throw new WorkflowExecutableStartRejectedException(category, "reason", "Start refused."));
+
+        using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("someOtherParam")]
     [InlineData("artifactId")]
     [InlineData(null)]

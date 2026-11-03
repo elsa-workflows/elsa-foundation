@@ -105,18 +105,61 @@ public sealed class WorkflowStartInputContractTests : IAsyncLifetime
         await PublishAsync(Required("count"));
         var router = await RouterWithBindingAsync();
 
-        var exception = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() => router.RouteAsync(StartRequest()).AsTask());
+        var result = await router.RouteAsync(StartRequest());
 
-        Assert.Equal(WorkflowExecutableStartRejectionCategory.Input, exception.Category);
-        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.MissingRequired, exception.ReasonCode);
+        var refused = Assert.Single(result.Starts);
+        Assert.Equal(StimulusStartStatus.Refused, refused.Status);
+        Assert.Equal(WorkflowExecutableInputValidationReasonCodes.MissingRequired, refused.Reason);
+        Assert.Equal(0, result.StartedCount);
         Assert.Empty(_agents.StartInputs);
     }
 
-    private async Task PublishAsync(params WorkflowDeclaredInput[] inputs)
+    [Fact]
+    public async Task RuntimeApiStart_KeepsTheSuppliedInputsOfAnArtifactWithoutAnInputContract()
+    {
+        await PublishToAsync(ArtifactId, inputContract: null);
+
+        await ApiStartAsync(("anything", 1));
+
+        Assert.Equal(1, Assert.Single(_agents.StartInputs)["anything"].GetInt32());
+    }
+
+    [Fact]
+    public async Task TriggerStart_RefusedByItsInputContract_DoesNotStopTheOtherMatchingStarts()
+    {
+        // Recipients start in artifact order, so the refused workflow runs first and the later one must still start.
+        await PublishToAsync("artifact-a", Contract(Required("count")));
+        await PublishToAsync("artifact-b", Contract(Optional("greeting", "\"hello\"")));
+        var router = await RouterWithBindingAsync("artifact-a", "artifact-b");
+
+        var result = await router.RouteAsync(StartRequest());
+
+        Assert.Collection(result.Starts,
+            refused =>
+            {
+                Assert.Equal("artifact-a", refused.ArtifactId);
+                Assert.Equal(StimulusStartStatus.Refused, refused.Status);
+                Assert.Equal(WorkflowExecutableInputValidationReasonCodes.MissingRequired, refused.Reason);
+                Assert.Null(refused.WorkflowExecutionId);
+            },
+            started =>
+            {
+                Assert.Equal("artifact-b", started.ArtifactId);
+                Assert.Equal(StimulusStartStatus.Started, started.Status);
+            });
+        Assert.Equal("hello", Assert.Single(_agents.StartInputs)["greeting"].GetString());
+    }
+
+    private Task PublishAsync(params WorkflowDeclaredInput[] inputs) => PublishToAsync(ArtifactId, Contract(inputs));
+
+    private static WorkflowExecutableInputContract Contract(params WorkflowDeclaredInput[] inputs) =>
+        new(WorkflowExecutableInputContract.CurrentVersion, inputs);
+
+    private async Task PublishToAsync(string artifactId, WorkflowExecutableInputContract? inputContract)
     {
         var services = _scope.ServiceProvider;
         await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new WorkflowExecutable(
-            identity: new WorkflowExecutableIdentity(ArtifactId, "definition-1", "version-1", "1.0.0", "sha256:inputs"),
+            identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:inputs"),
             rootActivity: new ExecutableNode(
                 executableNodeId: "node-root",
                 authoredActivityId: "authored-node-root",
@@ -128,11 +171,11 @@ public sealed class WorkflowStartInputContractTests : IAsyncLifetime
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
-            inputContract: new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, inputs),
+            inputContract: inputContract,
             dependencies: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
         await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(new WorkflowExecutableSourceReference(
-            "published-ref-inputs", ArtifactId, "WorkflowDefinitionVersion", "version-1", "1.0.0",
+            $"published-ref-{artifactId}", artifactId, "WorkflowDefinitionVersion", "version-1", "1.0.0",
             "definition-1", "version-1", "1.0.0", Now, Now, WorkflowExecutableReferenceScope.Published));
     }
 
@@ -147,21 +190,22 @@ public sealed class WorkflowStartInputContractTests : IAsyncLifetime
             CancellationToken.None);
     }
 
-    private async Task<StimulusRouter> RouterWithBindingAsync()
+    private async Task<StimulusRouter> RouterWithBindingAsync(params string[] artifactIds)
     {
         var bindings = new InMemoryWorkflowTriggerBindingStore();
-        await bindings.SaveAsync(new WorkflowTriggerBinding(
-            TriggerBindingId: WorkflowTriggerBinding.BuildId(ArtifactId, "node-root", StimulusHash),
-            ArtifactId: ArtifactId,
-            DefinitionId: "definition-1",
-            ArtifactVersion: "1.0.0",
-            ArtifactHash: "sha256:inputs",
-            ExecutableNodeId: "node-root",
-            StimulusType: StimulusType,
-            StimulusHash: StimulusHash,
-            CorrelationScope: null,
-            Metadata: new Dictionary<string, string>(),
-            CreatedAt: Now));
+        foreach (var artifactId in artifactIds.DefaultIfEmpty(ArtifactId))
+            await bindings.SaveAsync(new WorkflowTriggerBinding(
+                TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, "node-root", StimulusHash),
+                ArtifactId: artifactId,
+                DefinitionId: "definition-1",
+                ArtifactVersion: "1.0.0",
+                ArtifactHash: "sha256:inputs",
+                ExecutableNodeId: "node-root",
+                StimulusType: StimulusType,
+                StimulusHash: StimulusHash,
+                CorrelationScope: null,
+                Metadata: new Dictionary<string, string>(),
+                CreatedAt: Now));
         var services = _scope.ServiceProvider;
         return new StimulusRouter(
             bindings,

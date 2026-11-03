@@ -209,8 +209,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
-        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
         var inputs = ApplyInputContract(executable, request.Inputs);
+        await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
