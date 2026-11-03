@@ -2032,3 +2032,6 @@ override sealed Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSource? other
 static Elsa.Etl.Core.EtlSqlSource.operator !=(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
 static Elsa.Etl.Core.EtlSqlSource.operator ==(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
 Elsa.Etl.Core.Runtime.IEtlSqlEngine.ExtremeDatesAreInfinite.get -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!

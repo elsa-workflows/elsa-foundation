@@ -91,6 +91,18 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
                          || item.ImplementationType == typeof(WorkflowDefinitionAuthorizationStartupTask))).ToArray())
             services.Remove(previous);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(authorityValidator));
+        // The library's organization commands, which the library endpoints call and other domains reach through
+        // Workflows Design Core (spec 1193 D4). One Core implementation per shell: a duplicate fails startup.
+        // Rejected at configuration as well as at startup: the startup task runs only where the Tasks feature is composed.
+        WorkflowLibraryCommandsStartupTask.Validate(services);
+        services.TryAddScoped<WorkflowLibraryCommands>();
+        services.TryAddScoped<IWorkflowLibraryCommands>(sp => sp.GetRequiredService<WorkflowLibraryCommands>());
+        AddLibraryCommandsValidator(services);
+        // Exact version reads for other domains through Workflows Design Core (spec 1193 slice F, D4), over the same details
+        // composition the version endpoint uses. One implementation per shell, rejected at configuration and at startup.
+        WorkflowVersionReaderStartupTask.Validate(services);
+        services.TryAddScoped<IWorkflowVersionReader, WorkflowVersionReader>();
+        AddVersionReaderValidator(services);
         services.AddHttpContextAccessor();
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
@@ -102,6 +114,36 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
             if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsDesignJsonTypeInfoResolver))
                 options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsDesignJsonTypeInfoResolver());
         });
+    }
+
+    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
+    private static void AddLibraryCommandsValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowLibraryCommandsStartupTask))
+                ?.ImplementationInstance is not WorkflowLibraryCommandsStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowLibraryCommandsStartupTask(services);
+        services.RemoveAll<WorkflowLibraryCommandsStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowLibraryCommandsStartupTask
+                         || item.ImplementationType == typeof(WorkflowLibraryCommandsStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
+    }
+
+    // One validator per configuring collection: a copied child shell rebinds it to its own collection.
+    private static void AddVersionReaderValidator(IServiceCollection services)
+    {
+        if (services.LastOrDefault(item => item.ServiceType == typeof(WorkflowVersionReaderStartupTask))
+                ?.ImplementationInstance is not WorkflowVersionReaderStartupTask validator || !validator.Owns(services))
+            validator = new WorkflowVersionReaderStartupTask(services);
+        services.RemoveAll<WorkflowVersionReaderStartupTask>();
+        services.AddSingleton(validator);
+        foreach (var previous in services.Where(item => item.ServiceType == typeof(IStartupTask)
+                     && (item.ImplementationInstance is WorkflowVersionReaderStartupTask
+                         || item.ImplementationType == typeof(WorkflowVersionReaderStartupTask))).ToArray())
+            services.Remove(previous);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStartupTask>(validator));
     }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>

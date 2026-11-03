@@ -38,6 +38,8 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
         Templates.WorkflowTemplatesUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
         PermanentDeletionUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
         WorkflowLibraryUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
+        // A keyed create against a store without operation-key support is unavailable, never silently non-idempotent.
+        WorkflowLibraryOperationKeyUnsupportedException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
         WorkflowLibraryAuthorizationException => EndpointProblem.General(StatusCodes.Status403Forbidden, exception.Message),
         UnauthorizedAccessException => EndpointProblem.General(StatusCodes.Status403Forbidden, "The requested workflow library operation is not permitted."),
         ArgumentException => EndpointProblem.General(StatusCodes.Status400BadRequest, exception.Message),

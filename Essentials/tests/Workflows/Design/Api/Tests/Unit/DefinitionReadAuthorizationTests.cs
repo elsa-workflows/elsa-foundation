@@ -287,6 +287,29 @@ public sealed class DefinitionReadAuthorizationTests
     private const string WorkflowDesignPermissionsManage = "workflows/design:manage";
     private const string Scheme = "DesignReadAuthorization";
 
+    // A host whose workflow persistence has one scope stores every definition under that scope's tenant, whatever tenant
+    // created it (the conformance probe's packaged consumer stores "default"). The owner then refuses a principal of
+    // another tenant: the stored tenant must equal the principal's. This comparison predates the read evidence (it is the
+    // authorizer's tenant check on main), and the evidence confirms only the same tenant, so the outcome is unchanged with
+    // or without a library store. Manage satisfies Read in the permission evaluator.
+    [Theory]
+    [InlineData(true, "tenant-b", "default", StatusCodes.Status403Forbidden)]
+    [InlineData(false, "tenant-b", "default", StatusCodes.Status403Forbidden)]
+    [InlineData(true, "tenant-b", "tenant-b", StatusCodes.Status200OK)]
+    [InlineData(false, "tenant-b", "tenant-b", StatusCodes.Status200OK)]
+    public async Task A_definition_stored_under_another_tenant_is_refused_and_manage_alone_reads_its_own(bool library, string principalTenant,
+        string storedTenant, int expected)
+    {
+        using var host = new Host(library);
+        host.Definitions.Tenant = storedTenant;
+
+        var (status, _, body) = await host.GetAsync(Principal(principalTenant, WorkflowDesignPermissionsManage));
+
+        Assert.Equal(expected, status);
+        if (expected == StatusCodes.Status403Forbidden)
+            Assert.Contains("not readable in the current application context", body, StringComparison.Ordinal);
+    }
+
     private static ClaimsPrincipal Principal(string tenant, params string[] permissions) => new(new ClaimsIdentity(
         [
             new Claim(ClaimTypes.NameIdentifier, "actor"), new Claim(IdentityClaimTypes.Normalized, "v1"),
@@ -323,9 +346,9 @@ public sealed class DefinitionReadAuthorizationTests
                 && endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("GET") == true);
         }
 
-        internal async Task<(int Status, string? ContentType, string Body)> GetAsync()
+        internal async Task<(int Status, string? ContentType, string Body)> GetAsync(ClaimsPrincipal? user = null)
         {
-            using var request = Begin();
+            using var request = Begin(user);
             var context = request.Context;
             context.SetEndpoint(get);
             context.Request.Method = "GET";

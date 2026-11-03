@@ -106,6 +106,88 @@ internal static class WorkflowLibraryNativeWitness
             Assert.Null(await library.GetOrganizationAsync("alpha")); Assert.Null(await library.GetFolderAsync(folderId));
             Assert.Empty((await library.ListTagsAsync()).Items); Assert.Empty(await library.ListViewsAsync("alice"));
         }
+        foreach (var deleteWorkflows in new[] { false, true })
+            await RunDeletionAsync(fixture.ConnectionString, provider, tenant + "-delete-" + deleteWorkflows, deleteWorkflows);
+    }
+
+    private static async Task RunDeletionAsync(string connection, string provider, string tenant, bool deleteWorkflows)
+    {
+        string childId;
+        await using (var host = Host(connection, provider, tenant))
+        {
+            using var scope = host.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+            var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+            var deletion = scope.ServiceProvider.GetRequiredService<IWorkflowFolderDeletionStore>();
+            var folder = await library.CreateFolderAsync("Demo", null, "alice");
+            var child = await library.CreateFolderAsync("Demo", folder.Id, "alice"); childId = child.Id;
+            db.Definitions.AddRange(new WorkflowDefinition { Id = "one", Name = "One", TenantId = tenant },
+                new WorkflowDefinition { Id = "deleted", Name = "Deleted", TenantId = tenant });
+            await db.SaveChangesAsync();
+            await library.MoveDefinitionsAsync(["one", "deleted"], folder.Id, "alice", "place");
+            var deleted = await db.Definitions.SingleAsync(row => row.TenantId == tenant && row.Id == "deleted");
+            deleted.DeletedAt = DateTimeOffset.UnixEpoch; await db.SaveChangesAsync();
+            var preview = await deletion.PreviewFolderDeletionAsync(folder.Id);
+            await library.CreateFolderAsync("Grandchild", child.Id, "alice");
+            await Assert.ThrowsAsync<WorkflowLibraryConflictException>(() => deletion.DeleteFolderAsync(folder.Id,
+                preview.Revision, deleteWorkflows, "alice", "stale-delete"));
+            preview = await deletion.PreviewFolderDeletionAsync(folder.Id);
+            await deletion.DeleteFolderAsync(folder.Id, preview.Revision, deleteWorkflows, "alice", "delete");
+        }
+        await using var restart = Host(connection, provider, tenant);
+        using var verify = restart.CreateScope();
+        var read = verify.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var readDb = verify.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        Assert.Equal(childId, Assert.Single((await read.ListFoldersAsync(null)).Items).Id);
+        Assert.Null((await read.GetOrganizationAsync("one"))!.FolderId);
+        Assert.Null((await read.GetOrganizationAsync("deleted"))!.FolderId);
+        Assert.Equal(deleteWorkflows, (await readDb.Definitions.SingleAsync(row => row.TenantId == tenant && row.Id == "one")).DeletedAt is not null);
+        Assert.Equal(DateTimeOffset.UnixEpoch, (await readDb.Definitions.SingleAsync(row => row.TenantId == tenant && row.Id == "deleted")).DeletedAt);
+    }
+
+    /// <summary>
+    /// Spec 1193 FR-021 on a native engine: the unique operation-key index admits many unkeyed rows, scopes a key by tenant
+    /// (and by owner for views), and a repeated or concurrent keyed create resolves to exactly one tag or view.
+    /// </summary>
+    public static async Task RunOperationKeysAsync(WorkflowsDesignProviderFixture fixture, string provider)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
+        var tenant = "library-keys-" + Guid.NewGuid().ToString("N");
+        string tagId; string viewId;
+        await using (var host = Host(fixture.ConnectionString, provider, tenant))
+        {
+            using (var setup = host.CreateScope()) await setup.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().Database.EnsureCreatedAsync();
+            using var scope = host.CreateScope(); var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+            await library.CreateTagAsync(new("Unkeyed one"), "alice"); await library.CreateTagAsync(new("Unkeyed two"), "alice");
+            await library.SaveViewAsync(null, new("Unkeyed one", new()), "alice", false); await library.SaveViewAsync(null, new("Unkeyed two", new()), "alice", false);
+            async Task<WorkflowTag> CreateAsync()
+            {
+                using var racer = host.CreateScope();
+                return await racer.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>().CreateTagAsync(new("Keyed"), "alice", "keyed-tag");
+            }
+            var raced = await Task.WhenAll(CreateAsync(), CreateAsync(), CreateAsync());
+            tagId = Assert.Single(raced.Select(tag => tag.Id).Distinct());
+            Assert.Equal(tagId, (await library.CreateTagAsync(new("Keyed"), "alice", "keyed-tag")).Id);
+            await Assert.ThrowsAsync<WorkflowLibraryConflictException>(() => library.CreateTagAsync(new("Other"), "alice", "keyed-tag"));
+            Assert.Equal(3, (await library.ListTagsAsync()).Items.Count);
+            var view = await library.SaveViewAsync(null, new("Keyed", new(SearchTerm: "pay")), "alice", false, "keyed-view"); viewId = view.Id;
+            Assert.Equal(viewId, (await library.SaveViewAsync(null, new("Keyed", new(SearchTerm: "pay")), "alice", false, "keyed-view")).Id);
+            await Assert.ThrowsAsync<WorkflowLibraryConflictException>(() => library.SaveViewAsync(null, new("Other", new()), "alice", false, "keyed-view"));
+            Assert.NotEqual(viewId, (await library.SaveViewAsync(null, new("Keyed", new(SearchTerm: "pay")), "bob", false, "keyed-view")).Id);
+            Assert.Equal(3, (await library.ListViewsAsync("alice")).Count);
+        }
+        await using (var foreign = Host(fixture.ConnectionString, provider, tenant + "-foreign"))
+        {
+            using var scope = foreign.CreateScope(); var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+            Assert.Null(await library.FindTagByOperationKeyAsync("keyed-tag")); Assert.Null(await library.FindViewByOperationKeyAsync("keyed-view", "alice"));
+            Assert.NotEqual(tagId, (await library.CreateTagAsync(new("Keyed"), "alice", "keyed-tag")).Id);
+        }
+        await using (var restart = Host(fixture.ConnectionString, provider, tenant))
+        {
+            using var scope = restart.CreateScope(); var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+            Assert.Equal(tagId, (await library.FindTagByOperationKeyAsync("keyed-tag"))!.Id);
+            Assert.Equal(viewId, (await library.FindViewByOperationKeyAsync("keyed-view", "alice"))!.Id);
+        }
     }
 
     private static ServiceProvider Host(string connection, string provider, string tenant)

@@ -10,7 +10,7 @@ import { useWorkflowGraphOperationBatch } from "../workflow-editor/useWorkflowGr
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
 import { useWorkflowPersistence } from "../workflow-editor/useWorkflowPersistence";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
-import { getDraftRevision } from "../workflow-editor/editorHelpers";
+import { getDraftContentRevision } from "../workflow-editor/editorHelpers";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { writeLine } from "./fixtures";
 import { updateDraft } from "../api/workflowDesign";
@@ -51,7 +51,7 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.clearA
 describe("native reviewed workflow effect", () => {
   it("exposes bounded exact context without property values", async () => {
     const context = await agent.contextProviders.list()[0].collect({ surface: { route: "/workflows" } });
-    expect(context).toMatchObject({ attachments: [{ target: { resourceId: "definition", revision: getDraftRevision(draft) }, content: { activities: [{ id: "write" }] } }] });
+    expect(context).toMatchObject({ attachments: [{ target: { resourceId: "definition", revision: getDraftContentRevision(draft) }, content: { activities: [{ id: "write" }] } }] });
     expect(JSON.stringify(context)).not.toContain("secret-property-value");
   });
   it("observes atomic editor state, holds autosave and undoes the whole change", async () => {
@@ -59,7 +59,7 @@ describe("native reviewed workflow effect", () => {
     let completion!: ReturnType<NonNullable<typeof controller.execute>>;
     flushSync(() => { completion = controller.execute!(request()); });
     const result = await completion;
-    expect(result).toMatchObject({ outcome: "applied", result: { data: { observed: true, revision: getDraftRevision(doc.state.draft!) } } });
+    expect(result).toMatchObject({ outcome: "applied", result: { data: { observed: true, revision: getDraftContentRevision(doc.state.draft!) } } });
     expect(container.textContent).toContain('"x":150'); expect(persistence.reviewHeld).toBe(true);
     expect(controller.snapshot!.client!.generationId).toBe(generation);
     await vi.advanceTimersByTimeAsync(10000); expect(updateDraft).not.toHaveBeenCalled();

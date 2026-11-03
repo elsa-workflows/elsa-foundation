@@ -58,6 +58,12 @@ Phase 1, users and roles:
 
 Phase 2 (external OIDC) is filed once Phase 1 is under way. Phases 3–5 follow.
 
+The User Tasks portion of Phase 5 was delivered separately under owner-authorized
+[Program #3688](https://github.com/elsa-workflows/elsa-foundation/issues/3688) and
+[implementation #3577 / PR #3691](https://github.com/elsa-workflows/elsa-foundation/pull/3691).
+Its [resulting-main qualification](../../specs/1196-user-tasks/resulting-main-qualification.md)
+records the general task/forms/API/Studio capability. This changes no other parity phase or priority.
+
 ## Removal or completion conditions
 
 Complete when the identity phases (1–3) have shipped and the remaining accepted rows are either built or explicitly
