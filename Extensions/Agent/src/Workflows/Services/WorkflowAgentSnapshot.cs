@@ -9,7 +9,9 @@ namespace Elsa.Agent.Workflows.Services;
 /// <remarks>
 /// The compact containment structure (each activity's exact version, parent, slot and its own slots), the working-state
 /// kind and the visible Secret References are optional additions to schema <c>1</c>. A snapshot that carries structure
-/// must describe every activity and one tree; the Operation Batch tool requires it.
+/// must describe every activity and one tree; the Operation Batch tool requires it. The designer's diagnostics, the selected
+/// activity's property context and the graph activity references are further optional additions, read strictly by
+/// <see cref="WorkflowAgentExplainContext"/>.
 /// </remarks>
 internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentClientBinding Client, string DraftId,
     WorkflowAgentGraph Graph, JsonElement Content)
@@ -23,10 +25,24 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     /// <summary>Ids the document holds outside its tree (layout and presentation records); a new node never reuses one.</summary>
     internal IReadOnlyList<string> ReservedIds { get; init; } = [];
     internal string? SelectedNodeId { get; init; }
+    /// <summary>The validation diagnostics the designer shows for this working state (FR-018); empty when none were disclosed.</summary>
+    internal IReadOnlyList<WorkflowAgentDiagnostic> Diagnostics { get; init; } = [];
+    /// <summary>The selected activity's declared property context (FR-016, FR-017), or null when none was disclosed.</summary>
+    internal WorkflowAgentSelectedActivity? SelectedActivity { get; init; }
+    /// <summary>The graph activities the draft references by definition identity and version (FR-014).</summary>
+    internal IReadOnlyList<WorkflowAgentGraphActivity> GraphActivities { get; init; } = [];
 
     internal const string ModuleId = "Elsa.Studio.Workflows";
     internal const string ResourceType = "workflow-definition";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>The same snapshot without the selected activity's property context, for when the owning catalog cannot confirm it.</summary>
+    internal WorkflowAgentSnapshot WithoutSelectedActivity()
+    {
+        var body = System.Text.Json.Nodes.JsonNode.Parse(Content.GetRawText())!.AsObject();
+        body.Remove("selectedActivity");
+        return this with { Content = JsonSerializer.SerializeToElement(body, JsonOptions), SelectedActivity = null };
+    }
 
     internal static bool SameTarget(AgentResourceTarget left, AgentResourceTarget right) =>
         left.ModuleId == right.ModuleId && left.ResourceType == right.ResourceType &&
@@ -44,8 +60,10 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         JsonElement body;
         try { body = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
-        if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 ||
-            Text(body, "workflowDefinitionId") != target.ResourceId || Text(body, "revision") != target.Revision ||
+        // Malformed UTF-16 (a lone surrogate escape) throws wherever a name or string is read (JsonProperty.Name,
+        // GetString), so it is refused once, up front, like any other malformed snapshot; every later read is then safe.
+        if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 || !WellFormedText(body)) return false;
+        if (Text(body, "workflowDefinitionId") != target.ResourceId || Text(body, "revision") != target.Revision ||
             !ValidString(Text(body, "draftId")))
             return false;
         if (!body.TryGetProperty("activities", out var nodes) || nodes.ValueKind != JsonValueKind.Array || nodes.GetArrayLength() > 256 ||
@@ -82,8 +100,13 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         if (body.TryGetProperty("workingState", out var stateValue) && (stateValue.ValueKind != JsonValueKind.String || workingState is not ("draft" or "historical")))
             return false;
         if (!TryReadSecretReferences(body, out var secretReferences)) return false;
-        // Only declared graph metadata is copied. Caller summaries, permission claims, guidance,
-        // property values, diagnostics with authored payloads and arbitrary extra fields are discarded.
+        // Slice D: the designer's diagnostics, the selected activity's property context and the graph activity references.
+        if (!WorkflowAgentExplainContext.TryReadDiagnostics(body, out var diagnostics, out var diagnosticsOmitted)
+            || !WorkflowAgentExplainContext.TryReadSelectedActivity(body, selectedNodeId, structure, out var selectedActivity)
+            || !WorkflowAgentExplainContext.TryReadGraphActivities(body, activities.Count, activities.Select(item => item.Id).ToArray(), structure, out var graphActivities))
+            return false;
+        // Only declared graph metadata is copied. Caller summaries, permission claims, guidance, property values outside the
+        // selected activity's bounded property context, and arbitrary extra fields are discarded.
         // The optional additions are copied only when the editor disclosed them, so an older snapshot admits unchanged.
         var admittedBody = new Dictionary<string, object?>
         {
@@ -97,21 +120,68 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
         admittedBody["positions"] = admittedPositions;
         if (body.TryGetProperty("secretReferences", out _))
             admittedBody["secretReferences"] = secretReferences.Select(item => new { name = item.Name, typeName = item.TypeName, scope = item.Scope }).ToArray();
+        if (body.TryGetProperty("diagnostics", out _)) admittedBody["diagnostics"] = WorkflowAgentExplainContext.Project(diagnostics);
+        if (diagnosticsOmitted is not null) admittedBody["diagnosticsOmitted"] = diagnosticsOmitted;
+        if (selectedActivity is not null) admittedBody["selectedActivity"] = WorkflowAgentExplainContext.Project(selectedActivity);
+        if (body.TryGetProperty("graphActivities", out _)) admittedBody["graphActivities"] = WorkflowAgentExplainContext.Project(graphActivities);
         var admitted = JsonSerializer.SerializeToElement(admittedBody, JsonOptions);
         snapshot = new(new(ModuleId, ResourceType, target.ResourceId, target.Revision), client, Text(body, "draftId")!,
             new(target.Revision, activities, connections), admitted)
         {
             // An empty draft has no structure to withhold, so it is structured (and empty) by definition.
             Structure = structure ?? (activities.Count == 0 ? new Dictionary<string, WorkflowAgentNode>() : null), ReservedIds = reservedIds, WorkingState = workingState, SecretReferences = secretReferences,
-            SelectedNodeId = selectedNodeId
+            SelectedNodeId = selectedNodeId, Diagnostics = diagnostics, SelectedActivity = selectedActivity, GraphActivities = graphActivities
         };
         error = string.Empty;
         return true;
     }
 
+    /// <summary>
+    /// Whether every property name and string value in the (already size-bounded) body is well-formed UTF-16. Reading one
+    /// that holds a lone surrogate escape throws <see cref="InvalidOperationException"/>; only that read is guarded here.
+    /// </summary>
+    private static bool WellFormedText(JsonElement body)
+    {
+        var pending = new Stack<JsonElement>();
+        pending.Push(body);
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            switch (current.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in current.EnumerateObject())
+                    {
+                        try { _ = property.Name; }
+                        catch (InvalidOperationException) { return false; }
+                        pending.Push(property.Value);
+                    }
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in current.EnumerateArray()) pending.Push(item);
+                    break;
+                case JsonValueKind.String:
+                    try { _ = current.GetString(); }
+                    catch (InvalidOperationException) { return false; }
+                    break;
+            }
+        }
+        return true;
+    }
+
     internal static string? Text(JsonElement body, string property) =>
-        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() : null;
+        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(property, out var value) ? String(value) : null;
+
+    /// <summary>
+    /// The element's string, or null when it is not a string or holds malformed UTF-16 (a lone surrogate escape), which
+    /// <see cref="JsonElement.GetString"/> would throw on: such a value is refused like any other malformed field.
+    /// </summary>
+    internal static string? String(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.String) return null;
+        try { return value.GetString(); }
+        catch (InvalidOperationException) { return null; }
+    }
     internal static bool Number(JsonElement body, string property, out double number)
     {
         number = 0;
@@ -227,7 +297,7 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
             if (reservedItems.ValueKind != JsonValueKind.Array || reservedItems.GetArrayLength() > 256) return false;
             foreach (var item in reservedItems.EnumerateArray())
             {
-                var id = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+                var id = String(item);
                 if (!ValidString(id) || indexOf.ContainsKey(id!) || reserved.Contains(id!)) return false;
                 reserved.Add(id!);
             }
@@ -278,7 +348,7 @@ internal sealed record WorkflowAgentSnapshot(AgentResourceTarget Target, AgentCl
     {
         value = null;
         if (!body.TryGetProperty(property, out var element) || element.ValueKind == JsonValueKind.Null) return true;
-        value = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+        value = String(element);
         return value is not null && value.Length <= 256;
     }
     private static string Bounded(string? value) => value is null ? string.Empty : value[..Math.Min(value.Length, 256)];

@@ -57,7 +57,7 @@ internal sealed class HttpActivityAuthoringCatalog(
         view.ActivityVersionId, view.ActivityTypeKey, view.Version, view.DisplayName, view.Category, view.Description,
         view.Available, view.AvailabilityReason,
         view.Inputs.Select(input => new ActivityAuthoringCatalogInput(input.ReferenceKey, input.Name, input.Type, input.DisplayName,
-            input.IsRequired, input.IsSensitive, input.IsCredential)).ToArray());
+            input.IsRequired, input.IsSensitive, input.IsCredential) { UiHint = input.UiHint }).ToArray());
 }
 
 /// <summary>Rejects an ambiguous activity authoring catalog before the shell accepts requests.</summary>

@@ -195,7 +195,45 @@ through the review card's Undo (designer history), the whole batch again through
 save or publish. Last, a proposal approved and applied from a second tab of the same Studio is refused by that tab's
 host before anything is applied. The driver checks the adapter trace for every command the browser retained.
 `require_workflow_batch` refuses a missing, failed, duplicated or changed record; `witness_manifest()` counts the two
-cases (95 in all).
+cases.
+
+### Workflow explanation (spec 1193 T028)
+
+Next, `explain_journeys.py` runs once on each actual adapter (`{copilot,anthropic}-workflow-explain`) against the same
+nested shape, seeded with b's text bound to a workflow variable that does not exist, so the owner's draft validation
+reports it by activity and input; the seed also holds one activity of the `QualificationBatchCatalog` seam's
+password-hinted activity (input `passphrase`, a name no probe redactor rewrites), with no value. With that seam selected, the native unsaved working state adds a JavaScript
+expression on the nested activity and two credential activities: one holding a credential literal, one bound to a
+visible Secret Reference. Four native read turns (`workflow_read_graph`, each in its own
+`auto-read-only` session, in each adapter's own pinned frame order) select the credential literal, the invalid input,
+the JavaScript expression and the Secret Reference in turn. The accepted message's admitted context
+(`data.message.context`), every admission in the turn and the read result must each equal the working state as Studio's
+bridge discloses it: activities and nested structure, the designer's diagnostics (the owner's validations by activity
+and input), the visible Secret Reference, and the selected activity's declared properties, with the credential literal
+only withheld and the server's own `interpretation: "unavailable"` on every non-literal expression (no Expression Module
+registers Weaver tools). The read result addresses each activity by its scope path. A control snapshot that reports the
+credential input as an ordinary literal with a value of its own is refused at admission (`agent.context.incomplete`,
+400, with the module's reason) before any provider call. The owner's draft is unchanged. The packaged consumer ships no
+JavaScript Expression Module and no graph activity definition: JavaScript is disclosed by type and content only, and
+graph activity references are covered by the server and Studio unit tests.
+
+Then the admin runs the actual packaged Studio journey `workflow-explain` with a fresh normal-login state: with autosave
+turned off for that editor, the invalid activity is selected and read (its input's Variable expression, the unavailable
+interpretation and the designer's own diagnostic for it are admitted); a hand edit moves an activity, and the next read
+is attributed to a new revision with the moved position, equal to the editor's own export. (Before the first read the
+journey waits until the designer's panel names the seeded unresolved variable: its structural checks render at once, the
+server's draft validations later, and the snapshot discloses what the panel shows.) Then the driver types a random
+credential canary into the password-hinted input's own masked field (Studio offers a credential input only the secret
+picker), as an unsaved edit, and the next read must disclose that input only as withheld; nothing is saved. The canary
+exists only in Studio's working state: it is searched for, in memory and unredacted, in every request the page sent to
+the agent API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
+agent stream it received (counted only when every stream was captured without a capture or validation error and at
+least one agent event stream's bytes were read; the driver checks the retained capture the same way); then in the
+browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
+adapter traces, HTTP receipts, owner reads, browser captures), and must appear in none, so a regression in Studio's
+withholding fails the case. `require_workflow_explain` refuses a missing, failed, duplicated or changed
+record, a missing turn or control, or a canary search that found anything; `witness_manifest()` counts the two cases
+(97 in all).
 
 ### Restart inventory over the packaged durable store (#3441 T031)
 

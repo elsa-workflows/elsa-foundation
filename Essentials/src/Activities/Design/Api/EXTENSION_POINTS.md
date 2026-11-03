@@ -47,7 +47,10 @@ not the catalog route. A missing request, an unnormalized
 principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
 designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
 addable or not, with `Available`, `AvailabilityReason`, activity type and exact version identity, display data and
-declared inputs with `IsRequired`, `IsSensitive` and `IsCredential`. No default value or authored binding is carried. The
+declared inputs with `IsRequired`, `IsSensitive`, `IsCredential` and the optional `UiHint` (spec 1193 slice D; Minor,
+additive), and the computed `IsMasked`: sensitive, a credential or hinted `password`, which is exactly what the designer
+masks. `UiHint` is part of the record's value equality, so two inputs that differ only in their hint are not equal. No
+default value or authored binding is carried. The
 catalog is not narrowed per actor, because the designer offers no per-actor narrowing; tenant scoping is the stores'.
 `CanReadAsync` is the gate alone and reads no entries.
 

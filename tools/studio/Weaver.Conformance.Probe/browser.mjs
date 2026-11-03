@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -125,6 +125,23 @@ if (config.journey === "workflow-read-only") page.on("response", response => {
   if (url.origin === backend && response.request().method() === "GET" && [401, 403].includes(response.status()))
     refusedReads.push({ path: url.pathname, status: response.status() });
 });
+// Spec 1193 T028: every exchange the page has with the agent API, raw and in memory only (never retained, so no redactor
+// rewrites it): each request's URL and body, whatever its method, and each non-stream response body. Stream bodies are
+// the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
+const agentTraffic = [], agentResponseReads = [];
+if (config.journey === "workflow-explain") {
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.origin === backend && url.pathname.startsWith("/_elsa/agent/"))
+      agentTraffic.push({ method: request.method(), url: request.url(), body: request.postData() ?? "" });
+  });
+  page.on("response", response => {
+    const url = new URL(response.url());
+    if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || /event-stream/i.test(response.headers()["content-type"] ?? "")) return;
+    agentResponseReads.push(response.text().then(body => agentTraffic.push({ url: response.url(), status: response.status(), body }))
+      .catch(error => agentTraffic.push({ url: response.url(), unreadable: error.message })));
+  });
+}
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
 function observeResourceInteractions({ route }) {
   const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home", "Resize with Weaver"];
@@ -1505,6 +1522,7 @@ async function workflowReadOnly() {
 // operations of six kinds with three in a nested flowchart and a hand edit in its base revision, observed through the designer's own
 // export, validation, autosave, Undo and Redo; and last an approval from a second tab. Weaver never saves or publishes.
 const BATCH_TOOL = "workflow_apply_operation_batch";
+const READ_TOOL = "workflow_read_graph";
 async function workflowBatch() {
   const wf = config.workflow ?? {};
   const { definitionId, definitionPath, nodes, batch, followUp } = wf;
@@ -1716,6 +1734,149 @@ async function workflowBatch() {
     undoRestored: true, redoRestored: true, noSaveOrPublish: true };
 }
 
+// Spec 1193 T028: explaining the active draft in the actual packaged editor. With autosave off for this editor (component
+// state, not a stored preference), the reader selects the activity whose input the designer's own validation flags and
+// asks Weaver to read the draft: the admitted context names that input's expression type, the server's unavailable
+// interpretation and the designer's diagnostic for it. A hand edit then changes the unsaved working state, and the next
+// read is attributed to the new revision with the moved position, equal to the editor's own export. Nothing is saved.
+async function workflowExplain() {
+  const wf = config.workflow ?? {};
+  const { definitionId, definitionPath, nodes, explain } = wf;
+  need(definitionId && definitionPath && wf.draftPath && nodes?.a && nodes?.b && nodes?.nested && explain?.property && explain?.moveNode,
+    "The explanation journey needs exact owning IDs, node IDs and the expected selected input.");
+  owningDraftPath = wf.draftPath;
+  const node = id => page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(id) + "]");
+  const commands = {};
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId));
+  for (const id of [nodes.a, nodes.b, nodes.nested]) await expect(node(id)).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  // Wait on the editor's own state: the designer's structural checks render at once, the server's draft validations
+  // arrive later, and the snapshot discloses whatever the panel shows when the question is sent (observed natively on
+  // 04cd44f7c). The seeded unresolved variable is named in the panel only once the server's validations are in.
+  const panel = page.locator(".wf-validation");
+  need(typeof explain.diagnosticMarker === "string" && explain.diagnosticMarker, "The explanation journey needs the seeded diagnostic's marker.");
+  await expect(panel).toContainText(explain.diagnosticMarker, { timeout: 30000 });
+  result.evidence.push(retain("validation-panel", { text: await panel.innerText() }));
+  // Autosave off, through the editor's own menu; the hand edit below then stays in the unsaved working state.
+  await nativeEnter("autosave-menu", page.getByRole("button", { name: "More workflow actions", exact: true }), "More workflow actions");
+  const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
+  const autosave = menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ });
+  await expect(autosave).toBeFocused();
+  await expect(autosave).toHaveAttribute("aria-checked", "true");
+  await nativeEnter("autosave-off", autosave, "Autosave");
+  await expect(autosave).toHaveAttribute("aria-checked", "false");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const ask = async name => {
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    const selected = command(READ_TOOL, {});
+    commands[name] = selected.commandId;
+    await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    const answers = dock().locator('.weaver-message[data-role="assistant"]'), earlier = await answers.count();
+    await dock().getByLabel("Ask Weaver", { exact: true }).fill(JSON.stringify({ toolName: READ_TOOL, arguments: {} }));
+    const message = responseFor("/messages");
+    await dock().getByRole("button", { name: "Send message", exact: true }).click();
+    const sent = await accepted(message, name + "-message");
+    // The accepted message's admitted context, as Studio's agent client reads it: data.message.context.
+    const admitted = sent.value.data?.message?.context;
+    need(Array.isArray(admitted), name + ": the accepted message carries no admitted context.");
+    const drafts = admitted.filter(item => item.contentType === "workflow.definition");
+    need(drafts.length === 1 && drafts[0].target?.resourceId === definitionId, name + ": the message did not admit exactly the open working draft.");
+    // This turn's own answer, never an earlier turn's completed one.
+    await expect.poll(() => answers.count(), { timeout: 120000 }).toBeGreaterThan(earlier);
+    const answer = answers.nth(earlier);
+    await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 120000 });
+    await expect(answer).toContainText("Tool outcome received");
+    result.evidence.push(retain(name + "-outcome", { status: await answer.getAttribute("data-status"), revision: drafts[0].target.revision }));
+    return drafts[0];
+  };
+
+  await node(nodes.b).click({ position: { x: 12, y: 12 } });
+  await expect(node(nodes.b)).toHaveClass(/\bselected\b/);
+  result.evidence.push(retain("select-interaction", { method: "pointer-click", nodeId: nodes.b }));
+  const first = await ask("before");
+  const content = first.content ?? {};
+  need(content.selectedNodeId === nodes.b && content.selectedActivity?.nodeId === nodes.b, "The admitted context does not describe the selected activity.");
+  const property = (content.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.property);
+  need(property?.value?.kind === "expression" && property.value.expressionType === explain.expressionType && property.value.interpretation === explain.interpretation,
+    "The selected input's expression was not disclosed by type, content and the unavailable interpretation: " + JSON.stringify(property ?? null));
+  const diagnostic = (content.diagnostics ?? []).find(item => item.nodeId === nodes.b && item.property === explain.property && item.type === explain.diagnosticType);
+  need(diagnostic, "The designer's diagnostic for the selected input was not disclosed.");
+  // The packaged consumer has no design-authored (graph) activity: its CLR activities, though recommendations give them
+  // definition identities, are never disclosed as graph activities.
+  need(!("graphActivities" in content), "A source-owned activity was disclosed as a graph activity.");
+
+  // A hand edit with autosave off: the working state changes and stays unsaved.
+  const writes = owningWrites.length;
+  const position = (content.positions ?? []).find(item => item.nodeId === explain.moveNode);
+  const box = await node(explain.moveNode).boundingBox();
+  need(box && position, "The node to move by hand is not on the canvas or not in the admitted positions.");
+  await page.mouse.move(box.x + 12, box.y + 12); await page.mouse.down();
+  await page.mouse.move(box.x + 72, box.y + 52, { steps: 12 }); await page.mouse.up();
+  result.evidence.push(retain("move-interaction", { method: "pointer-drag", nodeId: explain.moveNode, dx: 60, dy: 40 }));
+  const second = await ask("after");
+  need(second.target.revision !== first.target.revision, "The read after the hand edit was attributed to the earlier revision.");
+  const moved = (second.content?.positions ?? []).find(item => item.nodeId === explain.moveNode);
+  need(moved && (moved.x !== position.x || moved.y !== position.y), "The admitted position did not follow the hand edit.");
+  const working = await workingDraft("working-after");
+  const exported = (working.layout ?? []).find(item => item.nodeId === explain.moveNode);
+  need(exported && exported.x === moved.x && exported.y === moved.y, "The admitted position is not the editor's working state.");
+  need(owningWrites.length === writes, "The hand edit was saved although autosave was off.");
+
+  // A credential canary typed into the editor's own masked field of a password-hinted input, as an unsaved edit after the
+  // export above, so it exists only in Studio's working state. The read discloses the input only as withheld.
+  const canary = explain.canary;
+  need(typeof canary === "string" && canary.length >= 24 && explain.maskedNode && explain.maskedLabel && explain.maskedProperty,
+    "The explanation journey needs the masked input and its canary.");
+  // The dock shares the editor's width, so the inspector may be collapsed beside it: close the dock, select the activity
+  // and expand the inspector through its own control, type, then reopen the dock (the conversation is kept).
+  await dock().getByRole("button", { name: "Close assistant", exact: true }).click();
+  await expect(dock()).toBeHidden();
+  await node(explain.maskedNode).click({ position: { x: 12, y: 12 } });
+  await expect(node(explain.maskedNode)).toHaveClass(/\bselected\b/);
+  const expand = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+  if (await expand.count()) await nativeEnter("inspector-expand", expand, "Expand inspector panel");
+  const field = page.locator('input[type="password"][aria-label=' + JSON.stringify(explain.maskedLabel) + ']');
+  await expect(field).toHaveCount(1);
+  await field.fill(canary);
+  result.evidence.push(retain("masked-interaction", { method: "keyboard-fill", nodeId: explain.maskedNode, input: explain.maskedProperty, length: canary.length }));
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await expect(dock()).toBeVisible();
+  const masked = await ask("masked");
+  const maskedContent = masked.content ?? {};
+  need(maskedContent.selectedNodeId === explain.maskedNode && maskedContent.selectedActivity?.nodeId === explain.maskedNode,
+    "The admitted context does not describe the masked activity.");
+  const withheld = (maskedContent.selectedActivity.properties ?? []).find(item => item.referenceKey === explain.maskedProperty);
+  need(withheld?.isSensitive === true && withheld.value?.kind === "withheld" && Object.keys(withheld.value).sort().join() === "expressionType,kind",
+    "The typed masked value was not disclosed only as withheld: " + JSON.stringify(withheld?.value?.kind ?? null));
+  // In-page search, raw and unredacted: no request the page sent to the agent API (any method, URL and query included), no
+  // response body it read, and no byte of any agent stream it received carries the canary.
+  await Promise.all(agentResponseReads);
+  // An empty body proves nothing: every captured stream must have been captured without error, and at least one must be
+  // an actual agent event stream whose bytes were read, before its absence of the canary counts.
+  const captured = await streamCapture();
+  need(captured.every(item => item.captureError == null && item.captureValidationError == null)
+    && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
+    "The in-page search has no complete, error-free agent stream capture to search.");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
+  need(!JSON.stringify(agentTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
+    "The typed canary left the browser's working state.");
+  need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
+  const after = await owner("owner-after", definitionPath);
+  result.ownerAfter = after.receipt;
+  // A digest, never a diff: a failed comparison must not print the owning draft (or a leaked value in it) to stdout.
+  need(digest(JSON.stringify(after.value.draft)) === digest(JSON.stringify(before.value.draft)), "The explanation journey changed the owning draft.");
+  need(owningWrites.length === 0, "The explanation journey wrote the owning draft.");
+  await screenshot("explained");
+  result.commands = commands;
+  result.observations = { explainCompleted: true, selectedExpressionType: property.value.expressionType, interpretation: property.value.interpretation,
+    diagnosticOnSelectedInput: true, autosaveOff: true, revisionChanged: true, positionFollowed: true, maskedTyped: true, maskedWithheld: true,
+    canaryAbsentInPage: true, draftUnchanged: true, owningWrites: owningWrites.length };
+}
+
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
@@ -1726,6 +1887,7 @@ try {
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
   else if (config.journey === "workflow-read-only") await workflowReadOnly();
   else if (config.journey === "workflow-batch") await workflowBatch();
+  else if (config.journey === "workflow-explain") await workflowExplain();
   else if (config.journey === "autonomy-size" || lifecycle) {
     const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
