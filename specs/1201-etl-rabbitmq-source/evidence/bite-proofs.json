@@ -3,6 +3,34 @@
  "note": "Each entry names the revision it was recorded at, and every entry bit there. An entry with supersededBy mutated code a later round rewrote; the entries it names cover that guard at the current code.",
  "results": [
   {
+   "mutation": "writer-tab-is-blank",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 1, Passed: 11",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\\t\", line: \"\\x01\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 12",
+   "original": "span.IndexOfAnyExcept((byte)' ', (byte)'\\t') < 0",
+   "mutated_text": "span.IndexOfAnyExcept((byte)' ') < 0",
+   "sourceRevision": "2ccf7d6279462a5e2a7e1cda170a73a241b7cbc9"
+  },
+  {
+   "mutation": "writer-carriage-return-is-a-line-break",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlRabbitMqSnapshotWriter.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlRabbitMqSourceTests.Each_message_body",
+   "mutated": "Failed!  - Failed: 1, Passed: 11",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlRabbitMqSourceTests.Each_message_body_becomes_exactly_one_snapshot_line(body: \"\\r\", line: \"\\x01\")"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 12",
+   "original": "        if (span.IndexOfAny((byte)'\\n', (byte)'\\r') < 0)\n",
+   "mutated_text": "        if (span.IndexOf((byte)'\\n') < 0)\n",
+   "sourceRevision": "2ccf7d6279462a5e2a7e1cda170a73a241b7cbc9"
+  },
+  {
    "mutation": "output-sql-columns-rabbitmq",
    "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/EtlConnectorOutputProcessor.cs",
    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
