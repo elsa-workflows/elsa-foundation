@@ -227,7 +227,9 @@ credential canary into the password-hinted input's own masked field (Studio offe
 picker), as an unsaved edit, and the next read must disclose that input only as withheld; nothing is saved. The canary
 exists only in Studio's working state: it is searched for, in memory and unredacted, in every request the page sent to
 the agent API (any method, URL and query included), every non-stream response body it read and the raw bytes of every
-agent stream it received; then in the browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
+agent stream it received (counted only when every stream was captured without a capture or validation error and at
+least one agent event stream's bytes were read; the driver checks the retained capture the same way); then in the
+browser's evidence and adapter trace, and then in every retained evidence file of the case (frames,
 adapter traces, HTTP receipts, owner reads, browser captures), and must appear in none, so a regression in Studio's
 withholding fails the case. `require_workflow_explain` refuses a missing, failed, duplicated or changed
 record, a missing turn or control, or a canary search that found anything; `witness_manifest()` counts the two cases

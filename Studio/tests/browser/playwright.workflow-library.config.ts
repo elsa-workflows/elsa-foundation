@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Own this fixture server: reusing another checkout's default port can test unrelated source.
 export default defineConfig({
   testDir: ".",
-  testMatch: /(?:workflow-library|workflow-definition-browse-context|workflow-definition-move|workflow-folder-restructure)\.spec\.ts/,
+  testMatch: /(?:workflow-library|workflow-organization-presentation|workflow-definition-browse-context|workflow-definition-move|workflow-folder-restructure|minimal-studio)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   reporter: "line",

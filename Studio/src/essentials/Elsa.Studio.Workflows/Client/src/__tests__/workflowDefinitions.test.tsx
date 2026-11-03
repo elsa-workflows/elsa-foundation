@@ -210,6 +210,24 @@ describe("workflow definition list", () => {
     expect(container.querySelector('[role="table"][aria-label="Workflow definitions"]')!.getAttribute("aria-busy")).toBe("false");
   });
 
+  it("settles a list opened on a saved view when its first view read fails, disclosing no view (spec 1193 FR-020)", async () => {
+    window.history.replaceState({}, "", "/?view=view-1");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [{ ...definitionCapabilities.capabilities[0], links: [...definitionCapabilities.capabilities[0].links,
+        { rel: "workflow-views", href: "design/workflows/views" }] }, activityCapability] };
+      if (url.includes("design/workflows/views")) throw new Error("views unavailable");
+      return routeJson(url);
+    });
+    const agent = createAgentRegistry();
+    const weaver = registerWorkflowAgent(agent);
+    const container = render(context(getJson), vi.fn(), weaver);
+    const list = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.library:"))?.[1];
+    await vi.waitFor(() => expect(list()).toBeDefined(), { timeout: 5_000, interval: 20 });
+    expect(getJson.mock.calls.some(([url]) => String(url).includes("design/workflows/views"))).toBe(true);
+    expect((list()!.content as { view: unknown }).view).toBeNull();
+    expect(container.querySelector('[role="table"][aria-label="Workflow definitions"]')!.getAttribute("aria-busy")).toBe("false");
+  });
+
   it("never settles the create dialog on a template read that failed for a catalog still loading (spec 1193 FR-023)", async () => {
     let releaseCatalog!: () => void;
     const catalogRead = new Promise<void>(resolve => { releaseCatalog = resolve; });

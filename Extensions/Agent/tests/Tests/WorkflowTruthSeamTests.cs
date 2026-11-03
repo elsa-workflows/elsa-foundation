@@ -298,14 +298,25 @@ public sealed class WorkflowTruthSeamTests
     }
 
     [Fact]
-    public async Task A_host_authorizer_that_withholds_the_layout_tool_reports_explanation_only_tools()
+    public async Task A_host_authorizer_that_withholds_the_layout_tool_still_reports_the_batch_tool_the_engine_offers()
     {
         using var host = Host.Create(hostAuthorizer: new DenyTool(WorkflowSetDesignerPositionTool.ToolName));
         var reported = Content(Single(await host.CollectAsync(), DefaultWorkflowAgentContextProvider.PermissionsContentType));
 
+        // manage reports the layout tool's host decision; each tool follows its own host decision and the owner's answer.
         Assert.Equal("denied", reported.GetProperty("manage").GetString());
-        Assert.Equal([WorkflowReadGraphTool.ToolName], Strings(reported, "tools"));
+        Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowApplyOperationBatchTool.ToolName], Strings(reported, "tools"));
         Assert.Equal(["workflow.explain"], Strings(reported, "capabilities"));
+    }
+
+    [Fact]
+    public async Task A_host_authorizer_that_withholds_the_batch_tool_reports_the_layout_tool_only()
+    {
+        using var host = Host.Create(hostAuthorizer: new DenyTool(WorkflowApplyOperationBatchTool.ToolName));
+        var reported = Content(Single(await host.CollectAsync(), DefaultWorkflowAgentContextProvider.PermissionsContentType));
+
+        Assert.Equal("allowed", reported.GetProperty("manage").GetString());
+        Assert.Equal([WorkflowReadGraphTool.ToolName, WorkflowSetDesignerPositionTool.ToolName], Strings(reported, "tools"));
     }
 
     private sealed class DenyTool(string name) : IAgentToolAuthorizer

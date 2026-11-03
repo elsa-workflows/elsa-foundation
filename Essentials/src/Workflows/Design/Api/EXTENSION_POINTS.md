@@ -97,7 +97,8 @@ endpoint's route gate applies (`ManageTags` for tag creation, `AssignTags` for t
 `Read` otherwise), and reports workflow organization disabled or an omitted store as `unavailable` with the backend's
 reason before any actor or permission decision. Infrastructure failures and cancellation propagate. The Core create
 shapes carry everything the library's own create accepts (a tag's and its values' deprecation and identities, which the
-store validates as on its own create; a view's schema version). A create's operation key is optional (none is the
+store validates as on its own create). A view's schema version is output only: the store creates version 1 and
+`WorkflowLibraryViewSnapshot.SchemaVersion` reports the stored version; a view save never supplies it. A create's operation key is optional (none is the
 library's ordinary non-idempotent create; Weaver always passes one); a blank key, or a key on a view update, is `invalid`.
 One registration per shell: a second one fails configuration and shell startup (`WorkflowLibraryCommandsStartupTask`).
 
@@ -116,6 +117,29 @@ before it discloses anything it read (Weaver's version context and `workflow_rea
 unknown version, another definition's version and a withheld definition are the same unavailable outcome). Infrastructure
 failures and cancellation propagate. One registration per shell: a second one fails configuration and shell startup
 (`WorkflowVersionReaderStartupTask`).
+
+### `IWorkflowFolderDeletionStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+
+Optional scoped single-implementation port for safe folder removal:
+`PreviewFolderDeletionAsync(folderId, cancellationToken)` and
+`DeleteFolderAsync(folderId, previewRevision, deleteWorkflows, actorId, operationKey, cancellationToken)`.
+EF implements it on the library store; omission leaves the existing empty-only DELETE available.
+Only a registered port advertises `workflow-folder-deletion-preview` (GET) and
+`workflow-folder-delete` (POST), and both disappear when organization is disabled.
+
+Preview returns authoritative bounded direct workflow targets, affected descendant folders,
+destination and an opaque revision. The API checks Read/Manage on canonical returned resource identities, ancestor
+visibility and the selected `IWorkflowDefinitionAuthorizer` before returning count-only inventory.
+Commit repeats authorization and the provider must validate the preview again inside its atomic
+hierarchy transaction. Never trust client-supplied counts or browser filters. EF limits direct
+workflow targets to 10,000 and hierarchy targets to the existing folder bound.
+
+Default removal moves direct workflow membership (including deleted workflows) and child folders
+to the surviving parent/top level. Descendant paths/depths change, while hierarchy and workflow
+identities remain intact. Name collisions reject the entire operation. The opt-in marks only
+active, directly assigned workflows soft-deleted; already deleted facts, tags, favorites, authored
+content, immutable versions, publication and runtime are preserved. Every move/deletion audit fact
+commits with the mutation. Stale previews and provider failures cannot leave partial changes.
 
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 

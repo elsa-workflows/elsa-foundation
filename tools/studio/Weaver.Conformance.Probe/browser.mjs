@@ -1874,15 +1874,20 @@ async function workflowExplain() {
   // In-page search, raw and unredacted: no request the page sent to the agent API (any method, URL and query included), no
   // response body it read, and no byte of any agent stream it received carries the canary.
   await Promise.all(agentResponseReads);
-  const streamed = (await streamCapture()).map(item => item.rawBody ?? "");
-  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")) && streamed.length > 0,
-    "The in-page search observed no agent message or stream to search.");
-  need(!JSON.stringify(agentTraffic).includes(canary) && !streamed.some(body => body.includes(canary)) && !JSON.stringify(masked).includes(canary),
+  // An empty body proves nothing: every captured stream must have been captured without error, and at least one must be
+  // an actual agent event stream whose bytes were read, before its absence of the canary counts.
+  const captured = await streamCapture();
+  need(captured.every(item => item.captureError == null && item.captureValidationError == null)
+    && captured.some(item => item.captureMethod !== "not-sse" && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ")),
+    "The in-page search has no complete, error-free agent stream capture to search.");
+  need(agentTraffic.some(item => item.method === "POST" && item.url.endsWith("/messages")), "The in-page search observed no agent message to search.");
+  need(!JSON.stringify(agentTraffic).includes(canary) && !captured.some(item => item.rawBody.includes(canary)) && !JSON.stringify(masked).includes(canary),
     "The typed canary left the browser's working state.");
   need(owningWrites.length === writes, "The masked edit was saved although autosave was off.");
   const after = await owner("owner-after", definitionPath);
   result.ownerAfter = after.receipt;
-  expect(after.value.draft).toEqual(before.value.draft);
+  // A digest, never a diff: a failed comparison must not print the owning draft (or a leaked value in it) to stdout.
+  need(digest(JSON.stringify(after.value.draft)) === digest(JSON.stringify(before.value.draft)), "The explanation journey changed the owning draft.");
   need(owningWrites.length === 0, "The explanation journey wrote the owning draft.");
   await screenshot("explained");
   result.commands = commands;

@@ -175,7 +175,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md) |
+| Workflows design — model, activity-input option providers, mutation events, commands, diff engine, safe folder deletion | [`Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md) |
 | Workflows design — draft validators | [`Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands and stores (opt-in EF Core) | [`Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
