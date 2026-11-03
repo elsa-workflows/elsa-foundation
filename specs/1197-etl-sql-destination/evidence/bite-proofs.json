@@ -215,6 +215,76 @@
       "original": "        NpgsqlException { IsTransient: true } => EtlSqlErrorKind.Transient,",
       "mutated_text": "",
       "sourceRevision": "a8f339cd2f012a70c817759b024d89aa13f47db5"
+    },
+    {
+      "mutation": "pg-ledger-ddl-always-run",
+      "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~A_role_that_may_only_write_a_pre_created_ledger",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.A_role_that_may_only_write_a_pre_created_ledger_delivers_without_running_ddl"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "IF to_regclass('{Quote(ledgerTable)}') IS NULL THEN",
+      "mutated_text": "IF true THEN",
+      "sourceRevision": "221f137cf5ca3da08231ecf62c161b3a0a92ec39"
+    },
+    {
+      "mutation": "pg-key-check-counts-include-columns",
+      "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~The_key_check_follows_search_path",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.The_key_check_follows_search_path_counts_only_key_columns_and_refuses_a_deferrable_constraint"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "a.attnum = ANY((i.indkey::int2[])[0:i.indnkeyatts - 1])",
+      "mutated_text": "a.attnum = ANY(i.indkey)",
+      "sourceRevision": "221f137cf5ca3da08231ecf62c161b3a0a92ec39"
+    },
+    {
+      "mutation": "pg-deferrable-accepted",
+      "file": "Extensions/Etl/src/Sql/PostgreSql/PostgreSqlEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~The_key_check_follows_search_path",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.The_key_check_follows_search_path_counts_only_key_columns_and_refuses_a_deferrable_constraint"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "AND NOT EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid AND k.condeferrable)",
+      "mutated_text": "",
+      "sourceRevision": "221f137cf5ca3da08231ecf62c161b3a0a92ec39"
+    },
+    {
+      "mutation": "allow-list-ignores-case",
+      "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/HostSqlBindings.cs",
+      "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+      "filter": "FullyQualifiedName~EtlSqlDestinationTests",
+      "mutated": "Failed!  - Failed:     1, Passed:     8",
+      "failedTests": [
+        "Elsa.Etl.Tests.EtlSqlDestinationTests.A_binding_pins_a_secret_free_handle_and_refuses_a_table_it_does_not_allow"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     9",
+      "original": "        if (!binding.AllowedTables.Contains(table, StringComparer.Ordinal))",
+      "mutated_text": "        if (!binding.AllowedTables.Contains(table, StringComparer.OrdinalIgnoreCase))",
+      "sourceRevision": "221f137cf5ca3da08231ecf62c161b3a0a92ec39"
+    },
+    {
+      "mutation": "sqlserver-pool-not-transient",
+      "file": "Extensions/Etl/src/Sql/SqlServer/SqlServerEtlSqlEngine.cs",
+      "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+      "filter": "FullyQualifiedName~An_exhausted_connection_pool_is_transient",
+      "mutated": "Failed!  - Failed:     1, Passed:     0",
+      "failedTests": [
+        "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.An_exhausted_connection_pool_is_transient"
+      ],
+      "restored": "Passed!  - Failed:     0, Passed:     1",
+      "original": "        InvalidOperationException pool when pool.Message.Contains(\"connection from the pool\", StringComparison.OrdinalIgnoreCase) => EtlSqlErrorKind.Transient,",
+      "mutated_text": "",
+      "sourceRevision": "221f137cf5ca3da08231ecf62c161b3a0a92ec39"
     }
   ]
 }

@@ -16,7 +16,10 @@ Source: the branch `agent/claude/2908-sql-destination`. Each section names the r
 
 ## Bite-proofs
 
-There are 15, in [`bite-proofs.json`](bite-proofs.json), each with the names of the tests that failed. 14 were recorded at `95d02a433`, and 1 at `a8f339cd2`.
+There are 20, in [`bite-proofs.json`](bite-proofs.json), each with the names of the tests that failed:
+- 14 were recorded at `95d02a433`.
+- 1 was recorded at `a8f339cd2`.
+- 5 were recorded at `221f137cf`, for the review round 1 fixes: ledger DDL only when missing, key columns only, deferrable refused, an exact allow-list, and SQL Server pool exhaustion.
 
 The first run's PostgreSQL deadlock mutation did not bite. Npgsql's `IsTransient` already classifies deadlocks, so the explicit SQLSTATE list was redundant. It was removed, and the remaining guard was re-proven.
 
