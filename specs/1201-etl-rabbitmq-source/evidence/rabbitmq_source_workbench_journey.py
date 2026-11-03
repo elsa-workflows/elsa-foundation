@@ -148,9 +148,14 @@ class Broker:
                 raise RuntimeError("A journey message was not routed to its queue.")
 
     def queue(self) -> dict:
-        info = wait_for(lambda: self.request("GET", f"queues/%2F/{QUEUE}"), lambda value: "messages_ready" in value,
-                        "The queue's counts were not reported.", 30)
-        return {"ready": info.get("messages_ready"), "unacknowledged": info.get("messages_unacknowledged")}
+        # Live counts from the broker; the management API's statistics refresh only every few seconds.
+        out = subprocess.check_output(["docker", "exec", self.name, "rabbitmqctl", "-q", "list_queues", "name", "messages_ready",
+                                       "messages_unacknowledged"], text=True)
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) == 3 and parts[0] == QUEUE:
+                return {"ready": int(parts[1]), "unacknowledged": int(parts[2])}
+        raise RuntimeError("The journey queue was not listed.")
 
     def stop(self) -> None:
         subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
