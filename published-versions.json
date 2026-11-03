@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "02ede10b3eda770ea3e7b818f91f3be7d9fe7875",
+  "last_publish_commit": "22d6b108fe256e56d1510d5b0d660ca33f240caa",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -39,13 +39,13 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Api",
-      "version": "4.0.27-preview",
-      "commit": "f34a8cd3c4ea6f87138b54c5922ce60b72c03e4f"
+      "version": "4.0.28-preview",
+      "commit": "22d6b108fe256e56d1510d5b0d660ca33f240caa"
     },
     {
       "package_id": "Elsa.Activities.Design.Core",
-      "version": "4.0.16-preview",
-      "commit": "f34a8cd3c4ea6f87138b54c5922ce60b72c03e4f"
+      "version": "4.0.17-preview",
+      "commit": "22d6b108fe256e56d1510d5b0d660ca33f240caa"
     },
     {
       "package_id": "Elsa.Activities.Design.Persistence.Core",
@@ -219,8 +219,8 @@
     },
     {
       "package_id": "Elsa.Agent.Workflows",
-      "version": "4.0.17-preview",
-      "commit": "02ede10b3eda770ea3e7b818f91f3be7d9fe7875"
+      "version": "4.0.18-preview",
+      "commit": "22d6b108fe256e56d1510d5b0d660ca33f240caa"
     },
     {
       "package_id": "Elsa.Api.AspNetCore",
