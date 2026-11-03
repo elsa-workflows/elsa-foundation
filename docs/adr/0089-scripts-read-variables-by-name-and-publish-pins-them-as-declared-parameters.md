@@ -144,8 +144,8 @@ result its own producer made, as spec 265 already requires for graph bodies (FR-
 - An invalid reference, an ambiguous occurrence (more than one eligible occurrence in the same scope) and denied
   access fail in both forms. A read never waits for or schedules its producer.
 
-These forms are for activity outputs only. A computed **variable** name is question 3, which is open: variables get no
-`try` form.
+These forms are for activity outputs only. A computed **variable** name that matches nothing reads `undefined` with a
+warning (A4, question 3); variables get no `try` form.
 
 **A2. One consistent view per materialization.** Every read made while a node's inputs are materialized comes from the
 same committed state: the state the input snapshot is taken from (ADR 0045 §3). A script never sees a value that another
@@ -165,8 +165,9 @@ with the version and digest it saw, and is committed with the input snapshot. Th
 no regular expressions) and checks it. It adds no parameter bindings.
 - A statically resolvable name that resolves to nothing visible is a publish diagnostic.
 - A computed name is allowed. Publish reports it conservatively: "may read any visible variable".
-- A computed name that resolves to no visible variable at run time reads as `undefined` in JavaScript, and a warning
-  is recorded with the read marked absent (question 3; ADR 0045 §2 as amended in
+- A computed variable name that resolves to no visible variable at run time reads as `undefined` in JavaScript, and a
+  warning is recorded with the read marked absent. This rule is for variable names only; activity outputs follow A1a
+  (question 3; ADR 0045 §2 as amended in
   [#3388](https://github.com/elsa-workflows/elsa-foundation/pull/3388)).
 - A statically resolvable name that now resolves to a different declaration than in the previously published version
   is a publish warning (kept from the Consequences below).
@@ -225,7 +226,10 @@ and ADR 0090.
 3. A computed name that resolves to no visible variable at run time: does it read `null` and record a warning, as Elsa
    3's `getVariable` returned, or does it fault the evaluation? **Proposed by @FransVanEk and agreed by @j03y-nxxbz
    (2026-10-29): neither.** It reads as `undefined`, JavaScript's own "not there", and a warning is recorded with the
-   read marked absent (A4). `null` would erase the difference between null and missing. @sfmskywalker: agreed?
+   read marked absent (A4). `null` would erase the difference between null and missing. **Agreed by @sfmskywalker**
+   (2026-10-29, [comment](https://github.com/elsa-workflows/elsa-foundation/pull/3420#issuecomment-6503643338);
+   confirmed 2026-10-30, [comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6519726021)),
+   with the rule limited to computed variable names, as A4 now says. All three agree.
 4. `activities.<name>.<output>`: addressed by name or by id in the source (ties to question 2)?
 5. @FransVanEk: your §5 answer (pinning plus a run-time fallback is fine if the reads are part of the step's input
    snapshot) and your answers on matrix rows 12 and 13: do they hold under A2 and A3?
