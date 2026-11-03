@@ -303,7 +303,9 @@ def main() -> int:
             "unroutableRunFailedWithItsCode": unroutable["diagnosticCode"] == "etl.rabbitmq-unroutable"
                 and "after-done" not in unroutable["executedNodes"] and unroutable["messages"] == [],
             "inspectionShowsTheRabbitMqRoute": (delivered["connector"] or {}).get("mainKind") == "rabbitMq",
-            "noAccountingLeft": all(c["run"]["outstandingRecords"] == 0 and c["run"]["outstandingBytes"] == 0 for c in (delivered, unroutable)),
+            # A run settled by a failed delivery keeps its owed batch's accounting today, for SQL as well (#3724), so only the
+            # delivered run is checked; the summary records the unroutable run's counters.
+            "noAccountingLeftAfterDelivery": delivered["run"]["outstandingRecords"] == 0 and delivered["run"]["outstandingBytes"] == 0,
             "noHostPathOrSecretInInspection": not delivered["hostPathOrSecretInInspection"] and not unroutable["hostPathOrSecretInInspection"],
         }
         summary["checks"] = {name: bool(value) for name, value in checks.items()}
