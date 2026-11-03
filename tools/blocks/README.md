@@ -22,6 +22,8 @@ The normal development administrator is used by default; `ELSA_STUDIO_USER` and 
 
 The native proof requires all 22 cases: 12 crossing-result comparisons over Sequence/linear Flowchart/BPMN, two loop comparisons with exact distinct values 1/2/3, four strict Balanced/Durable restart/resume comparisons, two cancellations with late delivery refused, and two supported native fault/reschedule comparisons. A result is `Passed` only after every assertion completes. An exception or `Running` receipt is incomplete. Existing evidence is never overwritten.
 
+Cancellation requires the exact held activity occurrences to become Cancelled. Historical inspection bookmark counts may remain nonzero; they are not a live bookmark-index query. The proof requires zero late resumptions and no downstream execution, without claiming deletion of historical bookmark evidence.
+
 The recovery fixture temporarily restricts the owned Workbench's dispatch depth to one. An exactly pinned nested dispatch faults during ordinary activity execution; the enclosing Sequence remains waiting under `ContinueWithIncidents`. The tool restores the original configuration, restarts only its owned backend and reschedules the exact faulted occurrence. It requires completion of the child, its Sequence ancestors and outer workflow, one downstream effect, a Superseded old occurrence and the retained original incident. It does not claim incident resolution. No CLR test activity or direct store mutation is used.
 
 Use the emitted Studio URL for the separate browser authoring/history journey. Native runtime proof does not qualify extraction selection, BPMN interchange, read-only behavior or promotion. Those remain the acceptance rows of the production leaves.

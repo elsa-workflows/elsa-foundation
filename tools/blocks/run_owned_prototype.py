@@ -73,7 +73,18 @@ logs = []
 children = []
 
 
+def verify_products():
+    for role, product_set in products.items():
+        for product in product_set["actualProductVersions"]:
+            if h.digest(assemblies[role].parent / product["name"]) != product["sha256"]:
+                raise ValueError("An owned host product changed during qualification")
+    for relative, expected in assets.items():
+        if h.digest(REPO / relative) != expected:
+            raise ValueError("An owned browser asset changed during qualification")
+
+
 def start(role, root, url):
+    verify_products()
     log = (OUT / (role + "-" + str(len(processes)) + ".log")).open("w")
     logs.append(log)
     child = subprocess.Popen(
@@ -131,6 +142,15 @@ try:
     st = start("studio", studio, studio_url)
     receipt = {
         "source": source,
+        "repositoryRoot": str(REPO),
+        "controlDirectory": str(OUT),
+        "controller": {
+            "pid": os.getpid(),
+            "started": h.process_field(os.getpid(), "lstart"),
+            "executable": h.process_field(os.getpid(), "comm"),
+            "command": h.process_field(os.getpid(), "args"),
+            "scriptSha256": h.digest(Path(__file__)),
+        },
         "backendUrl": backend_url,
         "studioUrl": studio_url,
         "products": products,

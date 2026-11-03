@@ -3,7 +3,8 @@
 
 from pathlib import Path
 import argparse, os
-import importlib.util, json, uuid, time, sys, urllib.request
+import importlib.util, json, uuid, time, urllib.request
+import subprocess
 
 s = importlib.util.spec_from_file_location(
     "q", Path(__file__).resolve().parents[2] / "tools/bpmn/qualify-hosting.py"
@@ -17,7 +18,81 @@ parser.add_argument("--control-dir", type=Path, required=True)
 OUT = parser.parse_args().control_dir.resolve()
 if (OUT / "native-transparency.json").exists():
     raise ValueError("Refuse to overwrite an existing proof")
-a = q.Api(json.loads((OUT / "ready.json").read_text())["backendUrl"])
+ready = json.loads((OUT / "ready.json").read_text())
+REPO = Path(__file__).resolve().parents[2]
+
+
+def verify_owned_run(processes=None):
+    # Before authenticated writes, require this checkout's live controller, owned children and exact products.
+    if (
+        (OUT / "closed.json").exists()
+        or ready["repositoryRoot"] != str(REPO)
+        or ready["controlDirectory"] != str(OUT)
+    ):
+        raise ValueError("This is not an active owned run in this checkout")
+    current = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=REPO, text=True
+    ).strip()
+    if (
+        current != ready["source"]
+        or subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=REPO, text=True
+        ).strip()
+    ):
+        raise ValueError(
+            "Qualification requires the exact clean committed source of the owned run"
+        )
+    controller = ready["controller"]
+    if (
+        q.digest(Path(__file__).with_name("run_owned_prototype.py"))
+        != controller["scriptSha256"]
+    ):
+        raise ValueError("The owned controller source changed")
+    for field, ps_field in (
+        ("started", "lstart"),
+        ("executable", "comm"),
+        ("command", "args"),
+    ):
+        if q.process_field(controller["pid"], ps_field) != controller[field]:
+            raise ValueError("The owned controller identity changed")
+    latest = {process["role"]: process for process in (processes or ready["processes"])}
+    if set(latest) != {"studio", "workbench"}:
+        raise ValueError("Both actual owned hosts are required")
+    for process in latest.values():
+        if (
+            process["parentPid"] != controller["pid"]
+            or int(q.process_field(process["pid"], "ppid")) != controller["pid"]
+            or q.process_field(process["pid"], "lstart") != process["started"]
+            or q.process_field(process["pid"], "comm") != process["executable"]
+        ):
+            raise ValueError("An owned child identity changed")
+    directories = {
+        "workbench": REPO / "Essentials/apps/Elsa.Workbench/bin/Debug/net10.0",
+        "studio": REPO / "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0",
+    }
+    for role, product_set in ready["products"].items():
+        if product_set["sourceCommit"] != current:
+            raise ValueError("Host product source differs from this checkout")
+        for product in product_set["actualProductVersions"]:
+            if (
+                Path(product["name"]).name != product["name"]
+                or q.digest(directories[role] / product["name"]) != product["sha256"]
+            ):
+                raise ValueError("A recorded actual host product changed")
+    for relative, expected in ready["browserAssets"].items():
+        asset = (REPO / relative).resolve()
+        asset.relative_to(REPO)
+        if q.digest(asset) != expected:
+            raise ValueError("A recorded actual browser asset changed")
+
+
+verify_owned_run()
+if q.digest(OUT / "workbench/shells.json") != ready["compositionSha256"]:
+    raise ValueError("The initial owned composition changed")
+q.Api(
+    ready["studioUrl"]
+)  # Validate both loopback URLs before any authenticated request.
+a = q.Api(ready["backendUrl"])
 a.login(
     os.environ.get("ELSA_STUDIO_USER", "admin"),
     os.environ.get("ELSA_STUDIO_PASSWORD", "Password123!"),
@@ -443,6 +518,10 @@ for extracted in [False, True]:
     c["cancelPlan"] = plan(c, "CancelWorkflow", {})
     c["cancelled"] = a.view(c["workflowExecutionId"])
     assert c["cancelled"]["instance"]["status"] == "Cancelled"
+    assert {n["activityExecutionId"] for n in c["cancelled"]["activities"]} == {
+        n["activityExecutionId"] for n in c["held"]["activities"]
+    }
+    assert all(n["status"] == "Cancelled" for n in c["cancelled"]["activities"])
     assert not any(
         n["executableNodeId"] == "after" for n in c["cancelled"]["activities"]
     )
@@ -641,6 +720,16 @@ try:
             for n in c["recovered"]["activities"]
             if n["executableNodeId"] in ("root", "block")
         )
+        expected_ancestors = (
+            {"root", "block"} if c["name"].endswith("True") else {"root"}
+        )
+        ancestors = [
+            n
+            for n in c["recovered"]["activities"]
+            if n["executableNodeId"] in expected_ancestors
+        ]
+        assert len(ancestors) == len(expected_ancestors)
+        assert {n["executableNodeId"] for n in ancestors} == expected_ancestors
         c["outerCompleted"] = completed(c["outer"])
         save()
         print(
@@ -654,5 +743,9 @@ finally:
         config.write_bytes(original)
         restart()
 
+verify_owned_run(report["restoredRestart"]["processes"])
+assert q.digest(config) == ready["compositionSha256"]
+assert len(report["cases"]) == 22
+assert len({case["name"] for case in report["cases"]}) == 22
 report["status"] = "Passed"
 save()
