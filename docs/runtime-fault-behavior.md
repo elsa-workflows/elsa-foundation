@@ -202,10 +202,11 @@ types are filtered out ahead of it and re-thrown untouched, because none of them
 about this item:
 
 - `OperationCanceledException`, a real cancel or shutdown. The item must stay queued.
-- `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison. A temporarily
-  unavailable step whose delayed release the queue refuses throws it too, even with no successor: a coalescing segment
-  that a boundary deactivated, and whose durable head has since moved, refuses that way. The step stays queued for a
-  later drain.
+- `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison. A delayed
+  release refused because the claim was lost throws it too: from the release for temporarily unavailable work, and from
+  the fallback acknowledgement for a `RetryAfter`. A coalescing segment that a boundary deactivated refuses that way
+  when the step's durable copy is gone, or another owner holds it under a live claim. Whatever holds the durable copy
+  keeps it, and nothing recreates a copy that is gone.
 - `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
 - `RuntimeStaleFencingTokenException`, where a commit was refused because another node now owns the run. The work
@@ -248,19 +249,37 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
      - the same delayed-release rule as temporarily unavailable work: a step kind that supports it
        (`ResumeBookmark`, `InvokeActivity`, `CompleteActivity`, `NotifyParentActivity`,
        `DeliverChildControl`, `Checkpoint`), a live claim not yet consumed by a commit, and a queue
-       that can persist the delay;
+       that can persist the delay. Inside a coalescing segment that queue must support claim transitions,
+       list items with their visibility (`IWorkflowSchedulerWorkVisibilityReader`) and delay a queued item
+       by its identity (`IWorkflowSchedulerWorkDeferral`). Lacking any of these, the segment keeps the
+       conservative path of a queue without visibility snapshots: a `ResumeBookmark` step is claimed from
+       the durable queue after a flush, and any other step claimed from the segment is not delayed, so
+       `RetryAfter` is poisoned and temporary unavailability propagates with the step still queued and
+       no delay;
      - a resumption re-driver is composed (an `IWorkflowDispatchDurabilityEvidence` naming
        `Resumption`, contributed by `WorkflowsRuntimeResumptionFeature`);
      - the fault was not caused by a checkpoint rule;
      - the delay ends no later than the last representable time, `DateTimeOffset.MaxValue`.
 
-     The step stays the only queued copy. It is not claimable before the delay ends (except in one race,
-     #3690, where a coalescing segment's flush cannot persist the delay and the step runs at once), and the
-     resumption sweep's backlog discovery then re-drives it. While it waits, the execution's later
-     queued steps wait behind it, because the queue serves each execution in order. If the queue
-     refuses the release, the item is acknowledged and poisoned instead, unless the claim was lost to another owner,
-     which throws claim-lost and records nothing, as for any lost claim. A coalescing segment that a boundary
-     deactivated, and whose durable head has since moved, refuses this way while the drain still owns the item.
+     The step stays the only queued copy. It is not claimable before the delay ends, and the resumption
+     sweep's backlog discovery then re-drives it. While it waits, the execution's later queued steps wait
+     behind it, because the queue serves each execution in order. A coalescing segment persists the delay
+     at its flush on the step itself, by identity, not on the queue's head: work another writer queued
+     for the execution while the segment held it can sit ahead of the step and runs first, and the step
+     still waits until its delay ends (#3690). If the queue refuses the release while the drain still owns
+     the item, the item is acknowledged and poisoned instead. A refusal because the claim was lost refuses
+     the acknowledgement too, so the drain throws claim-lost and records nothing, as for any lost claim. A
+     coalescing segment that a boundary deactivated refuses this way when the step's durable copy is gone,
+     or another owner holds it under a live claim.
+
+     One case is left ([#3700](https://github.com/elsa-workflows/elsa-foundation/issues/3700)). An active segment records the release in its overlay at once and persists
+     it only at its flush, after the flush commit has landed. If by then the step's durable copy is gone, or another owner
+     holds it under a live claim, this drain has lost the step. The flush fails with an
+     `InvalidOperationException`, as it does when any other work it tracks goes missing, although its
+     commit landed. The drainer has already recorded `RetryScheduled` with a `NextRetryAt` that this drain
+     did not persist: whoever holds the durable copy decides when the step runs. The flush commit is fenced
+     on the run's ownership, so this happens only when the step's durable copy leaves the drain after that
+     commit and before the release.
 4. Calls `HandleHandlerCrashAsync`, which records a `RuntimeSchedulerPoisonRecord` whichever answer
    came back:
 

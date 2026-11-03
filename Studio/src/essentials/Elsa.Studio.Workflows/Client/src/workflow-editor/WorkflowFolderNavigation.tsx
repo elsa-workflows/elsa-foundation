@@ -4,6 +4,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
+import { WorkflowFolderDeletionDialog } from "./WorkflowFolderDeletionDialog";
 import { getDialogs } from "./dialogs";
 import { useDialogFocus } from "./useDialogFocus";
 import { MoveWorkflowFolderDialog, RenameWorkflowFolderDialog } from "./WorkflowFolderMutationDialogs";
@@ -36,8 +37,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [breadcrumbError, setBreadcrumbError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState("all");
-  const [mutationSupport, setMutationSupport] = useState({ rename: false, move: false, deleteEmpty: false });
-  const [mutationDialog, setMutationDialog] = useState<"rename" | "move" | null>(null);
+  const [mutationSupport, setMutationSupport] = useState({ rename: false, move: false, deleteEmpty: false, deleteContents: false });
+  const [mutationDialog, setMutationDialog] = useState<"rename" | "move" | "delete" | null>(null);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const [status, setStatus] = useState("");
   const [pendingChildFocusId, setPendingChildFocusId] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const folderToggleButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
   const selectedId = selectedFolderId(selection);
   const breadcrumbIdentity = `${context.baseUrl}\u0000${selectedId ?? ""}`;
@@ -81,7 +83,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     let cancelled = false;
     void getWorkflowFolderMutationSupport(context)
       .then(support => { if (!cancelled) setMutationSupport(support); })
-      .catch(() => { if (!cancelled) setMutationSupport({ rename: false, move: false, deleteEmpty: false }); });
+      .catch(() => { if (!cancelled) setMutationSupport({ rename: false, move: false, deleteEmpty: false, deleteContents: false }); });
     return () => { cancelled = true; };
   }, [context]);
 
@@ -187,19 +189,19 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         folderToggleButtonRef.current?.focus();
         return;
       }
-      findTreeItemByKey(navigationRef.current, key)?.focus();
+      (findTreeItemByKey(navigationRef.current, key) ?? findTreeItemByKey(navigationRef.current, "all") ?? manageButtonRef.current)?.focus();
     });
   };
 
-  const closeMutationDialog = (action: "rename" | "move") => {
+  const closeMutationDialog = (action: "rename" | "move" | "delete") => {
     setMutationDialog(null);
-    requestAnimationFrame(() => ((action === "rename" ? renameButtonRef.current : moveButtonRef.current) ?? manageButtonRef.current)?.focus());
+    requestAnimationFrame(() => ((action === "rename" ? renameButtonRef.current : action === "move" ? moveButtonRef.current : deleteButtonRef.current) ?? manageButtonRef.current)?.focus());
   };
 
   const deleteFolder = async () => {
     if (!selectedFolder) return;
     const confirmed = await getDialogs().confirm({
-      message: `Delete empty folder "${selectedFolder.name}"? This cannot be undone.`,
+      message: `Delete folder "${selectedFolder.name}"? Only empty folders can be deleted by this backend. This cannot be undone.`,
       confirmLabel: "Delete folder",
       tone: "danger"
     });
@@ -249,11 +251,11 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   };
 
   const closeDrawer = () => { setDrawerOpen(false); setManagerOpen(false); };
-  const folderActions = canManage && selectedFolder && (mutationSupport.rename || mutationSupport.move || mutationSupport.deleteEmpty) ? (
+  const folderActions = canManage && selectedFolder && (mutationSupport.rename || mutationSupport.move || mutationSupport.deleteEmpty || mutationSupport.deleteContents) ? (
     <div className="wf-folder-actions" role="group" aria-label={`Actions for ${selectedFolder.name}`}>
       {mutationSupport.rename ? <StudioButton ref={renameButtonRef} onClick={() => { closeDrawer(); setMutationDialog("rename"); }}><FolderPen size={14} aria-hidden="true" /> Rename</StudioButton> : null}
       {mutationSupport.move ? <StudioButton ref={moveButtonRef} onClick={() => { closeDrawer(); setMutationDialog("move"); }}><Move size={14} aria-hidden="true" /> Move</StudioButton> : null}
-      {mutationSupport.deleteEmpty ? <StudioButton className="wf-delete-action" onClick={() => { closeDrawer(); void deleteFolder(); }}><Trash2 size={14} aria-hidden="true" /> Delete</StudioButton> : null}
+      {mutationSupport.deleteEmpty || mutationSupport.deleteContents ? <StudioButton ref={deleteButtonRef} className="wf-delete-action" onClick={() => { closeDrawer(); if (mutationSupport.deleteContents) setMutationDialog("delete"); else void deleteFolder(); }}><Trash2 size={14} aria-hidden="true" /> Delete</StudioButton> : null}
     </div>
   ) : null;
 
@@ -315,6 +317,23 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       onMoved={async (parentId, previousParentId) => {
         await refreshAfterStructureChange([previousParentId, parentId]);
         setStatus("Folder moved");
+      }}
+    /> : null}
+    {available && mutationDialog === "delete" && selectedFolder ? <WorkflowFolderDeletionDialog
+      key={`${context.baseUrl}:${selectedFolder.id}`}
+      context={context}
+      folder={selectedFolder}
+      onClose={() => closeMutationDialog("delete")}
+      onDeleted={async preview => {
+        setMutationDialog(null);
+        const parentId = preview.parent?.id ?? null;
+        const survivor: WorkflowFolderSelection = parentId ? { id: parentId } : "unfiled";
+        const survivorKey = parentId ? `folder:${parentId}` : "unfiled";
+        select(survivor);
+        setFocusedKey(survivorKey);
+        await refreshAfterStructureChange([parentId], survivor, preview.folder.id);
+        setStatus(`Deleted folder ${preview.folder.name}`);
+        restoreFolderFocus(survivorKey);
       }}
     /> : null}
   </>;

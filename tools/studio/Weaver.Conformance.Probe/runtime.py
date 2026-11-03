@@ -73,8 +73,37 @@ class Http:
 
     def json(self, path, body=None, *, method="GET", headers=None, expected=200):
         status, data, response_headers = self.request(path, body, method=method, headers=headers)
-        check(status == expected, f"{method} {path} returned {status}, expected {expected}")
+        check(status == expected, f"{method} {path} returned {status}, expected {expected}" + failure_excerpt(status, data))
         return json.loads(data), response_headers
+
+
+_SECRET_TEXT = re.compile(r'\b(?:Bearer|Basic|Digest|Negotiate)\s+\S+|'
+                          r'\b(?:access_?token|refresh_?token|id_?token|token|password|api_?key|client_?secret|secret|cookie)\b\s*[:=]\s*\S+',
+                          re.I)
+
+
+def failure_excerpt(status, data):
+    """A bounded, redacted excerpt of an unexpected 4xx problem body, so a refusal names its own cause in the failure.
+
+    Only a parsed JSON problem's own message fields are used: a 5xx, or any body that is not a JSON object (such as a
+    development exception page), contributes nothing, because its text can carry private exception detail. The whole
+    excerpt is redacted before it is bounded, so a secret crossing the bound can never leave a readable prefix.
+    """
+    if not isinstance(status, int) or not 400 <= status < 500 or not data:
+        return ""
+    try:
+        problem = json.loads(data)
+    except (ValueError, UnicodeDecodeError):
+        return ""
+    if not isinstance(problem, dict):
+        return ""
+    parts = [problem[key] for key in ("title", "detail", "message", "errorCode") if isinstance(problem.get(key), str)]
+    errors = problem.get("errors")
+    if isinstance(errors, dict):
+        parts.extend(f"{key}: {item}" for key, values in errors.items() if isinstance(values, list)
+                     for item in values if isinstance(item, str))
+    text = _SECRET_TEXT.sub("[redacted]", "; ".join(parts))
+    return "; body: " + text[:400] if text else ""
 
 
 def normal_sign_in(base, username, password, output, *, tenant_id=None):

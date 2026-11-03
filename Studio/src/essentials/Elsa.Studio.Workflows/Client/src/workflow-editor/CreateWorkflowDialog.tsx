@@ -12,7 +12,7 @@ import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { useDialogFocus } from "./useDialogFocus";
 
-export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
+export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
   context?: StudioEndpointContext;
   title?: string;
   submitLabel?: string;
@@ -28,18 +28,36 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   onClose(): void;
   onRetryCatalog?(): void;
   onSubmit(): void;
+  /**
+   * The saved templates this dialog offers (those it can use now), so the page can disclose them to Weaver; null until the
+   * dialog has read them for its settled activity catalog, so a disclosed list is never one about to change.
+   */
+  onTemplates?(templates: WorkflowTemplate[] | null): void;
 }) {
-  const [templates, setTemplates] = useState<Array<{ template: WorkflowTemplate; reason?: string }>>([]);
-  const [templateError, setTemplateError] = useState("");
+  // The templates as last read, with the catalog they were judged against (their availability depends on it).
+  const [templateRead, setTemplateRead] = useState<{ catalog: ActivityCatalogItem[]; items: Array<{ template: WorkflowTemplate; reason?: string }> } | null>(null);
+  // A failed read, with the catalog it was made for: it settles (and is shown for) that catalog only, so a failure while the
+  // catalog was still loading neither settles the dialog nor outlives the read that follows it.
+  const [templateFailure, setTemplateFailure] = useState<{ catalog: ActivityCatalogItem[] } | null>(null);
+  const templateError = templateFailure?.catalog === catalog
+    ? "Saved templates could not be loaded. Close and reopen this dialog to retry; built-in starters remain available." : "";
+  const templates = templateRead?.items ?? [];
   useEffect(() => {
     if (!context) return;
     let active = true;
     void import("../workflowTemplates").then(async module => {
       const values = await module.listWorkflowTemplates(context);
-      if (active) setTemplates((values ?? []).map(template => ({ template, reason: module.templateAvailabilityReason(template, catalog) })));
-    }).catch(() => { if (active) setTemplateError("Saved templates could not be loaded. Close and reopen this dialog to retry; built-in starters remain available."); });
+      if (active) setTemplateRead({ catalog, items: (values ?? []).map(template => ({ template, reason: module.templateAvailabilityReason(template, catalog) })) });
+    }).catch(() => { if (active) setTemplateFailure({ catalog }); });
     return () => { active = false; };
   }, [context, catalog]);
+  const templatesSettled = catalogState !== "idle" && catalogState !== "loading" && (!context || templateError !== "" || templateRead?.catalog === catalog);
+  // Only a read judged against the current catalog is offered; a failed read for it offers none.
+  const offered = templatesSettled ? (templateRead?.catalog === catalog ? templates : []).filter(item => !item.reason).map(item => item.template) : null;
+  const offeredKey = offered ? JSON.stringify(offered.map(template => [template.id, template.revision])) : null;
+  // Reported when the offered set changes (not on every render), so the page's disclosed revision moves only with it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { onTemplates?.(offered); }, [onTemplates, offeredKey]);
   const dialogRef = useRef<HTMLElement>(null);
   useDialogFocus(dialogRef, creating ? null : onClose);
   const submitErrorRef = useRef<HTMLDivElement>(null);
@@ -200,6 +218,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
             <span>Starting point</span>
             <select
               aria-label="Starting point"
+              aria-busy={!templatesSettled}
               aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
               value={draft.templateId ?? draft.starter ?? "blank"}
               disabled={creating}

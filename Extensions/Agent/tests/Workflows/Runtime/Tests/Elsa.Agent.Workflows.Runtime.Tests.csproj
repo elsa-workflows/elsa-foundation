@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Spec 1193 D2: the Runtime-only proof holds AppDomain-wide, so this project composes no Elsa.Workflows.Design* assembly,
+    directly or transitively. Elsa.Agent.Tests loads Design assemblies and cannot make that proof.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Elsa.Agent\Elsa.Agent.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Core\Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Elsa.Agent.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <!-- The started Runtime-only host (SC-009) composes the real Workflows Runtime API, which references no Design assembly. -->
+    <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

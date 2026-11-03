@@ -2007,3 +2007,6 @@ override Elsa.Etl.Core.Runtime.EtlSqlTarget.GetHashCode() -> int
 override Elsa.Etl.Core.Runtime.EtlSqlTarget.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlSqlTarget.operator !=(Elsa.Etl.Core.Runtime.EtlSqlTarget? left, Elsa.Etl.Core.Runtime.EtlSqlTarget? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlSqlTarget.operator ==(Elsa.Etl.Core.Runtime.EtlSqlTarget? left, Elsa.Etl.Core.Runtime.EtlSqlTarget? right) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease.PollGeneration.init -> void
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorHttpPageId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, int partitionOrdinal, long pageSequence, Elsa.Etl.Core.Runtime.EtlHttpRequest! request, long pollGeneration) -> string!
