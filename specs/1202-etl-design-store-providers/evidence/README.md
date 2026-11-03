@@ -14,7 +14,7 @@
 
 ## Suites
 
-At `bdb89368c` (review round 4): the ETL suite passed 1314 of 1314, the `etl-ef` provider suite 105 of 105 (35 per engine) and the architecture suite 614 of 614 (after `tools/architecture/restore-ci-project-graph.sh`). The solution-filter and test-tier checks pass.
+At `14eb2aca3` (review round 5): the ETL suite passed 1314 of 1314, the `etl-ef` provider suite 105 of 105 (35 per engine) and the architecture suite 614 of 614 (after `tools/architecture/restore-ci-project-graph.sh`). The solution-filter and test-tier checks pass.
 
 ## Bite-proofs
 
@@ -40,7 +40,7 @@ At `bdb89368c` (review round 4): the ETL suite passed 1314 of 1314, the `etl-ef`
 
 [`design_store_workbench_journey.py`](design_store_workbench_journey.py) starts, for each server engine, its own database container and its own Workbench on ephemeral loopback ports, with the ETL design store on that engine and the runtime on SQLite. It creates two definitions whose ids differ only by case, validates and publishes one, runs the published version from a native Flowchart over a JSON Lines file, stops the host, starts a new one on the same database and reads the draft, the publication and the catalog back.
 
-All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.json`](workbench-journey-summary.json), recorded at `bdb89368c` with a clean tree, after rounds 1–4's store fixes. Earlier runs at `9432455c1`, `ae9f03105` and `45c609432` passed the same checks. Container secrets are generated per run.
+All 18 checks (six per engine) pass; the summary is [`workbench-journey-summary.json`](workbench-journey-summary.json), recorded at `14eb2aca3` with a clean tree, after rounds 1–5's store fixes. Earlier runs at `9432455c1`, `ae9f03105`, `45c609432` and `bdb89368c` passed the same checks. Container secrets are generated per run.
 
 ## Limits
 
