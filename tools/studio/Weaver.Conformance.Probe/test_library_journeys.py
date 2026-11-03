@@ -214,6 +214,27 @@ class FrozenEvidenceTests(unittest.TestCase):
                 frozen_drop(save, root, log, kind="create-tag", operation_key="other", committed_id="tag-1")
 
 
+class SettledReviewTests(unittest.TestCase):
+    def test_each_library_review_waits_until_the_page_state_it_binds_is_settled(self):
+        # The 6231b4434 witness: the list was reviewed before its permissions were read, the read moved the page revision and
+        # the page refused the approved change as stale. Each review must wait on the page's own settled signal first.
+        source = Path(__file__).with_name("browser.mjs").read_text()
+        journey = source[source.index("async function workflowLibrary()"):source.index("async function workflowTemplates()")]
+        waits = [('getByRole("table", { name: "Workflow definitions", exact: true })).toHaveAttribute("aria-busy", "false"',
+                  'reviewedTool("workflow_library_set_list_state"'),
+                 ('getByRole("combobox", { name: "Starting point", exact: true })).toHaveAttribute("aria-busy", "false"',
+                  'reviewedTool("workflow_create_dialog_prefill"')]
+        previous = 0
+        for wait, review in waits:
+            self.assertIn(wait, journey)
+            self.assertLess(previous, journey.index(wait))
+            self.assertLess(journey.index(wait), journey.index(review))
+            # Nothing between the wait and the review changes the page state the review binds.
+            between = journey[journey.index(wait):journey.index(review)]
+            self.assertNotIn("nativeEnter(", between.replace('nativeEnter("open-weaver"', ""))
+            previous = journey.index(review)
+
+
 class BrowserAndGateTests(unittest.TestCase):
     def observed(self, journey):
         library = journey == LIBRARY_BROWSER
