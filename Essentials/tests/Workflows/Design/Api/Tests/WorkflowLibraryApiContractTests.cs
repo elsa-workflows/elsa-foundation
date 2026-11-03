@@ -751,6 +751,32 @@ public sealed class WorkflowLibraryApiContractTests
     }
 
     [Fact]
+    public async Task Folder_deletion_authorizes_canonical_ancestors_even_when_the_library_does_not_resolve_aliases()
+    {
+        var probe = new LibraryProbe { OrdinalFolderLookup = true, IncludeDeniedGrandparent = true, EmptyDeletionFolder = true };
+        await using var host = await StartAsync(probe, services => services.AddSingleton<IPermissionResourceHandler>(new DeletionPolicy("secret-root")));
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/INVOICES/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.Forbidden, preview.StatusCode);
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/INVOICES/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.Forbidden, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
+    public async Task Folder_deletion_refuses_missing_canonical_details_instead_of_skipping_ancestor_checks()
+    {
+        var probe = new LibraryProbe { MissingFolderDetail = true, EmptyDeletionFolder = true };
+        await using var host = await StartAsync(probe);
+        using var preview = await SendAsync(host, "GET", "/design/workflows/folders/invoices/deletion-preview", "library-all");
+        Assert.Equal(HttpStatusCode.NotFound, preview.StatusCode);
+        using var commit = await SendAsync(host, "POST", "/design/workflows/folders/invoices/delete", "library-all",
+            "{\"previewRevision\":\"preview-1\",\"deleteWorkflows\":false,\"operationKey\":\"delete\"}");
+        Assert.Equal(HttpStatusCode.NotFound, commit.StatusCode);
+        Assert.Null(probe.DeletedWorkflows);
+    }
+
+    [Fact]
     public async Task Folder_deletion_commits_the_previewed_canonical_identity()
     {
         var probe = new LibraryProbe();
@@ -876,11 +902,12 @@ public sealed class WorkflowLibraryApiContractTests
 
     private sealed class LibraryProbe : IWorkflowLibraryStore, IWorkflowFolderDeletionStore
     {
+        public bool OrdinalFolderLookup, MissingFolderDetail, IncludeDeniedGrandparent, EmptyDeletionFolder;
         public bool? DeletedWorkflows;
         public Task<FolderDeletionPreview> PreviewFolderDeletionAsync(string folderId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new FolderDeletionPreview(Folder, HiddenFolder,
                 [Folder with { Id = "child", ParentId = Folder.Id, Name = "Child" }],
-                [new("orders", false), new("second", false), new("deleted", true)], "preview-1"));
+                EmptyDeletionFolder ? [] : [new("orders", false), new("second", false), new("deleted", true)], "preview-1"));
         public Task DeleteFolderAsync(string folderId, string previewRevision, bool deleteWorkflows, string actorId,
             string operationKey, CancellationToken cancellationToken = default)
         { FolderId = folderId; Revision = previewRevision; DeletedWorkflows = deleteWorkflows; Actor = actorId; OperationKey = operationKey; return Task.CompletedTask; }
@@ -900,7 +927,9 @@ public sealed class WorkflowLibraryApiContractTests
         private WorkflowOrganization Organization(string id) => new(id, "invoices", IncludeHiddenFolder ? [HiddenFolder, Folder] : [Folder], [new("critical")], "r2");
         private static WorkflowTag Tag => new("critical", "Critical", null, "marker", "single", false, "t1", []);
         public Task<WorkflowFolderPage> ListFoldersAsync(string? parentId, int pageSize = 50, string? continuationToken = null, CancellationToken cancellationToken = default) => Task.FromResult(new WorkflowFolderPage([Folder], null));
-        public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowFolderDetail?>(new(Folder, IncludeHiddenFolder ? [HiddenFolder] : []));
+        public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<WorkflowFolderDetail?>(MissingFolderDetail || OrdinalFolderLookup && id != Folder.Id ? null :
+                new(Folder, IncludeDeniedGrandparent ? [HiddenFolder with { Id = "secret-root" }, HiddenFolder] : IncludeHiddenFolder ? [HiddenFolder] : []));
         public Task<WorkflowFolder> CreateFolderAsync(string name, string? parentId, string actorId, CancellationToken cancellationToken = default) { Actor = actorId; FolderId = parentId; return Task.FromResult(Folder); }
         public Task RenameFolderAsync(string id, string name, string? revision, string actorId, CancellationToken cancellationToken = default) { FolderId = id; Revision = revision; Actor = actorId; return Task.CompletedTask; }
         public Task MoveFolderAsync(string id, string? parentId, string? revision, string actorId, CancellationToken cancellationToken = default) { FolderId = id; Revision = revision; Actor = actorId; return Task.CompletedTask; }

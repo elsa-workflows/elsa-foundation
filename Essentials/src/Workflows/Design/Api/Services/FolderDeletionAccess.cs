@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 
 namespace Elsa.Workflows.Design.Api.Services;
 
@@ -17,13 +18,14 @@ internal static class FolderDeletionAccess
         await WorkflowLibraryAccess.SubjectAsync(context, true, token);
         await RequireAsync(new(FolderId: folderId));
         var library = context.RequestServices.GetRequiredService<IWorkflowLibraryStore>();
-        var detail = await library.GetFolderAsync(folderId, token);
-        if (detail is not null)
-            await WorkflowLibraryAccess.RequireFolderReadAsync(context, detail.Ancestors.Select(folder => folder.Id), token);
         var preview = await store.PreviewFolderDeletionAsync(folderId, token);
         // A provider can resolve aliases (for example GUID casing on SQL Server).
         // Resource policies must decide on the stored identity before exposing inventory.
         await RequireAsync(new(FolderId: preview.Folder.Id));
+        var detail = await library.GetFolderAsync(preview.Folder.Id, token)
+            ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), preview.Folder.Id);
+        await WorkflowLibraryAccess.RequireFolderReadAsync(context,
+            detail.Ancestors.Select(folder => folder.Id).Append(detail.Folder.Id), token);
         await RequireAsync(new(FolderId: preview.Parent?.Id));
         foreach (var folder in preview.Descendants)
             await RequireAsync(new(FolderId: folder.Id));
