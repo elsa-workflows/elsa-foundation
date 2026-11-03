@@ -165,6 +165,14 @@ class SelectedCommandEvidenceTests(unittest.TestCase):
             self.assertEqual(command, json.loads(path.read_text())["commandId"])
         self.assertEqual("command-denied", json.loads(self.command_file.read_text())["commandId"])
         with self.assertRaises(RuntimeError): select_command(first_transport, "command-again", "workflow_read_graph", {})
+        # A refused selection never replaces the shared command it could not retain.
+        self.assertEqual("command-denied", json.loads(self.command_file.read_text())["commandId"])
+
+    def test_the_retained_copy_is_the_exact_bytes_the_adapter_reads(self):
+        transport = self.transport("tool-unavailable")
+        ref = select_command(transport, "command-unavailable", "workflow_read_graph", {"definitionId": "d-1"})
+        self.assertEqual(self.command_file.read_bytes(), Path(ref["path"]).read_bytes())
+        self.assertEqual(sha(self.command_file), ref["sha256"])
 
 
 class SnapshotTests(unittest.TestCase):

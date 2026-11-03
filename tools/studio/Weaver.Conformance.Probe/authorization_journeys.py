@@ -23,7 +23,6 @@ from agent_transport import _json as strict_json
 from artifacts import TOOL, check, sha
 from case_records import retained
 from journey_runtime import atomic_json, same
-from runtime import private_json
 from owner_resources import seed_workflow
 
 
@@ -120,11 +119,13 @@ def select_command(transport, command_id, tool_name, arguments):
     The protocol command file is one shared, mutable input: the next turn atomically replaces it. A reference to it
     would no longer match its hash once a later turn ran, so the evidence is this turn's own immutable copy.
     """
-    transport.set_command(command_id, tool_name, arguments)
     copy_path = Path(transport.output) / "selected-command.json"
     check(not copy_path.exists(), "Never overwrite a selected protocol command")
-    private_json(copy_path, {"commandId": command_id, "toolName": tool_name, "arguments": arguments})
-    check(strict_json(copy_path.read_text()) == strict_json(Path(transport.command_file).read_text()),
+    selected = transport.set_command(command_id, tool_name, arguments)
+    data = Path(transport.command_file).read_bytes()
+    copy_path.write_bytes(data)
+    copy_path.chmod(0o600)
+    check(sha(copy_path) == selected["sha256"] and strict_json(data.decode())["commandId"] == command_id,
           "The retained command differs from the command the adapter will read")
     return retained(copy_path)
 

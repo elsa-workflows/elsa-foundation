@@ -322,30 +322,29 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
     }
 
     /// <summary>
-    /// End to end, an earlier lifecycle outcome whose owner cannot decide and a later read result that current authority
-    /// definitely refuses, in one turn: the definite refusal (403) is what the turn reports. It is reached through history
-    /// admission, which re-admits every recorded tool message in order before the current admission of the turn's retained
-    /// results, so the per-admission combination never sees this pair (see AgentRetainedOutcomeAdmissionTests). A turn
-    /// holds at most one mutation, so the lifecycle outcome comes from a full-auto mutation executed inline (uncertain).
+    /// Across admissions the first error wins. In one full-auto turn an inline mutation retains an uncertain lifecycle
+    /// outcome, then a read runs; while it runs the lifecycle outcome's owner becomes unable to decide (for historical and
+    /// current admission alike) and current authority withdraws the read. The read result's admission first re-admits
+    /// the recorded history in order, which reaches the earlier lifecycle outcome's outage before the later read's
+    /// definite refusal, so the turn stops with the owner's 503, as the Agent catalog states.
     /// </summary>
     [Fact]
-    public async Task A_later_definitely_refused_result_wins_over_an_earlier_owner_outage_in_the_same_turn()
+    public async Task Across_admissions_an_earlier_owner_outage_in_history_is_reported_before_a_later_definite_refusal()
     {
         var authority = new NativeAuthority();
         var source = new SplitSource();
         var provider = new SequenceProvider();
+        var read = new SwitchingReadTool(() =>
+        {
+            source.Unavailable = true;
+            authority.Withdrawn.Add(SwitchingReadTool.Name);
+        });
         using var root = AgentTestServices.Create(services =>
         {
             services.AddSingleton<IAgentProvider>(provider);
             services.AddScoped<IAgentContextProvider>(_ => source);
             services.AddSingleton<IAgentTool>(new InlineMutationTool());
-            services.AddSingleton<IAgentTool>(new SwitchingReadTool(() =>
-            {
-                // Between the read's own pre-dispatch admission and the admission of its result: the owner of the earlier
-                // lifecycle outcome becomes unavailable for current decisions, and current authority withdraws the read.
-                source.CurrentUnavailable = true;
-                authority.Withdrawn.Add(SwitchingReadTool.Name);
-            }));
+            services.AddSingleton<IAgentTool>(read);
             services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
         });
         using var scope = root.CreateScope();
@@ -356,28 +355,33 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
 
         var events = await Collect(scope, session.Id);
 
-        // The inline mutation's lifecycle outcome was really retained and admitted before the read ran.
-        var lifecycle = Assert.IsType<AgentToolResult>(Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallCompleted
-            && x.Payload is AgentToolCallOutcome { ToolName: InlineMutationTool.Name }).Payload is AgentToolCallOutcome outcome ? outcome.Result : null);
-        Assert.Equal("uncertain", lifecycle.Payload!.Data.GetProperty("status").GetString());
-        Assert.True(source.CurrentUnavailable);
-        Assert.Equal(("agent.result.disclosure_denied", 403), Code(Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error).Error));
+        // The inline mutation really retained a lifecycle outcome, and the read really ran into both conditions.
+        var lifecycle = Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallCompleted
+            && x.Payload is AgentToolCallOutcome { ToolName: InlineMutationTool.Name }).Payload as AgentToolCallOutcome;
+        Assert.Equal("uncertain", Assert.IsType<AgentToolResult>(lifecycle!.Result).Payload!.Data.GetProperty("status").GetString());
+        Assert.Equal(1, read.Executions);
+        Assert.True(source.UnavailableAnswers > 0);
+        Assert.Equal((SplitSource.UnavailableCode, 503), Code(Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error).Error));
     }
 
     private static (string?, int?) Code(AgentError? error) => (error?.Code, error?.StatusCode);
 
-    /// <summary>A disclosure owner that answers historical admission normally but cannot decide current lifecycle outcomes once switched.</summary>
+    /// <summary>A disclosure owner that, once switched, cannot decide any retained outcome, historical or current.</summary>
     private sealed class SplitSource : IAgentContextProvider
     {
         public const string Id = "split.source";
-        public bool CurrentUnavailable { get; set; }
+        public const string UnavailableCode = "split.authority.unavailable";
+        public bool Unavailable { get; set; }
+        public int UnavailableAnswers { get; private set; }
         public AgentContextProviderDescriptor Descriptor { get; } = new(Id, SplitModule, Id, [], ["1"], ["split.resource"]);
         public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(new AgentContextContribution([], []));
         public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(CurrentUnavailable && !request.IsHistorical && request.Results.Count > 0
-                ? new AgentContextContribution([], [new(Id, "split.authority.unavailable", "Owner outage.", true) { OwnerUnavailable = true }])
-                : new AgentContextContribution(request.Context, []));
+        {
+            if (!Unavailable || request.Results.Count == 0) return ValueTask.FromResult(new AgentContextContribution(request.Context, []));
+            UnavailableAnswers++;
+            return ValueTask.FromResult(new AgentContextContribution([], [new(Id, UnavailableCode, "Owner outage.", true) { OwnerUnavailable = true }]));
+        }
     }
 
     private const string SplitModule = "split.module";
@@ -399,12 +403,14 @@ public sealed class AgentLifecycleOutcomeDisclosureTests
     private sealed class SwitchingReadTool(Action onExecute) : IAgentTool
     {
         public const string Name = "split_read";
+        public int Executions { get; private set; }
         public AgentToolDescriptor Descriptor { get; } = new(Name, "Read", "Reads the split resource.", AgentToolMutability.ReadOnly,
             AgentRisk.ReadOnly, "{}", [], []) { ModuleId = SplitModule, DisclosureSourceId = SplitSource.Id, ResultType = "split.read", ResultSchemaVersion = "1" };
         public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
             => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Target = SplitTarget }));
         public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
         {
+            Executions++;
             onExecute();
             return Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Name, true, "read",
                 new("split.read", "1", JsonSerializer.SerializeToElement(new { size = "medium" })))));
