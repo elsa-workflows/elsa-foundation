@@ -23,11 +23,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// causal activity execution, <c>IActivityFaultCausation</c>, a structural parent's completed child, or the child whose
 /// parent notification the parent was handling), are established non-sensitive, and so on through that child's own
 /// incidents in this Run, because a propagated message can carry a descendant's text (a nested BPMN process copies its
-/// child's fault message); a chain deeper than the bound counts as sensitive. An incident a child-control consumer raised,
+/// child's fault message); a chain deeper than a bounded depth (eight in the default implementation) counts as sensitive. An incident a child-control consumer raised,
 /// or one recorded for poisoned scheduler work, is always withheld: its message may echo another Run's batches or an
 /// arbitrary handler's exception text. A child-control consumer's returned fault or failed disposal recorded before the
 /// runtime named the calling child carries neither marker and is not recognized; such Runs exist only in stores written by
-/// builds before #3736 (pre-4.0 previews).
+/// builds before #3736 (pre-4.0 previews). Neither is a fault an older BPMN interpreter deferred and raised on a later
+/// child's callback, which names that later child; Bpmn.Semantics 0.5.0 no longer defers faults.
 /// </para>
 /// </remarks>
 public interface IWorkflowRunInspection

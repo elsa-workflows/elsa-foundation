@@ -23,8 +23,8 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 /// <remarks>
 /// It is stricter than the run page in three ways, because its consumer discloses to a model rather than to the actor's
 /// own screen: a sensitive value is never released or resolved, even when a capture policy captured it; an incident message
-/// of an activity with a sensitive input binding is withheld, even with value inspection; and so is that activity's state
-/// view. A missing activity execution inspection, state view or payload read is reported as unsupported by this backend;
+/// that could echo a sensitive input, along its causal chain, or that a child-control consumer raised or poisoned scheduler
+/// work recorded, is withheld, even with value inspection; and so is the state view of an activity with a sensitive input. A missing activity execution inspection, state view or payload read is reported as unsupported by this backend;
 /// an activity execution this Run recorded (an incident names it, or the run's activity state still holds it) but whose
 /// inspection record is gone, or a value whose evidence vanished, as pruned.
 /// </remarks>
@@ -60,14 +60,15 @@ internal sealed class WorkflowRunInspection(
         // One verdict per activity execution (its Executable node and its own value evidence), shared by every incident that
         // names it, directly or as its causal child, and bounded in reads.
         var lookups = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var chain = new IncidentChain(view.Incidents);
         var selection = string.IsNullOrWhiteSpace(request.ActivityExecutionId) ? null
-            : await SelectAsync(view, request.ActivityExecutionId, canInspectValues, request.ResolveEvidenceIds, sensitive, lookups, cancellationToken);
+            : await SelectAsync(view, request.ActivityExecutionId, canInspectValues, request.ResolveEvidenceIds, sensitive, lookups, chain, cancellationToken);
         var incidents = new List<WorkflowRunInspectionIncident>();
         foreach (var incident in view.Incidents)
         {
             // Only a caller with value inspection reads incident messages at all, so only then is their sensitivity established.
             var sensitiveInputs = canInspectValues && await IncidentSensitiveAsync(id, incident.ActivityExecutionId, incident.ExecutableNodeId,
-                incident.Metadata, view.Incidents, sensitive, lookups, depth: 0, cancellationToken);
+                incident.Metadata, chain, sensitive, lookups, depth: 0, cancellationToken);
             incidents.Add(Incident(incident.IncidentId, incident.ActivityExecutionId, incident.ExecutableNodeId, incident.Severity, incident.Status,
                 incident.FailureType, incident.Message, incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt, canInspectValues, sensitiveInputs));
         }
@@ -133,7 +134,7 @@ internal sealed class WorkflowRunInspection(
     /// than the bound, raised by a child-control consumer, or recorded for poisoned scheduler work, counts as sensitive.
     /// </summary>
     private async Task<bool> IncidentSensitiveAsync(string workflowExecutionId, string? activityExecutionId, string? executableNodeId,
-        IReadOnlyDictionary<string, string> metadata, IReadOnlyCollection<IncidentStateView> runIncidents, HashSet<string>? sensitive,
+        IReadOnlyDictionary<string, string> metadata, IncidentChain chain, HashSet<string>? sensitive,
         Dictionary<string, bool> lookups, int depth, CancellationToken cancellationToken)
     {
         if (activityExecutionId is null) return true;
@@ -159,18 +160,38 @@ internal sealed class WorkflowRunInspection(
             var childNode = key == RuntimeMetadataKeys.CausalActivityExecutionId && metadata.TryGetValue(RuntimeMetadataKeys.CausalExecutableNodeId, out var node)
                             && !string.IsNullOrWhiteSpace(node) ? node : null;
             if (await ActivitySensitiveAsync(workflowExecutionId, child, childNode, sensitive, lookups, cancellationToken)) return true;
-            // The child's own propagated incident may carry a deeper descendant's text (a nested BPMN process copies its child's
-            // fault message), so the chain is followed through this Run's incidents, failing closed beyond the depth bound.
-            foreach (var childIncident in runIncidents.Where(item => item.ActivityExecutionId == child && item.ActivityExecutionId != activityExecutionId))
-            {
-                if (depth + 1 >= CausalDepthLimit) return true;
-                if (await IncidentSensitiveAsync(workflowExecutionId, child, childIncident.ExecutableNodeId, childIncident.Metadata, runIncidents,
-                        sensitive, lookups, depth + 1, cancellationToken))
-                    return true;
-            }
+            if (child != activityExecutionId && await ChainSensitiveAsync(workflowExecutionId, child, chain, sensitive, lookups, depth, cancellationToken))
+                return true;
         }
         return !metadata.ContainsKey(RuntimeMetadataKeys.CausalActivityExecutionId)
                && (metadata.ContainsKey(RuntimeMetadataKeys.CausalExecutableNodeId) || metadata.ContainsKey(RuntimeMetadataKeys.CausalIncidentId));
+    }
+
+    /// <summary>
+    /// Whether a causal child's own incidents make the chain sensitive: its propagated message may carry a deeper descendant's
+    /// text (a nested BPMN process copies its child's fault message). Each child's verdict is computed once per read; it reads
+    /// as sensitive while it is being computed, which ends a cycle, and a chain deeper than the bound counts as sensitive.
+    /// </summary>
+    private async Task<bool> ChainSensitiveAsync(string workflowExecutionId, string child, IncidentChain chain, HashSet<string>? sensitive,
+        Dictionary<string, bool> lookups, int depth, CancellationToken cancellationToken)
+    {
+        if (chain.Verdicts.TryGetValue(child, out var known)) return known;
+        if (depth + 1 >= CausalDepthLimit) return chain.Verdicts[child] = true;
+        chain.Verdicts[child] = true;
+        foreach (var incident in chain.ByActivity[child])
+        {
+            if (await IncidentSensitiveAsync(workflowExecutionId, child, incident.ExecutableNodeId, incident.Metadata, chain, sensitive, lookups,
+                    depth + 1, cancellationToken))
+                return true;
+        }
+        return chain.Verdicts[child] = false;
+    }
+
+    /// <summary>The Run's incidents by the activity execution each names, with each causal child's chain verdict.</summary>
+    private sealed class IncidentChain(IEnumerable<IncidentStateView> incidents)
+    {
+        public ILookup<string?, IncidentStateView> ByActivity { get; } = incidents.ToLookup(item => item.ActivityExecutionId, StringComparer.Ordinal);
+        public Dictionary<string, bool> Verdicts { get; } = new(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -193,7 +214,7 @@ internal sealed class WorkflowRunInspection(
         execution.ValueSnapshots.Any(item => item.IsSensitive && item.Subject == nameof(ActivityExecutionInspectionValueSubject.ActivityInput));
 
     private async Task<WorkflowRunInspectionSelection> SelectAsync(WorkflowInstanceDetailsView run, string activityExecutionId, bool canInspectValues,
-        IReadOnlySet<string>? resolve, HashSet<string>? sensitive, Dictionary<string, bool> lookups, CancellationToken cancellationToken)
+        IReadOnlySet<string>? resolve, HashSet<string>? sensitive, Dictionary<string, bool> lookups, IncidentChain chain, CancellationToken cancellationToken)
     {
         if (activities is null) return new(activityExecutionId, null, WorkflowRunUnavailableReason.Unsupported);
         var workflowExecutionId = run.Instance.WorkflowExecutionId;
@@ -223,7 +244,7 @@ internal sealed class WorkflowRunInspection(
         foreach (var incident in execution.Incidents)
         {
             var sensitiveInputs = canInspectValues && (nodeSensitive || await IncidentSensitiveAsync(workflowExecutionId, activityExecutionId,
-                execution.ExecutableNodeId, incident.Metadata, run.Incidents, sensitive, lookups, depth: 0, cancellationToken));
+                execution.ExecutableNodeId, incident.Metadata, chain, sensitive, lookups, depth: 0, cancellationToken));
             incidents.Add(Incident(incident.IncidentId, execution.ActivityExecutionId, incident.Causation?.ExecutableNodeId ?? execution.ExecutableNodeId,
                 incident.Severity, incident.Status, incident.FailureType, incident.Message, incident.IsBlocking, incident.CreatedAt, incident.ResolvedAt,
                 canInspectValues, sensitiveInputs));

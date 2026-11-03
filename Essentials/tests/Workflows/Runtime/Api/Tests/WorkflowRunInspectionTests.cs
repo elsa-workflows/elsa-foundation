@@ -345,9 +345,11 @@ public sealed class WorkflowRunInspectionTests
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public async Task A_propagated_chain_is_followed_through_the_childs_own_incident(bool grandchildSensitive, bool withheld)
+    [InlineData(true, true, RuntimeMetadataKeys.CompletedChildActivityExecutionId)]
+    [InlineData(false, false, RuntimeMetadataKeys.CompletedChildActivityExecutionId)]
+    [InlineData(true, true, RuntimeMetadataKeys.CausalActivityExecutionId)]
+    [InlineData(true, true, RuntimeMetadataKeys.NotifyingChildActivityExecutionId)]
+    public async Task A_propagated_chain_is_followed_through_the_childs_own_incident(bool grandchildSensitive, bool withheld, string key)
     {
         // A nested BPMN process copies its child's fault message into its own, which its parent copies in turn.
         const string ChildId = "actexec-child", GrandchildId = "actexec-grandchild";
@@ -358,8 +360,8 @@ public sealed class WorkflowRunInspectionTests
         await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(GrandchildId, RunId, "node-grandchild", "authored-grandchild", "Test.Leaf", "1.0.0",
             ActivityExecutionStatus.Faulted, null, 3, Now, Now, null, "checkpoint-3", "checkpoint-3", Now, ActivitySchedulingProvenance.Empty, [], [], [],
             grandchildSensitive ? [Sensitive("password")] : [Captured("text", "hello")], new Dictionary<string, string>()));
-        var parentCausal = new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = ChildId };
-        var childCausal = new Dictionary<string, string> { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = GrandchildId };
+        var parentCausal = new Dictionary<string, string> { [key] = ChildId };
+        var childCausal = new Dictionary<string, string> { [key] = GrandchildId };
         await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ActivityId, RunId, "node-1", "authored-1", "Test.Activity", "1.0.0",
             ActivityExecutionStatus.Faulted, null, 1, Now, Now, null, "checkpoint-1", "checkpoint-1", Now, ActivitySchedulingProvenance.Empty, [], [],
             [new ActivityExecutionIncidentSummary("incident-1", IncidentSeverity.Error, IncidentStatus.Blocking, null, "workflow.fault", "Child failed: " + Sentinel, Now,
@@ -374,6 +376,42 @@ public sealed class WorkflowRunInspectionTests
         Assert.Equal(withheld, run.Incidents.Single(item => item.IncidentId == parent.IncidentId).MessageRedacted);
         Assert.Equal(withheld, Assert.Single(run.Selection!.Execution!.Incidents).MessageRedacted);
         if (withheld) Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(run), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_cyclic_or_overlong_causal_chain_counts_as_sensitive(bool cyclic)
+    {
+        var details = await SeedAsync(WorkflowExecutionStatus.Faulted);
+        // Every activity in the chain is itself established non-sensitive: only the chain's shape withholds the message.
+        var length = cyclic ? 2 : 9; // one past the default implementation's depth bound of eight
+        var ids = Enumerable.Range(0, length).Select(index => index == 0 ? ActivityId : $"actexec-chain-{index}").ToArray();
+        foreach (var (id, index) in ids.Select((id, index) => (id, index)).Skip(1))
+            await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(id, RunId, $"node-chain-{index}", $"authored-chain-{index}", "Test.Child", "1.0.0",
+                ActivityExecutionStatus.Faulted, null, index + 1, Now, Now, null, "checkpoint-1", "checkpoint-1", Now, ActivitySchedulingProvenance.Empty, [], [], [],
+                [Captured("text", "hello")], new Dictionary<string, string>()));
+        // The last link names no child, so an overlong chain ends cleanly and only the depth bound withholds it.
+        Dictionary<string, string> Next(int index) => index + 1 < ids.Length || cyclic
+            ? new() { [RuntimeMetadataKeys.CompletedChildActivityExecutionId] = index + 1 < ids.Length ? ids[index + 1] : ids[0] }
+            : new();
+        await _inspections.SaveAsync(new ActivityExecutionInspectionProjection(ActivityId, RunId, "node-1", "authored-1", "Test.Activity", "1.0.0",
+            ActivityExecutionStatus.Faulted, null, 1, Now, Now, null, "checkpoint-1", "checkpoint-1", Now, ActivitySchedulingProvenance.Empty, [], [],
+            [new ActivityExecutionIncidentSummary("incident-1", IncidentSeverity.Error, IncidentStatus.Blocking, null, "workflow.fault", "Child failed: " + Sentinel, Now,
+                null, true, Next(0), ActivityExecutionIncidentCausation.From(Next(0)))],
+            [], new Dictionary<string, string>()));
+        var template = details.View!.Incidents.Single() with { Message = "Child failed: " + Sentinel };
+        var incidents = ids.Select((id, index) => template with
+        {
+            IncidentId = index == 0 ? template.IncidentId : $"incident-chain-{index}", ActivityExecutionId = id,
+            ExecutableNodeId = index == 0 ? template.ExecutableNodeId : $"node-chain-{index}", Metadata = Next(index),
+            Message = index == 0 ? template.Message : $"Link {index} failed."
+        }).ToArray();
+
+        var run = (await Create(new Details(details.View! with { Incidents = incidents })).GetAsync(new(RunId, ActivityId)))!;
+
+        Assert.True(run.Incidents.Single(item => item.IncidentId == template.IncidentId).MessageRedacted);
+        Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(run), StringComparison.Ordinal);
     }
 
     [Fact]
