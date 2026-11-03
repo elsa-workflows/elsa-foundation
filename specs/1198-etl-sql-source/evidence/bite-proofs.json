@@ -1,6 +1,6 @@
 {
  "spec": "1198-etl-sql-source",
- "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Where a theory has several failing rows, failedTests lists each test name once.",
+ "note": "Each entry names the revision it was recorded at. The postgres-read-committed mutation did not bite: in PostgreSQL a single SELECT already reads one snapshot under READ COMMITTED, so the read's point in time does not depend on the level there; REPEATABLE READ is kept for any future multi-statement read. On SQL Server only the snapshot-disabled database test bites the isolation level: the mid-read change test also passes under READ COMMITTED, so it proves that writers are not blocked and a change after the read never reaches the run, not the isolation level itself. Review round 1 adds 8 entries recorded at f606d68cc. The date mutation bites only on SQL Server: Npgsql returns DateOnly for a date column, which another branch writes, while SqlClient returns DateTime. Review round 2 adds 3 entries recorded at 2fee631a8 (the interval refusal, the time-of-day format, which bites on SQL Server only because Npgsql returns TimeOnly, and the SQL column limit) and re-records source-table-identifier-unchecked at that revision so it lists all three failing theory rows.",
  "results": [
   {
    "mutation": "source-table-identifier-unchecked",
@@ -9,13 +9,14 @@
    "filter": "FullyQualifiedName~EtlSqlSourceTests.A_table_that_is_not_an_identifier",
    "mutated": "Failed!  - Failed: 3, Passed: 0",
    "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.A_table_that_is_not_an_identifier_is_refused(table: \"1people\", code: \"source.sql-identifier-invalid\")",
     "Elsa.Etl.Tests.EtlSqlSourceTests.A_table_that_is_not_an_identifier_is_refused(table: \"a.b.c\", code: \"source.sql-identifier-invalid\")",
     "Elsa.Etl.Tests.EtlSqlSourceTests.A_table_that_is_not_an_identifier_is_refused(table: \"people;drop\", code: \"source.sql-identifier-invalid\")"
    ],
    "restored": "Passed!  - Failed: 0, Passed: 3",
    "original": "        if (!IsSqlTable(sql.Table))\n            diagnostics.Add(\"source.sql-identifier-invalid\", \"source.table\",",
    "mutated_text": "        if (false && !IsSqlTable(sql.Table))\n            diagnostics.Add(\"source.sql-identifier-invalid\", \"source.table\",",
-   "sourceRevision": "51fa1a20b9a45b306d4890c338a9b19514984cd2"
+   "sourceRevision": "2fee631a8e228570ff5515ba9ace1fc46c4c99a7"
   },
   {
    "mutation": "source-column-case-collision-allowed",
@@ -324,6 +325,48 @@
    "original": "case DateTime date when string.Equals(reader.GetDataTypeName(index), \"date\", StringComparison.OrdinalIgnoreCase):",
    "mutated_text": "case DateTime date when false:",
    "sourceRevision": "f606d68cc744d7351264ba2bd96f9cf686587c65"
+  },
+  {
+   "mutation": "interval-written-as-time",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~An_interval_is_a_duration",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlPostgreSqlProviderTests.An_interval_is_a_duration_not_a_time_and_is_refused"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "case TimeSpan span when IsTimeOfDay(reader.GetDataTypeName(index)) &&",
+   "mutated_text": "case TimeSpan span when true &&",
+   "sourceRevision": "2fee631a8e228570ff5515ba9ace1fc46c4c99a7"
+  },
+  {
+   "mutation": "time-of-day-refused",
+   "file": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Preparation/EtlSqlSnapshotReader.cs",
+   "project": "Extensions/Etl/tests/Sql/ProviderTests/Elsa.Etl.Sql.ProviderTests.csproj",
+   "filter": "FullyQualifiedName~A_snapshot_reads_every_accepted_type",
+   "mutated": "Failed!  - Failed: 1, Passed: 1",
+   "failedTests": [
+    "Elsa.Etl.Sql.ProviderTests.EtlSqlServerProviderTests.A_snapshot_reads_every_accepted_type_in_key_order_with_nulls"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 2",
+   "original": "case TimeSpan span when IsTimeOfDay(reader.GetDataTypeName(index)) &&",
+   "mutated_text": "case TimeSpan span when false &&",
+   "sourceRevision": "2fee631a8e228570ff5515ba9ace1fc46c4c99a7"
+  },
+  {
+   "mutation": "sql-columns-unbounded",
+   "file": "Extensions/Etl/src/Design/Elsa.Etl.Design/EtlArtifactCompiler.V2.cs",
+   "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+   "filter": "FullyQualifiedName~EtlSqlSourceTests.More_columns_than_the_field_limit",
+   "mutated": "Failed!  - Failed: 1, Passed: 0",
+   "failedTests": [
+    "Elsa.Etl.Tests.EtlSqlSourceTests.More_columns_than_the_field_limit_are_refused"
+   ],
+   "restored": "Passed!  - Failed: 0, Passed: 1",
+   "original": "var columns = ValidateSchema(sql.Columns, \"source.columns\", maximumFields, diagnostics);",
+   "mutated_text": "var columns = ValidateSchema(sql.Columns, \"source.columns\", 0, diagnostics);",
+   "sourceRevision": "2fee631a8e228570ff5515ba9ace1fc46c4c99a7"
   }
  ]
 }
