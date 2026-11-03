@@ -3146,3 +3146,19 @@ test("published state stays inside its column regardless of stylesheet order", a
   expect(noteBox.x + noteBox.width).toBeLessThan(updatedBox.x);
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(64);
 });
+
+for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
+  test(`Activity collection disclosure controls match adjacent controls at ${width}px ${theme}`, async ({ page }, testInfo) => {
+    await mockActivityDefinitions(page, route => route.fulfill({ json: pageOf([]) }));
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+    await expect(page.getByRole("heading", { name: "No designed activities yet", exact: true })).toBeVisible();
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const tools = page.locator(".ad-tools-disclosure > summary");
+    const advanced = page.locator(".ad-advanced-filters > summary");
+    expect((await tools.boundingBox())!.height).toBe((await refresh.boundingBox())!.height);
+    expect((await advanced.boundingBox())!.height).toBe((await page.getByRole("searchbox", { name: "Search", exact: true }).locator("..").boundingBox())!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("activity-collection.png"), fullPage: true });
+  });
+}

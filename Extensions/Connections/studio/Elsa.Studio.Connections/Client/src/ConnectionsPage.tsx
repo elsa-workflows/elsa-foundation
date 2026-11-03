@@ -32,7 +32,7 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const visibleDescriptors = contextIsLoaded ? descriptors : null;
   const selected = visibleItems.find(item => item.name === selectedName) ?? null;
 
-  const load = useCallback(async (query: string, preferredName?: string) => {
+  const load = useCallback(async (query: string) => {
     const requestContext = context;
     const requestId = ++loadRequestRef.current;
     setLoading(true);
@@ -46,7 +46,7 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
       setDescriptors(descriptorResponse);
       setAppliedSearch(query.trim());
       setSelectedName(current => {
-        const candidate = preferredName ?? current;
+        const candidate = current;
         return list.items.some(item => item.name === candidate) ? candidate : null;
       });
     } catch (cause) {
@@ -128,10 +128,10 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     </StudioCollectionToolbar>
     {!selected ? notification : null}
     {loadError && contextIsLoaded ? <p className="connections-load-error">{loadError}</p> : null}
-    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onOpen={name => { setNotice(null); setSelectedName(name); }} />
+    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onCreate={visibleDescriptors ? () => { setNotice(null); setCreating(true); } : undefined} onOpen={name => { setNotice(null); setSelectedName(name); }} />
     {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setSearch(appliedSearch); void load(appliedSearch, created.name); }} /> : null}
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
   </StudioPage>;
 }
