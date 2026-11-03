@@ -285,8 +285,8 @@ revision identity is its version identity). The server then reads that exact ver
 `workflows/design:read` (the gate is a read descriptor through `IAgentToolAuthorizer`), the owning
 `IWorkflowDefinitionAuthorizer.CanReadAsync` for the named definition, and `IWorkflowVersionReader.ReadAsync` (Workflows
 Design Core, D4); the version must belong to that definition. It admits `workflows.version` (`AuthoritativeRead`) with the
-definition identity and name, the version identity and label, its activity count (`readingIncomplete` when a container's
-children could not be read) and the definition's newest versions (at most 50, `versionsTruncated`), plus
+definition identity and name, the version identity and label, its activity count (`activitiesTruncated` when the walk stopped at its
+bound, `readingIncomplete` when a container's children could not be read) and the definition's newest versions (at most 50, `versionsTruncated`), plus
 `workflows.version-guidance`. Its target is the version identity only (FR-005); a later authority decision for a version
 target (a retained result, the tool's target) asks `IWorkflowVersionReader.FindDefinitionIdAsync` for the version's
 definition, which reads nothing else, and then that definition's owner, before the version is read. Required refusals: `agent.workflow.version_context_invalid`;
