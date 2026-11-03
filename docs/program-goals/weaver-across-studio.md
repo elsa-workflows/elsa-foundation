@@ -68,7 +68,7 @@ while its App credentials are unavailable locally, so its PRs merge through Code
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
-rather than live-provider evidence. M2–M5 remain open. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
+rather than live-provider evidence. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
 is verified Done through [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514),
 merged by the review App and qualified on resulting main `c0b47ceb1`. Its actual main CI,
 Studio and separate-package witnesses are recorded on the owning issue; existing skips and
@@ -87,16 +87,13 @@ is verified Done under [spec1189](../../specs/1189-weaver-recovery/spec.md). It 
 in four rounds. Main's own CI requalified it, including a fresh complete package witness with 20 restart
 cases on both actual adapters against the packaged EF store. M2 #3431 is verified complete.
 [Workflow journeys #3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442) is complete under
-[spec1193](../../specs/1193-weaver-workflow-journeys/spec.md), which is now Implemented. It was delivered
-as seven slices, #3671, #3704, #3715, #3722, #3727, #3732 and #3736; the last merged as `af947767a` and
-closed #3442. Code Review was unavailable, so each slice merged after a converged self-review loop under the
-owner's [standing delivery and merge authorization of 3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669).
-That authorization is an explicit standing owner exception to merging.md's one-action owner exception and
-its "no author merges its own PR" fallback. It covers this Program's PRs while Code Review is unavailable;
-otherwise the 1 November paragraph's Code Review route stands. Each slice carried independent package
-witness evidence on both actual adapters, recorded on its PR. Main's CI run 41721202214 on `a1419b9c3`,
-which contains `af947767a`, qualified the result, and
-[M3 #3432 is verified complete](https://github.com/elsa-workflows/elsa-foundation/issues/3432#issuecomment-6616867867).
+[spec1193](../../specs/1193-weaver-workflow-journeys/spec.md), which is now Implemented, and
+[M3 #3432 is verified complete](https://github.com/elsa-workflows/elsa-foundation/issues/3432#issuecomment-6616867867);
+the closeout links its slices and its resulting-main evidence. The slices merged after converged self-review
+loops under the owner's [standing delivery and merge authorization of 3 November](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6615643669),
+an explicit standing owner exception to merging.md's one-action owner exception and its "no author merges
+its own PR" fallback. The delivery lane uses it while Code Review is unavailable; that condition is the
+lane's interpretation, not the owner's words. Otherwise the 1 November paragraph's Code Review route stands.
 [Module support #3443](https://github.com/elsa-workflows/elsa-foundation/issues/3443) is the current
 implementation leaf, under [spec1203](../../specs/1203-weaver-module-support/spec.md).
 Review, required checks and resulting-main evidence remain delivery gates for each subsequent leaf.
