@@ -212,11 +212,13 @@ public sealed partial class EtlSqlPostgreSqlProviderTests
     protected override string TrueLiteral => "true";
     protected override string ZonedLiteral => "'2026-11-03 10:15:30+01'";
 
-    [SkippableFact]
-    public async Task A_zoned_time_of_day_is_refused_rather_than_given_a_placeholder_date()
+    [SkippableTheory]
+    [InlineData("timetz")]
+    [InlineData("timetz(0)")]
+    public async Task A_zoned_time_of_day_is_refused_rather_than_given_a_placeholder_date(string type)
     {
         Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
-        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL, clock timetz NULL)");
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL, clock {type} NULL)");
         await fixture.ExecuteAsync($"INSERT INTO {_table} (id, clock) VALUES (1, '10:15:30+01')");
 
         var failure = await Assert.ThrowsAsync<EtlConnectorPreparationFailure>(() => ReadSnapshotOnAsync(fixture.ConnectionString,
@@ -289,6 +291,20 @@ public sealed partial class EtlSqlServerProviderTests
     protected override string ZonedLiteral => "'2026-11-03 10:15:30 +01:00'";
     protected override string UnreachableConnectionString =>
         new SqlConnectionStringBuilder(fixture.ConnectionString) { DataSource = "tcp:127.0.0.1,1", ConnectTimeout = 5, ConnectRetryCount = 0 }.ConnectionString;
+
+    [SkippableFact]
+    public async Task Extreme_dates_are_real_values_on_sql_server_and_are_kept()
+    {
+        Skip.If(fixture.SkipReason is not null, fixture.SkipReason);
+        // A temporal table's open period ends at 9999-12-31 23:59:59.9999999; SQL Server has no infinity.
+        await fixture.ExecuteAsync($"CREATE TABLE {_table} (id bigint NOT NULL, period_end datetime2(7) NULL, first_day date NULL)");
+        await fixture.ExecuteAsync($"INSERT INTO {_table} (id, period_end, first_day) VALUES (1, '9999-12-31 23:59:59.9999999', '0001-01-01')");
+
+        var raw = await ReadRawSnapshotOnAsync(fixture.ConnectionString, new EtlSqlSource("db", _table,
+            [new("id", EtlColumnType.Int64, true), new("period_end", EtlColumnType.String, false), new("first_day", EtlColumnType.String, false)], ["id"]));
+
+        Assert.Equal("{\"id\":1,\"period_end\":\"9999-12-31T23:59:59.9999999\",\"first_day\":\"0001-01-01\"}\n", raw);
+    }
 
     [SkippableFact]
     public async Task An_unpaired_surrogate_arrives_already_replaced_by_the_driver()

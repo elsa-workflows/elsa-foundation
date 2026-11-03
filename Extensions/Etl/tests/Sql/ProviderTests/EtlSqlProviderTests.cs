@@ -156,6 +156,7 @@ public abstract partial class EtlSqlProviderTests(EtlSqlProviderFixture fixture)
         public EtlSqlErrorKind Classify(Exception exception) => inner.Classify(exception);
         public System.Data.IsolationLevel SnapshotIsolation => inner.SnapshotIsolation;
         public string? SnapshotSetup => inner.SnapshotSetup;
+        public bool ExtremeDatesAreInfinite => inner.ExtremeDatesAreInfinite;
         public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
             inner.SelectSnapshot(table, columns, keyColumns);
     }

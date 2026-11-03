@@ -59,6 +59,12 @@ public interface IEtlSqlEngine
     /// <summary>A statement run first inside the snapshot transaction, such as making it read-only, or null.</summary>
     string? SnapshotSetup { get; }
 
+    /// <summary>
+    /// Whether the driver returns the extreme <see cref="DateTime"/>, <see cref="DateOnly"/> and <see cref="DateTimeOffset"/>
+    /// values for infinite dates and timestamps (Npgsql's default), so a snapshot read refuses them rather than invent a date.
+    /// </summary>
+    bool ExtremeDatesAreInfinite { get; }
+
     /// <summary>Selects the columns of every row of the table, ordered by the key columns ascending.</summary>
     string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns);
 

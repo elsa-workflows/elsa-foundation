@@ -39,6 +39,7 @@ internal sealed class SqliteEtlSqlEngine : IEtlSqlEngine
     // SQLite's serializable transactions read one point in time.
     public System.Data.IsolationLevel SnapshotIsolation => System.Data.IsolationLevel.Serializable;
     public string? SnapshotSetup => null;
+    public bool ExtremeDatesAreInfinite => false;
 
     public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
         $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";

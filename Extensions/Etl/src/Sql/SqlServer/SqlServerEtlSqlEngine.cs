@@ -30,6 +30,9 @@ internal sealed class SqlServerEtlSqlEngine : IEtlSqlEngine
 
     public string? SnapshotSetup => null;
 
+    // SQL Server has no infinity: 9999-12-31 is a real value, such as a temporal table's open period end.
+    public bool ExtremeDatesAreInfinite => false;
+
     public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
         $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 

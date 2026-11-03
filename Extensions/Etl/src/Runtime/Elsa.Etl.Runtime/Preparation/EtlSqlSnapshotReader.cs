@@ -61,7 +61,7 @@ internal static class EtlSqlSnapshotReader
                 ExceptionDispatchInfo? failure = null;
                 try
                 {
-                    await CopyRowsAsync(reader, source, columns, maxBytes, destination, cancellationToken);
+                    await CopyRowsAsync(reader, source, columns, maxBytes, engine.ExtremeDatesAreInfinite, destination, cancellationToken);
                 }
                 catch (Exception exception)
                 {
@@ -103,7 +103,7 @@ internal static class EtlSqlSnapshotReader
         }
     }
 
-    private static async ValueTask CopyRowsAsync(DbDataReader reader, EtlSqlSource source, string[] columns, long maxBytes,
+    private static async ValueTask CopyRowsAsync(DbDataReader reader, EtlSqlSource source, string[] columns, long maxBytes, bool infiniteExtremes,
         Stream destination, CancellationToken cancellationToken)
     {
         if (reader.FieldCount != columns.Length)
@@ -121,7 +121,7 @@ internal static class EtlSqlSnapshotReader
                     for (var index = 0; index < columns.Length; index++)
                     {
                         writer.WritePropertyName(columns[index]);
-                        WriteValue(writer, reader, index, source.Columns[index], maxBytes - written);
+                        WriteValue(writer, reader, index, source.Columns[index], maxBytes - written, infiniteExtremes);
                     }
                     writer.WriteEndObject();
                 }
@@ -139,7 +139,8 @@ internal static class EtlSqlSnapshotReader
         }
     }
 
-    private static void WriteValue(Utf8JsonWriter writer, DbDataReader reader, int index, EtlColumn column, long remainingBytes)
+    private static void WriteValue(Utf8JsonWriter writer, DbDataReader reader, int index, EtlColumn column, long remainingBytes,
+        bool infiniteExtremes)
     {
         if (reader.IsDBNull(index))
         {
@@ -170,10 +171,11 @@ internal static class EtlSqlSnapshotReader
                         writer.WriteStringValue(text);
                         return;
                     case Guid guid: writer.WriteStringValue(guid.ToString("D", CultureInfo.InvariantCulture)); return;
-                    // Npgsql maps PostgreSQL's infinity and -infinity to the extreme values; they are not dates, so refuse them.
-                    case DateTime extreme when extreme == DateTime.MaxValue || extreme == DateTime.MinValue: break;
-                    case DateOnly extreme when extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue: break;
-                    case DateTimeOffset extreme when extreme == DateTimeOffset.MaxValue || extreme == DateTimeOffset.MinValue: break;
+                    // Where the driver maps infinity and -infinity to the extreme values, they are not dates, so refuse them.
+                    case DateTime extreme when infiniteExtremes && (extreme == DateTime.MaxValue || extreme == DateTime.MinValue): break;
+                    case DateOnly extreme when infiniteExtremes && (extreme == DateOnly.MaxValue || extreme == DateOnly.MinValue): break;
+                    case DateTimeOffset extreme when infiniteExtremes &&
+                        (extreme == DateTimeOffset.MaxValue || extreme == DateTimeOffset.MinValue): break;
                     // SqlClient returns DateTime for a date column (Npgsql returns DateOnly, written below); write the date
                     // alone so it compares as one.
                     case DateTime date when string.Equals(reader.GetDataTypeName(index), "date", StringComparison.OrdinalIgnoreCase):
@@ -182,7 +184,7 @@ internal static class EtlSqlSnapshotReader
                     case DateTime dateTime: writer.WriteStringValue(dateTime.ToString("O", CultureInfo.InvariantCulture)); return;
                     // Npgsql returns a zoned time of day as DateTimeOffset with a placeholder date; refuse it rather than
                     // invent a timestamp.
-                    case DateTimeOffset offset when !reader.GetDataTypeName(index).StartsWith("time with", StringComparison.OrdinalIgnoreCase):
+                    case DateTimeOffset offset when !IsZonedTimeOfDay(reader.GetDataTypeName(index)):
                         writer.WriteStringValue(offset.ToString("O", CultureInfo.InvariantCulture));
                         return;
                     case DateOnly date: writer.WriteStringValue(date.ToString("O", CultureInfo.InvariantCulture)); return;
@@ -220,10 +222,18 @@ internal static class EtlSqlSnapshotReader
         throw Failure("etl.sql-column-type-unsupported", column.Name);
     }
 
-    // SQL Server names it "time"; PostgreSQL "time without time zone" (a zoned time is refused above).
+    // SQL Server names it "time"; PostgreSQL "time without time zone", or "time(3) without time zone" with a precision.
     private static bool IsTimeOfDay(string dataTypeName) =>
         string.Equals(dataTypeName, "time", StringComparison.OrdinalIgnoreCase) ||
-        dataTypeName.StartsWith("time without time zone", StringComparison.OrdinalIgnoreCase);
+        IsTimeType(dataTypeName) && dataTypeName.EndsWith("without time zone", StringComparison.OrdinalIgnoreCase);
+
+    // PostgreSQL "time with time zone", or "time(3) with time zone"; never a timestamp.
+    private static bool IsZonedTimeOfDay(string dataTypeName) =>
+        IsTimeType(dataTypeName) && dataTypeName.EndsWith(" with time zone", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTimeType(string dataTypeName) =>
+        dataTypeName.StartsWith("time", StringComparison.OrdinalIgnoreCase) &&
+        !dataTypeName.StartsWith("timestamp", StringComparison.OrdinalIgnoreCase);
 
     private static async ValueTask ExecuteAsync(DbConnection connection, DbTransaction? transaction, string sql,
         CancellationToken cancellationToken)

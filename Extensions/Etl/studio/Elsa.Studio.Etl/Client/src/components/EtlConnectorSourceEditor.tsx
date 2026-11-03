@@ -127,7 +127,7 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
         schema={source.columns}
         maxFields={maxFields}
         disabled={disabled}
-        onChange={columns => onChange({ ...source, columns, key: source.key.filter(name => columns.some(column => column.name === name && column.required)) })}
+        onChange={columns => onChange({ ...source, columns, key: keyAfterColumnEdit(source, columns) })}
       />
       <fieldset className="etl-editor-field">
         <legend>Source key</legend>
@@ -149,6 +149,20 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
       </fieldset>
     </>
   );
+}
+
+/**
+ * The key after a column edit, in the same order: an edit that keeps the row count (a rename or type change) carries
+ * each key column through its row, and any edit drops a key column that is gone or no longer required.
+ */
+function keyAfterColumnEdit(source: EtlSqlSource, columns: EtlColumn[]): string[] {
+  const renamed = columns.length === source.columns.length
+    ? source.key.map(name => {
+      const row = source.columns.findIndex(column => column.name === name);
+      return row >= 0 ? columns[row].name : name;
+    })
+    : source.key;
+  return renamed.filter(name => columns.some(column => column.name === name && column.required));
 }
 
 function sourceColumns(source: EtlSourceV2): EtlColumn[] {

@@ -22,6 +22,9 @@ internal sealed class PostgreSqlEtlSqlEngine : IEtlSqlEngine
 
     public string? SnapshotSetup => "SET TRANSACTION READ ONLY";
 
+    // Npgsql maps infinity and -infinity to the extreme values, so a finite 9999-12-31 cannot be told apart from them.
+    public bool ExtremeDatesAreInfinite => true;
+
     public string SelectSnapshot(string table, IReadOnlyList<string> columns, IReadOnlyList<string> keyColumns) =>
         $"SELECT {string.Join(", ", columns.Select(Quote))} FROM {Quote(table)} ORDER BY {string.Join(", ", keyColumns.Select(Quote))}";
 

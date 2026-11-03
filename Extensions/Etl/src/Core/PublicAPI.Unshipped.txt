@@ -2029,3 +2029,4 @@ override Elsa.Etl.Core.EtlSqlSource.ToString() -> string!
 override sealed Elsa.Etl.Core.EtlSqlSource.Equals(Elsa.Etl.Core.EtlSource? other) -> bool
 static Elsa.Etl.Core.EtlSqlSource.operator !=(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
 static Elsa.Etl.Core.EtlSqlSource.operator ==(Elsa.Etl.Core.EtlSqlSource? left, Elsa.Etl.Core.EtlSqlSource? right) -> bool
+Elsa.Etl.Core.Runtime.IEtlSqlEngine.ExtremeDatesAreInfinite.get -> bool

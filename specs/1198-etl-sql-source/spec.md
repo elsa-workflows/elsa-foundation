@@ -72,7 +72,7 @@ An author picks a SQL source binding in Studio, names the table, declares column
 
   | Declared type | Accepted database values |
   |---------------|--------------------------|
-  | `String` | text; a GUID; a timestamp or time of day in ISO 8601 invariant form; a `date` column as `yyyy-MM-dd`. An interval and a zoned time of day are refused. |
+  | `String` | text; a GUID; a timestamp or time of day in ISO 8601 invariant form; a `date` column as `yyyy-MM-dd`. An interval and a zoned time of day are refused, and on PostgreSQL so are infinite dates and timestamps, which Npgsql cannot tell apart from the extreme finite ones. |
   | `Int64` | 8-, 16-, 32- and 64-bit integers |
   | `Decimal` | exact decimals within .NET `decimal` range, and integers |
   | `Boolean` | booleans (`bit` on SQL Server) |

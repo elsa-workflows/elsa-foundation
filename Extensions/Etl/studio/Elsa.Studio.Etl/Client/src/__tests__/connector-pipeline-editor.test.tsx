@@ -224,6 +224,11 @@ describe("connector pipeline editor", () => {
     clickCheckbox(control<HTMLInputElement>(editor.host, "id"));
 
     expect(editor.pipeline.source).toMatchObject({ key: ["name", "id"] });
+
+    // Renaming a key column carries it through in place; the key order is unchanged.
+    editor.render();
+    setInput(control<HTMLInputElement>(editor.host, "Source table columns field 2 name"), "full_name");
+    expect(editor.pipeline.source).toMatchObject({ key: ["full_name", "id"] });
   });
 
   it("offers continuous mode only for a cursor-paginated HTTP source and drops it when the source no longer supports it", () => {
