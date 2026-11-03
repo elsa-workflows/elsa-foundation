@@ -49,7 +49,8 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.True(batch.Settled);
         Assert.Equal(fixture.BatchId, batch.BatchId);
         Assert.Equal(fixture.OutputJson, batch.OutputJson);
-        Assert.Equal(0, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
+        // Spec 1192 adds a later connector-run column, so read only this historical column at this migration target.
+        Assert.Equal(0, await context.ConnectorRuns.AsNoTracking().Select(row => row.SourceInputReservedBytes).SingleAsync());
         Assert.Equal(0, (await context.ConnectorPartitions.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
 
         // Current runtime continuation uses the full current schema after verifying the historical step.

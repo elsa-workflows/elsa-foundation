@@ -95,7 +95,10 @@ internal sealed partial class EfEtlRuntimeStore
             var sourceNotBefore = currentFetch?.Phase == EtlConnectorHttpSourceFetchPhase.Waiting
                 ? currentFetch.NotBefore?.UtcTicks
                 : null;
-            if (row.NotBeforeUtcTicks != sourceNotBefore)
+            // A continuous shard that caught up idles with a cleared journal and its next poll time (spec 1192).
+            var idle = pipeline.Continuous is not null && currentFetch is null && http.Page is null && !http.Exhausted &&
+                       row.NotBeforeUtcTicks > 0;
+            if (row.NotBeforeUtcTicks != sourceNotBefore && !idle)
                 throw new InvalidDataException("The source-fetch retry eligibility differs from its request journal.");
         }
         var currentRow = await HttpPageRowAsync(row, http.PageSequence, cancellationToken);
