@@ -872,7 +872,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
 
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await expect(page.getByText(/Revision 1 passed validation/)).toBeVisible();
 
@@ -1051,7 +1051,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   state.validationMode = "valid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
-  await page.locator(".ad-diagnostics-panel summary").click();
+  await page.locator(".ad-diagnostics-panel > details > summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
   await page.getByRole("button", { name: "Review & publish" }).click();
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
