@@ -123,14 +123,8 @@ import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
-import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import { isHttpEndpointType } from "./httpTestRequest";
-import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
-import {
-  applyActivityVersionChange,
-  findActivityOccurrence,
-  validateActivityVersionChangePrecondition
-} from "./activityVersionChangeModel";
+import { useWorkflowEditorSaveCommands } from "./useWorkflowEditorSaveCommands";
 import { createLazyExpressionToolingClient } from "../expression-tooling/lazyExpressionToolingClient";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 
@@ -251,11 +245,6 @@ export function WorkflowEditor({
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
-  const [versionChange, setVersionChange] = useState<{
-    occurrence: ActivityNode;
-    current: ActivityDefinitionVersionView;
-    recommendation?: RecommendedActivityDefinition | null;
-  } | null>(null);
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
   const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
@@ -693,6 +682,7 @@ export function WorkflowEditor({
   } = useWorkflowOperations({
     context,
     draft: editableDraft,
+    lineage: lineageHold.lineage,
     details,
     catalog,
     busy,
@@ -1090,39 +1080,10 @@ export function WorkflowEditor({
     }
   }, [backendSession, canUseBpmnInterchange, context, directBpmnRoot, draft, editDraftAndSelect, editorDoc.pinned, setError, setStatus]);
 
-  const openVersionChange = useCallback((occurrence: ActivityNode, current: ActivityDefinitionVersionView) => {
-    setError("");
-    setAutosavePaused(true);
-    setVersionChange({ occurrence, current, recommendation: inspectedRecommendation });
-  }, [inspectedRecommendation, setAutosavePaused, setError]);
-
-  const cancelVersionChange = useCallback(() => {
-    setVersionChange(null);
-    setAutosavePaused(false);
-  }, [setAutosavePaused]);
-
-  const applyVersionChange = useCallback(async (request: ActivityVersionChangeApplyRequest) => {
-    if (!draft) throw new Error("No workflow draft is loaded.");
-    const staleReason = validateActivityVersionChangePrecondition(draft, request.precondition);
-    if (staleReason) throw new Error(staleReason);
-    const next = applyActivityVersionChange(
-      draft,
-      request.precondition.occurrenceId,
-      request.precondition.fromVersionId,
-      request.targetVersionId,
-      request.scope
-    );
-    if (next === draft) throw new Error("The reviewed occurrence no longer matches this version change.");
-
-    const saved = await saveDraft(next, "Activity version changed");
-    const savedOccurrence = findActivityOccurrence(saved.state.rootActivity, request.precondition.occurrenceId);
-    if (!savedOccurrence || savedOccurrence.activityVersionId !== request.targetVersionId) {
-      throw new Error("The server did not confirm the reviewed exact version change.");
-    }
-    loadDraft(saved);
-    setVersionChange(null);
-    setAutosavePaused(false);
-  }, [draft, loadDraft, saveDraft, setAutosavePaused]);
+  const { versionChange, openVersionChange, cancelVersionChange, applyVersionChange, saveFromToolbar, saveAndGoBack } = useWorkflowEditorSaveCommands({
+    draft, canEdit: editorDoc.canEdit, lineage: lineageHold.lineage, saveDraft, loadDraft, save, flushDefinitionMeta, onBack,
+    setAutosavePaused, setError, setStatus, setNavigationPending: setTemplateNavigationPending, recommendation: inspectedRecommendation
+  });
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
   // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The
@@ -1439,16 +1400,12 @@ export function WorkflowEditor({
         onBack={() => {
           if (!documentAdapter || !editableDraft) { onBack(); return; }
           if (templateNavigationPending) return;
-          setTemplateNavigationPending(true);
-          setStatus("Saving…");
-          void flushDefinitionMeta().then(async saved => {
-            if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); }
-          }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
+          saveAndGoBack(editableDraft);
         }}
-        onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
+        onSave={saveFromToolbar}
         directBpmnPublication={directBpmnRoot && backendSession ? <DirectBpmnPublishAction
           key={`${backendSession.key}:${definitionId}`} onOpenProcesses={onOpenBpmnProcesses} session={backendSession} definitionId={definitionId} draft={draft}
-          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} flushMetadata={flushDefinitionMeta}
+          busy={busy} readOnly={editorDoc.pinned} saveDraft={saveDraft} lineage={lineageHold.lineage} flushMetadata={flushDefinitionMeta}
           setPaused={setAutosavePaused} setBusy={value => setOperation(value ? "publishing" : "idle")}
           setStatus={setStatus} setError={setError} reload={reload} /> : undefined}
         publicationUnavailableReason={publicationUnavailableReason}

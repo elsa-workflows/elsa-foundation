@@ -281,6 +281,152 @@ describe("reviewed Operation Batch in the editor", () => {
     card.unmount();
   });
 
+  it("after an explicit save and the card's Undo, the undone status wins over the save", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    const card = mountCard(token(result));
+    expect(outcome(card)).toBe("persisted");
+
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result))).toMatchObject({ status: "unavailable", persisted: false });
+    expect(outcome(card)).toBeNull();
+    expect(card.container.textContent).not.toContain("Persisted");
+    expect(card.container.querySelector("[role=note]")!.textContent).toContain("This change is undone");
+    card.unmount();
+  });
+
+  it("a Redo straight after save and Undo restores exactly the saved state: persisted, not held, nothing written", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    flushSync(() => history.redo());
+    const card = mountCard(token(result));
+
+    expect(controller.batch!.state(token(result))).toEqual({ status: "available", persisted: true });
+    expect(outcome(card)).toBe("persisted");
+    expect(history.lineageHold.isHeld()).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    // The live draft is the saved one, so autosave has nothing to write.
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes);
+    card.unmount();
+  });
+
+  it("once an autosave persists the pre-batch state after Undo, a Redo is held again and the card says not saved", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    // Undo released the hold: the ordinary autosave writes the pre-batch state, so the owner no longer holds the batch.
+    await vi.advanceTimersByTimeAsync(10_000);
+    flushSync(noop);
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    expect(JSON.stringify(vi.mocked(updateDraft).mock.calls.at(-1)![1])).not.toContain("greet");
+
+    flushSync(() => history.redo());
+    const card = mountCard(token(result));
+    expect(controller.batch!.state(token(result))).toEqual({ status: "available", persisted: false });
+    expect(outcome(card)).toBe("applied-locally");
+    expect(history.lineageHold.isHeld()).toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes);
+    card.unmount();
+  });
+
+  it("an explicit save of a non-live snapshot with no declared line clears the saved set, the safe direction", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    const snapshot = { ...structuredClone(doc.state.draft!), layout: [...doc.state.draft!.layout, { nodeId: "a", x: 7, y: 7 }] };
+    const saved = await persistence.saveDraft(snapshot, "Publication snapshot saved");
+    flushSync(() => doc.loadDraft(saved));
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    // Unknown is never trusted: B is held again until an explicit save of a known line.
+    expect(controller.batch!.state(token(result)).persisted).toBe(false);
+    expect(history.lineageHold.isHeld()).toBe(true);
+  });
+
+  it("BPMN publish captures the line with its snapshot: a Redo during the save is held, never autosaved", async () => {
+    const result = await run(request(fiveKinds()));
+    await explicitSave();
+    flushSync(() => { void controller.batch!.undo(token(result)); });
+    // DirectBpmnPublishAction captures the snapshot (S0) and its line together, then awaits the metadata flush.
+    const snapshot = structuredClone(doc.state.draft!);
+    const lineage = [...history.lineageHold.lineage()];
+    expect(JSON.stringify(snapshot)).not.toContain("greet");
+    // Meanwhile the author redoes to the saved batch state S1.
+    flushSync(() => history.redo());
+    const saved = await persistence.saveDraft(snapshot, "BPMN publication snapshot saved", { lineage });
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+    expect(JSON.stringify(saved)).not.toContain("greet");
+
+    // The owner now holds S0, so B is not saved: the live S1 is held and the card says not saved.
+    const card = mountCard(token(result));
+    expect(controller.batch!.state(token(result))).toEqual({ status: "available", persisted: false });
+    expect(outcome(card)).toBe("applied-locally");
+    expect(history.lineageHold.isHeld()).toBe(true);
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes);
+    card.unmount();
+  });
+
+  it("BPMN publish of the live batch state marks the batch saved", async () => {
+    const result = await run(request(fiveKinds()));
+    expect(history.lineageHold.isHeld()).toBe(true);
+    const snapshot = structuredClone(doc.state.draft!);
+    const lineage = [...history.lineageHold.lineage()];
+    const saved = await persistence.saveDraft(snapshot, "BPMN publication snapshot saved", { lineage });
+    flushSync(() => doc.loadDraft(saved));
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result)).persisted).toBe(true);
+    expect(history.lineageHold.isHeld()).toBe(false);
+    await expectHandEditAutosaves();
+  });
+
+  it("the activity version change saves a snapshot derived from the live draft with its line, so the batch is saved and edits autosave", async () => {
+    const result = await run(request(fiveKinds()));
+    expect(history.lineageHold.isHeld()).toBe(true);
+    // As WorkflowEditor's version change: save `next` (derived from the live draft) with the live line, then load it.
+    const next = { ...structuredClone(doc.state.draft!), layout: [...doc.state.draft!.layout, { nodeId: "b", x: 9, y: 9 }] };
+    const saved = await persistence.saveDraft(next, "Activity version changed", { lineage: history.lineageHold.lineage() });
+    flushSync(() => doc.loadDraft(saved));
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result)).persisted).toBe(true);
+    expect(history.lineageHold.isHeld()).toBe(false);
+    await expectHandEditAutosaves();
+  });
+
+  it("an explicit save marks the line it wrote even when a hand edit lands while it is in flight; that edit then autosaves", async () => {
+    const result = await run(request(fiveKinds()));
+    let release!: () => void;
+    vi.mocked(updateDraft).mockImplementationOnce((_context, snapshot) => new Promise(resolve => { release = () => resolve(snapshot); }));
+    const pendingSave = persistence.saveDraft(doc.state.draft!, "Saved");
+    await vi.advanceTimersByTimeAsync(0);
+    // The later edit E, made while the save of B's line is in flight.
+    flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, layout: [...draft!.layout.filter(row => row.nodeId !== "a"), { nodeId: "a", x: 610, y: 610 }] })));
+    release();
+    await pendingSave;
+    await vi.advanceTimersByTimeAsync(0);
+    flushSync(noop);
+
+    expect(controller.batch!.state(token(result)).persisted).toBe(true);
+    expect(history.lineageHold.isHeld()).toBe(false);
+    // E stays unsaved on its own and autosaves as usual: it carries no new batch.
+    const writes = vi.mocked(updateDraft).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes + 1);
+    expect(vi.mocked(updateDraft).mock.calls.at(-1)![1].layout).toContainEqual({ nodeId: "a", x: 610, y: 610 });
+  });
+
   it("disables the review card's Undo with a reason after a later edit; designer history stays the path", async () => {
     const result = await run(request([op({ kind: "position", nodeId: "a", x: 900, y: 900 })]));
     expect(controller.batch!.state(token(result)).status).toBe("available");
@@ -385,6 +531,20 @@ async function run(invocation: StudioAgentPreparedInvocation) {
   let completion!: Promise<StudioAgentClientExecutionResult>;
   flushSync(() => { completion = controller.execute!(invocation); });
   return completion;
+}
+
+async function expectHandEditAutosaves() {
+  const writes = vi.mocked(updateDraft).mock.calls.length;
+  flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, layout: [...draft!.layout.filter(row => row.nodeId !== "b"), { nodeId: "b", x: 777, y: 777 }] })));
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(vi.mocked(updateDraft).mock.calls.length).toBe(writes + 1);
+  expect(vi.mocked(updateDraft).mock.calls.at(-1)![1].layout).toContainEqual({ nodeId: "b", x: 777, y: 777 });
+}
+
+async function explicitSave() {
+  await persistence.saveDraft(doc.state.draft!, "Saved");
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync(noop);
 }
 
 function mountCard(undoToken: string) {
