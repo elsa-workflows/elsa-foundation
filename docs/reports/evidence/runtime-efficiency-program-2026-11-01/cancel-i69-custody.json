@@ -5,7 +5,7 @@
   "files": 48,
   "manifest": "manifest.json (SHA-256 of every file)",
   "protectedValuesAbsent": true,
-  "protectedValuesCheck": "Runner ledgers/logs and both worker tars were searched for the database password on the database host before download; node.env files were excluded.",
+  "protectedValuesCheck": "Every collected runner file and both worker tars were searched for the database password on the database host before download; node.env files were excluded. manifest.json was generated afterwards and holds only file hashes.",
   "topology": {
     "subscriptionRegion": "westeurope",
     "resourceGroup": "rg-elsa-efficiency-i69 (task-owned, created 2026-11-03T21:32Z)",
@@ -28,5 +28,5 @@
   },
   "controller": "specs/1183-runtime-efficiency-program/evidence/two-host-qualification/cluster-controller.py and api.py, unchanged; series x1 (delay,loop), x2 (loop), x3 (loop)",
   "note": "The controller names node logs node-<host>-<n>.log per series, so each series overwrote the previous one: the archive keeps node A's and the sender's x3 logs and the x1 second sender's log (node-b-1.log). Every case ledger and every sender receipt directory is kept.",
-  "timing": "secondsToSettledReceipt is measured by the controller from writing cancel.json over SSH to reading finished.json with one-second SSH polling; it is an approximate measurement (the clock starts just after the request is written and stops after the polled read), not a latency. The hook marks its output timingEligible: false."
+  "timing": "secondsToSettledReceipt is measured by the controller from writing cancel.json over SSH, through one-second SSH polling for finished.json, to the two SSH reads of finished.json and dispatch.json that follow; it is an approximate measurement (the clock starts just after the request is written and stops after both reads), not a latency. The hook marks its output timingEligible: false."
 }

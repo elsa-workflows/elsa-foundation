@@ -725,7 +725,7 @@ Those runs used two Workbench processes and PostgreSQL 16 on one machine.
 On independent machines (fixture `i69`, 2026-11-03), the build containing #3669 passed all four cases. Node A and
 node B each ran on their own D2s_v6 machine, and PostgreSQL 16.15 ran in Docker on a third, on that machine's OS
 volume (Premium SSD), all on one private subnet. The controller and hook are the ones above, unchanged. Unlike the
-i68 topology, the database host had a public IP, open only to SSH from the operator's address.
+documented two-host topology, the database host had a public IP, open only to SSH from the operator's address.
 
 | Case | Series | Result |
 |---|---|---|
@@ -740,9 +740,9 @@ i68 topology, the database host had a public IP, open only to SSH from the opera
 - In each progressing case, activity rows grew by 146–196 in the five seconds before the Cancel, kept growing until
   it took effect, and did not change in the ten seconds after the settled receipt.
 - Every case ended with the owner's API reporting `Cancelled`, an empty transport and no incidents.
-- Errors logged: each node log has one PostgreSQL `40001` serialization conflict on the command transport, which EF
+- Errors logged: each surviving node log (three of the seven node processes) has one PostgreSQL `40001` serialization conflict on the command transport, which EF
   logs at `fail` level and the transport's bounded compare-and-swap retries as a transient write conflict. Node A's
-  other eight `fail` lines are EF probing migration-history tables on the fresh database. Nothing failed.
+  other eight `fail` lines are EF probing migration-history tables on the fresh database. No case failed.
 - Node logs survive only for the last series of each process name (see `cancel-i69-custody.json`). Every case ledger
   and sender receipt is kept.
 - Limits: two nodes only, so four-node results remain open; one parked and three progressing runs; no owner failure
@@ -755,6 +755,13 @@ After the 2,178-file archive was verified, the database container and task direc
 transfer token) were removed from the runner, the added NSG rule was deleted (remaining rules equal the original), the
 task resource group with both workers and its storage was deleted, and the runner was deallocated again. No
 task-tagged resource or running VM remains. See `fixture-cleanup-i68.json`.
+
+### Third fixture cleanup
+
+After the i69 collection was downloaded and extracted, the task resource group with all three machines, their disks,
+the network and the public IP was deleted; the database password existed only on the deleted database machine, and the
+task SSH key was deleted from the operator machine. No task resource or running VM remains, and no existing resource
+was touched. See `fixture-cleanup-i69.json`.
 
 ### Rebuilt backend REST end-to-end suite
 
