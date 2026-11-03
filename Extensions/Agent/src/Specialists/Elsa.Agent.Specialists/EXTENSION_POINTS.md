@@ -94,6 +94,20 @@ admitted conversation/revision reference, selected ordinary owner scope and exac
 The journal now admits a workflow-owned revision before dispatch and restores only its previous
 accepted receipt. Explicit continuation checks the workflow-owned conversation and expected base
 revision before opening a client; unavailable admission becomes a native conversation conflict.
+
+**Playground continuity.** The root specialist of an activity draft Test Run converses in its candidate's workspace,
+not in its workflow. This applies when the run is a Test Run whose runtime-pinned source has kind `ActivityDraftTestRun`.
+Its identity then carries `ConversationWorkspace` `activity-draft:{draftId}`, and the conversation owner uses that
+workspace in place of the workflow execution. The owner still binds the tenant, the partition, the exact candidate
+version (`activity-test-version-…`, one per saved draft revision) and the template hash. As a result:
+
+- successive playground runs of one saved revision continue one conversation explicitly through
+  `$specialist.options` `{conversationId, revision}`, which a fresh run passes as `{}`;
+- an edited revision, a stale revision, a published run and a nested specialist cannot continue it;
+- history follows the ordinary content retention of each accepted turn's own Test Run workflow.
+
+The workspace is shared like the generic Test Run itself: any caller who can manage draft Test Runs in the tenant and
+holds the conversation reference can continue it.
 It whitelists alternating user/assistant text, binds conversation/revision/version inside protection,
 and uses the existing Secrets key ring with retained configured decryption keys. Histories are bounded to64
 messages/eight MiB; byte capacity is checked before dispatch and is not an input-token accounting claim.

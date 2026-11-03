@@ -104,7 +104,7 @@ through BPMN; duplicate/late results cannot repeat parent continuation.
   - the journal turn's status, model requests, usage and conversation;
   - the application status of this invocation's own delivery: not accepted, pending, settlement pending, applied, or not applied (faulted, cancelled or superseded);
   - and never protected request or session material, instructions, fences or fingerprints, all read through the runtime-owned `ISpecialistInvocationInspector`.
-  - Remaining: explicit conversation continuity across playground runs (each run is its own workflow execution, so it needs a candidate owner profile bound to the caller, the exact candidate version and the template hash).
+  - Playground continuity across runs: the root specialist of an activity draft Test Run (its runtime-pinned source kind `ActivityDraftTestRun`) converses in the exact candidate's workspace, so a later run of the same saved revision continues explicitly through `$specialist.options` `{conversationId, revision}` (a fresh run passes `{}`; see #3768), while an edited or stale revision, a published run and a nested specialist cannot. The workspace is tenant-shared like the generic Test Run.
   - Remaining: occurrence evidence for published runtime invocations (with T035).
   - Remaining: an observable partial-output surface for T033's partial-vs-accepted view: the runner collapses a streamed response before acceptance, so no read returns partial output yet.
 - [ ] T033 [US7] Implement module-owned playground with fresh/continue, capability diagnostics, partial-vs-accepted output and truthful stop/uncertainty in `Extensions/Agent/studio/Elsa.Studio.Agent.Specialists/Client/src/SpecialistPlayground.tsx`.
