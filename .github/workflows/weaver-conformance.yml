@@ -46,7 +46,7 @@ concurrency:
 
 jobs:
   package-witness:
-    name: Remount diagnosis (not qualification)
+    name: Weaver independent package witness
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -58,7 +58,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-          fetch-depth: 0 # Temporary diagnosis pins the already-failed product source separately.
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -91,9 +90,9 @@ jobs:
       - name: Verify driver refusal controls
         run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
 
-      - name: Diagnose the bounded remount (not qualification)
+      - name: Qualify real distributions and all native journeys
         run: >-
-          python3 tools/studio/Weaver.Conformance.Probe/diagnose_remount.py
+          python3 tools/studio/Weaver.Conformance.Probe/qualify.py
           --output "$RUNNER_TEMP/weaver-conformance"
           --version "$WEAVER_VERSION"
 

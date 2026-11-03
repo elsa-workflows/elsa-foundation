@@ -77,14 +77,6 @@ const browser = await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
-// Temporary #3692 scheduling diagnosis; removed before full qualification.
-if (config.diagnosticCpuRate !== undefined) {
-  need(config.journey === "consumed-intent-remount" && config.diagnosticCpuRate === 4, "Only the bounded remount diagnosis may slow Chromium.");
-  const diagnosticSession = await context.newCDPSession(page);
-  await diagnosticSession.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-  result.diagnosticOnly = true;
-  result.diagnosticCpuRate = 4;
-}
 const streamCapture = await captureNativeStreams(page);
 // Only the autonomy journey observes its policy route; other journeys keep their qualified capture.
 const autonomyCapture = config.journey === "autonomy-size" ? await captureAutonomyExchanges(page) : null;
@@ -1371,6 +1363,9 @@ async function consumedIntentRemount() {
     catalogRevisionBefore: catalog.revision, catalogRevisionAfter: catalogAfter.revision,
     configurationReadbackVerified: true }));
   await expect(dock()).toHaveCount(0);
+  // Connection startup renders a temporary searchable shell. Its query is discarded
+  // when the connected AppContent mounts; the launcher exists only in that ready shell.
+  await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("navigation", { name: "Settings", exact: true }).getByRole("link", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(studioRoute("/features"));
