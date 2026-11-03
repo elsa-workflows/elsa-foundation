@@ -18,7 +18,7 @@ import "./workflowOrganization.css";
 
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
 
-export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, onViews }: {
+export function WorkflowLibraryControls({ context, support, location, onChange, onCatalog, onPermissions, onViews, refreshKey = 0 }: {
   context: StudioEndpointContext;
   support: Support;
   location: WorkflowDefinitionBrowseLocation;
@@ -27,6 +27,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
   onPermissions(permissions: WorkflowOrganizationPermissions): void;
   /** The visible library views once read, so the page can disclose the applied view's identity, owner kind and revision. */
   onViews?(views: WorkflowLibraryView[]): void;
+  refreshKey?: number;
 }) {
   const [tags, setTags] = useState<WorkflowTag[]>([]);
   const [views, setViews] = useState<WorkflowLibraryView[]>([]);
@@ -75,7 +76,7 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
       setLoadedViews(current => current ?? []);
     });
     return () => { generationRef.current += 1; };
-  }, [catalogTerm, context, onPermissions, refresh, support.tags, support.views]);
+  }, [catalogTerm, context, onPermissions, refresh, refreshKey, support.tags, support.views]);
 
   useEffect(() => { onCatalog(tags); }, [onCatalog, tags]);
   useEffect(() => { if (loadedViews) onViews?.(loadedViews); }, [onViews, loadedViews]);
